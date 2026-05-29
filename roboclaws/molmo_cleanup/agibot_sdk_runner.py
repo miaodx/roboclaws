@@ -20,6 +20,12 @@ AGIBOT_GDK_BACKEND_VARIANT = "agibot_gdk"
 AGIBOT_GDK_NORMAL_NAVI_PROVENANCE = "agibot_gdk_normal_navi"
 AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE = "agibot_gdk_relative_move"
 AGIBOT_HEAD_COLOR_CAMERA_PROVENANCE = "agibot_gdk_head_color_camera"
+AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS = {
+    "max_distance_m": 0.25,
+    "max_yaw_rad": 0.35,
+    "timeout_s": 3.0,
+    "operator_config_required": True,
+}
 PHYSICAL_AGIBOT_PILOT_SCHEMA = "physical_agibot_cleanup_pilot_v1"
 PHYSICAL_AGIBOT_PILOT_POLICY = "physical_agibot_navigation_perception_pilot"
 BLOCKED_MANIPULATION_TOOLS = (
@@ -987,6 +993,10 @@ def _bounded_local_nudge_status(*, enabled: bool) -> dict[str, Any]:
         "status": "not_requested",
         "enabled": enabled,
         "primitive_provenance": AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE if enabled else "",
+        "max_distance_m": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_distance_m"],
+        "max_yaw_rad": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_yaw_rad"],
+        "timeout_s": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["timeout_s"],
+        "operator_config_required": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["operator_config_required"],
         "safety_model": "Pnc.relative_move simple obstacle stop; no obstacle avoidance",
         "agent_facing_tool": False,
     }

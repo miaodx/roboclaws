@@ -171,6 +171,12 @@ def test_agibot_adapter_resolves_public_navigation_tool_family(tmp_path: Path) -
     assert candidate_nav["target_fixture_id"] == "sofa"
     assert candidate_nav["waypoint_id"] == "wp_sofa_front"
     assert candidate_nav["bounded_local_nudge"]["agent_facing_tool"] is False
+    assert candidate_nav["bounded_local_nudge"]["enabled"] is False
+    assert candidate_nav["bounded_local_nudge"]["max_distance_m"] == 0.25
+    assert candidate_nav["bounded_local_nudge"]["max_yaw_rad"] == 0.35
+    assert candidate_nav["bounded_local_nudge"]["timeout_s"] == 3.0
+    assert candidate_nav["bounded_local_nudge"]["operator_config_required"] is True
+    assert "simple obstacle stop" in candidate_nav["bounded_local_nudge"]["safety_model"]
     assert object_nav["tool"] == "navigate_to_object"
     assert object_nav["status"] == "blocked_capability"
     assert object_nav["failure_type"] == "object_not_mapped_to_public_waypoint"
