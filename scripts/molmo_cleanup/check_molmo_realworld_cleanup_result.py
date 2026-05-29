@@ -1333,6 +1333,11 @@ def _assert_isaac_runtime(
         for step in steps:
             provenance = step.get("view_provenance") or {}
             provenance_text = json.dumps(provenance, sort_keys=True).lower()
+            camera_contract = step.get("camera_control_contract") or {}
+            assert camera_contract.get("schema") == "robot_view_camera_control_contract_v1", step
+            assert camera_contract.get("same_pose_api") is False, step
+            assert camera_contract.get("camera_control_api") is None, step
+            assert camera_contract.get("status") == "backend_local_scene_bounds_camera", step
             assert "placeholder" not in provenance_text, step
             assert "isaac_lab_camera_rgb" in provenance_text, step
             if require_refreshed_views:

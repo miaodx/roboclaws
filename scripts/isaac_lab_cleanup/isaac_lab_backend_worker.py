@@ -3655,6 +3655,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
             state,
             semantic_pose_state_refreshed=semantic_pose_state_refreshed,
         ),
+        camera_control_contract=_robot_view_camera_control_contract(state),
         robot_pose=_pose_near(str(state.get("current_receptacle_id") or "floor_01")),
         robot_trajectory=[_pose_near(str(state.get("current_receptacle_id") or "floor_01"))],
         room_outline_count=len(state.get("receptacle_index") or {}),
@@ -3718,6 +3719,36 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         render_steps=int(capture.get("render_steps") or 0),
         render_resolution={"width": args.render_width, "height": args.render_height},
     )
+
+
+def _robot_view_camera_control_contract(state: dict[str, Any]) -> dict[str, Any]:
+    provenance = _dict(state.get("robot_view_provenance"))
+    semantic_pose_state_refreshed = provenance.get("semantic_pose_state_refreshed")
+    return {
+        "schema": "robot_view_camera_control_contract_v1",
+        "backend": ISAACLAB_SUBPROCESS_BACKEND,
+        "status": "backend_local_scene_bounds_camera",
+        "camera_control_api": None,
+        "camera_model": "backend_local_robot_view",
+        "same_pose_api": False,
+        "agent_facing_fpv": {
+            "source": str(provenance.get("fpv") or "isaac_lab_scene_bounds_fpv"),
+            "canonical_camera_control": False,
+        },
+        "report_verify_view": {
+            "source": str(provenance.get("verify") or "isaac_lab_scene_bounds_verify"),
+            "canonical_camera_control": False,
+        },
+        "pose_source": "isaac_support_pose_near_current_receptacle",
+        "lens_source": "isaac_robot_view_pinhole_defaults_24mm_20.955mm_aperture",
+        "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
+        "evidence_note": (
+            "Isaac cleanup robot views currently use backend-local scene-bounds/support-pose "
+            "camera placement, not roboclaws.camera_control.render_views. They are useful "
+            "report evidence, but they are not yet proof that the agent-facing FPV is "
+            "backend-swappable at identical scene-frame pose/FOV."
+        ),
+    }
 
 
 def _camera_capture_variant(capture: dict[str, Any]) -> str:

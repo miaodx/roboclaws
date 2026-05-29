@@ -2843,6 +2843,18 @@ def _add_isaac_robot_view_step(
         provenance = {key: f"{capture_method}:{key}" for key in views}
         provenance["semantic_pose_state_refreshed"] = semantic_pose_state_refreshed
         step["view_provenance"] = provenance
+        step["camera_control_contract"] = {
+            "schema": "robot_view_camera_control_contract_v1",
+            "backend": "isaac_lab_subprocess",
+            "status": "backend_local_scene_bounds_camera",
+            "camera_control_api": None,
+            "camera_model": "backend_local_robot_view",
+            "same_pose_api": False,
+            "agent_facing_fpv": {
+                "source": provenance["fpv"],
+                "canonical_camera_control": False,
+            },
+        }
 
 
 def _add_isaac_snapshot_artifacts(

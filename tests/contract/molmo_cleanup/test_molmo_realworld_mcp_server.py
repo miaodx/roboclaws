@@ -409,6 +409,16 @@ class _FakeVisualBackend(ApiSemanticCleanupBackend):
             "robot_trajectory": [{"x": 1.0, "y": 2.0}],
             "view_variant": "molmospaces-rby1m-fpv-map-chase-verify",
             "view_provenance": "test_fake_visual_backend",
+            "camera_control_contract": {
+                "schema": "robot_view_camera_control_contract_v1",
+                "status": "backend_local_robot_camera",
+                "camera_model": "backend_local_robot_view",
+                "same_pose_api": False,
+                "agent_facing_fpv": {
+                    "source": "test_fake_fpv",
+                    "canonical_camera_control": False,
+                },
+            },
             "focus": {
                 "has_focus": has_focus,
                 "object_id": focus_object_id,
@@ -495,6 +505,8 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert "navigate_to_visual_candidate" in observation["instruction"]
     assert "declare_visual_candidates" not in observation["instruction"]
     assert raw["image_artifacts"]["fpv"].endswith(".png")
+    assert raw["camera_control_contract"]["schema"] == "robot_view_camera_control_contract_v1"
+    assert raw["camera_control_contract"]["same_pose_api"] is False
     assert (tmp_path / raw["image_artifacts"]["fpv"]).is_file()
     image_block = observation_blocks[1]
     assert hasattr(image_block, "data")

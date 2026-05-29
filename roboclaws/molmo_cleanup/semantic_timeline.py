@@ -127,6 +127,7 @@ def record_robot_view_step(
             "robot_trajectory_count": len(result.get("robot_trajectory", [])),
             "view_variant": result.get("view_variant"),
             "view_provenance": result.get("view_provenance"),
+            "camera_control_contract": result.get("camera_control_contract"),
             "focus": annotate_focus_visual_grounding(result.get("focus")),
             "semantic_phase": semantic_phase,
             "room_outline_count": result.get("room_outline_count"),

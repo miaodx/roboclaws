@@ -555,6 +555,9 @@ class RealWorldMolmoCleanupMCPServer:
             observation_id,
             views=step.get("views") or {},
             robot_view_label=str(step.get("label", "")),
+            camera_control_contract=step.get("camera_control_contract")
+            if isinstance(step.get("camera_control_contract"), dict)
+            else None,
         )
         if attached is None:
             return response

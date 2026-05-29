@@ -6371,6 +6371,7 @@ def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
         artifacts = item.get("image_artifacts") or {}
         fpv_path = artifacts.get("fpv") or item.get("fpv_image")
         offset = item.get("camera_offset") or {}
+        camera_contract = _robot_view_camera_contract_summary(item.get("camera_control_contract"))
         cards.append(
             '<article class="raw-fpv-card">'
             "<div>"
@@ -6380,6 +6381,7 @@ def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
             f'<p class="pose">camera yaw={html.escape(str(offset.get("yaw_delta_deg", 0)))} '
             f"pitch={html.escape(str(offset.get('pitch_delta_deg', 0)))}</p>"
             f'<p class="note">{html.escape(str(item.get("artifact_status", "")))}</p>'
+            f"{camera_contract}"
             "</div>"
             f"{_view_figure(fpv_path, 'FPV')}"
             "</article>"
@@ -6528,6 +6530,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
             f"{_focus_summary(step, focus)}"
             f"{_robot_evidence_summary(step)}"
             f"{_robot_view_provenance_summary(step)}"
+            f"{_robot_view_camera_contract_summary(step.get('camera_control_contract'))}"
             '<div class="views robot-primary-views">'
             f"{_view_figure(views.get('fpv'), 'FPV')}"
             f"{_view_figure(views.get('map'), 'Map')}"
@@ -6608,6 +6611,29 @@ def _step_uses_refreshed_isaac_semantic_pose_capture(step: dict[str, Any]) -> bo
         provenance,
         sort_keys=True,
     )
+
+
+def _robot_view_camera_contract_summary(contract: Any) -> str:
+    if not isinstance(contract, dict):
+        return ""
+    badges = "".join(
+        [
+            _badge("Camera contract", contract.get("status", "unknown")),
+            _badge("Camera model", contract.get("camera_model", "unknown")),
+            _badge("Same-pose API", contract.get("same_pose_api", False)),
+        ]
+    )
+    fpv = (
+        contract.get("agent_facing_fpv")
+        if isinstance(contract.get("agent_facing_fpv"), dict)
+        else {}
+    )
+    fpv_source = fpv.get("source")
+    if fpv_source:
+        badges += _badge("FPV source", fpv_source)
+    note = str(contract.get("evidence_note") or "")
+    note_html = f'<p class="note">{html.escape(note)}</p>' if note else ""
+    return f'<div class="semantic-badges robot-view-camera-contract">{badges}</div>{note_html}'
 
 
 def _write_fpv_bbox_verification(
