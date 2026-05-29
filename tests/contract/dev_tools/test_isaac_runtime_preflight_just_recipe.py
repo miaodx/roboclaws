@@ -179,3 +179,42 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
         "segmentation_semantic_filter=usd_prim_path",
         "accept_nvidia_eula=false",
     ]
+
+
+def test_agent_harness_allows_isaac_prepared_cleanup_smoke_target() -> None:
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    harness_text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    assert "molmo-isaac-prepared-cleanup-smoke" in agent_text
+    assert re.search(
+        r"^molmo-isaac-prepared-cleanup-smoke \*overrides:",
+        harness_text,
+        re.MULTILINE,
+    )
+    assert "prepare_molmospaces_flattened_semantic_usd.py" in harness_text
+    assert "scene_semantic.usda" in harness_text
+    assert "summary.json" in harness_text
+    assert 'require_prepare_ready="true"' in harness_text
+    assert 'require_segmentation_evidence="true"' in harness_text
+    assert 'segmentation_data_types="semantic_segmentation"' in harness_text
+    assert 'segmentation_semantic_filter="usd_prim_path"' in harness_text
+    assert "require_canonical_robot_view_camera_control=true" in harness_text
+    assert "just harness::molmo-isaac-cleanup-smoke" in harness_text
+
+    route = trace_agent_harness(
+        "molmo-isaac-prepared-cleanup-smoke",
+        "scene_usd_path=/tmp/raw-molmospaces-scene.usd",
+        "output_dir=/tmp/roboclaws-isaac-prepared-cleanup",
+        "runtime_python=/tmp/isaac-python",
+        "stamp=val2",
+        "accept_nvidia_eula=false",
+    )
+    assert route == [
+        "just",
+        "harness::molmo-isaac-prepared-cleanup-smoke",
+        "scene_usd_path=/tmp/raw-molmospaces-scene.usd",
+        "output_dir=/tmp/roboclaws-isaac-prepared-cleanup",
+        "runtime_python=/tmp/isaac-python",
+        "stamp=val2",
+        "accept_nvidia_eula=false",
+    ]

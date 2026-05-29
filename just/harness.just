@@ -21,6 +21,7 @@
 # - just harness::molmo-isaac-runtime-preflight  Isaac Lab local runtime setup gate
 # - just harness::molmo-isaac-runtime-smoke  strict Isaac Lab renderer/USD smoke gate
 # - just harness::molmo-isaac-cleanup-smoke  strict Isaac Lab cleanup report gate
+# - just harness::molmo-isaac-prepared-cleanup-smoke  prepare semantic USD + strict cleanup gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -1009,6 +1010,116 @@ molmo-isaac-cleanup-smoke *overrides:
       check_cmd+=(--require-isaac-snapshot-provenance)
     fi
     "${check_cmd[@]}"
+
+# Prepare a flattened MolmoSpaces semantic USD, then run the strict Isaac
+# cleanup smoke against that prepared artifact. This keeps the explicit
+# prepared-scene boundary out of public household-cleanup defaults.
+molmo-isaac-prepared-cleanup-smoke *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    runtime_python=".venv-isaaclab/bin/python"
+    output_dir="output/isaaclab/prepared-cleanup-smoke"
+    stamp=""
+    scene_usd_path=""
+    prepared_scene_usd_path=""
+    summary_path=""
+    cleanup_stamp="cleanup"
+    seed="7"
+    task="帮我收拾这个房间"
+    scene_source="procthor-10k-val"
+    scene_index="0"
+    generated_mess_count="1"
+    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    robot_name="simple_camera_rig"
+    label_containers="true"
+    require_prepare_ready="true"
+    require_segmentation_evidence="true"
+    segmentation_data_types="semantic_segmentation"
+    segmentation_semantic_filter="usd_prim_path"
+    accept_nvidia_eula="true"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        runtime_python|output_dir|stamp|scene_usd_path|prepared_scene_usd_path|\
+        summary_path|cleanup_stamp|seed|task|prompt|scene_source|scene_index|\
+        generated_mess_count|map_bundle|robot_name|label_containers|\
+        require_prepare_ready|require_segmentation_evidence|\
+        segmentation_data_types|segmentation_semantic_filter|accept_nvidia_eula)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      if [[ "$key" == "prompt" ]]; then
+        key="task"
+      fi
+      printf -v "$key" '%s' "$value"
+    done
+    if [[ -z "$scene_usd_path" ]]; then
+      echo "error: scene_usd_path=<raw MolmoSpaces scene USD> is required" >&2
+      exit 1
+    fi
+    if [[ -z "$stamp" ]]; then
+      stamp="$({{timestamp_cmd}})"
+    fi
+    run_root="${output_dir}/${stamp}"
+    if [[ -z "$prepared_scene_usd_path" ]]; then
+      prepared_scene_usd_path="${run_root}/scene_semantic.usda"
+    fi
+    if [[ -z "$summary_path" ]]; then
+      summary_path="${run_root}/summary.json"
+    fi
+    mkdir -p "$run_root"
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      export OMNI_KIT_ACCEPT_EULA="YES"
+    fi
+    prep_cmd=("$runtime_python" scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py \
+      --scene-usd-path "$scene_usd_path" \
+      --output-usd-path "$prepared_scene_usd_path" \
+      --summary-output "$summary_path")
+    if [[ "$label_containers" == "true" ]]; then
+      prep_cmd+=(--label-containers)
+    else
+      prep_cmd+=(--no-label-containers)
+    fi
+    "${prep_cmd[@]}"
+    if [[ "$require_prepare_ready" == "true" ]]; then
+      .venv/bin/python scripts/isaac_lab_cleanup/check_prepared_semantic_usd_summary.py \
+        "$summary_path"
+    fi
+    cleanup_cmd=(just harness::molmo-isaac-cleanup-smoke \
+      output_dir="$run_root" \
+      stamp="$cleanup_stamp" \
+      runtime_python="$runtime_python" \
+      scene_usd_path="$prepared_scene_usd_path" \
+      seed="$seed" \
+      task="$task" \
+      scene_source="$scene_source" \
+      scene_index="$scene_index" \
+      generated_mess_count="$generated_mess_count" \
+      map_bundle="$map_bundle" \
+      robot_name="$robot_name" \
+      require_real_runtime=true \
+      require_scene_loaded=true \
+      require_local_scene_usd=true \
+      require_selected_usd_bindings=true \
+      require_robot_view_provenance=true \
+      require_canonical_robot_view_camera_control=true \
+      require_segmentation_evidence="$require_segmentation_evidence" \
+      segmentation_data_types="$segmentation_data_types" \
+      segmentation_semantic_filter="$segmentation_semantic_filter" \
+      require_snapshot_provenance=true \
+      accept_nvidia_eula="$accept_nvidia_eula")
+    exec "${cleanup_cmd[@]}"
 
 # List task files available under harness/tasks/.
 list-tasks:

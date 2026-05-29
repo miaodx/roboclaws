@@ -742,6 +742,7 @@ harness target *args:
       molmo-planner-manipulation-probe|molmo-visual-grounding-benchmark|\
       molmo-isaac-runtime-preflight|molmo-isaac-usd-references|\
       molmo-isaac-runtime-smoke|molmo-isaac-cleanup-smoke|\
+      molmo-isaac-prepared-cleanup-smoke|\
       list-tasks|history)
         trace_or_exec harness::"$target" "${rest[@]}"
         ;;

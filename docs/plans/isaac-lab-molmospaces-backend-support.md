@@ -243,7 +243,10 @@ protocol:
   `molmo-isaac-runtime-smoke` and `molmo-isaac-cleanup-smoke` accept
   `segmentation_semantic_filter=usd_prim_path`, and the cleanup CLI forwards
   `--isaac-segmentation-semantic-filter` into `IsaacLabSubprocessBackend`
-  without enabling segmentation by default.
+  without enabling segmentation by default. A maintainer wrapper,
+  `molmo-isaac-prepared-cleanup-smoke`, now composes the flattened semantic USD
+  prep step with the strict cleanup smoke gate while still keeping public
+  cleanup defaults unchanged.
 - On 2026-05-29, the strict prepared-USD cleanup smoke passed on
   `val_1`: `output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/`.
   The checker accepted real Isaac runtime diagnostics, local prepared scene
@@ -931,7 +934,18 @@ until broader scene coverage passes. The first `val_1` cleanup proof passed at
 `output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/`;
 the follow-up `val_0` proof passed at
 `output/isaaclab/cleanup-smoke/0529_val0_flattened_usdprimpath_cleanup/`.
-Repeat this flow for additional MolmoSpaces scenes before changing defaults:
+Repeat this flow for additional MolmoSpaces scenes before changing defaults.
+The preferred cleanup command now prepares the flattened semantic USD, checks
+`summary.json.status=ready`, and then runs the strict cleanup gate with
+segmentation evidence and canonical robot-view camera control:
+
+```bash
+just agent::harness molmo-isaac-prepared-cleanup-smoke \
+  scene_usd_path=output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda \
+  scene_index=1
+```
+
+For lower-level diagnosis, the two steps remain available separately:
 
 ```bash
 .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py \
