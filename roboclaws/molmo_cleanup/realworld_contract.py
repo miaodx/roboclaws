@@ -292,6 +292,7 @@ class RealWorldCleanupContract:
             runtime_map_prior
         )
         self._public_anchor_ids_by_private_fixture_id: dict[str, str] = {}
+        self._seed_public_fixture_anchor_ids_from_prior_anchors()
         self._camera_yaw_offset_deg = 0.0
         self._camera_pitch_offset_deg = 0.0
         self._handled_handles: set[str] = set()
@@ -324,7 +325,18 @@ class RealWorldCleanupContract:
         ]
 
     def public_receptacles_by_id(self) -> dict[str, dict[str, Any]]:
+        if self.map_mode == MINIMAL_MAP_MODE:
+            return {
+                str(item["fixture_id"]): dict(item)
+                for item in self._public_runtime_fixture_candidates()
+            }
         return {fixture_id: dict(fixture) for fixture_id, fixture in self._fixtures.items()}
+
+    def internal_fixture_id_for_public_reference(self, fixture_id: str | None) -> str | None:
+        if fixture_id is None:
+            return None
+        resolved = self._internal_fixture_id_for_public_anchor(str(fixture_id))
+        return resolved or str(fixture_id)
 
     def _minimal_metric_map(self) -> dict[str, Any]:
         source = (
@@ -680,6 +692,7 @@ class RealWorldCleanupContract:
         if waypoint is None:
             return self._error("observe", "missing_waypoint")
         self._observed_waypoint_ids.add(str(waypoint["waypoint_id"]))
+        self._seed_public_fixture_anchor_ids_for_waypoint(waypoint)
         if self.perception_mode in {RAW_FPV_ONLY_MODE, CAMERA_MODEL_POLICY_MODE}:
             raw_observation = self._record_raw_fpv_observation(
                 waypoint,
@@ -1029,6 +1042,17 @@ class RealWorldCleanupContract:
         )
 
     def navigate_to_object(self, object_id: str) -> dict[str, Any]:
+        if self._handle_is_non_actionable(object_id):
+            return self._error(
+                "navigate_to_object",
+                "already_handled",
+                object_id=object_id,
+                required_next_tool="observe",
+                recovery_hint=(
+                    "This observed handle has already been placed or skipped. "
+                    "Continue the waypoint sweep and observe for other cleanup objects."
+                ),
+            )
         internal_id = self._internal_object_id(object_id)
         if internal_id is None:
             grounding_error = self._unresolved_visual_candidate_error(
@@ -1065,6 +1089,17 @@ class RealWorldCleanupContract:
         )
 
     def pick(self, object_id: str) -> dict[str, Any]:
+        if self._handle_is_non_actionable(object_id):
+            return self._error(
+                "pick",
+                "already_handled",
+                object_id=object_id,
+                required_next_tool="observe",
+                recovery_hint=(
+                    "This observed handle has already been handled. Continue the "
+                    "waypoint sweep instead of picking it again."
+                ),
+            )
         internal_id = self._internal_object_id(object_id)
         if internal_id is None:
             grounding_error = self._unresolved_visual_candidate_error("pick", object_id)
@@ -1093,75 +1128,99 @@ class RealWorldCleanupContract:
         return self._public_manipulation_response("pick", object_id, picked)
 
     def navigate_to_receptacle(self, fixture_id: str) -> dict[str, Any]:
-        if fixture_id not in self._fixtures:
-            return self._error("navigate_to_receptacle", "stale_reference", fixture_id=fixture_id)
+        requested_fixture_id = str(fixture_id)
+        internal_fixture_id = self._internal_fixture_id_for_public_anchor(requested_fixture_id)
+        if internal_fixture_id not in self._fixtures:
+            return self._error(
+                "navigate_to_receptacle",
+                "stale_reference",
+                fixture_id=requested_fixture_id,
+            )
         if self._held_handle is None:
             return self._semantic_order_error(
                 "navigate_to_receptacle",
                 required_tool="pick",
-                fixture_id=fixture_id,
+                fixture_id=requested_fixture_id,
                 recovery_hint=(
                     "Pick an observed object before navigating to a cleanup fixture. "
                     "Use navigate_to_object -> pick first."
                 ),
             )
-        response = self.contract.navigate_to_receptacle(fixture_id)
+        response = self.contract.navigate_to_receptacle(internal_fixture_id)
         if not response.get("ok"):
             return self._public_error_from_private(
                 "navigate_to_receptacle",
                 self._held_handle or "",
                 response,
             )
-        self._current_waypoint_id = self._preferred_waypoint_for_fixture(fixture_id)
+        self._current_waypoint_id = self._public_waypoint_id_for_private_fixture(
+            internal_fixture_id
+        )
         self._reset_camera_adjustment()
-        self._current_receptacle_for_handle = (self._held_handle, fixture_id)
+        self._current_receptacle_for_handle = (self._held_handle, internal_fixture_id)
         self._opened_receptacle_for_handle = None
+        public_fixture_id = self._public_fixture_response_id(
+            internal_fixture_id,
+            requested_fixture_id,
+        )
         return self._ok(
             "navigate_to_receptacle",
             object_id=self._held_handle,
-            receptacle_id=fixture_id,
-            fixture_id=fixture_id,
+            receptacle_id=public_fixture_id,
+            fixture_id=public_fixture_id,
             navigation_backend=response.get("navigation_backend", API_SEMANTIC_PROVENANCE),
             primitive_provenance=response.get(
                 "primitive_provenance",
                 API_SEMANTIC_PROVENANCE,
             ),
-            goal_pose=self._fixture_pose(fixture_id),
+            goal_pose=self._fixture_pose(internal_fixture_id),
             pose_source="fixture_semantic_map",
             staleness_s=0.0,
             pose_confidence=1.0,
             pose_covariance=[0.0, 0.0, 0.0],
             requires_reobserve=False,
-            previous_receptacle_id=response.get("previous_receptacle_id"),
+            previous_receptacle_id=self._public_fixture_reference_id(
+                str(response.get("previous_receptacle_id") or "")
+            ),
             state_mutation=response.get("state_mutation"),
             navigation_status=response.get("status"),
         )
 
     def open_receptacle(self, fixture_id: str) -> dict[str, Any]:
-        if fixture_id not in self._fixtures:
-            return self._error("open_receptacle", "stale_reference", fixture_id=fixture_id)
+        requested_fixture_id = str(fixture_id)
+        internal_fixture_id = self._internal_fixture_id_for_public_anchor(requested_fixture_id)
+        if internal_fixture_id not in self._fixtures:
+            return self._error(
+                "open_receptacle",
+                "stale_reference",
+                fixture_id=requested_fixture_id,
+            )
         if self._held_handle is None:
             return self._semantic_order_error(
                 "open_receptacle",
                 required_tool="pick",
-                fixture_id=fixture_id,
+                fixture_id=requested_fixture_id,
                 recovery_hint="Pick an observed object before opening a cleanup fixture.",
             )
-        if self._current_receptacle_for_handle != (self._held_handle, fixture_id):
+        if self._current_receptacle_for_handle != (self._held_handle, internal_fixture_id):
             return self._semantic_order_error(
                 "open_receptacle",
                 required_tool="navigate_to_receptacle",
                 object_id=self._held_handle,
-                fixture_id=fixture_id,
+                fixture_id=requested_fixture_id,
                 recovery_hint=(
                     "Call navigate_to_receptacle for this fixture before open_receptacle. "
                     "Fridge-like cleanup must be nav -> open -> place_inside -> close."
                 ),
             )
-        opened = self.contract.open_receptacle(fixture_id)
+        opened = self.contract.open_receptacle(internal_fixture_id)
         if opened.get("ok"):
-            self._opened_receptacle_for_handle = (self._held_handle, fixture_id)
-        return self._public_fixture_response("open_receptacle", fixture_id, opened)
+            self._opened_receptacle_for_handle = (self._held_handle, internal_fixture_id)
+        return self._public_fixture_response(
+            "open_receptacle",
+            self._public_fixture_response_id(internal_fixture_id, requested_fixture_id),
+            opened,
+        )
 
     def place(self, fixture_id: str) -> dict[str, Any]:
         return self._place(fixture_id, inside=False)
@@ -1170,33 +1229,41 @@ class RealWorldCleanupContract:
         return self._place(fixture_id, inside=True)
 
     def close_receptacle(self, fixture_id: str) -> dict[str, Any]:
-        if fixture_id not in self._fixtures:
-            return self._error("close_receptacle", "stale_reference", fixture_id=fixture_id)
+        requested_fixture_id = str(fixture_id)
+        internal_fixture_id = self._internal_fixture_id_for_public_anchor(requested_fixture_id)
+        if internal_fixture_id not in self._fixtures:
+            return self._error(
+                "close_receptacle", "stale_reference", fixture_id=requested_fixture_id
+            )
         pending = self._pending_close_receptacle_for_handle
-        if pending is None or pending[1] != fixture_id:
+        if pending is None or pending[1] != internal_fixture_id:
             return self._semantic_order_error(
                 "close_receptacle",
                 required_tool="place_inside",
                 object_id=pending[0] if pending is not None else None,
-                fixture_id=fixture_id,
+                fixture_id=requested_fixture_id,
                 recovery_hint=(
                     "Call close_receptacle only after place_inside for the same fridge-like "
                     "fixture."
                 ),
             )
         handle, _ = pending
-        closed = self.contract.close_receptacle(fixture_id)
+        closed = self.contract.close_receptacle(internal_fixture_id)
+        public_fixture_id = self._public_fixture_response_id(
+            internal_fixture_id,
+            requested_fixture_id,
+        )
         if closed.get("ok"):
             self._pending_close_receptacle_for_handle = None
             self._set_handle_state(
                 handle,
                 "placed_closed",
                 tool="close_receptacle",
-                fixture_id=fixture_id,
+                fixture_id=public_fixture_id,
             )
         return self._public_fixture_response(
             "close_receptacle",
-            fixture_id,
+            public_fixture_id,
             closed,
             object_id=handle,
         )
@@ -1597,6 +1664,82 @@ class RealWorldCleanupContract:
         _assert_no_forbidden_agent_view_keys(payload)
         return payload
 
+    def _seed_public_fixture_anchor_ids_from_prior_anchors(self) -> None:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return
+        for anchor in self._runtime_map_anchor_priors:
+            anchor_id = str(anchor.get("anchor_id") or "")
+            if not _is_place_anchor(anchor) or not anchor_id:
+                continue
+            fixture_id = self._best_internal_fixture_for_anchor(anchor)
+            if fixture_id:
+                self._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
+
+    def _seed_public_fixture_anchor_ids_for_waypoint(self, waypoint: dict[str, Any]) -> None:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return
+        private_waypoint = self._private_waypoint_for_public_waypoint(waypoint)
+        for fixture_id in private_waypoint.get("fixture_ids") or []:
+            fixture_id = str(fixture_id or "")
+            if fixture_id and fixture_id in self._fixtures:
+                self._public_anchor_id_for_fixture(fixture_id)
+
+    def _public_runtime_fixture_candidates(self) -> list[dict[str, Any]]:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return []
+        candidates = []
+        for anchor in self._runtime_public_semantic_anchors():
+            if not _is_place_anchor(anchor):
+                continue
+            anchor_id = str(anchor.get("anchor_id") or "")
+            if not anchor_id:
+                continue
+            fixture_id = self._internal_fixture_id_for_public_anchor(anchor_id)
+            fixture = self._fixtures.get(fixture_id) if fixture_id else {}
+            category = str(anchor.get("category") or (fixture or {}).get("category") or "")
+            name = str(anchor.get("label") or (fixture or {}).get("name") or category or anchor_id)
+            waypoint_id = str(
+                anchor.get("waypoint_id")
+                or (
+                    self._public_waypoint_for_private_fixture(fixture_id).get("waypoint_id")
+                    if fixture_id
+                    else ""
+                )
+                or self._current_waypoint_id
+            )
+            waypoint = self._waypoint_by_id(waypoint_id) or {}
+            pose = dict(anchor.get("pose") or self._waypoint_pose(waypoint))
+            item = {
+                "fixture_id": anchor_id,
+                "receptacle_id": anchor_id,
+                "category": category,
+                "name": name,
+                "room_id": str(anchor.get("room_id") or waypoint.get("room_id") or ""),
+                "affordances": list(anchor.get("affordances") or []),
+                "pose": {"frame_id": "map", **pose},
+                "preferred_inspection_waypoint_id": waypoint_id,
+                "preferred_manipulation_waypoint_id": waypoint_id,
+                "public_fixture_source": "runtime_semantic_anchor",
+            }
+            _assert_no_forbidden_agent_view_keys(item)
+            candidates.append(item)
+        return candidates
+
+    def _minimal_target_fixture_for_detection(
+        self,
+        detection: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        public_hints = {
+            "rooms": [
+                {
+                    "room_id": "runtime_semantic_anchors",
+                    "room_label": "Runtime semantic anchors",
+                    "fixtures": self._public_runtime_fixture_candidates(),
+                }
+            ]
+        }
+        return infer_target_fixture_for_detection(detection, public_hints)
+
     def _public_fixture_reference_payload(self, value: Any) -> Any:
         if self.map_mode != MINIMAL_MAP_MODE:
             return value
@@ -1644,6 +1787,86 @@ class RealWorldCleanupContract:
         anchor_id = f"anchor_fixture_{len(self._public_anchor_ids_by_private_fixture_id) + 1:03d}"
         self._public_anchor_ids_by_private_fixture_id[fixture_id] = anchor_id
         return anchor_id
+
+    def _best_internal_fixture_for_anchor(self, anchor: dict[str, Any]) -> str:
+        category = str(anchor.get("category") or "")
+        waypoint_id = str(anchor.get("waypoint_id") or "")
+        public_waypoint = self._waypoint_by_id(waypoint_id) or {}
+        private_waypoint = self._private_waypoint_for_public_waypoint(public_waypoint)
+        fixture_ids = [str(item) for item in private_waypoint.get("fixture_ids") or []]
+        for fixture_id in fixture_ids:
+            fixture = self._fixtures.get(fixture_id, {})
+            if _norm(category) and _norm(category) in _norm(
+                " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
+            ):
+                return fixture_id
+        for fixture_id, public_anchor_id in self._public_anchor_ids_by_private_fixture_id.items():
+            if public_anchor_id == str(anchor.get("anchor_id") or ""):
+                return fixture_id
+        for fixture_id, fixture in self._fixtures.items():
+            if _norm(category) and _norm(category) in _norm(
+                " ".join(str(fixture.get(key, "")) for key in ("fixture_id", "category", "name"))
+            ):
+                return fixture_id
+        return ""
+
+    def _internal_fixture_id_for_public_anchor(self, anchor_id: str) -> str:
+        if not anchor_id:
+            return ""
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return anchor_id
+        for fixture_id, public_anchor_id in self._public_anchor_ids_by_private_fixture_id.items():
+            if public_anchor_id == anchor_id:
+                return fixture_id
+        anchor = next(
+            (
+                item
+                for item in self._runtime_public_semantic_anchors()
+                if str(item.get("anchor_id") or "") == anchor_id
+            ),
+            {},
+        )
+        fixture_id = self._best_internal_fixture_for_anchor(anchor) if anchor else ""
+        if fixture_id:
+            self._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
+        return fixture_id
+
+    def _public_waypoint_for_private_fixture(self, fixture_id: str) -> dict[str, Any]:
+        private_waypoint_id = self._preferred_waypoint_for_fixture(fixture_id)
+        private_waypoint = next(
+            (
+                item
+                for item in self._waypoints
+                if str(item.get("waypoint_id") or "") == private_waypoint_id
+            ),
+            {},
+        )
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return private_waypoint
+        for public_id, mapped in self._private_waypoint_by_public_id.items():
+            if str(mapped.get("waypoint_id") or "") == str(
+                private_waypoint.get("waypoint_id") or ""
+            ):
+                return self._waypoint_by_id(public_id) or {}
+        return self._waypoint_by_id(self._current_waypoint_id) or {}
+
+    def _public_waypoint_id_for_private_fixture(self, fixture_id: str) -> str:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return self._preferred_waypoint_for_fixture(fixture_id)
+        waypoint = self._public_waypoint_for_private_fixture(fixture_id)
+        public_waypoint_id = str(waypoint.get("waypoint_id") or "")
+        return public_waypoint_id or self._current_waypoint_id
+
+    def _public_fixture_response_id(
+        self,
+        internal_fixture_id: str,
+        requested_fixture_id: str,
+    ) -> str:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return internal_fixture_id
+        if requested_fixture_id.startswith("anchor_"):
+            return requested_fixture_id
+        return self._public_fixture_reference_id(internal_fixture_id)
 
     def policy_view_payload(self) -> dict[str, Any]:
         payload = {
@@ -1844,22 +2067,28 @@ class RealWorldCleanupContract:
             grounding_status = str(
                 detection.get("grounding_status") or declaration.get("grounding_status") or ""
             )
-            public_candidate = infer_target_fixture_for_detection(detection, public_fixtures)
+            public_candidate = self.target_fixture_for_detection(detection, public_fixtures)
             candidate_fixture_id = (public_candidate or {}).get("fixture_id", "")
             source_fixture_id = str(support.get("fixture_id") or "")
+            public_candidate_fixture_id = self._public_fixture_reference_id(
+                str(candidate_fixture_id)
+            )
+            public_source_fixture_id = self._public_fixture_reference_id(source_fixture_id)
+            state = str(lifecycle.get("state", "pending"))
             cleanup_recommended = bool(
                 grounding_status not in {"ambiguous", "unresolved"}
-                and candidate_fixture_id
-                and candidate_fixture_id != source_fixture_id
+                and public_candidate_fixture_id
+                and public_candidate_fixture_id != public_source_fixture_id
+                and state not in _NON_ACTIONABLE_HANDLE_STATES
             )
             lifecycle_rows.append(
                 {
                     "object_id": handle,
-                    "state": lifecycle.get("state", "pending"),
+                    "state": state,
                     "category": detection.get("category", ""),
                     "room_id": detection.get("current_room_id", lifecycle.get("room_id", "")),
-                    "source_fixture_id": self._public_fixture_reference_id(source_fixture_id),
-                    "candidate_fixture_id": self._public_fixture_reference_id(candidate_fixture_id),
+                    "source_fixture_id": public_source_fixture_id,
+                    "candidate_fixture_id": public_candidate_fixture_id,
                     "cleanup_recommended": cleanup_recommended,
                     "grounding_status": grounding_status,
                     "candidate_source": "public_semantic_anchor"
@@ -2035,6 +2264,8 @@ class RealWorldCleanupContract:
         detection: dict[str, Any],
         fixture_hints: dict[str, Any],
     ) -> dict[str, Any] | None:
+        if self.map_mode == MINIMAL_MAP_MODE:
+            return self._minimal_target_fixture_for_detection(detection)
         return infer_target_fixture_for_detection(detection, fixture_hints)
 
     def attach_raw_fpv_observation_artifact(
@@ -2059,55 +2290,65 @@ class RealWorldCleanupContract:
         return None
 
     def _place(self, fixture_id: str, *, inside: bool) -> dict[str, Any]:
-        if fixture_id not in self._fixtures:
+        requested_fixture_id = str(fixture_id)
+        internal_fixture_id = self._internal_fixture_id_for_public_anchor(requested_fixture_id)
+        public_fixture_id = self._public_fixture_response_id(
+            internal_fixture_id,
+            requested_fixture_id,
+        )
+        if internal_fixture_id not in self._fixtures:
             return self._error(
-                "place_inside" if inside else "place", "stale_reference", fixture_id=fixture_id
+                "place_inside" if inside else "place",
+                "stale_reference",
+                fixture_id=requested_fixture_id,
             )
         handle = self._held_handle
         if handle is None:
             return self._error("place_inside" if inside else "place", "not_holding")
         tool = "place_inside" if inside else "place"
-        if self._current_receptacle_for_handle != (handle, fixture_id):
+        if self._current_receptacle_for_handle != (handle, internal_fixture_id):
             return self._semantic_order_error(
                 tool,
                 required_tool="navigate_to_receptacle",
                 object_id=handle,
-                fixture_id=fixture_id,
+                fixture_id=requested_fixture_id,
                 recovery_hint=(
                     "Call navigate_to_receptacle for this fixture after pick and before "
                     "placing the held object."
                 ),
             )
-        if not inside and _fixture_prefers_inside(self._fixtures[fixture_id]):
-            requires_open = _fixture_requires_open(self._fixtures[fixture_id])
+        if not inside and _fixture_prefers_inside(self._fixtures[internal_fixture_id]):
+            requires_open = _fixture_requires_open(self._fixtures[internal_fixture_id])
             needs_open = requires_open and self._opened_receptacle_for_handle != (
                 handle,
-                fixture_id,
+                internal_fixture_id,
             )
             required_tool = "open_receptacle" if needs_open else "place_inside"
             return self._semantic_order_error(
                 "place",
                 required_tool=required_tool,
                 object_id=handle,
-                fixture_id=fixture_id,
+                fixture_id=requested_fixture_id,
                 recovery_hint=(
                     "Use place_inside for fridge-like or shelf-like fixtures; "
                     "fridge-like fixtures must be opened first."
                 ),
             )
-        if inside and _fixture_requires_open(self._fixtures[fixture_id]):
-            if self._opened_receptacle_for_handle != (handle, fixture_id):
+        if inside and _fixture_requires_open(self._fixtures[internal_fixture_id]):
+            if self._opened_receptacle_for_handle != (handle, internal_fixture_id):
                 return self._semantic_order_error(
                     "place_inside",
                     required_tool="open_receptacle",
                     object_id=handle,
-                    fixture_id=fixture_id,
+                    fixture_id=requested_fixture_id,
                     recovery_hint=(
                         "Call open_receptacle for this fridge-like fixture before place_inside."
                     ),
                 )
         placed = (
-            self.contract.place_inside(fixture_id) if inside else self.contract.place(fixture_id)
+            self.contract.place_inside(internal_fixture_id)
+            if inside
+            else self.contract.place(internal_fixture_id)
         )
         if placed.get("ok"):
             self._handled_handles.add(handle)
@@ -2115,10 +2356,10 @@ class RealWorldCleanupContract:
                 handle,
                 "placed",
                 tool=tool,
-                fixture_id=fixture_id,
+                fixture_id=public_fixture_id,
             )
-            if inside and _fixture_requires_open(self._fixtures[fixture_id]):
-                self._pending_close_receptacle_for_handle = (handle, fixture_id)
+            if inside and _fixture_requires_open(self._fixtures[internal_fixture_id]):
+                self._pending_close_receptacle_for_handle = (handle, internal_fixture_id)
             else:
                 self._pending_close_receptacle_for_handle = None
             self._held_handle = None
@@ -2128,7 +2369,7 @@ class RealWorldCleanupContract:
             tool,
             handle,
             placed,
-            fixture_id=fixture_id,
+            fixture_id=public_fixture_id,
         )
 
     def _visible_detections_for_waypoint(self, waypoint: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2224,7 +2465,7 @@ class RealWorldCleanupContract:
         return sorted(candidates, key=lambda item: str(item["object_id"]))
 
     def _public_candidate_hint(self, detection: dict[str, Any]) -> dict[str, Any]:
-        candidate = infer_target_fixture_for_detection(detection, self.fixture_hints())
+        candidate = self.target_fixture_for_detection(detection, self.fixture_hints())
         if candidate is None:
             return {
                 "candidate_fixture_id": "",
@@ -2234,11 +2475,15 @@ class RealWorldCleanupContract:
             }
         candidate_fixture_id = str(candidate.get("fixture_id") or "")
         source_fixture_id = str((detection.get("support_estimate") or {}).get("fixture_id") or "")
+        public_candidate_fixture_id = self._public_fixture_reference_id(candidate_fixture_id)
+        public_source_fixture_id = self._public_fixture_reference_id(source_fixture_id)
         return {
-            "candidate_fixture_id": candidate_fixture_id,
+            "candidate_fixture_id": public_candidate_fixture_id,
             "candidate_fixture_category": str(candidate.get("category") or ""),
             "cleanup_recommended": bool(
-                candidate_fixture_id and candidate_fixture_id != source_fixture_id
+                public_candidate_fixture_id
+                and public_candidate_fixture_id != public_source_fixture_id
+                and not self._handle_is_non_actionable(str(detection.get("object_id") or ""))
             ),
             "candidate_source": "public_semantic_anchor"
             if self.map_mode == MINIMAL_MAP_MODE and candidate_fixture_id
@@ -2289,7 +2534,7 @@ class RealWorldCleanupContract:
                 producer_type=SIMULATED_CAMERA_MODEL_PROVENANCE,
                 source_observation_id=observation_id,
             )
-            target = infer_target_fixture_for_detection(detection, self.fixture_hints())
+            target = self.target_fixture_for_detection(detection, self.fixture_hints())
             target_fixture_id = str((target or {}).get("fixture_id") or location_id)
             inputs.append(
                 {
@@ -2497,7 +2742,7 @@ class RealWorldCleanupContract:
             "name": category,
             "support_estimate": {"fixture_id": source_fixture_id},
         }
-        target = infer_target_fixture_for_detection(pseudo_detection, self.fixture_hints())
+        target = self.target_fixture_for_detection(pseudo_detection, self.fixture_hints())
         return str((target or {}).get("fixture_id") or "")
 
     def _fixture_hints_for_visual_grounding_request(self) -> list[dict[str, Any]]:
@@ -2878,7 +3123,7 @@ class RealWorldCleanupContract:
             "name": category,
             "support_estimate": {"fixture_id": ""},
         }
-        public_target = infer_target_fixture_for_detection(pseudo_detection, self.fixture_hints())
+        public_target = self.target_fixture_for_detection(pseudo_detection, self.fixture_hints())
         expected = str((public_target or {}).get("fixture_id") or "")
         return {
             "status": "plausible" if not expected or expected == target_fixture_id else "weak",
@@ -3601,9 +3846,14 @@ def cleanup_policy_trace_from_events(
         loop_style = "interleaved_cleanup_loop"
     else:
         loop_style = "survey_first_cleanup_loop"
+    waypoint_source = (
+        "generated_exploration_candidate"
+        if metric_map.get("mode") == MINIMAL_MAP_MODE
+        else "static_map_fixture_coverage"
+    )
     return {
         "schema": CLEANUP_POLICY_TRACE_SCHEMA,
-        "waypoint_source": "static_map_fixture_coverage",
+        "waypoint_source": waypoint_source,
         "loop_style": loop_style,
         "total_waypoints": total_waypoints,
         "observed_waypoint_count": len(visited_waypoints),
@@ -4127,6 +4377,14 @@ def _semantic_anchor_type_for_fixture(fixture: dict[str, Any]) -> str:
     if any(term in text for term in ("table", "counter", "desk", "stand", "sofa", "bed")):
         return "surface"
     return "fixture"
+
+
+def _is_place_anchor(anchor: dict[str, Any]) -> bool:
+    anchor_type = str(anchor.get("anchor_type") or "")
+    if anchor_type not in {"surface", "receptacle", "fixture"}:
+        return False
+    affordances = {str(item).lower() for item in anchor.get("affordances") or []}
+    return bool({"place", "place_inside", "open"}.intersection(affordances))
 
 
 def _anchor_affordances_for_fixture(fixture: dict[str, Any]) -> list[str]:

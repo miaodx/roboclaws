@@ -846,7 +846,9 @@ def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> Non
         assert provenance.get("source_fixtures_hidden") is True, waypoint
         assert provenance.get("source_waypoint_hidden") is True, waypoint
         assert "source_waypoint_id" not in provenance, waypoint
-    assert (data.get("semantic_sweep") or {}).get("minimal_map_mode") is True, data
+    semantic_sweep = data.get("semantic_sweep")
+    if semantic_sweep is not None:
+        assert semantic_sweep.get("minimal_map_mode") is True, data
     _assert_no_forbidden_keys(metric_map)
     _assert_no_forbidden_keys(fixture_hints)
 
@@ -2068,13 +2070,34 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     trace = data.get("cleanup_policy_trace") or {}
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
     if metric_map.get("mode") == "minimal":
-        assert trace.get("waypoint_source") in {
-            "generated_exploration_candidate",
-            "static_map_fixture_coverage",
-        }, trace
-        assert trace.get("loop_style") == "scan_only", trace
-        assert trace.get("cleanup_action_count") == 0, trace
-        assert trace.get("first_cleanup_before_full_survey") is False, trace
+        assert trace.get("waypoint_source") == "generated_exploration_candidate", trace
+        if data.get("semantic_sweep_mode") is True:
+            assert trace.get("first_cleanup_before_full_survey") is False, trace
+            assert trace.get("loop_style") == "scan_only", trace
+            assert trace.get("cleanup_action_count") == 0, trace
+        else:
+            assert trace.get("loop_style") in {
+                "survey_first_cleanup_loop",
+                "interleaved_cleanup_loop",
+            }, trace
+            if trace.get("loop_style") == "survey_first_cleanup_loop":
+                assert trace.get("first_cleanup_before_full_survey") is False, trace
+            else:
+                assert trace.get("first_cleanup_before_full_survey") is True, trace
+            assert int(trace.get("cleanup_action_count") or 0) > 0, trace
+            placed_object_count = int(trace.get("placed_object_count") or 0)
+            post_place_observe_count = int(trace.get("post_place_observe_count") or 0)
+            observed_waypoint_count = int(trace.get("observed_waypoint_count") or 0)
+            total_waypoints = int(trace.get("total_waypoints") or 0)
+            if trace.get("post_place_observe_complete") is not True:
+                post_place_observe_count = max(
+                    post_place_observe_count,
+                    _post_place_observe_count_allowing_public_state_queries(trace),
+                )
+            assert placed_object_count > 0, trace
+            assert total_waypoints > 0, trace
+            assert observed_waypoint_count >= total_waypoints, trace
+            assert post_place_observe_count >= placed_object_count, trace
         assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
         assert "generated_exploration_candidate" in report_text, report_text[:500]
         return

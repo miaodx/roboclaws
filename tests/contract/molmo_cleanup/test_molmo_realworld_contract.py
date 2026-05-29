@@ -378,6 +378,85 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     _assert_no_forbidden_keys(agent_view)
 
 
+def test_minimal_map_mode_keeps_public_waypoint_after_receptacle_navigation() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    observation = _first_non_empty_observation(contract)
+    detection = next(
+        item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
+    )
+    fixture_id = str(detection["candidate_fixture_id"])
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    navigation = contract.navigate_to_receptacle(fixture_id)
+    post_nav_map = contract.metric_map()
+
+    assert navigation["ok"] is True
+    assert post_nav_map["robot_pose"]["waypoint_id"].startswith("generated_exploration_")
+    assert post_nav_map["robot_pose"]["room_id"] == "generated_area"
+    assert post_nav_map["robot_pose"]["waypoint_id"] in {
+        str(item["waypoint_id"]) for item in post_nav_map["inspection_waypoints"]
+    }
+
+
+def test_minimal_map_mode_observe_marks_placed_object_non_actionable() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    observation = _first_non_empty_observation(contract)
+    detection = next(
+        item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
+    )
+    fixture_id = str(detection["candidate_fixture_id"])
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    assert contract.navigate_to_receptacle(fixture_id)["ok"] is True
+    if detection.get("recommended_tool") == "place_inside":
+        opened = contract.open_receptacle(fixture_id)
+        if opened["ok"]:
+            assert contract.place_inside(fixture_id)["ok"] is True
+            closed = contract.close_receptacle(fixture_id)
+            if closed["ok"]:
+                expected_state = "placed_closed"
+            else:
+                expected_state = "placed"
+        else:
+            assert contract.place_inside(fixture_id)["ok"] is True
+            expected_state = "placed"
+    else:
+        assert contract.place(fixture_id)["ok"] is True
+        expected_state = "placed"
+
+    later = contract.observe()
+    later_detection = next(
+        item
+        for item in later["visible_object_detections"]
+        if item["object_id"] == detection["object_id"]
+    )
+    worklist_item = next(
+        item
+        for item in contract.cleanup_worklist_payload()["objects"]
+        if item["object_id"] == detection["object_id"]
+    )
+    duplicate_nav = contract.navigate_to_object(detection["object_id"])
+    duplicate_pick = contract.pick(detection["object_id"])
+
+    assert later_detection["cleanup_recommended"] is False
+    assert worklist_item["state"] == expected_state
+    assert worklist_item["cleanup_recommended"] is False
+    assert duplicate_nav["ok"] is False
+    assert duplicate_nav["error_reason"] == "already_handled"
+    assert duplicate_pick["ok"] is False
+    assert duplicate_pick["error_reason"] == "already_handled"
+
+
 def test_minimal_map_mode_done_uses_generated_candidate_coverage() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(

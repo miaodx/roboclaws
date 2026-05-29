@@ -404,6 +404,7 @@ def run_realworld_cleanup(
     )
     agent_scratchpad["policy"] = policy_name
     handled_handles: set[str] = set()
+    pending_minimal_detections: dict[str, dict[str, Any]] = {}
 
     for waypoint in metric_map["inspection_waypoints"]:
         waypoint_id = str(waypoint["waypoint_id"])
@@ -458,30 +459,16 @@ def run_realworld_cleanup(
         if semantic_sweep:
             continue
         for detection in detections:
-            handle = str(detection["object_id"])
-            if handle in handled_handles:
+            if map_mode == MINIMAL_MAP_MODE:
+                pending_minimal_detections[str(detection["object_id"])] = dict(detection)
                 continue
-            agent_scratchpad["observed_handles"].setdefault(handle, {"object_id": handle})
-            target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
-            if target_fixture is None:
-                agent_scratchpad["failed_attempts"].append(
-                    {"object_id": handle, "reason": "no_public_fixture_match"}
-                )
-                continue
-            target_fixture_id = str(target_fixture["fixture_id"])
-            support = detection.get("support_estimate") or {}
-            if support.get("fixture_id") == target_fixture_id:
-                agent_scratchpad["notes"].append(
-                    {"object_id": handle, "reason": "already_on_inferred_fixture"}
-                )
-                continue
-            view_index = _clean_visible_object(
+            view_index = _maybe_clean_visible_object(
                 trace_events=trace_events,
                 started_at=started_at,
                 contract=contract,
                 base_contract=base_contract,
                 detection=detection,
-                target_fixture=target_fixture,
+                fixture_hints=fixture_hints,
                 robot_view_steps=robot_view_steps,
                 output_dir=output_dir,
                 view_index=view_index,
@@ -489,20 +476,30 @@ def run_realworld_cleanup(
                 planner_proof_evidence=(
                     planner_proof_evidence if use_planner_proof_for_cleanup_primitives else None
                 ),
+                agent_scratchpad=agent_scratchpad,
+                handled_handles=handled_handles,
+                perception_mode=perception_mode,
             )
-            handled_handles.add(handle)
-            agent_scratchpad["observed_handles"][handle].update(
-                {
-                    "object_id": handle,
-                    "category": detection.get("category"),
-                    "from_fixture_id": support.get("fixture_id"),
-                    "to_fixture_id": target_fixture_id,
-                    "reason": _decision_reason(perception_mode),
-                    "perception_source": detection.get("perception_source", "visible_detection"),
-                    "model_provenance": detection.get("model_provenance"),
-                    "source_observation_id": detection.get("source_observation_id"),
-                    "handled": True,
-                }
+
+    if not semantic_sweep and map_mode == MINIMAL_MAP_MODE:
+        for detection in pending_minimal_detections.values():
+            view_index = _maybe_clean_visible_object(
+                trace_events=trace_events,
+                started_at=started_at,
+                contract=contract,
+                base_contract=base_contract,
+                detection=detection,
+                fixture_hints=fixture_hints,
+                robot_view_steps=robot_view_steps,
+                output_dir=output_dir,
+                view_index=view_index,
+                record_robot_views=record_robot_views,
+                planner_proof_evidence=(
+                    planner_proof_evidence if use_planner_proof_for_cleanup_primitives else None
+                ),
+                agent_scratchpad=agent_scratchpad,
+                handled_handles=handled_handles,
+                perception_mode=perception_mode,
             )
 
     done = _call_tool(
@@ -923,7 +920,9 @@ def _clean_visible_object(
             action=str(capture["action"]),
             label_suffix=str(capture["label_suffix"]),
             focus_object_id=capture.get("focus_object_id"),
-            focus_receptacle_id=capture.get("focus_receptacle_id"),
+            focus_receptacle_id=contract.internal_fixture_id_for_public_reference(
+                capture.get("focus_receptacle_id")
+            ),
             semantic_phase=capture.get("semantic_phase"),
         )
 
@@ -975,6 +974,73 @@ def _clean_visible_object(
         view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
 
     return view_index
+
+
+def _maybe_clean_visible_object(
+    *,
+    trace_events: list[dict[str, Any]],
+    started_at: float,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    detection: dict[str, Any],
+    fixture_hints: dict[str, Any],
+    robot_view_steps: list[dict[str, Any]],
+    output_dir: Path,
+    view_index: int,
+    record_robot_views: bool,
+    planner_proof_evidence: dict[str, Any] | None,
+    agent_scratchpad: dict[str, Any],
+    handled_handles: set[str],
+    perception_mode: str,
+) -> int:
+    handle = str(detection["object_id"])
+    if handle in handled_handles:
+        return view_index
+    agent_scratchpad["observed_handles"].setdefault(handle, {"object_id": handle})
+    live_detection = contract.inspect_visible_object(handle)
+    if live_detection.get("ok") and isinstance(live_detection.get("detection"), dict):
+        detection = dict(live_detection["detection"])
+    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    if target_fixture is None:
+        agent_scratchpad["failed_attempts"].append(
+            {"object_id": handle, "reason": "no_public_fixture_match"}
+        )
+        return view_index
+    target_fixture_id = str(target_fixture["fixture_id"])
+    support = detection.get("support_estimate") or {}
+    if support.get("fixture_id") == target_fixture_id:
+        agent_scratchpad["notes"].append(
+            {"object_id": handle, "reason": "already_on_inferred_fixture"}
+        )
+        return view_index
+    next_view_index = _clean_visible_object(
+        trace_events=trace_events,
+        started_at=started_at,
+        contract=contract,
+        base_contract=base_contract,
+        detection=detection,
+        target_fixture=target_fixture,
+        robot_view_steps=robot_view_steps,
+        output_dir=output_dir,
+        view_index=view_index,
+        record_robot_views=record_robot_views,
+        planner_proof_evidence=planner_proof_evidence,
+    )
+    handled_handles.add(handle)
+    agent_scratchpad["observed_handles"][handle].update(
+        {
+            "object_id": handle,
+            "category": detection.get("category"),
+            "from_fixture_id": support.get("fixture_id"),
+            "to_fixture_id": target_fixture_id,
+            "reason": _decision_reason(perception_mode),
+            "perception_source": detection.get("perception_source", "visible_detection"),
+            "model_provenance": detection.get("model_provenance"),
+            "source_observation_id": detection.get("source_observation_id"),
+            "handled": True,
+        }
+    )
+    return next_view_index
 
 
 def _write_snapshot(

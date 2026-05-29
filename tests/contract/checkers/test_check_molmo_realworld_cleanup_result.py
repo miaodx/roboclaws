@@ -329,6 +329,120 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
     )
 
 
+def test_checker_allows_minimal_map_waypoint_honesty_for_survey_first_cleanup(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+    trace = result["cleanup_policy_trace"]
+    assert trace["waypoint_source"] == "generated_exploration_candidate"
+    assert trace["loop_style"] == "survey_first_cleanup_loop"
+    assert trace["first_cleanup_before_full_survey"] is False
+    assert trace["placed_object_count"] == 5
+    assert trace["post_place_observe_count"] >= trace["placed_object_count"]
+
+
+def test_checker_allows_minimal_map_waypoint_honesty_for_online_interleaved_cleanup(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    trace = result["cleanup_policy_trace"]
+    trace["loop_style"] = "interleaved_cleanup_loop"
+    trace["first_cleanup_before_full_survey"] = True
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+
+
+def test_checker_allows_minimal_map_without_semantic_sweep_metadata(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    result["semantic_sweep"] = None
+    result["semantic_sweep_mode"] = None
+    result["agent_metric_mode"] = "minimal"
+    result["agent_runtime_minimal"] = True
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+
+
+def test_checker_rejects_minimal_interleaved_cleanup_without_full_sweep(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    trace = result["cleanup_policy_trace"]
+    trace["loop_style"] = "interleaved_cleanup_loop"
+    trace["first_cleanup_before_full_survey"] = True
+    trace["observed_waypoint_count"] = max(0, int(trace["total_waypoints"]) - 1)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_minimal_map=True,
+            require_waypoint_honesty=True,
+        )
+
+
 def test_checker_accepts_isaac_selected_bindings_when_rows_match_scene_index(
     tmp_path: Path,
 ) -> None:

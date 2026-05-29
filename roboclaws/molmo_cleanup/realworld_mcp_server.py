@@ -287,11 +287,21 @@ class RealWorldMolmoCleanupMCPServer:
                 str(raw.get("observation_id") or "")
             )
         if tool == "fixture_hints":
-            augmented["instruction"] = (
-                "Use room-level fixture ids and affordances as static public landmarks. "
-                "Runtime movable objects come only from observe; acceptable destination "
-                "sets and generated mess truth are private."
-            )
+            if self.contract.map_mode == "minimal":
+                augmented["instruction"] = (
+                    "Minimal map mode hides authored rooms and fixture hints. Use "
+                    "runtime_metric_map.public_semantic_anchors and each observed object's "
+                    "cleanup_worklist.candidate_fixture_id as public destination anchors. "
+                    "Those anchor_fixture_* ids are valid for navigate_to_receptacle, place, "
+                    "place_inside, open_receptacle, and close_receptacle. Acceptable "
+                    "destination sets and generated mess truth are private."
+                )
+            else:
+                augmented["instruction"] = (
+                    "Use room-level fixture ids and affordances as static public landmarks. "
+                    "Runtime movable objects come only from observe; acceptable destination "
+                    "sets and generated mess truth are private."
+                )
         if tool == "declare_visual_candidates" and augmented.get("ok"):
             augmented = _compact_declare_visual_candidates_response(augmented)
             augmented["instruction"] = (
@@ -661,6 +671,9 @@ class RealWorldMolmoCleanupMCPServer:
             return None
         return self.contract._internal_object_id(handle)
 
+    def _internal_fixture_id(self, fixture_id: str | None) -> str | None:
+        return self.contract.internal_fixture_id_for_public_reference(fixture_id)
+
     def _record_robot_view(
         self,
         action: str,
@@ -686,7 +699,7 @@ class RealWorldMolmoCleanupMCPServer:
                 action=action,
                 label_suffix=label_suffix,
                 focus_object_id=focus_object_id,
-                focus_receptacle_id=focus_receptacle_id,
+                focus_receptacle_id=self._internal_fixture_id(focus_receptacle_id),
                 semantic_phase=semantic_phase,
             )
         except Exception as exc:
