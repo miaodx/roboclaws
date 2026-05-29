@@ -4,7 +4,8 @@
 execution still unrun
 **Created:** 2026-05-19
 **Source:** grill-with-docs session on Agibot G2 GDK docs, local
-`vendors/agibot/app` examples, and `docs/plans/real-robot-nav2-cleanup-pilot.md`
+`vendors/agibot_sdk/` docs/examples, and
+`docs/plans/real-robot-nav2-cleanup-pilot.md`
 **Workflow:** Pre-GSD plan. Ingest into `.planning/` before implementation.
 
 ## Problem
@@ -187,7 +188,7 @@ Tool behavior:
 
 1. **Agibot Docs And Example Mirror**
    Keep the Agibot GDK 2.6.3 docs and relevant example code under
-   `vendors/agibot/` so implementation decisions can cite local source
+   `vendors/agibot_sdk/` so implementation decisions can cite local source
    material. Keep these files vendored evidence, not runtime package code.
 
 2. **Minimal Map Context Capture Script**
@@ -370,6 +371,8 @@ movement gate, not physical PNC execution.
 
 2026-05-29 mocked Agibot GDK navigation gate:
 
+- Aligned this plan's vendored-doc path references with the actual SDK mirror at
+  `vendors/agibot_sdk/`.
 - Added a focused contract test that injects a fake `agibot_gdk` module into
   the SDK runner execute path and verifies successful `Pnc.normal_navi`
   evidence: `navigation_status=succeeded`,
@@ -510,7 +513,7 @@ movement gate, not physical PNC execution.
 
 ## Acceptance Criteria
 
-- Agibot GDK docs/examples are mirrored under `vendors/agibot/` for local
+- Agibot GDK docs/examples are mirrored under `vendors/agibot_sdk/` for local
   reference.
 - An operator can capture an Agibot Minimal Map Context without hand-tagging
   rooms, fixtures, or semantic waypoints.
