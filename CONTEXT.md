@@ -79,7 +79,8 @@ _Avoid_: runtime observation memory, private scene graph, raw hidden truth
 **Minimal Navigation Map Artifact**:
 An intentionally sparse Navigation Map Artifact aligned with raw robot maps:
 occupancy/free-space geometry plus localization and safety context, without
-preauthored room, fixture, or object semantics.
+preauthored room, fixture, or object semantics. It is the preferred real-robot
+starting point; rich authored bundles are dev/test or explicit aids.
 _Avoid_: complete semantic map, arbitrary coordinate freedom, private scene graph
 
 **Metric Map Projection**:
@@ -91,18 +92,29 @@ _Avoid_: raw occupancy map, independent map source, private backend metadata
 **Runtime Metric Map**:
 The current-run Metric Map Projection after public runtime evidence is added:
 observed object handles, loaded priors, generated waypoint/area evidence, room
-or fixture candidates, and map update candidates.
+or fixture candidates, public semantic anchors, and map update candidates.
 _Avoid_: source map artifact, hidden mutable global map, private target truth
+
+**Public Semantic Anchor**:
+A public-evidence-backed fixed or semi-static place the robot can reason about:
+room area, surface, receptacle, fixture, or observation waypoint, with stable id,
+label/category, pose or waypoint link, affordances, provenance, and confidence.
+Semantic-map-build may create these anchors from observations over a minimal
+source map; cleanup may use fixture/receptacle anchors as destination hints.
+_Avoid_: small movable object, private acceptable destination, unreviewed source-map mutation
 
 **Semantic Map Build Task**:
 A first-class Runnable Task that navigates and observes to produce a Runtime
 Metric Map snapshot for later robot tasks. It selects a map-building skill,
-requires household world capabilities, and disables manipulation.
+requires household world capabilities, and disables manipulation. In the
+minimal-map mainline, it turns sparse maps into cleanup-usable public evidence.
 _Avoid_: cleanup profile, private target discovery, source-map mutation, MCP tool
 
 **Household Cleanup Task**:
 A first-class Runnable Task that consumes household world evidence and combines
-it with manipulation capability requirements to tidy movable objects.
+it with manipulation capability requirements to tidy movable objects. It may use
+current fixture/receptacle anchors as destination hints; older movable-object
+priors need current-run confirmation before pick/place.
 _Avoid_: source-map builder, semantic-map owner, capability profile
 
 **Household World Capability Profile**:
@@ -123,7 +135,8 @@ _Avoid_: static fixture, current-run confirmed handle, private generated mess
 
 **Map Update Candidate**:
 A public-evidence-backed proposed update to static map semantics, usually for a
-large fixture or semi-static object.
+large fixture or semi-static object. It may be useful in the current Runtime
+Metric Map before a later review workflow writes source-map semantics.
 _Avoid_: automatic source-map mutation, small movable cleanup object
 
 **Generated Exploration Candidate**:
@@ -326,9 +339,13 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 - **Rich vs minimal maps**: rich map bundles may contain authored public
   semantics; minimal map artifacts intentionally start near raw occupancy maps
   so online/offline semantic-map-build can enrich them through public evidence.
+  The real-robot mainline starts from minimal maps, not rich authored semantics.
 - **Semantic map build vs cleanup**: semantic-map-build creates world evidence;
   cleanup consumes it. Simulator or dry-run evidence is useful, but it is not
   physical execution proof.
+- **Anchors vs priors**: fixture/receptacle Public Semantic Anchors in a
+  current Runtime Metric Map can guide cleanup destinations; older movable
+  priors must be confirmed by current camera evidence before manipulation.
 - **Nav2 vs Agibot**: Nav2 and Agibot are backend variants/provenance choices
   when public tool shape remains stable.
 - **Recorded vs verified waypoint**: an operator-recorded waypoint is not

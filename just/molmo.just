@@ -237,6 +237,23 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       semantic_sweep_args=(--semantic-sweep)
       checker_semantic_args=(--require-semantic-sweep)
       profile_requires_clean_success="false"
+      filtered_checker_visual_args=()
+      skip_checker_arg_value="false"
+      for checker_arg in "${checker_visual_args[@]}"; do
+        if [[ "$skip_checker_arg_value" == "true" ]]; then
+          skip_checker_arg_value="false"
+          continue
+        fi
+        case "$checker_arg" in
+          --min-semantic-accepted-count|--min-model-declared-actions)
+            skip_checker_arg_value="true"
+            ;;
+          *)
+            filtered_checker_visual_args+=("$checker_arg")
+            ;;
+        esac
+      done
+      checker_visual_args=("${filtered_checker_visual_args[@]}")
     fi
     semantic_sweep_args+=(--map-mode "$map_mode")
     if [[ "$map_mode" == "minimal" ]]; then

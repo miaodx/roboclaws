@@ -250,6 +250,7 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
     assert runtime_map["private_truth_included"] is False
     assert runtime_map["source_map_mutated"] is False
     assert runtime_map["static_map"]["fixtures"]
+    assert runtime_map["public_semantic_anchors"] == []
     assert runtime_map["map_update_candidates"] == []
     assert runtime_map["observed_objects"]
     observed = runtime_map["observed_objects"][0]
@@ -351,7 +352,29 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     assert runtime_map["static_map"]["fixtures"] == []
     assert runtime_map["static_map"]["driveable_ways"] == []
     assert runtime_map["generated_exploration_candidates"]
+    assert runtime_map["public_semantic_anchors"]
+    waypoint_anchor = next(
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_type"] == "observation_waypoint"
+        and item["waypoint_id"] == waypoint["waypoint_id"]
+    )
+    assert waypoint_anchor["anchor_id"].startswith("anchor_waypoint_generated_")
+    assert waypoint_anchor["waypoint_id"] == waypoint["waypoint_id"]
+    assert waypoint_anchor["producer_type"] == "generated_exploration_candidate"
+    assert waypoint_anchor["promotion_status"] == "run_local"
+    fixture_anchor = next(
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_type"] in {"fixture", "receptacle"}
+    )
+    assert fixture_anchor["anchor_id"].startswith("anchor_fixture_")
+    assert fixture_anchor["source_observation_id"]
     assert runtime_map["observed_objects"]
+    assert runtime_map["observed_objects"][0]["source_fixture_id"].startswith("anchor_fixture_")
+    assert agent_view["observed_objects"][0]["support_estimate"]["fixture_id"].startswith(
+        "anchor_fixture_"
+    )
     _assert_no_forbidden_keys(agent_view)
 
 

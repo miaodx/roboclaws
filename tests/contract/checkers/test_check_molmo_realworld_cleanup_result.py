@@ -116,6 +116,51 @@ def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
     assert result["agent_view"]["fixture_hints"]["rooms"] == []
     assert result["runtime_metric_map"]["static_map"]["fixtures"] == []
     assert result["runtime_metric_map"]["generated_exploration_candidates"]
+    anchors = result["runtime_metric_map"]["public_semantic_anchors"]
+    assert anchors
+    assert any(item["anchor_type"] == "observation_waypoint" for item in anchors)
+    assert any(item["anchor_type"] in {"fixture", "receptacle"} for item in anchors)
+
+
+def test_checker_allows_semantic_sweep_robot_timeline_without_cleanup_actions(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        map_mode="minimal",
+    )
+    robot_views = tmp_path / "robot_views"
+    robot_views.mkdir()
+    for name in ("scene.fpv.png", "scene.chase.png", "scene.map.png", "scene.verify.png"):
+        (robot_views / name).write_bytes(b"placeholder")
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
+    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["artifacts"]["robot_views"] = str(robot_views)
+    result["robot_view_steps"] = [
+        _scene_context_robot_step("before"),
+        _scene_context_robot_step("after"),
+    ]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_minimal_map=True,
+        require_robot_views=True,
+    )
+    assert not any(
+        step.get("action", "").startswith(("pick ", "place "))
+        for step in result["robot_view_steps"]
+    )
 
 
 def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None:
@@ -134,6 +179,32 @@ def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
+        )
+
+
+def test_checker_rejects_promoted_runtime_semantic_anchor(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        map_mode="minimal",
+    )
+    result["runtime_metric_map"]["public_semantic_anchors"][0]["promotion_status"] = "promoted"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_semantic_sweep=True,
+            require_minimal_map=True,
         )
 
 
@@ -229,6 +300,32 @@ def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
         min_generated_mess_count=5,
         require_waypoint_honesty=True,
         require_real_robot_alignment=True,
+    )
+
+
+def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        map_mode="minimal",
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
     )
 
 
@@ -2118,6 +2215,24 @@ def _robot_step(action: str) -> dict[str, object]:
         },
         "focus": {
             "has_focus": True,
+            "fpv_visibility": {"status": "ok"},
+            "visibility": {"status": "ok"},
+        },
+    }
+
+
+def _scene_context_robot_step(action: str) -> dict[str, object]:
+    return {
+        "action": action,
+        "room_outline_count": 1,
+        "views": {
+            "fpv": "robot_views/scene.fpv.png",
+            "chase": "robot_views/scene.chase.png",
+            "map": "robot_views/scene.map.png",
+            "verify": "robot_views/scene.verify.png",
+        },
+        "focus": {
+            "has_focus": False,
             "fpv_visibility": {"status": "ok"},
             "visibility": {"status": "ok"},
         },

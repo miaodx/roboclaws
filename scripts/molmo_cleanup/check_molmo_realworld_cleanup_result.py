@@ -749,6 +749,35 @@ def _assert_runtime_metric_map(
         assert "observed_objects" not in fixture, fixture
         assert "objects" not in fixture, fixture
         assert not str(fixture.get("fixture_id") or "").startswith("observed_"), fixture
+    anchors = runtime_metric_map.get("public_semantic_anchors") or []
+    assert isinstance(anchors, list), runtime_metric_map
+    for anchor in anchors:
+        assert str(anchor.get("anchor_id") or ""), anchor
+        assert str(anchor.get("anchor_id") or "").startswith("anchor_"), anchor
+        assert anchor.get("anchor_type") in {
+            "room_area",
+            "surface",
+            "receptacle",
+            "fixture",
+            "observation_waypoint",
+        }, anchor
+        for key in (
+            "category",
+            "label",
+            "waypoint_id",
+            "affordances",
+            "producer_type",
+            "producer_id",
+            "confidence",
+            "source_observation_id",
+            "promotion_status",
+        ):
+            assert key in anchor, anchor
+        assert isinstance(anchor.get("affordances") or [], list), anchor
+        assert anchor.get("promotion_status") != "promoted", anchor
+        assert not str(anchor.get("anchor_id") or "").startswith("observed_"), anchor
+        assert "target_receptacle_id" not in anchor, anchor
+        assert "is_misplaced" not in anchor, anchor
     observed = runtime_metric_map.get("observed_objects") or []
     agent_observed = agent_view.get("observed_objects") or []
     current_observed = [item for item in observed if item.get("freshness") != "prior"]
@@ -804,6 +833,9 @@ def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> Non
     assert waypoints, metric_map
     generated = runtime_map.get("generated_exploration_candidates") or []
     assert len(generated) == len(waypoints), runtime_map
+    anchors = runtime_map.get("public_semantic_anchors") or []
+    assert anchors, runtime_map
+    assert any(item.get("anchor_type") == "observation_waypoint" for item in anchors), anchors
     for waypoint in waypoints:
         assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
         assert waypoint.get("waypoint_source") == "generated_exploration_candidate", waypoint
@@ -909,8 +941,8 @@ def _assert_robot_views(
             focused_actions.add(action.split(" ", 1)[0])
             if not action.startswith("observe "):
                 _assert_focused_robot_step(step)
-    assert focused_actions, (focused_actions, data)
     if require_complete_actions:
+        assert focused_actions, (focused_actions, data)
         for expected in CANONICAL_SURFACE_CLEANUP_PHASES:
             assert expected in focused_actions, (expected, focused_actions, data)
         if any(
@@ -2017,12 +2049,15 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     waypoints = metric_map.get("inspection_waypoints") or []
     assert waypoints, metric_map
     for waypoint in waypoints:
-        assert waypoint.get("waypoint_source") in {
+        allowed_sources = {
             "static_map_coverage",
             "fixture_coverage",
             "static_map_fixture_coverage",
             "agibot_robot_map_9_static_rehearsal",
-        }, waypoint
+        }
+        if metric_map.get("mode") == "minimal":
+            allowed_sources.add("generated_exploration_candidate")
+        assert waypoint.get("waypoint_source") in allowed_sources, waypoint
         assert waypoint.get("purpose"), waypoint
         label_text = f"{waypoint.get('waypoint_source', '')} {waypoint.get('purpose', '')}".lower()
         assert not any(word in label_text for word in forbidden_words), waypoint
@@ -2032,6 +2067,17 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     assert worklist.get("waypoints"), worklist
     trace = data.get("cleanup_policy_trace") or {}
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
+    if metric_map.get("mode") == "minimal":
+        assert trace.get("waypoint_source") in {
+            "generated_exploration_candidate",
+            "static_map_fixture_coverage",
+        }, trace
+        assert trace.get("loop_style") == "scan_only", trace
+        assert trace.get("cleanup_action_count") == 0, trace
+        assert trace.get("first_cleanup_before_full_survey") is False, trace
+        assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
+        assert "generated_exploration_candidate" in report_text, report_text[:500]
+        return
     assert trace.get("waypoint_source") == "static_map_fixture_coverage", trace
     assert trace.get("loop_style") == "interleaved_cleanup_loop", trace
     assert trace.get("first_cleanup_before_full_survey") is True, trace

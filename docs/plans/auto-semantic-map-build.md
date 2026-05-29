@@ -14,6 +14,14 @@ eventual physical-robot runs. Early real-robot acceptance may prove only
 navigation, observation, and runtime-map evidence while manipulation remains a
 declared blocked capability.
 
+**Accepted direction, 2026-05-29:** make the minimal source map the real-robot
+mainline. Rich authored semantic map bundles may remain as development,
+simulation, or explicitly selected aids, but the product path should assume a
+sparse occupancy/free-space map and let `semantic-map-build` enrich the
+Runtime Metric Map through public observation evidence. Cleanup should consume
+that enriched Runtime Metric Map instead of depending on hand-authored fixture
+semantics.
+
 ## Problem
 
 Roboclaws cleanup already has a public coarse map path: `metric_map()` projects
@@ -47,6 +55,10 @@ that a separate query surface is necessary.
 
 - Make semantic map build **online-first**: the current cleanup run owns a
   Runtime Metric Map that can grow as observations arrive.
+- Treat minimal Navigation Map Artifacts as the default deployment starting
+  point. The builder should recover cleanup-usable room/fixture/receptacle
+  semantics from public observation evidence instead of assuming a preauthored
+  semantic map.
 - Treat semantic map build as a task-neutral world-understanding capability:
   the clean public task name should be `semantic-map-build`, and cleanup should
   consume its snapshots rather than own the abstraction.
@@ -69,6 +81,8 @@ that a separate query surface is necessary.
 - Preserve the static/dynamic boundary:
   - static map data contains coarse navigation geometry and fixed or semi-static
     fixtures;
+  - public evidence may create Runtime Metric Map anchors for fixed or
+    semi-static rooms, surfaces, receptacles, and fixtures;
   - small movable cleanup objects appear only as observed handles;
   - large fixture changes appear first as update candidates, not automatic map
     mutations.
@@ -100,6 +114,9 @@ that a separate query surface is necessary.
 - Do not silently write runtime observations back into `map_bundle/semantics.json`
   or an Agibot source map context.
 - Do not promote small movable cleanup targets into static map semantics.
+- Do not make rich authored room/fixture semantics the normal real-robot
+  prerequisite. They may stay as CI/dev fixtures or explicit comparison modes,
+  but the fast hardware path starts from minimal maps.
 - Do not make offline sweep a separate map-building architecture. It is a mode
   of the same online map-update logic.
 - Do not require a complex next-best-view or global coverage planner for the
@@ -139,6 +156,12 @@ This plan uses the terms added to `CONTEXT.md`:
   earlier sweep or snapshot into a later run.
 - **Map Update Candidate**: a proposed static-semantics update for a large
   fixture or semi-static furniture item.
+- **Public Semantic Anchor**: a public-evidence-backed room area, surface,
+  receptacle, fixture, or observation waypoint in the Runtime Metric Map.
+  Anchors carry stable id, label/category, waypoint or pose link, affordances
+  when known, producer provenance, and confidence. Cleanup may use
+  fixture/receptacle anchors as destination hints, but they do not mutate the
+  source map unless a later review workflow accepts them.
 - **Semantic Sweep Mode**: a no-cleanup-action mode that navigates and observes
   to build or refresh runtime-map evidence.
 - **Generated Exploration Candidate**: a safe navigation or observation
@@ -196,6 +219,13 @@ contain large fixed or semi-static items such as cabinets, beds, sofas, fridges,
 tables, counters, sinks, large receptacles, rooms, waypoints, and driveable
 areas.
 
+For the minimal-map mainline, the source projection may start with no authored
+rooms, fixtures, or inspection waypoints beyond generated exploration
+candidates. Runtime evidence should add Public Semantic Anchors for fixed or
+semi-static places the robot can use later: room areas, surfaces, receptacles,
+fixtures, and observation waypoints. These anchors are current-run public
+evidence, not a silent source-map rewrite.
+
 `observed_objects` contains small movable cleanup targets such as dishes, books,
 toys, clothes, pillows, electronics, and other objects that the robot may clean.
 These objects must not be written into static map semantics.
@@ -251,7 +281,8 @@ derive safe exploration candidates from public free space
 project candidates as generated_* waypoint entries in metric_map
 agent chooses candidate order through semantic-map-build skill
 navigate / observe / declare_visual_candidates
-update runtime rooms, fixture candidates, observed objects, and map candidates
+update runtime semantic anchors, fixture/receptacle candidates, observed objects,
+and map candidates
 disable source-map mutation and cleanup actions
 write runtime-map snapshot plus candidate provenance
 ```
@@ -313,6 +344,41 @@ after the HTTP service is available.
 
 ## Success Standards
 
+### Minimal-mainline acceptance
+
+- The default implementation path for physical household world work can start
+  from a Minimal Navigation Map Artifact: occupancy/free-space geometry,
+  localization/safety context, pose/frame metadata, and generated exploration
+  candidates, with no required authored rooms, fixtures, or inspection
+  waypoints.
+- Rich authored semantic map bundles remain optional dev/test or explicitly
+  selected comparison inputs. A real-robot acceptance claim must not depend on
+  hand-authored room/fixture semantics being present before the run.
+- The agent may choose among generated exploration candidates, but it never
+  invents arbitrary robot coordinates. Every executable navigation target is
+  generated or verified by the backend/operator navigation layer.
+- The first accepted minimal-map artifact and report must show candidate
+  provenance, visited/unvisited state, and the absence of hidden source rooms,
+  fixtures, source waypoint ids, and private cleanup truth in Agent View.
+
+### Semantic-anchor acceptance
+
+- A semantic-map-build run over a minimal source map can create Public Semantic
+  Anchors for fixed or semi-static places: room areas, surfaces, receptacles,
+  fixtures, and observation waypoints.
+- Each accepted anchor includes a stable public id, label/category, waypoint or
+  pose link, affordances when known, producer provenance, confidence, and source
+  observation evidence.
+- Public Semantic Anchors may appear in the current Runtime Metric Map and in
+  run-local snapshots; they must not silently mutate the source Navigation Map
+  Artifact or `map_bundle/semantics.json`.
+- Small movable cleanup objects are never promoted into Public Semantic Anchors,
+  static fixtures, or source map semantics. They remain observed handles or
+  priors.
+- Ambiguous fixture/receptacle detections remain map update candidates or
+  low-confidence anchors that cleanup can ignore; they must not be converted
+  into confident destinations without public evidence.
+
 ### Contract success
 
 - `metric_map()` / Agent View can expose a Runtime Metric Map without adding a
@@ -326,6 +392,9 @@ after the HTTP service is available.
 - A minimal-map run can start without preauthored rooms, fixtures, or
   inspection waypoints while still exposing bounded navigation geometry and
   generated exploration candidates.
+- Runtime-map snapshots distinguish `static_map`, Public Semantic Anchors,
+  `observed_objects`, priors, and `map_update_candidates` clearly enough for
+  checkers and reports to validate each boundary independently.
 
 ### Online cleanup success
 
@@ -336,6 +405,22 @@ after the HTTP service is available.
   are grounded and actionable under the existing cleanup contract.
 - The final report shows the runtime map state, observed-object lifecycle, and
   producer provenance.
+
+### Cleanup-consumer acceptance
+
+- `household-cleanup` can consume a `runtime_map_prior=<runtime_metric_map.json>`
+  produced by a minimal-map `semantic-map-build` run.
+- Fixture/receptacle Public Semantic Anchors from the current Runtime Metric Map
+  can be used as public destination hints for cleanup planning.
+- Movable objects loaded from an older runtime-map snapshot enter cleanup only
+  as Observed Object Priors with `actionability=needs_confirm`; they cannot be
+  picked until current-run camera evidence confirms them.
+- A cleanup run that starts from a minimal-map snapshot must not read hidden
+  generated mess sets, acceptable destinations, scorer results, or authored
+  fixture truth to recover destinations.
+- A successful consumer run produces a report showing which anchors came from
+  the prior, which observations confirmed current objects, and which cleanup
+  decisions used public destination hints.
 
 ### Semantic sweep success
 
@@ -349,6 +434,24 @@ after the HTTP service is available.
   action.
 - Reports make clear that the sweep produced map evidence, not private cleanup
   target truth.
+
+### G2 map-build pilot acceptance
+
+- The first Agibot G2 hardware acceptance target is `semantic-map-build`, not
+  full physical cleanup.
+- The accepted pilot proves operator/backend-approved waypoint navigation,
+  robot-local `head_color` or RAW_FPV observation capture, visual candidate
+  declaration or grounding output, Runtime Metric Map snapshot writing, and a
+  report with backend provenance and safety gates.
+- Manipulation, object/receptacle navigation, pick, place, open, and close
+  remain declared blocked capabilities in the G2 map-build pilot.
+- Real G2 readiness evidence uses a real camera grounding lane such as
+  `camera-labels` with an external visual-grounding producer. Simulator labels,
+  `world-labels`, or `visual_grounding=sim` may validate contracts but do not
+  satisfy hardware perception acceptance.
+- A G2 snapshot may seed a later online run only as public world evidence:
+  fixture/receptacle anchors may guide destinations, while movable-object priors
+  still need current camera confirmation before manipulation.
 
 ### Grounding success
 
@@ -370,6 +473,11 @@ after the HTTP service is available.
   small movable objects into static map semantics.
 - The checker can require prior objects to remain non-actionable until
   confirmed by current-run evidence.
+- The checker can require minimal-mainline runs to expose generated exploration
+  candidates and hide authored source rooms/fixtures/waypoint ids from Agent
+  View.
+- The checker can reject source-map mutation and private-truth leakage when
+  Public Semantic Anchors are created from observations.
 - The checker can prove semantic sweep mode did not call cleanup actions.
 
 ## Implementation Slices
@@ -483,6 +591,10 @@ with no backward-compatibility requirement for old public names:
 - Expose candidates as `generated_*` waypoint entries and run
   `semantic-map-build direct ... map_mode=minimal` over those candidates with
   cleanup actions disabled.
+- Produce Runtime Metric Map Public Semantic Anchors for observed fixed or
+  semi-static rooms, surfaces, receptacles, fixtures, and observation waypoints
+  so a later cleanup run can use the snapshot without relying on the old
+  authored semantic bundle.
 - Reuse `navigate_to_waypoint` for candidate navigation; defer a dedicated
   `navigate_to_exploration_candidate` tool until waypoint projection proves
   insufficient.

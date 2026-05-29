@@ -491,6 +491,15 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     assert "--min-sweep-coverage 1.0" in body
 
 
+def test_molmo_semantic_sweep_strips_cleanup_quality_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert 'if [[ "$semantic_sweep_enabled" == "true" ]]; then' in text
+    assert "--min-semantic-accepted-count|--min-model-declared-actions" in text
+    assert "filtered_checker_visual_args" in text
+    assert 'checker_visual_args=("${filtered_checker_visual_args[@]}")' in text
+
+
 def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
     route = trace_task_run(
         "household-cleanup",

@@ -5328,6 +5328,7 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
     if not runtime_metric_map:
         return ""
     static_map = runtime_metric_map.get("static_map") or {}
+    anchors = runtime_metric_map.get("public_semantic_anchors") or []
     observed = runtime_metric_map.get("observed_objects") or []
     candidates = runtime_metric_map.get("map_update_candidates") or []
     map_mode = runtime_metric_map.get("map_mode", "rich")
@@ -5336,9 +5337,33 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
         f"schema={runtime_metric_map.get('schema', '')}, "
         f"map mode={map_mode}, "
         f"static fixtures={len(static_map.get('fixtures') or [])}, "
+        f"public semantic anchors={len(anchors)}, "
         f"observed objects={len(observed)}, update candidates={len(candidates)}, "
         f"generated exploration candidates={len(generated)}, "
         f"source map mutated={runtime_metric_map.get('source_map_mutated')}"
+    )
+    anchor_rows = []
+    for item in anchors:
+        anchor_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('anchor_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('anchor_type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('waypoint_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('producer_type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('promotion_status', '')))}</td>"
+            "</tr>"
+        )
+    anchor_table = (
+        "<p>No public semantic anchors yet.</p>"
+        if not anchor_rows
+        else (
+            '<div class="table-wrap"><table><thead><tr><th>Anchor</th>'
+            "<th>Type</th><th>Category</th><th>Waypoint</th>"
+            "<th>Producer</th><th>Promotion</th></tr></thead><tbody>"
+            + "".join(anchor_rows)
+            + "</tbody></table></div>"
+        )
     )
     rows = []
     for item in observed:
@@ -5371,8 +5396,8 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
     return (
         "<h3>Runtime Metric Map</h3>"
         f'<p class="note">{html.escape(summary)}. Static map, observed objects, '
-        "and map update candidates remain separate.</p>"
-        f"{observed_table}{candidate_note}"
+        "public semantic anchors, and map update candidates remain separate.</p>"
+        f"{anchor_table}{observed_table}{candidate_note}"
     )
 
 
