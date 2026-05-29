@@ -295,6 +295,9 @@ def test_isaac_scene_camera_spec_honors_canonical_explicit_pose() -> None:
             "view_id": "view 01/table",
             "camera_model": "canonical_eye_target_camera_v1",
             "coordinate_frame": "molmospaces_scene_frame_v1",
+            "robot_view_role": "fpv",
+            "camera_basis": "robot_pose_eye_target",
+            "camera_mode": "canonical_robot_fpv",
             "eye": [1.0, 2.0, 3.0],
             "target": [2.7, 5.9, 1.0],
             "usd_prim_path": "/val_1/Geometry/table_01",
@@ -315,6 +318,9 @@ def test_isaac_scene_camera_spec_honors_canonical_explicit_pose() -> None:
     assert spec["eye"] == pytest.approx([1.0, 2.0, 3.0])
     assert spec["backend_eye"] == pytest.approx([1.0, 2.0, 3.0])
     assert spec["target_source"] == "canonical_explicit_target"
+    assert spec["robot_view_role"] == "fpv"
+    assert spec["camera_basis"] == "robot_pose_eye_target"
+    assert spec["camera_mode"] == "canonical_robot_fpv"
     assert spec["camera_model"] == "canonical_eye_target_camera_v1"
     assert spec["coordinate_frame"] == "molmospaces_scene_frame_v1"
 
