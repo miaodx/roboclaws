@@ -44,6 +44,54 @@ For the minimal-map path, the completed context must include safety bounds plus
 generated or free-space exploration candidates. It must not require
 hand-authored rooms, fixtures, or semantic waypoints.
 
+Before any real-movement run, add operator gate evidence to
+`agibot_map_context.completed.json`. The localization gate may include
+operator-configured confidence and state thresholds when the G2 exposes stable
+values:
+
+```json
+{
+  "operator_localization_gate": {
+    "selected_map_confirmed": true,
+    "g02_pad_relocalized": true,
+    "localization_ready": true,
+    "localization_confidence": 0.92,
+    "min_localization_confidence": 0.9,
+    "localization_state": "localized",
+    "accepted_localization_states": ["localized", "tracking"],
+    "operator": "<operator>",
+    "confirmed_at": "<iso8601>"
+  },
+  "operator_run_enablement_gate": {
+    "enabled": true,
+    "scope": "session",
+    "operator": "<operator>",
+    "confirmed_at": "<iso8601>"
+  }
+}
+```
+
+Optional bounded local nudge limits may also be recorded for review evidence.
+They do not enable an agent-facing nudge tool, and current Agibot map-build
+keeps `relative_move` execution disabled. If supplied, the values must be
+operator-confirmed and no looser than the conservative defaults:
+
+```json
+{
+  "operator_bounded_local_nudge": {
+    "operator_configured": true,
+    "max_distance_m": 0.12,
+    "max_yaw_rad": 0.2,
+    "timeout_s": 1.5,
+    "source": "operator_safety_review"
+  }
+}
+```
+
+The adapter rejects loose or unconfirmed nudge limits back to
+`max_distance_m=0.25`, `max_yaw_rad=0.35`, and `timeout_s=3.0` while marking
+the config invalid in report evidence.
+
 Generate the Roboclaws agent view and preview locally:
 
 ```bash
