@@ -67,9 +67,9 @@ def _manifest() -> dict[str, object]:
                 "focal_length_mm": 24.0,
             },
             "lighting_profile": {
-                "profile_id": "scene_probe_soft_v1",
-                "isaac_dome_intensity": 250.0,
-                "isaac_key_intensity": 850.0,
+                "profile_id": "scene_probe_existing_usd_lights_v1",
+                "isaac_dome_intensity": 0.0,
+                "isaac_key_intensity": 0.0,
                 "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
             },
             "calibration_status": "canonical_scene_frame_similarity_fit_v1",
@@ -285,7 +285,7 @@ def _manifest() -> dict[str, object]:
                 "visual_artifact_provenance": "mujoco_camera_control_canonical_eye_target",
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
-                "lighting_profile": {"profile_id": "scene_probe_soft_v1"},
+                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
                 "images": {
                     "room_01_room_2": {
                         "path": "molmospaces/camera_views/room_01_room_2.png",
@@ -334,7 +334,12 @@ def _manifest() -> dict[str, object]:
                 ),
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
-                "lighting_profile": {"profile_id": "scene_probe_soft_v1"},
+                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "lighting_diagnostics": {
+                    "status": "using_existing_stage_lights",
+                    "existing_light_count": 2,
+                    "added_light_count": 0,
+                },
                 "images": {
                     "room_01_room_2": {
                         "path": "isaaclab/camera_views/room_01_room_2.png",
@@ -414,7 +419,8 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "canonical_scene_frame_similarity_fit_v1" in html
     assert "canonical_eye_target_camera_v1" in html
     assert "backend eye=" in html
-    assert "scene_probe_soft_v1" in html
+    assert "scene_probe_existing_usd_lights_v1" in html
+    assert "using_existing_stage_lights" in html
     assert MOLMOSPACES_LANE_ID in html
     assert ISAAC_LANE_ID in html
     assert "molmospaces/camera_views/view_01_bed.png" in html

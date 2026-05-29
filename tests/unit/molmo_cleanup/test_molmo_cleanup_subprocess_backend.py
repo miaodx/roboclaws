@@ -310,6 +310,38 @@ def test_molmospaces_worker_normalizes_camera_control_request() -> None:
     assert spec["backend_target"] == pytest.approx(spec["lookat"])
 
 
+def test_molmospaces_worker_converts_canonical_eye_to_mujoco_free_camera_angles() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    requested_eye = [1.9435, 3.23895, 1.45]
+    requested_target = [2.99, 4.983, 1.45]
+
+    spec = worker._camera_view_spec(
+        {
+            "view_id": "room 01/room 2",
+            "camera_model": "canonical_eye_target_camera_v1",
+            "eye": requested_eye,
+            "target": requested_target,
+        },
+        index=1,
+    )
+
+    assert spec["view_id"] == "room_01_room_2"
+    assert spec["lookat"] == pytest.approx(requested_target)
+    assert spec["eye"] == pytest.approx(requested_eye)
+    assert spec["backend_eye"] == pytest.approx(requested_eye)
+    assert spec["backend_target"] == pytest.approx(requested_target)
+    assert spec["azimuth"] == pytest.approx(59.03455257875734)
+    assert spec["elevation"] == pytest.approx(0.0)
+    reconstructed_eye = worker._eye_from_mujoco_free_camera(
+        lookat=spec["lookat"],
+        distance=spec["distance"],
+        azimuth=spec["azimuth"],
+        elevation=spec["elevation"],
+    )
+    assert reconstructed_eye == pytest.approx(requested_eye)
+
+
 class _FakeCFunc:
     def __init__(self, callback):
         self.callback = callback

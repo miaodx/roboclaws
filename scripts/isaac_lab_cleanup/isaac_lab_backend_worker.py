@@ -1569,7 +1569,10 @@ def _capture_isaac_lab_scene_camera_views(
     resolution = camera_request["render_resolution"]
     width = int(resolution["width"])
     height = int(resolution["height"])
-    _ensure_capture_lighting(stage_utils, profile=camera_request.get("lighting_profile"))
+    lighting_diagnostics = _ensure_capture_lighting(
+        stage_utils,
+        profile=camera_request.get("lighting_profile"),
+    )
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
     lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
@@ -1641,6 +1644,7 @@ def _capture_isaac_lab_scene_camera_views(
         "camera_request_schema": camera_request.get("schema"),
         "calibration_status": camera_request.get("calibration_status"),
         "lighting_profile": camera_request.get("lighting_profile") or {},
+        "lighting_diagnostics": lighting_diagnostics,
         "lens": camera_request.get("lens") or {},
         "derived_lens": {
             "focal_length_mm": focal_length,
@@ -2211,28 +2215,95 @@ def _current_stage_bounds(stage_utils: Any) -> dict[str, list[float]] | None:
     return {"min": min_point, "max": max_point, "size": size, "center": center}
 
 
-def _ensure_capture_lighting(stage_utils: Any, profile: dict[str, Any] | None = None) -> None:
+def _ensure_capture_lighting(
+    stage_utils: Any, profile: dict[str, Any] | None = None
+) -> dict[str, Any]:
     from pxr import Gf, UsdGeom, UsdLux
 
     get_current_stage = getattr(stage_utils, "get_current_stage", None)
     if not callable(get_current_stage):
-        return
+        return {"status": "missing_stage_api", "existing_light_count": 0, "added_light_count": 0}
     stage = get_current_stage()
     if stage is None:
-        return
+        return {"status": "missing_stage", "existing_light_count": 0, "added_light_count": 0}
     profile = profile if isinstance(profile, dict) else {}
     dome_intensity = float(profile.get("isaac_dome_intensity", 1500.0))
     key_intensity = float(profile.get("isaac_key_intensity", 7000.0))
     key_rotation = profile.get("isaac_key_rotation_deg")
     if not isinstance(key_rotation, (list, tuple)) or len(key_rotation) < 3:
         key_rotation = [-55.0, 0.0, 35.0]
-    dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
-    dome.CreateIntensityAttr(dome_intensity)
-    key = UsdLux.DistantLight.Define(stage, "/RoboclawsSmokeKeyLight")
-    key.CreateIntensityAttr(key_intensity)
-    UsdGeom.XformCommonAPI(key).SetRotate(
-        Gf.Vec3f(float(key_rotation[0]), float(key_rotation[1]), float(key_rotation[2]))
-    )
+    existing_lights = _stage_light_paths(stage, exclude_prefix="/RoboclawsSmoke")
+    added_lights = []
+    if dome_intensity > 0.0:
+        dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
+        dome.CreateIntensityAttr(dome_intensity)
+        added_lights.append("/RoboclawsSmokeDomeLight")
+    if key_intensity > 0.0:
+        key = UsdLux.DistantLight.Define(stage, "/RoboclawsSmokeKeyLight")
+        key.CreateIntensityAttr(key_intensity)
+        UsdGeom.XformCommonAPI(key).SetRotate(
+            Gf.Vec3f(float(key_rotation[0]), float(key_rotation[1]), float(key_rotation[2]))
+        )
+        added_lights.append("/RoboclawsSmokeKeyLight")
+    return {
+        "schema": "isaac_capture_lighting_diagnostics_v1",
+        "status": "using_existing_stage_lights" if not added_lights else "added_capture_lights",
+        "profile_id": str(profile.get("profile_id") or ""),
+        "existing_light_count": len(existing_lights),
+        "existing_light_paths": existing_lights,
+        "added_light_count": len(added_lights),
+        "added_light_paths": added_lights,
+        "requested_dome_intensity": dome_intensity,
+        "requested_key_intensity": key_intensity,
+    }
+
+
+def _stage_light_paths(
+    stage: Any, *, exclude_prefix: str = "", light_api: Any | None = None
+) -> list[str]:
+    if light_api is None:
+        from pxr import UsdLux
+
+        light_api = UsdLux.LightAPI
+    paths = []
+    for prim in stage.Traverse():
+        if not prim or not prim.IsValid():
+            continue
+        path = str(prim.GetPath())
+        if exclude_prefix and path.startswith(exclude_prefix):
+            continue
+        if prim.IsA(light_api) or _prim_type_is_light(prim):
+            paths.append(path)
+    return paths
+
+
+_USD_LIGHT_TYPE_NAMES = frozenset(
+    {
+        "CylinderLight",
+        "DiskLight",
+        "DistantLight",
+        "DomeLight",
+        "GeometryLight",
+        "PortalLight",
+        "RectLight",
+        "SphereLight",
+    }
+)
+
+
+def _prim_type_is_light(prim: Any) -> bool:
+    type_name = ""
+    get_type_name = getattr(prim, "GetTypeName", None)
+    if callable(get_type_name):
+        type_name = str(get_type_name() or "")
+    if not type_name:
+        get_type_info = getattr(prim, "GetPrimTypeInfo", None)
+        if callable(get_type_info):
+            type_info = get_type_info()
+            info_type_name = getattr(type_info, "GetTypeName", None)
+            if callable(info_type_name):
+                type_name = str(info_type_name() or "")
+    return type_name in _USD_LIGHT_TYPE_NAMES
 
 
 def _isaac_camera_view_poses(
@@ -3624,6 +3695,7 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         camera_request_schema=capture.get("camera_request_schema"),
         calibration_status=capture.get("calibration_status"),
         lighting_profile=capture.get("lighting_profile") or {},
+        lighting_diagnostics=capture.get("lighting_diagnostics") or {},
         lens=capture.get("lens") or {},
         derived_lens=capture.get("derived_lens") or {},
         view_variant=view_variant,

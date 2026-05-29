@@ -23,9 +23,9 @@ DEFAULT_SCENE_PROBE_LENS = {
     "focal_length_mm": 24.0,
 }
 DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
-    "profile_id": "scene_probe_soft_v1",
-    "isaac_dome_intensity": 250.0,
-    "isaac_key_intensity": 850.0,
+    "profile_id": "scene_probe_existing_usd_lights_v1",
+    "isaac_dome_intensity": 0.0,
+    "isaac_key_intensity": 0.0,
     "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
 }
 
@@ -236,9 +236,9 @@ def _camera_lens(value: Any) -> dict[str, float]:
 def _lighting_profile(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
     return {
-        "profile_id": str(raw.get("profile_id") or "scene_probe_soft_v1"),
-        "isaac_dome_intensity": float(raw.get("isaac_dome_intensity", 250.0)),
-        "isaac_key_intensity": float(raw.get("isaac_key_intensity", 850.0)),
+        "profile_id": str(raw.get("profile_id") or "scene_probe_existing_usd_lights_v1"),
+        "isaac_dome_intensity": float(raw.get("isaac_dome_intensity", 0.0)),
+        "isaac_key_intensity": float(raw.get("isaac_key_intensity", 0.0)),
         "isaac_key_rotation_deg": _vec3(
             raw.get("isaac_key_rotation_deg"),
             default=[-55.0, 0.0, 35.0],

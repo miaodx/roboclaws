@@ -2488,7 +2488,11 @@ def _camera_view_spec(raw_spec: dict[str, Any], *, index: int) -> dict[str, Any]
         dy = eye[1] - lookat[1]
         dz = eye[2] - lookat[2]
         distance = max(math.sqrt(dx * dx + dy * dy + dz * dz), 0.01)
-        azimuth = math.degrees(math.atan2(dx, dy))
+        horizontal = math.hypot(dx, dy)
+        if horizontal > 1e-9:
+            azimuth = math.degrees(math.atan2(-dy, -dx))
+        else:
+            azimuth = float(camera_orbit.get("azimuth_deg", raw_spec.get("azimuth", 0.0)))
         elevation = -math.degrees(math.asin(dz / distance))
     else:
         distance = float(camera_orbit.get("distance_m", raw_spec.get("distance", 4.0)))
@@ -2566,8 +2570,8 @@ def _eye_from_mujoco_free_camera(
     elevation_rad = math.radians(elevation)
     horizontal = math.cos(elevation_rad) * distance
     return [
-        float(lookat[0]) + math.sin(azimuth_rad) * horizontal,
-        float(lookat[1]) + math.cos(azimuth_rad) * horizontal,
+        float(lookat[0]) - math.cos(azimuth_rad) * horizontal,
+        float(lookat[1]) - math.sin(azimuth_rad) * horizontal,
         float(lookat[2]) - math.sin(elevation_rad) * distance,
     ]
 

@@ -303,6 +303,7 @@ def _capture_molmospaces_camera_views(
             "camera_request_schema": result.get("camera_request_schema"),
             "calibration_status": result.get("calibration_status"),
             "lighting_profile": result.get("lighting_profile") or {},
+            "lighting_diagnostics": result.get("lighting_diagnostics") or {},
             "lens": result.get("lens") or {},
             "images": _image_entries(output_dir=config.output_dir, result=result),
             "views": result.get("views") or [],
@@ -352,6 +353,7 @@ def _capture_isaac_lane(
             "camera_request_schema": result.get("camera_request_schema"),
             "calibration_status": result.get("calibration_status"),
             "lighting_profile": result.get("lighting_profile") or {},
+            "lighting_diagnostics": result.get("lighting_diagnostics") or {},
             "lens": result.get("lens") or {},
             "derived_lens": result.get("derived_lens") or {},
             "render_steps": result.get("render_steps"),
@@ -1181,8 +1183,8 @@ def _eye_from_mujoco_orbit(
     elevation_rad = math.radians(elevation)
     horizontal = math.cos(elevation_rad) * distance
     return [
-        float(target[0]) + math.sin(azimuth_rad) * horizontal,
-        float(target[1]) + math.cos(azimuth_rad) * horizontal,
+        float(target[0]) - math.cos(azimuth_rad) * horizontal,
+        float(target[1]) - math.sin(azimuth_rad) * horizontal,
         float(target[2]) - math.sin(elevation_rad) * distance,
     ]
 
@@ -1847,6 +1849,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(lane.get('view_variant', '')))}</td>"
             f"<td>{html.escape(str(lane.get('calibration_status', '')))}</td>"
             f"<td>{html.escape(str(_lighting_profile_id(lane)))}</td>"
+            f"<td>{html.escape(str(_lighting_diagnostics_text(lane)))}</td>"
             "</tr>"
         )
     headers = "".join(
@@ -1862,6 +1865,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             "View variant",
             "Calibration",
             "Lighting",
+            "Lighting diagnostics",
         )
     )
     return f"""
@@ -1884,6 +1888,21 @@ def _lighting_profile_id(lane: dict[str, Any]) -> str:
         lane.get("lighting_profile") if isinstance(lane.get("lighting_profile"), dict) else {}
     )
     return str(lighting.get("profile_id") or "")
+
+
+def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:
+    diagnostics = (
+        lane.get("lighting_diagnostics")
+        if isinstance(lane.get("lighting_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    return (
+        f"{diagnostics.get('status')}; "
+        f"existing={diagnostics.get('existing_light_count')}; "
+        f"added={diagnostics.get('added_light_count')}"
+    )
 
 
 def _failure_section(manifest: dict[str, Any]) -> str:

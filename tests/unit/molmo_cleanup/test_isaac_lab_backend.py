@@ -328,6 +328,44 @@ def test_isaac_camera_lens_derives_horizontal_aperture_from_vertical_fov() -> No
     assert aperture == pytest.approx(29.82337649)
 
 
+def test_isaac_stage_light_paths_detects_existing_lights_without_pxr() -> None:
+    class _FakePrim:
+        def __init__(self, path: str, is_light: bool, type_name: str = "") -> None:
+            self._path = path
+            self._is_light = is_light
+            self._type_name = type_name
+
+        def IsValid(self) -> bool:
+            return True
+
+        def GetPath(self) -> str:
+            return self._path
+
+        def IsA(self, _api: object) -> bool:
+            return self._is_light
+
+        def GetTypeName(self) -> str:
+            return self._type_name
+
+    class _FakeStage:
+        def Traverse(self) -> list[_FakePrim]:
+            return [
+                _FakePrim("/val_1/scene_skybox_light", True),
+                _FakePrim("/val_1/scene_dir_light", False, "DistantLight"),
+                _FakePrim("/val_1/Geometry/table", False),
+            ]
+
+    paths = isaac_lab_backend_worker._stage_light_paths(
+        _FakeStage(),
+        light_api=object(),
+    )
+
+    assert paths == [
+        "/val_1/scene_skybox_light",
+        "/val_1/scene_dir_light",
+    ]
+
+
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:
     map_bundle = Path("assets/maps/molmospaces-procthor-val-0-7")
     backend = IsaacLabSubprocessBackend(
