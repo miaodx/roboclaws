@@ -17,6 +17,7 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     _camera_intrinsics_contract_from_capture,
     _camera_pose_contract_from_capture,
     _canonical_camera_control_views,
+    _contact_sheet_entries,
     _isaac_view_specs,
     _molmospaces_view_specs,
     _room_camera_control_views,
@@ -86,6 +87,10 @@ def _manifest() -> dict[str, object]:
             "vcs": "git",
             "commit_id": "3c50ae6093f7e4a4ef32529f8a773715da410a2f",
             "requested_revision": "3c50ae6093f7e4a4ef32529f8a773715da410a2f",
+        },
+        "artifacts": {
+            "comparison_manifest": "comparison_manifest.json",
+            "report": "report.html",
         },
         "scene_frame_transform": {
             "schema": "molmospaces_to_isaac_scene_transform_v1",
@@ -387,7 +392,12 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     html = report_path.read_text(encoding="utf-8")
 
     assert report_path == tmp_path / "report.html"
+    assert (tmp_path / "contact_sheet.png").is_file()
+    assert manifest["artifacts"]["contact_sheet"] == "contact_sheet.png"  # type: ignore[index]
+    assert manifest["contact_sheet"]["view_count"] == 3  # type: ignore[index]
     assert "Render-only scene identity probe" in html
+    assert "Contact Sheet" in html
+    assert "contact_sheet.png" in html
     assert "does not execute household cleanup" in html
     assert "pick, place, or scoring" in html
     assert "MolmoSpaces metadata handle" in html
@@ -411,6 +421,23 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "molmospaces/camera_views/room_01_room_2.png" in html
     assert "isaaclab/camera_views/view_02_sink.png" in html
     assert "Pick up" not in html
+
+
+def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:
+    manifest = _manifest()
+    _write_image(
+        tmp_path / "molmospaces/camera_views/room_01_room_2.png",
+        color=(20, 80, 120),
+    )
+    _write_image(
+        tmp_path / "isaaclab/camera_views/room_01_room_2.png",
+        color=(100, 120, 140),
+    )
+
+    entries = _contact_sheet_entries(manifest, output_dir=tmp_path)
+
+    assert [entry["view_id"] for entry in entries] == ["room_01_room_2"]
+    assert set(entries[0]["images"]) == {MOLMOSPACES_LANE_ID, ISAAC_LANE_ID}
 
 
 def test_scene_camera_comparison_manifest_is_json_serializable() -> None:

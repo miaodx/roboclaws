@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, ImageDraw, ImageFont
+
 from roboclaws.molmo_cleanup.camera_control import (
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
@@ -178,6 +180,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         canonical_views=canonical_views,
         isaac_lane=manifest["lanes"][ISAAC_LANE_ID],
     )
+    _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
     manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
@@ -188,6 +191,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
 
 
 def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_dir: Path) -> Path:
+    _write_contact_sheet(manifest, output_dir=output_dir)
     report_path = output_dir / "report.html"
     report_path.write_text(_report_html(manifest, output_dir=output_dir), encoding="utf-8")
     return report_path
@@ -1042,6 +1046,103 @@ def _room_scale_contract_from_capture(
     }
 
 
+def _write_contact_sheet(manifest: dict[str, Any], *, output_dir: Path) -> Path | None:
+    entries = _contact_sheet_entries(manifest, output_dir=output_dir)
+    if not entries:
+        return None
+    contact_path = output_dir / "contact_sheet.png"
+    tile_width = 360
+    tile_height = 240
+    label_height = 44
+    gap = 12
+    margin = 16
+    lanes = (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID)
+    sheet_width = margin * 2 + len(lanes) * tile_width + (len(lanes) - 1) * gap
+    sheet_height = margin * 2 + len(entries) * (tile_height + label_height + gap) - gap
+    sheet = Image.new("RGB", (sheet_width, sheet_height), (238, 242, 246))
+    draw = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default()
+    for row_index, entry in enumerate(entries):
+        y = margin + row_index * (tile_height + label_height + gap)
+        draw.text(
+            (margin, y),
+            f"{entry['view_id']}  {entry.get('label') or ''}",
+            fill=(32, 36, 44),
+            font=font,
+        )
+        for lane_index, lane_id in enumerate(lanes):
+            x = margin + lane_index * (tile_width + gap)
+            tile_y = y + label_height
+            draw.rectangle(
+                (x, tile_y, x + tile_width, tile_y + tile_height),
+                fill=(255, 255, 255),
+                outline=(203, 213, 225),
+            )
+            image_path = entry["images"].get(lane_id)
+            if image_path is None:
+                draw.text(
+                    (x + 12, tile_y + 12),
+                    f"missing {lane_id}",
+                    fill=(100, 116, 139),
+                    font=font,
+                )
+                continue
+            with Image.open(image_path).convert("RGB") as image:
+                image.thumbnail((tile_width, tile_height), Image.Resampling.LANCZOS)
+                paste_x = x + (tile_width - image.width) // 2
+                paste_y = tile_y + (tile_height - image.height) // 2
+                sheet.paste(image, (paste_x, paste_y))
+            draw.rectangle((x, tile_y, x + tile_width, tile_y + 18), fill=(15, 23, 42))
+            draw.text((x + 6, tile_y + 4), lane_id, fill=(248, 250, 252), font=font)
+    contact_path.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(contact_path)
+    manifest.setdefault("artifacts", {})["contact_sheet"] = _relpath(contact_path, output_dir)
+    manifest["contact_sheet"] = {
+        "path": _relpath(contact_path, output_dir),
+        "view_count": len(entries),
+        "lanes": list(lanes),
+        "dimensions": {
+            "width": sheet.width,
+            "height": sheet.height,
+            "channels": 3,
+        },
+    }
+    return contact_path
+
+
+def _contact_sheet_entries(manifest: dict[str, Any], *, output_dir: Path) -> list[dict[str, Any]]:
+    views = [
+        item
+        for item in manifest.get("canonical_camera_views") or []
+        if isinstance(item, dict) and item.get("view_id")
+    ]
+    entries = []
+    for view in views:
+        view_id = str(view.get("view_id") or "")
+        images: dict[str, Path] = {}
+        for lane_id in (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID):
+            lane = (manifest.get("lanes") or {}).get(lane_id)
+            if not isinstance(lane, dict):
+                continue
+            lane_images = lane.get("images") if isinstance(lane.get("images"), dict) else {}
+            image = lane_images.get(view_id) if isinstance(lane_images, dict) else None
+            if not isinstance(image, dict):
+                continue
+            rel_path = str(image.get("path") or "")
+            path = output_dir / rel_path
+            if path.is_file():
+                images[lane_id] = path
+        if images:
+            entries.append(
+                {
+                    "view_id": view_id,
+                    "label": view.get("label") or view.get("category") or "",
+                    "images": images,
+                }
+            )
+    return entries
+
+
 def _views_by_id(lane: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {
         str(item.get("view_id") or ""): item
@@ -1223,6 +1324,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
     body = "\n".join(
         [
             _summary_section(title, manifest),
+            _contact_sheet_section(manifest, output_dir=output_dir),
             _pose_contract_section(manifest),
             _intrinsics_contract_section(manifest),
             _room_scale_section(manifest),
@@ -1299,6 +1401,14 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
       gap: 12px;
+    }}
+    .contact-sheet {{
+      width: 100%;
+      max-height: 960px;
+      object-fit: contain;
+      background: #f8fafc;
+      border: 1px solid #d9dde6;
+      border-radius: 6px;
     }}
     figure {{
       margin: 0;
@@ -1403,6 +1513,35 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
             ]
         )
     }</div>
+</section>
+"""
+
+
+def _contact_sheet_section(manifest: dict[str, Any], *, output_dir: Path) -> str:
+    contact_sheet = (
+        manifest.get("contact_sheet") if isinstance(manifest.get("contact_sheet"), dict) else {}
+    )
+    path = str(contact_sheet.get("path") or "")
+    if not path:
+        artifacts = manifest.get("artifacts") if isinstance(manifest.get("artifacts"), dict) else {}
+        path = str(artifacts.get("contact_sheet") or "")
+    if not path or not (output_dir / path).is_file():
+        return ""
+    dimensions = (
+        contact_sheet.get("dimensions") if isinstance(contact_sheet.get("dimensions"), dict) else {}
+    )
+    note = (
+        f"{contact_sheet.get('view_count') or ''} canonical views, "
+        f"{_dimension_text(dimensions)}. "
+        "Use this as a first-pass visual scan; the tables below carry the pose, "
+        "intrinsics, room-scale, and target residual diagnostics."
+    )
+    return f"""
+<section class="panel">
+  <h2>Contact Sheet</h2>
+  <p class="note">{html.escape(note)}</p>
+  <img class="contact-sheet" src="{html.escape(path, quote=True)}"
+       alt="MuJoCo and Isaac view contact sheet">
 </section>
 """
 
