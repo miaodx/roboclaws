@@ -20,6 +20,7 @@ from typing import BinaryIO
 FULL_PERMISSION_ARGS = ("--dangerously-skip-permissions", "--permission-mode", "bypassPermissions")
 SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
+REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -135,7 +136,10 @@ class LiveClaudeCleanupRunner:
             SERVER_SCRIPT,
             *self.args.server_arg,
         ]
-        self.server_proc = subprocess.Popen(command, cwd=self.args.repo_root)
+        env = os.environ.copy()
+        if env.get(REPORT_RERUN_COMMAND_ENV):
+            command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
+        self.server_proc = subprocess.Popen(command, cwd=self.args.repo_root, env=env)
         (self.run_dir / "server.pid").write_text(f"{self.server_proc.pid}\n", encoding="utf-8")
 
     def _wait_for_mcp_ready(self) -> None:

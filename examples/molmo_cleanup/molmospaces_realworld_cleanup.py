@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -101,6 +102,7 @@ from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
 SEMANTIC_SWEEP_POLICY = "semantic_sweep_baseline"
+REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 SEMANTIC_SWEEP_CAMERA_SCHEDULE: tuple[dict[str, float], ...] = (
     {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},
     {"yaw_delta_deg": -30.0, "pitch_delta_deg": 0.0},
@@ -674,6 +676,7 @@ def run_realworld_cleanup(
         "final_containment": done.get("final_containment", {}),
         "tool_event_counts": public_tool_counts,
         "backend_tool_event_counts": done["tool_event_counts"],
+        "rerun_command": os.environ.get(REPORT_RERUN_COMMAND_ENV, "").strip(),
         "artifacts": {
             "agent_view": str(agent_view_path),
             "runtime_metric_map": str(runtime_metric_map_path),

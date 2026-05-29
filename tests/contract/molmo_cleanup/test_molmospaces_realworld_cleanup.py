@@ -258,6 +258,33 @@ def test_realworld_cleanup_report_separates_agent_view_and_private_eval(
     assert "ADR-0003 real-world-style cleanup run" in report
 
 
+def test_realworld_cleanup_demo_persists_facade_rerun_command(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    demo = _load_demo_module()
+    prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
+    command = (
+        "just task::run household-cleanup codex world-labels seed=7 "
+        "generated_mess_count=5 map_mode=minimal robot_views=on "
+        f"runtime_map_prior={prior} "
+        f"output_dir={tmp_path}"
+    )
+    monkeypatch.setenv("ROBOCLAWS_REPORT_RERUN_COMMAND", command)
+
+    demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=5,
+    )
+
+    run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert run_result["rerun_command"] == command
+    assert command in report
+    assert "household-cleanup direct world-labels" not in report
+
+
 def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) -> None:
     demo = _load_demo_module()
 
