@@ -32,6 +32,7 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     _projection_diagnostics,
     _render_domain_calibration,
     _render_domain_source_diagnostics,
+    _render_domain_view_triage,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
@@ -497,9 +498,12 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
     assert "Render Domain Source Diagnostics" in html
+    assert "Render Domain View Triage" in html
     assert "geometry_swap_ready_render_domain_pending" in html
     assert "render_domain_residual_high" in html
     assert "same_explicit_eye_target_pose" in html
+    assert "object_material_texture_binding_contract" in html
+    assert "room_light_wall_shadow_contract" in html
     assert "mujoco_housegen_materials" in html
     assert "isaac_preview_surface_material_conversion" in html
     assert "USD PreviewSurface" in html
@@ -824,6 +828,50 @@ def test_render_domain_source_diagnostics_cite_official_renderer_paths() -> None
     assert "opacity" in refs["isaac_preview_surface_material_conversion"]["snippet_summary"].lower()
     assert "shadow" in refs["isaac_default_lights_and_shadow_flags"]["claim"].lower()
     assert "material/light/texture" in diagnostics["recommended_next_action"]
+
+
+def test_render_domain_view_triage_separates_geometry_from_renderer_contracts() -> None:
+    manifest = _manifest()
+    manifest["projection_diagnostics"] = {
+        "pairs": [
+            {"view_id": "room_01_room_2", "max_pixel_delta": 0.0},
+            {"view_id": "view_01_bed", "max_pixel_delta": 0.0},
+        ]
+    }
+    manifest["visual_diagnostics"] = {
+        "views": [
+            {
+                "view_id": "room_01_room_2",
+                "label": "Room 2",
+                "delta": {
+                    "mean_absolute_pixel_delta": 58.0,
+                    "mean_luminance_delta": 36.0,
+                },
+            },
+            {
+                "view_id": "view_01_bed",
+                "label": "Bed",
+                "delta": {
+                    "mean_absolute_pixel_delta": 72.0,
+                    "mean_luminance_delta": -64.0,
+                },
+            },
+        ]
+    }
+    manifest["canonical_camera_views"][1].pop("usd_prim_path", None)  # type: ignore[index,union-attr]
+
+    triage = _render_domain_view_triage(manifest)
+
+    rows = {item["view_id"]: item for item in triage["views"]}
+    assert triage["status"] == "computed"
+    assert triage["top_residual_view_id"] == "view_01_bed"
+    assert triage["high_residual_view_count"] == 2
+    assert rows["view_01_bed"]["geometry_status"] == "projection_pass"
+    assert rows["view_01_bed"]["suspected_contract"] == ("object_material_texture_binding_contract")
+    assert rows["view_01_bed"]["usd_prim_path"] == "/val_1/Geometry/bed_01"
+    assert rows["room_01_room_2"]["geometry_status"] == "projection_pass"
+    assert rows["room_01_room_2"]["suspected_contract"] == "room_light_wall_shadow_contract"
+    assert "camera geometry separate" in triage["interpretation"]
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:

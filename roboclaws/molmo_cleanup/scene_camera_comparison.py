@@ -269,6 +269,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
+    manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
@@ -288,6 +289,8 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     if not isinstance(manifest.get("render_domain_source_diagnostics"), dict):
         manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
+    if not isinstance(manifest.get("render_domain_view_triage"), dict):
+        manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
         manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     report_path = output_dir / "report.html"
@@ -2388,6 +2391,179 @@ def _render_domain_source_diagnostics(manifest: dict[str, Any]) -> dict[str, Any
     }
 
 
+def _render_domain_view_triage(manifest: dict[str, Any]) -> dict[str, Any]:
+    visual = (
+        manifest.get("visual_diagnostics")
+        if isinstance(manifest.get("visual_diagnostics"), dict)
+        else {}
+    )
+    projection = (
+        manifest.get("projection_diagnostics")
+        if isinstance(manifest.get("projection_diagnostics"), dict)
+        else {}
+    )
+    source = (
+        manifest.get("render_domain_source_diagnostics")
+        if isinstance(manifest.get("render_domain_source_diagnostics"), dict)
+        else _render_domain_source_diagnostics(manifest)
+    )
+    source_ids = [
+        str(item.get("evidence_id"))
+        for item in source.get("source_references") or []
+        if isinstance(item, dict) and item.get("status") == "available"
+    ]
+    projection_by_view = {
+        str(item.get("view_id") or ""): item
+        for item in projection.get("pairs") or []
+        if isinstance(item, dict)
+    }
+    views = [item for item in visual.get("views") or [] if isinstance(item, dict)]
+    rows = []
+    for item in views:
+        view_id = str(item.get("view_id") or "")
+        delta = item.get("delta") if isinstance(item.get("delta"), dict) else {}
+        pixel_delta = _optional_float(delta.get("mean_absolute_pixel_delta"))
+        luminance_delta = _optional_float(delta.get("mean_luminance_delta"))
+        luminance_abs = abs(luminance_delta) if luminance_delta is not None else None
+        projection_pair = projection_by_view.get(view_id, {})
+        projection_delta = _optional_float(projection_pair.get("max_pixel_delta"))
+        anchor_kind = _view_anchor_kind(manifest, view_id)
+        usd_prim_path = _view_usd_prim_path(manifest, view_id)
+        residual_class = _view_render_residual_class(
+            pixel_delta=pixel_delta,
+            luminance_abs=luminance_abs,
+        )
+        suspicion = _view_render_suspicion(
+            residual_class=residual_class,
+            anchor_kind=anchor_kind,
+            usd_prim_path=usd_prim_path,
+        )
+        rows.append(
+            {
+                "view_id": view_id,
+                "label": item.get("label"),
+                "anchor_kind": anchor_kind,
+                "usd_prim_path": usd_prim_path,
+                "mean_absolute_pixel_delta": pixel_delta,
+                "abs_mean_luminance_delta": luminance_abs,
+                "max_projection_delta_px": projection_delta,
+                "geometry_status": "projection_pass"
+                if projection_delta is not None
+                and projection_delta <= CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX
+                else "projection_missing_or_failed",
+                "render_residual_class": residual_class,
+                "suspected_contract": suspicion,
+                "next_probe": _view_render_next_probe(suspicion),
+            }
+        )
+    high = [
+        item
+        for item in rows
+        if item.get("render_residual_class") in {"high_pixel_and_luminance", "high_pixel_delta"}
+    ]
+    rows.sort(
+        key=lambda item: (
+            float(item.get("mean_absolute_pixel_delta") or 0.0),
+            float(item.get("abs_mean_luminance_delta") or 0.0),
+        ),
+        reverse=True,
+    )
+    return {
+        "schema": "scene_camera_render_domain_view_triage_v1",
+        "status": "computed" if rows else "missing_visual_view_metrics",
+        "view_count": len(rows),
+        "high_residual_view_count": len(high),
+        "source_evidence_ids": source_ids,
+        "top_residual_view_id": rows[0].get("view_id") if rows else None,
+        "views": rows,
+        "recommended_next_action": (
+            "Start with the highest-residual object/receptacle views. For object views, "
+            "compare the MuJoCo MJCF material/texture assigned to the anchor against the "
+            "Isaac USD material binding and PreviewSurface inputs for the same prim. For "
+            "room views, compare exported/default lights and wall or ceiling shadow flags."
+        ),
+        "interpretation": (
+            "This view-level triage keeps camera geometry separate from renderer-domain "
+            "work. A view can have projection_pass while still carrying a material, "
+            "texture, lighting, shadow, or tone-response residual."
+        ),
+    }
+
+
+def _view_anchor_kind(manifest: dict[str, Any], view_id: str) -> str:
+    for view in manifest.get("canonical_camera_views") or []:
+        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
+            return str(view.get("anchor_kind") or "")
+    return ""
+
+
+def _view_usd_prim_path(manifest: dict[str, Any], view_id: str) -> str:
+    anchor_id = ""
+    for view in ((manifest.get("lanes") or {}).get(ISAAC_LANE_ID) or {}).get("views") or []:
+        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
+            usd_prim_path = str(view.get("usd_prim_path") or "")
+            if usd_prim_path:
+                return usd_prim_path
+            anchor_id = str(view.get("anchor_id") or "")
+            break
+    for view in manifest.get("canonical_camera_views") or []:
+        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
+            usd_prim_path = str(view.get("usd_prim_path") or "")
+            if usd_prim_path:
+                return usd_prim_path
+            if not anchor_id:
+                anchor_id = str(view.get("anchor_id") or "")
+            break
+    if anchor_id:
+        for anchor in manifest.get("anchors") or []:
+            if isinstance(anchor, dict) and str(anchor.get("anchor_id") or "") == anchor_id:
+                return str(anchor.get("isaac_usd_prim_path") or "")
+    return ""
+
+
+def _view_render_residual_class(
+    *,
+    pixel_delta: float | None,
+    luminance_abs: float | None,
+) -> str:
+    if pixel_delta is None:
+        return "missing_pixel_delta"
+    pixel_high = pixel_delta >= 50.0
+    luminance_high = luminance_abs is not None and luminance_abs >= 30.0
+    if pixel_high and luminance_high:
+        return "high_pixel_and_luminance"
+    if pixel_high:
+        return "high_pixel_delta"
+    if luminance_high:
+        return "high_luminance_delta"
+    return "moderate_or_low_residual"
+
+
+def _view_render_suspicion(
+    *,
+    residual_class: str,
+    anchor_kind: str,
+    usd_prim_path: str,
+) -> str:
+    if residual_class == "moderate_or_low_residual":
+        return "lower_priority_renderer_delta"
+    if anchor_kind == "room":
+        return "room_light_wall_shadow_contract"
+    if usd_prim_path:
+        return "object_material_texture_binding_contract"
+    return "object_material_texture_contract_missing_usd_prim"
+
+
+def _view_render_next_probe(suspicion: str) -> str:
+    if suspicion == "room_light_wall_shadow_contract":
+        return "Compare MuJoCo default/exported lights with Isaac USD lights and wall shadow flags."
+    if suspicion == "object_material_texture_binding_contract":
+        return "Compare MJCF material/texture inputs with the matched Isaac USD material binding."
+    if suspicion == "object_material_texture_contract_missing_usd_prim":
+        return "Resolve the Isaac USD prim path before comparing material or texture contracts."
+    return "Keep as lower priority until high-residual views are explained."
+
+
 def _render_source_reference(reference: dict[str, Any]) -> dict[str, Any]:
     rel_path = Path(str(reference.get("path") or ""))
     path = REPO_ROOT / rel_path
@@ -2797,6 +2973,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _projection_diagnostics_section(manifest),
             _visual_diagnostics_section(manifest),
             _render_domain_source_section(manifest),
+            _render_domain_view_triage_section(manifest),
             _anchor_section(manifest),
             _runtime_section(manifest),
             _failure_section(manifest),
@@ -3656,6 +3833,64 @@ def _render_domain_source_section(manifest: dict[str, Any]) -> str:
   <h2>Render Domain Source Diagnostics</h2>
   <p class="note">{html.escape(note)}</p>
   <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _render_domain_view_triage_section(manifest: dict[str, Any]) -> str:
+    triage = (
+        manifest.get("render_domain_view_triage")
+        if isinstance(manifest.get("render_domain_view_triage"), dict)
+        else _render_domain_view_triage(manifest)
+    )
+    if not triage:
+        return ""
+    rows = []
+    for item in triage.get("views") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('anchor_kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('render_residual_class', '')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('abs_mean_luminance_delta')))}</td>"
+            f"<td>{html.escape(_pixels_text(item.get('max_projection_delta_px')))}</td>"
+            f"<td>{html.escape(str(item.get('suspected_contract', '')))}</td>"
+            f"<td>{html.escape(str(item.get('usd_prim_path', '')))}</td>"
+            f"<td>{html.escape(str(item.get('next_probe', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "View",
+            "Anchor",
+            "Residual",
+            "Mean pixel delta",
+            "Mean luminance delta",
+            "Projection delta",
+            "Suspected contract",
+            "Isaac USD prim",
+            "Next probe",
+        )
+    )
+    note = (
+        f"status={triage.get('status')}; views={triage.get('view_count')}; "
+        f"high_residual_views={triage.get('high_residual_view_count')}; "
+        f"top={triage.get('top_residual_view_id')}. "
+        f"{triage.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Render Domain View Triage</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(triage.get("recommended_next_action") or ""))}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
