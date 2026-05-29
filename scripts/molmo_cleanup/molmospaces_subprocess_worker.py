@@ -3234,24 +3234,65 @@ def _collect_room_outlines(
         room_id = match.group(1)
         if room_id in seen:
             continue
-        size = [float(value) for value in model.geom_size[geom_id]]
-        half_extents = sorted(size)[-2:]
-        if half_extents[0] < 0.25 or half_extents[1] < 0.25:
+        bounds = _geom_xy_bounds(model, data, geom_id)
+        if bounds is None:
             continue
-        center = _xyz(data.geom_xpos[geom_id])
+        min_xy, max_xy = bounds
+        half_extents = [
+            (float(max_xy[0]) - float(min_xy[0])) / 2.0,
+            (float(max_xy[1]) - float(min_xy[1])) / 2.0,
+        ]
+        if min(half_extents) < 0.25:
+            continue
+        center = [
+            (float(min_xy[0]) + float(max_xy[0])) / 2.0,
+            (float(min_xy[1]) + float(max_xy[1])) / 2.0,
+        ]
         outlines.append(
             {
                 "room_id": room_id,
                 "label": room_id.replace("_", " ").title(),
-                "center": [center[0], center[1]],
-                "half_extents": [round(half_extents[1], 6), round(half_extents[0], 6)],
-                "provenance": "mujoco_room_geom",
+                "center": [round(center[0], 6), round(center[1], 6)],
+                "half_extents": [round(half_extents[0], 6), round(half_extents[1], 6)],
+                "provenance": "mujoco_room_mesh_world_bounds",
             }
         )
         seen.add(room_id)
     if outlines:
         return sorted(outlines, key=lambda item: item["room_id"])
     return _fallback_room_outlines(state)
+
+
+def _geom_xy_bounds(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    geom_id: int,
+) -> tuple[list[float], list[float]] | None:
+    geom_type = int(model.geom_type[geom_id])
+    if geom_type == int(mujoco.mjtGeom.mjGEOM_MESH):
+        mesh_id = int(model.geom_dataid[geom_id])
+        if mesh_id < 0:
+            return None
+        vertex_start = int(model.mesh_vertadr[mesh_id])
+        vertex_count = int(model.mesh_vertnum[mesh_id])
+        if vertex_count <= 0:
+            return None
+        vertices = model.mesh_vert[vertex_start : vertex_start + vertex_count]
+        matrix = data.geom_xmat[geom_id].reshape(3, 3)
+        position = data.geom_xpos[geom_id]
+        world_vertices = vertices @ matrix.T + position
+        min_xy = [float(world_vertices[:, 0].min()), float(world_vertices[:, 1].min())]
+        max_xy = [float(world_vertices[:, 0].max()), float(world_vertices[:, 1].max())]
+        return min_xy, max_xy
+
+    center = _xyz(data.geom_xpos[geom_id])
+    size = [float(value) for value in model.geom_size[geom_id]]
+    radius_x = abs(size[0]) if size else 0.0
+    radius_y = abs(size[1]) if len(size) > 1 else radius_x
+    return [center[0] - radius_x, center[1] - radius_y], [
+        center[0] + radius_x,
+        center[1] + radius_y,
+    ]
 
 
 def _fallback_room_outlines(state: dict[str, Any]) -> list[dict[str, Any]]:

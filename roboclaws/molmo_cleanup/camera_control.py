@@ -21,7 +21,6 @@ DEFAULT_SCENE_PROBE_CAMERA_ORBIT = {
 DEFAULT_SCENE_PROBE_LENS = {
     "vertical_fov_deg": 45.0,
     "focal_length_mm": 24.0,
-    "horizontal_aperture_mm": 20.955,
 }
 DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
     "profile_id": "scene_probe_soft_v1",
@@ -225,11 +224,13 @@ def _camera_orbit(value: Any) -> dict[str, float]:
 
 def _camera_lens(value: Any) -> dict[str, float]:
     raw = value if isinstance(value, dict) else {}
-    return {
+    lens = {
         "vertical_fov_deg": float(raw.get("vertical_fov_deg", 45.0)),
         "focal_length_mm": float(raw.get("focal_length_mm", 24.0)),
-        "horizontal_aperture_mm": float(raw.get("horizontal_aperture_mm", 20.955)),
     }
+    if "horizontal_aperture_mm" in raw:
+        lens["horizontal_aperture_mm"] = float(raw["horizontal_aperture_mm"])
+    return lens
 
 
 def _lighting_profile(value: Any) -> dict[str, Any]:

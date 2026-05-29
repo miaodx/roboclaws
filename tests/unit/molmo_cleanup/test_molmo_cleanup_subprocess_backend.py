@@ -663,6 +663,45 @@ def test_worker_support_surface_accepts_rotated_collision_slab() -> None:
     assert surfaces[0]["half_extents"] == pytest.approx([0.6, 0.4])
 
 
+def test_worker_room_outlines_use_mesh_world_bounds_not_geom_size() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = worker.mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <asset>
+            <mesh name="room_1"
+                  vertex="0 0 0  0 2 0  4 0 0  4 2 0
+                          0 0 .1  0 2 .1  4 0 .1  4 2 .1"/>
+          </asset>
+          <worldbody>
+            <body name="room_1" pos="1 2 0">
+              <geom name="room_1_visual_0" type="mesh" mesh="room_1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = worker.mujoco.MjData(model)
+    worker.mujoco.mj_forward(model, data)
+
+    outlines = worker._collect_room_outlines(
+        model,
+        data,
+        {"receptacles": {}, "objects": {}},
+    )
+
+    assert outlines == [
+        {
+            "room_id": "room_1",
+            "label": "Room 1",
+            "center": pytest.approx([3.0, 3.0]),
+            "half_extents": pytest.approx([2.0, 1.0]),
+            "provenance": "mujoco_room_mesh_world_bounds",
+        }
+    ]
+
+
 def test_worker_allows_open_shelf_place_inside_without_open(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

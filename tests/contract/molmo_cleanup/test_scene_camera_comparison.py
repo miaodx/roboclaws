@@ -14,9 +14,13 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     ISAAC_LANE_ID,
     MOLMOSPACES_LANE_ID,
     SCENE_CAMERA_COMPARISON_SCHEMA,
+    _camera_intrinsics_contract_from_capture,
+    _camera_pose_contract_from_capture,
     _canonical_camera_control_views,
     _isaac_view_specs,
     _molmospaces_view_specs,
+    _room_camera_control_views,
+    _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
     render_scene_camera_comparison_report,
 )
@@ -60,7 +64,6 @@ def _manifest() -> dict[str, object]:
             "lens": {
                 "vertical_fov_deg": 45.0,
                 "focal_length_mm": 24.0,
-                "horizontal_aperture_mm": 20.955,
             },
             "lighting_profile": {
                 "profile_id": "scene_probe_soft_v1",
@@ -76,12 +79,23 @@ def _manifest() -> dict[str, object]:
             "view_count": 2,
             "same_pose_contract": True,
         },
+        "official_molmospaces_source": {
+            "package": "molmo-spaces",
+            "status": "installed",
+            "url": "https://github.com/allenai/molmospaces.git",
+            "vcs": "git",
+            "commit_id": "3c50ae6093f7e4a4ef32529f8a773715da410a2f",
+            "requested_revision": "3c50ae6093f7e4a4ef32529f8a773715da410a2f",
+        },
         "scene_frame_transform": {
             "schema": "molmospaces_to_isaac_scene_transform_v1",
             "source_frame": "molmospaces_scene_frame_v1",
             "target_frame": "isaac_prepared_usd_world_frame",
+            "diagnostic_kind": "camera_target_vs_isaac_usd_bounds",
             "status": "identity_checked_against_usd_bounds",
-            "parity_status": "canonical_pose_fit_within_threshold",
+            "parity_status": "target_matches_usd_bounds_within_threshold",
+            "target_residual_status": "target_matches_usd_bounds_within_threshold",
+            "interpretation": "Target/geometry residual diagnostic, not camera pose residual.",
             "pair_count": 2,
             "xy_scale": 1.0,
             "rotation_z_deg": 0.0,
@@ -89,6 +103,10 @@ def _manifest() -> dict[str, object]:
             "residual_threshold_m": 0.08,
             "mean_residual_m": 0.03,
             "max_residual_m": 0.04,
+            "mean_xy_residual_m": 0.02,
+            "max_xy_residual_m": 0.022,
+            "mean_z_residual_m": 0.0,
+            "max_z_residual_m": 0.0,
             "pairs": [
                 {
                     "anchor_id": "bed_01",
@@ -102,6 +120,83 @@ def _manifest() -> dict[str, object]:
                 }
             ],
         },
+        "camera_pose_contract": {
+            "schema": "canonical_camera_pose_contract_v1",
+            "camera_model": "canonical_eye_target_camera_v1",
+            "coordinate_frame": "molmospaces_scene_frame_v1",
+            "status": "same_backend_pose_within_threshold",
+            "pair_count": 2,
+            "pose_threshold_m": 0.005,
+            "max_pose_delta_m": 0.0,
+            "interpretation": "Backends reported the requested eye/target pose.",
+            "pairs": [
+                {
+                    "view_id": "view_01_bed",
+                    "anchor_id": "bed_01",
+                    "category": "Bed",
+                    "requested_eye": [0.2, 6.4, 2.6],
+                    "requested_target": [2.8, 9.0, 0.8],
+                    "molmospaces_backend_eye": [0.2, 6.4, 2.6],
+                    "molmospaces_backend_target": [2.8, 9.0, 0.8],
+                    "isaac_backend_eye": [0.2, 6.4, 2.6],
+                    "isaac_backend_target": [2.8, 9.0, 0.8],
+                    "backend_eye_delta_m": 0.0,
+                    "backend_target_delta_m": 0.0,
+                }
+            ],
+        },
+        "camera_intrinsics_contract": {
+            "schema": "canonical_camera_intrinsics_contract_v1",
+            "status": "intrinsics_consistent",
+            "camera_model": "canonical_eye_target_camera_v1",
+            "resolution": {"width": 960, "height": 640},
+            "requested_lens": {
+                "vertical_fov_deg": 45.0,
+                "focal_length_mm": 24.0,
+            },
+            "molmospaces_lens": {
+                "vertical_fov_deg": 45.0,
+                "focal_length_mm": 24.0,
+            },
+            "isaac_lens": {
+                "vertical_fov_deg": 45.0,
+                "focal_length_mm": 24.0,
+            },
+            "isaac_derived_lens": {
+                "focal_length_mm": 24.0,
+                "horizontal_aperture_mm": 29.82337649086285,
+            },
+            "intrinsics_precedence": "vertical_fov_deg",
+            "derived_from_vertical_fov": {
+                "horizontal_aperture_mm": 29.82337649086285,
+                "horizontal_fov_deg": 63.707,
+            },
+            "requested_vs_derived_horizontal_aperture_delta_mm": None,
+            "interpretation": "The scene probe treats vertical_fov_deg as canonical.",
+        },
+        "room_scale_contract": {
+            "schema": "room_scale_contract_v1",
+            "status": "room_outline_mesh_bounds",
+            "room_count": 1,
+            "room_outline_source": "molmospaces_room_outlines",
+            "isaac_scene_bounds": {
+                "size": [9.976, 10.097, 3.154],
+                "center": [4.983, 5.043, 1.475],
+            },
+            "max_room_to_scene_width_ratio": 0.599,
+            "max_room_to_scene_depth_ratio": 0.987,
+            "interpretation": "Room-level camera poses are derived from room mesh world bounds.",
+            "rooms": [
+                {
+                    "view_id": "room_01_room_2",
+                    "room_id": "room_2",
+                    "center": [2.99, 4.983],
+                    "size": [5.98, 9.966],
+                    "half_extents": [2.99, 4.983],
+                    "provenance": "mujoco_room_mesh_world_bounds",
+                }
+            ],
+        },
         "scene": {
             "scene_source": "procthor-10k-val",
             "scene_index": 1,
@@ -111,6 +206,47 @@ def _manifest() -> dict[str, object]:
             "render_width": 960,
             "render_height": 640,
         },
+        "canonical_camera_views": [
+            {
+                "view_id": "room_01_room_2",
+                "anchor_id": "room_2",
+                "anchor_kind": "room",
+                "category": "Room",
+                "room_id": "room_2",
+                "camera_basis": "room_center_inset_eye_target",
+            },
+            {
+                "view_id": "view_01_bed",
+                "anchor_id": "bed_01",
+                "anchor_kind": "receptacle",
+                "category": "Bed",
+                "room_id": "room_2",
+                "camera_basis": "near_topdown_anchor_orbit",
+            },
+            {
+                "view_id": "view_02_sink",
+                "anchor_id": "sink_01",
+                "anchor_kind": "receptacle",
+                "category": "Sink",
+                "room_id": "room_3",
+                "camera_basis": "near_topdown_anchor_orbit",
+            },
+        ],
+        "room_camera_views": [
+            {
+                "view_id": "room_01_room_2",
+                "anchor_id": "room_2",
+                "anchor_kind": "room",
+                "category": "Room",
+                "room_id": "room_2",
+                "camera_basis": "room_center_inset_eye_target",
+                "room_outline": {
+                    "center": [2.99, 4.983],
+                    "half_extents": [2.99, 4.983],
+                    "provenance": "mujoco_room_mesh_world_bounds",
+                },
+            }
+        ],
         "anchors": [
             {
                 "anchor_id": "bed_01",
@@ -121,7 +257,7 @@ def _manifest() -> dict[str, object]:
                 "room_center_xy": [2.7, 4.5],
                 "isaac_support_position": [2.8, 9.0, 0.8],
                 "isaac_usd_prim_path": "/val_1/Geometry/bed_01",
-                "isaac_target_source": "Isaac scene-index support pose",
+                "isaac_target_source": "Canonical explicit target",
             },
             {
                 "anchor_id": "sink_01",
@@ -132,7 +268,7 @@ def _manifest() -> dict[str, object]:
                 "room_center_xy": [8.0, 3.0],
                 "isaac_support_position": [9.6, 1.8, 0.5],
                 "isaac_usd_prim_path": "/val_1/Geometry/sink_01",
-                "isaac_target_source": "Isaac scene-index support pose",
+                "isaac_target_source": "Canonical explicit target",
             },
         ],
         "lanes": {
@@ -146,6 +282,10 @@ def _manifest() -> dict[str, object]:
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
                 "lighting_profile": {"profile_id": "scene_probe_soft_v1"},
                 "images": {
+                    "room_01_room_2": {
+                        "path": "molmospaces/camera_views/room_01_room_2.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    },
                     "view_01_bed": {
                         "path": "molmospaces/camera_views/view_01_bed.png",
                         "dimensions": {"width": 64, "height": 48, "channels": 3},
@@ -157,6 +297,13 @@ def _manifest() -> dict[str, object]:
                 },
                 "views": [
                     {
+                        "view_id": "room_01_room_2",
+                        "eye": [1.0, 2.0, 1.45],
+                        "target": [2.0, 3.0, 1.45],
+                        "backend_eye": [1.0, 2.0, 1.45],
+                        "backend_target": [2.0, 3.0, 1.45],
+                    },
+                    {
                         "view_id": "view_01_bed",
                         "eye": [0.2, 6.4, 2.6],
                         "target": [2.8, 9.0, 0.8],
@@ -167,6 +314,8 @@ def _manifest() -> dict[str, object]:
                         "view_id": "view_02_sink",
                         "eye": [7.0, -1.4, 2.6],
                         "target": [9.6, 1.8, 0.6],
+                        "backend_eye": [7.0, -1.4, 2.6],
+                        "backend_target": [9.6, 1.8, 0.6],
                     },
                 ],
             },
@@ -182,6 +331,10 @@ def _manifest() -> dict[str, object]:
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
                 "lighting_profile": {"profile_id": "scene_probe_soft_v1"},
                 "images": {
+                    "room_01_room_2": {
+                        "path": "isaaclab/camera_views/room_01_room_2.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    },
                     "view_01_bed": {
                         "path": "isaaclab/camera_views/view_01_bed.png",
                         "dimensions": {"width": 64, "height": 48, "channels": 3},
@@ -192,16 +345,32 @@ def _manifest() -> dict[str, object]:
                     },
                 },
                 "views": [
-                    {"view_id": "view_01_bed", "eye": [0.1, -3.0, 2.6], "target": [2.7, 0.6, 0.8]},
+                    {
+                        "view_id": "room_01_room_2",
+                        "eye": [1.0, 2.0, 1.45],
+                        "target": [2.0, 3.0, 1.45],
+                        "backend_eye": [1.0, 2.0, 1.45],
+                        "backend_target": [2.0, 3.0, 1.45],
+                    },
+                    {
+                        "view_id": "view_01_bed",
+                        "eye": [0.2, 6.4, 2.6],
+                        "target": [2.8, 9.0, 0.8],
+                        "backend_eye": [0.2, 6.4, 2.6],
+                        "backend_target": [2.8, 9.0, 0.8],
+                    },
                     {
                         "view_id": "view_02_sink",
-                        "eye": [-0.4, -1.6, 2.6],
-                        "target": [2.2, 1.6, 0.6],
+                        "eye": [7.0, -1.4, 2.6],
+                        "target": [9.6, 1.8, 0.6],
+                        "backend_eye": [7.0, -1.4, 2.6],
+                        "backend_target": [9.6, 1.8, 0.6],
                     },
                 ],
             },
         },
         "view_specs": {
+            "room-level-canonical": [],
             MOLMOSPACES_LANE_ID: [],
             ISAAC_LANE_ID: [],
         },
@@ -222,7 +391,15 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "does not execute household cleanup" in html
     assert "pick, place, or scoring" in html
     assert "MolmoSpaces metadata handle" in html
-    assert "Scene Frame Transform" in html
+    assert "Camera Pose Contract" in html
+    assert "Camera Intrinsics Contract" in html
+    assert "Room Scale Contract" in html
+    assert "Target Vs USD Bounds Diagnostics" in html
+    assert "same_backend_pose_within_threshold" in html
+    assert "intrinsics_consistent" in html
+    assert "mujoco_room_mesh_world_bounds" in html
+    assert "room_center_inset_eye_target" in html
+    assert "https://github.com/allenai/molmospaces.git" in html
     assert CAMERA_CONTROL_API_NAME in html
     assert "canonical_scene_frame_similarity_fit_v1" in html
     assert "canonical_eye_target_camera_v1" in html
@@ -231,6 +408,7 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert MOLMOSPACES_LANE_ID in html
     assert ISAAC_LANE_ID in html
     assert "molmospaces/camera_views/view_01_bed.png" in html
+    assert "molmospaces/camera_views/room_01_room_2.png" in html
     assert "isaaclab/camera_views/view_02_sink.png" in html
     assert "Pick up" not in html
 
@@ -289,7 +467,7 @@ def test_isaac_view_specs_record_support_pose_for_transform_but_not_camera_targe
             "anchor_id": "sink_01",
             "anchor_kind": "receptacle",
             "usd_prim_path": "/val_1/Geometry/sink_01",
-            "target_source": "isaac_scene_index_support_pose",
+            "target_source": "isaac_worker_usd_prim_world_bounds_diagnostic",
             "isaac_support_position": [123.0, 456.0, 0.0],
             "min_target_z": 0.6,
         }
@@ -320,7 +498,7 @@ def test_canonical_camera_control_views_carry_explicit_pose_not_lane_orbit() -> 
             "anchor_id": "table_01",
             "anchor_kind": "receptacle",
             "usd_prim_path": "/val_1/Geometry/table_01",
-            "target_source": "isaac_scene_index_support_pose",
+            "target_source": "isaac_worker_usd_prim_world_bounds_diagnostic",
             "isaac_support_position": [2.7, 5.9, 0.37],
             "min_target_z": 0.6,
         }
@@ -346,6 +524,60 @@ def test_canonical_camera_control_views_carry_explicit_pose_not_lane_orbit() -> 
     assert "lane_camera_orbits" not in views[0]
 
 
+def test_room_camera_control_views_use_same_canonical_pose_contract() -> None:
+    views = _room_camera_control_views(
+        {
+            "room_outlines": [
+                {
+                    "room_id": "room_2",
+                    "label": "Room 2",
+                    "center": [2.0, 4.0],
+                    "half_extents": [3.0, 2.0],
+                    "provenance": "mujoco_room_geom",
+                }
+            ]
+        }
+    )
+
+    assert views == [
+        {
+            "view_id": "room_01_room_2",
+            "label": "Room 2 canonical room view",
+            "anchor_id": "room_2",
+            "anchor_kind": "room",
+            "category": "Room",
+            "room_id": "room_2",
+            "camera_mode": "canonical_eye_target",
+            "camera_model": "canonical_eye_target_camera_v1",
+            "coordinate_frame": "molmospaces_scene_frame_v1",
+            "coordinate_convention": "molmospaces_scene_frame_v1",
+            "calibration_status": "canonical_scene_frame_similarity_fit_v1",
+            "eye": pytest.approx([0.95, 3.3, 1.45]),
+            "target": pytest.approx([2.0, 4.0, 1.45]),
+            "lookat": pytest.approx([2.0, 4.0, 1.45]),
+            "up": [0.0, 0.0, 1.0],
+            "camera_basis": "room_center_inset_eye_target",
+            "target_source": {
+                MOLMOSPACES_LANE_ID: "molmospaces_room_outline_center",
+                ISAAC_LANE_ID: "canonical_explicit_room_target_from_molmospaces_scene_frame",
+            },
+            "lane_targets": {
+                MOLMOSPACES_LANE_ID: {
+                    "lookat": pytest.approx([2.0, 4.0, 1.45]),
+                    "room_id": "room_2",
+                },
+                ISAAC_LANE_ID: {"room_id": "room_2"},
+            },
+            "room_outline": {
+                "center": [2.0, 4.0],
+                "half_extents": [3.0, 2.0],
+                "provenance": "mujoco_room_geom",
+            },
+        }
+    ]
+    assert "lane_camera_orbits" not in views[0]
+
+
 def test_scene_frame_transform_from_capture_uses_usd_bounds_residuals() -> None:
     transform = _scene_frame_transform_from_capture(
         canonical_views=[
@@ -367,10 +599,105 @@ def test_scene_frame_transform_from_capture_uses_usd_bounds_residuals() -> None:
     )
 
     assert transform["status"] == "identity_checked_against_usd_bounds"
-    assert transform["parity_status"] == "canonical_pose_fit_within_threshold"
+    assert transform["diagnostic_kind"] == "camera_target_vs_isaac_usd_bounds"
+    assert transform["target_residual_status"] == "target_matches_usd_bounds_within_threshold"
     assert transform["max_residual_m"] == pytest.approx(0.044721, rel=1e-4)
     assert transform["max_xy_residual_m"] == pytest.approx(0.044721, rel=1e-4)
     assert transform["max_z_residual_m"] == pytest.approx(0.0)
+
+
+def test_camera_pose_contract_from_capture_checks_backend_pose_delta() -> None:
+    contract = _camera_pose_contract_from_capture(
+        canonical_views=[
+            {
+                "view_id": "view_01_table",
+                "anchor_id": "table_01",
+                "category": "DiningTable",
+                "eye": [1.0, 2.0, 3.0],
+                "target": [2.7, 5.9, 1.0],
+            }
+        ],
+        molmospaces_lane={
+            "views": [
+                {
+                    "view_id": "view_01_table",
+                    "backend_eye": [1.0, 2.0, 3.0],
+                    "backend_target": [2.7, 5.9, 1.0],
+                }
+            ]
+        },
+        isaac_lane={
+            "views": [
+                {
+                    "view_id": "view_01_table",
+                    "backend_eye": [1.0, 2.0, 3.0],
+                    "backend_target": [2.7, 5.9, 1.0],
+                    "usd_bounds_target": [2.72, 5.94, 0.6],
+                }
+            ]
+        },
+    )
+
+    assert contract["status"] == "same_backend_pose_within_threshold"
+    assert contract["max_pose_delta_m"] == pytest.approx(0.0)
+    assert contract["pairs"][0]["backend_eye_delta_m"] == pytest.approx(0.0)
+    assert contract["pairs"][0]["backend_target_delta_m"] == pytest.approx(0.0)
+
+
+def test_camera_intrinsics_contract_declares_vertical_fov_precedence() -> None:
+    contract = _camera_intrinsics_contract_from_capture(
+        requested_lens={
+            "vertical_fov_deg": 45.0,
+            "focal_length_mm": 24.0,
+        },
+        requested_resolution={"width": 960, "height": 640},
+        molmospaces_lane={
+            "lens": {
+                "vertical_fov_deg": 45.0,
+                "focal_length_mm": 24.0,
+            }
+        },
+        isaac_lane={
+            "lens": {
+                "vertical_fov_deg": 45.0,
+                "focal_length_mm": 24.0,
+            },
+            "derived_lens": {
+                "focal_length_mm": 24.0,
+                "horizontal_aperture_mm": 29.82337649086285,
+            },
+        },
+    )
+
+    assert contract["status"] == "intrinsics_consistent"
+    assert contract["intrinsics_precedence"] == "vertical_fov_deg"
+    assert contract["derived_from_vertical_fov"]["horizontal_aperture_mm"] == pytest.approx(
+        29.82337649
+    )
+    assert contract["requested_vs_derived_horizontal_aperture_delta_mm"] is None
+
+
+def test_room_scale_contract_compares_room_outline_to_isaac_scene_bounds() -> None:
+    contract = _room_scale_contract_from_capture(
+        room_views=[
+            {
+                "view_id": "room_01_room_2",
+                "room_id": "room_2",
+                "room_outline": {
+                    "center": [2.99, 4.983],
+                    "half_extents": [2.99, 4.983],
+                    "provenance": "mujoco_room_mesh_world_bounds",
+                },
+            }
+        ],
+        isaac_lane={"scene_bounds": {"size": [9.976, 10.097, 3.154]}},
+    )
+
+    assert contract["status"] == "room_outline_mesh_bounds"
+    assert contract["room_count"] == 1
+    assert contract["rooms"][0]["size"] == pytest.approx([5.98, 9.966])
+    assert contract["max_room_to_scene_width_ratio"] == pytest.approx(0.5994, rel=1e-3)
+    assert contract["max_room_to_scene_depth_ratio"] == pytest.approx(0.987, rel=1e-3)
 
 
 def test_molmospaces_view_specs_use_anchor_orbit_not_focus_camera_heuristic() -> None:

@@ -32,7 +32,10 @@ ISAAC_LANE_ID = "isaaclab-prepared-usd"
 DEFAULT_RENDER_WIDTH = 960
 DEFAULT_RENDER_HEIGHT = 640
 CANONICAL_POSE_PARITY_THRESHOLD_M = 0.08
+CANONICAL_CAMERA_POSE_THRESHOLD_M = 0.005
 CANONICAL_CAMERA_ELEVATION_DEG = 78.0
+ROOM_CAMERA_HEIGHT_M = 1.45
+ROOM_CAMERA_INSET_FRACTION = 0.35
 
 
 @dataclass(frozen=True)
@@ -85,10 +88,13 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         },
         "frame_mapping_note": (
             "The canonical camera frame is the MolmoSpaces scene frame. The Isaac lane renders "
-            "the same explicit eye/target/up request and reports USD-bounds residuals for the "
-            "matched anchors. If residuals are high, the artifact is evidence of a scene "
-            "geometry/anchor mismatch rather than proof of full backend-swappable parity."
+            "the same explicit eye/target/up request for both room-level and object-anchor "
+            "views. The report also records USD-bounds residuals for matched anchors. If "
+            "residuals are high, the artifact is evidence of a target-definition or scene "
+            "geometry mismatch rather than proof of full backend-swappable visual parity."
         ),
+        "official_molmospaces_source": _official_molmospaces_source(),
+        "room_camera_views": [],
         "anchors": [],
         "view_specs": {},
         "lanes": {},
@@ -103,6 +109,8 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     molmo_state = molmo.pop("_state", {}) if isinstance(molmo, dict) else {}
     anchors = _scene_anchors(molmo_state, limit=4)
     manifest["anchors"] = anchors
+    room_views = _room_camera_control_views(molmo_state)
+    manifest["room_camera_views"] = room_views
     molmo_specs = _molmospaces_view_specs(anchors, molmo_state=molmo_state)
     isaac_specs = _isaac_view_specs(
         anchors,
@@ -110,12 +118,13 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         scene_index=config.scene_index,
     )
     scene_transform = _identity_scene_frame_transform()
-    canonical_views = _canonical_camera_control_views(
+    anchor_views = _canonical_anchor_camera_control_views(
         anchors,
         molmo_specs=molmo_specs,
         isaac_specs=isaac_specs,
         scene_transform=scene_transform,
     )
+    canonical_views = [*room_views, *anchor_views]
     camera_request = canonical_scene_camera_control_request(
         canonical_views,
         width=config.render_width,
@@ -129,6 +138,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     )
     manifest["camera_control"]["request_artifact"] = _relpath(camera_request_path, output_dir)
     manifest["view_specs"] = {
+        "room-level-canonical": room_views,
         MOLMOSPACES_LANE_ID: molmo_specs,
         ISAAC_LANE_ID: isaac_specs,
     }
@@ -136,7 +146,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     manifest["canonical_camera_views"] = canonical_views
     manifest["camera_control"]["view_count"] = len(camera_request.get("views") or [])
     manifest["camera_control"]["same_pose_contract"] = True
-    if molmo.get("status") == "success" and anchors:
+    if molmo.get("status") == "success" and canonical_views:
         molmo.update(
             _capture_molmospaces_camera_views(
                 config,
@@ -148,6 +158,21 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         config,
         camera_request_path=camera_request_path,
         lane_dir=output_dir / "isaaclab",
+    )
+    manifest["camera_pose_contract"] = _camera_pose_contract_from_capture(
+        canonical_views=canonical_views,
+        molmospaces_lane=molmo,
+        isaac_lane=manifest["lanes"][ISAAC_LANE_ID],
+    )
+    manifest["camera_intrinsics_contract"] = _camera_intrinsics_contract_from_capture(
+        requested_lens=camera_request.get("lens"),
+        requested_resolution=camera_request.get("render_resolution"),
+        molmospaces_lane=molmo,
+        isaac_lane=manifest["lanes"][ISAAC_LANE_ID],
+    )
+    manifest["room_scale_contract"] = _room_scale_contract_from_capture(
+        room_views=room_views,
+        isaac_lane=manifest["lanes"][ISAAC_LANE_ID],
     )
     manifest["scene_frame_transform"] = _scene_frame_transform_from_capture(
         canonical_views=canonical_views,
@@ -183,6 +208,32 @@ def failed_lane_summaries(manifest: dict[str, Any]) -> list[str]:
         failure = lane.get("failure") if isinstance(lane.get("failure"), dict) else {}
         summaries.append(f"{lane_id}: {failure.get('message') or lane.get('status')}")
     return summaries
+
+
+def _official_molmospaces_source() -> dict[str, Any]:
+    try:
+        from importlib import metadata
+
+        distribution = metadata.distribution("molmo-spaces")
+        direct_url_text = distribution.read_text("direct_url.json")
+        payload = json.loads(direct_url_text) if direct_url_text else {}
+    except (metadata.PackageNotFoundError, OSError, json.JSONDecodeError, KeyError):
+        return {
+            "package": "molmo-spaces",
+            "status": "not_installed",
+            "expected_source": "https://github.com/allenai/molmospaces",
+        }
+    vcs_info = payload.get("vcs_info") if isinstance(payload, dict) else {}
+    return {
+        "package": "molmo-spaces",
+        "status": "installed",
+        "url": str(payload.get("url") or ""),
+        "vcs": str(vcs_info.get("vcs") or "") if isinstance(vcs_info, dict) else "",
+        "commit_id": str(vcs_info.get("commit_id") or "") if isinstance(vcs_info, dict) else "",
+        "requested_revision": str(vcs_info.get("requested_revision") or "")
+        if isinstance(vcs_info, dict)
+        else "",
+    }
 
 
 def _capture_molmospaces_lane(config: SceneCameraComparisonConfig) -> dict[str, Any]:
@@ -455,9 +506,9 @@ def _isaac_view_specs(
                 "anchor_kind": anchor["anchor_kind"],
                 "usd_prim_path": usd_prim_path,
                 "target_source": (
-                    "isaac_scene_index_support_pose"
-                    if isaac_support_position
-                    else "isaac_worker_usd_prim_world_bounds"
+                    "isaac_worker_usd_prim_world_bounds_diagnostic"
+                    if usd_prim_path
+                    else "missing_isaac_usd_prim_path"
                 ),
                 "isaac_support_position": isaac_support_position,
                 "min_target_z": 0.6,
@@ -466,13 +517,76 @@ def _isaac_view_specs(
         anchor["isaac_usd_prim_path"] = usd_prim_path
         if isaac_support_position:
             anchor["isaac_support_position"] = isaac_support_position
-            anchor["isaac_target_source"] = "Isaac scene-index support pose"
+            anchor["isaac_target_source"] = (
+                "Canonical explicit target; Isaac support pose recorded as navigation metadata"
+            )
         else:
-            anchor["isaac_target_source"] = "USD prim world bounds resolved in Isaac worker"
+            anchor["isaac_target_source"] = (
+                "Canonical explicit target; USD prim bounds resolved in Isaac worker"
+            )
     return specs
 
 
-def _canonical_camera_control_views(
+def _room_camera_control_views(state: dict[str, Any]) -> list[dict[str, Any]]:
+    views = []
+    rooms = [room for room in (state.get("room_outlines") or []) if isinstance(room, dict)]
+    rooms.sort(key=lambda item: str(item.get("room_id") or ""))
+    for index, room in enumerate(rooms, start=1):
+        center = room.get("center")
+        half_extents = room.get("half_extents")
+        if not (
+            isinstance(center, list)
+            and len(center) >= 2
+            and isinstance(half_extents, list)
+            and len(half_extents) >= 2
+        ):
+            continue
+        room_id = str(room.get("room_id") or f"room_{index}")
+        hx = max(float(half_extents[0]), 0.5)
+        hy = max(float(half_extents[1]), 0.5)
+        target = [float(center[0]), float(center[1]), ROOM_CAMERA_HEIGHT_M]
+        eye = [
+            float(center[0]) - hx * ROOM_CAMERA_INSET_FRACTION,
+            float(center[1]) - hy * ROOM_CAMERA_INSET_FRACTION,
+            ROOM_CAMERA_HEIGHT_M,
+        ]
+        views.append(
+            {
+                "view_id": f"room_{index:02d}_{_safe_id(room_id)}",
+                "label": f"{room.get('label') or room_id} canonical room view",
+                "anchor_id": room_id,
+                "anchor_kind": "room",
+                "category": "Room",
+                "room_id": room_id,
+                "camera_mode": "canonical_eye_target",
+                "camera_model": CANONICAL_CAMERA_MODEL,
+                "coordinate_frame": MOLMOSPACES_SCENE_FRAME,
+                "coordinate_convention": MOLMOSPACES_SCENE_FRAME,
+                "calibration_status": CANONICAL_POSE_CALIBRATION,
+                "eye": eye,
+                "target": target,
+                "lookat": target,
+                "up": [0.0, 0.0, 1.0],
+                "camera_basis": "room_center_inset_eye_target",
+                "target_source": {
+                    MOLMOSPACES_LANE_ID: "molmospaces_room_outline_center",
+                    ISAAC_LANE_ID: "canonical_explicit_room_target_from_molmospaces_scene_frame",
+                },
+                "lane_targets": {
+                    MOLMOSPACES_LANE_ID: {"lookat": target, "room_id": room_id},
+                    ISAAC_LANE_ID: {"room_id": room_id},
+                },
+                "room_outline": {
+                    "center": [float(center[0]), float(center[1])],
+                    "half_extents": [hx, hy],
+                    "provenance": str(room.get("provenance") or ""),
+                },
+            }
+        )
+    return views
+
+
+def _canonical_anchor_camera_control_views(
     anchors: list[dict[str, Any]],
     *,
     molmo_specs: list[dict[str, Any]],
@@ -517,7 +631,7 @@ def _canonical_camera_control_views(
             },
             "target_source": {
                 MOLMOSPACES_LANE_ID: molmo_spec.get("target_source"),
-                ISAAC_LANE_ID: isaac_spec.get("target_source"),
+                ISAAC_LANE_ID: "canonical_explicit_target_from_molmospaces_scene_frame",
             },
             "lane_targets": {
                 MOLMOSPACES_LANE_ID: {
@@ -535,6 +649,9 @@ def _canonical_camera_control_views(
         }
         views.append(view)
     return views
+
+
+_canonical_camera_control_views = _canonical_anchor_camera_control_views
 
 
 def _camera_control_views(
@@ -630,6 +747,11 @@ def _scene_frame_transform_from_capture(
         transform = _identity_scene_frame_transform()
         transform["status"] = "missing_render_diagnostics"
         transform["parity_status"] = "not_proven"
+        transform["diagnostic_kind"] = "camera_target_vs_isaac_usd_bounds"
+        transform["interpretation"] = (
+            "No Isaac USD-bounds diagnostics were captured; this does not prove or disprove "
+            "camera pose parity."
+        )
         return transform
     # Fit residuals against identity first; the current prepared USD should already
     # share the MolmoSpaces scene frame when camera parity is real.
@@ -658,15 +780,23 @@ def _scene_frame_transform_from_capture(
     mean_xy_residual = sum(xy_residual_values) / len(xy_residual_values)
     max_z_residual = max(z_residual_values)
     mean_z_residual = sum(z_residual_values) / len(z_residual_values)
+    target_residual_status = (
+        "target_matches_usd_bounds_within_threshold"
+        if max_residual <= CANONICAL_POSE_PARITY_THRESHOLD_M
+        else "target_definition_residual_high"
+    )
     return {
         "schema": "molmospaces_to_isaac_scene_transform_v1",
         "source_frame": MOLMOSPACES_SCENE_FRAME,
         "target_frame": "isaac_prepared_usd_world_frame",
+        "diagnostic_kind": "camera_target_vs_isaac_usd_bounds",
         "status": "identity_checked_against_usd_bounds",
-        "parity_status": (
-            "canonical_pose_fit_within_threshold"
-            if max_residual <= CANONICAL_POSE_PARITY_THRESHOLD_M
-            else "canonical_pose_fit_residual_high"
+        "parity_status": target_residual_status,
+        "target_residual_status": target_residual_status,
+        "interpretation": (
+            "This residual compares the requested canonical camera target with the center of "
+            "the matched Isaac USD prim bounds. It is a target-definition/geometry diagnostic, "
+            "not a backend camera-pose residual."
         ),
         "pair_count": len(pairs),
         "xy_scale": 1.0,
@@ -681,6 +811,249 @@ def _scene_frame_transform_from_capture(
         "max_z_residual_m": max_z_residual,
         "pairs": residuals,
     }
+
+
+def _camera_pose_contract_from_capture(
+    *,
+    canonical_views: list[dict[str, Any]],
+    molmospaces_lane: dict[str, Any],
+    isaac_lane: dict[str, Any],
+) -> dict[str, Any]:
+    request_views = {
+        str(item.get("view_id") or ""): item for item in canonical_views if isinstance(item, dict)
+    }
+    molmo_views = _views_by_id(molmospaces_lane)
+    isaac_views = _views_by_id(isaac_lane)
+    pairs: list[dict[str, Any]] = []
+    for view_id, request_view in request_views.items():
+        requested_eye = request_view.get("eye")
+        requested_target = request_view.get("target") or request_view.get("lookat")
+        molmo_view = molmo_views.get(view_id, {})
+        isaac_view = isaac_views.get(view_id, {})
+        molmo_eye = _backend_vec(molmo_view, "eye")
+        molmo_target = _backend_vec(molmo_view, "target")
+        isaac_eye = _backend_vec(isaac_view, "eye")
+        isaac_target = _backend_vec(isaac_view, "target")
+        if not all(
+            _is_vec3(value)
+            for value in (
+                requested_eye,
+                requested_target,
+                molmo_eye,
+                molmo_target,
+                isaac_eye,
+                isaac_target,
+            )
+        ):
+            continue
+        pairs.append(
+            {
+                "view_id": view_id,
+                "anchor_id": request_view.get("anchor_id"),
+                "category": request_view.get("category"),
+                "requested_eye": [float(value) for value in requested_eye[:3]],
+                "requested_target": [float(value) for value in requested_target[:3]],
+                "molmospaces_backend_eye": [float(value) for value in molmo_eye[:3]],
+                "molmospaces_backend_target": [float(value) for value in molmo_target[:3]],
+                "isaac_backend_eye": [float(value) for value in isaac_eye[:3]],
+                "isaac_backend_target": [float(value) for value in isaac_target[:3]],
+                "molmospaces_request_eye_residual_m": _distance_3d(requested_eye, molmo_eye),
+                "molmospaces_request_target_residual_m": _distance_3d(
+                    requested_target, molmo_target
+                ),
+                "isaac_request_eye_residual_m": _distance_3d(requested_eye, isaac_eye),
+                "isaac_request_target_residual_m": _distance_3d(requested_target, isaac_target),
+                "backend_eye_delta_m": _distance_3d(molmo_eye, isaac_eye),
+                "backend_target_delta_m": _distance_3d(molmo_target, isaac_target),
+            }
+        )
+    if not pairs:
+        return {
+            "schema": "canonical_camera_pose_contract_v1",
+            "camera_model": CANONICAL_CAMERA_MODEL,
+            "coordinate_frame": MOLMOSPACES_SCENE_FRAME,
+            "status": "missing_pose_diagnostics",
+            "pair_count": 0,
+            "pose_threshold_m": CANONICAL_CAMERA_POSE_THRESHOLD_M,
+            "interpretation": "No matched backend eye/target diagnostics were captured.",
+            "pairs": [],
+        }
+    residual_keys = (
+        "molmospaces_request_eye_residual_m",
+        "molmospaces_request_target_residual_m",
+        "isaac_request_eye_residual_m",
+        "isaac_request_target_residual_m",
+        "backend_eye_delta_m",
+        "backend_target_delta_m",
+    )
+    maxima = {f"max_{key}": max(float(item[key]) for item in pairs) for key in residual_keys}
+    max_pose_delta = max(maxima.values())
+    status = (
+        "same_backend_pose_within_threshold"
+        if max_pose_delta <= CANONICAL_CAMERA_POSE_THRESHOLD_M
+        else "backend_camera_pose_mismatch"
+    )
+    return {
+        "schema": "canonical_camera_pose_contract_v1",
+        "camera_model": CANONICAL_CAMERA_MODEL,
+        "coordinate_frame": MOLMOSPACES_SCENE_FRAME,
+        "status": status,
+        "pair_count": len(pairs),
+        "pose_threshold_m": CANONICAL_CAMERA_POSE_THRESHOLD_M,
+        "max_pose_delta_m": max_pose_delta,
+        **maxima,
+        "interpretation": (
+            "This checks the requested eye/target against the eye/target each backend "
+            "reported after applying the Roboclaws camera-control request."
+        ),
+        "pairs": pairs,
+    }
+
+
+def _camera_intrinsics_contract_from_capture(
+    *,
+    requested_lens: Any,
+    requested_resolution: Any,
+    molmospaces_lane: dict[str, Any],
+    isaac_lane: dict[str, Any],
+) -> dict[str, Any]:
+    lens = requested_lens if isinstance(requested_lens, dict) else {}
+    resolution = requested_resolution if isinstance(requested_resolution, dict) else {}
+    width = _optional_float(resolution.get("width"))
+    height = _optional_float(resolution.get("height"))
+    requested_vertical_fov = _optional_float(lens.get("vertical_fov_deg"))
+    requested_focal = _optional_float(lens.get("focal_length_mm"))
+    requested_horizontal_aperture = _optional_float(lens.get("horizontal_aperture_mm"))
+    derived_horizontal_aperture = None
+    derived_horizontal_fov = None
+    if (
+        requested_vertical_fov is not None
+        and requested_focal is not None
+        and width is not None
+        and height is not None
+        and height > 0
+    ):
+        vertical_aperture = (
+            2.0 * requested_focal * math.tan(math.radians(requested_vertical_fov) / 2.0)
+        )
+        derived_horizontal_aperture = vertical_aperture * width / height
+        derived_horizontal_fov = math.degrees(
+            2.0 * math.atan(derived_horizontal_aperture / (2.0 * requested_focal))
+        )
+    aperture_delta = None
+    if requested_horizontal_aperture is not None and derived_horizontal_aperture is not None:
+        aperture_delta = abs(requested_horizontal_aperture - derived_horizontal_aperture)
+    precedence = (
+        "vertical_fov_deg"
+        if requested_vertical_fov is not None
+        else "horizontal_aperture_mm"
+        if requested_horizontal_aperture is not None
+        else "backend_default"
+    )
+    status = "intrinsics_consistent"
+    if aperture_delta is not None and aperture_delta > 0.001:
+        status = "vertical_fov_overrides_horizontal_aperture"
+    return {
+        "schema": "canonical_camera_intrinsics_contract_v1",
+        "status": status,
+        "camera_model": CANONICAL_CAMERA_MODEL,
+        "resolution": {
+            "width": int(width) if width is not None else None,
+            "height": int(height) if height is not None else None,
+        },
+        "requested_lens": dict(lens),
+        "molmospaces_lens": dict(molmospaces_lane.get("lens") or {}),
+        "isaac_lens": dict(isaac_lane.get("lens") or {}),
+        "isaac_derived_lens": dict(isaac_lane.get("derived_lens") or {}),
+        "intrinsics_precedence": precedence,
+        "derived_from_vertical_fov": {
+            "horizontal_aperture_mm": derived_horizontal_aperture,
+            "horizontal_fov_deg": derived_horizontal_fov,
+        },
+        "requested_vs_derived_horizontal_aperture_delta_mm": aperture_delta,
+        "interpretation": (
+            "The scene probe treats vertical_fov_deg as the canonical lens input. "
+            "Isaac derives horizontal aperture from vertical FOV and aspect ratio; "
+            "MuJoCo applies the same vertical FOV to its free camera."
+        ),
+    }
+
+
+def _room_scale_contract_from_capture(
+    *,
+    room_views: list[dict[str, Any]],
+    isaac_lane: dict[str, Any],
+) -> dict[str, Any]:
+    rooms = []
+    for view in room_views:
+        if not isinstance(view, dict):
+            continue
+        outline = view.get("room_outline") if isinstance(view.get("room_outline"), dict) else {}
+        half_extents = outline.get("half_extents")
+        center = outline.get("center")
+        if not (
+            isinstance(half_extents, list)
+            and len(half_extents) >= 2
+            and isinstance(center, list)
+            and len(center) >= 2
+        ):
+            continue
+        size = [float(half_extents[0]) * 2.0, float(half_extents[1]) * 2.0]
+        rooms.append(
+            {
+                "view_id": view.get("view_id"),
+                "room_id": view.get("room_id"),
+                "center": [float(center[0]), float(center[1])],
+                "size": size,
+                "half_extents": [float(half_extents[0]), float(half_extents[1])],
+                "provenance": str(outline.get("provenance") or ""),
+            }
+        )
+    scene_bounds = (
+        isaac_lane.get("scene_bounds") if isinstance(isaac_lane.get("scene_bounds"), dict) else {}
+    )
+    scene_size = scene_bounds.get("size") if isinstance(scene_bounds.get("size"), list) else []
+    status = "room_outline_mesh_bounds"
+    max_room_to_scene_width_ratio = None
+    max_room_to_scene_depth_ratio = None
+    if len(scene_size) >= 2 and rooms:
+        scene_width = max(float(scene_size[0]), 1e-6)
+        scene_depth = max(float(scene_size[1]), 1e-6)
+        max_room_to_scene_width_ratio = max(float(room["size"][0]) / scene_width for room in rooms)
+        max_room_to_scene_depth_ratio = max(float(room["size"][1]) / scene_depth for room in rooms)
+        if max_room_to_scene_width_ratio > 1.05 or max_room_to_scene_depth_ratio > 1.05:
+            status = "room_outline_exceeds_isaac_scene_bounds"
+    if not rooms:
+        status = "missing_room_outline_diagnostics"
+    return {
+        "schema": "room_scale_contract_v1",
+        "status": status,
+        "room_count": len(rooms),
+        "room_outline_source": "molmospaces_room_outlines",
+        "isaac_scene_bounds": dict(scene_bounds),
+        "max_room_to_scene_width_ratio": max_room_to_scene_width_ratio,
+        "max_room_to_scene_depth_ratio": max_room_to_scene_depth_ratio,
+        "interpretation": (
+            "Room-level camera poses are derived from MolmoSpaces room outlines. "
+            "Those outlines must come from room mesh world bounds, not MuJoCo mesh geom_size, "
+            "otherwise same-pose backend comparisons can start from a wrong room scale."
+        ),
+        "rooms": rooms,
+    }
+
+
+def _views_by_id(lane: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        str(item.get("view_id") or ""): item
+        for item in lane.get("views") or []
+        if isinstance(item, dict)
+    }
+
+
+def _backend_vec(view: dict[str, Any], key: str) -> list[float] | None:
+    backend_value = view.get(f"backend_{key}")
+    value = backend_value if _is_vec3(backend_value) else view.get(key)
+    return [float(item) for item in value[:3]] if _is_vec3(value) else None
 
 
 def _support_pose_position(value: Any) -> list[float] | None:
@@ -850,6 +1223,9 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
     body = "\n".join(
         [
             _summary_section(title, manifest),
+            _pose_contract_section(manifest),
+            _intrinsics_contract_section(manifest),
+            _room_scale_section(manifest),
             _transform_section(manifest),
             _anchor_section(manifest),
             _runtime_section(manifest),
@@ -963,6 +1339,11 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
 
 def _summary_section(title: str, manifest: dict[str, Any]) -> str:
     scene = manifest.get("scene") if isinstance(manifest.get("scene"), dict) else {}
+    official_source = (
+        manifest.get("official_molmospaces_source")
+        if isinstance(manifest.get("official_molmospaces_source"), dict)
+        else {}
+    )
     camera = (
         manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
     )
@@ -973,6 +1354,21 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
     transform = (
         manifest.get("scene_frame_transform")
         if isinstance(manifest.get("scene_frame_transform"), dict)
+        else {}
+    )
+    pose_contract = (
+        manifest.get("camera_pose_contract")
+        if isinstance(manifest.get("camera_pose_contract"), dict)
+        else {}
+    )
+    intrinsics = (
+        manifest.get("camera_intrinsics_contract")
+        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
+        else {}
+    )
+    room_scale = (
+        manifest.get("room_scale_contract")
+        if isinstance(manifest.get("room_scale_contract"), dict)
         else {}
     )
     return f"""
@@ -988,19 +1384,203 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
                 ("scene", f"{scene.get('scene_source')}:{scene.get('scene_index')}"),
                 ("seed", scene.get("seed")),
                 ("prepared USD", scene.get("scene_usd_path")),
+                ("MolmoSpaces source", official_source.get("url")),
+                ("MolmoSpaces commit", _short_commit(official_source.get("commit_id"))),
                 ("render", f"{scene.get('render_width')} x {scene.get('render_height')}"),
                 ("camera API", camera.get("api_name")),
                 ("camera model", camera.get("camera_model")),
                 ("frame", camera.get("coordinate_frame")),
                 ("calibration", camera.get("calibration_status")),
                 ("same pose", camera.get("same_pose_contract")),
-                ("fit", transform.get("parity_status")),
-                ("max residual", _meters_text(transform.get("max_residual_m"))),
+                ("camera pose", pose_contract.get("status")),
+                ("max pose delta", _meters_text(pose_contract.get("max_pose_delta_m"))),
+                ("intrinsics", intrinsics.get("status")),
+                ("room scale", room_scale.get("status")),
+                ("target vs USD", transform.get("target_residual_status")),
+                ("target residual", _meters_text(transform.get("max_residual_m"))),
                 ("FOV", f"{lens.get('vertical_fov_deg')} deg" if lens else ""),
                 ("lighting", lighting.get("profile_id") if lighting else ""),
             ]
         )
     }</div>
+</section>
+"""
+
+
+def _intrinsics_contract_section(manifest: dict[str, Any]) -> str:
+    contract = (
+        manifest.get("camera_intrinsics_contract")
+        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
+        else {}
+    )
+    if not contract:
+        return ""
+    requested = (
+        contract.get("requested_lens") if isinstance(contract.get("requested_lens"), dict) else {}
+    )
+    molmo = (
+        contract.get("molmospaces_lens")
+        if isinstance(contract.get("molmospaces_lens"), dict)
+        else {}
+    )
+    isaac = contract.get("isaac_lens") if isinstance(contract.get("isaac_lens"), dict) else {}
+    isaac_derived = (
+        contract.get("isaac_derived_lens")
+        if isinstance(contract.get("isaac_derived_lens"), dict)
+        else {}
+    )
+    derived = (
+        contract.get("derived_from_vertical_fov")
+        if isinstance(contract.get("derived_from_vertical_fov"), dict)
+        else {}
+    )
+    rows = [
+        ("Requested vertical FOV", f"{requested.get('vertical_fov_deg')} deg"),
+        ("Requested focal length", f"{requested.get('focal_length_mm')} mm"),
+        ("Requested horizontal aperture", f"{requested.get('horizontal_aperture_mm')} mm"),
+        (
+            "Derived horizontal aperture",
+            f"{_optional_float(derived.get('horizontal_aperture_mm')):.6g} mm"
+            if _optional_float(derived.get("horizontal_aperture_mm")) is not None
+            else "",
+        ),
+        (
+            "Derived horizontal FOV",
+            f"{_optional_float(derived.get('horizontal_fov_deg')):.6g} deg"
+            if _optional_float(derived.get("horizontal_fov_deg")) is not None
+            else "",
+        ),
+        ("MuJoCo lens payload", json.dumps(molmo, sort_keys=True)),
+        ("Isaac lens payload", json.dumps(isaac, sort_keys=True)),
+        ("Isaac derived lens", json.dumps(isaac_derived, sort_keys=True)),
+        ("Horizontal aperture delta", _intrinsics_delta_text(contract)),
+    ]
+    body = "".join(
+        f"<tr><td>{html.escape(label)}</td><td>{html.escape(str(value))}</td></tr>"
+        for label, value in rows
+    )
+    note = (
+        f"status={contract.get('status')}; "
+        f"precedence={contract.get('intrinsics_precedence')}. "
+        f"{contract.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Camera Intrinsics Contract</h2>
+  <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Field</th><th>Value</th></tr></thead>
+    <tbody>{body}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _room_scale_section(manifest: dict[str, Any]) -> str:
+    contract = (
+        manifest.get("room_scale_contract")
+        if isinstance(manifest.get("room_scale_contract"), dict)
+        else {}
+    )
+    if not contract:
+        return ""
+    rows = []
+    for room in contract.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(room.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(room.get('room_id', '')))}</td>"
+            f"<td>{html.escape(_vec_text(room.get('center')))}</td>"
+            f"<td>{html.escape(_vec_text(room.get('size')))}</td>"
+            f"<td>{html.escape(str(room.get('provenance', '')))}</td>"
+            "</tr>"
+        )
+    bounds = (
+        contract.get("isaac_scene_bounds")
+        if isinstance(contract.get("isaac_scene_bounds"), dict)
+        else {}
+    )
+    note = (
+        f"status={contract.get('status')}; rooms={contract.get('room_count')}; "
+        f"isaac_scene_size={_vec_text(bounds.get('size'))}; "
+        f"max_width_ratio={_ratio_text(contract.get('max_room_to_scene_width_ratio'))}; "
+        f"max_depth_ratio={_ratio_text(contract.get('max_room_to_scene_depth_ratio'))}. "
+        f"{contract.get('interpretation') or ''}"
+    )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in ("View", "Room", "Center", "Size XY", "Provenance")
+    )
+    return f"""
+<section class="panel">
+  <h2>Room Scale Contract</h2>
+  <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _intrinsics_delta_text(contract: dict[str, Any]) -> str:
+    value = _optional_float(contract.get("requested_vs_derived_horizontal_aperture_delta_mm"))
+    return f"{value:.6g} mm" if value is not None else ""
+
+
+def _pose_contract_section(manifest: dict[str, Any]) -> str:
+    contract = (
+        manifest.get("camera_pose_contract")
+        if isinstance(manifest.get("camera_pose_contract"), dict)
+        else {}
+    )
+    if not contract:
+        return ""
+    rows = []
+    for item in contract.get("pairs") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('anchor_id', '')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('requested_eye')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('requested_target')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('molmospaces_backend_eye')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('isaac_backend_eye')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('backend_eye_delta_m')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('backend_target_delta_m')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "View",
+            "Handle",
+            "Requested eye",
+            "Requested target",
+            "MuJoCo backend eye",
+            "Isaac backend eye",
+            "Backend eye delta",
+            "Backend target delta",
+        )
+    )
+    note = (
+        f"status={contract.get('status')}; "
+        f"max_pose_delta={_meters_text(contract.get('max_pose_delta_m'))}; "
+        f"threshold={_meters_text(contract.get('pose_threshold_m'))}. "
+        f"{contract.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Camera Pose Contract</h2>
+  <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
 </section>
 """
 
@@ -1023,7 +1603,6 @@ def _transform_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('category', '')))}</td>"
             f"<td>{html.escape(_vec_text(item.get('source')))}</td>"
             f"<td>{html.escape(_vec_text(item.get('target')))}</td>"
-            f"<td>{html.escape(_vec_text(item.get('fitted')))}</td>"
             f"<td>{html.escape(_meters_text(item.get('residual_m')))}</td>"
             f"<td>{html.escape(_meters_text(item.get('xy_residual_m')))}</td>"
             f"<td>{html.escape(_meters_text(item.get('z_residual_m')))}</td>"
@@ -1034,25 +1613,25 @@ def _transform_section(manifest: dict[str, Any]) -> str:
         for label in (
             "Handle",
             "Category",
-            "MolmoSpaces anchor",
-            "Isaac support pose",
-            "Fitted Isaac pose",
+            "Requested camera target",
+            "Isaac USD bounds target",
             "Residual",
             "XY residual",
             "Z residual",
         )
     )
     note = (
-        f"{transform.get('source_frame')} -> {transform.get('target_frame')}; "
-        f"status={transform.get('status')}; parity={transform.get('parity_status')}; "
+        f"diagnostic={transform.get('diagnostic_kind')}; "
+        f"status={transform.get('status')}; result={transform.get('target_residual_status')}; "
         f"mean={_meters_text(transform.get('mean_residual_m'))}; "
         f"max={_meters_text(transform.get('max_residual_m'))}; "
         f"max_xy={_meters_text(transform.get('max_xy_residual_m'))}; "
-        f"max_z={_meters_text(transform.get('max_z_residual_m'))}."
+        f"max_z={_meters_text(transform.get('max_z_residual_m'))}. "
+        f"{transform.get('interpretation') or ''}"
     )
     return f"""
 <section class="panel">
-  <h2>Scene Frame Transform</h2>
+  <h2>Target Vs USD Bounds Diagnostics</h2>
   <p class="note">{html.escape(note)}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
@@ -1081,9 +1660,10 @@ def _anchor_section(manifest: dict[str, Any]) -> str:
         )
     note = (
         "Anchors are matched by MolmoSpaces metadata handle, not by cleanup action. "
-        "MuJoCo targets use metadata anchor/support surfaces; Isaac support poses are "
-        "recorded as diagnostics. The canonical camera request itself carries explicit "
-        "eye/target/up values, and USD-bounds residuals are measured after rendering."
+        "MuJoCo targets use metadata anchor/support surfaces. Isaac support poses are "
+        "navigation/placement metadata diagnostics, not camera target coordinates. The "
+        "canonical camera request itself carries explicit eye/target/up values, and "
+        "USD-bounds residuals are measured after rendering."
     )
     headers = "".join(
         f"<th>{html.escape(label)}</th>"
@@ -1194,18 +1774,34 @@ def _failure_section(manifest: dict[str, Any]) -> str:
 
 
 def _view_sections(manifest: dict[str, Any], *, output_dir: Path) -> str:
-    anchors = [item for item in manifest.get("anchors") or [] if isinstance(item, dict)]
+    views = [
+        item
+        for item in manifest.get("canonical_camera_views") or []
+        if isinstance(item, dict) and item.get("view_id")
+    ]
+    if not views:
+        views = [
+            {
+                "view_id": f"view_{index:02d}_{_safe_id(anchor.get('category'))}",
+                **anchor,
+            }
+            for index, anchor in enumerate(
+                [item for item in manifest.get("anchors") or [] if isinstance(item, dict)],
+                start=1,
+            )
+        ]
     blocks = []
-    for index, anchor in enumerate(anchors, start=1):
-        view_id = f"view_{index:02d}_{_safe_id(anchor.get('category'))}"
-        room = html.escape(str(anchor.get("room_id") or "scene"))
-        category = html.escape(str(anchor.get("category") or "view"))
-        anchor_id = html.escape(str(anchor.get("anchor_id") or ""))
+    for view in views:
+        view_id = str(view.get("view_id") or "")
+        room = html.escape(str(view.get("room_id") or "scene"))
+        category = html.escape(str(view.get("category") or "view"))
+        anchor_id = html.escape(str(view.get("anchor_id") or ""))
+        basis = html.escape(str(view.get("camera_basis") or ""))
         blocks.append(
             f"""
 <section class="panel">
   <h2>{room} {category}</h2>
-  <p class="note">{anchor_id}</p>
+  <p class="note">{anchor_id} {basis}</p>
   <div class="comparison-grid">
     {_figure(manifest, MOLMOSPACES_LANE_ID, view_id, output_dir=output_dir)}
     {_figure(manifest, ISAAC_LANE_ID, view_id, output_dir=output_dir)}
@@ -1280,7 +1876,7 @@ def _dimension_text(dimensions: dict[str, Any]) -> str:
 
 
 def _vec_text(value: Any) -> str:
-    if not isinstance(value, list) or len(value) < 3:
+    if not isinstance(value, list) or len(value) < 2:
         return ""
     return "[" + ", ".join(f"{float(item):.3f}" for item in value[:3]) + "]"
 
@@ -1295,6 +1891,15 @@ def _meters_text(value: Any) -> str:
     return f"{text} m" if text else ""
 
 
+def _ratio_text(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _badges(items: list[tuple[str, Any]]) -> str:
     parts = []
     for label, value in items:
@@ -1305,6 +1910,11 @@ def _badges(items: list[tuple[str, Any]]) -> str:
             f"<strong>{html.escape(str(value))}</strong></span>"
         )
     return "".join(parts)
+
+
+def _short_commit(value: Any) -> str:
+    text = str(value or "")
+    return text[:12] if text else ""
 
 
 def default_output_dir() -> Path:

@@ -567,9 +567,13 @@ prepared Isaac USD with one external camera request. It is for scene/camera
 review only: it does not run cleanup, pick/place, private scoring, or pickup
 box annotation. The main lane now uses explicit canonical
 `eye`/`target`/`up` poses in the MolmoSpaces scene frame for both backends.
-The report also records USD-bounds residuals; high residuals mean the artifact
-is not yet proof of full backend-swappable scene parity even when both renders
-come from the same camera request.
+Room-level views use MolmoSpaces room mesh world bounds, not MuJoCo mesh
+`geom_size`, so the room camera starts from a real room scale. The report also
+records camera-pose, camera-intrinsics, room-scale, and USD-bounds residuals
+separately. A passing camera-pose contract means the two backends accepted the
+same render-camera API pose; high USD-bounds residuals, material differences,
+or Isaac overexposure still mean the artifact is not yet proof of full
+backend-swappable visual parity.
 
 Real visual MCP smoke:
 
