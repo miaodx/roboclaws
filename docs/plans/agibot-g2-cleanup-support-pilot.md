@@ -385,10 +385,18 @@ movement gate, not physical PNC execution.
   `cancel_requested`, `cancel_error`) and final task state after cancel; the SDK
   runner calls `Pnc.cancel_task()` on timeout instead of only reporting the
   timed-out `Pnc.normal_navi` state.
+- Tightened Human Takeover Stop readiness classification so runtime navigation
+  failures such as timeout, PNC failure, `normal_navi` exception, map mismatch,
+  and bounded local nudge failure require takeover evidence, while dry-run
+  movement-gate blocks and unverified-waypoint refusals remain ordinary blocked
+  capability outcomes.
 - Focused verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
   `./.venv/bin/ruff check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
-  and `./.venv/bin/ruff format --check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`.
+  `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  `./.venv/bin/ruff format --check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
+  and `./.venv/bin/ruff format --check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
   This is mocked SDK evidence, not real G2 hardware validation.
 
 2026-05-29 Codex Agibot semantic-map-build route slice:

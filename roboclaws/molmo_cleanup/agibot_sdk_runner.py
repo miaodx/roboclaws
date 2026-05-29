@@ -29,6 +29,21 @@ BLOCKED_MANIPULATION_TOOLS = (
     "open_receptacle",
     "close_receptacle",
 )
+HUMAN_TAKEOVER_FAILURE_TYPES = {
+    "operator_localization_gate_not_confirmed",
+    "operator_run_enablement_gate_not_confirmed",
+    "map_mismatch",
+    "current_map_mismatch",
+    "timeout",
+    "pnc_busy",
+    "pnc_failed",
+    "normal_navi_exception",
+    "local_motion_failed",
+    "relative_move_failed",
+    "bounded_local_nudge_failed",
+    "robot_obstacle_stop",
+    "human_emergency_stop",
+}
 
 
 class AgibotSDKRunnerError(RuntimeError):
@@ -983,10 +998,7 @@ def _human_takeover_stop_required(
         str(observation.get("failure_type") or ""),
         str(navigation.get("failure_type") or ""),
     }
-    return bool(
-        {"operator_localization_gate_not_confirmed", "operator_run_enablement_gate_not_confirmed"}
-        & failure_types
-    )
+    return bool(HUMAN_TAKEOVER_FAILURE_TYPES & failure_types)
 
 
 def _map_fields_present(metric_map: dict[str, Any]) -> bool:

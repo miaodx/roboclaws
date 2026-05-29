@@ -11,6 +11,7 @@ from roboclaws.molmo_cleanup.agibot_sdk_runner import (
     AGIBOT_SDK_RUNNER_BACKEND,
     BLOCKED_MANIPULATION_TOOLS,
     AgibotSDKRunnerAdapter,
+    _human_takeover_stop_required,
     run_physical_agibot_cleanup_pilot,
 )
 from roboclaws.molmo_cleanup.artifact_report import (
@@ -274,6 +275,26 @@ def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -
     assert [item["stage"] for item in runner["subphase_reports"]] == ["agent_view_export"]
     assert "navigate_to_room" in runner["public_tool_boundary"]
     assert "navigate_to_visual_candidate" in runner["public_tool_boundary"]
+
+
+def test_physical_agibot_human_takeover_stop_covers_runtime_navigation_failures() -> None:
+    assert _human_takeover_stop_required(
+        {},
+        {"failure_type": "operator_run_enablement_gate_not_confirmed"},
+    )
+    assert _human_takeover_stop_required({}, {"failure_type": "timeout"})
+    assert _human_takeover_stop_required({}, {"failure_type": "pnc_failed"})
+    assert _human_takeover_stop_required({}, {"failure_type": "normal_navi_exception"})
+    assert _human_takeover_stop_required({}, {"failure_type": "map_mismatch"})
+    assert _human_takeover_stop_required({}, {"failure_type": "bounded_local_nudge_failed"})
+    assert not _human_takeover_stop_required(
+        {},
+        {"failure_type": "real_movement_not_enabled"},
+    )
+    assert not _human_takeover_stop_required(
+        {},
+        {"failure_type": "waypoint_not_pnc_verified"},
+    )
 
 
 def _completed_context() -> dict:
