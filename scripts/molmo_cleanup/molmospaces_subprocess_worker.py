@@ -23,6 +23,7 @@ from PIL import Image, ImageDraw
 from roboclaws.molmo_cleanup.camera_control import (
     ANCHOR_ORBIT_CAMERA_MODEL,
     CAMERA_CONTROL_API_NAME,
+    CANONICAL_CAMERA_MODEL,
     load_camera_control_request,
     normalize_camera_control_request,
 )
@@ -746,8 +747,8 @@ def write_camera_views(
         calibration_status=camera_request.get("calibration_status"),
         lighting_profile=camera_request.get("lighting_profile") or {},
         lens=camera_request.get("lens") or {},
-        view_variant="molmospaces-anchor-orbit-camera-control-v1",
-        visual_artifact_provenance="mujoco_camera_control_anchor_orbit",
+        view_variant=_camera_request_variant(camera_request),
+        visual_artifact_provenance=_camera_request_provenance(camera_request),
         views=views,
         images=saved,
         shapes=shapes,
@@ -2488,7 +2489,7 @@ def _camera_view_spec(raw_spec: dict[str, Any], *, index: int) -> dict[str, Any]
         dz = eye[2] - lookat[2]
         distance = max(math.sqrt(dx * dx + dy * dy + dz * dz), 0.01)
         azimuth = math.degrees(math.atan2(dx, dy))
-        elevation = math.degrees(math.asin(dz / distance))
+        elevation = -math.degrees(math.asin(dz / distance))
     else:
         distance = float(camera_orbit.get("distance_m", raw_spec.get("distance", 4.0)))
         azimuth = float(camera_orbit.get("azimuth_deg", raw_spec.get("azimuth", 225.0)))
@@ -2510,11 +2511,15 @@ def _camera_view_spec(raw_spec: dict[str, Any], *, index: int) -> dict[str, Any]
         if isinstance(raw_spec.get("robot_pose"), dict)
         else {},
         "lookat": lookat,
+        "target": lookat,
         "eye": eye,
+        "backend_eye": eye,
+        "backend_target": lookat,
         "distance": distance,
         "azimuth": azimuth,
         "elevation": elevation,
         "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
+        "coordinate_frame": str(raw_spec.get("coordinate_frame") or ""),
         "camera_orbit": dict(camera_orbit),
         "lens": dict(lens),
         "calibration_status": str(raw_spec.get("calibration_status") or ""),
@@ -2530,6 +2535,18 @@ def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]
             return lane_orbit
     camera_orbit = raw_spec.get("camera_orbit")
     return camera_orbit if isinstance(camera_orbit, dict) else {}
+
+
+def _camera_request_variant(camera_request: dict[str, Any]) -> str:
+    if camera_request.get("camera_model") == CANONICAL_CAMERA_MODEL:
+        return "molmospaces-canonical-eye-target-camera-control-v1"
+    return "molmospaces-anchor-orbit-camera-control-v1"
+
+
+def _camera_request_provenance(camera_request: dict[str, Any]) -> str:
+    if camera_request.get("camera_model") == CANONICAL_CAMERA_MODEL:
+        return "mujoco_camera_control_canonical_eye_target"
+    return "mujoco_camera_control_anchor_orbit"
 
 
 def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
@@ -2551,7 +2568,7 @@ def _eye_from_mujoco_free_camera(
     return [
         float(lookat[0]) + math.sin(azimuth_rad) * horizontal,
         float(lookat[1]) + math.cos(azimuth_rad) * horizontal,
-        float(lookat[2]) + math.sin(elevation_rad) * distance,
+        float(lookat[2]) - math.sin(elevation_rad) * distance,
     ]
 
 

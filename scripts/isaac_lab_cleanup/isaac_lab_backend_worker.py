@@ -24,6 +24,7 @@ from roboclaws.molmo_cleanup.backend import HELD_LOCATION_ID
 from roboclaws.molmo_cleanup.camera_control import (
     ANCHOR_ORBIT_CAMERA_MODEL,
     CAMERA_CONTROL_API_NAME,
+    CANONICAL_CAMERA_MODEL,
     load_camera_control_request,
     normalize_camera_control_request,
 )
@@ -1572,6 +1573,13 @@ def _capture_isaac_lab_scene_camera_views(
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
     lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    focal_length = float(lens.get("focal_length_mm", 24.0))
+    horizontal_aperture = _horizontal_aperture_from_lens(
+        lens,
+        width=width,
+        height=height,
+        focal_length=focal_length,
+    )
     sim_utils.create_prim("/World/RoboclawsSceneProbeCameraRig", "Xform")
     camera = Camera(
         cfg=CameraCfg(
@@ -1581,9 +1589,9 @@ def _capture_isaac_lab_scene_camera_views(
             width=width,
             data_types=["rgb"],
             spawn=sim_utils.PinholeCameraCfg(
-                focal_length=float(lens.get("focal_length_mm", 24.0)),
+                focal_length=focal_length,
                 focus_distance=4.0,
-                horizontal_aperture=float(lens.get("horizontal_aperture_mm", 20.955)),
+                horizontal_aperture=horizontal_aperture,
             ),
         )
     )
@@ -1634,6 +1642,10 @@ def _capture_isaac_lab_scene_camera_views(
         "calibration_status": camera_request.get("calibration_status"),
         "lighting_profile": camera_request.get("lighting_profile") or {},
         "lens": camera_request.get("lens") or {},
+        "derived_lens": {
+            "focal_length_mm": focal_length,
+            "horizontal_aperture_mm": horizontal_aperture,
+        },
         "render_steps": total_render_steps,
         "scene_bounds": scene_bounds,
         "views": views,
@@ -2334,20 +2346,29 @@ def _isaac_scene_camera_view_spec(
     view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
     safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
     usd_prim_path = str(raw_spec.get("usd_prim_path") or "")
-    target = _target_from_usd_prim_path(
+    usd_bounds_target = _target_from_usd_prim_path(
         stage_utils=stage_utils,
         usd_prim_path=usd_prim_path,
         min_target_z=float(raw_spec.get("min_target_z", 0.6)),
     )
-    target_source = "usd_prim_world_bounds" if target is not None else ""
-    if target is None:
+    target_source = "usd_prim_world_bounds" if usd_bounds_target is not None else ""
+    if raw_spec.get("camera_model") == CANONICAL_CAMERA_MODEL:
+        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
+        target_source = "canonical_explicit_target"
+    elif usd_bounds_target is not None:
+        target = usd_bounds_target
+    else:
         target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
         target_source = "explicit_target_or_default"
+    backend_transform = _backend_transform_for_lane(raw_spec, "isaaclab-prepared-usd")
     if "eye" in raw_spec and raw_spec.get("eye") is not None:
         eye = _camera_vec3(
             raw_spec.get("eye"),
             default=[target[0], target[1] - 4.0, target[2] + 2.0],
         )
+        if backend_transform:
+            eye = _apply_scene_transform_to_point(eye, backend_transform)
+            target = _apply_scene_transform_to_point(target, backend_transform)
     else:
         camera_orbit = _lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")
         eye = _eye_from_lookat_spec(
@@ -2367,8 +2388,12 @@ def _isaac_scene_camera_view_spec(
         "eye": eye,
         "target": target,
         "lookat": target,
+        "backend_eye": eye,
+        "backend_target": target,
+        "usd_bounds_target": usd_bounds_target,
         "target_source": target_source,
         "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
+        "coordinate_frame": str(raw_spec.get("coordinate_frame") or ""),
         "camera_orbit": dict(_lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")),
         "lens": dict(raw_spec.get("lens")) if isinstance(raw_spec.get("lens"), dict) else {},
         "calibration_status": str(raw_spec.get("calibration_status") or ""),
@@ -2384,6 +2409,46 @@ def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]
             return lane_orbit
     camera_orbit = raw_spec.get("camera_orbit")
     return camera_orbit if isinstance(camera_orbit, dict) else {}
+
+
+def _backend_transform_for_lane(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
+    transforms = raw_spec.get("backend_transforms")
+    if isinstance(transforms, dict):
+        transform = transforms.get(lane_id)
+        if isinstance(transform, dict):
+            return transform
+    return {}
+
+
+def _apply_scene_transform_to_point(point: list[float], transform: dict[str, Any]) -> list[float]:
+    scale = float(transform.get("xy_scale", 1.0))
+    rotation_rad = math.radians(float(transform.get("rotation_z_deg", 0.0)))
+    raw_translation = transform.get("translation")
+    translation = raw_translation if isinstance(raw_translation, list) else []
+    tx = float(translation[0]) if len(translation) > 0 else 0.0
+    ty = float(translation[1]) if len(translation) > 1 else 0.0
+    tz = float(translation[2]) if len(translation) > 2 else 0.0
+    x = float(point[0])
+    y = float(point[1])
+    return [
+        scale * (math.cos(rotation_rad) * x - math.sin(rotation_rad) * y) + tx,
+        scale * (math.sin(rotation_rad) * x + math.cos(rotation_rad) * y) + ty,
+        float(point[2]) + tz,
+    ]
+
+
+def _horizontal_aperture_from_lens(
+    lens: dict[str, Any],
+    *,
+    width: int,
+    height: int,
+    focal_length: float,
+) -> float:
+    if "vertical_fov_deg" in lens:
+        vertical_fov_rad = math.radians(float(lens["vertical_fov_deg"]))
+        vertical_aperture = 2.0 * focal_length * math.tan(vertical_fov_rad / 2.0)
+        return vertical_aperture * float(width) / float(height)
+    return float(lens.get("horizontal_aperture_mm", 20.955))
 
 
 def _target_from_usd_prim_path(
@@ -3551,6 +3616,8 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         "view_count": len(capture.get("views") or []),
     }
     write_state_from_state_arg(state)
+    view_variant = _camera_capture_variant(capture)
+    provenance = _camera_capture_provenance(capture)
     return _ok(
         "camera_views",
         camera_control_api=capture.get("camera_control_api") or CAMERA_CONTROL_API_NAME,
@@ -3558,8 +3625,9 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         calibration_status=capture.get("calibration_status"),
         lighting_profile=capture.get("lighting_profile") or {},
         lens=capture.get("lens") or {},
-        view_variant="isaaclab-anchor-orbit-camera-control-v1",
-        visual_artifact_provenance="isaac_lab_camera_rgb_anchor_orbit_scene_probe",
+        derived_lens=capture.get("derived_lens") or {},
+        view_variant=view_variant,
+        visual_artifact_provenance=provenance,
         scene_usd=scene_usd,
         views=capture.get("views") or [],
         images=capture.get("images") or {},
@@ -3568,6 +3636,24 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         render_steps=int(capture.get("render_steps") or 0),
         render_resolution={"width": args.render_width, "height": args.render_height},
     )
+
+
+def _camera_capture_variant(capture: dict[str, Any]) -> str:
+    if any(
+        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
+        for item in capture.get("views") or []
+    ):
+        return "isaaclab-canonical-eye-target-camera-control-v1"
+    return "isaaclab-anchor-orbit-camera-control-v1"
+
+
+def _camera_capture_provenance(capture: dict[str, Any]) -> str:
+    if any(
+        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
+        for item in capture.get("views") or []
+    ):
+        return "isaac_lab_camera_rgb_canonical_eye_target_scene_probe"
+    return "isaac_lab_camera_rgb_anchor_orbit_scene_probe"
 
 
 def _real_semantic_pose_robot_view_images(

@@ -305,7 +305,9 @@ def test_molmospaces_worker_normalizes_camera_control_request() -> None:
     assert spec["azimuth"] == pytest.approx(90.0)
     assert spec["elevation"] == pytest.approx(-28.0)
     assert spec["lookat"] == pytest.approx([2.7, 5.9, 1.0])
-    assert spec["eye"][2] < spec["lookat"][2]
+    assert spec["eye"][2] > spec["lookat"][2]
+    assert spec["backend_eye"] == pytest.approx(spec["eye"])
+    assert spec["backend_target"] == pytest.approx(spec["lookat"])
 
 
 class _FakeCFunc:

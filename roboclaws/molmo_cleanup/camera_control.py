@@ -7,8 +7,11 @@ from typing import Any
 CAMERA_CONTROL_REQUEST_SCHEMA = "roboclaws_camera_control_request_v1"
 CAMERA_CONTROL_API_NAME = "roboclaws.camera_control.render_views"
 ANCHOR_ORBIT_CAMERA_MODEL = "anchor_orbit_lookat_camera_v1"
+CANONICAL_CAMERA_MODEL = "canonical_eye_target_camera_v1"
 WORLD_Z_UP_ORBIT_CONVENTION = "world_z_up_anchor_orbit_v1"
+MOLMOSPACES_SCENE_FRAME = "molmospaces_scene_frame_v1"
 ANCHOR_ORBIT_CALIBRATION = "anchor_orbit_relative_calibrated_v1"
+CANONICAL_POSE_CALIBRATION = "canonical_scene_frame_similarity_fit_v1"
 
 DEFAULT_SCENE_PROBE_CAMERA_ORBIT = {
     "distance_m": 4.4,
@@ -71,6 +74,49 @@ def scene_probe_camera_control_request(
     }
 
 
+def canonical_scene_camera_control_request(
+    views: list[dict[str, Any]],
+    *,
+    width: int,
+    height: int,
+    lens: dict[str, Any] | None = None,
+    lighting_profile: dict[str, Any] | None = None,
+    scene_frame: str = MOLMOSPACES_SCENE_FRAME,
+    calibration_status: str = CANONICAL_POSE_CALIBRATION,
+) -> dict[str, Any]:
+    """Build a camera request whose primary contract is explicit eye/target/up."""
+
+    lens_payload = _camera_lens(lens)
+    lighting = _lighting_profile(lighting_profile)
+    normalized_views = []
+    for index, raw_view in enumerate(views, start=1):
+        view = dict(raw_view)
+        view.setdefault("view_id", f"view_{index:02d}")
+        view.setdefault("label", str(view["view_id"]))
+        view["camera_model"] = CANONICAL_CAMERA_MODEL
+        view["coordinate_frame"] = scene_frame
+        view["coordinate_convention"] = scene_frame
+        view.setdefault("up", [0.0, 0.0, 1.0])
+        view.setdefault("lens", dict(lens_payload))
+        view.setdefault("calibration_status", calibration_status)
+        normalized_views.append(view)
+    return {
+        "schema": CAMERA_CONTROL_REQUEST_SCHEMA,
+        "api_name": CAMERA_CONTROL_API_NAME,
+        "camera_model": CANONICAL_CAMERA_MODEL,
+        "coordinate_frame": scene_frame,
+        "coordinate_convention": scene_frame,
+        "calibration_status": calibration_status,
+        "render_resolution": {
+            "width": _positive_int(width),
+            "height": _positive_int(height),
+        },
+        "lens": lens_payload,
+        "lighting_profile": lighting,
+        "views": normalized_views,
+    }
+
+
 def normalize_camera_control_request(
     payload: dict[str, Any] | list[dict[str, Any]],
     *,
@@ -99,11 +145,20 @@ def normalize_camera_control_request(
     request.setdefault("schema", CAMERA_CONTROL_REQUEST_SCHEMA)
     request.setdefault("api_name", CAMERA_CONTROL_API_NAME)
     request.setdefault("camera_model", ANCHOR_ORBIT_CAMERA_MODEL)
-    request.setdefault("coordinate_convention", WORLD_Z_UP_ORBIT_CONVENTION)
-    request["camera_orbit"] = _camera_orbit(request.get("camera_orbit"))
+    if request.get("camera_model") == CANONICAL_CAMERA_MODEL:
+        request.setdefault("coordinate_frame", MOLMOSPACES_SCENE_FRAME)
+        request.setdefault("coordinate_convention", request["coordinate_frame"])
+    else:
+        request.setdefault("coordinate_convention", WORLD_Z_UP_ORBIT_CONVENTION)
+        request["camera_orbit"] = _camera_orbit(request.get("camera_orbit"))
     request["lens"] = _camera_lens(request.get("lens"))
     request["lighting_profile"] = _lighting_profile(request.get("lighting_profile"))
-    calibration_status = str(request.get("calibration_status") or ANCHOR_ORBIT_CALIBRATION)
+    default_calibration = (
+        CANONICAL_POSE_CALIBRATION
+        if request.get("camera_model") == CANONICAL_CAMERA_MODEL
+        else ANCHOR_ORBIT_CALIBRATION
+    )
+    calibration_status = str(request.get("calibration_status") or default_calibration)
     request["calibration_status"] = calibration_status
     request["views"] = [
         _normalize_view(item, index=index, request=request)
@@ -145,7 +200,14 @@ def _normalize_view(
     view.setdefault("view_id", f"view_{index:02d}")
     view.setdefault("label", str(view["view_id"]))
     view.setdefault("camera_model", request.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL)
-    view.setdefault("camera_orbit", dict(request["camera_orbit"]))
+    if view.get("camera_model") == CANONICAL_CAMERA_MODEL:
+        view.setdefault(
+            "coordinate_frame",
+            request.get("coordinate_frame") or MOLMOSPACES_SCENE_FRAME,
+        )
+        view.setdefault("up", [0.0, 0.0, 1.0])
+    else:
+        view.setdefault("camera_orbit", dict(request["camera_orbit"]))
     view.setdefault("lens", dict(request["lens"]))
     view.setdefault("calibration_status", request["calibration_status"])
     view.setdefault("coordinate_convention", request["coordinate_convention"])

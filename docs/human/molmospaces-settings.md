@@ -565,8 +565,11 @@ just molmo::scene-camera-comparison
 This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo and a
 prepared Isaac USD with one external camera request. It is for scene/camera
 review only: it does not run cleanup, pick/place, private scoring, or pickup
-box annotation. Per-lane orbit calibration is recorded when MuJoCo and prepared
-Isaac USD do not share a proven raw world camera convention.
+box annotation. The main lane now uses explicit canonical
+`eye`/`target`/`up` poses in the MolmoSpaces scene frame for both backends.
+The report also records USD-bounds residuals; high residuals mean the artifact
+is not yet proof of full backend-swappable scene parity even when both renders
+come from the same camera request.
 
 Real visual MCP smoke:
 

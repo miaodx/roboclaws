@@ -287,6 +287,47 @@ def test_isaac_scene_camera_spec_uses_camera_control_orbit() -> None:
     assert spec["lens"] == {"focal_length_mm": 24.0}
 
 
+def test_isaac_scene_camera_spec_honors_canonical_explicit_pose() -> None:
+    spec = isaac_lab_backend_worker._isaac_scene_camera_view_spec(
+        {
+            "view_id": "view 01/table",
+            "camera_model": "canonical_eye_target_camera_v1",
+            "coordinate_frame": "molmospaces_scene_frame_v1",
+            "eye": [1.0, 2.0, 3.0],
+            "target": [2.7, 5.9, 1.0],
+            "usd_prim_path": "/val_1/Geometry/table_01",
+            "backend_transforms": {
+                "isaaclab-prepared-usd": {
+                    "xy_scale": 1.0,
+                    "rotation_z_deg": 0.0,
+                    "translation": [0.0, 0.0, 0.0],
+                }
+            },
+            "calibration_status": "canonical_scene_frame_similarity_fit_v1",
+        },
+        index=1,
+    )
+
+    assert spec["view_id"] == "view_01_table"
+    assert spec["target"] == pytest.approx([2.7, 5.9, 1.0])
+    assert spec["eye"] == pytest.approx([1.0, 2.0, 3.0])
+    assert spec["backend_eye"] == pytest.approx([1.0, 2.0, 3.0])
+    assert spec["target_source"] == "canonical_explicit_target"
+    assert spec["camera_model"] == "canonical_eye_target_camera_v1"
+    assert spec["coordinate_frame"] == "molmospaces_scene_frame_v1"
+
+
+def test_isaac_camera_lens_derives_horizontal_aperture_from_vertical_fov() -> None:
+    aperture = isaac_lab_backend_worker._horizontal_aperture_from_lens(
+        {"vertical_fov_deg": 45.0, "horizontal_aperture_mm": 20.955},
+        width=960,
+        height=640,
+        focal_length=24.0,
+    )
+
+    assert aperture == pytest.approx(29.82337649)
+
+
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:
     map_bundle = Path("assets/maps/molmospaces-procthor-val-0-7")
     backend = IsaacLabSubprocessBackend(
