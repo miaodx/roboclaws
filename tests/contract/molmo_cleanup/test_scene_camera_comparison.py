@@ -25,6 +25,8 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     _image_visual_metrics,
     _isaac_view_specs,
     _molmospaces_view_specs,
+    _normalize_color_profile_for_replay,
+    _offline_color_profile_replay,
     _projection_diagnostics,
     _render_domain_calibration,
     _room_camera_control_views,
@@ -507,6 +509,42 @@ def test_scene_camera_visual_metrics_quantify_brightness_delta(tmp_path: Path) -
     assert bright_metrics["mean_luminance"] > dark_metrics["mean_luminance"]
     assert dark_metrics["overexposed_fraction"] == 0.0
     assert delta["mean_absolute_pixel_delta"] == pytest.approx(100.0)
+
+
+def test_scene_camera_color_profile_replay_applies_backend_gain(tmp_path: Path) -> None:
+    molmo = tmp_path / "molmo.png"
+    isaac = tmp_path / "isaac.png"
+    _write_image(molmo, color=(100, 100, 100))
+    _write_image(isaac, color=(200, 200, 200))
+
+    replay = _offline_color_profile_replay(
+        view_id="view_1",
+        label="View 1",
+        molmo_path=molmo,
+        isaac_path=isaac,
+        color_profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "highlight_knee": 225.0,
+            "highlight_compression": 0.55,
+            "gamma": 1.0,
+            "backend_luminance_gain": {
+                MOLMOSPACES_LANE_ID: 1.0,
+                ISAAC_LANE_ID: 0.5,
+            },
+        },
+    )
+
+    assert replay["lanes"][MOLMOSPACES_LANE_ID]["mean_luminance"] == pytest.approx(100.0)
+    assert replay["lanes"][ISAAC_LANE_ID]["mean_luminance"] == pytest.approx(100.0)
+    assert replay["delta"]["mean_luminance_delta"] == pytest.approx(0.0)
+    assert (tmp_path / "isaac.color_profile_replay.png").is_file()
+
+
+def test_scene_camera_color_profile_replay_normalizes_legacy_profile() -> None:
+    profile = _normalize_color_profile_for_replay({"profile_id": "display_srgb_soft_highlight_v1"})
+
+    assert profile["backend_luminance_gain"][MOLMOSPACES_LANE_ID] == pytest.approx(1.0)
+    assert profile["backend_luminance_gain"][ISAAC_LANE_ID] == pytest.approx(0.7161647108631373)
 
 
 def test_scene_camera_render_domain_calibration_detects_global_gain() -> None:

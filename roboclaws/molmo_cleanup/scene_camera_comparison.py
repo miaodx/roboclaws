@@ -23,6 +23,7 @@ from roboclaws.molmo_cleanup.camera_control import (
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     MOLMOSPACES_SCENE_FRAME,
     canonical_scene_camera_control_request,
+    normalize_camera_control_request,
     write_camera_control_request,
 )
 from roboclaws.molmo_cleanup.isaac_lab_backend import IsaacLabSubprocessBackend
@@ -1579,6 +1580,16 @@ def _contact_sheet_entries(manifest: dict[str, Any], *, output_dir: Path) -> lis
 def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[str, Any]:
     entries = _contact_sheet_entries(manifest, output_dir=output_dir)
     view_results = []
+    replay_results = []
+    camera_control = (
+        manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
+    )
+    color_profile = (
+        camera_control.get("color_profile")
+        if isinstance(camera_control.get("color_profile"), dict)
+        else DEFAULT_SCENE_PROBE_COLOR_PROFILE
+    )
+    color_profile = _normalize_color_profile_for_replay(color_profile)
     for entry in entries:
         molmo_path = entry["images"].get(MOLMOSPACES_LANE_ID)
         isaac_path = entry["images"].get(ISAAC_LANE_ID)
@@ -1609,6 +1620,15 @@ def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[s
                     ],
                 },
             }
+        )
+        replay_results.append(
+            _offline_color_profile_replay(
+                view_id=entry["view_id"],
+                label=entry.get("label") or "",
+                molmo_path=molmo_path,
+                isaac_path=isaac_path,
+                color_profile=color_profile,
+            )
         )
     luminance_deltas = [
         abs(float(item["delta"]["mean_luminance_delta"]))
@@ -1652,6 +1672,121 @@ def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[s
         "mean_absolute_pixel_delta": sum(mae_values) / len(mae_values) if mae_values else None,
         "max_overexposed_fraction": max_overexposed_fraction,
         "max_underexposed_fraction": max_underexposed_fraction,
+        "render_domain_calibration": _render_domain_calibration(view_results),
+        "color_profile_replay": _color_profile_replay_summary(replay_results),
+        "views": view_results,
+    }
+
+
+def _offline_color_profile_replay(
+    *,
+    view_id: str,
+    label: str,
+    molmo_path: Path,
+    isaac_path: Path,
+    color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    import numpy as np
+
+    molmo_replay_path = _color_profile_replay_image(
+        molmo_path,
+        np=np,
+        color_profile=color_profile,
+        backend=MOLMOSPACES_LANE_ID,
+    )
+    isaac_replay_path = _color_profile_replay_image(
+        isaac_path,
+        np=np,
+        color_profile=color_profile,
+        backend=ISAAC_LANE_ID,
+    )
+    molmo_metrics = _image_visual_metrics(molmo_replay_path)
+    isaac_metrics = _image_visual_metrics(isaac_replay_path)
+    diff_metrics = _image_pair_visual_delta(molmo_replay_path, isaac_replay_path)
+    return {
+        "view_id": view_id,
+        "label": label,
+        "lanes": {
+            MOLMOSPACES_LANE_ID: molmo_metrics,
+            ISAAC_LANE_ID: isaac_metrics,
+        },
+        "delta": {
+            **diff_metrics,
+            "mean_luminance_delta": isaac_metrics["mean_luminance"]
+            - molmo_metrics["mean_luminance"],
+        },
+    }
+
+
+def _normalize_color_profile_for_replay(color_profile: dict[str, Any]) -> dict[str, Any]:
+    request = normalize_camera_control_request(
+        {
+            "render_resolution": {"width": 1, "height": 1},
+            "color_profile": color_profile,
+            "views": [],
+        }
+    )
+    return dict(request.get("color_profile") or {})
+
+
+def _color_profile_replay_image(
+    path: Path,
+    *,
+    np: Any,
+    color_profile: dict[str, Any],
+    backend: str,
+) -> Path:
+    with Image.open(path).convert("RGB") as image:
+        array = np.asarray(image)
+    gain = _color_profile_backend_luminance_gain(color_profile, backend=backend)
+    adjusted = np.clip(array.astype("float32") * gain, 0, 255).astype("uint8")
+    replay_path = path.with_name(f"{path.stem}.color_profile_replay.png")
+    Image.fromarray(adjusted).save(replay_path)
+    return replay_path
+
+
+def _color_profile_backend_luminance_gain(color_profile: dict[str, Any], *, backend: str) -> float:
+    gains = color_profile.get("backend_luminance_gain")
+    if not isinstance(gains, dict) or backend not in gains:
+        return 1.0
+    try:
+        return float(gains[backend])
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _color_profile_replay_summary(view_results: list[dict[str, Any]]) -> dict[str, Any]:
+    if not view_results:
+        return {
+            "schema": "scene_camera_color_profile_replay_v1",
+            "status": "missing_view_images",
+            "view_count": 0,
+        }
+    luminance_deltas = [
+        abs(float(item["delta"]["mean_luminance_delta"]))
+        for item in view_results
+        if isinstance(item.get("delta"), dict)
+    ]
+    mae_values = [
+        float(item["delta"]["mean_absolute_pixel_delta"])
+        for item in view_results
+        if isinstance(item.get("delta"), dict)
+    ]
+    return {
+        "schema": "scene_camera_color_profile_replay_v1",
+        "status": "computed",
+        "interpretation": (
+            "Offline replay applies only the current backend_luminance_gain delta to "
+            "existing already-color-managed PNGs. It estimates the expected direction of "
+            "renderer calibration without claiming a fresh backend rerender."
+        ),
+        "view_count": len(view_results),
+        "mean_abs_mean_luminance_delta": (
+            sum(luminance_deltas) / len(luminance_deltas) if luminance_deltas else None
+        ),
+        "max_abs_mean_luminance_delta": max(luminance_deltas) if luminance_deltas else None,
+        "mean_absolute_pixel_delta": sum(mae_values) / len(mae_values) if mae_values else None,
+        "max_mean_absolute_pixel_delta": max(mae_values) if mae_values else None,
         "render_domain_calibration": _render_domain_calibration(view_results),
         "views": view_results,
     }
@@ -2757,11 +2892,32 @@ def _visual_diagnostics_section(manifest: dict[str, Any]) -> str:
             f"{_float_text(calibration.get('max_abs_calibrated_luminance_residual'))}; "
             f"{calibration.get('recommended_next_action') or ''}"
         )
+    replay = (
+        diagnostics.get("color_profile_replay")
+        if isinstance(diagnostics.get("color_profile_replay"), dict)
+        else {}
+    )
+    replay_note = ""
+    if replay:
+        replay_calibration = (
+            replay.get("render_domain_calibration")
+            if isinstance(replay.get("render_domain_calibration"), dict)
+            else {}
+        )
+        replay_note = (
+            f"Color-profile replay: status={replay.get('status')}; "
+            f"mean_luminance_delta="
+            f"{_float_text(replay.get('mean_abs_mean_luminance_delta'))}; "
+            f"mean_pixel_delta={_float_text(replay.get('mean_absolute_pixel_delta'))}; "
+            f"residual_status={replay_calibration.get('status') or ''}. "
+            f"{replay.get('interpretation') or ''}"
+        )
     return f"""
 <section class="panel">
   <h2>Visual Diagnostics</h2>
   <p class="note">{html.escape(note)}</p>
   <p class="note">{html.escape(calibration_note)}</p>
+  <p class="note">{html.escape(replay_note)}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
