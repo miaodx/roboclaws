@@ -101,6 +101,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--visual-grounding", default=SIM_VISUAL_GROUNDING_PIPELINE_ID)
     parser.add_argument("--visual-grounding-base-url")
     parser.add_argument("--visual-grounding-timeout-s", type=float)
+    parser.add_argument(
+        "--rerun-command",
+        help="Exact public command that launched this run, shown in report.html.",
+    )
     return parser.parse_args(argv)
 
 
@@ -213,6 +217,7 @@ def run_molmo_realworld_cleanup_agent_server(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    rerun_command: str | None = None,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
 ) -> dict[str, Any]:
@@ -269,6 +274,7 @@ def run_molmo_realworld_cleanup_agent_server(
             visual_grounding=visual_grounding,
             visual_grounding_base_url=visual_grounding_base_url,
             visual_grounding_timeout_s=visual_grounding_timeout_s,
+            rerun_command=rerun_command,
         )
         server.run_in_thread()
         server.write_runtime_event("direct_molmo_realworld_cleanup_server_started", mcp_url=url)
@@ -338,6 +344,7 @@ def main(argv: list[str] | None = None) -> int:
             visual_grounding=args.visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+            rerun_command=args.rerun_command,
         )
     except Exception as exc:
         print(f"Molmo real-world cleanup agent server failed: {exc}", file=sys.stderr)

@@ -167,6 +167,41 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
     }
 
 
+def test_realworld_mcp_done_persists_facade_rerun_command(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    smoke = _load_smoke_module()
+    prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
+    command = (
+        "just task::run household-cleanup codex world-labels seed=7 "
+        "generated_mess_count=5 map_mode=minimal robot_views=on "
+        f"runtime_map_prior={prior} "
+        f"output_dir={tmp_path}"
+    )
+    monkeypatch.setenv(
+        "ROBOCLAWS_REPORT_RERUN_COMMAND",
+        "just task::run household-cleanup direct world-labels seed=7",
+    )
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        rerun_command=command,
+    )
+    try:
+        smoke._drive_public_sweep(server)
+        server.call_tool("done", reason="rerun command smoke")
+    finally:
+        server.close()
+
+    run_result = json.loads((tmp_path / "run_result.json").read_text(encoding="utf-8"))
+    report = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert run_result["rerun_command"] == command
+    assert command in report
+    assert "household-cleanup direct world-labels" not in report
+
+
 def test_realworld_mcp_accepts_minimal_map_mode(tmp_path: Path) -> None:
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,

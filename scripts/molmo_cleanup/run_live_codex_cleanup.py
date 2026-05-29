@@ -22,6 +22,7 @@ from roboclaws.molmo_cleanup.report import runtime_timing_from_trace
 FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
 SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
+REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 CODEX_CLEANUP_MCP_SERVER_NAME = "cleanup"
 CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION = (
     "Live MCP route constraint: do not call update_plan, do not create todo/checklist "
@@ -178,7 +179,10 @@ class LiveCodexCleanupRunner:
             SERVER_SCRIPT,
             *self.args.server_arg,
         ]
-        self.server_proc = subprocess.Popen(command, cwd=self.args.repo_root)
+        env = os.environ.copy()
+        if env.get(REPORT_RERUN_COMMAND_ENV):
+            command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
+        self.server_proc = subprocess.Popen(command, cwd=self.args.repo_root, env=env)
         (self.run_dir / "server.pid").write_text(f"{self.server_proc.pid}\n", encoding="utf-8")
 
     def _wait_for_mcp_ready(self) -> None:
