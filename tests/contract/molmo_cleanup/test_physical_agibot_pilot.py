@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.agibot_cleanup_contract import AgibotCleanupMCPContract
 from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import (
     MCP_SERVER_NAME,
     _camera_model_policy_evidence,
@@ -20,6 +21,7 @@ from roboclaws.molmo_cleanup.artifact_report import (
     is_cleanup_run_result_artifact,
     rerender_cleanup_report_from_artifact_path,
 )
+from roboclaws.molmo_cleanup.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
@@ -333,6 +335,49 @@ def test_agibot_semantic_map_build_server_accepts_visual_grounding_timeout(
         assert config.timeout_s == 9.5
     finally:
         server.close()
+
+
+def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Path) -> None:
+    contract = AgibotCleanupMCPContract(
+        run_dir=tmp_path / "run",
+        context_json=COMPLETED_CONTEXT_FIXTURE,
+    )
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "run",
+        contract=contract,
+    )
+
+    try:
+        metric_map = server.call_tool("metric_map")
+        fixture_hints = server.call_tool("fixture_hints")
+        nav = server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
+        observe = server.call_tool("observe")
+        pick = server.call_tool("pick", object_id="observed_unknown")
+        done = server.call_tool("done", reason="shared Agibot cleanup MCP rehearsal")
+    finally:
+        server.close()
+
+    run_dir = tmp_path / "run"
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    trace_text = (run_dir / "trace.jsonl").read_text(encoding="utf-8")
+
+    assert metric_map["schema"] == "real_robot_map_bundle_v1"
+    assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
+    assert nav["tool"] == "navigate_to_waypoint"
+    assert nav["primitive_provenance"] == "blocked_capability"
+    assert observe["raw_fpv_observation"]["camera"] == "head_color"
+    assert pick["status"] == "blocked_capability"
+    assert done["agent_driven"] is True
+    assert run_result["mcp_server"] == "molmo_cleanup_realworld"
+    assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
+    assert run_result["backend"] == AGIBOT_SDK_RUNNER_BACKEND
+    assert run_result["backend_variant"] == "agibot_gdk"
+    assert run_result["agent_view"]["policy_view"]["policy_observation_camera"] == "head_color"
+    assert run_result["manipulation_evidence"]["status"] == "blocked_capability"
+    assert run_result["real_robot_readiness"]["backend_variant"] == "agibot_gdk"
+    assert run_result["real_robot_readiness"]["physical_cleanup_ready"] is False
+    assert run_result["requested_generated_mess_count"] == 0
+    assert "scene_objects" not in trace_text
 
 
 def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -> None:

@@ -193,6 +193,8 @@ class RealWorldMolmoCleanupMCPServer:
             )
         self.contract = contract
         self.base_contract = contract.contract
+        backend_name = getattr(contract, "backend_name", None)
+        self.backend_name = str(backend_name()) if callable(backend_name) else ""
         self.scenario = contract.scenario
         self.task_prompt = task_prompt
         self.fixture_hint_mode = fixture_hint_mode
@@ -347,10 +349,15 @@ class RealWorldMolmoCleanupMCPServer:
         primitive_counts = primitive_provenance_counts(trace_events)
         agent_view = self._agent_view_payload()
         cleanup_policy_trace = cleanup_policy_trace_from_events(trace_events, agent_view)
-        real_robot_readiness = real_robot_readiness_from_events(
-            agent_view=agent_view,
-            trace_events=trace_events,
-            robot_view_steps=self.robot_view_steps,
+        readiness_hook = getattr(self.contract, "real_robot_readiness_payload", None)
+        real_robot_readiness = (
+            readiness_hook(trace_events)
+            if callable(readiness_hook)
+            else real_robot_readiness_from_events(
+                agent_view=agent_view,
+                trace_events=trace_events,
+                robot_view_steps=self.robot_view_steps,
+            )
         )
         private_evaluation = self.contract.private_evaluation_payload(done_response["score"])
         requested_count = getattr(
@@ -392,7 +399,7 @@ class RealWorldMolmoCleanupMCPServer:
         )
 
         run_result = {
-            "backend": _backend_name(self.base_contract.backend),
+            "backend": _backend_name(self.base_contract.backend, override=self.backend_name),
             "scenario_id": self.scenario.scenario_id,
             "seed": self.scenario.seed,
             "task_prompt": self.task_prompt,
@@ -405,7 +412,7 @@ class RealWorldMolmoCleanupMCPServer:
             "primitive_provenance": API_SEMANTIC_PROVENANCE,
             "primitive_provenance_summary": primitive_counts,
             "manipulation_evidence": api_semantic_manipulation_evidence(
-                backend=_backend_name(self.base_contract.backend),
+                backend=_backend_name(self.base_contract.backend, override=self.backend_name),
                 primitive_summary=primitive_counts,
             ),
             "policy": self.policy,
@@ -471,12 +478,15 @@ class RealWorldMolmoCleanupMCPServer:
         if self.cleanup_profile is not None:
             profile_metadata = cleanup_profile_metadata_for_run(
                 profile_name=self.cleanup_profile,
-                backend=_backend_name(self.base_contract.backend),
+                backend=_backend_name(self.base_contract.backend, override=self.backend_name),
                 perception_mode=self.perception_mode,
                 record_robot_views=self.record_robot_views,
             )
             run_result["cleanup_profile"] = profile_metadata["profile"]
             run_result["cleanup_profile_metadata"] = profile_metadata
+        override_hook = getattr(self.contract, "run_result_overrides", None)
+        if callable(override_hook):
+            run_result.update(override_hook())
         attach_nav2_map_bundle_snapshot(
             run_result=run_result,
             run_dir=self.run_dir,
@@ -928,7 +938,9 @@ def _default_agent_driven(policy: str) -> bool:
     return policy in AGENT_POLICIES or policy.endswith("_agent")
 
 
-def _backend_name(backend: Any) -> str:
+def _backend_name(backend: Any, *, override: str = "") -> str:
+    if override:
+        return override
     if backend.__class__.__name__ == "MolmoSpacesSubprocessBackend":
         return "molmospaces_subprocess"
     return "api_semantic_synthetic"

@@ -496,6 +496,25 @@ movement gate, not physical PNC execution.
 - Focused verification covers route propagation and MCP server timeout
   configuration. This is still not real G2 hardware validation.
 
+2026-05-29 shared cleanup MCP integration slice:
+
+- Added an Agibot adapter-backed cleanup contract for the existing
+  `molmo_cleanup_realworld` MCP server. It reuses the shared public cleanup
+  tool list, delegates map/navigation/observation to `AgibotSDKRunnerAdapter`,
+  keeps physical manipulation blocked, and reports
+  `cleanup_profile=real_robot_cleanup_v1` / `backend_variant=agibot_gdk`
+  without exposing Agibot-specific agent-facing tools.
+- Extended the generic cleanup agent-server entrypoint so
+  `--backend agibot_gdk --context-json ...` can construct that shared MCP
+  contract. The existing Agibot `semantic-map-build` MCP server remains the
+  first hardware acceptance target; this closes the cleanup-shaped shared-MCP
+  contract gap without claiming physical cleanup.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
+  `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_cleanup_contract.py roboclaws/molmo_cleanup/realworld_mcp_server.py examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  and `./.venv/bin/ruff format --check` over the same touched files.
+  This is still shared-MCP contract evidence, not real G2 hardware validation.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent

@@ -527,6 +527,24 @@ def test_household_cleanup_routes_agibot_backend_to_blocked_cleanup_pilot_cli() 
     ]
 
 
+def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> None:
+    result = subprocess.run(
+        [
+            ".venv/bin/python",
+            "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py",
+            "--help",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "agibot_gdk" in result.stdout
+    assert "--context-json" in result.stdout
+    assert "--real-movement-enabled" in result.stdout
+
+
 def test_agibot_backend_route_requires_context_json() -> None:
     stderr = assert_task_run_fails(
         "semantic-map-build",
