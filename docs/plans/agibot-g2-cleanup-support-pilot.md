@@ -410,14 +410,23 @@ movement gate, not physical PNC execution.
   `./.venv/bin/ruff check roboclaws/devtools/commands.py roboclaws/molmo_cleanup/agibot_map_build_mcp_server.py examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py scripts/molmo_cleanup/run_live_codex_agibot_map_build.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py`,
   and `./.venv/bin/ruff format --check` over the same touched files.
 - Live Codex fixture dry-run verification:
-  `just task::run semantic-map-build codex camera-labels backend=agibot_gdk context_json=tests/fixtures/agibot_map_context.completed.json output_dir=output/agibot/semantic-map-build-codex-live-validation policy=codex_agibot_semantic_map_build_pilot`
-  produced `output/agibot/semantic-map-build-codex-live-validation/0529_1834/seed-7/`
+  `just task::run semantic-map-build codex camera-labels backend=agibot_gdk context_json=tests/fixtures/agibot_map_context.completed.json output_dir=output/agibot/semantic-map-build-codex-live-validation policy=codex_agibot_semantic_map_build_pilot visual_grounding=grounding-dino`
+  produced `output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/`
   with `agent_driven=true`, `mcp_server=agibot_semantic_map_build`,
   `backend_variant=agibot_gdk`, `cleanup_status=physical_agibot_semantic_map_build_rehearsal`,
-  `sweep_coverage_rate=1.0`, and Codex MCP calls to `metric_map`,
-  `fixture_hints`, `navigate_to_waypoint`, `observe`, and `done`. Movement was
-  disabled, so this is live-provider/fixture dry-run evidence; real G2 hardware
-  validation remains unrun.
+  `sweep_coverage_rate=1.0`, `evidence_lane=camera-labels`,
+  `perception_mode=camera_model_policy`,
+  `visual_grounding_pipeline_id=grounding-dino`,
+  `camera_model_policy_evidence.private_truth_included=false`, and explicit
+  `live_camera_capture_not_enabled` / `external_visual_grounding_not_invoked`
+  failure evidence for the dry-run camera lane. `trace.jsonl` records Codex MCP
+  calls to `metric_map`, `fixture_hints`, `navigate_to_waypoint`, `observe`, and
+  `done`. Movement and live camera capture were disabled, so this is
+  live-provider/fixture dry-run evidence; real G2 hardware validation remains
+  unrun.
+- The artifact checker now accepts this no-cleanup map-build shape only through
+  an explicit semantic-sweep gate. Verification command:
+  `./.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/run_result.json --expect-backend agibot_gdk --expect-policy codex_agibot_semantic_map_build_pilot --expect-mcp-server agibot_semantic_map_build --require-agent-driven --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --require-visual-grounding-failure --require-runtime-metric-map --require-semantic-sweep --min-generated-mess-count 0 --min-sweep-coverage 1.0 --allow-partial-cleanup`.
 
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 

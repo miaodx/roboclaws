@@ -78,6 +78,8 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 from roboclaws.molmo_cleanup.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
+AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
+AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER = "agibot_semantic_map_build"
 
 
 def parse_args() -> argparse.Namespace:
@@ -301,6 +303,23 @@ def _assert_result(
     require_isaac_snapshot_provenance: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
+    if data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA:
+        _assert_agibot_semantic_map_build_result(
+            data,
+            base,
+            expect_backend=expect_backend,
+            expect_policy=expect_policy,
+            expect_profile=expect_profile,
+            expect_mcp_server=expect_mcp_server,
+            require_agent_driven=require_agent_driven,
+            require_camera_model_policy=require_camera_model_policy,
+            require_runtime_metric_map=require_runtime_metric_map,
+            require_semantic_sweep=require_semantic_sweep,
+            expect_visual_grounding_pipeline=expect_visual_grounding_pipeline,
+            require_visual_grounding_failure=require_visual_grounding_failure,
+            min_sweep_coverage=min_sweep_coverage,
+        )
+        return
     assert data.get("adr_0003_satisfied") is True, data
     if require_semantic_sweep and expect_policy == "deterministic_sweep_baseline":
         expect_policy = "semantic_sweep_baseline"
@@ -509,6 +528,184 @@ def _assert_result(
             require_segmentation_evidence=require_isaac_segmentation_evidence,
             require_snapshot_provenance=require_isaac_snapshot_provenance,
         )
+
+
+def _assert_agibot_semantic_map_build_result(
+    data: dict[str, Any],
+    base: Path,
+    *,
+    expect_backend: str | None,
+    expect_policy: str | None,
+    expect_profile: str | None,
+    expect_mcp_server: str | None,
+    require_agent_driven: bool,
+    require_camera_model_policy: bool,
+    require_runtime_metric_map: bool,
+    require_semantic_sweep: bool,
+    expect_visual_grounding_pipeline: str | None,
+    require_visual_grounding_failure: bool,
+    min_sweep_coverage: float | None,
+) -> None:
+    assert require_semantic_sweep, data
+    assert data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA, data
+    assert data.get("cleanup_profile") == "real_robot_cleanup_v1", data
+    assert data.get("backend_variant") == "agibot_gdk", data
+    if expect_backend is not None:
+        assert (
+            data.get("backend_variant") == expect_backend or data.get("backend") == expect_backend
+        ), data
+    if expect_policy is not None:
+        assert data.get("policy") == expect_policy, data
+    if expect_mcp_server is not None:
+        assert data.get("mcp_server") == expect_mcp_server, data
+    else:
+        assert data.get("mcp_server") == AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER, data
+    if require_agent_driven:
+        assert data.get("agent_driven") is True, data
+
+    agent_view = data.get("agent_view") or {}
+    _assert_agibot_semantic_map_build_agent_view(agent_view)
+
+    if require_runtime_metric_map:
+        _assert_agibot_semantic_map_build_runtime_map(
+            data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+        )
+    if min_sweep_coverage is not None:
+        assert float(data.get("sweep_coverage_rate") or 0.0) >= min_sweep_coverage, data
+
+    readiness = data.get("real_robot_readiness") or {}
+    assert readiness.get("schema") == REAL_ROBOT_READINESS_SCHEMA, readiness
+    assert readiness.get("backend_variant") == "agibot_gdk", readiness
+    assert readiness.get("semantic_map_build") is True, readiness
+    assert readiness.get("physical_navigation_pilot") is True, readiness
+    assert readiness.get("physical_cleanup_ready") is False, readiness
+    assert readiness.get("manipulation_blocked") is True, readiness
+
+    manipulation = data.get("manipulation_evidence") or {}
+    assert manipulation.get("status") == "blocked_capability", manipulation
+    assert manipulation.get("primitive_provenance") == "blocked_capability", manipulation
+
+    trace = data.get("cleanup_policy_trace") or {}
+    assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
+    assert trace.get("agent_reasoning_visible") is True, trace
+    assert trace.get("cleanup_action_count") == 0, trace
+    decisions = {str(item.get("decision") or "") for item in trace.get("events") or []}
+    assert {"inspect_public_metric_map", "inspect_public_fixture_hints"} <= decisions, trace
+    assert "observe_head_color" in decisions, trace
+
+    private = data.get("private_evaluation") or {}
+    assert private.get("generated_mess_count") == 0, private
+    assert private.get("acceptable_destination_sets") == {}, private
+
+    artifacts = data.get("artifacts") or {}
+    for key in ("trace", "before_snapshot", "after_snapshot", "report"):
+        path = _resolve_path(base, artifacts.get(key, ""))
+        assert path.is_file(), path
+        assert path.stat().st_size > 0, path
+    if require_runtime_metric_map:
+        path = _resolve_path(base, artifacts.get("runtime_metric_map", ""))
+        assert path.is_file(), path
+        assert path.stat().st_size > 0, path
+    trace_path = _resolve_path(base, artifacts["trace"])
+    _assert_trace_is_public(trace_path)
+    _assert_no_duplicate_post_place_navigation(trace_path)
+
+    report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
+    if expect_profile is not None:
+        assert expect_profile in report_text, report_text[:500]
+    assert "AgiBot Backend Evidence" in report_text, report_text[:500]
+    assert "Real-Robot Readiness" in report_text, report_text[:500]
+    assert "Agent View" in report_text, report_text[:500]
+    assert "Private Evaluation" in report_text, report_text[:500]
+    assert "Score" in report_text, report_text[:500]
+    if require_runtime_metric_map:
+        assert "Runtime Metric Map" in report_text, report_text[:500]
+    if require_camera_model_policy:
+        _assert_agibot_semantic_map_build_camera_model_policy(
+            data,
+            report_text,
+            expect_pipeline_id=expect_visual_grounding_pipeline,
+            require_failure=require_visual_grounding_failure,
+        )
+
+
+def _assert_agibot_semantic_map_build_agent_view(agent_view: dict[str, Any]) -> None:
+    assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
+    assert "metric_map" in agent_view, agent_view
+    assert "fixture_hints" in agent_view, agent_view
+    assert agent_view.get("observed_objects") == [], agent_view
+    policy_view = agent_view.get("policy_view") or {}
+    assert policy_view.get("policy_observation_camera") == "head_color", policy_view
+    raw = agent_view.get("raw_fpv_observations") or []
+    assert raw, agent_view
+    for item in raw:
+        assert item.get("camera") == "head_color", item
+        assert item.get("source") == "agibot_g2_policy_camera", item
+        assert item.get("primitive_provenance") in {
+            "blocked_capability",
+            "agibot_gdk_head_color",
+        }, item
+    _assert_no_forbidden_keys(agent_view)
+
+
+def _assert_agibot_semantic_map_build_runtime_map(runtime_metric_map: dict[str, Any]) -> None:
+    assert runtime_metric_map.get("schema") == RUNTIME_METRIC_MAP_SCHEMA, runtime_metric_map
+    assert runtime_metric_map.get("source") == "agibot_semantic_map_build_mcp", runtime_metric_map
+    assert "metric_map" in runtime_metric_map, runtime_metric_map
+    assert "fixture_hints" in runtime_metric_map, runtime_metric_map
+    assert isinstance(runtime_metric_map.get("observed_objects") or [], list), runtime_metric_map
+    assert isinstance(runtime_metric_map.get("visited_waypoint_ids") or [], list), (
+        runtime_metric_map
+    )
+    assert isinstance(runtime_metric_map.get("observed_waypoint_ids") or [], list), (
+        runtime_metric_map
+    )
+    _assert_no_forbidden_keys(runtime_metric_map)
+
+
+def _assert_agibot_semantic_map_build_camera_model_policy(
+    data: dict[str, Any],
+    report_text: str,
+    *,
+    expect_pipeline_id: str | None,
+    require_failure: bool,
+) -> None:
+    assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
+    evidence = data.get("camera_model_policy_evidence") or (
+        (data.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
+    )
+    assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
+    assert evidence.get("enabled") is True, evidence
+    assert evidence.get("model_provenance") == EXTERNAL_VISUAL_GROUNDING_PROVENANCE, evidence
+    assert evidence.get("private_truth_included") is False, evidence
+    pipeline_id = str(evidence.get("visual_grounding_pipeline_id") or "")
+    pipeline_ids = [str(item) for item in evidence.get("visual_grounding_pipeline_ids") or []]
+    if expect_pipeline_id is not None:
+        assert expect_pipeline_id in pipeline_ids, evidence
+    assert pipeline_id in pipeline_ids, evidence
+    assert int(evidence.get("event_count") or 0) >= 1, evidence
+    failure_count = int(evidence.get("visual_grounding_failure_count") or 0)
+    if require_failure:
+        assert failure_count >= 1, evidence
+    events = evidence.get("events") or []
+    assert events, evidence
+    for event in events:
+        assert event.get("candidate_count") == 0, event
+        pipeline = event.get("visual_grounding_pipeline") or {}
+        assert pipeline.get("schema") == "visual_grounding_pipeline_v1", event
+        assert pipeline.get("pipeline_id") in pipeline_ids, event
+        assert pipeline.get("status") == "failed", event
+        assert pipeline.get("failure_reason"), event
+        stages = pipeline.get("stages") or []
+        stage_names = {str(stage.get("stage") or "") for stage in stages}
+        assert "agibot_head_color_capture" in stage_names, event
+        assert "external_visual_grounding_not_invoked" in stage_names, event
+    assert data.get("raw_fpv_observations"), data
+    assert "Camera Model Policy" in report_text, report_text[:500]
+    assert "Raw FPV Observations" in report_text, report_text[:500]
+    assert pipeline_id in report_text, report_text[:500]
+    assert "Bearer " not in json.dumps(data), data
+    assert "Bearer " not in report_text, report_text[:500]
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:

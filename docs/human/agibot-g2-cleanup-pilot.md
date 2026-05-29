@@ -95,7 +95,8 @@ server route:
 just task::run semantic-map-build codex camera-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
-  output_dir=output/agibot/semantic-map-build-codex-dry-run
+  output_dir=output/agibot/semantic-map-build-codex-dry-run \
+  visual_grounding=grounding-dino
 ```
 
 This route launches the Docker-backed Codex runtime against the
@@ -104,8 +105,12 @@ This route launches the Docker-backed Codex runtime against the
 `camera-labels`, the report records `perception_mode=camera_model_policy`, the
 requested visual-grounding pipeline, and explicit no-live-camera failure
 evidence instead of fabricating labels. The route exists, has mocked contract
-coverage, and has passed one live Codex fixture dry-run at
-`output/agibot/semantic-map-build-codex-live-validation/0529_1834/seed-7/`.
+coverage, and has passed a live Codex fixture dry-run at
+`output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/`.
+That artifact records `evidence_lane=camera-labels`,
+`perception_mode=camera_model_policy`,
+`visual_grounding_pipeline_id=grounding-dino`, and the explicit
+`live_camera_capture_not_enabled` failure boundary for dry-run camera evidence.
 Real G2 hardware validation is still a separate unrun gate.
 
 For a cleanup-shaped contract rehearsal, use the same backend route while

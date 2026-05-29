@@ -18,6 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
 CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_realworld_cleanup_result.py"
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
+AGIBOT_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
 
 
 def _load_module(path: Path, name: str):
@@ -89,6 +90,84 @@ def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
     assert counts["adjust_camera:request"] >= 1
     assert counts.get("pick:request") is None
     assert result["runtime_metric_map"]["observed_objects"]
+
+
+def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> None:
+    agibot = _load_module(
+        REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
+        "agibot_map_build_mcp_server",
+    )
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_dir = tmp_path / "agibot-map-build"
+    server = agibot.make_agibot_semantic_map_build_mcp(
+        run_dir=run_dir,
+        context_json=AGIBOT_CONTEXT_FIXTURE,
+        evidence_lane="camera-labels",
+        visual_grounding_pipeline_id="grounding-dino",
+    )
+    try:
+        server.call_tool("metric_map")
+        server.call_tool("fixture_hints")
+        server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
+        server.call_tool("observe")
+        server.call_tool("done", reason="checker fixture complete")
+    finally:
+        server.close()
+
+    data, path = checker._load_run_results(run_dir / "run_result.json")[0]
+    checker._assert_result(
+        data,
+        path.parent,
+        expect_task=None,
+        expect_backend="agibot_gdk",
+        expect_policy="codex_agibot_semantic_map_build_pilot",
+        expect_mcp_server="agibot_semantic_map_build",
+        min_generated_mess_count=0,
+        require_agent_driven=True,
+        require_camera_model_policy=True,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        expect_visual_grounding_pipeline="grounding-dino",
+        require_visual_grounding_failure=True,
+        min_sweep_coverage=1.0,
+    )
+
+
+def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
+    tmp_path: Path,
+) -> None:
+    agibot = _load_module(
+        REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
+        "agibot_map_build_mcp_server_no_gate",
+    )
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_dir = tmp_path / "agibot-map-build"
+    server = agibot.make_agibot_semantic_map_build_mcp(
+        run_dir=run_dir,
+        context_json=AGIBOT_CONTEXT_FIXTURE,
+        evidence_lane="camera-labels",
+        visual_grounding_pipeline_id="grounding-dino",
+    )
+    try:
+        server.call_tool("metric_map")
+        server.call_tool("fixture_hints")
+        server.call_tool("observe")
+        server.call_tool("done", reason="checker fixture complete")
+    finally:
+        server.close()
+
+    data, path = checker._load_run_results(run_dir / "run_result.json")[0]
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            data,
+            path.parent,
+            expect_task=None,
+            expect_backend="agibot_gdk",
+            expect_policy="codex_agibot_semantic_map_build_pilot",
+            min_generated_mess_count=0,
+            require_camera_model_policy=True,
+            require_runtime_metric_map=True,
+        )
 
 
 def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
