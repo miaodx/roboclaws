@@ -1289,6 +1289,9 @@ def _assert_canonical_robot_view_camera_control(data: dict[str, Any], base: Path
         assert contract.get("camera_control_api") == CAMERA_CONTROL_API_NAME, step
         assert contract.get("camera_model") == "canonical_eye_target_camera_v1", step
         assert contract.get("same_pose_api") is True, step
+        lighting = contract.get("lighting_profile") or {}
+        assert isinstance(lighting, dict), step
+        assert lighting.get("profile_id") == "scene_probe_existing_usd_lights_v1", step
         fpv = contract.get("agent_facing_fpv") or {}
         verify = contract.get("report_verify_view") or {}
         assert fpv.get("canonical_camera_control") is True, step

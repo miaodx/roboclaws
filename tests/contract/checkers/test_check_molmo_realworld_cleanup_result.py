@@ -1153,6 +1153,36 @@ def test_checker_rejects_backend_local_robot_view_when_canonical_required(
         )
 
 
+def test_checker_rejects_canonical_robot_view_without_lighting_contract(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    data = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    _add_isaac_robot_view_step(
+        data,  # type: ignore[arg-type]
+        tmp_path,
+        capture_method="isaac_lab_camera_rgb_semantic_pose_robot_views",
+        semantic_pose_state_refreshed=True,
+        canonical_camera_control=True,
+    )
+    for step in data["robot_view_steps"]:
+        step["camera_control_contract"].pop("lighting_profile", None)
+    data["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            data,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=0,
+            allow_partial_cleanup=True,
+            require_canonical_robot_view_camera_control=True,
+        )
+
+
 def test_checker_rejects_refreshed_isaac_semantic_pose_without_refreshed_views(
     tmp_path: Path,
 ) -> None:
@@ -3061,6 +3091,7 @@ def _add_isaac_robot_view_step(
                 "camera_control_api": "roboclaws.camera_control.render_views",
                 "camera_model": "canonical_eye_target_camera_v1",
                 "same_pose_api": True,
+                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
                 "robot_pose": robot_pose,
                 "agent_facing_fpv": {
                     "source": "canonical_eye_target_robot_pose",
