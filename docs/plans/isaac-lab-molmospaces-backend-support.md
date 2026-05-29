@@ -16,9 +16,10 @@ ids for scene-specific Isaac runs. Raw composed MolmoSpaces USD semantic AOV
 still collapses to `BACKGROUND`, but a flattened semantic USD with labels
 authored on final renderable descendants and
 `segmentation_semantic_filter=usd_prim_path` now proves selected-object
-segmentation evidence in runtime smoke and strict cleanup smoke on `val_1`.
-The current integration slice is explicit prepared-USD handoff and broader
-scene coverage, not default cleanup segmentation. Manipulation is still
+segmentation evidence in runtime smoke and strict cleanup smoke on `val_1`
+and strict cleanup smoke on `val_0`. The current integration slice is explicit
+prepared-USD handoff and broader scene coverage, not default cleanup
+segmentation. Manipulation is still
 explicitly `isaac_semantic_pose`, not planner-backed.
 **Created:** 2026-05-27
 **Last updated:** 2026-05-29
@@ -251,6 +252,19 @@ protocol:
   `semantic_filter=["usd_prim_path"]`, `candidate_bbox_count=24`,
   `selected_usd_prim_match_count=2`, and cleanup/report parity with
   `primitive_provenance=isaac_semantic_pose`.
+- On 2026-05-29, the same strict prepared-USD cleanup gate passed on `val_0`:
+  `output/isaaclab/cleanup-smoke/0529_val0_flattened_usdprimpath_cleanup/`.
+  The prepared-scene summary
+  `output/isaaclab/flattened-semantic-usd/0529_val0_flattened_semantic_scene/summary.json`
+  reported `status=ready`, `matched_entry_count=139`,
+  `renderable_labeled_prim_count=1124`, `mesh_labeled_prim_count=651`,
+  `missing_prim_count=0`, and no blockers. The cleanup checker accepted real
+  Isaac runtime diagnostics, local prepared scene USD loading, selected USD
+  bindings, robot-view and snapshot provenance, report-only segmentation
+  evidence with `semantic_filter=["usd_prim_path"]`,
+  `candidate_bbox_count=24`, `selected_usd_prim_match_count=1`, and
+  cleanup/report parity with `primitive_provenance=isaac_semantic_pose`,
+  completion status `success`, accepted count 1, and sweep coverage 1.0.
 - Real-mode snapshot calls now reuse the captured Isaac RGB frame instead of
   drawing placeholder images. `run_result.json` records `snapshot_artifacts`
   with provenance, static-capture status, and `semantic_pose_rendered=false`;
@@ -631,8 +645,9 @@ loaded USD prims. The proven route is to flatten the composed scene, author
 semantic labels on final renderable descendants, and request
 `segmentation_semantic_filter=usd_prim_path` against the prepared USD. That
 prepared route now passes strict runtime smoke and strict cleanup smoke on
-`val_1`. Meanwhile `instance_id_segmentation_fast` still aborts inside
-Isaac/Omniverse before producing worker state;
+`val_1`, and strict cleanup smoke on `val_0`. Meanwhile
+`instance_id_segmentation_fast` still aborts inside Isaac/Omniverse before
+producing worker state;
 semantic pose edits are tracked in backend JSON state and snapshots rather than
 rendered back into the live USD stage; planner-backed/physics-backed
 manipulation is still out of scope for this slice; broader prepared-scene
@@ -913,7 +928,9 @@ just agent::harness molmo-isaac-renderer-comparison \
 
 Prepared MolmoSpaces semantic segmentation remains a maintainer/local-dev path
 until broader scene coverage passes. The first `val_1` cleanup proof passed at
-`output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/`.
+`output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/`;
+the follow-up `val_0` proof passed at
+`output/isaaclab/cleanup-smoke/0529_val0_flattened_usdprimpath_cleanup/`.
 Repeat this flow for additional MolmoSpaces scenes before changing defaults:
 
 ```bash

@@ -8,9 +8,10 @@ Isaac Sim/Lab semantic AOV is available for generated controls, including a
 control scene that references NVIDIA Isaac 5.1 official Blocks assets.
 MolmoSpaces `val_1` still collapses to full-frame `BACKGROUND` through the raw
 composed scene path, including the MolmoSpaces official Isaac package route.
-The blocker has narrowed: a flattened MolmoSpaces `val_1` USD with semantic
-labels authored directly on renderable Gprim/Mesh targets produces usable Isaac
-semantic segmentation when the camera semantic filter is `usd_prim_path`.
+The blocker has narrowed: flattened MolmoSpaces `val_0` and `val_1` USDs with
+semantic labels authored directly on renderable Gprim/Mesh targets produce
+usable Isaac semantic segmentation when the camera semantic filter is
+`usd_prim_path`.
 
 ## Blocker Fingerprint
 
@@ -25,6 +26,24 @@ semantic segmentation when the camera semantic filter is `usd_prim_path`.
 
 ## Last Proven Evidence
 
+- Flattened `usd_prim_path` cleanup smoke on `val_0`:
+  `output/isaaclab/cleanup-smoke/0529_val0_flattened_usdprimpath_cleanup/run_result.json`
+  - strict checker passed with real Isaac runtime, local prepared scene USD,
+    selected USD bindings, robot-view provenance, snapshot provenance,
+    segmentation evidence, and `isaac_semantic_pose`
+  - `semantic_filter=["usd_prim_path"]`
+  - `segmentation.status=available`
+  - `candidate_bbox_count=24`
+  - `selected_usd_prim_match_count=1`
+  - cleanup score status `success`, `accepted_count=1`,
+    `sweep_coverage_rate=1.0`
+- Flattened semantic USD prep artifact on `val_0`:
+  `output/isaaclab/flattened-semantic-usd/0529_val0_flattened_semantic_scene/summary.json`
+  - `status=ready`
+  - matched 139 MolmoSpaces metadata entries
+  - authored labels on 1124 renderable Gprims, including 651 Mesh prims
+  - `missing_prim_count=0`
+  - `blockers=[]`
 - Flattened `usd_prim_path` cleanup smoke:
   `output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/run_result.json`
   - strict checker passed with real Isaac runtime, local prepared scene USD,
@@ -122,17 +141,19 @@ Keep default cleanup segmentation disabled. The integration slice treats
 flattened semantic USD as an explicit pre-cleanup artifact, not as an implicit
 online cleanup mutation: prepare `scene_semantic.usda` plus `summary.json`,
 then run local Isaac runtime or cleanup smoke against that prepared scene with
-`segmentation_semantic_filter=usd_prim_path`. That path now passes on `val_1`;
-the next decision is whether the prepared-artifact gate generalizes to more
-MolmoSpaces scenes.
+`segmentation_semantic_filter=usd_prim_path`. That path now passes strict
+cleanup smoke on `val_0` and `val_1`; the next decision is how broad the
+prepared-artifact corpus must be before adding a convenience wrapper or
+changing defaults.
 
 ## Next Command Or Artifact
 
 Prepared semantic USD handoff is wired and proven behind explicit local-dev
-opt-ins for runtime smoke and cleanup smoke on `val_1`. Next local artifact
-should prepare and run the same strict segmentation cleanup gate on another
-MolmoSpaces scene. Do not expose this through the default public
-`household-cleanup` path until multiple scenes pass the prepared-artifact gate.
+opt-ins for cleanup smoke on `val_0` and `val_1`. Next local artifact should
+either broaden the prepared-artifact corpus further or add an explicit
+maintainer convenience wrapper that still keeps defaults unchanged. Do not
+expose this through the default public `household-cleanup` path until broader
+coverage passes.
 
 ## Stop Condition
 
@@ -157,4 +178,4 @@ MolmoSpaces/Isaac evidence.
 - Broaden segmentation-off MolmoSpaces scene-index cleanup coverage beyond
   `val_0` and `val_1`.
 - Broaden prepared flattened semantic USD segmentation cleanup coverage beyond
-  `val_1`.
+  `val_0` and `val_1`.
