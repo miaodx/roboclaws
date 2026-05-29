@@ -475,6 +475,7 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
         "run_dir=output/agibot/map-build-codex/test-run",
         "policy=codex_agibot_semantic_map_build_pilot",
         "visual_grounding=grounding-dino",
+        "visual_grounding_timeout_s=12.5",
     )
 
     assert route[:3] == [
@@ -492,6 +493,8 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
     assert "--server-arg=camera-labels" in route
     assert "--server-arg=--visual-grounding" in route
     assert "--server-arg=grounding-dino" in route
+    assert "--server-arg=--visual-grounding-timeout-s" in route
+    assert "--server-arg=12.5" in route
     assert "--backend" in route
     assert "agibot_gdk" in route
     assert "--policy" in route

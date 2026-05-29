@@ -316,6 +316,25 @@ def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
     assert event["visual_grounding_pipeline"]["status"] == "ok"
 
 
+def test_agibot_semantic_map_build_server_accepts_visual_grounding_timeout(
+    tmp_path: Path,
+) -> None:
+    server = make_agibot_semantic_map_build_mcp(
+        run_dir=tmp_path / "run",
+        context_json=COMPLETED_CONTEXT_FIXTURE,
+        evidence_lane="camera-labels",
+        visual_grounding_pipeline_id="fake-http",
+        visual_grounding_timeout_s=9.5,
+    )
+
+    try:
+        config = getattr(server.visual_grounding_client, "config", None)
+        assert config is not None
+        assert config.timeout_s == 9.5
+    finally:
+        server.close()
+
+
 def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -> None:
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")

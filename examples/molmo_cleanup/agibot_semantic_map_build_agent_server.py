@@ -45,6 +45,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="camera-labels",
     )
     parser.add_argument("--visual-grounding", default="grounding-dino")
+    parser.add_argument(
+        "--visual-grounding-timeout-s",
+        type=float,
+        help="Timeout for External Visual Grounding Service requests.",
+    )
     return parser.parse_args(argv)
 
 
@@ -69,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         real_movement_enabled=args.real_movement_enabled,
         evidence_lane=args.evidence_lane,
         visual_grounding_pipeline_id=args.visual_grounding,
+        visual_grounding_timeout_s=args.visual_grounding_timeout_s,
     )
     url = f"http://{args.host}:{args.port}/mcp"
     print("\nAgibot semantic-map-build MCP server is ready.")

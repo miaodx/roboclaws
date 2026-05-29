@@ -360,6 +360,9 @@ run task driver mode="" *overrides:
               --evidence-lane "$profile"
               --visual-grounding "$visual_grounding"
             )
+            if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
+              server_args+=(--visual-grounding-timeout-s "$visual_grounding_timeout_s")
+            fi
             runner_python="$(get runner_python "")"
             if [[ -n "$runner_python" ]]; then
               server_args+=(--runner-python "$runner_python")

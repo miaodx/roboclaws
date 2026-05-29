@@ -78,6 +78,7 @@ def make_agibot_semantic_map_build_mcp(
     agibot_map_artifact_dir: Path | None = None,
     evidence_lane: str = "camera-labels",
     visual_grounding_pipeline_id: str = "grounding-dino",
+    visual_grounding_timeout_s: float | None = None,
     visual_grounding_client: VisualGroundingClient | None = None,
     scenario: CleanupScenario | None = None,
 ) -> "AgibotSemanticMapBuildMCPServer":
@@ -94,6 +95,7 @@ def make_agibot_semantic_map_build_mcp(
         agibot_map_artifact_dir=agibot_map_artifact_dir,
         evidence_lane=evidence_lane,
         visual_grounding_pipeline_id=visual_grounding_pipeline_id,
+        visual_grounding_timeout_s=visual_grounding_timeout_s,
         visual_grounding_client=visual_grounding_client,
         scenario=scenario,
     )
@@ -117,6 +119,7 @@ class AgibotSemanticMapBuildMCPServer:
         agibot_map_artifact_dir: Path | None = None,
         evidence_lane: str = "camera-labels",
         visual_grounding_pipeline_id: str = "grounding-dino",
+        visual_grounding_timeout_s: float | None = None,
         visual_grounding_client: VisualGroundingClient | None = None,
         scenario: CleanupScenario | None = None,
     ) -> None:
@@ -136,8 +139,12 @@ class AgibotSemanticMapBuildMCPServer:
         self.visual_grounding_client = (
             visual_grounding_client
             if visual_grounding_client is not None
-            else visual_grounding_client_from_env(self.visual_grounding_pipeline_id)
+            else visual_grounding_client_from_env(
+                self.visual_grounding_pipeline_id,
+                timeout_s=visual_grounding_timeout_s,
+            )
         )
+        self.visual_grounding_timeout_s = visual_grounding_timeout_s
         self.real_movement_enabled = bool(real_movement_enabled)
         self.scenario = scenario or build_cleanup_scenario(seed=7)
         self.adapter = AgibotSDKRunnerAdapter(

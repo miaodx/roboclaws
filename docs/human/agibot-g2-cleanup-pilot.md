@@ -96,7 +96,8 @@ just task::run semantic-map-build codex camera-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-codex-dry-run \
-  visual_grounding=grounding-dino
+  visual_grounding=grounding-dino \
+  visual_grounding_timeout_s=20
 ```
 
 This route launches the Docker-backed Codex runtime against the
@@ -146,6 +147,20 @@ The Codex MCP route is now available for `semantic-map-build` with
 reports, or dry-run Codex reports as real G2 hardware evidence. A hardware
 acceptance claim requires the Codex route to run against the actual G2 with the
 operator gates enabled and the report label honest.
+
+For Codex-controlled hardware acceptance, use the same public route and enable
+movement only after the operator gate:
+
+```bash
+just task::run semantic-map-build codex camera-labels \
+  backend=agibot_gdk \
+  context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
+  output_dir=output/agibot/semantic-map-build-hardware \
+  policy=codex_agibot_semantic_map_build_pilot \
+  visual_grounding=grounding-dino \
+  visual_grounding_timeout_s=20 \
+  real_movement_enabled=true
+```
 
 After a Codex hardware run, verify the artifact with the hardware-only gate:
 

@@ -483,6 +483,19 @@ movement gate, not physical PNC execution.
 - Focused verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_semantic_map_build_artifact tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_agibot_rehearsal_as_hardware_validation tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_hardware_semantic_map_build_shape tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_camera_labels_call_external_grounding -q`.
 
+2026-05-29 Codex hardware run configurability slice:
+
+- Threaded `visual_grounding_timeout_s` from
+  `just task::run semantic-map-build codex ... backend=agibot_gdk` into the
+  Agibot semantic-map-build MCP server and the External Visual Grounding Service
+  client. This keeps the G2 hardware route configurable through the same public
+  facade as other household tasks.
+- Updated the runbook with an explicit Codex-controlled hardware command using
+  `real_movement_enabled=true`, `visual_grounding=grounding-dino`, and
+  `visual_grounding_timeout_s=20`.
+- Focused verification covers route propagation and MCP server timeout
+  configuration. This is still not real G2 hardware validation.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent
