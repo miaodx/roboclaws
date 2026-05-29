@@ -50,6 +50,7 @@ SUPPORTED_ROUTES: set[tuple[str, str]] = {
     ("photo-chairs", "codex"),
     ("photo-chairs", "claude"),
     ("semantic-map-build", "direct"),
+    ("semantic-map-build", "codex"),
     ("household-cleanup", "direct"),
     ("household-cleanup", "mcp-smoke"),
     ("household-cleanup", "codex"),

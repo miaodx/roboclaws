@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import (
+    MCP_SERVER_NAME,
+    make_agibot_semantic_map_build_mcp,
+)
 from roboclaws.molmo_cleanup.agibot_sdk_runner import (
     AGIBOT_SDK_RUNNER_BACKEND,
     BLOCKED_MANIPULATION_TOOLS,
@@ -169,6 +173,67 @@ def test_agibot_adapter_resolves_public_navigation_tool_family(tmp_path: Path) -
     assert object_nav["tool"] == "navigate_to_object"
     assert object_nav["status"] == "blocked_capability"
     assert object_nav["failure_type"] == "object_not_mapped_to_public_waypoint"
+
+
+def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
+    tmp_path: Path,
+) -> None:
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+    run_dir = tmp_path / "run"
+    server = make_agibot_semantic_map_build_mcp(
+        run_dir=run_dir,
+        context_json=context_path,
+    )
+
+    try:
+        metric_map = server.call_tool("metric_map")
+        fixture_hints = server.call_tool("fixture_hints")
+        nav = server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
+        observe = server.call_tool("observe")
+        blocked = server.call_tool("pick", object_id="observed_unknown")
+        done = server.call_tool("done", reason="mocked public sweep complete")
+    finally:
+        server.close()
+
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    runtime_map = json.loads((run_dir / "runtime_metric_map.json").read_text(encoding="utf-8"))
+    trace_events = [
+        json.loads(line)
+        for line in (run_dir / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+
+    assert metric_map["tool"] == "metric_map"
+    assert fixture_hints["tool"] == "fixture_hints"
+    assert nav["tool"] == "navigate_to_waypoint"
+    assert nav["waypoint_id"] == "wp_sofa_front"
+    assert observe["tool"] == "observe"
+    assert blocked["status"] == "blocked_capability"
+    assert done["agent_driven"] is True
+    assert run_result["agent_driven"] is True
+    assert run_result["mcp_server"] == MCP_SERVER_NAME
+    assert run_result["backend_variant"] == "agibot_gdk"
+    assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
+    assert run_result["cleanup_policy_trace"]["agent_reasoning_visible"] is True
+    assert run_result["cleanup_policy_trace"]["agent_review_kind"] == (
+        "agibot_codex_semantic_map_build_review"
+    )
+    assert run_result["cleanup_policy_trace"]["events"][0]["decision"] == (
+        "inspect_public_metric_map"
+    )
+    assert run_result["cleanup_policy_trace"]["events"][-1]["decision"] == "block_manipulation"
+    assert run_result["real_robot_readiness"]["semantic_map_build"] is True
+    assert run_result["real_robot_readiness"]["visited_waypoint_ids"] == ["wp_sofa_front"]
+    assert run_result["runtime_metric_map"]["visited_waypoint_ids"] == ["wp_sofa_front"]
+    assert runtime_map["source"] == "agibot_semantic_map_build_mcp"
+    assert runtime_map["visited_waypoint_ids"] == ["wp_sofa_front"]
+    assert run_result["manipulation_evidence"]["status"] == "blocked_capability"
+    assert "runtime_metric_map.json" in run_result["artifacts"].values()
+    assert any(event.get("tool") == "observe" for event in trace_events)
+    assert "AgiBot Backend Evidence" in report_text
+    assert "Agibot semantic-map-build" in report_text
 
 
 def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -> None:

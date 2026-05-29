@@ -88,6 +88,22 @@ This should produce `run_result.json`, `trace.jsonl`, subphase reports, and
 `report.html`. The report is expected to show dry-run movement-gate blocks,
 visible policy decisions, skipped waypoint reasoning, and blocked manipulation.
 
+For the Codex-controlled semantic-map-build lane, use the Agibot-specific MCP
+server route:
+
+```bash
+just task::run semantic-map-build codex camera-labels \
+  backend=agibot_gdk \
+  context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
+  output_dir=output/agibot/semantic-map-build-codex-dry-run
+```
+
+This route launches the Docker-backed Codex runtime against the
+`agibot_semantic_map_build` MCP server and writes `run_result.json`,
+`trace.jsonl`, `runtime_metric_map.json`, and `report.html`. The route exists
+and has mocked contract coverage; real Codex provider execution and real G2
+hardware validation are still separate unrun gates.
+
 For a cleanup-shaped contract rehearsal, use the same backend route while
 keeping manipulation blocked:
 
@@ -115,11 +131,12 @@ just task::run semantic-map-build direct camera-labels \
   real_movement_enabled=true
 ```
 
-The current public route for Agibot hardware is the SDK-backed direct CLI
-boundary behind `just task::run`. Full live Codex task control for
-`semantic-map-build` is not yet implemented; do not present a direct-run report
-as Codex-driven hardware evidence. If a Codex comparison is needed today, use it
-only as an external operator/supervisor lane and keep the report label honest.
+The SDK-backed direct CLI boundary remains the smallest hardware bring-up path.
+The Codex MCP route is now available for `semantic-map-build` with
+`backend=agibot_gdk`, but do not present mocked contract tests, direct-run
+reports, or dry-run Codex reports as real G2 hardware evidence. A hardware
+acceptance claim requires the Codex route to run against the actual G2 with the
+operator gates enabled and the report label honest.
 
 ## Review Checklist
 

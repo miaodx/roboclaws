@@ -20,6 +20,9 @@ MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
+AGIBOT_MAP_BUILD_CODEX_RUNNER = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_agibot_map_build.py"
+)
 CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_PROVIDER",
     "ROBOCLAWS_CODEX_PROVIDER",
@@ -460,6 +463,42 @@ def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> Non
     assert "--waypoint-id" in route
     assert "wp_sofa_front" in route
     assert "agibot-g2-cleanup" not in " ".join(route)
+
+
+def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "codex",
+        "camera-labels",
+        "backend=agibot_gdk",
+        "context_json=tests/fixtures/agibot_map_context.completed.json",
+        "run_dir=output/agibot/map-build-codex/test-run",
+        "policy=codex_agibot_semantic_map_build_pilot",
+    )
+
+    assert route[:3] == [
+        "cmd",
+        ".venv/bin/python",
+        "scripts/molmo_cleanup/run_live_codex_agibot_map_build.py",
+    ]
+    assert "--repo-root" in route
+    assert str(REPO_ROOT) in route
+    assert "--run-dir" in route
+    assert "output/agibot/map-build-codex/test-run" in route
+    assert "--server-arg=--context-json" in route
+    assert "--server-arg=tests/fixtures/agibot_map_context.completed.json" in route
+    assert "--backend" in route
+    assert "agibot_gdk" in route
+    assert "--policy" in route
+    assert "codex_agibot_semantic_map_build_pilot" in route
+    assert str(AGIBOT_MAP_BUILD_CODEX_RUNNER.relative_to(REPO_ROOT)) in route
+    assert "molmo::cleanup" not in route
+
+
+def test_semantic_map_build_codex_requires_agibot_backend() -> None:
+    stderr = assert_task_run_fails("semantic-map-build", "codex", "camera-labels")
+
+    assert "semantic-map-build codex currently requires backend=agibot_gdk" in stderr
 
 
 def test_household_cleanup_routes_agibot_backend_to_blocked_cleanup_pilot_cli() -> None:

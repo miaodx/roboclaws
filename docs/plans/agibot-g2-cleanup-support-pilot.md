@@ -329,8 +329,9 @@ movement gate, not physical PNC execution.
   physical cleanup success claim.
 - Focused route tests cover `semantic-map-build direct camera-labels
   backend=agibot_gdk`, cleanup-shaped direct routing, and the required
-  `context_json` guard. Codex-driven hardware task control remains a later
-  acceptance layer beyond this direct routing slice.
+  `context_json` guard. At that direct-routing slice, Codex-driven task control
+  remained a later acceptance layer; the later Codex Agibot semantic-map-build
+  route slice adds the live MCP route without claiming hardware validation.
 
 2026-05-29 Agibot pilot report trace slice:
 
@@ -361,9 +362,10 @@ movement gate, not physical PNC execution.
 - The runbook covers operator map capture, minimal context projection,
   PNC waypoint verification, dry-run report review, movement enablement, and
   the acceptance checklist for `real_robot_cleanup_v1` on Agibot G2.
-- It explicitly documents the current limitation: Agibot hardware routing is
-  the SDK-backed direct CLI boundary behind `just task::run`, while full live
-  Codex control for `semantic-map-build` is still unimplemented and must not be
+- It explicitly documented the then-current limitation that Agibot hardware
+  routing was the SDK-backed direct CLI boundary behind `just task::run`, before
+  the later Codex Agibot semantic-map-build route slice added the live MCP
+  route. Real Codex provider and G2 hardware validation still must not be
   claimed from direct-run artifacts.
 
 2026-05-29 mocked Agibot GDK navigation gate:
@@ -382,6 +384,28 @@ movement gate, not physical PNC execution.
   `./.venv/bin/ruff check tests/contract/agibot/test_agibot_map_context_scripts.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`,
   and `./.venv/bin/ruff format --check tests/contract/agibot/test_agibot_map_context_scripts.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py`.
   This is mocked SDK evidence, not real G2 hardware validation.
+
+2026-05-29 Codex Agibot semantic-map-build route slice:
+
+- Added an Agibot-specific `agibot_semantic_map_build` MCP server for
+  `semantic-map-build` with `backend=agibot_gdk`. It exposes public map,
+  fixture, navigation, observation, blocked camera/manipulation, and `done`
+  tools backed by the Agibot SDK runner boundary.
+- Added the live Codex runner wrapper
+  `scripts/molmo_cleanup/run_live_codex_agibot_map_build.py` plus the public
+  route `just task::run semantic-map-build codex <lane> backend=agibot_gdk
+  context_json=...`. Non-Agibot `semantic-map-build codex` remains rejected
+  until intentionally supported.
+- The MCP `done` artifact now writes `run_result.json`, `trace.jsonl`,
+  `runtime_metric_map.json`, and `report.html` with
+  `agent_driven=true`, `mcp_server=agibot_semantic_map_build`, and
+  `backend_variant=agibot_gdk`.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
+  `./.venv/bin/ruff check roboclaws/devtools/commands.py roboclaws/molmo_cleanup/agibot_map_build_mcp_server.py examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py scripts/molmo_cleanup/run_live_codex_agibot_map_build.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  and `./.venv/bin/ruff format --check` over the same touched files.
+  This is route/MCP contract evidence only; live Codex provider execution and
+  real G2 hardware validation remain unrun.
 
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
