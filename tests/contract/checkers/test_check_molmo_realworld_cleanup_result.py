@@ -206,6 +206,65 @@ def test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence(
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("agent_driven", False),
+        ("mcp_server", "molmo_cleanup_realworld"),
+        ("policy", "semantic_sweep_baseline"),
+        ("evidence_lane", "world-labels"),
+        ("perception_mode", "visible_object_detections"),
+    ],
+)
+def test_checker_rejects_non_codex_camera_labels_shape_as_agibot_hardware(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_dir = _write_agibot_map_build_fixture(tmp_path)
+    data, path = checker._load_run_results(run_dir / "run_result.json")[0]
+    _promote_agibot_fixture_to_hardware_shape(data, run_dir)
+    data[field] = value
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            data,
+            path.parent,
+            expect_task=None,
+            expect_backend="agibot_gdk",
+            min_generated_mess_count=0,
+            require_semantic_sweep=True,
+            require_agibot_g2_hardware=True,
+            min_sweep_coverage=1.0,
+        )
+
+
+def test_checker_rejects_agibot_hardware_without_runtime_metric_map(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_dir = _write_agibot_map_build_fixture(tmp_path)
+    data, path = checker._load_run_results(run_dir / "run_result.json")[0]
+    _promote_agibot_fixture_to_hardware_shape(data, run_dir)
+    data.pop("runtime_metric_map", None)
+    agent_view = data["agent_view"]
+    assert isinstance(agent_view, dict)
+    agent_view.pop("runtime_metric_map", None)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            data,
+            path.parent,
+            expect_task=None,
+            expect_backend="agibot_gdk",
+            min_generated_mess_count=0,
+            require_semantic_sweep=True,
+            require_agibot_g2_hardware=True,
+            min_sweep_coverage=1.0,
+        )
+
+
 def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
     tmp_path: Path,
 ) -> None:

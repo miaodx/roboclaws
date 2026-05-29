@@ -730,6 +730,16 @@ def _assert_agibot_g2_hardware_semantic_map_build(
     base: Path,
     readiness: dict[str, Any],
 ) -> None:
+    assert data.get("agent_driven") is True, data
+    assert data.get("mcp_server") == AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER, data
+    assert data.get("policy") == AGIBOT_SEMANTIC_MAP_BUILD_POLICY, data
+    assert data.get("evidence_lane") == "camera-labels", data
+    assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
+    runtime_metric_map = data.get("runtime_metric_map") or (data.get("agent_view") or {}).get(
+        "runtime_metric_map"
+    )
+    assert isinstance(runtime_metric_map, dict), data
+    _assert_agibot_semantic_map_build_runtime_map(runtime_metric_map)
     assert readiness.get("status") == "physical_agibot_semantic_map_build_complete", readiness
     assert readiness.get("movement_enabled") is True, readiness
     assert readiness.get("navigation_perception_ready") is True, readiness

@@ -521,10 +521,16 @@ movement gate, not physical PNC execution.
   visual-grounding pipeline ids even when the rest of the artifact is promoted
   into the hardware-shaped status. Final G2 acceptance now requires a real
   External Visual Grounding Service pipeline, not a simulator/control placeholder.
+- Made the hardware-only checker self-contained for the first acceptance target:
+  it now requires the Codex-driven `agibot_semantic_map_build` MCP server,
+  `policy=codex_agibot_semantic_map_build_pilot`, `evidence_lane=camera-labels`,
+  `perception_mode=camera_model_policy`, `agent_driven=true`, and runtime metric
+  map evidence directly under `--require-agibot-g2-hardware`.
 - Focused verification:
   `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_hardware_semantic_map_build_shape tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_agibot_rehearsal_as_hardware_validation -q`,
-  the broader focused Agibot/checker route test set, and ruff check/format over
-  the checker and checker contract test.
+  the broader focused Agibot/checker route test set including non-Codex/lane and
+  missing runtime-map rejection cases, and ruff check/format over the checker
+  and checker contract test.
   This is still a hardware-gate tightening, not real G2 hardware validation.
 
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
