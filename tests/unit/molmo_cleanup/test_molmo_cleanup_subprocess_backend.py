@@ -905,6 +905,9 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert request["api_name"] == "roboclaws.camera_control.render_views"
     assert request["camera_model"] == "canonical_eye_target_camera_v1"
     assert request["render_resolution"] == {"width": 320, "height": 240}
+    assert request["lighting_profile"]["profile_id"] == "scene_probe_existing_usd_lights_v1"
+    assert request["lighting_profile"]["isaac_dome_intensity"] == 0.0
+    assert request["lighting_profile"]["isaac_key_intensity"] == 0.0
     assert [item["robot_view_role"] for item in request["views"]] == ["fpv", "verify"]
     assert request["views"][0]["eye"] == [1.0, 2.0, 1.55]
     assert request["views"][0]["target"] == [3.0, 2.0, 0.8]
@@ -1003,6 +1006,9 @@ def test_worker_robot_views_prefers_canonical_camera_control(
     assert state["tool_event_counts"] == {"robot_views:request": 1}
     assert result["camera_control_contract"]["same_pose_api"] is True
     assert result["camera_control_contract"]["camera_model"] == "canonical_eye_target_camera_v1"
+    assert result["camera_control_contract"]["lighting_profile"]["profile_id"] == (
+        "scene_probe_existing_usd_lights_v1"
+    )
     assert result["camera_control_contract"]["agent_facing_fpv"]["canonical_camera_control"] is True
     assert Path(result["views"]["fpv"]).is_file()
 

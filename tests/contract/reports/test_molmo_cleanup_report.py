@@ -1186,6 +1186,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
         "status": "backend_local_robot_camera",
         "camera_model": "backend_local_robot_view",
         "same_pose_api": False,
+        "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
         "agent_facing_fpv": {
             "source": "robot_0/head_camera",
             "canonical_camera_control": False,
@@ -1291,6 +1292,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
     assert "Camera contract" in raw_fpv_html
     assert "backend_local_robot_camera" in raw_fpv_html
     assert "Same-pose API" in raw_fpv_html
+    assert "scene_probe_existing_usd_lights_v1" in raw_fpv_html
 
 
 def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
