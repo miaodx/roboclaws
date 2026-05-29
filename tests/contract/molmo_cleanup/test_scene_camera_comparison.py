@@ -31,6 +31,7 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     _offline_color_profile_replay,
     _projection_diagnostics,
     _render_domain_calibration,
+    _render_domain_source_diagnostics,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
@@ -495,9 +496,14 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Target Vs USD Bounds Diagnostics" in html
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
+    assert "Render Domain Source Diagnostics" in html
     assert "geometry_swap_ready_render_domain_pending" in html
     assert "render_domain_residual_high" in html
     assert "same_explicit_eye_target_pose" in html
+    assert "mujoco_housegen_materials" in html
+    assert "isaac_preview_surface_material_conversion" in html
+    assert "USD PreviewSurface" in html
+    assert "doNotCastShadows" in html
     assert "same_backend_pose_within_threshold" in html
     assert "same_projected_geometry_within_threshold" in html
     assert "intrinsics_consistent" in html
@@ -795,6 +801,29 @@ def test_backend_swap_geometry_contract_blocks_room_scale_mismatch() -> None:
     assert contract["geometry_contract_status"] == "fail"
     assert contract["same_api_agent_swap_claim"] is False
     assert checks["same_room_scale"]["status"] == "fail"
+
+
+def test_render_domain_source_diagnostics_cite_official_renderer_paths() -> None:
+    manifest = _manifest()
+    manifest["visual_diagnostics"] = {
+        "render_domain_calibration": {"status": "view_dependent_render_domain_delta"},
+    }
+
+    diagnostics = _render_domain_source_diagnostics(manifest)
+
+    refs = {item["evidence_id"]: item for item in diagnostics["source_references"]}
+    assert diagnostics["status"] == "official_sources_available"
+    assert diagnostics["root_cause_status"] == "render_contract_mismatch_evidence"
+    assert diagnostics["available_source_reference_count"] == diagnostics["source_reference_count"]
+    assert refs["mujoco_housegen_materials"]["status"] == "available"
+    assert refs["mujoco_housegen_materials"]["path"] == (
+        "vendors/molmospaces/molmo_spaces/housegen/builder.py"
+    )
+    assert "texture" in refs["mujoco_asset_texture_material_collection"]["snippet_summary"].lower()
+    assert refs["isaac_preview_surface_material_conversion"]["status"] == "available"
+    assert "opacity" in refs["isaac_preview_surface_material_conversion"]["snippet_summary"].lower()
+    assert "shadow" in refs["isaac_default_lights_and_shadow_flags"]["claim"].lower()
+    assert "material/light/texture" in diagnostics["recommended_next_action"]
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:

@@ -43,6 +43,85 @@ CANONICAL_CAMERA_ELEVATION_DEG = 78.0
 SURFACE_AIM_HEIGHT_ALLOWANCE_M = 0.3
 ROOM_CAMERA_HEIGHT_M = 1.45
 ROOM_CAMERA_INSET_FRACTION = 0.35
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+OFFICIAL_RENDER_SOURCE_REFERENCES = (
+    {
+        "evidence_id": "mujoco_housegen_materials",
+        "lane": MOLMOSPACES_LANE_ID,
+        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
+        "line_start": 361,
+        "line_end": 399,
+        "claim": (
+            "MuJoCo scene generation parses AI2-THOR material albedo, specular values, "
+            "and diffuse texture paths into MJCF material metadata."
+        ),
+    },
+    {
+        "evidence_id": "mujoco_housegen_lights",
+        "lane": MOLMOSPACES_LANE_ID,
+        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
+        "line_start": 455,
+        "line_end": 470,
+        "claim": (
+            "MuJoCo housegen optionally exports house lights, otherwise it creates a "
+            "default MJCF light at scene-build time."
+        ),
+    },
+    {
+        "evidence_id": "mujoco_asset_texture_material_collection",
+        "lane": MOLMOSPACES_LANE_ID,
+        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
+        "line_start": 1372,
+        "line_end": 1452,
+        "claim": (
+            "MuJoCo asset import copies texture slots and material RGBA into the scene "
+            "spec before rendering."
+        ),
+    },
+    {
+        "evidence_id": "isaac_preview_surface_material_conversion",
+        "lane": ISAAC_LANE_ID,
+        "path": (
+            "vendors/molmospaces/molmo_spaces_isaac/src/molmo_spaces_isaac/assets/utils/material.py"
+        ),
+        "line_start": 52,
+        "line_end": 112,
+        "claim": (
+            "Isaac USD conversion maps MJCF materials to USD PreviewSurface materials, "
+            "forces opacity to 1.0, maps shininess to roughness, and handles diffuse "
+            "textures through USD texture nodes."
+        ),
+    },
+    {
+        "evidence_id": "isaac_material_binding_texture_warning",
+        "lane": ISAAC_LANE_ID,
+        "path": (
+            "vendors/molmospaces/molmo_spaces_isaac/src/"
+            "molmo_spaces_isaac/assets/house_converter.py"
+        ),
+        "line_start": 288,
+        "line_end": 322,
+        "claim": (
+            "Isaac material binding warns that textured materials bound to non-Mesh prims "
+            "can discard textures at render time."
+        ),
+    },
+    {
+        "evidence_id": "isaac_default_lights_and_shadow_flags",
+        "lane": ISAAC_LANE_ID,
+        "path": (
+            "vendors/molmospaces/molmo_spaces_isaac/src/"
+            "molmo_spaces_isaac/assets/house_converter.py"
+        ),
+        "line_start": 325,
+        "line_end": 380,
+        "claim": (
+            "Isaac scene conversion authors default DistantLight/DomeLight and disables "
+            "shadow casting on selected wall or ceiling visual prims."
+        ),
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -189,6 +268,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     )
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
@@ -206,6 +286,8 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     if not isinstance(manifest.get("visual_diagnostics"), dict):
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    if not isinstance(manifest.get("render_domain_source_diagnostics"), dict):
+        manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
         manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     report_path = output_dir / "report.html"
@@ -2247,6 +2329,150 @@ def _backend_swap_geometry_contract(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _render_domain_source_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
+    visual = (
+        manifest.get("visual_diagnostics")
+        if isinstance(manifest.get("visual_diagnostics"), dict)
+        else {}
+    )
+    calibration = (
+        visual.get("render_domain_calibration")
+        if isinstance(visual.get("render_domain_calibration"), dict)
+        else {}
+    )
+    source_refs = [_render_source_reference(item) for item in OFFICIAL_RENDER_SOURCE_REFERENCES]
+    missing = [item for item in source_refs if item.get("status") != "available"]
+    lane_summary = {
+        MOLMOSPACES_LANE_ID: {
+            "renderer_contract": "MJCF materials/textures/lights rendered by MuJoCo",
+            "evidence_count": sum(
+                1 for item in source_refs if item.get("lane") == MOLMOSPACES_LANE_ID
+            ),
+        },
+        ISAAC_LANE_ID: {
+            "renderer_contract": "USD PreviewSurface materials/lights rendered by Isaac",
+            "evidence_count": sum(1 for item in source_refs if item.get("lane") == ISAAC_LANE_ID),
+        },
+    }
+    status = "official_sources_available" if not missing else "missing_official_source_refs"
+    root_cause_status = (
+        "render_contract_mismatch_evidence"
+        if calibration.get("status") == "view_dependent_render_domain_delta" and not missing
+        else "source_evidence_available"
+        if not missing
+        else "source_evidence_incomplete"
+    )
+    return {
+        "schema": "scene_camera_render_domain_source_diagnostics_v1",
+        "status": status,
+        "root_cause_status": root_cause_status,
+        "official_source": "vendors/molmospaces",
+        "source_reference_count": len(source_refs),
+        "available_source_reference_count": len(source_refs) - len(missing),
+        "missing_source_reference_count": len(missing),
+        "lane_summary": lane_summary,
+        "source_references": source_refs,
+        "recommended_next_action": (
+            "Tune renderer parity at the material/light/texture contract boundary before "
+            "changing camera geometry: compare MJCF material/texture/light inputs against "
+            "the converted USD PreviewSurface, default light, shadow, and texture-binding "
+            "outputs for each high-delta view."
+        ),
+        "interpretation": (
+            "These diagnostics cite the official MolmoSpaces code paths that feed each "
+            "backend's renderer. They explain why equal camera geometry can still produce "
+            "different images: MuJoCo renders MJCF material/light state, while Isaac renders "
+            "converted USD PreviewSurface materials, authored USD lights, shadow flags, and "
+            "texture bindings."
+        ),
+    }
+
+
+def _render_source_reference(reference: dict[str, Any]) -> dict[str, Any]:
+    rel_path = Path(str(reference.get("path") or ""))
+    path = REPO_ROOT / rel_path
+    line_start = int(reference.get("line_start") or 1)
+    line_end = int(reference.get("line_end") or line_start)
+    exists = path.is_file()
+    snippet_status = "missing"
+    snippet = ""
+    if exists:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+            selected = lines[max(line_start - 1, 0) : max(line_end, line_start)]
+            snippet_status = "available" if selected else "empty"
+            snippet = _render_source_snippet(selected)
+        except OSError:
+            snippet_status = "unreadable"
+    return {
+        "evidence_id": reference.get("evidence_id"),
+        "lane": reference.get("lane"),
+        "path": str(rel_path),
+        "line_start": line_start,
+        "line_end": line_end,
+        "status": "available" if exists and snippet_status == "available" else snippet_status,
+        "claim": reference.get("claim"),
+        "snippet_summary": snippet,
+    }
+
+
+def _render_source_snippet(lines: list[str]) -> str:
+    priority_keywords = (
+        "doNotCastShadows",
+        "opacity=1.0",
+        "definePreviewMaterial",
+        "addDiffuseTextureToPreviewMaterial",
+        "UsdLux.DistantLight",
+        "defineDomeLight",
+        "add_light",
+        "add_texture",
+    )
+    keywords = (
+        "material",
+        "texture",
+        "light",
+        "shadow",
+        "opacity",
+        "roughness",
+        "specular",
+        "Preview",
+        "DistantLight",
+        "DomeLight",
+        "doNotCastShadows",
+    )
+    matching = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if (
+            stripped.startswith("def ")
+            or stripped.startswith("#")
+            or stripped.endswith(":")
+            or stripped in {")", "("}
+        ):
+            continue
+        if any(keyword.lower() in stripped.lower() for keyword in keywords):
+            matching.append(stripped)
+    selected = []
+    for keyword in priority_keywords:
+        for line in matching:
+            if keyword.lower() in line.lower() and line not in selected:
+                selected.append(line)
+            if len(selected) >= 5:
+                break
+        if len(selected) >= 5:
+            break
+    for line in matching:
+        if line not in selected:
+            selected.append(line)
+        if len(selected) >= 5:
+            break
+    if not selected:
+        selected = [line.strip() for line in lines if line.strip()][:3]
+    return " | ".join(selected)
+
+
 def _image_visual_metrics(path: Path) -> dict[str, Any]:
     with Image.open(path).convert("RGB") as image:
         pixels = list(image.getdata())
@@ -2570,6 +2796,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _transform_section(manifest),
             _projection_diagnostics_section(manifest),
             _visual_diagnostics_section(manifest),
+            _render_domain_source_section(manifest),
             _anchor_section(manifest),
             _runtime_section(manifest),
             _failure_section(manifest),
@@ -3374,6 +3601,61 @@ def _visual_diagnostics_section(manifest: dict[str, Any]) -> str:
   <p class="note">{html.escape(calibration_note)}</p>
   <p class="note">{html.escape(replay_note)}</p>
   <p class="note">{html.escape(candidate_note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _render_domain_source_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("render_domain_source_diagnostics")
+        if isinstance(manifest.get("render_domain_source_diagnostics"), dict)
+        else _render_domain_source_diagnostics(manifest)
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("source_references") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('evidence_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('lane', '')))}</td>"
+            f"<td>{html.escape(str(item.get('path', '')))}:"
+            f"{html.escape(str(item.get('line_start', '')))}</td>"
+            f"<td>{html.escape(str(item.get('status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('claim', '')))}</td>"
+            f"<td>{html.escape(str(item.get('snippet_summary', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in ("Evidence", "Lane", "Source", "Status", "Claim", "Snippet")
+    )
+    lane_summary = (
+        diagnostics.get("lane_summary") if isinstance(diagnostics.get("lane_summary"), dict) else {}
+    )
+    lane_note = "; ".join(
+        f"{lane}: {summary.get('renderer_contract')} ({summary.get('evidence_count')} refs)"
+        for lane, summary in lane_summary.items()
+        if isinstance(summary, dict)
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"root_cause={diagnostics.get('root_cause_status')}; "
+        f"source_refs={diagnostics.get('available_source_reference_count')}/"
+        f"{diagnostics.get('source_reference_count')}; {lane_note}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Render Domain Source Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
