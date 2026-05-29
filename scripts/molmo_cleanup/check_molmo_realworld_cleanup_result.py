@@ -80,6 +80,7 @@ from roboclaws.molmo_cleanup.visual_grounding import EXTERNAL_VISUAL_GROUNDING_P
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER = "agibot_semantic_map_build"
+AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
 
 
 def parse_args() -> argparse.Namespace:
@@ -550,6 +551,11 @@ def _assert_agibot_semantic_map_build_result(
     assert data.get("schema") == AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA, data
     assert data.get("cleanup_profile") == "real_robot_cleanup_v1", data
     assert data.get("backend_variant") == "agibot_gdk", data
+    if require_semantic_sweep and expect_policy in {
+        "deterministic_sweep_baseline",
+        "semantic_sweep_baseline",
+    }:
+        expect_policy = AGIBOT_SEMANTIC_MAP_BUILD_POLICY
     if expect_backend is not None:
         assert (
             data.get("backend_variant") == expect_backend or data.get("backend") == expect_backend

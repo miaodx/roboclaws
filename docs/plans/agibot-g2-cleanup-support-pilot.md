@@ -426,7 +426,7 @@ movement gate, not physical PNC execution.
   unrun.
 - The artifact checker now accepts this no-cleanup map-build shape only through
   an explicit semantic-sweep gate. Verification command:
-  `./.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/run_result.json --expect-backend agibot_gdk --expect-policy codex_agibot_semantic_map_build_pilot --expect-mcp-server agibot_semantic_map_build --require-agent-driven --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --require-visual-grounding-failure --require-runtime-metric-map --require-semantic-sweep --min-generated-mess-count 0 --min-sweep-coverage 1.0 --allow-partial-cleanup`.
+  `./.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/run_result.json --expect-backend agibot_gdk --expect-mcp-server agibot_semantic_map_build --require-agent-driven --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --require-visual-grounding-failure --require-runtime-metric-map --require-semantic-sweep --min-generated-mess-count 0 --min-sweep-coverage 1.0 --allow-partial-cleanup`.
 
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 

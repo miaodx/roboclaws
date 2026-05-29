@@ -120,7 +120,7 @@ def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> N
         path.parent,
         expect_task=None,
         expect_backend="agibot_gdk",
-        expect_policy="codex_agibot_semantic_map_build_pilot",
+        expect_policy="semantic_sweep_baseline",
         expect_mcp_server="agibot_semantic_map_build",
         min_generated_mess_count=0,
         require_agent_driven=True,
