@@ -10,6 +10,7 @@ from PIL import Image, ImageStat
 
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.molmo_cleanup.camera_control import CAMERA_CONTROL_API_NAME
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
@@ -1361,14 +1362,30 @@ def _assert_isaac_runtime(
             provenance_text = json.dumps(provenance, sort_keys=True).lower()
             camera_contract = step.get("camera_control_contract") or {}
             assert camera_contract.get("schema") == "robot_view_camera_control_contract_v1", step
-            assert camera_contract.get("same_pose_api") is False, step
-            assert camera_contract.get("camera_control_api") is None, step
-            assert camera_contract.get("status") == "backend_local_scene_bounds_camera", step
             assert "placeholder" not in provenance_text, step
             assert "isaac_lab_camera_rgb" in provenance_text, step
             if require_refreshed_views:
                 assert provenance.get("semantic_pose_state_refreshed") is True, step
                 assert "isaac_lab_camera_rgb_semantic_pose_robot_views" in provenance_text, step
+                capture = semantic_pose_state.get("semantic_pose_view_capture") or {}
+                if capture.get("canonical_camera_control") is True:
+                    assert camera_contract.get("same_pose_api") is True, step
+                    assert camera_contract.get("camera_control_api") == CAMERA_CONTROL_API_NAME, (
+                        step
+                    )
+                    assert camera_contract.get("status") == "canonical_camera_control_robot_view", (
+                        step
+                    )
+                else:
+                    assert camera_contract.get("same_pose_api") is False, step
+                    assert camera_contract.get("camera_control_api") is None, step
+                    assert camera_contract.get("status") == "backend_local_scene_bounds_camera", (
+                        step
+                    )
+            else:
+                assert camera_contract.get("same_pose_api") is False, step
+                assert camera_contract.get("camera_control_api") is None, step
+                assert camera_contract.get("status") == "backend_local_scene_bounds_camera", step
             views = step.get("views") or {}
             assert isinstance(views, dict), step
             for key in ("fpv", "chase", "map", "verify"):

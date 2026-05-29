@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import sys
 import types
 from pathlib import Path
@@ -386,6 +387,106 @@ def test_isaac_scene_camera_spec_records_usd_bounds(monkeypatch: pytest.MonkeyPa
     assert spec["usd_bounds"]["min"] == pytest.approx([2.0, 5.0, 0.3])
     assert spec["usd_bounds"]["max"] == pytest.approx([3.0, 6.0, 1.2])
     assert spec["usd_bounds"]["center"] == pytest.approx([2.5, 5.5, 0.75])
+
+
+def test_isaac_support_pose_uses_usd_world_bounds_center() -> None:
+    support = isaac_lab_backend_worker._support_pose_from_usd_bounds(
+        {
+            "center": [2.5, 5.5, 0.75],
+            "max": [3.0, 6.0, 1.2],
+            "size": [1.0, 2.0, 0.9],
+        },
+        fallback={"frame": "world", "x": 99.0, "y": 99.0, "z": 0.0, "yaw_deg": 45.0},
+    )
+
+    assert support is not None
+    assert support["frame"] == "usd_world"
+    assert support["x"] == pytest.approx(2.5)
+    assert support["y"] == pytest.approx(5.5)
+    assert support["z"] == pytest.approx(1.2)
+    assert support["yaw_deg"] == pytest.approx(45.0)
+    assert support["support_radius_m"] == pytest.approx(1.0)
+    assert support["source"] == "usd_world_bounds_top_center"
+
+
+def test_isaac_robot_pose_prefers_bound_receptacle_support_pose() -> None:
+    state = {
+        "scene_binding_diagnostics": {
+            "selected_target_receptacle_bindings": {
+                "sink_01": {
+                    "status": "bound",
+                    "usd_handle": "real_sink",
+                    "usd_prim_path": "/val_1/Geometry/real_sink",
+                }
+            }
+        },
+        "receptacle_index": {
+            "real_sink": {
+                "support_pose": {
+                    "frame": "usd_world",
+                    "x": 2.5,
+                    "y": 5.5,
+                    "z": 0.75,
+                    "source": "usd_world_bounds_top_center",
+                    "support_radius_m": 0.8,
+                },
+                "usd_world_bounds": {"center": [2.5, 5.5, 0.75]},
+            }
+        },
+        "object_index": {
+            "bowl_01": {
+                "usd_world_bounds": {"center": [4.5, 7.5, 0.9]},
+            }
+        },
+    }
+
+    pose = isaac_lab_backend_worker._robot_pose_for_receptacle(state, "sink_01")
+
+    assert pose["frame"] == "usd_world"
+    assert pose["pose_source"] == "usd_world_bounds_support_pose"
+    assert pose["support_pose_source"] == "usd_world_bounds_top_center"
+    assert pose["target_position"] == pytest.approx([2.5, 5.5, 0.75])
+    distance_to_target = math.hypot(pose["x"] - 2.5, pose["y"] - 5.5)
+    assert distance_to_target == pytest.approx(1.15)
+
+
+def test_isaac_canonical_robot_view_focus_prefers_object_pose() -> None:
+    state = {
+        "scene_binding_diagnostics": {
+            "selected_object_bindings": {
+                "mug_01": {
+                    "status": "bound",
+                    "usd_handle": "mug_01",
+                    "usd_prim_path": "/World/Objects/mug_01",
+                }
+            }
+        },
+        "object_index": _unit_isaac_object_index(),
+        "receptacle_index": _unit_isaac_receptacle_index(),
+    }
+    state["semantic_pose_state"] = {
+        "object_poses": isaac_lab_backend_worker._semantic_object_poses_from_state(
+            {
+                **state,
+                "scenario": {
+                    "objects": [{"object_id": "mug_01", "location_id": "sink_01"}],
+                },
+                "locations": {"mug_01": "sink_01"},
+                "containment": {},
+                "current_receptacle_id": "sink_01",
+            }
+        )
+    }
+
+    focus = isaac_lab_backend_worker._canonical_robot_view_focus(
+        state,
+        {"target_position": [2.5, 5.5, 1.2]},
+        focus_object_id="mug_01",
+        focus_receptacle_id="sink_01",
+    )
+
+    assert focus["source"] == "isaac_semantic_pose_object_pose"
+    assert focus["focus_position"] == pytest.approx([4.0, 5.0, 0.4])
 
 
 def test_isaac_stage_light_paths_detects_existing_lights_without_pxr() -> None:
@@ -805,23 +906,8 @@ def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
                 "receptacle_candidate_count": 1,
                 "blockers": [],
             },
-            "object_index": {
-                "mug_01": {
-                    "usd_prim_path": "/World/Objects/mug_01",
-                    "category": "mug01",
-                    "public_label": "mug_01",
-                    "index_source": "usd_stage_traversal",
-                }
-            },
-            "receptacle_index": {
-                "sink_01": {
-                    "usd_prim_path": "/World/Receptacles/sink_01",
-                    "category": "sink01",
-                    "public_label": "sink_01",
-                    "index_source": "usd_stage_traversal",
-                    "support_pose": {"frame": "world", "x": 0.0, "y": 0.0, "z": 0.0},
-                }
-            },
+            "object_index": _unit_isaac_object_index(),
+            "receptacle_index": _unit_isaac_receptacle_index(),
             "segmentation": {
                 "schema": "isaac_segmentation_diagnostics_v1",
                 "source": "isaac_lab_camera",
@@ -1294,8 +1380,8 @@ def test_isaac_lab_real_worker_views_reuse_real_smoke_images(
                 "receptacle_candidate_count": 1,
                 "blockers": [],
             },
-            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
-            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+            "object_index": _unit_isaac_object_index(),
+            "receptacle_index": _unit_isaac_receptacle_index(),
         }
 
     monkeypatch.setattr(
@@ -1388,8 +1474,8 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
                 "receptacle_candidate_count": 1,
                 "blockers": [],
             },
-            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
-            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+            "object_index": _unit_isaac_object_index(),
+            "receptacle_index": _unit_isaac_receptacle_index(),
         }
 
     def fake_capture_semantic_pose_robot_views(
@@ -1413,6 +1499,33 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             "render_steps": 9,
         }
 
+    def fake_capture_scene_camera_views(
+        *,
+        scene_usd: Path,
+        camera_request: dict[str, object],
+        output_dir: Path,
+        width: int,
+        height: int,
+    ) -> dict[str, object]:
+        assert scene_usd == run_dir / "scene.usda"
+        assert camera_request["api_name"] == "roboclaws.camera_control.render_views"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        views = []
+        images: dict[str, str] = {}
+        for item in camera_request["views"]:
+            assert isinstance(item, dict)
+            assert item["robot_view_role"] in {"fpv", "verify"}
+            image_path = output_dir / f"{item['view_id']}.png"
+            _write_nonblank_image(image_path)
+            views.append({**item, "image_path": str(image_path), "shape": [height, width, 3]})
+            images[str(item["view_id"])] = str(image_path)
+        return {
+            "camera_control_api": camera_request["api_name"],
+            "views": views,
+            "images": images,
+            "render_steps": 6,
+        }
+
     monkeypatch.setattr(
         isaac_lab_backend_worker,
         "real_runtime_smoke",
@@ -1422,6 +1535,11 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         isaac_lab_backend_worker,
         "capture_semantic_pose_robot_views",
         fake_capture_semantic_pose_robot_views,
+    )
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "capture_scene_camera_views",
+        fake_capture_scene_camera_views,
     )
     init_args = isaac_lab_backend_worker.parse_args(
         [
@@ -1438,6 +1556,21 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         ]
     )
     isaac_lab_backend_worker.init_state(init_args)
+    nav_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "navigate_to_receptacle",
+            "--receptacle-id",
+            "sink_01",
+        ]
+    )
+    nav_result = isaac_lab_backend_worker.navigate_to_receptacle(
+        nav_args,
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+    assert nav_result["ok"] is True
+    assert nav_result["robot_pose"]["pose_source"] == "usd_world_bounds_support_pose"
     result = isaac_lab_backend_worker.write_robot_views(
         isaac_lab_backend_worker.parse_args(
             [
@@ -1459,11 +1592,22 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
 
     assert result["ok"] is True
     assert result["view_provenance"]["semantic_pose_state_refreshed"] is True
-    assert "isaac_lab_camera_rgb_semantic_pose_robot_views" in json.dumps(result["view_provenance"])
+    assert result["view_provenance"]["canonical_camera_control"] is True
+    assert result["camera_control_contract"]["same_pose_api"] is True
+    assert result["camera_control_contract"]["camera_control_api"] == (
+        "roboclaws.camera_control.render_views"
+    )
+    assert result["camera_control_contract"]["robot_pose"]["pose_source"] == (
+        "usd_world_bounds_support_pose"
+    )
+    assert "isaac_lab_camera_rgb_canonical_robot_view" in json.dumps(result["view_provenance"])
     state = isaac_lab_backend_worker.read_state(state_path)
     assert state["semantic_pose_state"]["rendered_to_usd"] is True
     assert state["robot_view_provenance"]["semantic_pose_state_refreshed"] is True
+    assert state["robot_view_provenance"]["canonical_camera_control"] is True
     assert state["semantic_pose_view_capture"]["render_steps"] == 9
+    assert state["semantic_pose_view_capture"]["canonical_camera_control"] is True
+    assert state["semantic_pose_view_capture"]["canonical_camera_control_render_steps"] == 6
     assert state["semantic_pose_state"]["semantic_pose_view_capture"]["render_steps"] == 9
     robot_view_gap = next(
         item for item in state["mapping_gaps"] if item["area"] == "robot_view_variants"
@@ -1516,8 +1660,8 @@ def test_isaac_lab_real_worker_views_fallback_when_semantic_pose_rerender_fails(
                 "receptacle_candidate_count": 1,
                 "blockers": [],
             },
-            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
-            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+            "object_index": _unit_isaac_object_index(),
+            "receptacle_index": _unit_isaac_receptacle_index(),
         }
 
     def fail_capture_semantic_pose_robot_views(**_: object) -> dict[str, object]:
@@ -1617,8 +1761,8 @@ def test_isaac_lab_real_worker_snapshot_reuses_real_smoke_image(
                 "receptacle_candidate_count": 1,
                 "blockers": [],
             },
-            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
-            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+            "object_index": _unit_isaac_object_index(),
+            "receptacle_index": _unit_isaac_receptacle_index(),
         }
 
     monkeypatch.setattr(
@@ -1773,3 +1917,43 @@ def _write_robot_view_images(run_dir: Path) -> dict[str, str]:
         draw.rectangle((8, 8, 56, 40), outline=(240, 180 - index, 60), width=3)
         image.save(path)
     return {key: str(path) for key, path in paths.items()}
+
+
+def _unit_isaac_object_index() -> dict[str, dict[str, object]]:
+    return {
+        "mug_01": {
+            "usd_prim_path": "/World/Objects/mug_01",
+            "category": "mug01",
+            "public_label": "mug_01",
+            "index_source": "usd_stage_traversal",
+            "usd_world_bounds": {
+                "center": [4.0, 5.0, 0.4],
+                "max": [4.2, 5.2, 0.8],
+                "size": [0.4, 0.4, 0.8],
+            },
+        }
+    }
+
+
+def _unit_isaac_receptacle_index() -> dict[str, dict[str, object]]:
+    return {
+        "sink_01": {
+            "usd_prim_path": "/World/Receptacles/sink_01",
+            "category": "sink01",
+            "public_label": "sink_01",
+            "index_source": "usd_stage_traversal",
+            "usd_world_bounds": {
+                "center": [2.5, 5.5, 0.75],
+                "max": [3.0, 6.0, 1.2],
+                "size": [1.0, 1.0, 0.9],
+            },
+            "support_pose": {
+                "frame": "usd_world",
+                "x": 2.5,
+                "y": 5.5,
+                "z": 1.2,
+                "source": "usd_world_bounds_top_center",
+                "support_radius_m": 0.5,
+            },
+        }
+    }

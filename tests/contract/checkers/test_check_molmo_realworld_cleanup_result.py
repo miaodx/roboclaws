@@ -1062,6 +1062,42 @@ def test_checker_accepts_isaac_semantic_pose_rerendered_robot_views(
     )
 
 
+def test_checker_accepts_isaac_canonical_robot_view_camera_control(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state_with_refreshed_robot_views(
+        canonical_camera_control=True
+    )
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_robot_view_step(
+        data,
+        tmp_path,
+        capture_method="isaac_lab_camera_rgb_semantic_pose_robot_views",
+        semantic_pose_state_refreshed=True,
+        canonical_camera_control=True,
+    )
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=True,
+        require_semantic_pose=True,
+        require_robot_view_provenance=True,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
 def test_checker_rejects_refreshed_isaac_semantic_pose_without_refreshed_views(
     tmp_path: Path,
 ) -> None:
@@ -2901,6 +2937,7 @@ def _add_isaac_robot_view_step(
     blank_key: str = "",
     capture_method: str = "isaac_lab_camera_rgb_static_robot_views",
     semantic_pose_state_refreshed: bool = False,
+    canonical_camera_control: bool = False,
 ) -> None:
     view_dir = base / "isaac_robot_views"
     view_dir.mkdir(parents=True, exist_ok=True)
@@ -2939,20 +2976,38 @@ def _add_isaac_robot_view_step(
     ]
     for step in data["robot_view_steps"]:
         provenance = {key: f"{capture_method}:{key}" for key in views}
+        if canonical_camera_control:
+            provenance["fpv"] = "isaac_lab_camera_rgb_canonical_robot_view:fpv"
+            provenance["verify"] = "isaac_lab_camera_rgb_canonical_robot_view:verify"
         provenance["semantic_pose_state_refreshed"] = semantic_pose_state_refreshed
+        provenance["canonical_camera_control"] = canonical_camera_control
         step["view_provenance"] = provenance
-        step["camera_control_contract"] = {
-            "schema": "robot_view_camera_control_contract_v1",
-            "backend": "isaac_lab_subprocess",
-            "status": "backend_local_scene_bounds_camera",
-            "camera_control_api": None,
-            "camera_model": "backend_local_robot_view",
-            "same_pose_api": False,
-            "agent_facing_fpv": {
-                "source": provenance["fpv"],
-                "canonical_camera_control": False,
-            },
-        }
+        if canonical_camera_control:
+            step["camera_control_contract"] = {
+                "schema": "robot_view_camera_control_contract_v1",
+                "backend": "isaaclab_subprocess",
+                "status": "canonical_camera_control_robot_view",
+                "camera_control_api": "roboclaws.camera_control.render_views",
+                "camera_model": "canonical_eye_target_camera_v1",
+                "same_pose_api": True,
+                "agent_facing_fpv": {
+                    "source": "canonical_eye_target_robot_pose",
+                    "canonical_camera_control": True,
+                },
+            }
+        else:
+            step["camera_control_contract"] = {
+                "schema": "robot_view_camera_control_contract_v1",
+                "backend": "isaaclab_subprocess",
+                "status": "backend_local_scene_bounds_camera",
+                "camera_control_api": None,
+                "camera_model": "backend_local_robot_view",
+                "same_pose_api": False,
+                "agent_facing_fpv": {
+                    "source": provenance["fpv"],
+                    "canonical_camera_control": False,
+                },
+            }
 
 
 def _add_isaac_snapshot_artifacts(
@@ -3123,7 +3178,10 @@ def _isaac_semantic_pose_state() -> dict[str, object]:
     }
 
 
-def _isaac_semantic_pose_state_with_refreshed_robot_views() -> dict[str, object]:
+def _isaac_semantic_pose_state_with_refreshed_robot_views(
+    *,
+    canonical_camera_control: bool = False,
+) -> dict[str, object]:
     state = _isaac_semantic_pose_state()
     state["rendered_to_usd"] = True
     state["semantic_pose_view_capture"] = {
@@ -3132,6 +3190,7 @@ def _isaac_semantic_pose_state_with_refreshed_robot_views() -> dict[str, object]
         "rendered_to_usd": True,
         "scene_usd": "loaded_scene.usda",
         "render_steps": 4,
+        "canonical_camera_control": canonical_camera_control,
     }
     return state
 
