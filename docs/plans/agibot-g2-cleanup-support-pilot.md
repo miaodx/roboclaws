@@ -465,6 +465,24 @@ movement gate, not physical PNC execution.
   an explicit semantic-sweep gate. Verification command:
   `./.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/run_result.json --expect-backend agibot_gdk --expect-mcp-server agibot_semantic_map_build --require-agent-driven --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --require-visual-grounding-failure --require-runtime-metric-map --require-semantic-sweep --min-generated-mess-count 0 --min-sweep-coverage 1.0 --allow-partial-cleanup`.
 
+2026-05-29 Agibot hardware acceptance gate slice:
+
+- Wired the Agibot `semantic-map-build` MCP camera-labels path so successful live
+  `head_color` observations call the configured External Visual Grounding Service
+  instead of only recording `external_visual_grounding_not_invoked`. Dry-run or
+  blocked camera captures still record explicit failure evidence without
+  fabricated labels.
+- Added the checker flag `--require-agibot-g2-hardware` for final hardware
+  acceptance. It rejects rehearsal artifacts and requires
+  `physical_agibot_semantic_map_build_complete`, `real_movement_enabled`,
+  successful `agibot_gdk_normal_navi`, live `agibot_gdk_head_color_camera`
+  observations with image artifacts, no Human Takeover Stop, full waypoint
+  coverage, and successful External Visual Grounding Service candidates.
+- Updated the runbook with the hardware-only verification command. This remains a
+  machine-checkable gate, not evidence that a real G2 run has happened.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_semantic_map_build_artifact tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_agibot_rehearsal_as_hardware_validation tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_hardware_semantic_map_build_shape tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_camera_labels_call_external_grounding -q`.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent

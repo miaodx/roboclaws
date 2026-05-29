@@ -5,6 +5,7 @@ from pathlib import Path
 
 from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import (
     MCP_SERVER_NAME,
+    _camera_model_policy_evidence,
     make_agibot_semantic_map_build_mcp,
 )
 from roboclaws.molmo_cleanup.agibot_sdk_runner import (
@@ -259,6 +260,62 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     assert "Agibot semantic-map-build" in report_text
 
 
+def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
+    tmp_path: Path,
+) -> None:
+    grounding_client = _StaticAgibotVisualGroundingClient()
+    camera_path = tmp_path / "subphases" / "02-observe" / "head_color.jpg"
+    camera_path.parent.mkdir(parents=True)
+    camera_path.write_bytes(b"not-a-real-image")
+
+    evidence = _camera_model_policy_evidence(
+        [],
+        perception_mode="camera_model_policy",
+        visual_grounding_pipeline_id="fake-http",
+        raw_observations=[
+            {
+                "schema": "raw_fpv_observation_v1",
+                "observation_id": "agibot_observe_001",
+                "source": "agibot_g2_policy_camera",
+                "camera": "head_color",
+                "perception_mode": "camera_model_policy",
+                "status": "ok",
+                "ok": True,
+                "primitive_provenance": "agibot_gdk_head_color_camera",
+                "image_artifacts": {"fpv": "subphases/02-observe/head_color.jpg"},
+            }
+        ],
+        fixture_hints={
+            "rooms": [
+                {
+                    "room_id": "living_room",
+                    "fixtures": [
+                        {
+                            "fixture_id": "sofa_01",
+                            "room_id": "living_room",
+                            "category": "sofa",
+                            "name": "sofa",
+                            "affordances": ["support"],
+                        }
+                    ],
+                }
+            ]
+        },
+        run_dir=tmp_path,
+        visual_grounding_client=grounding_client,
+    )
+
+    event = evidence["events"][0]
+    assert grounding_client.last_request is not None
+    assert grounding_client.last_request["observation_id"] == "agibot_observe_001"
+    assert grounding_client.last_request["pipeline_request"]["pipeline_id"] == "fake-http"
+    assert grounding_client.last_request["fixture_hints"][0]["fixture_id"] == "sofa_01"
+    assert evidence["candidate_count"] == 1
+    assert evidence["visual_grounding_failure_count"] == 0
+    assert event["candidate_count"] == 1
+    assert event["visual_grounding_pipeline"]["status"] == "ok"
+
+
 def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -> None:
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
@@ -363,3 +420,36 @@ def _completed_context() -> dict:
 
 def _robot_map_9_context() -> dict:
     return json.loads(ROBOT_MAP_9_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
+
+
+class _StaticAgibotVisualGroundingClient:
+    pipeline_id = "fake-http"
+
+    def __init__(self) -> None:
+        self.last_request: dict | None = None
+
+    def request_candidates(self, request: dict) -> dict:
+        self.last_request = request
+        return {
+            "schema": "visual_grounding_response_v1",
+            "status": "ok",
+            "pipeline": {
+                "pipeline_id": self.pipeline_id,
+                "stages": [
+                    {
+                        "stage": "fake_detector",
+                        "producer_id": self.pipeline_id,
+                        "model_id": "fake",
+                        "status": "ok",
+                        "latency_ms": 1,
+                    }
+                ],
+            },
+            "candidates": [
+                {
+                    "category": "dish",
+                    "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
+                    "confidence": 0.8,
+                }
+            ],
+        }

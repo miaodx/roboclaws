@@ -93,26 +93,8 @@ def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
 
 
 def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> None:
-    agibot = _load_module(
-        REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
-        "agibot_map_build_mcp_server",
-    )
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
-    run_dir = tmp_path / "agibot-map-build"
-    server = agibot.make_agibot_semantic_map_build_mcp(
-        run_dir=run_dir,
-        context_json=AGIBOT_CONTEXT_FIXTURE,
-        evidence_lane="camera-labels",
-        visual_grounding_pipeline_id="grounding-dino",
-    )
-    try:
-        server.call_tool("metric_map")
-        server.call_tool("fixture_hints")
-        server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
-        server.call_tool("observe")
-        server.call_tool("done", reason="checker fixture complete")
-    finally:
-        server.close()
+    run_dir = _write_agibot_map_build_fixture(tmp_path)
 
     data, path = checker._load_run_results(run_dir / "run_result.json")[0]
     checker._assert_result(
@@ -129,6 +111,58 @@ def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> N
         require_semantic_sweep=True,
         expect_visual_grounding_pipeline="grounding-dino",
         require_visual_grounding_failure=True,
+        min_sweep_coverage=1.0,
+    )
+
+
+def test_checker_rejects_agibot_rehearsal_as_hardware_validation(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_dir = _write_agibot_map_build_fixture(tmp_path)
+
+    data, path = checker._load_run_results(run_dir / "run_result.json")[0]
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            data,
+            path.parent,
+            expect_task=None,
+            expect_backend="agibot_gdk",
+            expect_policy="semantic_sweep_baseline",
+            expect_mcp_server="agibot_semantic_map_build",
+            min_generated_mess_count=0,
+            require_agent_driven=True,
+            require_camera_model_policy=True,
+            require_runtime_metric_map=True,
+            require_semantic_sweep=True,
+            require_agibot_g2_hardware=True,
+            expect_visual_grounding_pipeline="grounding-dino",
+            min_sweep_coverage=1.0,
+        )
+
+
+def test_checker_accepts_agibot_hardware_semantic_map_build_shape(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    run_dir = _write_agibot_map_build_fixture(tmp_path)
+    data, path = checker._load_run_results(run_dir / "run_result.json")[0]
+    _promote_agibot_fixture_to_hardware_shape(data, run_dir)
+
+    checker._assert_result(
+        data,
+        path.parent,
+        expect_task=None,
+        expect_backend="agibot_gdk",
+        expect_policy="semantic_sweep_baseline",
+        expect_mcp_server="agibot_semantic_map_build",
+        min_generated_mess_count=0,
+        require_agent_driven=True,
+        require_camera_model_policy=True,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_agibot_g2_hardware=True,
+        expect_visual_grounding_pipeline="grounding-dino",
         min_sweep_coverage=1.0,
     )
 
@@ -2456,6 +2490,125 @@ def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, obje
         "model_declared_observations": [observation],
         "tool_event_counts": {"declare_visual_candidates:request": 1},
     }
+
+
+def _write_agibot_map_build_fixture(tmp_path: Path) -> Path:
+    agibot = _load_module(
+        REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
+        f"agibot_map_build_mcp_server_{id(tmp_path)}",
+    )
+    run_dir = tmp_path / "agibot-map-build"
+    server = agibot.make_agibot_semantic_map_build_mcp(
+        run_dir=run_dir,
+        context_json=AGIBOT_CONTEXT_FIXTURE,
+        evidence_lane="camera-labels",
+        visual_grounding_pipeline_id="grounding-dino",
+    )
+    try:
+        server.call_tool("metric_map")
+        server.call_tool("fixture_hints")
+        server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
+        server.call_tool("observe")
+        server.call_tool("done", reason="checker fixture complete")
+    finally:
+        server.close()
+    return run_dir
+
+
+def _promote_agibot_fixture_to_hardware_shape(
+    data: dict[str, object],
+    run_dir: Path,
+) -> None:
+    pipeline = {
+        "schema": "visual_grounding_pipeline_v1",
+        "pipeline_id": "grounding-dino",
+        "status": "ok",
+        "stages": [
+            {
+                "stage": "grounding_dino",
+                "producer_id": "grounding-dino",
+                "model_id": "grounding-dino",
+                "status": "ok",
+                "latency_ms": 1,
+            }
+        ],
+        "candidate_count": 1,
+        "unresolved_count": 0,
+        "duplicate_rate": 0.0,
+        "auth_mode": "none",
+    }
+    image_rel = "subphases/02-observe/head_color.jpg"
+    image_path = run_dir / image_rel
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (20, 10), (240, 240, 240)).save(image_path)
+
+    data["cleanup_status"] = "physical_agibot_semantic_map_build_complete"
+    data["completion_status"] = "physical_agibot_semantic_map_build_complete"
+    data["primitive_provenance"] = "agibot_gdk_normal_navi"
+    data["sweep_coverage_rate"] = 1.0
+    readiness = data["real_robot_readiness"]
+    assert isinstance(readiness, dict)
+    readiness.update(
+        {
+            "status": "physical_agibot_semantic_map_build_complete",
+            "movement_enabled": True,
+            "navigation_perception_ready": True,
+            "human_takeover_stop": False,
+            "inspection_waypoint_attempt_count": 1,
+            "inspection_waypoint_total": 1,
+            "reached_waypoint_count": 1,
+            "observed_reached_waypoint_count": 1,
+            "observed_reached_waypoint_rate": 1.0,
+            "observed_waypoint_rate": 1.0,
+        }
+    )
+
+    raw = data["raw_fpv_observations"]
+    assert isinstance(raw, list)
+    raw[0].update(
+        {
+            "ok": True,
+            "status": "ok",
+            "camera": "head_color",
+            "primitive_provenance": "agibot_gdk_head_color_camera",
+            "image_artifacts": {"fpv": image_rel},
+        }
+    )
+    agent_view = data["agent_view"]
+    assert isinstance(agent_view, dict)
+    agent_view["raw_fpv_observations"] = raw
+
+    camera_policy = data["camera_model_policy_evidence"]
+    assert isinstance(camera_policy, dict)
+    camera_policy.update(
+        {
+            "event_count": 1,
+            "candidate_count": 1,
+            "visual_grounding_failure_count": 0,
+            "events": [
+                {
+                    "observation_id": raw[0]["observation_id"],
+                    "room_id": "",
+                    "candidate_count": 1,
+                    "registered_observed_handles": [],
+                    "visual_grounding_pipeline": pipeline,
+                }
+            ],
+        }
+    )
+    agent_view["camera_model_policy_evidence"] = camera_policy
+
+    trace = data["cleanup_policy_trace"]
+    assert isinstance(trace, dict)
+    events = trace["events"]
+    assert isinstance(events, list)
+    for event in events:
+        if isinstance(event, dict) and event.get("decision") == "visit_public_waypoint":
+            event["primitive_provenance"] = "agibot_gdk_normal_navi"
+            event["status"] = "ok"
+        if isinstance(event, dict) and event.get("decision") == "observe_head_color":
+            event["primitive_provenance"] = "agibot_gdk_head_color_camera"
+            event["status"] = "ok"
 
 
 def _robot_step(action: str) -> dict[str, object]:

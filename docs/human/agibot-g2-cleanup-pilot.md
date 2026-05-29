@@ -147,6 +147,29 @@ reports, or dry-run Codex reports as real G2 hardware evidence. A hardware
 acceptance claim requires the Codex route to run against the actual G2 with the
 operator gates enabled and the report label honest.
 
+After a Codex hardware run, verify the artifact with the hardware-only gate:
+
+```bash
+.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  output/agibot/semantic-map-build-hardware/<stamp>/seed-7/run_result.json \
+  --expect-backend agibot_gdk \
+  --expect-mcp-server agibot_semantic_map_build \
+  --require-agent-driven \
+  --require-camera-model-policy \
+  --expect-visual-grounding-pipeline grounding-dino \
+  --require-runtime-metric-map \
+  --require-semantic-sweep \
+  --require-agibot-g2-hardware \
+  --min-generated-mess-count 0 \
+  --min-sweep-coverage 1.0 \
+  --allow-partial-cleanup
+```
+
+This gate rejects dry-run rehearsal artifacts. It requires `real_movement_enabled`
+evidence, successful `agibot_gdk_normal_navi` navigation, live
+`agibot_gdk_head_color_camera` observations with image artifacts, no Human
+Takeover Stop, and successful External Visual Grounding Service output.
+
 ## Review Checklist
 
 Accept the pilot only when `report.html` and `run_result.json` show:
@@ -158,6 +181,8 @@ Accept the pilot only when `report.html` and `run_result.json` show:
 - `agent_view.policy_view.policy_observation_camera=head_color`
 - navigation evidence is `agibot_gdk_normal_navi` for real movement or
   `blocked_capability` for dry-run/gate failures
+- `camera-labels` has successful External Visual Grounding Service evidence for
+  real hardware acceptance
 - `cleanup_policy_trace.agent_reasoning_visible=true`
 - visited and skipped public waypoints include decision, progress, and reason
 - manipulation tools remain blocked

@@ -109,6 +109,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-camera-model-policy", action="store_true")
     parser.add_argument("--require-runtime-metric-map", action="store_true")
     parser.add_argument("--require-semantic-sweep", action="store_true")
+    parser.add_argument("--require-agibot-g2-hardware", action="store_true")
     parser.add_argument("--require-minimal-map", action="store_true")
     parser.add_argument("--expect-visual-grounding-pipeline")
     parser.add_argument("--require-visual-grounding-failure", action="store_true")
@@ -202,6 +203,7 @@ def main() -> None:
             require_camera_model_policy=args.require_camera_model_policy,
             require_runtime_metric_map=args.require_runtime_metric_map,
             require_semantic_sweep=args.require_semantic_sweep,
+            require_agibot_g2_hardware=args.require_agibot_g2_hardware,
             require_minimal_map=args.require_minimal_map,
             expect_visual_grounding_pipeline=args.expect_visual_grounding_pipeline,
             require_visual_grounding_failure=args.require_visual_grounding_failure,
@@ -273,6 +275,7 @@ def _assert_result(
     require_camera_model_policy: bool = False,
     require_runtime_metric_map: bool = False,
     require_semantic_sweep: bool = False,
+    require_agibot_g2_hardware: bool = False,
     require_minimal_map: bool = False,
     expect_visual_grounding_pipeline: str | None = None,
     require_visual_grounding_failure: bool = False,
@@ -316,6 +319,7 @@ def _assert_result(
             require_camera_model_policy=require_camera_model_policy,
             require_runtime_metric_map=require_runtime_metric_map,
             require_semantic_sweep=require_semantic_sweep,
+            require_agibot_g2_hardware=require_agibot_g2_hardware,
             expect_visual_grounding_pipeline=expect_visual_grounding_pipeline,
             require_visual_grounding_failure=require_visual_grounding_failure,
             min_sweep_coverage=min_sweep_coverage,
@@ -543,6 +547,7 @@ def _assert_agibot_semantic_map_build_result(
     require_camera_model_policy: bool,
     require_runtime_metric_map: bool,
     require_semantic_sweep: bool,
+    require_agibot_g2_hardware: bool,
     expect_visual_grounding_pipeline: str | None,
     require_visual_grounding_failure: bool,
     min_sweep_coverage: float | None,
@@ -586,6 +591,8 @@ def _assert_agibot_semantic_map_build_result(
     assert readiness.get("physical_navigation_pilot") is True, readiness
     assert readiness.get("physical_cleanup_ready") is False, readiness
     assert readiness.get("manipulation_blocked") is True, readiness
+    if require_agibot_g2_hardware:
+        _assert_agibot_g2_hardware_semantic_map_build(data, base, readiness)
 
     manipulation = data.get("manipulation_evidence") or {}
     assert manipulation.get("status") == "blocked_capability", manipulation
@@ -650,6 +657,7 @@ def _assert_agibot_semantic_map_build_agent_view(agent_view: dict[str, Any]) -> 
         assert item.get("primitive_provenance") in {
             "blocked_capability",
             "agibot_gdk_head_color",
+            "agibot_gdk_head_color_camera",
         }, item
     _assert_no_forbidden_keys(agent_view)
 
@@ -696,22 +704,83 @@ def _assert_agibot_semantic_map_build_camera_model_policy(
     events = evidence.get("events") or []
     assert events, evidence
     for event in events:
-        assert event.get("candidate_count") == 0, event
         pipeline = event.get("visual_grounding_pipeline") or {}
         assert pipeline.get("schema") == "visual_grounding_pipeline_v1", event
         assert pipeline.get("pipeline_id") in pipeline_ids, event
-        assert pipeline.get("status") == "failed", event
-        assert pipeline.get("failure_reason"), event
-        stages = pipeline.get("stages") or []
-        stage_names = {str(stage.get("stage") or "") for stage in stages}
-        assert "agibot_head_color_capture" in stage_names, event
-        assert "external_visual_grounding_not_invoked" in stage_names, event
+        if require_failure:
+            assert event.get("candidate_count") == 0, event
+            assert pipeline.get("status") == "failed", event
+            assert pipeline.get("failure_reason"), event
+            stages = pipeline.get("stages") or []
+            stage_names = {str(stage.get("stage") or "") for stage in stages}
+            assert "agibot_head_color_capture" in stage_names, event
+            assert "external_visual_grounding_not_invoked" in stage_names, event
+        else:
+            assert pipeline.get("status") in {"ok", "failed"}, event
     assert data.get("raw_fpv_observations"), data
     assert "Camera Model Policy" in report_text, report_text[:500]
     assert "Raw FPV Observations" in report_text, report_text[:500]
     assert pipeline_id in report_text, report_text[:500]
     assert "Bearer " not in json.dumps(data), data
     assert "Bearer " not in report_text, report_text[:500]
+
+
+def _assert_agibot_g2_hardware_semantic_map_build(
+    data: dict[str, Any],
+    base: Path,
+    readiness: dict[str, Any],
+) -> None:
+    assert readiness.get("status") == "physical_agibot_semantic_map_build_complete", readiness
+    assert readiness.get("movement_enabled") is True, readiness
+    assert readiness.get("navigation_perception_ready") is True, readiness
+    assert readiness.get("human_takeover_stop") is False, readiness
+    assert int(readiness.get("inspection_waypoint_attempt_count") or 0) >= 1, readiness
+    assert int(readiness.get("inspection_waypoint_total") or 0) >= 1, readiness
+    assert int(readiness.get("reached_waypoint_count") or 0) >= 1, readiness
+    assert float(readiness.get("observed_waypoint_rate") or 0.0) >= 1.0, readiness
+    assert data.get("cleanup_status") == "physical_agibot_semantic_map_build_complete", data
+    assert data.get("primitive_provenance") == "agibot_gdk_normal_navi", data
+    assert float(data.get("sweep_coverage_rate") or 0.0) >= 1.0, data
+
+    raw = data.get("raw_fpv_observations") or []
+    assert raw, data
+    live_head_color = [
+        item
+        for item in raw
+        if item.get("ok") is True
+        and item.get("camera") == "head_color"
+        and item.get("primitive_provenance") == "agibot_gdk_head_color_camera"
+        and (item.get("image_artifacts") or {}).get("fpv")
+    ]
+    assert live_head_color, raw
+    for item in live_head_color:
+        path = _resolve_path(base, str((item.get("image_artifacts") or {}).get("fpv") or ""))
+        assert path.is_file(), item
+        assert path.stat().st_size > 0, item
+
+    camera_policy = data.get("camera_model_policy_evidence") or {}
+    assert camera_policy.get("enabled") is True, camera_policy
+    assert camera_policy.get("model_provenance") == EXTERNAL_VISUAL_GROUNDING_PROVENANCE, (
+        camera_policy
+    )
+    assert int(camera_policy.get("event_count") or 0) >= 1, camera_policy
+    assert int(camera_policy.get("candidate_count") or 0) >= 1, camera_policy
+    assert int(camera_policy.get("visual_grounding_failure_count") or 0) == 0, camera_policy
+    for event in camera_policy.get("events") or []:
+        pipeline = event.get("visual_grounding_pipeline") or {}
+        assert pipeline.get("schema") == "visual_grounding_pipeline_v1", event
+        assert pipeline.get("status") == "ok", event
+        assert int(pipeline.get("candidate_count") or 0) >= 1, event
+        stages = pipeline.get("stages") or []
+        assert stages, event
+        assert all(str(stage.get("status") or "ok") != "blocked" for stage in stages), event
+
+    trace = data.get("cleanup_policy_trace") or {}
+    decisions = {str(item.get("decision") or "") for item in trace.get("events") or []}
+    assert "visit_public_waypoint" in decisions, trace
+    assert "observe_head_color" in decisions, trace
+    manipulation = data.get("manipulation_evidence") or {}
+    assert manipulation.get("status") == "blocked_capability", manipulation
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:

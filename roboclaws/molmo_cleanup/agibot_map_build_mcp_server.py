@@ -21,6 +21,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
     VISIBLE_OBJECT_DETECTIONS_MODE,
+    VISUAL_GROUNDING_CATEGORY_HINTS,
 )
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
@@ -29,6 +30,13 @@ from roboclaws.molmo_cleanup.visual_grounding import (
     EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     VISUAL_GROUNDING_PIPELINE_SCHEMA,
+    VisualGroundingClient,
+    VisualGroundingContractError,
+    image_payload_for_raw_observation,
+    pipeline_summary_from_response,
+    visual_grounding_client_from_env,
+    visual_grounding_failure_response,
+    visual_grounding_request,
 )
 
 DEFAULT_HOST = "127.0.0.1"
@@ -70,6 +78,7 @@ def make_agibot_semantic_map_build_mcp(
     agibot_map_artifact_dir: Path | None = None,
     evidence_lane: str = "camera-labels",
     visual_grounding_pipeline_id: str = "grounding-dino",
+    visual_grounding_client: VisualGroundingClient | None = None,
     scenario: CleanupScenario | None = None,
 ) -> "AgibotSemanticMapBuildMCPServer":
     return AgibotSemanticMapBuildMCPServer(
@@ -85,6 +94,7 @@ def make_agibot_semantic_map_build_mcp(
         agibot_map_artifact_dir=agibot_map_artifact_dir,
         evidence_lane=evidence_lane,
         visual_grounding_pipeline_id=visual_grounding_pipeline_id,
+        visual_grounding_client=visual_grounding_client,
         scenario=scenario,
     )
 
@@ -107,6 +117,7 @@ class AgibotSemanticMapBuildMCPServer:
         agibot_map_artifact_dir: Path | None = None,
         evidence_lane: str = "camera-labels",
         visual_grounding_pipeline_id: str = "grounding-dino",
+        visual_grounding_client: VisualGroundingClient | None = None,
         scenario: CleanupScenario | None = None,
     ) -> None:
         self.run_dir = Path(run_dir).resolve()
@@ -121,6 +132,11 @@ class AgibotSemanticMapBuildMCPServer:
         self.visual_grounding_pipeline_id = _normalized_visual_grounding_pipeline(
             visual_grounding_pipeline_id,
             evidence_lane=self.evidence_lane,
+        )
+        self.visual_grounding_client = (
+            visual_grounding_client
+            if visual_grounding_client is not None
+            else visual_grounding_client_from_env(self.visual_grounding_pipeline_id)
         )
         self.real_movement_enabled = bool(real_movement_enabled)
         self.scenario = scenario or build_cleanup_scenario(seed=7)
@@ -368,6 +384,9 @@ class AgibotSemanticMapBuildMCPServer:
             perception_mode=self.perception_mode,
             visual_grounding_pipeline_id=self.visual_grounding_pipeline_id,
             raw_observations=raw_observations,
+            fixture_hints=fixture_hints,
+            run_dir=self.run_dir,
+            visual_grounding_client=self.visual_grounding_client,
         )
         run_result = {
             "schema": AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA,
@@ -869,7 +888,7 @@ def _raw_fpv_observations_from_trace(
                     "primitive_provenance",
                     BLOCKED_CAPABILITY_PROVENANCE,
                 ),
-                "image_artifacts": {},
+                "image_artifacts": _raw_fpv_image_artifacts(response),
                 "public_contract_note": (
                     "Agibot map-build records robot-local head_color observation "
                     "intent. Dry-run runs do not include live camera pixels."
@@ -879,12 +898,26 @@ def _raw_fpv_observations_from_trace(
     return observations
 
 
+def _raw_fpv_image_artifacts(response: dict[str, Any]) -> dict[str, str]:
+    artifact = str(response.get("camera_artifact") or "")
+    if not artifact:
+        return {}
+    report_dir = str(response.get("agibot_sdk_report") or "")
+    if not report_dir:
+        return {"fpv": artifact}
+    parent = Path(report_dir).parent
+    return {"fpv": str(parent / artifact)}
+
+
 def _camera_model_policy_evidence(
     trace_events: list[dict[str, Any]],
     *,
     perception_mode: str,
     visual_grounding_pipeline_id: str,
     raw_observations: list[dict[str, Any]],
+    fixture_hints: dict[str, Any],
+    run_dir: Path,
+    visual_grounding_client: VisualGroundingClient | None,
 ) -> dict[str, Any]:
     if perception_mode != CAMERA_MODEL_POLICY_MODE:
         return {
@@ -896,6 +929,197 @@ def _camera_model_policy_evidence(
             "visual_grounding_failure_count": 0,
             "private_truth_included": False,
         }
+    events = [
+        _camera_model_policy_event(
+            raw,
+            trace_events=trace_events,
+            visual_grounding_pipeline_id=visual_grounding_pipeline_id,
+            fixture_hints=fixture_hints,
+            run_dir=run_dir,
+            visual_grounding_client=visual_grounding_client,
+        )
+        for raw in raw_observations
+    ]
+    event_count = len(events)
+    failure_count = sum(
+        1
+        for event in events
+        if (event.get("visual_grounding_pipeline") or {}).get("status") != "ok"
+    )
+    return {
+        "schema": "camera_model_policy_v1",
+        "enabled": True,
+        "event_count": event_count,
+        "candidate_count": sum(int(event.get("candidate_count") or 0) for event in events),
+        "visual_grounding_pipeline_id": visual_grounding_pipeline_id,
+        "visual_grounding_pipeline_ids": [visual_grounding_pipeline_id],
+        "visual_grounding_failure_count": failure_count,
+        "model_provenance": EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+        "private_truth_included": False,
+        "duplicate_rate": _duplicate_rate_from_events(events),
+        "events": events,
+        "policy_note": (
+            "Agibot camera-labels requests external visual grounding over robot-local "
+            "head_color evidence when live camera pixels are available. Dry-run artifacts "
+            "record explicit no-live-camera failure instead of fabricating labels."
+        ),
+    }
+
+
+def _camera_model_policy_event(
+    raw_observation: dict[str, Any],
+    *,
+    trace_events: list[dict[str, Any]],
+    visual_grounding_pipeline_id: str,
+    fixture_hints: dict[str, Any],
+    run_dir: Path,
+    visual_grounding_client: VisualGroundingClient | None,
+) -> dict[str, Any]:
+    if not raw_observation.get("ok"):
+        return _failed_camera_model_policy_event(
+            raw_observation,
+            visual_grounding_pipeline_id=visual_grounding_pipeline_id,
+            failure_reason=_observe_failure_reason(raw_observation, trace_events),
+            capture_status=str(raw_observation.get("status") or "blocked"),
+        )
+    if visual_grounding_client is None:
+        pipeline = pipeline_summary_from_response(
+            visual_grounding_failure_response(
+                pipeline_id=visual_grounding_pipeline_id,
+                reason="missing_client",
+                message=(
+                    "Agibot camera-labels hardware validation requires an External "
+                    "Visual Grounding Service client."
+                ),
+                latency_ms=0,
+            )
+        )
+        return _camera_model_policy_event_from_pipeline(
+            raw_observation,
+            pipeline=pipeline,
+            candidates=[],
+        )
+
+    request = visual_grounding_request(
+        run_id="agibot_semantic_map_build",
+        raw_observation=_visual_grounding_raw_observation(raw_observation),
+        category_hints=list(VISUAL_GROUNDING_CATEGORY_HINTS),
+        fixture_hints=_fixture_hints_for_visual_grounding_request(fixture_hints),
+        pipeline_id=visual_grounding_pipeline_id,
+        image=image_payload_for_raw_observation(raw_observation, base_dir=run_dir),
+    )
+    try:
+        response = visual_grounding_client.request_candidates(request)
+        client_config = getattr(visual_grounding_client, "config", None)
+        auth_mode = str(getattr(client_config, "auth_mode", "none"))
+        pipeline = pipeline_summary_from_response(response, auth_mode=auth_mode)
+        candidates = list(response.get("candidates") or [])
+    except VisualGroundingContractError as exc:
+        pipeline = {
+            "schema": VISUAL_GROUNDING_PIPELINE_SCHEMA,
+            "pipeline_id": visual_grounding_pipeline_id,
+            "status": "contract_error",
+            "stages": [],
+            "candidate_count": 0,
+            "unresolved_count": 0,
+            "duplicate_rate": 0.0,
+            "failure_reason": "contract_error",
+            "failure_message": str(exc),
+            "auth_mode": "none",
+        }
+        candidates = []
+
+    return _camera_model_policy_event_from_pipeline(
+        raw_observation,
+        pipeline=pipeline,
+        candidates=candidates,
+    )
+
+
+def _failed_camera_model_policy_event(
+    raw_observation: dict[str, Any],
+    *,
+    visual_grounding_pipeline_id: str,
+    failure_reason: str,
+    capture_status: str,
+) -> dict[str, Any]:
+    return {
+        "observation_id": raw_observation.get("observation_id", ""),
+        "room_id": "",
+        "candidate_count": 0,
+        "registered_observed_handles": [],
+        "visual_grounding_pipeline": {
+            "schema": VISUAL_GROUNDING_PIPELINE_SCHEMA,
+            "pipeline_id": visual_grounding_pipeline_id,
+            "status": "failed",
+            "failure_reason": failure_reason,
+            "stages": [
+                {
+                    "stage": "agibot_head_color_capture",
+                    "producer_id": "agibot_g2_policy_camera",
+                    "status": capture_status,
+                },
+                {
+                    "stage": "external_visual_grounding_not_invoked",
+                    "producer_id": visual_grounding_pipeline_id,
+                    "status": "blocked",
+                },
+            ],
+        },
+    }
+
+
+def _camera_model_policy_event_from_pipeline(
+    raw_observation: dict[str, Any],
+    *,
+    pipeline: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "observation_id": raw_observation.get("observation_id", ""),
+        "room_id": "",
+        "candidate_count": len(candidates),
+        "registered_observed_handles": [],
+        "visual_grounding_pipeline": pipeline,
+    }
+
+
+def _visual_grounding_raw_observation(raw_observation: dict[str, Any]) -> dict[str, Any]:
+    result = dict(raw_observation)
+    result.setdefault("waypoint_id", "")
+    result.setdefault("room_id", "")
+    result.setdefault("artifact_status", str(raw_observation.get("status") or "ok"))
+    return result
+
+
+def _fixture_hints_for_visual_grounding_request(
+    fixture_hints: dict[str, Any],
+) -> list[dict[str, Any]]:
+    rows = []
+    for room in fixture_hints.get("rooms") or []:
+        if not isinstance(room, dict):
+            continue
+        room_id = str(room.get("room_id") or "")
+        for fixture in room.get("fixtures") or []:
+            if not isinstance(fixture, dict):
+                continue
+            rows.append(
+                {
+                    "fixture_id": str(fixture.get("fixture_id") or ""),
+                    "room_id": str(fixture.get("room_id") or room_id),
+                    "category": str(fixture.get("category") or ""),
+                    "name": str(fixture.get("name") or ""),
+                    "affordances": list(fixture.get("affordances") or []),
+                }
+            )
+    return rows
+
+
+def _observe_failure_reason(
+    raw_observation: dict[str, Any],
+    trace_events: list[dict[str, Any]],
+) -> str:
+    observation_id = str(raw_observation.get("observation_id") or "")
     observe_failures = [
         event.get("response") or {}
         for event in trace_events
@@ -904,56 +1128,22 @@ def _camera_model_policy_evidence(
         and isinstance(event.get("response"), dict)
         and not (event.get("response") or {}).get("ok")
     ]
-    events = []
-    for index, raw in enumerate(raw_observations, start=1):
-        failure = observe_failures[index - 1] if index <= len(observe_failures) else {}
-        failure_reason = str(failure.get("failure_type") or "no_live_camera_pixels")
-        events.append(
-            {
-                "observation_id": raw["observation_id"],
-                "room_id": "",
-                "candidate_count": 0,
-                "registered_observed_handles": [],
-                "visual_grounding_pipeline": {
-                    "schema": VISUAL_GROUNDING_PIPELINE_SCHEMA,
-                    "pipeline_id": visual_grounding_pipeline_id,
-                    "status": "failed",
-                    "failure_reason": failure_reason,
-                    "stages": [
-                        {
-                            "stage": "agibot_head_color_capture",
-                            "producer_id": "agibot_g2_policy_camera",
-                            "status": str(failure.get("status") or raw.get("status") or "blocked"),
-                        },
-                        {
-                            "stage": "external_visual_grounding_not_invoked",
-                            "producer_id": visual_grounding_pipeline_id,
-                            "status": "blocked",
-                        },
-                    ],
-                },
-            }
-        )
-    event_count = len(events)
-    failure_count = event_count if event_count else 1
-    return {
-        "schema": "camera_model_policy_v1",
-        "enabled": True,
-        "event_count": event_count,
-        "candidate_count": 0,
-        "visual_grounding_pipeline_id": visual_grounding_pipeline_id,
-        "visual_grounding_pipeline_ids": [visual_grounding_pipeline_id],
-        "visual_grounding_failure_count": failure_count,
-        "model_provenance": EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
-        "private_truth_included": False,
-        "duplicate_rate": 0.0,
-        "events": events,
-        "policy_note": (
-            "Agibot camera-labels requests external visual grounding over robot-local "
-            "head_color evidence. This dry-run artifact records the requested "
-            "pipeline and explicit no-live-camera failure instead of fabricating labels."
-        ),
-    }
+    for failure in observe_failures:
+        failure_id = str(failure.get("observation_id") or failure.get("observation_label") or "")
+        if observation_id and failure_id and failure_id != observation_id:
+            continue
+        return str(failure.get("failure_type") or "no_live_camera_pixels")
+    return str(raw_observation.get("status") or "no_live_camera_pixels")
+
+
+def _duplicate_rate_from_events(events: list[dict[str, Any]]) -> float:
+    rates = [
+        float((event.get("visual_grounding_pipeline") or {}).get("duplicate_rate") or 0.0)
+        for event in events
+    ]
+    if not rates:
+        return 0.0
+    return max(rates)
 
 
 def _dominant_provenance(trace_events: list[dict[str, Any]]) -> str:
