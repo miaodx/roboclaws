@@ -533,6 +533,20 @@ movement gate, not physical PNC execution.
   and checker contract test.
   This is still a hardware-gate tightening, not real G2 hardware validation.
 
+2026-05-29 Agibot bounded local nudge configuration slice:
+
+- Added operator-provided `operator_bounded_local_nudge` parsing to the Agibot
+  SDK runner adapter. Bounded local nudge remains disabled and non-agent-facing,
+  but the evidence now distinguishes missing, valid, and invalid operator config.
+- Conservative caps remain `max_distance_m=0.25`, `max_yaw_rad=0.35`, and
+  `timeout_s=3.0`. Operator config may only tighten those limits; unconfirmed or
+  looser values fall back to the conservative defaults with invalid-config
+  evidence.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_adapter_resolves_public_navigation_tool_family tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_bounded_local_nudge_uses_operator_config_with_conservative_caps tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_bounded_local_nudge_rejects_unconfirmed_or_loose_operator_config tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_localization_gate_enforces_optional_thresholds -q`,
+  plus ruff check/format over the runner and focused test.
+  This is still configuration/evidence support, not `relative_move` execution.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent

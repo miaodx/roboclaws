@@ -186,6 +186,73 @@ def test_agibot_adapter_resolves_public_navigation_tool_family(tmp_path: Path) -
     assert object_nav["failure_type"] == "object_not_mapped_to_public_waypoint"
 
 
+def test_agibot_bounded_local_nudge_uses_operator_config_with_conservative_caps(
+    tmp_path: Path,
+) -> None:
+    context = _completed_context()
+    context["operator_bounded_local_nudge"] = {
+        "operator_configured": True,
+        "max_distance_m": 0.12,
+        "max_yaw_rad": 0.2,
+        "timeout_s": 1.5,
+        "source": "operator_safety_review",
+    }
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(context), encoding="utf-8")
+    adapter = AgibotSDKRunnerAdapter(
+        context_json=context_path,
+        run_dir=tmp_path / "run",
+    )
+
+    candidate_nav = adapter.navigate_to_visual_candidate(
+        source_observation_id="agibot_observe_001",
+        target_fixture_id="sofa",
+    )
+    nudge = candidate_nav["bounded_local_nudge"]
+
+    assert nudge["enabled"] is False
+    assert nudge["agent_facing_tool"] is False
+    assert nudge["operator_config_required"] is True
+    assert nudge["operator_config_present"] is True
+    assert nudge["operator_config_valid"] is True
+    assert nudge["operator_config_source"] == "operator_safety_review"
+    assert nudge["max_distance_m"] == 0.12
+    assert nudge["max_yaw_rad"] == 0.2
+    assert nudge["timeout_s"] == 1.5
+
+
+def test_agibot_bounded_local_nudge_rejects_unconfirmed_or_loose_operator_config(
+    tmp_path: Path,
+) -> None:
+    context = _completed_context()
+    context["operator_bounded_local_nudge"] = {
+        "operator_configured": True,
+        "max_distance_m": 0.5,
+        "max_yaw_rad": 0.5,
+        "timeout_s": 5.0,
+    }
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(context), encoding="utf-8")
+    adapter = AgibotSDKRunnerAdapter(
+        context_json=context_path,
+        run_dir=tmp_path / "run",
+    )
+
+    candidate_nav = adapter.navigate_to_visual_candidate(
+        source_observation_id="agibot_observe_001",
+        target_fixture_id="sofa",
+    )
+    nudge = candidate_nav["bounded_local_nudge"]
+
+    assert nudge["enabled"] is False
+    assert nudge["operator_config_present"] is True
+    assert nudge["operator_config_valid"] is False
+    assert nudge["max_distance_m"] == 0.25
+    assert nudge["max_yaw_rad"] == 0.35
+    assert nudge["timeout_s"] == 3.0
+    assert "conservative defaults" in nudge["config_reason"]
+
+
 def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     tmp_path: Path,
 ) -> None:

@@ -272,7 +272,10 @@ class AgibotSDKRunnerAdapter:
         response["candidate_id"] = candidate_id
         response["fixture_id"] = resolved_fixture_id
         response["target_fixture_id"] = target_fixture_id
-        response["bounded_local_nudge"] = _bounded_local_nudge_status(enabled=False)
+        response["bounded_local_nudge"] = _bounded_local_nudge_status(
+            enabled=False,
+            context=self.context_payload,
+        )
         response["manipulation_ready"] = False
         return response
 
@@ -1030,18 +1033,77 @@ def _accepted_localization_states(value: Any) -> set[str]:
     return set()
 
 
-def _bounded_local_nudge_status(*, enabled: bool) -> dict[str, Any]:
+def _bounded_local_nudge_status(
+    *,
+    enabled: bool,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    config = _operator_bounded_local_nudge_config(context or {})
     return {
         "schema": "agibot_bounded_local_nudge_v1",
         "status": "not_requested",
         "enabled": enabled,
         "primitive_provenance": AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE if enabled else "",
-        "max_distance_m": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_distance_m"],
-        "max_yaw_rad": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_yaw_rad"],
-        "timeout_s": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["timeout_s"],
-        "operator_config_required": AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["operator_config_required"],
+        "max_distance_m": config["max_distance_m"],
+        "max_yaw_rad": config["max_yaw_rad"],
+        "timeout_s": config["timeout_s"],
+        "operator_config_required": config["operator_config_required"],
+        "operator_config_present": config["operator_config_present"],
+        "operator_config_valid": config["operator_config_valid"],
+        "operator_config_source": config["operator_config_source"],
+        "config_reason": config["reason"],
         "safety_model": "Pnc.relative_move simple obstacle stop; no obstacle avoidance",
         "agent_facing_tool": False,
+    }
+
+
+def _operator_bounded_local_nudge_config(context: dict[str, Any]) -> dict[str, Any]:
+    raw = context.get("operator_bounded_local_nudge")
+    if raw is None:
+        raw = context.get("bounded_local_nudge")
+    if not isinstance(raw, dict):
+        return {
+            **AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS,
+            "operator_config_present": False,
+            "operator_config_valid": False,
+            "operator_config_source": "",
+            "reason": (
+                "operator bounded local nudge config is missing; conservative defaults apply."
+            ),
+        }
+
+    max_distance = _optional_float(raw.get("max_distance_m"))
+    max_yaw = _optional_float(raw.get("max_yaw_rad"))
+    timeout = _optional_float(raw.get("timeout_s"))
+    valid = (
+        bool(raw.get("operator_configured") or raw.get("confirmed"))
+        and max_distance is not None
+        and 0.0 < max_distance <= AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_distance_m"]
+        and max_yaw is not None
+        and 0.0 < max_yaw <= AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_yaw_rad"]
+        and timeout is not None
+        and 0.0 < timeout <= AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["timeout_s"]
+    )
+    if not valid:
+        return {
+            **AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS,
+            "operator_config_present": True,
+            "operator_config_valid": False,
+            "operator_config_source": str(raw.get("source") or "operator_bounded_local_nudge"),
+            "reason": (
+                "operator bounded local nudge config must be confirmed and no larger "
+                "than conservative defaults."
+            ),
+        }
+    return {
+        "max_distance_m": max_distance,
+        "max_yaw_rad": max_yaw,
+        "timeout_s": timeout,
+        "operator_config_required": True,
+        "operator_config_present": True,
+        "operator_config_valid": True,
+        "operator_config_source": str(raw.get("source") or "operator_bounded_local_nudge"),
+        "reason": "",
     }
 
 
