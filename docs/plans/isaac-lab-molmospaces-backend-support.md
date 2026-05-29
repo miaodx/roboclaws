@@ -953,8 +953,10 @@ Both lanes succeeded. The comparison manifest reports
 `camera_pose_contract.status=same_backend_pose_within_threshold`,
 `max_pose_delta_m=0.0`, `camera_intrinsics_contract.status=intrinsics_consistent`,
 `projection_diagnostics.max_pixel_delta=0.0`, and
-`room_scale_contract.status=room_outline_mesh_bounds`. The remaining image-level
-differences are renderer/material/lighting/exposure differences
+`room_scale_contract.status=room_outline_mesh_bounds`. That run used the earlier
+coarse room-scale contract; the 2026-05-30 `0530_0009` report below now records
+the stricter room-by-room MuJoCo/Isaac outline deltas. The remaining image-level
+differences in the 2026-05-29 run are renderer/material/lighting/exposure differences
 (`visual_diagnostics.max_mean_absolute_pixel_delta≈74.96`,
 `max_abs_mean_luminance_delta≈68.57`, `max_overexposed_fraction≈0.454`), not a
 same-camera pose/FOV/room-scale mismatch. A follow-up code slice moved cleanup
@@ -998,6 +1000,46 @@ have mean luminance around 230-240 and `lum>=245` fractions from roughly 0.11 to
 0.52. The next rendering slice should tune Isaac exposure/white handling or add
 an explicit color-management contract; it should not reopen room-scale,
 eye/target, FOV, or backend-local camera placement as the primary explanation.
+
+A follow-up color-management run passed at
+`output/isaaclab/cleanup-smoke/0530_val1_color_contract_cleanup/` against the
+same prepared `val_1` USD. It keeps the same strict camera gate:
+`robot_view_camera_control.status=all_robot_views_use_canonical_camera_control`,
+`canonical_contract_count=6`, `backend_local_contract_count=0`, and
+`same_pose_api=true`. Every robot-view camera-control contract carries
+`camera_model=canonical_eye_target_camera_v1`,
+`coordinate_frame=molmospaces_scene_frame_v1`,
+`color_profile.profile_id=display_srgb_soft_highlight_v1`, and
+`lighting_profile.profile_id=scene_probe_existing_usd_lights_v1`. The report's
+primary `*.fpv.png` robot views are byte-identical to the canonical camera
+control captures under `*.fpv.canonical_camera_control/`, so the compatibility
+filename is not a stale backend-local view.
+
+The fresher render-only parity proof is
+`output/molmo/scene-camera-comparison/0530_0009/`. It reports
+`max_pose_delta_m=0.0`,
+`camera_intrinsics_contract.status=intrinsics_consistent`,
+`projection_diagnostics.max_pixel_delta=0.0`,
+`room_scale_contract.status=same_room_outlines_within_threshold`,
+`room_scale_contract.matched_room_outline_count=2`,
+`max_room_outline_center_delta_m=0.0`,
+`max_room_outline_size_delta_m=0.0`,
+`max_overexposed_fraction=0.0`, and both lanes use
+`display_srgb_soft_highlight_v1`. The remaining visual deltas are still
+render-domain deltas: Isaac/MuJoCo material, wall texture, indirect light, and
+tone response. They are not currently explained by room scale, eye/target pose,
+FOV, or agent-facing robot FPV camera selection.
+
+A separate backend-swappability gap was then closed for the cleanup smoke map
+context. The strict `scene_index=1` cleanup proof now defaults to a scene-index
+map bundle instead of the older `assets/maps/molmospaces-procthor-val-0-7`
+static bundle. The real Isaac run at
+`output/isaaclab/cleanup-smoke/0530_val1_scene_outline_map_context_cleanup_2/`
+reports a scene-index map id, USD room outlines for `room_2` and `room_3`, four
+scene-outline inspection waypoints, `sweep_coverage_rate=1.0`, and a successful
+one-object cleanup score. This closes the earlier agent-facing map/waypoint
+mismatch for the current `val_1` proof; broader scene coverage remains future
+work before claiming corpus-wide transparent backend replacement.
 
 For lower-level diagnosis, the two steps remain available separately:
 

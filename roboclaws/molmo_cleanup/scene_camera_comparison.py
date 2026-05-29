@@ -37,6 +37,7 @@ DEFAULT_RENDER_HEIGHT = 640
 CANONICAL_POSE_PARITY_THRESHOLD_M = 0.08
 CANONICAL_CAMERA_POSE_THRESHOLD_M = 0.005
 CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX = 0.5
+CANONICAL_ROOM_OUTLINE_THRESHOLD_M = 0.005
 CANONICAL_CAMERA_ELEVATION_DEG = 78.0
 SURFACE_AIM_HEIGHT_ALLOWANCE_M = 0.3
 ROOM_CAMERA_HEIGHT_M = 1.45
@@ -1087,6 +1088,55 @@ def _room_scale_contract_from_capture(
                 "provenance": str(outline.get("provenance") or ""),
             }
         )
+    isaac_room_outlines = _isaac_room_outlines_by_id(isaac_lane)
+    outline_pairs = []
+    for room in rooms:
+        room_id = str(room.get("room_id") or "")
+        isaac_outline = isaac_room_outlines.get(room_id)
+        if not isaac_outline:
+            continue
+        isaac_center = isaac_outline.get("center")
+        isaac_half_extents = isaac_outline.get("half_extents")
+        if not (
+            isinstance(isaac_center, list)
+            and len(isaac_center) >= 2
+            and isinstance(isaac_half_extents, list)
+            and len(isaac_half_extents) >= 2
+        ):
+            continue
+        isaac_size = [float(isaac_half_extents[0]) * 2.0, float(isaac_half_extents[1]) * 2.0]
+        center_delta = _distance_xy(room["center"], isaac_center)
+        size_delta = _distance_xy(room["size"], isaac_size)
+        half_extent_delta = _distance_xy(room["half_extents"], isaac_half_extents)
+        outline_pairs.append(
+            {
+                "room_id": room_id,
+                "molmospaces_center": list(room["center"]),
+                "isaac_center": [float(isaac_center[0]), float(isaac_center[1])],
+                "center_delta_m": center_delta,
+                "molmospaces_size": list(room["size"]),
+                "isaac_size": isaac_size,
+                "size_delta_m": size_delta,
+                "molmospaces_half_extents": list(room["half_extents"]),
+                "isaac_half_extents": [
+                    float(isaac_half_extents[0]),
+                    float(isaac_half_extents[1]),
+                ],
+                "half_extent_delta_m": half_extent_delta,
+                "molmospaces_provenance": str(room.get("provenance") or ""),
+                "isaac_provenance": str(isaac_outline.get("provenance") or ""),
+                "isaac_usd_prim_path": str(isaac_outline.get("usd_prim_path") or ""),
+            }
+        )
+    max_center_delta = (
+        max(float(item["center_delta_m"]) for item in outline_pairs) if outline_pairs else None
+    )
+    max_size_delta = (
+        max(float(item["size_delta_m"]) for item in outline_pairs) if outline_pairs else None
+    )
+    max_half_extent_delta = (
+        max(float(item["half_extent_delta_m"]) for item in outline_pairs) if outline_pairs else None
+    )
     scene_bounds = (
         isaac_lane.get("scene_bounds") if isinstance(isaac_lane.get("scene_bounds"), dict) else {}
     )
@@ -1103,21 +1153,59 @@ def _room_scale_contract_from_capture(
             status = "room_outline_exceeds_isaac_scene_bounds"
     if not rooms:
         status = "missing_room_outline_diagnostics"
+    elif not outline_pairs:
+        status = "missing_isaac_room_outline_pairs"
+    elif (
+        status == "room_outline_mesh_bounds"
+        and max_center_delta is not None
+        and max_size_delta is not None
+        and max_half_extent_delta is not None
+    ):
+        if max(max_center_delta, max_size_delta, max_half_extent_delta) <= (
+            CANONICAL_ROOM_OUTLINE_THRESHOLD_M
+        ):
+            status = "same_room_outlines_within_threshold"
+        else:
+            status = "room_outline_mismatch"
     return {
         "schema": "room_scale_contract_v1",
         "status": status,
         "room_count": len(rooms),
+        "matched_room_outline_count": len(outline_pairs),
         "room_outline_source": "molmospaces_room_outlines",
+        "isaac_room_outline_source": "isaac_scene_index_diagnostics.room_outlines",
         "isaac_scene_bounds": dict(scene_bounds),
         "max_room_to_scene_width_ratio": max_room_to_scene_width_ratio,
         "max_room_to_scene_depth_ratio": max_room_to_scene_depth_ratio,
+        "room_outline_threshold_m": CANONICAL_ROOM_OUTLINE_THRESHOLD_M,
+        "max_room_outline_center_delta_m": max_center_delta,
+        "max_room_outline_size_delta_m": max_size_delta,
+        "max_room_outline_half_extent_delta_m": max_half_extent_delta,
         "interpretation": (
             "Room-level camera poses are derived from MolmoSpaces room outlines. "
-            "Those outlines must come from room mesh world bounds, not MuJoCo mesh geom_size, "
+            "Those outlines must match Isaac USD room mesh world bounds room-by-room; "
             "otherwise same-pose backend comparisons can start from a wrong room scale."
         ),
         "rooms": rooms,
+        "room_outline_pairs": outline_pairs,
     }
+
+
+def _isaac_room_outlines_by_id(isaac_lane: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    diagnostics = (
+        isaac_lane.get("scene_index_diagnostics")
+        if isinstance(isaac_lane.get("scene_index_diagnostics"), dict)
+        else {}
+    )
+    outlines = diagnostics.get("room_outlines") if isinstance(diagnostics, dict) else []
+    result: dict[str, dict[str, Any]] = {}
+    for item in outlines or []:
+        if not isinstance(item, dict):
+            continue
+        room_id = str(item.get("room_id") or "")
+        if room_id:
+            result[room_id] = item
+    return result
 
 
 def _projection_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -1785,6 +1873,10 @@ def _distance_3d(left: list[float], right: list[float]) -> float:
     )
 
 
+def _distance_xy(left: list[float], right: list[float]) -> float:
+    return math.hypot(float(left[0]) - float(right[0]), float(left[1]) - float(right[1]))
+
+
 def _is_vec3(value: Any) -> bool:
     return isinstance(value, list) and len(value) >= 3
 
@@ -2209,9 +2301,13 @@ def _room_scale_section(manifest: dict[str, Any]) -> str:
     )
     note = (
         f"status={contract.get('status')}; rooms={contract.get('room_count')}; "
+        f"matched_room_outlines={contract.get('matched_room_outline_count')}; "
         f"isaac_scene_size={_vec_text(bounds.get('size'))}; "
         f"max_width_ratio={_ratio_text(contract.get('max_room_to_scene_width_ratio'))}; "
-        f"max_depth_ratio={_ratio_text(contract.get('max_room_to_scene_depth_ratio'))}. "
+        f"max_depth_ratio={_ratio_text(contract.get('max_room_to_scene_depth_ratio'))}; "
+        f"max_center_delta={_meters_text(contract.get('max_room_outline_center_delta_m'))}; "
+        f"max_size_delta={_meters_text(contract.get('max_room_outline_size_delta_m'))}; "
+        f"threshold={_meters_text(contract.get('room_outline_threshold_m'))}. "
         f"{contract.get('interpretation') or ''}"
     )
     headers = "".join(
@@ -2226,7 +2322,48 @@ def _room_scale_section(manifest: dict[str, Any]) -> str:
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
   </table></div>
+  {_room_outline_pairs_table(contract)}
 </section>
+"""
+
+
+def _room_outline_pairs_table(contract: dict[str, Any]) -> str:
+    pairs = [item for item in contract.get("room_outline_pairs") or [] if isinstance(item, dict)]
+    if not pairs:
+        return ""
+    rows = []
+    for item in pairs:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('room_id', '')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('molmospaces_center')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('isaac_center')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('center_delta_m')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('molmospaces_size')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('isaac_size')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('size_delta_m')))}</td>"
+            f"<td>{html.escape(str(item.get('isaac_usd_prim_path', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Room",
+            "MuJoCo center",
+            "Isaac center",
+            "Center delta",
+            "MuJoCo size",
+            "Isaac size",
+            "Size delta",
+            "Isaac room prim",
+        )
+    )
+    return f"""
+  <h3>Matched Room Outlines</h3>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
 """
 
 

@@ -884,14 +884,66 @@ def test_room_scale_contract_compares_room_outline_to_isaac_scene_bounds() -> No
                 },
             }
         ],
-        isaac_lane={"scene_bounds": {"size": [9.976, 10.097, 3.154]}},
+        isaac_lane={
+            "scene_bounds": {"size": [9.976, 10.097, 3.154]},
+            "scene_index_diagnostics": {
+                "room_outlines": [
+                    {
+                        "room_id": "room_2",
+                        "center": [2.99, 4.983],
+                        "half_extents": [2.99, 4.983],
+                        "provenance": "isaac_usd_room_mesh_world_bounds",
+                        "usd_prim_path": "/val_1/Geometry/room_2_visual_0",
+                    }
+                ],
+            },
+        },
     )
 
-    assert contract["status"] == "room_outline_mesh_bounds"
+    assert contract["status"] == "same_room_outlines_within_threshold"
     assert contract["room_count"] == 1
+    assert contract["matched_room_outline_count"] == 1
     assert contract["rooms"][0]["size"] == pytest.approx([5.98, 9.966])
+    assert contract["room_outline_pairs"][0]["center_delta_m"] == pytest.approx(0.0)
+    assert contract["room_outline_pairs"][0]["size_delta_m"] == pytest.approx(0.0)
+    assert contract["room_outline_pairs"][0]["isaac_usd_prim_path"] == (
+        "/val_1/Geometry/room_2_visual_0"
+    )
     assert contract["max_room_to_scene_width_ratio"] == pytest.approx(0.5994, rel=1e-3)
     assert contract["max_room_to_scene_depth_ratio"] == pytest.approx(0.987, rel=1e-3)
+
+
+def test_room_scale_contract_flags_room_outline_mismatch() -> None:
+    contract = _room_scale_contract_from_capture(
+        room_views=[
+            {
+                "view_id": "room_01_room_2",
+                "room_id": "room_2",
+                "room_outline": {
+                    "center": [2.99, 4.983],
+                    "half_extents": [2.99, 4.983],
+                    "provenance": "mujoco_room_mesh_world_bounds",
+                },
+            }
+        ],
+        isaac_lane={
+            "scene_bounds": {"size": [9.976, 10.097, 3.154]},
+            "scene_index_diagnostics": {
+                "room_outlines": [
+                    {
+                        "room_id": "room_2",
+                        "center": [3.25, 4.983],
+                        "half_extents": [2.5, 4.0],
+                        "provenance": "isaac_usd_room_mesh_world_bounds",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert contract["status"] == "room_outline_mismatch"
+    assert contract["max_room_outline_center_delta_m"] == pytest.approx(0.26)
+    assert contract["max_room_outline_size_delta_m"] > 1.0
 
 
 def test_molmospaces_view_specs_use_anchor_orbit_not_focus_camera_heuristic() -> None:
