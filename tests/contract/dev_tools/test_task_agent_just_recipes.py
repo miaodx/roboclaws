@@ -437,6 +437,60 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
     assert route[-2:] == ["isaaclab_subprocess", "rich"]
 
 
+def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "direct",
+        "camera-labels",
+        "backend=agibot_gdk",
+        "context_json=tests/fixtures/agibot_map_context.completed.json",
+        "waypoint_id=wp_sofa_front",
+        "output_dir=output/agibot/map-build",
+    )
+
+    assert route[:6] == [
+        "cmd",
+        ".venv/bin/python",
+        "scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py",
+        "--context-json",
+        "tests/fixtures/agibot_map_context.completed.json",
+        "--output-dir",
+    ]
+    assert route[6] == "output/agibot/map-build"
+    assert "--waypoint-id" in route
+    assert "wp_sofa_front" in route
+    assert "agibot-g2-cleanup" not in " ".join(route)
+
+
+def test_household_cleanup_routes_agibot_backend_to_blocked_cleanup_pilot_cli() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "backend=agibot_gdk",
+        "context_json=tests/fixtures/agibot_map_context.completed.json",
+    )
+
+    assert route[:5] == [
+        "cmd",
+        ".venv/bin/python",
+        "scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py",
+        "--context-json",
+        "tests/fixtures/agibot_map_context.completed.json",
+    ]
+
+
+def test_agibot_backend_route_requires_context_json() -> None:
+    stderr = assert_task_run_fails(
+        "semantic-map-build",
+        "direct",
+        "camera-labels",
+        "backend=agibot_gdk",
+    )
+
+    assert "backend=agibot_gdk requires context_json" in stderr
+
+
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
     match = re.search(r"camera-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)

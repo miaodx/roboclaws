@@ -72,13 +72,15 @@ run task driver mode="" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        agent_souls|agents|backend|baseline|candidate|cap|generated_mess_count|\
+        agent_souls|agents|agibot_map_artifact_dir|backend|baseline|candidate|cap|context_json|\
+        generated_mess_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|map_mode|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
-        profile|runtime_map_prior|scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
-        visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget)
+        profile|real_movement_enabled|run_dir|runner_python|runner_script|runtime_map_prior|\
+        scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
+        visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -321,6 +323,49 @@ run task driver mode="" *overrides:
         map_mode="$(get map_mode rich)"
         runtime_map_prior="$(get runtime_map_prior "")"
         backend="$(get backend auto)"
+        if [[ "$backend" == "agibot_gdk" ]]; then
+          context_json="$(get context_json "")"
+          if [[ -z "$context_json" ]]; then
+            echo "error: backend=agibot_gdk requires context_json=<agibot map context JSON>" >&2
+            exit 1
+          fi
+          agibot_args=(.venv/bin/python scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py
+            --context-json "$context_json"
+            --output-dir "$output_dir")
+          waypoint_id="$(get waypoint_id "")"
+          if [[ -n "$waypoint_id" ]]; then
+            agibot_args+=(--waypoint-id "$waypoint_id")
+          fi
+          run_dir="$(get run_dir "")"
+          if [[ -n "$run_dir" ]]; then
+            agibot_args+=(--run-dir "$run_dir")
+          fi
+          runner_python="$(get runner_python "")"
+          if [[ -n "$runner_python" ]]; then
+            agibot_args+=(--runner-python "$runner_python")
+          fi
+          runner_script="$(get runner_script "")"
+          if [[ -n "$runner_script" ]]; then
+            agibot_args+=(--runner-script "$runner_script")
+          fi
+          agibot_map_artifact_dir="$(get agibot_map_artifact_dir "")"
+          if [[ -n "$agibot_map_artifact_dir" ]]; then
+            agibot_args+=(--agibot-map-artifact-dir "$agibot_map_artifact_dir")
+          fi
+          real_movement_enabled="$(get real_movement_enabled false)"
+          case "$real_movement_enabled" in
+            true|1|yes|on)
+              agibot_args+=(--real-movement-enabled)
+              ;;
+            false|0|no|off|"")
+              ;;
+            *)
+              echo "error: unsupported real_movement_enabled '$real_movement_enabled' (expected true|false)" >&2
+              exit 1
+              ;;
+          esac
+          run_cmd "${agibot_args[@]}"
+        fi
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
           "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \

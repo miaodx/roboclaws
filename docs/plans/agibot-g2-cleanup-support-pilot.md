@@ -314,6 +314,24 @@ movement gate, not physical PNC execution.
   context behavior, unverified-waypoint blocking, and physical pilot adapter
   regressions.
 
+2026-05-29 Agibot public task routing slice:
+
+- Added public `just task::run ... backend=agibot_gdk` routing for the existing
+  `semantic-map-build` and `household-cleanup` tasks through
+  `scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py`.
+- The route requires `context_json=<agibot map context JSON>` and may pass
+  `waypoint_id`, `run_dir`, `runner_python`, `runner_script`,
+  `agibot_map_artifact_dir`, and `real_movement_enabled`. This keeps Agibot G2
+  as a backend variant under the shared task grammar instead of adding an
+  Agibot-only public task name.
+- The routed `household-cleanup` shape still uses the Agibot Navigation +
+  Perception Pilot artifact and keeps manipulation blocked; it is not a
+  physical cleanup success claim.
+- Focused route tests cover `semantic-map-build direct camera-labels
+  backend=agibot_gdk`, cleanup-shaped direct routing, and the required
+  `context_json` guard. Codex-driven hardware task control remains a later
+  acceptance layer beyond this direct routing slice.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent
