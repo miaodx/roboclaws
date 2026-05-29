@@ -68,7 +68,17 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     assert "CLI boundary" in report_text
     assert "One Roboclaws pilot run" in report_text
     assert "movement_enabled=false" in report_text
+    assert "Agibot pilot progress" in report_text
+    assert "Dry-run blocked by movement gate" in report_text
+    assert "Physical manipulation is intentionally blocked" in report_text
     assert persisted["semantic_substeps"] == []
+    assert persisted["cleanup_policy_trace"]["agent_review_kind"] == (
+        "agibot_navigation_perception_pilot_review"
+    )
+    assert persisted["cleanup_policy_trace"]["agent_reasoning_visible"] is True
+    assert persisted["cleanup_policy_trace"]["events"][0]["decision"] == "observe_head_color"
+    assert persisted["cleanup_policy_trace"]["events"][1]["decision"] == "visit_public_waypoint"
+    assert persisted["cleanup_policy_trace"]["events"][-1]["decision"] == "block_manipulation"
     assert persisted["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
     assert persisted["agibot_sdk_runner"]["next_confidence_layer"] == (
         "Agibot Robot Map 9 Semantic Actions Rehearsal"

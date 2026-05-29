@@ -332,6 +332,28 @@ movement gate, not physical PNC execution.
   `context_json` guard. Codex-driven hardware task control remains a later
   acceptance layer beyond this direct routing slice.
 
+2026-05-29 Agibot pilot report trace slice:
+
+- Extended the physical Agibot pilot `cleanup_policy_trace` with
+  `agent_review_kind=agibot_navigation_perception_pilot_review`,
+  `agent_reasoning_visible=true`, selected/skipped waypoint counts, and
+  operator-review notes.
+- Each pilot trace event now records the visible tool choice plus
+  `decision`, `progress`, and `reason` fields for `observe_head_color`,
+  `visit_public_waypoint`, `skip_public_waypoint`, and
+  `block_manipulation` decisions. This makes dry-run movement-gate blocks and
+  intentionally blocked physical manipulation reviewable in the shared cleanup
+  report.
+- Shared report rendering now shows the richer decision/progress/reason columns
+  only when those fields are present, preserving the existing generic cleanup
+  policy trace shape for non-Agibot reports.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`,
+  `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_sdk_runner.py roboclaws/molmo_cleanup/report.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  and `./.venv/bin/ruff format --check roboclaws/molmo_cleanup/agibot_sdk_runner.py roboclaws/molmo_cleanup/report.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
+  This remains dry-run/report evidence, not real G2 hardware validation.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent

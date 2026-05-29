@@ -5464,8 +5464,19 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
     trace = run_result.get("cleanup_policy_trace") or {}
     if not trace:
         return ""
+    events = [item for item in trace.get("events") or [] if isinstance(item, dict)]
+    has_review_fields = any(
+        item.get("decision") or item.get("progress") or item.get("reason") for item in events
+    )
     rows = []
-    for item in trace.get("events") or []:
+    for item in events:
+        review_cells = ""
+        if has_review_fields:
+            review_cells = (
+                f"<td>{html.escape(str(item.get('decision', '')))}</td>"
+                f"<td>{html.escape(str(item.get('progress', '')))}</td>"
+                f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            )
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(item.get('index', '')))}</td>"
@@ -5474,12 +5485,14 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('waypoint_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('fixture_id', '')))}</td>"
+            f"{review_cells}"
             "</tr>"
         )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Waypoint source', trace.get('waypoint_source', 'unknown'))}"
         f"{_metric('Loop style', trace.get('loop_style', 'unknown'))}"
+        f"{_metric('Review kind', trace.get('agent_review_kind', 'n/a'))}"
         f"{_metric('Waypoint observes', trace.get('scan_observe_count', 0))}"
         f"{_metric('Cleanup actions', trace.get('cleanup_action_count', 0))}"
         f"{_metric('Post-place observes', trace.get('post_place_observe_count', 0))}"
@@ -5492,21 +5505,33 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
                 trace.get("first_cleanup_before_full_survey", False),
             ),
             _badge("Post-place observe complete", trace.get("post_place_observe_complete", False)),
+            _badge("Agent reasoning visible", trace.get("agent_reasoning_visible", False)),
         )
     )
+    review_headers = ""
+    if has_review_fields:
+        review_headers = "<th>Decision</th><th>Progress</th><th>Reason</th>"
     table = (
         '<div class="table-wrap"><table><thead><tr><th>#</th><th>Tool</th>'
-        "<th>Role</th><th>Waypoint</th><th>Object</th><th>Fixture</th></tr></thead>"
+        "<th>Role</th><th>Waypoint</th><th>Object</th><th>Fixture</th>"
+        f"{review_headers}</tr></thead>"
         "<tbody>" + "".join(rows) + "</tbody></table></div>"
     )
+    notes = [
+        "inspection_waypoints are static_map_fixture_coverage inputs. Coverage scans, "
+        "cleanup actions, and post-place observes are labelled so reviewers can tell "
+        "whether the run was interleaved or survey-first. The current public MCP surface "
+        "models open_receptacle and close_receptacle as semantic access state around "
+        "place_inside."
+    ]
+    operator_review_note = str(trace.get("operator_review_note") or "").strip()
+    if operator_review_note:
+        notes.append(operator_review_note)
+    note_html = "".join(f'<p class="note">{html.escape(note)}</p>' for note in notes)
     return (
         '<section class="panel cleanup-policy-trace">'
         "<h2>Waypoint Honesty & Cleanup Loop</h2>"
-        '<p class="note">inspection_waypoints are static_map_fixture_coverage inputs. '
-        "Coverage scans, cleanup actions, and post-place observes are labelled so "
-        "reviewers can tell whether the run was interleaved or survey-first. "
-        "The current public MCP surface models open_receptacle and close_receptacle "
-        "as semantic access state around place_inside.</p>"
+        f"{note_html}"
         f'{metrics}<div class="badges">{badges}</div>{table}</section>'
     )
 
