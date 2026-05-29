@@ -9,7 +9,10 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from roboclaws.molmo_cleanup.camera_control import CAMERA_CONTROL_API_NAME
+from roboclaws.molmo_cleanup.camera_control import (
+    CAMERA_CONTROL_API_NAME,
+    DEFAULT_SCENE_PROBE_COLOR_PROFILE,
+)
 from roboclaws.molmo_cleanup.scene_camera_comparison import (
     ISAAC_LANE_ID,
     MOLMOSPACES_LANE_ID,
@@ -59,7 +62,7 @@ def _manifest() -> dict[str, object]:
             "MuJoCo and prepared Isaac USD expose different world frames for this scene. "
             "Views are matched by MolmoSpaces metadata handles and category anchors, then "
             "rendered through one Roboclaws camera-control request using the same anchor "
-            "lens, lighting profile, and view ids."
+            "lens, lighting profile, color profile, and view ids."
         ),
         "camera_control": {
             "api_name": CAMERA_CONTROL_API_NAME,
@@ -74,6 +77,11 @@ def _manifest() -> dict[str, object]:
                 "isaac_dome_intensity": 0.0,
                 "isaac_key_intensity": 0.0,
                 "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
+            },
+            "color_profile": {
+                "profile_id": "display_srgb_soft_highlight_v1",
+                "highlight_knee": 225.0,
+                "highlight_compression": 0.55,
             },
             "calibration_status": "canonical_scene_frame_similarity_fit_v1",
             "calibration_note": (
@@ -320,6 +328,7 @@ def _manifest() -> dict[str, object]:
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
                 "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "images": {
                     "room_01_room_2": {
                         "path": "molmospaces/camera_views/room_01_room_2.png",
@@ -369,6 +378,7 @@ def _manifest() -> dict[str, object]:
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
                 "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "lighting_diagnostics": {
                     "status": "using_existing_stage_lights",
                     "existing_light_count": 2,
@@ -454,6 +464,7 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "https://github.com/allenai/molmospaces.git" in html
     assert CAMERA_CONTROL_API_NAME in html
     assert "canonical_scene_frame_similarity_fit_v1" in html
+    assert "display_srgb_soft_highlight_v1" in html
     assert "canonical_eye_target_camera_v1" in html
     assert "backend eye=" in html
     assert "scene_probe_existing_usd_lights_v1" in html
@@ -519,6 +530,12 @@ def test_scene_camera_comparison_manifest_is_json_serializable() -> None:
     assert SCENE_CAMERA_COMPARISON_SCHEMA in encoded
     assert "private_manifest" not in encoded
     assert "_state" not in encoded
+
+
+def test_scene_camera_comparison_default_color_profile_contract() -> None:
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["highlight_knee"] == 225.0
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["highlight_compression"] == 0.55
 
 
 def test_isaac_view_specs_record_support_pose_for_transform_but_not_camera_target(

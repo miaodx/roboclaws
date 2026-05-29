@@ -6648,6 +6648,9 @@ def _robot_view_camera_contract_summary(contract: Any) -> str:
     )
     if lighting:
         badges += _badge("Lighting", lighting.get("profile_id", "unknown"))
+    color = contract.get("color_profile") if isinstance(contract.get("color_profile"), dict) else {}
+    if color:
+        badges += _badge("Color", color.get("profile_id", "unknown"))
     note = str(contract.get("evidence_note") or "")
     note_html = f'<p class="note">{html.escape(note)}</p>' if note else ""
     return f'<div class="semantic-badges robot-view-camera-contract">{badges}</div>{note_html}'

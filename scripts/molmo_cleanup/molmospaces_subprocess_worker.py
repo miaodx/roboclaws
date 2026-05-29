@@ -27,6 +27,7 @@ from roboclaws.molmo_cleanup.camera_control import (
     load_camera_control_request,
     normalize_camera_control_request,
 )
+from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
 from roboclaws.molmo_cleanup.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
@@ -828,19 +829,29 @@ def _render_camera_views_with_model_data(
     previous_fovy = float(model.vis.global_.fovy)
     model.vis.global_.fovy = float(lens.get("vertical_fov_deg", previous_fovy))
     output_dir.mkdir(parents=True, exist_ok=True)
+    color_profile = camera_request.get("color_profile") or {}
 
     try:
         saved: dict[str, str] = {}
         shapes: dict[str, list[int]] = {}
+        color_diagnostics: dict[str, dict[str, Any]] = {}
         views: list[dict[str, Any]] = []
         for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
             spec = _camera_view_spec(raw_spec, index=index)
             camera = _camera_from_view_spec(state, spec)
             frame = _render_free_camera(model, data, camera, width=width, height=height)
+            import numpy as np
+
+            frame, color_diagnostic = apply_camera_color_profile(
+                frame,
+                np=np,
+                profile=color_profile,
+            )
             output_path = output_dir / f"{spec['view_id']}.png"
             Image.fromarray(frame).save(output_path)
             saved[str(spec["view_id"])] = str(output_path)
             shapes[str(spec["view_id"])] = list(frame.shape)
+            color_diagnostics[str(spec["view_id"])] = color_diagnostic
             views.append(
                 {
                     **spec,
@@ -857,6 +868,8 @@ def _render_camera_views_with_model_data(
         camera_request_schema=camera_request.get("schema"),
         calibration_status=camera_request.get("calibration_status"),
         lighting_profile=camera_request.get("lighting_profile") or {},
+        color_profile=color_profile,
+        color_management=color_diagnostics,
         lens=camera_request.get("lens") or {},
         view_variant=_camera_request_variant(camera_request),
         visual_artifact_provenance=_camera_request_provenance(camera_request),

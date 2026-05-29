@@ -18,6 +18,7 @@ from roboclaws.molmo_cleanup.camera_control import (
     CANONICAL_CAMERA_MODEL,
     CANONICAL_POSE_CALIBRATION,
     DEFAULT_SCENE_PROBE_CAMERA_ORBIT,
+    DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LENS,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     MOLMOSPACES_SCENE_FRAME,
@@ -81,6 +82,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
             "coordinate_frame": MOLMOSPACES_SCENE_FRAME,
             "lens": dict(DEFAULT_SCENE_PROBE_LENS),
             "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
+            "color_profile": dict(DEFAULT_SCENE_PROBE_COLOR_PROFILE),
             "calibration_status": CANONICAL_POSE_CALIBRATION,
             "calibration_note": (
                 "One Roboclaws camera-control request carries explicit eye/target/up poses "
@@ -135,6 +137,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         height=config.render_height,
         lens=DEFAULT_SCENE_PROBE_LENS,
         lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+        color_profile=DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     )
     camera_request_path = write_camera_control_request(
         output_dir / "camera_control_request.json",
@@ -312,6 +315,8 @@ def _capture_molmospaces_camera_views(
             "calibration_status": result.get("calibration_status"),
             "lighting_profile": result.get("lighting_profile") or {},
             "lighting_diagnostics": result.get("lighting_diagnostics") or {},
+            "color_profile": result.get("color_profile") or {},
+            "color_management": result.get("color_management") or {},
             "lens": result.get("lens") or {},
             "images": _image_entries(output_dir=config.output_dir, result=result),
             "views": result.get("views") or [],
@@ -362,6 +367,8 @@ def _capture_isaac_lane(
             "calibration_status": result.get("calibration_status"),
             "lighting_profile": result.get("lighting_profile") or {},
             "lighting_diagnostics": result.get("lighting_diagnostics") or {},
+            "color_profile": result.get("color_profile") or {},
+            "color_management": result.get("color_management") or {},
             "lens": result.get("lens") or {},
             "derived_lens": result.get("derived_lens") or {},
             "render_steps": result.get("render_steps"),
@@ -2011,6 +2018,7 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
     lighting = (
         camera.get("lighting_profile") if isinstance(camera.get("lighting_profile"), dict) else {}
     )
+    color = camera.get("color_profile") if isinstance(camera.get("color_profile"), dict) else {}
     transform = (
         manifest.get("scene_frame_transform")
         if isinstance(manifest.get("scene_frame_transform"), dict)
@@ -2067,6 +2075,7 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
                 ("max projection delta", _pixels_text(projection.get("max_pixel_delta"))),
                 ("FOV", f"{lens.get('vertical_fov_deg')} deg" if lens else ""),
                 ("lighting", lighting.get("profile_id") if lighting else ""),
+                ("color", color.get("profile_id") if color else ""),
             ]
         )
     }</div>
@@ -2542,6 +2551,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(lane.get('calibration_status', '')))}</td>"
             f"<td>{html.escape(str(_lighting_profile_id(lane)))}</td>"
             f"<td>{html.escape(str(_lighting_diagnostics_text(lane)))}</td>"
+            f"<td>{html.escape(str(_color_profile_id(lane)))}</td>"
             "</tr>"
         )
     headers = "".join(
@@ -2558,6 +2568,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             "Calibration",
             "Lighting",
             "Lighting diagnostics",
+            "Color",
         )
     )
     return f"""
@@ -2580,6 +2591,11 @@ def _lighting_profile_id(lane: dict[str, Any]) -> str:
         lane.get("lighting_profile") if isinstance(lane.get("lighting_profile"), dict) else {}
     )
     return str(lighting.get("profile_id") or "")
+
+
+def _color_profile_id(lane: dict[str, Any]) -> str:
+    color = lane.get("color_profile") if isinstance(lane.get("color_profile"), dict) else {}
+    return str(color.get("profile_id") or "")
 
 
 def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:

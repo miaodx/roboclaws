@@ -348,6 +348,46 @@ def test_molmospaces_worker_converts_canonical_eye_to_mujoco_free_camera_angles(
     assert reconstructed_eye == pytest.approx(requested_eye)
 
 
+def test_molmospaces_camera_views_apply_color_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = SimpleNamespace(vis=SimpleNamespace(global_=SimpleNamespace(fovy=55.0)))
+    data = object()
+    frame = np.full((4, 6, 3), 250, dtype=np.uint8)
+
+    monkeypatch.setattr(worker, "_camera_from_view_spec", lambda _state, spec: spec)
+    monkeypatch.setattr(worker, "_render_free_camera", lambda *_args, **_kwargs: frame.copy())
+
+    result = worker._render_camera_views_with_model_data(
+        model,
+        data,
+        state={},
+        output_dir=tmp_path,
+        camera_request={
+            "camera_model": "canonical_eye_target_camera_v1",
+            "views": [
+                {
+                    "view_id": "fpv",
+                    "eye": [0.0, 0.0, 1.0],
+                    "target": [1.0, 0.0, 1.0],
+                }
+            ],
+        },
+        width=6,
+        height=4,
+    )
+
+    assert result["ok"] is True
+    assert model.vis.global_.fovy == pytest.approx(55.0)
+    assert result["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert result["color_management"]["fpv"]["before"]["overexposed_fraction"] == pytest.approx(1.0)
+    assert result["color_management"]["fpv"]["after"]["overexposed_fraction"] == pytest.approx(0.0)
+    assert Path(result["images"]["fpv"]).is_file()
+
+
 def test_molmospaces_worker_preserves_robot_view_role_on_camera_spec() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()
@@ -908,9 +948,42 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert request["lighting_profile"]["profile_id"] == "scene_probe_existing_usd_lights_v1"
     assert request["lighting_profile"]["isaac_dome_intensity"] == 0.0
     assert request["lighting_profile"]["isaac_key_intensity"] == 0.0
+    assert request["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert request["color_profile"]["highlight_knee"] == pytest.approx(225.0)
     assert [item["robot_view_role"] for item in request["views"]] == ["fpv", "verify"]
     assert request["views"][0]["eye"] == [1.0, 2.0, 1.55]
     assert request["views"][0]["target"] == [3.0, 2.0, 0.8]
+
+
+def test_camera_color_profile_compresses_highlights() -> None:
+    from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+
+    frame = np.array(
+        [
+            [[250, 250, 250], [220, 220, 220]],
+            [[245, 240, 235], [10, 20, 30]],
+        ],
+        dtype=np.uint8,
+    )
+
+    adjusted, diagnostics = apply_camera_color_profile(
+        frame,
+        np=np,
+        profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "highlight_knee": 225.0,
+            "highlight_compression": 0.5,
+            "gamma": 1.0,
+        },
+    )
+
+    assert adjusted.dtype == np.uint8
+    assert int(adjusted[0, 0, 0]) == 237
+    assert int(adjusted[0, 1, 0]) == 220
+    assert diagnostics["profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert (
+        diagnostics["before"]["overexposed_fraction"] > diagnostics["after"]["overexposed_fraction"]
+    )
 
 
 def test_worker_robot_pose_near_receptacle_uses_shared_pose_resolver() -> None:
@@ -1008,6 +1081,9 @@ def test_worker_robot_views_prefers_canonical_camera_control(
     assert result["camera_control_contract"]["camera_model"] == "canonical_eye_target_camera_v1"
     assert result["camera_control_contract"]["lighting_profile"]["profile_id"] == (
         "scene_probe_existing_usd_lights_v1"
+    )
+    assert result["camera_control_contract"]["color_profile"]["profile_id"] == (
+        "display_srgb_soft_highlight_v1"
     )
     assert result["camera_control_contract"]["agent_facing_fpv"]["canonical_camera_control"] is True
     assert Path(result["views"]["fpv"]).is_file()

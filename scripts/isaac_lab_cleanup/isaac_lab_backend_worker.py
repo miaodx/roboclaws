@@ -29,6 +29,7 @@ from roboclaws.molmo_cleanup.camera_control import (
     load_camera_control_request,
     normalize_camera_control_request,
 )
+from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -1785,6 +1786,7 @@ def _capture_scene_camera_request_with_existing_sim(
         profile=camera_request.get("lighting_profile"),
     )
     lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    color_profile = camera_request.get("color_profile") or {}
     focal_length = float(lens.get("focal_length_mm", 24.0))
     horizontal_aperture = _horizontal_aperture_from_lens(
         lens,
@@ -1811,6 +1813,7 @@ def _capture_scene_camera_request_with_existing_sim(
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: dict[str, str] = {}
     shapes: dict[str, list[int]] = {}
+    color_diagnostics: dict[str, dict[str, Any]] = {}
     views: list[dict[str, Any]] = []
     total_render_steps = 0
     for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
@@ -1836,10 +1839,16 @@ def _capture_scene_camera_request_with_existing_sim(
             )
         if not _image_has_variance(rgb_image, np=np):
             raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
+        rgb_image, color_diagnostic = apply_camera_color_profile(
+            rgb_image,
+            np=np,
+            profile=color_profile,
+        )
         output_path = output_dir / f"{spec['view_id']}.png"
         Image.fromarray(rgb_image, mode="RGB").save(output_path)
         saved[str(spec["view_id"])] = str(output_path)
         shapes[str(spec["view_id"])] = list(rgb_image.shape)
+        color_diagnostics[str(spec["view_id"])] = color_diagnostic
         views.append(
             {
                 **spec,
@@ -1853,6 +1862,8 @@ def _capture_scene_camera_request_with_existing_sim(
         "camera_request_schema": camera_request.get("schema"),
         "calibration_status": camera_request.get("calibration_status"),
         "lighting_profile": camera_request.get("lighting_profile") or {},
+        "color_profile": color_profile,
+        "color_management": color_diagnostics,
         "lighting_diagnostics": lighting_diagnostics,
         "lens": camera_request.get("lens") or {},
         "derived_lens": {
@@ -1924,6 +1935,7 @@ def _capture_isaac_lab_scene_camera_views(
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
     lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    color_profile = camera_request.get("color_profile") or {}
     focal_length = float(lens.get("focal_length_mm", 24.0))
     horizontal_aperture = _horizontal_aperture_from_lens(
         lens,
@@ -1950,6 +1962,7 @@ def _capture_isaac_lab_scene_camera_views(
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: dict[str, str] = {}
     shapes: dict[str, list[int]] = {}
+    color_diagnostics: dict[str, dict[str, Any]] = {}
     views: list[dict[str, Any]] = []
     total_render_steps = 0
     for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
@@ -1975,10 +1988,16 @@ def _capture_isaac_lab_scene_camera_views(
             )
         if not _image_has_variance(rgb_image, np=np):
             raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
+        rgb_image, color_diagnostic = apply_camera_color_profile(
+            rgb_image,
+            np=np,
+            profile=color_profile,
+        )
         output_path = output_dir / f"{spec['view_id']}.png"
         Image.fromarray(rgb_image, mode="RGB").save(output_path)
         saved[str(spec["view_id"])] = str(output_path)
         shapes[str(spec["view_id"])] = list(rgb_image.shape)
+        color_diagnostics[str(spec["view_id"])] = color_diagnostic
         views.append(
             {
                 **spec,
@@ -1992,6 +2011,8 @@ def _capture_isaac_lab_scene_camera_views(
         "camera_request_schema": camera_request.get("schema"),
         "calibration_status": camera_request.get("calibration_status"),
         "lighting_profile": camera_request.get("lighting_profile") or {},
+        "color_profile": color_profile,
+        "color_management": color_diagnostics,
         "lighting_diagnostics": lighting_diagnostics,
         "lens": camera_request.get("lens") or {},
         "derived_lens": {
@@ -4151,6 +4172,8 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         calibration_status=capture.get("calibration_status"),
         lighting_profile=capture.get("lighting_profile") or {},
         lighting_diagnostics=capture.get("lighting_diagnostics") or {},
+        color_profile=capture.get("color_profile") or {},
+        color_management=capture.get("color_management") or {},
         lens=capture.get("lens") or {},
         derived_lens=capture.get("derived_lens") or {},
         view_variant=view_variant,
@@ -4386,6 +4409,8 @@ def _copy_canonical_robot_view_capture(
         "images": copied,
         "views": merged_views,
         "render_steps": int(capture.get("render_steps") or 0),
+        "color_profile": _dict(capture.get("color_profile")),
+        "color_management": _dict(capture.get("color_management")),
     }
 
 
@@ -4501,6 +4526,8 @@ def _real_semantic_pose_robot_view_images(
             "coordinate_frame": _dict(canonical_capture.get("request")).get("coordinate_frame")
             or MOLMOSPACES_SCENE_FRAME,
             "render_steps": int(canonical_capture.get("render_steps") or 0),
+            "color_profile": _dict(canonical_capture.get("color_profile")),
+            "color_management": _dict(canonical_capture.get("color_management")),
             "views": canonical_capture.get("views") or [],
         }
         state["semantic_pose_view_capture"]["canonical_camera_control_render_steps"] = int(

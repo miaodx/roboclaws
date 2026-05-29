@@ -28,6 +28,14 @@ DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
     "isaac_key_intensity": 0.0,
     "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
 }
+DEFAULT_SCENE_PROBE_COLOR_PROFILE = {
+    "profile_id": "display_srgb_soft_highlight_v1",
+    "input_transfer": "renderer_rgb",
+    "output_transfer": "srgb_uint8",
+    "highlight_knee": 225.0,
+    "highlight_compression": 0.55,
+    "gamma": 1.0,
+}
 
 
 def scene_probe_camera_control_request(
@@ -38,6 +46,7 @@ def scene_probe_camera_control_request(
     camera_orbit: dict[str, Any] | None = None,
     lens: dict[str, Any] | None = None,
     lighting_profile: dict[str, Any] | None = None,
+    color_profile: dict[str, Any] | None = None,
     calibration_status: str = ANCHOR_ORBIT_CALIBRATION,
 ) -> dict[str, Any]:
     """Build the public Roboclaws camera-control request used by scene probes."""
@@ -45,6 +54,7 @@ def scene_probe_camera_control_request(
     orbit = _camera_orbit(camera_orbit)
     lens_payload = _camera_lens(lens)
     lighting = _lighting_profile(lighting_profile)
+    color = _color_profile(color_profile)
     normalized_views = []
     for index, raw_view in enumerate(views, start=1):
         view = dict(raw_view)
@@ -69,6 +79,7 @@ def scene_probe_camera_control_request(
         "camera_orbit": orbit,
         "lens": lens_payload,
         "lighting_profile": lighting,
+        "color_profile": color,
         "views": normalized_views,
     }
 
@@ -80,6 +91,7 @@ def canonical_scene_camera_control_request(
     height: int,
     lens: dict[str, Any] | None = None,
     lighting_profile: dict[str, Any] | None = None,
+    color_profile: dict[str, Any] | None = None,
     scene_frame: str = MOLMOSPACES_SCENE_FRAME,
     calibration_status: str = CANONICAL_POSE_CALIBRATION,
 ) -> dict[str, Any]:
@@ -87,6 +99,7 @@ def canonical_scene_camera_control_request(
 
     lens_payload = _camera_lens(lens)
     lighting = _lighting_profile(lighting_profile)
+    color = _color_profile(color_profile)
     normalized_views = []
     for index, raw_view in enumerate(views, start=1):
         view = dict(raw_view)
@@ -112,6 +125,7 @@ def canonical_scene_camera_control_request(
         },
         "lens": lens_payload,
         "lighting_profile": lighting,
+        "color_profile": color,
         "views": normalized_views,
     }
 
@@ -152,6 +166,7 @@ def normalize_camera_control_request(
         request["camera_orbit"] = _camera_orbit(request.get("camera_orbit"))
     request["lens"] = _camera_lens(request.get("lens"))
     request["lighting_profile"] = _lighting_profile(request.get("lighting_profile"))
+    request["color_profile"] = _color_profile(request.get("color_profile"))
     default_calibration = (
         CANONICAL_POSE_CALIBRATION
         if request.get("camera_model") == CANONICAL_CAMERA_MODEL
@@ -243,6 +258,18 @@ def _lighting_profile(value: Any) -> dict[str, Any]:
             raw.get("isaac_key_rotation_deg"),
             default=[-55.0, 0.0, 35.0],
         ),
+    }
+
+
+def _color_profile(value: Any) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    return {
+        "profile_id": str(raw.get("profile_id") or "display_srgb_soft_highlight_v1"),
+        "input_transfer": str(raw.get("input_transfer") or "renderer_rgb"),
+        "output_transfer": str(raw.get("output_transfer") or "srgb_uint8"),
+        "highlight_knee": float(raw.get("highlight_knee", 225.0)),
+        "highlight_compression": float(raw.get("highlight_compression", 0.55)),
+        "gamma": float(raw.get("gamma", 1.0)),
     }
 
 

@@ -5,6 +5,7 @@ import math
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image, ImageDraw
@@ -361,6 +362,206 @@ def test_isaac_camera_lens_derives_horizontal_aperture_from_vertical_fov() -> No
     )
 
     assert aperture == pytest.approx(29.82337649)
+
+
+def test_isaac_scene_camera_capture_applies_color_profile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import numpy as np
+
+    class _FakeSim:
+        device = "cpu"
+
+        def __init__(self) -> None:
+            self.steps = 0
+
+        def reset(self) -> None:
+            self.steps = 0
+
+        def step(self) -> None:
+            self.steps += 1
+
+        def get_physics_dt(self) -> float:
+            return 1 / 60
+
+    class _FakeSimUtils:
+        @staticmethod
+        def create_prim(*_args: object, **_kwargs: object) -> None:
+            return None
+
+        class PinholeCameraCfg:
+            def __init__(self, **kwargs: object) -> None:
+                self.kwargs = kwargs
+
+    class _FakeCameraCfg:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+    class _FakeTensor:
+        def __init__(self, array: np.ndarray) -> None:
+            self._array = array
+
+        def detach(self) -> "_FakeTensor":
+            return self
+
+        def cpu(self) -> "_FakeTensor":
+            return self
+
+        def numpy(self) -> np.ndarray:
+            return self._array
+
+    class _FakeCamera:
+        def __init__(self, cfg: _FakeCameraCfg) -> None:
+            self.cfg = cfg
+            self.data = SimpleNamespace(output={})
+
+        def set_world_poses_from_view(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def update(self, *, dt: float) -> None:
+            del dt
+            frame = np.full((1, 4, 6, 3), 250, dtype=np.uint8)
+            frame[:, 0, 0, :] = 230
+            self.data.output["rgb"] = _FakeTensor(frame)
+
+    class _FakeTorch:
+        float32 = "float32"
+
+        @staticmethod
+        def tensor(value: object, **_kwargs: object) -> object:
+            return value
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "_ensure_capture_lighting",
+        lambda *_args, **_kwargs: {"status": "unit_lighting_skipped"},
+    )
+
+    result = isaac_lab_backend_worker._capture_scene_camera_request_with_existing_sim(
+        camera_request={
+            "camera_model": "canonical_eye_target_camera_v1",
+            "views": [
+                {
+                    "view_id": "fpv",
+                    "eye": [0.0, 0.0, 1.0],
+                    "target": [1.0, 0.0, 1.0],
+                }
+            ],
+        },
+        output_dir=tmp_path,
+        width=6,
+        height=4,
+        sim=_FakeSim(),
+        sim_utils=_FakeSimUtils,
+        stage_utils=SimpleNamespace(),
+        camera_type=_FakeCamera,
+        camera_cfg_type=_FakeCameraCfg,
+        torch=_FakeTorch,
+        np=np,
+        scene_bounds={},
+    )
+
+    assert result["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert result["color_management"]["fpv"]["before"]["overexposed_fraction"] > 0.9
+    assert result["color_management"]["fpv"]["after"]["overexposed_fraction"] == pytest.approx(0.0)
+    assert Path(result["images"]["fpv"]).is_file()
+
+
+def test_isaac_write_camera_views_returns_color_contract(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    state_path = tmp_path / "state.json"
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    state = {
+        "runtime": {"runtime_mode": "real"},
+        "scene_usd": str(scene_usd),
+        "tool_event_counts": {},
+    }
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    request_path = tmp_path / "camera_control_request.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "camera_model": "canonical_eye_target_camera_v1",
+                "render_resolution": {"width": 6, "height": 4},
+                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
+                "views": [
+                    {
+                        "view_id": "fpv",
+                        "eye": [0.0, 0.0, 1.0],
+                        "target": [1.0, 0.0, 1.0],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_capture_scene_camera_views(
+        *,
+        scene_usd: Path,
+        camera_request: dict[str, object],
+        output_dir: Path,
+        width: int,
+        height: int,
+    ) -> dict[str, object]:
+        output_path = output_dir / "fpv.png"
+        _write_nonblank_image(output_path)
+        return {
+            "camera_control_api": "roboclaws.camera_control.render_views",
+            "camera_request_schema": camera_request.get("schema"),
+            "calibration_status": camera_request.get("calibration_status"),
+            "lighting_profile": camera_request.get("lighting_profile"),
+            "lighting_diagnostics": {"status": "unit"},
+            "color_profile": camera_request.get("color_profile"),
+            "color_management": {
+                "fpv": {
+                    "after": {"overexposed_fraction": 0.0},
+                }
+            },
+            "lens": camera_request.get("lens"),
+            "derived_lens": {"horizontal_aperture_mm": 29.8},
+            "views": [
+                {
+                    "view_id": "fpv",
+                    "camera_model": "canonical_eye_target_camera_v1",
+                    "image_path": str(output_path),
+                }
+            ],
+            "images": {"fpv": str(output_path)},
+            "shapes": {"fpv": [height, width, 3]},
+            "scene_bounds": {},
+            "render_steps": 1,
+            "scene_usd": str(scene_usd),
+        }
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "capture_scene_camera_views",
+        fake_capture_scene_camera_views,
+    )
+
+    result = isaac_lab_backend_worker.write_camera_views(
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                str(state_path),
+                "camera_views",
+                "--output-dir",
+                str(tmp_path / "camera_views"),
+                "--camera-request-path",
+                str(request_path),
+            ]
+        ),
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+
+    assert result["ok"] is True
+    assert result["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert result["color_management"]["fpv"]["after"]["overexposed_fraction"] == 0.0
 
 
 def test_isaac_scene_camera_spec_records_usd_bounds(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1601,6 +1802,7 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             "canonical_camera_control": {
                 "request": {
                     "api_name": "roboclaws.camera_control.render_views",
+                    "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                     "views": [
                         {
                             "robot_view_role": "fpv",
@@ -1625,6 +1827,12 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
                     },
                 ],
                 "render_steps": 6,
+                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
+                "color_management": {
+                    "isaac_robot_view_fpv": {
+                        "after": {"overexposed_fraction": 0.0},
+                    }
+                },
             },
         }
 
@@ -1652,6 +1860,12 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             images[str(item["view_id"])] = str(image_path)
         return {
             "camera_control_api": camera_request["api_name"],
+            "color_profile": camera_request.get("color_profile"),
+            "color_management": {
+                "isaac_robot_view_fpv": {
+                    "after": {"overexposed_fraction": 0.0},
+                }
+            },
             "views": views,
             "images": images,
             "render_steps": 6,
@@ -1747,6 +1961,15 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     )
     assert state["canonical_robot_view_camera_control_capture"]["camera_control_api"] == (
         "roboclaws.camera_control.render_views"
+    )
+    assert state["canonical_robot_view_camera_control_capture"]["color_profile"]["profile_id"] == (
+        "display_srgb_soft_highlight_v1"
+    )
+    assert (
+        state["canonical_robot_view_camera_control_capture"]["color_management"][
+            "isaac_robot_view_fpv"
+        ]["after"]["overexposed_fraction"]
+        == 0.0
     )
     assert len(state["canonical_robot_view_camera_control_capture"]["views"]) == 2
     fpv_capture = state["canonical_robot_view_camera_control_capture"]["views"][0]

@@ -120,6 +120,7 @@ def canonical_robot_view_camera_control_contract(
         "lens_source": "roboclaws_camera_control_lens",
         "lens": dict(request.get("lens") or {}),
         "lighting_profile": dict(request.get("lighting_profile") or {}),
+        "color_profile": dict(request.get("color_profile") or {}),
         "render_resolution": dict(request.get("render_resolution") or {}),
         "evidence_note": (
             "Agent-facing FPV and verify views were rendered from the Roboclaws "
