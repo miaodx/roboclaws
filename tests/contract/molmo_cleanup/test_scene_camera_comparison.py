@@ -31,6 +31,7 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     _offline_color_profile_replay,
     _projection_diagnostics,
     _render_domain_calibration,
+    _render_domain_contract_probe,
     _render_domain_source_diagnostics,
     _render_domain_view_triage,
     _room_camera_control_views,
@@ -71,6 +72,92 @@ def _visual_metric_pair(
             ISAAC_LANE_ID: {"mean_luminance": isaac_luminance},
         },
     }
+
+
+def _write_render_contract_probe_fixtures(
+    tmp_path: Path,
+    manifest: dict[str, object],
+) -> None:
+    xml_path = tmp_path / "scene.xml"
+    xml_path.write_text(
+        """
+<mujoco>
+  <asset>
+    <texture type="2d" name="CarpetTex" file="textures/Carpet.png" />
+    <material name="material_Carpet" texture="CarpetTex" rgba="1 0.8 0.6 1" />
+  </asset>
+  <worldbody>
+    <light pos="1 -1 1.5" directional="true" diffuse="0.5 0.5 0.5" />
+    <body name="bed_01">
+      <geom name="bed_01_visual_0" class="__VISUAL_MJT__" type="mesh"
+            material="material_Carpet" mesh="BedMesh" />
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    usd_path = tmp_path / "scene.usda"
+    usd_path.write_text(
+        """
+#usda 1.0
+def Xform "val_1"
+{
+  def Scope "Geometry"
+  {
+    def Xform "bed_01"
+    {
+      def Scope "Geometry"
+      {
+        def Mesh "BedMesh"
+        {
+          rel material:binding = </val_1/Geometry/bed_01/Materials/material_Carpet>
+        }
+      }
+      def Scope "Materials"
+      {
+        def Material "material_Carpet"
+        {
+          token outputs:surface.connect =
+              </val_1/Geometry/bed_01/Materials/material_Carpet/PreviewSurface.outputs:surface>
+          def Shader "PreviewSurface"
+          {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect =
+                </val_1/Geometry/bed_01/Materials/material_Carpet/DiffuseTexture.outputs:rgb>
+          }
+          def Shader "DiffuseTexture"
+          {
+            asset inputs:file = @textures/Carpet.png@
+          }
+        }
+      }
+    }
+    def Mesh "wall_01"
+    {
+      bool primvars:doNotCastShadows = 1
+    }
+  }
+  def DomeLight "scene_skybox_light"
+  {
+    float inputs:intensity = 2000
+  }
+  def DistantLight "scene_dir_light"
+  {
+    float inputs:intensity = 500
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest["lanes"][MOLMOSPACES_LANE_ID]["scene_xml"] = str(xml_path)  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["scene_usd"] = str(usd_path)  # type: ignore[index]
+    manifest["canonical_camera_views"][1]["anchor_id"] = "bed_01"  # type: ignore[index]
+    manifest["canonical_camera_views"][1]["usd_prim_path"] = "/val_1/Geometry/bed_01"  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["views"][1]["anchor_id"] = "bed_01"  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["views"][1]["usd_prim_path"] = (  # type: ignore[index]
+        "/val_1/Geometry/bed_01"
+    )
 
 
 def _manifest() -> dict[str, object]:
@@ -460,6 +547,7 @@ def _manifest() -> dict[str, object]:
 
 def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path: Path) -> None:
     manifest = _manifest()
+    _write_render_contract_probe_fixtures(tmp_path, manifest)
     for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
         for image in lane["images"].values():  # type: ignore[index,union-attr]
             path = str(image["path"])  # type: ignore[index]
@@ -499,11 +587,13 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Visual Diagnostics" in html
     assert "Render Domain Source Diagnostics" in html
     assert "Render Domain View Triage" in html
+    assert "Render Domain Contract Probe" in html
     assert "geometry_swap_ready_render_domain_pending" in html
     assert "render_domain_residual_high" in html
     assert "same_explicit_eye_target_pose" in html
     assert "object_material_texture_binding_contract" in html
     assert "room_light_wall_shadow_contract" in html
+    assert "light_or_shadow_contract_delta" in html
     assert "mujoco_housegen_materials" in html
     assert "isaac_preview_surface_material_conversion" in html
     assert "USD PreviewSurface" in html
@@ -872,6 +962,51 @@ def test_render_domain_view_triage_separates_geometry_from_renderer_contracts() 
     assert rows["room_01_room_2"]["geometry_status"] == "projection_pass"
     assert rows["room_01_room_2"]["suspected_contract"] == "room_light_wall_shadow_contract"
     assert "camera geometry separate" in triage["interpretation"]
+
+
+def test_render_domain_contract_probe_reads_mjcf_and_usda_contracts(tmp_path: Path) -> None:
+    manifest = _manifest()
+    _write_render_contract_probe_fixtures(tmp_path, manifest)
+    manifest["render_domain_view_triage"] = {
+        "views": [
+            {
+                "view_id": "view_01_bed",
+                "anchor_kind": "receptacle",
+                "suspected_contract": "object_material_texture_binding_contract",
+                "render_residual_class": "high_pixel_and_luminance",
+                "mean_absolute_pixel_delta": 72.0,
+                "abs_mean_luminance_delta": 64.0,
+                "usd_prim_path": "/val_1/Geometry/bed_01",
+            },
+            {
+                "view_id": "room_01_room_2",
+                "anchor_kind": "room",
+                "suspected_contract": "room_light_wall_shadow_contract",
+                "render_residual_class": "high_pixel_and_luminance",
+                "mean_absolute_pixel_delta": 58.0,
+                "abs_mean_luminance_delta": 36.0,
+                "usd_prim_path": "",
+            },
+        ]
+    }
+
+    probe = _render_domain_contract_probe(manifest)
+
+    rows = {item["view_id"]: item for item in probe["views"]}
+    bed = rows["view_01_bed"]
+    room = rows["room_01_room_2"]
+    assert probe["status"] == "computed"
+    assert probe["mujoco_parse_status"] == "parsed"
+    assert probe["isaac_parse_status"] == "parsed"
+    assert bed["mujoco"]["materials"] == ["material_Carpet"]
+    assert bed["isaac"]["materials"] == ["material_Carpet"]
+    assert Path(bed["mujoco"]["texture_files"][0]).name == "Carpet.png"
+    assert Path(bed["isaac"]["texture_files"][0]).name == "Carpet.png"
+    assert bed["contract_delta"]["status"] == "material_texture_names_match"
+    assert room["contract_delta"]["status"] == "light_or_shadow_contract_delta"
+    assert room["contract_delta"]["mujoco_light_count"] == 1
+    assert room["contract_delta"]["isaac_light_count"] == 2
+    assert probe["isaac_shadow_disabled_prim_count"] == 1
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:
