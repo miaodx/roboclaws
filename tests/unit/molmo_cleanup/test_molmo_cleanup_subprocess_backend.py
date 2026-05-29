@@ -385,6 +385,10 @@ def test_molmospaces_camera_views_apply_color_profile(
     assert result["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert result["color_management"]["fpv"]["before"]["overexposed_fraction"] == pytest.approx(1.0)
     assert result["color_management"]["fpv"]["after"]["overexposed_fraction"] == pytest.approx(0.0)
+    assert result["color_management"]["fpv"]["backend_luminance_gain"]["backend"] == (
+        "molmospaces-mujoco"
+    )
+    assert result["color_management"]["fpv"]["backend_luminance_gain"]["gain"] == pytest.approx(1.0)
     assert Path(result["images"]["fpv"]).is_file()
 
 
@@ -950,6 +954,12 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert request["lighting_profile"]["isaac_key_intensity"] == 0.0
     assert request["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert request["color_profile"]["highlight_knee"] == pytest.approx(225.0)
+    assert request["color_profile"]["backend_luminance_gain"]["molmospaces-mujoco"] == (
+        pytest.approx(1.0)
+    )
+    assert request["color_profile"]["backend_luminance_gain"]["isaaclab-prepared-usd"] == (
+        pytest.approx(0.7161647108631373)
+    )
     assert [item["robot_view_role"] for item in request["views"]] == ["fpv", "verify"]
     assert request["views"][0]["eye"] == [1.0, 2.0, 1.55]
     assert request["views"][0]["target"] == [3.0, 2.0, 0.8]
@@ -984,6 +994,34 @@ def test_camera_color_profile_compresses_highlights() -> None:
     assert (
         diagnostics["before"]["overexposed_fraction"] > diagnostics["after"]["overexposed_fraction"]
     )
+
+
+def test_camera_color_profile_applies_backend_luminance_gain() -> None:
+    from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+
+    frame = np.full((2, 2, 3), 100, dtype=np.uint8)
+
+    adjusted, diagnostics = apply_camera_color_profile(
+        frame,
+        np=np,
+        profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "highlight_knee": 225.0,
+            "highlight_compression": 0.5,
+            "gamma": 1.0,
+            "backend_luminance_gain": {
+                "molmospaces-mujoco": 1.0,
+                "isaaclab-prepared-usd": 0.5,
+            },
+            "backend_luminance_gain_source": "unit",
+        },
+        backend="isaaclab-prepared-usd",
+    )
+
+    assert int(adjusted[0, 0, 0]) == 50
+    assert diagnostics["backend_luminance_gain"]["status"] == "applied"
+    assert diagnostics["backend_luminance_gain"]["gain"] == pytest.approx(0.5)
+    assert diagnostics["backend_luminance_gain"]["source"] == "unit"
 
 
 def test_worker_robot_pose_near_receptacle_uses_shared_pose_resolver() -> None:

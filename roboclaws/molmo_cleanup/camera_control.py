@@ -35,6 +35,15 @@ DEFAULT_SCENE_PROBE_COLOR_PROFILE = {
     "highlight_knee": 225.0,
     "highlight_compression": 0.55,
     "gamma": 1.0,
+    "backend_luminance_gain": {
+        "molmospaces-mujoco": 1.0,
+        "molmospaces_subprocess": 1.0,
+        "isaaclab-prepared-usd": 0.7161647108631373,
+        "isaaclab_subprocess": 0.7161647108631373,
+    },
+    "backend_luminance_gain_source": (
+        "output/molmo/scene-camera-comparison/0530_0009/comparison_manifest.json"
+    ),
 }
 
 
@@ -263,7 +272,7 @@ def _lighting_profile(value: Any) -> dict[str, Any]:
 
 def _color_profile(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
-    return {
+    profile = {
         "profile_id": str(raw.get("profile_id") or "display_srgb_soft_highlight_v1"),
         "input_transfer": str(raw.get("input_transfer") or "renderer_rgb"),
         "output_transfer": str(raw.get("output_transfer") or "srgb_uint8"),
@@ -271,6 +280,33 @@ def _color_profile(value: Any) -> dict[str, Any]:
         "highlight_compression": float(raw.get("highlight_compression", 0.55)),
         "gamma": float(raw.get("gamma", 1.0)),
     }
+    backend_luminance_gain = _float_mapping(
+        raw.get(
+            "backend_luminance_gain",
+            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_luminance_gain"),
+        )
+    )
+    if backend_luminance_gain:
+        profile["backend_luminance_gain"] = backend_luminance_gain
+    backend_luminance_gain_source = raw.get(
+        "backend_luminance_gain_source",
+        DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_luminance_gain_source"),
+    )
+    if backend_luminance_gain_source:
+        profile["backend_luminance_gain_source"] = str(backend_luminance_gain_source)
+    return profile
+
+
+def _float_mapping(value: Any) -> dict[str, float]:
+    if not isinstance(value, dict):
+        return {}
+    parsed: dict[str, float] = {}
+    for key, raw_item in value.items():
+        try:
+            parsed[str(key)] = float(raw_item)
+        except (TypeError, ValueError):
+            continue
+    return parsed
 
 
 def _vec3(value: Any, *, default: list[float]) -> list[float]:

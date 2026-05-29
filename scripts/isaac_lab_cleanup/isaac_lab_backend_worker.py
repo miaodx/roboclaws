@@ -1843,6 +1843,7 @@ def _capture_scene_camera_request_with_existing_sim(
             rgb_image,
             np=np,
             profile=color_profile,
+            backend="isaaclab-prepared-usd",
         )
         output_path = output_dir / f"{spec['view_id']}.png"
         Image.fromarray(rgb_image, mode="RGB").save(output_path)
@@ -1992,6 +1993,7 @@ def _capture_isaac_lab_scene_camera_views(
             rgb_image,
             np=np,
             profile=color_profile,
+            backend="isaaclab-prepared-usd",
         )
         output_path = output_dir / f"{spec['view_id']}.png"
         Image.fromarray(rgb_image, mode="RGB").save(output_path)

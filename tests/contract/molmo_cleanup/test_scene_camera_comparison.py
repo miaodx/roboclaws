@@ -578,6 +578,13 @@ def test_scene_camera_comparison_default_color_profile_contract() -> None:
     assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["profile_id"] == "display_srgb_soft_highlight_v1"
     assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["highlight_knee"] == 225.0
     assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["highlight_compression"] == 0.55
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain"][
+        "molmospaces-mujoco"
+    ] == pytest.approx(1.0)
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain"][
+        "isaaclab-prepared-usd"
+    ] == pytest.approx(0.7161647108631373)
+    assert "0530_0009" in DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain_source"]
 
 
 def test_isaac_view_specs_record_support_pose_for_transform_but_not_camera_target(

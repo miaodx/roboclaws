@@ -465,6 +465,12 @@ def test_isaac_scene_camera_capture_applies_color_profile(
     assert result["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert result["color_management"]["fpv"]["before"]["overexposed_fraction"] > 0.9
     assert result["color_management"]["fpv"]["after"]["overexposed_fraction"] == pytest.approx(0.0)
+    assert result["color_management"]["fpv"]["backend_luminance_gain"]["backend"] == (
+        "isaaclab-prepared-usd"
+    )
+    assert result["color_management"]["fpv"]["backend_luminance_gain"]["gain"] == pytest.approx(
+        0.7161647108631373
+    )
     assert Path(result["images"]["fpv"]).is_file()
 
 
