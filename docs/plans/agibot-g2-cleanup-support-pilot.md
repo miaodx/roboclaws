@@ -354,6 +354,18 @@ movement gate, not physical PNC execution.
   and `./.venv/bin/ruff format --check roboclaws/molmo_cleanup/agibot_sdk_runner.py roboclaws/molmo_cleanup/report.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
   This remains dry-run/report evidence, not real G2 hardware validation.
 
+2026-05-29 Agibot G2 pilot runbook slice:
+
+- Added `docs/human/agibot-g2-cleanup-pilot.md` and linked it from
+  `docs/human/README.md`.
+- The runbook covers operator map capture, minimal context projection,
+  PNC waypoint verification, dry-run report review, movement enablement, and
+  the acceptance checklist for `real_robot_cleanup_v1` on Agibot G2.
+- It explicitly documents the current limitation: Agibot hardware routing is
+  the SDK-backed direct CLI boundary behind `just task::run`, while full live
+  Codex control for `semantic-map-build` is still unimplemented and must not be
+  claimed from direct-run artifacts.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent
