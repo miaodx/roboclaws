@@ -878,7 +878,7 @@ molmo-isaac-cleanup-smoke *overrides:
     scene_index="0"
     scene_usd_path=""
     generated_mess_count="1"
-    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    map_bundle="scene-index"
     robot_name="simple_camera_rig"
     require_real_runtime="true"
     require_scene_loaded="true"
@@ -945,9 +945,14 @@ molmo-isaac-cleanup-smoke *overrides:
       --scene-index "$scene_index" \
       --include-robot \
       --robot-name "$robot_name" \
-      --record-robot-views \
-      --map-bundle-dir "$map_bundle" \
-      --require-map-bundle)
+      --record-robot-views)
+    case "$map_bundle" in
+      scene-index|none|"")
+        ;;
+      *)
+        run_cmd+=(--map-bundle-dir "$map_bundle" --require-map-bundle)
+        ;;
+    esac
     if [[ -n "$scene_usd_path" ]]; then
       run_cmd+=(--isaac-scene-usd-path "$scene_usd_path")
     fi
@@ -984,7 +989,8 @@ molmo-isaac-cleanup-smoke *overrides:
       --require-waypoint-honesty \
       --require-real-robot-alignment \
       --require-isaac-runtime \
-      --require-isaac-semantic-pose)
+      --require-isaac-semantic-pose \
+      --require-isaac-scene-index-map-context)
     if [[ "$require_real_runtime" == "true" ]]; then
       check_cmd+=(--require-isaac-real-runtime)
     fi
@@ -1030,7 +1036,7 @@ molmo-isaac-prepared-cleanup-smoke *overrides:
     scene_source="procthor-10k-val"
     scene_index="0"
     generated_mess_count="1"
-    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    map_bundle="scene-index"
     robot_name="simple_camera_rig"
     label_containers="true"
     require_prepare_ready="true"

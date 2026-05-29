@@ -163,6 +163,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-isaac-segmentation-evidence", action="store_true")
     parser.add_argument("--require-isaac-snapshot-provenance", action="store_true")
     parser.add_argument(
+        "--require-isaac-scene-index-map-context",
+        action="store_true",
+        help=(
+            "Require Isaac scene-index cleanup runs to expose map/waypoint context "
+            "generated from the loaded scene instead of a stale prebuilt map bundle."
+        ),
+    )
+    parser.add_argument(
         "--require-canonical-robot-view-camera-control",
         action="store_true",
         help=(
@@ -248,6 +256,7 @@ def main() -> None:
             require_isaac_robot_view_provenance=args.require_isaac_robot_view_provenance,
             require_isaac_segmentation_evidence=args.require_isaac_segmentation_evidence,
             require_isaac_snapshot_provenance=args.require_isaac_snapshot_provenance,
+            require_isaac_scene_index_map_context=(args.require_isaac_scene_index_map_context),
             require_canonical_robot_view_camera_control=(
                 args.require_canonical_robot_view_camera_control
             ),
@@ -317,6 +326,7 @@ def _assert_result(
     require_isaac_robot_view_provenance: bool = False,
     require_isaac_segmentation_evidence: bool = False,
     require_isaac_snapshot_provenance: bool = False,
+    require_isaac_scene_index_map_context: bool = False,
     require_canonical_robot_view_camera_control: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
@@ -534,6 +544,7 @@ def _assert_result(
         or require_isaac_robot_view_provenance
         or require_isaac_segmentation_evidence
         or require_isaac_snapshot_provenance
+        or require_isaac_scene_index_map_context
     ):
         _assert_isaac_runtime(
             data,
@@ -547,6 +558,7 @@ def _assert_result(
             require_robot_view_provenance=require_isaac_robot_view_provenance,
             require_segmentation_evidence=require_isaac_segmentation_evidence,
             require_snapshot_provenance=require_isaac_snapshot_provenance,
+            require_scene_index_map_context=require_isaac_scene_index_map_context,
         )
 
 
@@ -1330,6 +1342,7 @@ def _assert_isaac_runtime(
     require_robot_view_provenance: bool,
     require_segmentation_evidence: bool,
     require_snapshot_provenance: bool,
+    require_scene_index_map_context: bool = False,
 ) -> None:
     assert data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, data
     isaac = data.get("isaac_runtime") or {}
@@ -1474,6 +1487,9 @@ def _assert_isaac_runtime(
     if require_snapshot_provenance:
         _assert_isaac_snapshot_provenance(isaac, base)
 
+    if require_scene_index_map_context:
+        _assert_isaac_scene_index_map_context(data, base)
+
 
 def _assert_isaac_real_runtime_diagnostics(runtime: dict[str, Any]) -> None:
     assert runtime.get("python_version"), runtime
@@ -1487,6 +1503,91 @@ def _assert_isaac_real_runtime_diagnostics(runtime: dict[str, Any]) -> None:
     assert isinstance(camera_resolution, list), runtime
     assert len(camera_resolution) == 2, runtime
     assert all(int(value or 0) > 0 for value in camera_resolution), runtime
+
+
+def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> None:
+    isaac = data.get("isaac_runtime") or {}
+    scenario_id = str(data.get("scenario_id") or "")
+    assert scenario_id.startswith("isaac-scene-index-"), data
+    assert isaac.get("scenario_source") == "isaac_scene_index", isaac
+
+    agent_view = data.get("agent_view") or {}
+    metric_map = agent_view.get("metric_map") or {}
+    runtime_map = data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    static_map = runtime_map.get("static_map") or {}
+    nav2_bundle = data.get("nav2_map_bundle") or {}
+    fixture_hints = agent_view.get("fixture_hints") or {}
+    scene_index_overlay = fixture_hints.get("scene_index_fixture_overlay") or {}
+
+    if scene_index_overlay:
+        assert scene_index_overlay.get("enabled") is True, scene_index_overlay
+        assert scene_index_overlay.get("source") == "isaac_scene_index", scene_index_overlay
+    else:
+        assert isaac.get("scenario_source") == "isaac_scene_index", {
+            "isaac_runtime": isaac,
+            "fixture_hints": fixture_hints,
+        }
+    _assert_map_bundle_environment(metric_map.get("map_bundle") or {}, scenario_id)
+    _assert_map_bundle_environment(static_map.get("map_bundle") or {}, scenario_id)
+    _assert_map_bundle_environment(nav2_bundle, scenario_id)
+    _assert_isaac_scene_index_room_scale(metric_map)
+    _assert_isaac_scene_index_room_scale(static_map)
+    assert "source_bundle_root" not in nav2_bundle, nav2_bundle
+    assert nav2_bundle.get("source_provenance") == "molmospaces_public_semantic_map", nav2_bundle
+
+    artifact_paths = nav2_bundle.get("artifact_paths") or {}
+    semantics_path = _resolve_path(base, str(artifact_paths.get("semantics_json") or ""))
+    assert semantics_path.is_file(), nav2_bundle
+    semantics = json.loads(semantics_path.read_text(encoding="utf-8"))
+    assert semantics.get("environment_id") == scenario_id, semantics
+    assert str(semantics.get("map_id") or "").startswith(scenario_id), semantics
+    assert "molmospaces-procthor-val-0-7" not in json.dumps(
+        {
+            "metric_map": metric_map.get("map_bundle"),
+            "static_map": static_map.get("map_bundle"),
+            "nav2_bundle": nav2_bundle,
+            "semantics_environment_id": semantics.get("environment_id"),
+            "semantics_map_id": semantics.get("map_id"),
+        },
+        sort_keys=True,
+    )
+
+
+def _assert_map_bundle_environment(bundle: dict[str, Any], scenario_id: str) -> None:
+    assert bundle.get("schema") in {
+        "nav2_map_bundle_v1",
+        "nav2_map_bundle_snapshot_v1",
+    }, bundle
+    assert bundle.get("environment_id") == scenario_id, bundle
+    assert str(bundle.get("map_id") or "").startswith(scenario_id), bundle
+
+
+def _assert_isaac_scene_index_room_scale(metric_map: dict[str, Any]) -> None:
+    rooms = [room for room in metric_map.get("rooms") or [] if isinstance(room, dict)]
+    assert rooms, metric_map
+    outlines = [
+        room.get("scene_room_outline")
+        for room in rooms
+        if isinstance(room.get("scene_room_outline"), dict)
+    ]
+    assert outlines, rooms
+    assert any(
+        outline.get("provenance") == "isaac_usd_room_mesh_world_bounds" for outline in outlines
+    ), outlines
+    max_width = max(_polygon_extent(room.get("polygon") or [], "x") for room in rooms)
+    max_depth = max(_polygon_extent(room.get("polygon") or [], "y") for room in rooms)
+    assert max_width > 2.5 or max_depth > 2.5, rooms
+
+
+def _polygon_extent(points: list[Any], axis: str) -> float:
+    values = [
+        float(point.get(axis, 0.0))
+        for point in points
+        if isinstance(point, dict) and point.get(axis) is not None
+    ]
+    if not values:
+        return 0.0
+    return max(values) - min(values)
 
 
 def _assert_isaac_scene_loaded(
@@ -2506,7 +2607,7 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
         return
     assert trace.get("waypoint_source") == "static_map_fixture_coverage", trace
     assert trace.get("loop_style") == "interleaved_cleanup_loop", trace
-    assert trace.get("first_cleanup_before_full_survey") is True, trace
+    assert _trace_started_cleanup_after_first_actionable_observation(trace), trace
     placed_object_count = int(trace.get("placed_object_count") or 0)
     post_place_observe_count = int(trace.get("post_place_observe_count") or 0)
     if trace.get("post_place_observe_complete") is not True:
@@ -2518,6 +2619,17 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
     assert "static_map_fixture_coverage" in report_text, report_text[:500]
     assert "post_place_observe" in report_text, report_text[:500]
+
+
+def _trace_started_cleanup_after_first_actionable_observation(trace: dict[str, Any]) -> bool:
+    first_cleanup = trace.get("first_cleanup_index")
+    first_actionable = trace.get("first_actionable_observation_index")
+    if first_cleanup is not None or first_actionable is not None:
+        try:
+            return int(first_cleanup) == int(first_actionable) + 1
+        except (TypeError, ValueError):
+            return False
+    return trace.get("first_cleanup_before_full_survey") is True
 
 
 def _post_place_observe_count_allowing_public_state_queries(trace: dict[str, Any]) -> int:

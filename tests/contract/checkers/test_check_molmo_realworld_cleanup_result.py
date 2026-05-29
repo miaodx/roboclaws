@@ -676,6 +676,65 @@ def test_checker_accepts_isaac_selected_bindings_when_rows_match_scene_index(
     )
 
 
+def test_checker_accepts_isaac_scene_index_map_context(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_scene_index_map_context(data, tmp_path)
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=False,
+        require_semantic_pose=False,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+        require_scene_index_map_context=True,
+    )
+
+
+def test_checker_rejects_stale_prebuilt_map_bundle_for_isaac_scene_index(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_scene_index_map_context(data, tmp_path)
+    stale_bundle = {
+        **data["agent_view"]["metric_map"]["map_bundle"],
+        "environment_id": "molmospaces-procthor-val-0-7",
+        "map_id": "molmospaces-procthor-val-0-7_semantic_map",
+    }
+    data["agent_view"]["metric_map"]["map_bundle"] = stale_bundle
+    data["runtime_metric_map"]["static_map"]["map_bundle"] = stale_bundle
+    data["nav2_map_bundle"]["environment_id"] = "molmospaces-procthor-val-0-7"
+    data["nav2_map_bundle"]["map_id"] = "molmospaces-procthor-val-0-7_semantic_map"
+    data["nav2_map_bundle"]["source_bundle_root"] = "assets/maps/molmospaces-procthor-val-0-7"
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+            require_scene_index_map_context=True,
+        )
+
+
 def test_checker_accepts_isaac_real_runtime_when_diagnostics_are_present(
     tmp_path: Path,
 ) -> None:
@@ -3043,6 +3102,95 @@ def _add_isaac_loaded_scene(
         "manual_editor_steps_required": manual_editor_steps_required,
     }
     return scene_usd
+
+
+def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> None:
+    scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
+    map_id = f"{scenario_id}_semantic_map"
+    map_bundle = {
+        "schema": "nav2_map_bundle_v1",
+        "environment_id": scenario_id,
+        "map_id": map_id,
+        "map_version": "static-fixture-map-v1",
+        "source_provenance": "molmospaces_public_semantic_map",
+        "robot_profile_id": "rby1m",
+        "parameter_hash": "unit-scene-index-map-context",
+    }
+    metric_map = {
+        "schema": "real_robot_map_bundle_v1",
+        "map_bundle": dict(map_bundle),
+        "rooms": [_isaac_scene_index_room()],
+    }
+    runtime_map = {
+        "schema": "runtime_metric_map_v1",
+        "static_map": {"map_bundle": dict(map_bundle), "rooms": [_isaac_scene_index_room()]},
+    }
+    fixture_hints = {
+        "schema": "static_fixture_semantic_map_v1",
+        "scene_index_fixture_overlay": {
+            "enabled": True,
+            "source": "isaac_scene_index",
+            "fixture_count": 1,
+        },
+    }
+    data["scenario_id"] = scenario_id
+    isaac_runtime = data["isaac_runtime"]
+    assert isinstance(isaac_runtime, dict)
+    isaac_runtime["scenario_source"] = "isaac_scene_index"
+    data["agent_view"] = {
+        "metric_map": metric_map,
+        "fixture_hints": fixture_hints,
+        "runtime_metric_map": runtime_map,
+    }
+    data["runtime_metric_map"] = runtime_map
+    semantics_path = base / "map_bundle" / "semantics.json"
+    semantics_path.parent.mkdir(parents=True, exist_ok=True)
+    semantics_path.write_text(
+        json.dumps(
+            {
+                "schema": "nav2_cleanup_semantics_v1",
+                "environment_id": scenario_id,
+                "map_id": map_id,
+                "map_version": "static-fixture-map-v1",
+                "rooms": [_isaac_scene_index_room()],
+                "fixtures": [],
+                "inspection_waypoints": [],
+                "driveable_ways": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    data["nav2_map_bundle"] = {
+        "schema": "nav2_map_bundle_snapshot_v1",
+        "environment_id": scenario_id,
+        "map_id": map_id,
+        "map_version": "static-fixture-map-v1",
+        "source_provenance": "molmospaces_public_semantic_map",
+        "snapshot_complete": True,
+        "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
+        "artifact_hashes": {"semantics_json": "0" * 64},
+    }
+
+
+def _isaac_scene_index_room() -> dict[str, object]:
+    return {
+        "room_id": "room_2",
+        "room_label": "Room 2",
+        "fixture_count": 1,
+        "polygon": [
+            {"x": 0.0, "y": 0.0},
+            {"x": 5.98, "y": 0.0},
+            {"x": 5.98, "y": 9.966},
+            {"x": 0.0, "y": 9.966},
+        ],
+        "scene_room_outline": {
+            "room_id": "room_2",
+            "center": [2.99, 4.983],
+            "half_extents": [2.99, 4.983],
+            "provenance": "isaac_usd_room_mesh_world_bounds",
+            "usd_prim_path": "/val_1/Geometry/room_2_visual_0",
+        },
+    }
 
 
 def _add_isaac_robot_view_step(
