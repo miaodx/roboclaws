@@ -26,6 +26,7 @@ from roboclaws.molmo_cleanup.scene_camera_comparison import (
     _isaac_view_specs,
     _molmospaces_view_specs,
     _projection_diagnostics,
+    _render_domain_calibration,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
@@ -49,6 +50,21 @@ def just_bin() -> str:
 def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (64, 48), color=color).save(path)
+
+
+def _visual_metric_pair(
+    view_id: str,
+    *,
+    molmo_luminance: float,
+    isaac_luminance: float,
+) -> dict[str, object]:
+    return {
+        "view_id": view_id,
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {"mean_luminance": molmo_luminance},
+            ISAAC_LANE_ID: {"mean_luminance": isaac_luminance},
+        },
+    }
 
 
 def _manifest() -> dict[str, object]:
@@ -491,6 +507,32 @@ def test_scene_camera_visual_metrics_quantify_brightness_delta(tmp_path: Path) -
     assert bright_metrics["mean_luminance"] > dark_metrics["mean_luminance"]
     assert dark_metrics["overexposed_fraction"] == 0.0
     assert delta["mean_absolute_pixel_delta"] == pytest.approx(100.0)
+
+
+def test_scene_camera_render_domain_calibration_detects_global_gain() -> None:
+    calibration = _render_domain_calibration(
+        [
+            _visual_metric_pair("view_1", molmo_luminance=50.0, isaac_luminance=100.0),
+            _visual_metric_pair("view_2", molmo_luminance=100.0, isaac_luminance=200.0),
+        ]
+    )
+
+    assert calibration["status"] == "global_luminance_gain_sufficient"
+    assert calibration["global_isaac_luminance_gain"] == pytest.approx(0.5)
+    assert calibration["mean_abs_calibrated_luminance_residual"] == pytest.approx(0.0)
+
+
+def test_scene_camera_render_domain_calibration_flags_view_dependent_delta() -> None:
+    calibration = _render_domain_calibration(
+        [
+            _visual_metric_pair("view_1", molmo_luminance=50.0, isaac_luminance=100.0),
+            _visual_metric_pair("view_2", molmo_luminance=180.0, isaac_luminance=200.0),
+        ]
+    )
+
+    assert calibration["status"] == "view_dependent_render_domain_delta"
+    assert calibration["mean_abs_calibrated_luminance_residual"] > 12.0
+    assert "material" in calibration["recommended_next_action"]
 
 
 def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() -> None:

@@ -1652,7 +1652,90 @@ def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[s
         "mean_absolute_pixel_delta": sum(mae_values) / len(mae_values) if mae_values else None,
         "max_overexposed_fraction": max_overexposed_fraction,
         "max_underexposed_fraction": max_underexposed_fraction,
+        "render_domain_calibration": _render_domain_calibration(view_results),
         "views": view_results,
+    }
+
+
+def _render_domain_calibration(view_results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Estimate whether one global Isaac luminance gain explains the visual delta."""
+
+    pairs = []
+    for item in view_results:
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        molmo = (
+            lanes.get(MOLMOSPACES_LANE_ID)
+            if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict)
+            else {}
+        )
+        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
+        molmo_luminance = _optional_float(molmo.get("mean_luminance"))
+        isaac_luminance = _optional_float(isaac.get("mean_luminance"))
+        if molmo_luminance is None or isaac_luminance is None or isaac_luminance <= 0:
+            continue
+        pairs.append(
+            {
+                "view_id": str(item.get("view_id") or ""),
+                "molmospaces_luminance": molmo_luminance,
+                "isaac_luminance": isaac_luminance,
+            }
+        )
+    if not pairs:
+        return {
+            "schema": "scene_camera_render_domain_calibration_v1",
+            "status": "missing_luminance_pairs",
+            "pair_count": 0,
+        }
+
+    numerator = sum(pair["molmospaces_luminance"] * pair["isaac_luminance"] for pair in pairs)
+    denominator = sum(pair["isaac_luminance"] ** 2 for pair in pairs)
+    gain = numerator / denominator if denominator > 0 else 1.0
+    residuals = []
+    original_abs_deltas = []
+    for pair in pairs:
+        calibrated = pair["isaac_luminance"] * gain
+        residual = calibrated - pair["molmospaces_luminance"]
+        original_delta = pair["isaac_luminance"] - pair["molmospaces_luminance"]
+        original_abs_deltas.append(abs(original_delta))
+        residuals.append(
+            {
+                **pair,
+                "calibrated_isaac_luminance": calibrated,
+                "original_luminance_delta": original_delta,
+                "calibrated_luminance_residual": residual,
+                "abs_calibrated_luminance_residual": abs(residual),
+            }
+        )
+    mean_original_delta = sum(original_abs_deltas) / len(original_abs_deltas)
+    abs_residuals = [item["abs_calibrated_luminance_residual"] for item in residuals]
+    mean_residual = sum(abs_residuals) / len(abs_residuals)
+    max_residual = max(abs_residuals)
+    improvement_fraction = (
+        1.0 - mean_residual / mean_original_delta if mean_original_delta > 0 else 1.0
+    )
+    if mean_original_delta <= 10.0:
+        status = "already_luminance_matched"
+        next_action = "Do not tune exposure from this artifact; inspect material/texture deltas."
+    elif mean_residual <= 12.0 and max_residual <= 20.0:
+        status = "global_luminance_gain_sufficient"
+        next_action = "A global Isaac exposure/gain adjustment is a plausible next renderer slice."
+    else:
+        status = "view_dependent_render_domain_delta"
+        next_action = (
+            "A single global gain leaves large residuals; inspect per-room lights, material "
+            "albedo, indirect lighting, and tone response before changing camera geometry."
+        )
+    return {
+        "schema": "scene_camera_render_domain_calibration_v1",
+        "status": status,
+        "pair_count": len(pairs),
+        "global_isaac_luminance_gain": gain,
+        "mean_abs_original_luminance_delta": mean_original_delta,
+        "mean_abs_calibrated_luminance_residual": mean_residual,
+        "max_abs_calibrated_luminance_residual": max_residual,
+        "mean_luminance_delta_improvement_fraction": improvement_fraction,
+        "recommended_next_action": next_action,
+        "residuals": residuals,
     }
 
 
@@ -2657,10 +2740,28 @@ def _visual_diagnostics_section(manifest: dict[str, Any]) -> str:
         f"max_underexposed={_percent_text(diagnostics.get('max_underexposed_fraction'))}. "
         f"{diagnostics.get('interpretation') or ''}"
     )
+    calibration = (
+        diagnostics.get("render_domain_calibration")
+        if isinstance(diagnostics.get("render_domain_calibration"), dict)
+        else {}
+    )
+    calibration_note = ""
+    if calibration:
+        calibration_note = (
+            f"Render-domain calibration: status={calibration.get('status')}; "
+            f"global_isaac_luminance_gain="
+            f"{_float_text(calibration.get('global_isaac_luminance_gain'))}; "
+            f"mean_residual="
+            f"{_float_text(calibration.get('mean_abs_calibrated_luminance_residual'))}; "
+            f"max_residual="
+            f"{_float_text(calibration.get('max_abs_calibrated_luminance_residual'))}; "
+            f"{calibration.get('recommended_next_action') or ''}"
+        )
     return f"""
 <section class="panel">
   <h2>Visual Diagnostics</h2>
   <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(calibration_note)}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
