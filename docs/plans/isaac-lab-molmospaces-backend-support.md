@@ -982,6 +982,23 @@ scene. The remaining visible mismatch is Isaac/MuJoCo render-domain difference
 such as exposure, lighting, material, and tone mapping; it is no longer explained
 by room scale, camera eye/target, FOV, or backend-local robot-view placement.
 
+After the robot-view contract started carrying the explicit lighting profile,
+a fresh real prepared-cleanup run passed at
+`output/isaaclab/cleanup-smoke/0529_val1_lighting_contract_cleanup/`. The strict
+checker now requires `--require-canonical-robot-view-camera-control` to prove
+`lighting_profile.profile_id=scene_probe_existing_usd_lights_v1` on every
+canonical robot-view contract. The new run reports 6/6 canonical robot-view
+contracts, `backend_local_contract_count=0`,
+`frame=molmospaces_scene_frame_v1`,
+`pose_source=roboclaws_shared_scene_frame_support_pose`, and the same shared
+pose resolver as MuJoCo. The report also visibly displays the Lighting badge for
+each robot-view step. A quick FPV luminance audit shows the render-domain issue
+still remains under that explicit lighting contract: the six Isaac FPV frames
+have mean luminance around 230-240 and `lum>=245` fractions from roughly 0.11 to
+0.52. The next rendering slice should tune Isaac exposure/white handling or add
+an explicit color-management contract; it should not reopen room-scale,
+eye/target, FOV, or backend-local camera placement as the primary explanation.
+
 For lower-level diagnosis, the two steps remain available separately:
 
 ```bash
