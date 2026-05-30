@@ -185,7 +185,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
             "os.environ",
             {
                 "MODEL": "mimo_openai/mimo-v2.5-pro",
-                "IMAGE_MODEL": "mimo_openai/mimo-v2-omni",
+                "IMAGE_MODEL": "mimo_openai/mimo-v2.5",
                 "ROBOCLAWS_OBSERVE_MODE": "text-bridge",
             },
             clear=False,
@@ -240,7 +240,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         "127.0.0.1 is unreachable from Docker's default bridge on 6.x kernels"
     )
     assert mcp_kwargs.get("model_name") == "mimo_openai/mimo-v2.5-pro"
-    assert mcp_kwargs.get("image_model") == "mimo_openai/mimo-v2-omni"
+    assert mcp_kwargs.get("image_model") == "mimo_openai/mimo-v2.5"
     assert mcp_kwargs.get("observe_mode") == "text-bridge"
     assert mcp_kwargs.get("allow_privileged_tools") is False
     fake_server.run_in_thread.assert_called_once()

@@ -335,7 +335,7 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
                 "--output-dir",
                 str(tmp_path),
                 "--pipeline",
-                "grounding-dino,yoloe,yoloe+mimo-v2-omni,mimo-v2-omni-direct",
+                "grounding-dino,yoloe,yoloe+mimo-v2.5,mimo-v2.5-direct",
                 "--base-url",
                 base_url,
                 "--timeout-s",
@@ -365,8 +365,8 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
     assert set(by_pipeline) == {
         "grounding-dino",
         "yoloe",
-        "yoloe+mimo-v2-omni",
-        "mimo-v2-omni-direct",
+        "yoloe+mimo-v2.5",
+        "mimo-v2.5-direct",
     }
     assert by_pipeline["grounding-dino"]["stage_summary"][0]["producer_id"] == "grounding-dino"
     assert by_pipeline["grounding-dino"]["metrics"]["precision"] == 1.0
@@ -375,23 +375,23 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
     assert by_pipeline["yoloe"]["metrics"]["duplicate_count"] >= 1
     assert by_pipeline["grounding-dino"]["metrics"]["actionability_proxy_rate"] > 0.0
     assert by_pipeline["yoloe"]["metrics"]["destination_hint_rate"] == 1.0
-    assert [stage["stage"] for stage in by_pipeline["yoloe+mimo-v2-omni"]["stage_summary"]] == [
+    assert [stage["stage"] for stage in by_pipeline["yoloe+mimo-v2.5"]["stage_summary"]] == [
         "proposer",
         "refiner",
     ]
-    assert by_pipeline["yoloe+mimo-v2-omni"]["metrics"]["rejected_proposal_count"] >= 1
-    assert by_pipeline["mimo-v2-omni-direct"]["stage_summary"][0]["stage"] == "direct_producer"
+    assert by_pipeline["yoloe+mimo-v2.5"]["metrics"]["rejected_proposal_count"] >= 1
+    assert by_pipeline["mimo-v2.5-direct"]["stage_summary"][0]["stage"] == "direct_producer"
     assert result["ranking"][0]["pipeline_id"] in {
         "grounding-dino",
-        "mimo-v2-omni-direct",
-        "yoloe+mimo-v2-omni",
+        "mimo-v2.5-direct",
+        "yoloe+mimo-v2.5",
     }
     assert "actionability_proxy_rate" in result["ranking"][0]
     promotion = result["promotion_recommendation"]
     assert promotion["selected_end_to_end_pipelines"][0] == "sim"
     assert promotion["best_proposer_only_pipeline_id"] == "grounding-dino"
-    assert promotion["best_proposer_plus_refiner_pipeline_id"] == "yoloe+mimo-v2-omni"
-    assert promotion["best_direct_vlm_pipeline_id"] == "mimo-v2-omni-direct"
+    assert promotion["best_proposer_plus_refiner_pipeline_id"] == "yoloe+mimo-v2.5"
+    assert promotion["best_direct_vlm_pipeline_id"] == "mimo-v2.5-direct"
     assert promotion["selected_real_stage_provenance_complete"] is False
     assert promotion["requires_real_stage_provenance_before_promotion"] is True
     assert (
@@ -412,7 +412,7 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
     refined = [
         item
         for item in predictions
-        if item["pipeline_id"] == "yoloe+mimo-v2-omni"
+        if item["pipeline_id"] == "yoloe+mimo-v2.5"
         and item["diagnostic_evidence"]["rejected_proposal_count"]
     ]
     assert refined
@@ -806,7 +806,7 @@ def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_
     monkeypatch.setenv("VISUAL_GROUNDING_VLM_INPUT_USD_PER_1K_TOKENS", "0.001")
     monkeypatch.setenv("VISUAL_GROUNDING_VLM_OUTPUT_USD_PER_1K_TOKENS", "0.002")
     service = _start_configurable_service(
-        pipeline_id="mimo-v2-omni-direct",
+        pipeline_id="mimo-v2.5-direct",
         adapter_mode="real",
     )
     try:
@@ -820,7 +820,7 @@ def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_
                 "--output-dir",
                 str(tmp_path),
                 "--pipeline",
-                "mimo-v2-omni-direct",
+                "mimo-v2.5-direct",
                 "--base-url",
                 base_url,
                 "--timeout-s",
@@ -841,7 +841,7 @@ def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_
             str(CHECKER),
             str(tmp_path),
             "--expect-pipeline",
-            "mimo-v2-omni-direct",
+            "mimo-v2.5-direct",
             "--require-success",
             "--require-candidates",
         ],
@@ -851,7 +851,7 @@ def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_
 
     result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
     pipeline = result["pipelines"][0]
-    assert pipeline["pipeline_id"] == "mimo-v2-omni-direct"
+    assert pipeline["pipeline_id"] == "mimo-v2.5-direct"
     assert pipeline["failure_count"] == 0
     assert pipeline["auth_mode"] == "bearer_configured"
     assert pipeline["evidence_level"] == "real_or_hosted_service"
@@ -926,7 +926,7 @@ def test_visual_grounding_benchmark_runs_provider_prefixed_hosted_vlm_direct(
         adapter_mode="real",
     )
     pipelines = [
-        "xiaomi/mimo-v2-omni-direct",
+        "xiaomi/mimo-v2.5-direct",
         "vertex_ai/gemini-3-flash-preview-direct",
         "tongyi/qwen3-vl-flash-direct",
         "siliconflow/Qwen/Qwen3-VL-8B-Instruct-direct",
@@ -969,7 +969,7 @@ def test_visual_grounding_benchmark_runs_provider_prefixed_hosted_vlm_direct(
         if request["payload"].get("model")
     }
     assert seen_models == {
-        "xiaomi/mimo-v2-omni",
+        "xiaomi/mimo-v2.5",
         "vertex_ai/gemini-3-flash-preview",
         "tongyi/qwen3-vl-flash",
         "siliconflow/Qwen/Qwen3-VL-8B-Instruct",

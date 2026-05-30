@@ -196,7 +196,7 @@ def _model_id_for_producer(producer_id: str) -> str:
         "fake-http": "deterministic-public-metadata",
         "grounding-dino": "contract-stub:IDEA-Research/grounding-dino-tiny",
         "yoloe": "contract-stub:ultralytics/yoloe",
-        "mimo-v2-omni": "contract-stub:mimo-v2-omni",
+        "mimo-v2.5": "contract-stub:mimo-v2.5",
         "qwen3-vl": "contract-stub:Qwen/Qwen3-VL-8B-Instruct",
     }.get(producer_id, f"contract-stub:{producer_id}")
 

@@ -43,7 +43,7 @@ To run these demos without editing user-level Codex or Claude Code config, copy
 `.env.example` to `.env` and fill the keys you have. Normal users configure
 keys only; command shape controls behavior. Codex defaults to the internal
 multi-model aggregator when `XM_LLM_API_KEY` is present (`mify`,
-`xiaomi/mimo-v2-omni`, Responses API, web search disabled). `CODEX_BASE_URL`
+`xiaomi/mimo-v2.5`, Responses API, web search disabled). `CODEX_BASE_URL`
 and `CODEX_API_KEY` remain available only for explicit non-mify Codex
 debugging. Claude Code prefers `MIMO_TP_KEY` when present, then `KIMI_API_KEY`,
 then `XM_LLM_API_KEY` through the `mify-anthropic` profile
@@ -69,8 +69,8 @@ capability catalog:
   `observe_archived` for photo evidence or a configured vision bridge for
   ordinary navigation observations. `scene_objects` and `goto` are available
   only when the server is started with privileged helpers enabled.
-- `mimo-v2.5` and `mimo-v2-omni` are MiMo image-capable routes and can receive raw
-  `observe` images.
+- `mimo-v2.5` is the MiMo image-capable route and can receive raw `observe`
+  images.
 - `kimi-k2.6` is image-capable, but the Claude Code Kimi coding endpoint has
   shown intermittent generic server errors when a long skill-reading context is
   immediately followed by multiple inline PNG image blocks. For batch photo

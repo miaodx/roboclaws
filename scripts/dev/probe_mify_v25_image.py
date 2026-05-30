@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probe mify MiMo omni image understanding through chat and responses APIs.
+"""Probe mify MiMo v2.5 image understanding through chat and responses APIs.
 
 This script intentionally uses only the Python standard library so it can be
 shared as a small standalone reproducer.
@@ -20,7 +20,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-DEFAULT_MODEL = "xiaomi/mimo-v2-omni"
+DEFAULT_MODEL = "xiaomi/mimo-v2.5"
 DEFAULT_BASE_URL = "https://api.llm.mioffice.cn/v1"
 DEFAULT_PROMPT = (
     "Inspect the attached real robot FPV image. Output only strict JSON with "
@@ -155,7 +155,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Probe mify MiMo omni image input with one image.",
+        description="Probe mify MiMo v2.5 image input with one image.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--image", type=Path, required=True)
@@ -167,7 +167,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--mime-type", default="image/png")
     parser.add_argument("--timeout-s", type=float, default=90.0)
     parser.add_argument("--prompt", default=DEFAULT_PROMPT)
-    parser.add_argument("--output-dir", type=Path, default=Path(".tmp/mify-omni-image-probe"))
+    parser.add_argument("--output-dir", type=Path, default=Path(".tmp/mify-v25-image-probe"))
     return parser.parse_args(argv)
 
 
@@ -230,7 +230,7 @@ def post_json(
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "roboclaws-mify-omni-image-probe/1.0",
+            "User-Agent": "roboclaws-mify-v25-image-probe/1.0",
         },
         method="POST",
     )

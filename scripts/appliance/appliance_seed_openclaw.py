@@ -139,10 +139,10 @@ def _provider_config(env: dict[str, str]) -> ProviderConfig:
         mode = env.get("MIMO_PROVIDER_MODE", "openai")
         if mode != "openai":
             raise SystemExit("The appliance currently supports MIMO_PROVIDER_MODE=openai")
-        model = env.get("MODEL", openclaw_model_id("mimo-v2-omni"))
+        model = env.get("MODEL", openclaw_model_id("mimo-v2.5"))
         image_model = env.get("IMAGE_MODEL", "")
         if not image_model and not model_supports_images(model):
-            image_model = openclaw_model_id("mimo-v2-omni")
+            image_model = openclaw_model_id("mimo-v2.5")
         image_model = image_model or model
         return ProviderConfig(
             provider_id="mimo",
@@ -158,25 +158,17 @@ def _provider_config(env: dict[str, str]) -> ProviderConfig:
                 "api": "openai-completions",
                 "models": [
                     {
-                        "id": "mimo-v2-omni",
-                        "name": "MiMo V2 Omni (vision+tools)",
+                        "id": "mimo-v2.5",
+                        "name": "MiMo V2.5 (vision+tools)",
                         "input": ["text", "image"],
                         "reasoning": False,
-                        "contextWindow": 262144,
+                        "contextWindow": 1048576,
                         "maxTokens": 32768,
                     },
                     {
                         "id": "mimo-v2.5-pro",
                         "name": "MiMo V2.5 Pro (text+tools)",
                         "input": ["text"],
-                        "reasoning": False,
-                        "contextWindow": 1048576,
-                        "maxTokens": 32768,
-                    },
-                    {
-                        "id": "mimo-v2.5",
-                        "name": "MiMo V2.5 (vision+tools)",
-                        "input": ["text", "image"],
                         "reasoning": False,
                         "contextWindow": 1048576,
                         "maxTokens": 32768,

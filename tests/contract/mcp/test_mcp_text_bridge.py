@@ -45,15 +45,14 @@ def test_resolve_observe_delivery_auto_uses_text_bridge_for_text_only_mimo() -> 
 def test_resolve_observe_delivery_auto_keeps_images_for_image_capable_models() -> None:
     assert resolve_observe_delivery("mimo_openai/mimo-v2.5", observe_mode="auto") == "images"
     assert resolve_observe_delivery("mimo_anthropic/mimo-v2.5", observe_mode="auto") == "images"
-    assert resolve_observe_delivery("mimo_openai/mimo-v2-omni", observe_mode="auto") == "images"
     assert resolve_observe_delivery("anthropic_kimi/k2p5", observe_mode="auto") == "images"
 
 
 def test_vision_bridge_sends_navigation_images_in_one_request() -> None:
     client = _FakeClient(content="Immediate view: table ahead.\nNavigation cues: rotate right.")
     bridge = VisionBridge(
-        bridge_model="mimo_openai/mimo-v2-omni",
-        image_model="mimo_openai/mimo-v2-omni",
+        bridge_model="mimo_openai/mimo-v2.5",
+        image_model="mimo_openai/mimo-v2.5",
         client=client,
     )
 
@@ -66,12 +65,12 @@ def test_vision_bridge_sends_navigation_images_in_one_request() -> None:
 
     assert isinstance(result, VisionBridgeResult)
     assert result.delivery == "text-bridge"
-    assert result.bridge_model == "mimo_openai/mimo-v2-omni"
+    assert result.bridge_model == "mimo_openai/mimo-v2.5"
     assert result.error is None
     assert "Immediate view" in result.description
 
     request = client.calls[0]
-    assert request["model"] == "mimo-v2-omni"
+    assert request["model"] == "mimo-v2.5"
     content = request["messages"][1]["content"]
     image_parts = [part for part in content if part["type"] == "image_url"]
     assert len(image_parts) == 3
@@ -81,8 +80,8 @@ def test_vision_bridge_sends_navigation_images_in_one_request() -> None:
 def test_vision_bridge_failure_returns_safe_fallback_text() -> None:
     client = _FakeClient(exc=RuntimeError("upstream unavailable"))
     bridge = VisionBridge(
-        bridge_model="mimo_openai/mimo-v2-omni",
-        image_model="mimo_openai/mimo-v2-omni",
+        bridge_model="mimo_openai/mimo-v2.5",
+        image_model="mimo_openai/mimo-v2.5",
         client=client,
     )
 
@@ -94,6 +93,6 @@ def test_vision_bridge_failure_returns_safe_fallback_text() -> None:
     )
 
     assert result.delivery == "text-bridge"
-    assert result.bridge_model == "mimo_openai/mimo-v2-omni"
+    assert result.bridge_model == "mimo_openai/mimo-v2.5"
     assert result.error == "upstream unavailable"
     assert "Vision bridge unavailable" in result.description

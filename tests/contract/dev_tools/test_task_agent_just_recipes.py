@@ -936,12 +936,12 @@ def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -
 
     assert result.stdout.splitlines() == [
         (
-            "mify model=xiaomi/mimo-v2-omni "
+            "mify model=xiaomi/mimo-v2.5 "
             "base_url=https://api.llm.mioffice.cn/v1 key_env=XM_LLM_API_KEY "
             "protocol=responses"
         ),
         "-c",
-        'model="xiaomi/mimo-v2-omni"',
+        'model="xiaomi/mimo-v2.5"',
         "-c",
         'model_provider="mify"',
         "-c",
@@ -989,7 +989,7 @@ def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_rout
     assert result.stdout.splitlines() == [
         "mify",
         "-c",
-        'model="xiaomi/mimo-v2-omni"',
+        'model="xiaomi/mimo-v2.5"',
         "-c",
         'model_provider="mify"',
         "-c",

@@ -67,15 +67,15 @@ def test_configurable_service_contract_fake_mode_serves_named_pipeline() -> None
 def test_configurable_service_contract_fake_dispatcher_allows_request_pipeline() -> None:
     server = _start_service(pipeline_id="contract-fake", adapter_mode="auto")
     try:
-        response = _client("yoloe+mimo-v2-omni", server).request_candidates(
-            _request("yoloe+mimo-v2-omni")
+        response = _client("yoloe+mimo-v2.5", server).request_candidates(
+            _request("yoloe+mimo-v2.5")
         )
     finally:
         server.shutdown()
         server.server_close()
 
     assert response["status"] == "ok"
-    assert response["pipeline"]["pipeline_id"] == "yoloe+mimo-v2-omni"
+    assert response["pipeline"]["pipeline_id"] == "yoloe+mimo-v2.5"
     assert [stage["stage"] for stage in response["pipeline"]["stages"]] == [
         "proposer",
         "refiner",
@@ -146,8 +146,8 @@ def test_real_mode_dispatches_grounding_dino_adapter(monkeypatch) -> None:
 
 def test_real_mode_reports_refiner_pipeline_missing_config_without_fake_success() -> None:
     response = adapters.visual_grounding_service_response(
-        payload=_request("grounding-dino+mimo-v2-omni"),
-        configured_pipeline_id="grounding-dino+mimo-v2-omni",
+        payload=_request("grounding-dino+mimo-v2.5"),
+        configured_pipeline_id="grounding-dino+mimo-v2.5",
         adapter_mode="real",
         latency_ms=1,
     )
@@ -156,8 +156,8 @@ def test_real_mode_reports_refiner_pipeline_missing_config_without_fake_success(
     assert response["error"]["reason"] == "missing_config"
     assert response["candidates"] == []
     assert response["pipeline"]["stages"][0]["stage"] == "refiner"
-    assert response["pipeline"]["stages"][0]["producer_id"] == "mimo-v2-omni"
-    assert response["diagnostics"]["required_adapters"][0]["producer_id"] == "mimo-v2-omni"
+    assert response["pipeline"]["stages"][0]["producer_id"] == "mimo-v2.5"
+    assert response["diagnostics"]["required_adapters"][0]["producer_id"] == "mimo-v2.5"
 
 
 def test_real_mode_reports_grounding_dino_missing_dependency(monkeypatch) -> None:
@@ -407,8 +407,8 @@ def test_real_mode_direct_mimo_uses_hosted_vlm_boundary(monkeypatch) -> None:
     monkeypatch.setenv("VISUAL_GROUNDING_MIMO_API_KEY", "secret-mimo-key")
     try:
         response = adapters.visual_grounding_service_response(
-            payload=_request("mimo-v2-omni-direct", image=_jpeg_image_payload()),
-            configured_pipeline_id="mimo-v2-omni-direct",
+            payload=_request("mimo-v2.5-direct", image=_jpeg_image_payload()),
+            configured_pipeline_id="mimo-v2.5-direct",
             adapter_mode="real",
             latency_ms=1,
         )
@@ -418,13 +418,13 @@ def test_real_mode_direct_mimo_uses_hosted_vlm_boundary(monkeypatch) -> None:
 
     assert response["status"] == "ok"
     assert response["pipeline"]["stages"][0]["stage"] == "direct_producer"
-    assert response["pipeline"]["stages"][0]["producer_id"] == "mimo-v2-omni"
+    assert response["pipeline"]["stages"][0]["producer_id"] == "mimo-v2.5"
     assert response["candidates"][0]["category"] == "dish"
-    assert response["diagnostics"]["diagnostic_mode"] == "real_mimo-v2-omni_direct"
+    assert response["diagnostics"]["diagnostic_mode"] == "real_mimo-v2.5_direct"
     assert response["diagnostics"]["private_truth_included"] is False
     assert seen["path"] == "/v1/chat/completions"
     assert seen["authorization"] == "Bearer secret-mimo-key"
-    assert seen["payload"]["model"] == "mimo-v2-omni"
+    assert seen["payload"]["model"] == "mimo-v2.5"
     content = seen["payload"]["messages"][1]["content"]
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert "secret-mimo-key" not in json.dumps(response)
@@ -515,8 +515,8 @@ def test_real_mode_refines_proposals_with_hosted_mimo(monkeypatch) -> None:
     monkeypatch.setenv("VISUAL_GROUNDING_MIMO_API_KEY", "secret-mimo-key")
     try:
         response = adapters.visual_grounding_service_response(
-            payload=_request("grounding-dino+mimo-v2-omni", image=_jpeg_image_payload()),
-            configured_pipeline_id="grounding-dino+mimo-v2-omni",
+            payload=_request("grounding-dino+mimo-v2.5", image=_jpeg_image_payload()),
+            configured_pipeline_id="grounding-dino+mimo-v2.5",
             adapter_mode="real",
             latency_ms=1,
         )
@@ -529,7 +529,7 @@ def test_real_mode_refines_proposals_with_hosted_mimo(monkeypatch) -> None:
         "proposer",
         "refiner",
     ]
-    assert response["pipeline"]["stages"][1]["producer_id"] == "mimo-v2-omni"
+    assert response["pipeline"]["stages"][1]["producer_id"] == "mimo-v2.5"
     assert response["candidates"][0]["confidence"] == 0.91
     assert response["candidates"][0]["image_region"] == {
         "type": "bbox",
@@ -614,9 +614,9 @@ def test_adapter_catalog_lists_real_adapter_slots_without_private_truth() -> Non
         "torch",
         "transformers",
     }
-    assert by_id["mimo-v2-omni"]["role"] == "refiner_or_direct_producer"
-    assert by_id["mimo-v2-omni"]["runtime"]["status"] in {"configured", "missing_config"}
-    assert by_id["mimo-v2-omni"]["runtime"]["auth_mode"] in {
+    assert by_id["mimo-v2.5"]["role"] == "refiner_or_direct_producer"
+    assert by_id["mimo-v2.5"]["runtime"]["status"] in {"configured", "missing_config"}
+    assert by_id["mimo-v2.5"]["runtime"]["auth_mode"] in {
         "none",
         "bearer_configured",
     }
@@ -643,13 +643,13 @@ def test_configurable_service_lists_adapter_catalog_cli() -> None:
         "yoloe",
         "yolo-world",
         "omdet-turbo",
-        "mimo-v2-omni",
+        "mimo-v2.5",
         "qwen3-vl",
     }
     assert "yolo-custom" not in {item["producer_id"] for item in catalog["adapters"]}
     by_id = {item["producer_id"]: item for item in catalog["adapters"]}
     assert "runtime" in by_id["grounding-dino"]
-    assert "runtime" in by_id["mimo-v2-omni"]
+    assert "runtime" in by_id["mimo-v2.5"]
     assert "authorization" not in result.stdout.lower()
     assert "secret-mimo-key" not in result.stdout
 

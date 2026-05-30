@@ -78,7 +78,7 @@ MiMo direct vision:
 cd /home/mi/ws/gogo/roboclaws
 set -a && source .env && set +a
 docker rm -f openclaw-gateway 2>/dev/null || true
-TOKEN=$(PROVIDER=mimo MODEL=mimo_openai/mimo-v2-omni AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
+TOKEN=$(PROVIDER=mimo MODEL=mimo_openai/mimo-v2.5 AGENTS=2 ./scripts/openclaw/openclaw-bootstrap.sh)
 ```
 
 `openclaw_demo.py` sends images directly in the chat-completions turn, so the

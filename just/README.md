@@ -110,7 +110,7 @@ exported in the invoking shell at launch time. They also source repo-local
 Run `just code::codex-provider-smoke` locally before long Codex visual runs to
 verify the `.env`-configured Responses-compatible endpoint works with the pinned
 Docker-backed Codex CLI. When `XM_LLM_API_KEY` is present, Codex defaults to the
-internal multi-model aggregator (`mify`, `xiaomi/mimo-v2-omni`, Responses API)
+internal multi-model aggregator (`mify`, `xiaomi/mimo-v2.5`, Responses API)
 and disables web search because that gateway phase does not support Codex's web
 search tool. Hosted CI does not run Codex or Codex provider smoke.
 
@@ -163,7 +163,7 @@ just task::run household-cleanup direct camera-labels
 just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
 just task::run household-cleanup direct world-labels runtime_map_prior=output/map/runtime_metric_map.json
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
-just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
 .venv/bin/python scripts/visual_grounding/build_representative_visual_grounding_corpus.py output --output output/visual-grounding-corpora/representative-raw-fpv/representative_raw_fpv_corpus.json
 .venv/bin/python scripts/visual_grounding/build_molmospaces_visual_grounding_bbox_corpus.py --output output/visual-grounding-corpora/molmospaces-bbox-10x10/corpus.json --scene-indices 0-9 --targets-per-scene 10
@@ -222,7 +222,7 @@ for local test servers, or use the MiMo defaults with `MIMO_TP_KEY`:
 ```bash
 MIMO_TP_KEY=... \
   .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline grounding-dino+mimo-v2-omni --adapter-mode real
+    --pipeline grounding-dino+mimo-v2.5 --adapter-mode real
 
 VISUAL_GROUNDING_QWEN_BASE_URL=http://127.0.0.1:8000/v1 \
 VISUAL_GROUNDING_QWEN_API_KEY=... \
@@ -267,7 +267,7 @@ Real proposer pipeline ids such as `grounding-dino` and `yoloe` report
 `adapter_unavailable` or dependency failures unless the service is started with
 `--adapter-mode contract-fake` for contract tests or `--adapter-mode real` with
 installed sidecar dependencies and model weights. Hosted refiner/direct routes
-such as `grounding-dino+mimo-v2-omni`, `mimo-v2-omni-direct`, and
+such as `grounding-dino+mimo-v2.5`, `mimo-v2.5-direct`, and
 `qwen3-vl-direct` report `missing_config` until their OpenAI-compatible
 endpoint and key/no-key local policy are configured. The adapter catalog records
 the optional sidecar extra, provider configuration slot, and current redacted

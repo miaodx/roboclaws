@@ -104,7 +104,7 @@ just task::run household-cleanup direct world-labels seed=7 generated_mess_count
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
 `XM_LLM_API_KEY` in the repo-local `.env` to use the default internal mify route
-(`xiaomi/mimo-v2-omni`, Responses API), then run:
+(`xiaomi/mimo-v2.5`, Responses API), then run:
 
 ```bash
 just task::run household-cleanup codex world-labels seed=7 generated_mess_count=10

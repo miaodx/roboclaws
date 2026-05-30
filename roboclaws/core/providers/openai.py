@@ -167,7 +167,7 @@ class NvidiaProvider(OpenAIProvider):
 class MimoProvider(NvidiaProvider):
     def __init__(
         self,
-        model: str = "mimo-v2-omni",
+        model: str = "mimo-v2.5",
         api_key: str | None = None,
         max_tokens: int = 2048,
     ) -> None:
