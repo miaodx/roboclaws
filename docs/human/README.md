@@ -21,6 +21,7 @@ AI agents should also read these docs when they need human-facing context.
 
 - [Local runtime reference](local-runtime.md)
 - [Direct Codex/Claude robot driver](coding-agent-nav-server.md)
+- [Agibot G2 Codex A Acceptance](agibot-g2-codex-a-acceptance.md)
 - [Agibot G2 Cleanup Pilot](agibot-g2-cleanup-pilot.md)
 - [Real Robot Nav2 Cleanup Pilot](real-robot-nav2-cleanup-pilot.md)
 - [OpenClaw demo](openclaw/demo.md)
