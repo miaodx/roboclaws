@@ -721,6 +721,12 @@ def run_realworld_cleanup(
         source_bundle_dir=selected_bundle_dir,
     )
     if backend_instance is not None:
+        mess_diagnostics = getattr(backend_instance, "mess_placement_diagnostics", None)
+        placement_diagnostics = getattr(backend_instance, "placement_diagnostics", None)
+        if mess_diagnostics is not None:
+            run_result["mess_placement_diagnostics"] = mess_diagnostics
+        if placement_diagnostics is not None:
+            run_result["placement_diagnostics"] = placement_diagnostics
         if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
             run_result["molmospaces_runtime"] = {
                 "python_executable": str(backend_instance.python_executable),

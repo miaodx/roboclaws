@@ -947,6 +947,8 @@ def _backend_name(backend: Any, *, override: str = "") -> str:
         return override
     if backend.__class__.__name__ == "MolmoSpacesSubprocessBackend":
         return "molmospaces_subprocess"
+    if backend.__class__.__name__ == "IsaacLabSubprocessBackend":
+        return "isaaclab_subprocess"
     return "api_semantic_synthetic"
 
 
@@ -956,7 +958,8 @@ def _resolve_artifact_path(run_dir: Path, value: str) -> Path:
 
 
 def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> None:
-    if _backend_name(backend) != "molmospaces_subprocess":
+    backend_name = _backend_name(backend)
+    if backend_name not in {"molmospaces_subprocess", "isaaclab_subprocess"}:
         return
     mess_diagnostics = getattr(backend, "mess_placement_diagnostics", None)
     placement_diagnostics = getattr(backend, "placement_diagnostics", None)
@@ -964,6 +967,37 @@ def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> N
         run_result["mess_placement_diagnostics"] = mess_diagnostics
     if placement_diagnostics is not None:
         run_result["placement_diagnostics"] = placement_diagnostics
+    if backend_name == "isaaclab_subprocess":
+        scene_index_payload = {}
+        scene_index_artifact = getattr(backend, "scene_index_artifact_payload", None)
+        if callable(scene_index_artifact):
+            scene_index_payload = scene_index_artifact()
+        run_result["isaac_runtime"] = {
+            "python_executable": str(getattr(backend, "python_executable", "")),
+            "runtime": getattr(backend, "runtime", {}),
+            "scene_usd": getattr(backend, "scene_usd", ""),
+            "scene_load": getattr(backend, "scene_load", {}),
+            "scene_index": getattr(backend, "scene_index", None),
+            "scenario_source": getattr(backend, "scenario_source", ""),
+            "object_index": getattr(backend, "object_index", {}),
+            "receptacle_index": getattr(backend, "receptacle_index", {}),
+            "scene_index_diagnostics": getattr(backend, "scene_index_diagnostics", {}),
+            "scene_binding_diagnostics": getattr(backend, "scene_binding_diagnostics", {}),
+            "mapping_gaps": getattr(backend, "current_mapping_gaps", []),
+            "segmentation": getattr(backend, "segmentation", {}),
+            "requested_generated_mess_count": getattr(
+                backend,
+                "requested_generated_mess_count",
+                None,
+            ),
+            "generated_mess_count": getattr(backend, "generated_mess_count", None),
+            "semantic_pose_state": getattr(backend, "semantic_pose_state", {}),
+            "semantic_pose_view_capture": getattr(backend, "semantic_pose_view_capture", {}),
+            "snapshot_artifacts": getattr(backend, "snapshot_artifacts", []),
+        }
+        if scene_index_payload:
+            run_result["isaac_runtime"]["scene_index_artifact_payload"] = scene_index_payload
+        return
     run_result["molmospaces_runtime"] = {
         "python_executable": str(getattr(backend, "python_executable", "")),
         "runtime": getattr(backend, "runtime", {}),

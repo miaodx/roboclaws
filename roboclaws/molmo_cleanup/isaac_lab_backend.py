@@ -162,7 +162,8 @@ class IsaacLabSubprocessBackend:
 
     @property
     def mess_placement_diagnostics(self) -> list[dict[str, Any]]:
-        return []
+        raw = self._read_state().get("mess_placement_diagnostics") or []
+        return [dict(item) for item in raw if isinstance(item, dict)]
 
     @property
     def placement_diagnostics(self) -> list[dict[str, Any]]:

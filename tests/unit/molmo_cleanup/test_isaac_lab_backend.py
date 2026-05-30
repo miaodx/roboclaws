@@ -79,6 +79,15 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert scene_index_payload["receptacle_index_count"] == len(
         scene_index_payload["receptacle_index"]
     )
+    assert len(backend.mess_placement_diagnostics) == 1
+    mess_diagnostic = backend.mess_placement_diagnostics[0]
+    assert mess_diagnostic["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
+    assert mess_diagnostic["diagnostic_source"] == "mess_seed"
+    assert mess_diagnostic["placement_support_status"] in {
+        "direct_support",
+        "degraded_elevated",
+        "semantic_contained_in_receptacle",
+    }
 
     snapshot_path = tmp_path / "snapshot.png"
     backend.write_snapshot(snapshot_path, title="Fake Isaac snapshot")
@@ -118,6 +127,11 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         assert response["semantic_pose_event"]["rendered_to_usd"] is False
         assert response["semantic_pose_event"]["state_source"] == ISAAC_SEMANTIC_POSE_STATE_SOURCE
     assert done["final_locations"][object_id] == receptacle_id
+    assert place["placement_diagnostic"]["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
+    assert place["placement_diagnostic"]["diagnostic_source"] == "cleanup_place"
+    assert place["placement_support_status"] == place["placement_diagnostic"][
+        "placement_support_status"
+    ]
     semantic_pose_state = backend.semantic_pose_state
     assert semantic_pose_state["schema"] == ISAAC_SEMANTIC_POSE_STATE_SCHEMA
     assert semantic_pose_state["primitive_provenance"] == ISAAC_SEMANTIC_POSE_PROVENANCE
@@ -126,6 +140,9 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert semantic_pose_state["physical_robot"] is False
     assert semantic_pose_state["object_poses"][object_id]["location_id"] == receptacle_id
     assert semantic_pose_state["object_poses"][object_id]["rendered_to_usd"] is False
+    assert semantic_pose_state["object_poses"][object_id]["position_source"] == (
+        "isaac_support_placement_resolver"
+    )
     assert [event["tool"] for event in semantic_pose_state["transform_events"]] == [
         "navigate_to_object",
         "pick",
@@ -513,7 +530,9 @@ def test_isaac_write_camera_views_returns_color_contract(
         output_dir: Path,
         width: int,
         height: int,
+        semantic_pose_state: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        assert semantic_pose_state == {}
         output_path = output_dir / "fpv.png"
         _write_nonblank_image(output_path)
         return {
@@ -693,6 +712,321 @@ def test_isaac_robot_pose_prefers_bound_receptacle_support_pose() -> None:
     assert distance_to_target == pytest.approx(1.15)
 
 
+def test_isaac_support_placement_resolver_uses_usd_bounds() -> None:
+    state = {
+        "scenario": {
+            "objects": [
+                {
+                    "object_id": "mug_01",
+                    "name": "mug",
+                    "category": "dish",
+                    "location_id": "sofa_01",
+                    "pickupable": True,
+                }
+            ],
+            "receptacles": [
+                {
+                    "receptacle_id": "sink_01",
+                    "name": "sink",
+                    "category": "Sink",
+                    "room_area": "kitchen",
+                }
+            ],
+        },
+        "locations": {"mug_01": "sofa_01"},
+        "containment": {},
+        "object_pose_overrides": {},
+        "object_index": _unit_isaac_object_index(),
+        "receptacle_index": _unit_isaac_receptacle_index(),
+        "scene_binding_diagnostics": {
+            "selected_object_bindings": {
+                "mug_01": {
+                    "status": "bound",
+                    "usd_handle": "mug_01",
+                    "usd_prim_path": "/World/Objects/mug_01",
+                }
+            },
+            "selected_target_receptacle_bindings": {
+                "sink_01": {
+                    "status": "bound",
+                    "usd_handle": "sink_01",
+                    "usd_prim_path": "/World/Receptacles/sink_01",
+                }
+            },
+        },
+    }
+
+    resolution = isaac_lab_backend_worker._resolve_isaac_placement(
+        state,
+        object_id="mug_01",
+        receptacle_id="sink_01",
+        index=0,
+        relation="on",
+        source="unit",
+    )
+
+    assert resolution["support_status"] == "direct_support"
+    assert resolution["contact_proof"] == "usd_bounds_direct_support"
+    assert resolution["position"] == pytest.approx([2.5, 5.5, 1.615])
+    assert resolution["object_bottom_offset_m"] == pytest.approx(0.4)
+    assert resolution["support_clearance_m"] == pytest.approx(0.015)
+    diagnostic = isaac_lab_backend_worker._isaac_placement_diagnostic(
+        state=state,
+        object_id="mug_01",
+        receptacle_id="sink_01",
+        relation="on",
+        source="unit",
+        placement_resolution=resolution,
+    )
+    assert diagnostic["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
+    assert diagnostic["direct_support_proven"] is True
+    assert diagnostic["support_surface_top_z"] == pytest.approx(1.2)
+
+
+def test_isaac_receptacle_support_surfaces_prefer_broad_lower_descendant() -> None:
+    class _FakePrim:
+        def __init__(
+            self,
+            path: str,
+            *,
+            type_name: str = "Mesh",
+            children: list["_FakePrim"] | None = None,
+        ) -> None:
+            self._path = path
+            self._type_name = type_name
+            self.children = children or []
+
+        def GetPath(self) -> str:
+            return self._path
+
+        def GetTypeName(self) -> str:
+            return self._type_name
+
+        def IsA(self, _type: object) -> bool:
+            return self._type_name == "Mesh"
+
+    mattress = _FakePrim("/World/Receptacles/bed_01/Geometry/mattress")
+    bedsheet = _FakePrim("/World/Receptacles/bed_01/Geometry/bedsheet")
+    headboard = _FakePrim("/World/Receptacles/bed_01/Geometry/headboard")
+    rail = _FakePrim("/World/Receptacles/bed_01/Geometry/rail")
+    bed = _FakePrim(
+        "/World/Receptacles/bed_01",
+        type_name="Xform",
+        children=[mattress, bedsheet, headboard, rail],
+    )
+    bounds_by_path = {
+        "/World/Receptacles/bed_01": {
+            "center": [2.0, 3.0, 0.85],
+            "min": [0.8, 1.8, 0.0],
+            "max": [3.2, 4.2, 1.7],
+            "size": [2.4, 2.4, 1.7],
+        },
+        "/World/Receptacles/bed_01/Geometry/mattress": {
+            "center": [2.0, 3.0, 0.45],
+            "min": [0.9, 1.9, 0.2],
+            "max": [3.1, 4.1, 0.7],
+            "size": [2.2, 2.2, 0.5],
+        },
+        "/World/Receptacles/bed_01/Geometry/bedsheet": {
+            "center": [2.05, 3.02, 0.43],
+            "min": [0.95, 1.92, 0.2],
+            "max": [3.15, 4.12, 0.66],
+            "size": [2.2, 2.2, 0.46],
+        },
+        "/World/Receptacles/bed_01/Geometry/headboard": {
+            "center": [2.0, 4.15, 0.85],
+            "min": [0.8, 4.05, 0.0],
+            "max": [3.2, 4.25, 1.7],
+            "size": [2.4, 0.2, 1.7],
+        },
+        "/World/Receptacles/bed_01/Geometry/rail": {
+            "center": [0.86, 3.0, 0.7],
+            "min": [0.8, 1.8, 0.0],
+            "max": [0.92, 4.2, 1.4],
+            "size": [0.12, 2.4, 1.4],
+        },
+    }
+    original_usd_world_bounds = isaac_lab_backend_worker._usd_world_bounds
+    original_iter_usd_prim_range = isaac_lab_backend_worker._iter_usd_prim_range
+    isaac_lab_backend_worker._usd_world_bounds = (  # type: ignore[method-assign]
+        lambda prim, *, usd_geom: bounds_by_path[str(prim.GetPath())]
+    )
+    isaac_lab_backend_worker._iter_usd_prim_range = lambda prim: [  # type: ignore[method-assign]
+        prim,
+        *getattr(prim, "children", []),
+    ]
+
+    try:
+        surfaces = isaac_lab_backend_worker._usd_receptacle_support_surfaces(
+            prim=bed,
+            usd_geom=SimpleNamespace(Gprim=object),
+        )
+    finally:
+        isaac_lab_backend_worker._usd_world_bounds = original_usd_world_bounds  # type: ignore[method-assign]
+        isaac_lab_backend_worker._iter_usd_prim_range = original_iter_usd_prim_range  # type: ignore[method-assign]
+
+    assert surfaces[0]["source"] == "isaac_usd_descendant_support_surface_union"
+    assert surfaces[0]["top_z"] == pytest.approx(0.7)
+    assert surfaces[1]["surface_id"] in {
+        "/World/Receptacles/bed_01/Geometry/mattress",
+        "/World/Receptacles/bed_01/Geometry/bedsheet",
+    }
+    assert surfaces[1]["source"] == "isaac_usd_descendant_support_surface"
+    assert all("headboard" not in item["surface_id"] for item in surfaces[:2])
+
+
+def test_isaac_support_placement_resolver_uses_descendant_support_surface() -> None:
+    state = {
+        "scenario": {
+            "objects": [
+                {
+                    "object_id": "bowl_01",
+                    "name": "bowl",
+                    "category": "dish",
+                    "location_id": "sink_01",
+                    "pickupable": True,
+                }
+            ],
+            "receptacles": [
+                {
+                    "receptacle_id": "bed_01",
+                    "name": "bed",
+                    "category": "Bed",
+                    "room_area": "bedroom",
+                }
+            ],
+        },
+        "locations": {"bowl_01": "sink_01"},
+        "containment": {},
+        "object_pose_overrides": {},
+        "object_index": {
+            "bowl_01": {
+                "usd_prim_path": "/World/Objects/bowl_01",
+                "category": "Bowl",
+                "public_label": "bowl_01",
+                "usd_world_bounds": {
+                    "center": [0.0, 0.0, 0.1],
+                    "min": [-0.1, -0.1, 0.0],
+                    "max": [0.1, 0.1, 0.2],
+                    "size": [0.2, 0.2, 0.2],
+                },
+            }
+        },
+        "receptacle_index": {
+            "bed_01": {
+                "usd_prim_path": "/World/Receptacles/bed_01",
+                "category": "Bed",
+                "public_label": "bed_01",
+                "usd_world_bounds": {
+                    "center": [2.0, 3.0, 0.85],
+                    "min": [0.8, 1.8, 0.0],
+                    "max": [3.2, 4.2, 1.7],
+                    "size": [2.4, 2.4, 1.7],
+                },
+                "support_surfaces": [
+                    {
+                        "surface_id": "/World/Receptacles/bed_01/Geometry/support_union",
+                        "center": [2.0, 3.0],
+                        "top_z": 0.7,
+                        "half_extents": [1.1, 1.1],
+                        "area_m2": 4.84,
+                        "source": "isaac_usd_descendant_support_surface_union",
+                    }
+                ],
+            }
+        },
+        "scene_binding_diagnostics": {},
+    }
+
+    resolution = isaac_lab_backend_worker._resolve_isaac_placement(
+        state,
+        object_id="bowl_01",
+        receptacle_id="bed_01",
+        index=0,
+        relation="on",
+        source="unit",
+    )
+
+    assert resolution["support_status"] == "direct_support"
+    assert resolution["position"] == pytest.approx([2.0, 3.0, 0.835])
+    assert resolution["support_surface"]["surface_id"].endswith("/support_union")
+    assert resolution["support_surface"]["top_z"] == pytest.approx(0.7)
+    assert resolution["support_surface"]["source"] == "isaac_usd_descendant_support_surface_union"
+
+
+def test_isaac_mess_seed_updates_locations_and_pose_overrides() -> None:
+    state = {
+        "scenario": {
+            "objects": [
+                {
+                    "object_id": "mug_01",
+                    "name": "mug",
+                    "category": "dish",
+                    "location_id": "sink_01",
+                    "pickupable": True,
+                }
+            ],
+            "receptacles": [
+                {
+                    "receptacle_id": "sink_01",
+                    "name": "sink",
+                    "category": "Sink",
+                    "room_area": "kitchen",
+                },
+                {
+                    "receptacle_id": "sofa_01",
+                    "name": "sofa",
+                    "category": "Sofa",
+                    "room_area": "living",
+                },
+            ],
+        },
+        "private_manifest": {
+            "targets": [{"object_id": "mug_01", "valid_receptacle_ids": ["sink_01"]}],
+        },
+        "locations": {"mug_01": "sink_01"},
+        "containment": {},
+        "object_pose_overrides": {},
+        "mess_placement_diagnostics": [],
+        "object_index": _unit_isaac_object_index(),
+        "receptacle_index": {
+            **_unit_isaac_receptacle_index(),
+            "sofa_01": {
+                "usd_prim_path": "/World/Receptacles/sofa_01",
+                "category": "Sofa",
+                "public_label": "sofa_01",
+                "usd_world_bounds": {
+                    "center": [1.0, 2.0, 0.4],
+                    "min": [0.5, 1.5, 0.0],
+                    "max": [1.5, 2.5, 0.8],
+                    "size": [1.0, 1.0, 0.8],
+                },
+                "support_pose": {
+                    "frame": "usd_world",
+                    "x": 1.0,
+                    "y": 2.0,
+                    "z": 0.8,
+                    "source": "usd_world_bounds_top_center",
+                    "support_radius_m": 0.5,
+                },
+            },
+        },
+        "scene_binding_diagnostics": {},
+    }
+
+    isaac_lab_backend_worker._seed_generated_mess_placements(state)
+
+    assert state["locations"]["mug_01"] == "sofa_01"
+    assert state["scenario"]["objects"][0]["location_id"] == "sofa_01"
+    assert state["object_pose_overrides"]["mug_01"]["position_source"] == (
+        "isaac_support_placement_resolver"
+    )
+    assert state["mess_placement_diagnostics"][0]["diagnostic_source"] == "mess_seed"
+    assert state["mess_placement_diagnostics"][0]["placement_support_status"] == (
+        "direct_support"
+    )
+
+
 def test_isaac_usd_scene_index_extracts_room_outlines(monkeypatch: pytest.MonkeyPatch) -> None:
     class _FakePrim:
         def __init__(self, path: str, name: str) -> None:
@@ -784,6 +1118,67 @@ def test_isaac_canonical_robot_view_focus_prefers_object_pose() -> None:
 
     assert focus["source"] == "isaac_semantic_pose_object_pose"
     assert focus["focus_position"] == pytest.approx([4.0, 5.0, 0.4])
+
+
+def test_isaac_semantic_pose_stage_application_uses_exact_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+
+    class _FakePrim:
+        def IsValid(self) -> bool:
+            return True
+
+    class _FakeStage:
+        def GetPrimAtPath(self, path: str) -> _FakePrim:
+            assert path == "/World/Objects/mug_01"
+            return _FakePrim()
+
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            translations.append(value)
+
+    class _FakeGf:
+        @staticmethod
+        def Vec3d(*values: float) -> tuple[float, float, float]:
+            return (float(values[0]), float(values[1]), float(values[2]))
+
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeGf,
+        UsdGeom=types.SimpleNamespace(XformCommonAPI=_FakeXformCommonAPI),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+    result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        semantic_pose_state={
+            "object_poses": {
+                "mug_01": {
+                    "usd_prim_path": "/World/Objects/mug_01",
+                    "support_receptacle_id": "sink_01",
+                    "position": [9.0, 8.0, 7.0],
+                }
+            },
+            "receptacle_index": {
+                "sink_01": {
+                    "support_pose": {
+                        "x": 2.5,
+                        "y": 5.5,
+                        "z": 1.2,
+                    }
+                }
+            },
+        },
+    )
+
+    assert result["status"] == "applied"
+    assert translations == [(9.0, 8.0, 7.0)]
+    assert result["applied_objects"][0]["target_position"] == [9.0, 8.0, 7.0]
 
 
 def test_isaac_stage_light_paths_detects_existing_lights_without_pxr() -> None:
@@ -1102,6 +1497,10 @@ def test_isaac_scene_index_can_generate_scene_specific_cleanup_scenario() -> Non
 
     assert scenario is not None
     assert scenario.scenario_id == "isaac-scene-index-procthor-10k-val-1-7-1"
+    assert [item.receptacle_id for item in scenario.receptacles] == [
+        "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+        "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",
+    ]
     assert scenario.objects[0].object_id == "bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2"
     assert scenario.objects[0].location_id == "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2"
     target = scenario.private_manifest.targets[0]
@@ -1850,9 +2249,11 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         width: int,
         height: int,
         simulation_app: object,
+        semantic_pose_state: dict[str, object] | None = None,
     ) -> dict[str, object]:
         assert scene_usd == run_dir / "scene.usda"
         assert simulation_app == "unit-simulation-app"
+        assert semantic_pose_state is not None
         assert camera_request["api_name"] == "roboclaws.camera_control.render_views"
         output_dir.mkdir(parents=True, exist_ok=True)
         views = []
@@ -2303,6 +2704,7 @@ def _unit_isaac_object_index() -> dict[str, dict[str, object]]:
             "index_source": "usd_stage_traversal",
             "usd_world_bounds": {
                 "center": [4.0, 5.0, 0.4],
+                "min": [3.8, 4.8, 0.0],
                 "max": [4.2, 5.2, 0.8],
                 "size": [0.4, 0.4, 0.8],
             },

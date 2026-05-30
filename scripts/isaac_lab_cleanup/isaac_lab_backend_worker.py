@@ -80,11 +80,27 @@ ISAAC_OFFICIAL_BLOCK_ASSETS = (
     "Props/Blocks/red_block.usd",
     "Props/Blocks/green_block.usd",
 )
+MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS = {
+    "sink",
+    "shelvingunit",
+    "desk",
+    "fridge",
+    "tvstand",
+    "bed",
+    "sofa",
+    "diningtable",
+    "countertop",
+}
 MAX_SEGMENTATION_CANDIDATES = 24
 REAL_SMOKE_CAPTURE_METHOD = "isaac_lab_camera_rgb"
 REAL_ROBOT_VIEW_CAPTURE_METHOD = "isaac_lab_camera_rgb_static_robot_views"
 REAL_ROBOT_VIEW_RERENDER_METHOD = "isaac_lab_camera_rgb_semantic_pose_robot_views"
 REAL_SMOKE_RENDERER_MODE = "isaac_lab_headless_rtx"
+PLACEMENT_DIAGNOSTIC_SCHEMA = "molmospaces_semantic_placement_diagnostic_v1"
+ISAAC_PLACEMENT_RESOLVER_SOURCE = "isaac_support_placement_resolver"
+ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = "isaac_usd_descendant_support_surface"
+ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = "isaac_usd_descendant_support_surface_union"
+ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = "isaac_usd_world_bounds"
 _DEFERRED_SIMULATION_APP: Any | None = None
 
 
@@ -363,15 +379,10 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "current_receptacle_id": initial_receptacle_id,
         "open_receptacle_ids": [],
         "containment": {},
+        "object_pose_overrides": {},
+        "mess_placement_diagnostics": [],
         "tool_event_counts": {},
         "placement_diagnostics": [],
-        "semantic_pose_state": _initial_semantic_pose_state(
-            scenario=scenario,
-            object_index=object_index,
-            receptacle_index=receptacle_index,
-            scene_binding_diagnostics=scene_binding_diagnostics,
-            initial_receptacle_id=initial_receptacle_id,
-        ),
         "mapping_gaps": mapping_gaps,
         "object_index": object_index,
         "receptacle_index": receptacle_index,
@@ -383,6 +394,9 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "segmentation": segmentation,
         "robot": _robot_payload(args.robot_name) if args.include_robot else None,
     }
+    _seed_generated_mess_placements(state)
+    state["current_receptacle_id"] = _first_target_object_location(state) or initial_receptacle_id
+    state["semantic_pose_state"] = _initial_semantic_pose_state_from_state(state)
     args.run_dir.mkdir(parents=True, exist_ok=True)
     write_state(args.state_path, state)
     if real_smoke is None:
@@ -868,10 +882,18 @@ def _annotate_usd_index_geometry(
             if str(entry.get("kind") or "") == "receptacle" or isinstance(
                 entry.get("support_pose"), dict
             ):
+                support_surfaces = _usd_receptacle_support_surfaces(prim=prim, usd_geom=usd_geom)
+                if support_surfaces:
+                    entry["support_surfaces"] = support_surfaces
                 support_pose = _support_pose_from_usd_bounds(
                     entry.get("usd_world_bounds"),
                     fallback=_dict(entry.get("support_pose")),
                 )
+                if support_surfaces:
+                    support_pose = _support_pose_from_support_surface(
+                        support_surfaces[0],
+                        fallback=support_pose,
+                    )
                 if support_pose is not None:
                     entry["support_pose"] = support_pose
 
@@ -969,6 +991,220 @@ def _support_pose_from_usd_bounds(
     if size is not None:
         pose["support_radius_m"] = round(max(size[0], size[1]) / 2.0, 6)
     return pose
+
+
+def _support_pose_from_support_surface(
+    surface: dict[str, Any],
+    *,
+    fallback: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    center = surface.get("center")
+    if not isinstance(center, (list, tuple)) or len(center) < 2:
+        return dict(fallback) if fallback else None
+    try:
+        x = float(center[0])
+        y = float(center[1])
+        z = float(surface["top_z"])
+    except (KeyError, TypeError, ValueError):
+        return dict(fallback) if fallback else None
+    half_extents = surface.get("half_extents")
+    pose = {
+        "frame": "usd_world",
+        "x": x,
+        "y": y,
+        "z": z,
+        "yaw_deg": _float_or_default(_dict(fallback).get("yaw_deg"), 0.0),
+        "source": str(surface.get("source") or ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE),
+        "support_surface_id": surface.get("surface_id"),
+    }
+    if isinstance(half_extents, (list, tuple)) and len(half_extents) >= 2:
+        try:
+            pose["support_radius_m"] = round(
+                max(abs(float(half_extents[0])), abs(float(half_extents[1]))),
+                6,
+            )
+        except (TypeError, ValueError):
+            pass
+    return pose
+
+
+def _float_or_default(value: Any, default: float) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _usd_receptacle_support_surfaces(*, prim: Any, usd_geom: Any) -> list[dict[str, Any]]:
+    whole_bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
+    whole_surface = _support_surface_from_usd_bounds(
+        bounds=whole_bounds,
+        surface_id=str(prim.GetPath()),
+        source=ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE,
+    )
+    candidates = []
+    for descendant in _iter_usd_prim_range(prim):
+        if descendant == prim:
+            continue
+        if not _is_usd_renderable_support_candidate(descendant, usd_geom=usd_geom):
+            continue
+        bounds = _usd_world_bounds(descendant, usd_geom=usd_geom)
+        surface = _support_surface_from_usd_bounds(
+            bounds=bounds,
+            surface_id=str(descendant.GetPath()),
+            source=ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
+        )
+        if surface is None:
+            continue
+        score = _usd_support_surface_score(surface, whole_surface=whole_surface)
+        if score is None:
+            continue
+        surface["selection_score"] = round(float(score), 6)
+        candidates.append(surface)
+    candidates.sort(
+        key=lambda item: (
+            float(item.get("selection_score") or 0.0),
+            float(item.get("area_m2") or 0.0),
+            -float(item.get("top_z") or 0.0),
+            str(item.get("surface_id") or ""),
+        ),
+        reverse=True,
+    )
+    if candidates:
+        union = _usd_support_surface_union(candidates, whole_surface=whole_surface)
+        if union is not None:
+            return [union, *candidates[:7]]
+        return candidates[:8]
+    return [whole_surface] if whole_surface is not None else []
+
+
+def _is_usd_renderable_support_candidate(prim: Any, *, usd_geom: Any) -> bool:
+    gprim_type = getattr(usd_geom, "Gprim", None)
+    if gprim_type is not None and prim.IsA(gprim_type):
+        return True
+    return str(prim.GetTypeName() or "") in {"Mesh", "Cube", "Sphere", "Cylinder", "Capsule"}
+
+
+def _support_surface_from_usd_bounds(
+    *,
+    bounds: Any,
+    surface_id: str,
+    source: str,
+) -> dict[str, Any] | None:
+    raw_bounds = bounds if isinstance(bounds, dict) else {}
+    center = _vec3(raw_bounds.get("center"))
+    size = _vec3(raw_bounds.get("size"))
+    max_point = _vec3(raw_bounds.get("max"))
+    if center is None or size is None or max_point is None:
+        return None
+    half_extents = [abs(float(size[0])) / 2.0, abs(float(size[1])) / 2.0]
+    if min(half_extents) < 0.03:
+        return None
+    area = 4.0 * float(half_extents[0]) * float(half_extents[1])
+    if area <= 0.0:
+        return None
+    return {
+        "surface_id": surface_id,
+        "center": [round(float(center[0]), 6), round(float(center[1]), 6)],
+        "top_z": round(float(max_point[2]), 6),
+        "half_extents": [
+            round(float(half_extents[0]), 6),
+            round(float(half_extents[1]), 6),
+        ],
+        "area_m2": round(float(area), 6),
+        "source": source,
+    }
+
+
+def _usd_support_surface_score(
+    surface: dict[str, Any],
+    *,
+    whole_surface: dict[str, Any] | None,
+) -> float | None:
+    area = float(surface.get("area_m2") or 0.0)
+    if area < 0.03:
+        return None
+    half_extents = surface.get("half_extents")
+    if not isinstance(half_extents, (list, tuple)) or len(half_extents) < 2:
+        return None
+    try:
+        min_half_extent = min(abs(float(half_extents[0])), abs(float(half_extents[1])))
+        top_z = float(surface["top_z"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if min_half_extent < 0.06:
+        return None
+    whole_area = float(_dict(whole_surface).get("area_m2") or 0.0)
+    whole_top_z = _dict(whole_surface).get("top_z")
+    area_ratio = area / whole_area if whole_area > 0.0 else 1.0
+    try:
+        below_whole_top = max(float(whole_top_z) - top_z, 0.0)
+    except (TypeError, ValueError):
+        below_whole_top = 0.0
+    # Beds and similar receptacles often include tall backboards in the parent
+    # bounds. Favor broad lower descendants over the highest broad descendant.
+    return area + min(area_ratio, 1.25) + min(below_whole_top * 2.0, 3.0)
+
+
+def _usd_support_surface_union(
+    candidates: list[dict[str, Any]],
+    *,
+    whole_surface: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    broad = []
+    best_top_z = float(candidates[0].get("top_z") or 0.0) if candidates else 0.0
+    for surface in candidates:
+        if surface.get("source") != ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE:
+            continue
+        top_z = _float_or_default(surface.get("top_z"), best_top_z)
+        area = _float_or_default(surface.get("area_m2"), 0.0)
+        whole_area = _float_or_default(_dict(whole_surface).get("area_m2"), 0.0)
+        if area < 0.03:
+            continue
+        if whole_area > 0.0 and area / whole_area < 0.35:
+            continue
+        if abs(top_z - best_top_z) > 0.08:
+            continue
+        center = surface.get("center")
+        half_extents = surface.get("half_extents")
+        if not isinstance(center, (list, tuple)) or len(center) < 2:
+            continue
+        if not isinstance(half_extents, (list, tuple)) or len(half_extents) < 2:
+            continue
+        try:
+            min_x = float(center[0]) - abs(float(half_extents[0]))
+            max_x = float(center[0]) + abs(float(half_extents[0]))
+            min_y = float(center[1]) - abs(float(half_extents[1]))
+            max_y = float(center[1]) + abs(float(half_extents[1]))
+        except (TypeError, ValueError):
+            continue
+        broad.append((surface, min_x, max_x, min_y, max_y, top_z))
+    if len(broad) < 2:
+        return None
+    min_x = min(item[1] for item in broad)
+    max_x = max(item[2] for item in broad)
+    min_y = min(item[3] for item in broad)
+    max_y = max(item[4] for item in broad)
+    top_z = max(item[5] for item in broad)
+    area = (max_x - min_x) * (max_y - min_y)
+    if area <= 0.0:
+        return None
+    return {
+        "surface_id": "+".join(str(item[0].get("surface_id") or "") for item in broad),
+        "center": [round((min_x + max_x) / 2.0, 6), round((min_y + max_y) / 2.0, 6)],
+        "top_z": round(top_z, 6),
+        "half_extents": [
+            round((max_x - min_x) / 2.0, 6),
+            round((max_y - min_y) / 2.0, 6),
+        ],
+        "area_m2": round(area, 6),
+        "source": ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
+        "selection_score": round(
+            max(float(item[0].get("selection_score") or 0.0) for item in broad),
+            6,
+        ),
+        "member_count": len(broad),
+    }
 
 
 def _room_outline_from_usd_prim(
@@ -1214,12 +1450,12 @@ def _is_molmospaces_receptacle_metadata(metadata: dict[str, Any]) -> bool:
     category = _norm(metadata.get("category"))
     if not category:
         return False
-    if category in _MOLMOSPACES_RECEPTACLE_CATEGORY_NORMS:
+    if category in _MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS:
         return True
     return bool(metadata.get("children")) and metadata.get("is_static") is True
 
 
-_MOLMOSPACES_RECEPTACLE_CATEGORY_NORMS = {
+_MOLMOSPACES_SCENE_INDEX_RECEPTACLE_CATEGORY_NORMS = {
     "bed",
     "bookshelf",
     "chair",
@@ -1887,6 +2123,7 @@ def capture_scene_camera_views(
     output_dir: Path,
     width: int,
     height: int,
+    semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from isaaclab.app import AppLauncher
 
@@ -1902,6 +2139,7 @@ def capture_scene_camera_views(
         width=width,
         height=height,
         simulation_app=simulation_app,
+        semantic_pose_state=semantic_pose_state,
     )
 
 
@@ -1913,6 +2151,7 @@ def _capture_isaac_lab_scene_camera_views(
     width: int,
     height: int,
     simulation_app: Any,
+    semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1925,6 +2164,10 @@ def _capture_isaac_lab_scene_camera_views(
         raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
     _wait_for_stage_load(stage_utils, simulation_app)
     _load_current_stage_payloads(stage_utils)
+    pose_apply = _apply_semantic_pose_state_to_stage(
+        stage_utils=stage_utils,
+        semantic_pose_state=semantic_pose_state,
+    )
     scene_bounds = _current_stage_bounds(stage_utils)
     camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
     resolution = camera_request["render_resolution"]
@@ -2025,6 +2268,7 @@ def _capture_isaac_lab_scene_camera_views(
         },
         "render_steps": total_render_steps,
         "scene_bounds": scene_bounds,
+        "semantic_pose_stage_application": pose_apply,
         "views": views,
         "images": saved,
         "shapes": shapes,
@@ -2101,6 +2345,9 @@ def _semantic_pose_target_position(
     receptacle_index: dict[str, Any],
     fallback_pose: dict[str, Any],
 ) -> tuple[float, float, float] | None:
+    exact_position = _vec3(fallback_pose.get("position"))
+    if exact_position is not None:
+        return (exact_position[0], exact_position[1], exact_position[2])
     support = _dict(receptacle_index.get(support_id))
     pose = _dict(support.get("support_pose")) or fallback_pose
     try:
@@ -3486,7 +3733,20 @@ def _initial_semantic_pose_state(
         "object_index": object_index,
         "receptacle_index": receptacle_index,
         "scene_binding_diagnostics": scene_binding_diagnostics or {},
+        "object_pose_overrides": {},
     }
+    return _semantic_pose_state_from_backend_state(state, transform_events=[])
+
+
+def _initial_semantic_pose_state_from_state(state: dict[str, Any]) -> dict[str, Any]:
+    return _semantic_pose_state_from_backend_state(state, transform_events=[])
+
+
+def _semantic_pose_state_from_backend_state(
+    state: dict[str, Any],
+    *,
+    transform_events: list[dict[str, Any]],
+) -> dict[str, Any]:
     return {
         "schema": ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
         "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
@@ -3495,12 +3755,16 @@ def _initial_semantic_pose_state(
         "planner_backed": False,
         "physical_robot": False,
         "semantic_pose_only": True,
-        "robot_pose": _robot_pose_for_receptacle(state, initial_receptacle_id),
-        "held_object_id": None,
-        "open_receptacle_ids": [],
+        "robot_pose": _robot_pose_for_receptacle(
+            state,
+            str(state.get("current_receptacle_id") or ""),
+        ),
+        "held_object_id": state.get("held_object_id"),
+        "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
         "object_poses": _semantic_object_poses_from_state(state),
         "articulations": _semantic_articulations_from_state(state),
-        "transform_events": [],
+        "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
+        "transform_events": transform_events,
         "evidence_note": (
             "Semantic cleanup primitives update backend JSON pose/articulation state "
             "against public USD prim handles. These edits are not rendered back into "
@@ -3568,6 +3832,7 @@ def _record_semantic_pose_event(
             "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
             "object_poses": _semantic_object_poses_from_state(state),
             "articulations": _semantic_articulations_from_state(state),
+            "object_pose_overrides": dict(_dict(state.get("object_pose_overrides"))),
             "transform_events": events,
             "evidence_note": (
                 "Semantic cleanup primitives update backend JSON pose/articulation state "
@@ -3578,6 +3843,781 @@ def _record_semantic_pose_event(
     )
     state["semantic_pose_state"] = semantic_pose_state
     return event
+
+
+def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
+    targets = [_dict(item) for item in _dict(state.get("private_manifest")).get("targets", [])]
+    if not targets:
+        return
+    target_receptacle_ids = {
+        receptacle_id
+        for target in targets
+        for receptacle_id in target.get("valid_receptacle_ids", [])
+        if str(receptacle_id)
+    }
+    wrong_pool = _mess_wrong_receptacle_pool(state, target_receptacle_ids)
+    if not wrong_pool:
+        return
+    diagnostics = [
+        dict(item)
+        for item in state.get("mess_placement_diagnostics", [])
+        if isinstance(item, dict)
+    ]
+    for index, target in enumerate(targets):
+        object_id = str(target.get("object_id") or "")
+        if not object_id:
+            continue
+        target_ids = {str(item) for item in target.get("valid_receptacle_ids", []) if str(item)}
+        wrong = wrong_pool[index % len(wrong_pool)]
+        if len(wrong_pool) > 1 and str(wrong.get("receptacle_id") or "") in target_ids:
+            wrong = wrong_pool[(index + 1) % len(wrong_pool)]
+        receptacle_id = str(wrong.get("receptacle_id") or "")
+        if not receptacle_id:
+            continue
+        relation = "inside" if _receptacle_prefers_inside(wrong) else "on"
+        placement_resolution = _apply_object_location(
+            state,
+            object_id=object_id,
+            receptacle_id=receptacle_id,
+            relation=relation,
+            placement_index=index,
+            source="mess_seed",
+        )
+        diagnostic = _isaac_placement_diagnostic(
+            state=state,
+            object_id=object_id,
+            receptacle_id=receptacle_id,
+            relation=relation,
+            source="mess_seed",
+            placement_resolution=placement_resolution,
+        )
+        diagnostics.append(diagnostic)
+    state["mess_placement_diagnostics"] = diagnostics
+
+
+def _mess_wrong_receptacle_pool(
+    state: dict[str, Any],
+    target_receptacle_ids: set[str],
+) -> list[dict[str, Any]]:
+    receptacles = list(_receptacles_by_id(state).values())
+    wrong_pool = [
+        item
+        for item in receptacles
+        if str(item.get("receptacle_id") or "") not in target_receptacle_ids
+        and not _receptacle_requires_open(item)
+    ]
+    if not wrong_pool:
+        wrong_pool = [
+            item
+            for item in receptacles
+            if str(item.get("receptacle_id") or "") not in target_receptacle_ids
+        ]
+    return wrong_pool or receptacles
+
+
+def _apply_object_location(
+    state: dict[str, Any],
+    *,
+    object_id: str,
+    receptacle_id: str,
+    relation: str,
+    placement_index: int,
+    source: str,
+) -> dict[str, Any]:
+    resolution = _resolve_isaac_placement(
+        state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        index=placement_index,
+        relation=relation,
+        source=source,
+    )
+    state.setdefault("locations", {})[object_id] = receptacle_id
+    containment = dict(state.get("containment") or {})
+    containment[object_id] = {
+        "contained_in": receptacle_id if relation == "inside" else "",
+        "location_relation": relation,
+    }
+    state["containment"] = containment
+    overrides = dict(state.get("object_pose_overrides") or {})
+    position = _vec3(resolution.get("position"))
+    if position is not None:
+        overrides[object_id] = {
+            "position": _round_vec3(position),
+            "position_source": ISAAC_PLACEMENT_RESOLVER_SOURCE,
+            "support_receptacle_id": receptacle_id,
+            "relation": relation,
+            "support_status": resolution.get("support_status"),
+            "contact_proof": resolution.get("contact_proof"),
+            "resolution_source": resolution.get("resolution_source"),
+            "source": source,
+        }
+    else:
+        overrides.pop(object_id, None)
+    state["object_pose_overrides"] = overrides
+    _set_public_scenario_object_location(
+        state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        relation=relation,
+    )
+    return resolution
+
+
+def _set_public_scenario_object_location(
+    state: dict[str, Any],
+    *,
+    object_id: str,
+    receptacle_id: str,
+    relation: str,
+) -> None:
+    scenario = _dict(state.get("scenario"))
+    for item in scenario.get("objects", []):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("object_id") or "") != object_id:
+            continue
+        item["location_id"] = receptacle_id
+        item["contained_in"] = receptacle_id if relation == "inside" else ""
+        item["location_relation"] = relation
+        break
+
+
+def _first_target_object_location(state: dict[str, Any]) -> str:
+    for target in _dict(state.get("private_manifest")).get("targets", []):
+        object_id = str(_dict(target).get("object_id") or "")
+        location_id = str(_dict(state.get("locations")).get(object_id) or "")
+        if location_id:
+            return location_id
+    return ""
+
+
+def _resolve_isaac_placement(
+    state: dict[str, Any],
+    *,
+    object_id: str,
+    receptacle_id: str,
+    index: int,
+    relation: str,
+    source: str,
+) -> dict[str, Any]:
+    if relation == "on":
+        direct = _isaac_direct_support_placement(
+            state,
+            object_id=object_id,
+            receptacle_id=receptacle_id,
+            index=index,
+        )
+        if direct is not None:
+            direct["source"] = source
+            return direct
+    position = _isaac_fallback_placement_position(
+        state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        index=index,
+        relation=relation,
+    )
+    support_status = (
+        "semantic_contained_in_receptacle" if relation == "inside" else "degraded_elevated"
+    )
+    contact_proof = (
+        "semantic_containment" if relation == "inside" else "degraded_no_direct_support_surface"
+    )
+    return {
+        "position": position,
+        "support_status": support_status,
+        "contact_proof": contact_proof,
+        "resolution_source": "isaac_category_fallback",
+        "candidate_count": 0,
+        "degraded": relation == "on",
+        "source": source,
+    }
+
+
+def _isaac_state_objects_for_clearance(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    objects = dict(_objects_by_id(state))
+    for object_id, entry in _dict(state.get("object_index")).items():
+        object_id = str(object_id)
+        if object_id in objects:
+            continue
+        item = _dict(entry)
+        if not item:
+            continue
+        objects[object_id] = {
+            "object_id": object_id,
+            "category": str(item.get("category") or ""),
+            "name": str(item.get("public_label") or object_id),
+            "location_id": str(item.get("parent") or ""),
+            "pickupable": True,
+        }
+    return objects
+
+
+def _isaac_direct_support_placement(
+    state: dict[str, Any],
+    *,
+    object_id: str,
+    receptacle_id: str,
+    index: int,
+) -> dict[str, Any] | None:
+    surfaces = _isaac_receptacle_support_surfaces(state, receptacle_id)
+    if not surfaces:
+        return None
+    footprint = _isaac_object_footprint_half_extents(state, object_id)
+    bottom_offset = _isaac_object_bottom_offset(state, object_id)
+    clearance = _isaac_direct_support_clearance(
+        _dict(_objects_by_id(state).get(object_id)),
+        _dict(_receptacles_by_id(state).get(receptacle_id)),
+    )
+    candidate_count = 0
+    for surface in sorted(
+        surfaces,
+        key=lambda item: (
+            float(item.get("area_m2") or 0.0),
+            float(item.get("top_z") or 0.0),
+        ),
+        reverse=True,
+    ):
+        for candidate in _surface_candidate_positions(
+            surface,
+            footprint=footprint,
+            bottom_offset=bottom_offset,
+            clearance=clearance,
+            index=index,
+        ):
+            candidate_count += 1
+            if not _candidate_has_direct_support(candidate, surface, footprint):
+                continue
+            if not _isaac_candidate_is_clear_of_dynamic_objects(
+                state,
+                object_id=object_id,
+                position=candidate,
+                footprint=footprint,
+                bottom_offset=bottom_offset,
+            ):
+                continue
+            return {
+                "position": candidate,
+                "support_status": "direct_support",
+                "contact_proof": "usd_bounds_direct_support",
+                "resolution_source": "isaac_support_surface",
+                "candidate_count": candidate_count,
+                "degraded": False,
+                "support_surface": surface,
+                "object_bottom_offset_m": round(float(bottom_offset), 6),
+                "support_clearance_m": round(float(clearance), 6),
+                "object_footprint_half_extents_m": [
+                    round(float(footprint[0]), 6),
+                    round(float(footprint[1]), 6),
+                ],
+            }
+    surface = surfaces[0]
+    return {
+        "position": _elevated_position_over_surface(surface, bottom_offset=bottom_offset),
+        "support_status": "degraded_elevated",
+        "contact_proof": "degraded_no_candidate_inside_support_surface",
+        "resolution_source": "isaac_support_surface_elevated_fallback",
+        "candidate_count": candidate_count,
+        "degraded": True,
+        "support_surface": surface,
+        "object_bottom_offset_m": round(float(bottom_offset), 6),
+        "support_clearance_m": round(float(clearance), 6),
+        "object_footprint_half_extents_m": [
+            round(float(footprint[0]), 6),
+            round(float(footprint[1]), 6),
+        ],
+    }
+
+
+def _isaac_receptacle_support_surface(
+    state: dict[str, Any],
+    receptacle_id: str,
+) -> dict[str, Any] | None:
+    surfaces = _isaac_receptacle_support_surfaces(state, receptacle_id)
+    return surfaces[0] if surfaces else None
+
+
+def _isaac_receptacle_support_surfaces(
+    state: dict[str, Any],
+    receptacle_id: str,
+) -> list[dict[str, Any]]:
+    entry = _isaac_index_entry(
+        state,
+        receptacle_id,
+        index_name="receptacle_index",
+        binding_groups=("selected_target_receptacle_bindings", "receptacle_bindings"),
+    )
+    surfaces = []
+    for surface in entry.get("support_surfaces") or []:
+        normalized = _normalize_support_surface(surface)
+        if normalized is not None:
+            surfaces.append(normalized)
+    if surfaces:
+        return sorted(
+            surfaces,
+            key=lambda item: (
+                float(item.get("area_m2") or 0.0),
+                float(item.get("top_z") or 0.0),
+            ),
+            reverse=True,
+        )
+    surface = _support_surface_from_usd_bounds(
+        bounds=_dict(entry.get("usd_world_bounds")),
+        surface_id=_receptacle_usd_prim_path(state, receptacle_id) or receptacle_id,
+        source=ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE,
+    )
+    if surface is not None:
+        return [surface]
+    support_pose = _receptacle_support_pose(state, receptacle_id)
+    center = _support_pose_position(support_pose)
+    radius = float(support_pose.get("support_radius_m") or 0.0) if support_pose else 0.0
+    if center is None or radius <= 0.0:
+        return []
+    area = 4.0 * radius * radius
+    return [
+        {
+            "surface_id": _receptacle_usd_prim_path(state, receptacle_id) or receptacle_id,
+            "center": [round(float(center[0]), 6), round(float(center[1]), 6)],
+            "top_z": round(float(center[2]), 6),
+            "half_extents": [round(float(radius), 6), round(float(radius), 6)],
+            "area_m2": round(float(area), 6),
+            "source": str(support_pose.get("source") or "isaac_support_pose"),
+        }
+    ]
+
+
+def _normalize_support_surface(surface: Any) -> dict[str, Any] | None:
+    raw = _dict(surface)
+    center = raw.get("center")
+    half_extents = raw.get("half_extents")
+    if not isinstance(center, (list, tuple)) or len(center) < 2:
+        return None
+    if not isinstance(half_extents, (list, tuple)) or len(half_extents) < 2:
+        return None
+    try:
+        center_xy = [round(float(center[0]), 6), round(float(center[1]), 6)]
+        top_z = round(float(raw["top_z"]), 6)
+        half_xy = [
+            round(abs(float(half_extents[0])), 6),
+            round(abs(float(half_extents[1])), 6),
+        ]
+    except (KeyError, TypeError, ValueError):
+        return None
+    if min(half_xy) < 0.03:
+        return None
+    area = float(raw.get("area_m2") or (4.0 * half_xy[0] * half_xy[1]))
+    if area <= 0.0:
+        return None
+    normalized = {
+        "surface_id": str(raw.get("surface_id") or ""),
+        "center": center_xy,
+        "top_z": top_z,
+        "half_extents": half_xy,
+        "area_m2": round(area, 6),
+        "source": str(raw.get("source") or ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE),
+    }
+    if raw.get("selection_score") is not None:
+        try:
+            normalized["selection_score"] = round(float(raw["selection_score"]), 6)
+        except (TypeError, ValueError):
+            pass
+    return normalized
+
+
+def _surface_candidate_positions(
+    surface: dict[str, Any],
+    *,
+    footprint: tuple[float, float],
+    bottom_offset: float,
+    clearance: float,
+    index: int,
+) -> list[list[float]]:
+    center = surface["center"]
+    half_extents = surface["half_extents"]
+    margin_x = float(footprint[0]) + 0.04
+    margin_y = float(footprint[1]) + 0.04
+    available_x = max(float(half_extents[0]) - margin_x, 0.0)
+    available_y = max(float(half_extents[1]) - margin_y, 0.0)
+    slot_x = min(available_x * 0.55, 0.28)
+    slot_y = min(available_y * 0.55, 0.28)
+    offsets = [
+        (0.0, 0.0),
+        (-slot_x, 0.0),
+        (slot_x, 0.0),
+        (0.0, -slot_y),
+        (0.0, slot_y),
+        (-slot_x, -slot_y),
+        (slot_x, -slot_y),
+        (-slot_x, slot_y),
+        (slot_x, slot_y),
+    ]
+    if len(offsets) > 1:
+        shift = index % len(offsets)
+        offsets = offsets[shift:] + offsets[:shift]
+    z = float(surface["top_z"]) + float(bottom_offset) + float(clearance)
+    return [
+        [
+            round(float(center[0]) + float(dx), 6),
+            round(float(center[1]) + float(dy), 6),
+            round(z, 6),
+        ]
+        for dx, dy in offsets
+    ]
+
+
+def _candidate_has_direct_support(
+    position: list[float],
+    surface: dict[str, Any],
+    footprint: tuple[float, float],
+) -> bool:
+    center = surface["center"]
+    half_extents = surface["half_extents"]
+    margin_x = float(footprint[0]) + 0.015
+    margin_y = float(footprint[1]) + 0.015
+    return abs(float(position[0]) - float(center[0])) + margin_x <= float(half_extents[0]) and abs(
+        float(position[1]) - float(center[1])
+    ) + margin_y <= float(half_extents[1])
+
+
+def _isaac_candidate_is_clear_of_dynamic_objects(
+    state: dict[str, Any],
+    *,
+    object_id: str,
+    position: list[float],
+    footprint: tuple[float, float],
+    bottom_offset: float,
+) -> bool:
+    candidate_bottom = float(position[2]) - float(bottom_offset)
+    candidate_height = max(_isaac_object_height(state, object_id), 0.04)
+    candidate_top = candidate_bottom + candidate_height
+    candidate_aabb = {
+        "min_x": float(position[0]) - float(footprint[0]),
+        "max_x": float(position[0]) + float(footprint[0]),
+        "min_y": float(position[1]) - float(footprint[1]),
+        "max_y": float(position[1]) + float(footprint[1]),
+        "min_z": candidate_bottom,
+        "max_z": candidate_top,
+    }
+    for other_id in _isaac_state_objects_for_clearance(state):
+        if other_id == object_id:
+            continue
+        if _dict(state.get("locations")).get(other_id) == HELD_LOCATION_ID:
+            continue
+        other_aabb = _isaac_object_current_aabb(state, other_id)
+        if other_aabb is None:
+            continue
+        if not _aabb_xy_overlaps(
+            (
+                candidate_aabb["min_x"],
+                candidate_aabb["max_x"],
+                candidate_aabb["min_y"],
+                candidate_aabb["max_y"],
+            ),
+            other_aabb,
+            margin=0.025,
+        ):
+            continue
+        if candidate_bottom - 0.015 <= other_aabb["max_z"] and candidate_top + 0.015 >= other_aabb[
+            "min_z"
+        ]:
+            return False
+    return True
+
+
+def _aabb_xy_overlaps(
+    first: tuple[float, float, float, float],
+    second: dict[str, float],
+    *,
+    margin: float,
+) -> bool:
+    min_x, max_x, min_y, max_y = first
+    return (
+        min_x - margin <= float(second["max_x"])
+        and max_x + margin >= float(second["min_x"])
+        and min_y - margin <= float(second["max_y"])
+        and max_y + margin >= float(second["min_y"])
+    )
+
+
+def _isaac_object_current_aabb(state: dict[str, Any], object_id: str) -> dict[str, float] | None:
+    bounds = _isaac_object_world_bounds(state, object_id)
+    size = _vec3(_dict(bounds).get("size"))
+    center = _vec3(_dict(bounds).get("center"))
+    if center is None or size is None:
+        return None
+    override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
+    override_position = _vec3(override.get("position"))
+    if override_position is not None:
+        center = override_position
+    half_x = max(abs(float(size[0])) / 2.0, 0.025)
+    half_y = max(abs(float(size[1])) / 2.0, 0.025)
+    half_z = max(abs(float(size[2])) / 2.0, 0.02)
+    return {
+        "min_x": float(center[0]) - half_x,
+        "max_x": float(center[0]) + half_x,
+        "min_y": float(center[1]) - half_y,
+        "max_y": float(center[1]) + half_y,
+        "min_z": float(center[2]) - half_z,
+        "max_z": float(center[2]) + half_z,
+    }
+
+
+def _elevated_position_over_surface(
+    surface: dict[str, Any],
+    *,
+    bottom_offset: float,
+) -> list[float]:
+    center = surface["center"]
+    return [
+        round(float(center[0]), 6),
+        round(float(center[1]), 6),
+        round(float(surface["top_z"]) + float(bottom_offset) + 0.08, 6),
+    ]
+
+
+def _isaac_fallback_placement_position(
+    state: dict[str, Any],
+    *,
+    object_id: str,
+    receptacle_id: str,
+    index: int,
+    relation: str,
+) -> list[float]:
+    receptacle = _dict(_receptacles_by_id(state).get(receptacle_id))
+    support = _receptacle_support_pose(state, receptacle_id)
+    base = _support_pose_position(support)
+    if base is None:
+        base = _vec3(_dict(_isaac_receptacle_world_bounds(state, receptacle_id)).get("center"))
+    if base is None:
+        pose = _pose_near(receptacle_id)
+        base = [float(pose["x"]), float(pose["y"]), float(pose.get("z", 0.0))]
+    text = _receptacle_text(receptacle)
+    if relation == "inside" and ("fridge" in text or "refrigerator" in text):
+        return _round_vec3([base[0] + 0.08, base[1] - 0.16, base[2] + 0.35])
+    offset = ((index % 3) - 1) * 0.12
+    y_offset = 0.08 * (index % 2)
+    category = str(_dict(_objects_by_id(state).get(object_id)).get("category") or "")
+    if _norm(category) in {"apple", "food"}:
+        y_offset = 0.16
+    return _round_vec3([base[0] + offset, base[1] + y_offset, base[2] + 0.18])
+
+
+def _isaac_object_footprint_half_extents(
+    state: dict[str, Any],
+    object_id: str,
+) -> tuple[float, float]:
+    size = _vec3(_dict(_isaac_object_world_bounds(state, object_id)).get("size"))
+    if size is not None:
+        return (max(abs(float(size[0])) / 2.0, 0.025), max(abs(float(size[1])) / 2.0, 0.025))
+    category = _norm(_dict(_objects_by_id(state).get(object_id)).get("category"))
+    if category in {"remotecontrol", "remote", "electronics"}:
+        return (0.09, 0.045)
+    if category in {"plate", "dish"}:
+        return (0.13, 0.13)
+    if category in {"apple", "potato", "food"}:
+        return (0.065, 0.065)
+    if category == "book":
+        return (0.12, 0.08)
+    if category == "pillow":
+        return (0.22, 0.16)
+    return (0.08, 0.08)
+
+
+def _isaac_object_bottom_offset(state: dict[str, Any], object_id: str) -> float:
+    bounds = _dict(_isaac_object_world_bounds(state, object_id))
+    center = _vec3(bounds.get("center"))
+    min_point = _vec3(bounds.get("min"))
+    if center is not None and min_point is not None:
+        offset = float(center[2]) - float(min_point[2])
+        if 0.0 < offset <= 1.0:
+            return max(offset, 0.01)
+    return _isaac_object_surface_lift(_dict(_objects_by_id(state).get(object_id)).get("category"))
+
+
+def _isaac_object_height(state: dict[str, Any], object_id: str) -> float:
+    size = _vec3(_dict(_isaac_object_world_bounds(state, object_id)).get("size"))
+    if size is not None:
+        return max(abs(float(size[2])), 0.01)
+    return _isaac_object_surface_lift(_dict(_objects_by_id(state).get(object_id)).get("category"))
+
+
+def _isaac_object_surface_lift(category: Any) -> float:
+    normalized = _norm(category)
+    if normalized in {"book", "plate", "remotecontrol", "remote", "electronics"}:
+        return 0.04
+    if normalized in {"apple", "potato", "food"}:
+        return 0.08
+    if normalized == "pillow":
+        return 0.12
+    return 0.06
+
+
+def _isaac_direct_support_clearance(
+    obj: dict[str, Any],
+    receptacle: dict[str, Any],
+) -> float:
+    receptacle_text = _receptacle_text(receptacle)
+    object_category = _norm(obj.get("category"))
+    if "bed" in receptacle_text or "sofa" in receptacle_text:
+        return 0.035
+    if object_category in {"book", "plate", "remotecontrol", "remote", "electronics"}:
+        return 0.02
+    return 0.015
+
+
+def _isaac_object_world_bounds(state: dict[str, Any], object_id: str) -> dict[str, Any]:
+    return _dict(
+        _isaac_index_entry(
+            state,
+            object_id,
+            index_name="object_index",
+            binding_groups=("selected_object_bindings", "object_bindings"),
+        ).get("usd_world_bounds")
+    )
+
+
+def _isaac_receptacle_world_bounds(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
+    return _dict(
+        _isaac_index_entry(
+            state,
+            receptacle_id,
+            index_name="receptacle_index",
+            binding_groups=("selected_target_receptacle_bindings", "receptacle_bindings"),
+        ).get("usd_world_bounds")
+    )
+
+
+def _isaac_index_entry(
+    state: dict[str, Any],
+    public_id: str,
+    *,
+    index_name: str,
+    binding_groups: tuple[str, ...],
+) -> dict[str, Any]:
+    binding = _binding_for_handle(state.get("scene_binding_diagnostics"), public_id, binding_groups)
+    index = _dict(state.get(index_name))
+    for handle in (binding.get("usd_handle"), public_id):
+        entry = _dict(index.get(str(handle)))
+        if entry:
+            return entry
+    return {}
+
+
+def _receptacle_requires_open(receptacle: dict[str, Any]) -> bool:
+    text = _receptacle_text(receptacle)
+    return "fridge" in text or "refrigerator" in text
+
+
+def _receptacle_prefers_inside(receptacle: dict[str, Any]) -> bool:
+    return _receptacle_requires_open(receptacle) or _receptacle_is_open_container(receptacle)
+
+
+def _receptacle_is_open_container(receptacle: dict[str, Any]) -> bool:
+    text = _receptacle_text(receptacle)
+    return any(term in text for term in ("shelvingunit", "bookshelf", "bookcase", "shelf"))
+
+
+def _receptacle_text(receptacle: dict[str, Any]) -> str:
+    parts = (
+        receptacle.get("receptacle_id", ""),
+        receptacle.get("name", ""),
+        receptacle.get("category", ""),
+        receptacle.get("kind", ""),
+    )
+    return " ".join(str(part) for part in parts).lower()
+
+
+def _isaac_placement_diagnostic(
+    *,
+    state: dict[str, Any],
+    object_id: str,
+    receptacle_id: str,
+    relation: str,
+    source: str,
+    placement_resolution: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    obj = _dict(_objects_by_id(state).get(object_id))
+    receptacle = _dict(_receptacles_by_id(state).get(receptacle_id))
+    placement_resolution = placement_resolution or {}
+    requested_position = _vec3(placement_resolution.get("position")) or []
+    object_position = requested_position or _semantic_object_position_from_state(
+        state,
+        object_id=object_id,
+        location_id=str(_dict(state.get("locations")).get(object_id) or ""),
+        original_location_id=str(obj.get("location_id") or ""),
+        support_receptacle_id=receptacle_id,
+    )
+    if object_position is None:
+        object_position = []
+    receptacle_position = _support_pose_position(_receptacle_support_pose(state, receptacle_id))
+    if receptacle_position is None:
+        receptacle_position = _vec3(
+            _dict(_isaac_receptacle_world_bounds(state, receptacle_id)).get("center")
+        )
+    if receptacle_position is None:
+        receptacle_position = []
+    xy_distance = (
+        math.dist(object_position[:2], receptacle_position[:2])
+        if len(object_position) >= 2 and len(receptacle_position) >= 2
+        else None
+    )
+    z_delta = (
+        float(object_position[2]) - float(receptacle_position[2])
+        if len(object_position) >= 3 and len(receptacle_position) >= 3
+        else None
+    )
+    default_support_status = (
+        "semantic_contained_in_receptacle" if relation == "inside" else "semantic_on_receptacle"
+    )
+    support_status = str(placement_resolution.get("support_status") or default_support_status)
+    diagnostic = {
+        "schema": PLACEMENT_DIAGNOSTIC_SCHEMA,
+        "status": support_status,
+        "object_id": object_id,
+        "object_category": obj.get("category"),
+        "object_usd_prim_path": _object_usd_prim_path(state, object_id),
+        "receptacle_id": receptacle_id,
+        "receptacle_category": receptacle.get("category") or receptacle.get("kind"),
+        "receptacle_usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
+        "relation": relation,
+        "requested_position": _round_vec3(requested_position) if requested_position else [],
+        "object_position": _round_vec3(object_position) if object_position else [],
+        "receptacle_position": _round_vec3(receptacle_position) if receptacle_position else [],
+        "xy_distance_m": round(float(xy_distance), 6) if xy_distance is not None else None,
+        "z_delta_m": round(float(z_delta), 6) if z_delta is not None else None,
+        "support_status": support_status,
+        "placement_support_status": support_status,
+        "direct_support_proven": support_status == "direct_support",
+        "contact_proof": str(
+            placement_resolution.get("contact_proof") or "not_measured_isaac_semantic_pose"
+        ),
+        "diagnostic_source": source,
+        "resolution_source": placement_resolution.get("resolution_source", "isaac_semantic"),
+        "candidate_count": int(placement_resolution.get("candidate_count") or 0),
+        "degraded": bool(placement_resolution.get("degraded", False)),
+        "state_mutation": "isaac_prim_transform",
+        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "planner_backed": False,
+        "physical_robot": False,
+    }
+    support_surface = placement_resolution.get("support_surface")
+    if isinstance(support_surface, dict):
+        diagnostic["support_surface_id"] = support_surface.get("surface_id")
+        diagnostic["support_surface_center"] = support_surface.get("center")
+        diagnostic["support_surface_half_extents"] = support_surface.get("half_extents")
+        diagnostic["support_surface_top_z"] = support_surface.get("top_z")
+        diagnostic["support_surface_source"] = support_surface.get("source")
+        if support_surface.get("member_count") is not None:
+            diagnostic["support_surface_member_count"] = support_surface.get("member_count")
+    for key in (
+        "object_bottom_offset_m",
+        "support_clearance_m",
+        "object_footprint_half_extents_m",
+    ):
+        if placement_resolution.get(key) is not None:
+            diagnostic[key] = placement_resolution[key]
+    return diagnostic
 
 
 def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -3596,12 +4636,19 @@ def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[s
             current_receptacle_id if location_id == HELD_LOCATION_ID else location_id
         )
         relation = _dict(containment.get(object_id)).get("location_relation") or "on"
+        pose_override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
         position = _semantic_object_position_from_state(
             state,
             object_id=object_id,
             location_id=location_id,
             original_location_id=str(item.get("location_id") or ""),
             support_receptacle_id=support_receptacle_id,
+        )
+        position_source = _semantic_object_position_source(
+            position,
+            location_id=location_id,
+            original_location_id=str(item.get("location_id") or ""),
+            pose_override=pose_override,
         )
         poses[object_id] = {
             "object_id": object_id,
@@ -3612,14 +4659,16 @@ def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[s
             "attached_to_robot": location_id == HELD_LOCATION_ID,
             "location_relation": relation,
             "position": position,
-            "position_source": _semantic_object_position_source(
-                position,
-                location_id=location_id,
-                original_location_id=str(item.get("location_id") or ""),
-            ),
+            "position_source": position_source,
             "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
             "rendered_to_usd": False,
         }
+        if pose_override:
+            poses[object_id]["placement_support_status"] = pose_override.get("support_status")
+            poses[object_id]["placement_contact_proof"] = pose_override.get("contact_proof")
+            poses[object_id]["placement_resolution_source"] = pose_override.get(
+                "resolution_source"
+            )
     return poses
 
 
@@ -3631,6 +4680,11 @@ def _semantic_object_position_from_state(
     original_location_id: str,
     support_receptacle_id: str,
 ) -> list[float] | None:
+    if location_id != HELD_LOCATION_ID:
+        pose_override = _dict(_dict(state.get("object_pose_overrides")).get(object_id))
+        override_position = _vec3(pose_override.get("position"))
+        if override_position is not None:
+            return _round_vec3(override_position)
     if location_id == original_location_id:
         bounds_position = _object_usd_world_bounds_center(state, object_id)
         if bounds_position is not None:
@@ -3658,9 +4712,12 @@ def _semantic_object_position_source(
     *,
     location_id: str,
     original_location_id: str,
+    pose_override: dict[str, Any] | None = None,
 ) -> str:
     if position is None:
         return ""
+    if _vec3(_dict(pose_override).get("position")) is not None and location_id != HELD_LOCATION_ID:
+        return str(_dict(pose_override).get("position_source") or ISAAC_PLACEMENT_RESOLVER_SOURCE)
     if location_id == HELD_LOCATION_ID:
         return "isaac_robot_target_position"
     if location_id == original_location_id:
@@ -3923,24 +4980,26 @@ def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> 
     object_id = state.get("held_object_id")
     if object_id is None:
         return _error(tool, "not_holding")
-    state["locations"][object_id] = receptacle_id
+    object_id = str(object_id)
     state["held_object_id"] = None
     state["current_receptacle_id"] = receptacle_id
-    containment = dict(state.get("containment") or {})
-    containment[object_id] = {
-        "contained_in": receptacle_id if relation == "inside" else "",
-        "location_relation": relation,
-    }
-    state["containment"] = containment
-    diagnostic = {
-        "schema": "isaac_semantic_pose_placement_v1",
-        "direct_support_proven": False,
-        "degradation": "semantic_pose_only",
-        "object_id": object_id,
-        "receptacle_id": receptacle_id,
-        "relation": relation,
-    }
-    state["placement_diagnostics"].append(diagnostic)
+    placement_resolution = _apply_object_location(
+        state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        relation=relation,
+        placement_index=len(state.get("placement_diagnostics") or []),
+        source="cleanup_place",
+    )
+    diagnostic = _isaac_placement_diagnostic(
+        state=state,
+        object_id=object_id,
+        receptacle_id=receptacle_id,
+        relation=relation,
+        source="cleanup_place",
+        placement_resolution=placement_resolution,
+    )
+    state.setdefault("placement_diagnostics", []).append(diagnostic)
     event = _record_semantic_pose_event(
         state,
         tool=tool,
@@ -3950,6 +5009,10 @@ def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> 
         previous_location_id=HELD_LOCATION_ID,
         location_id=receptacle_id,
         relation=relation,
+        placement_support_status=diagnostic.get("placement_support_status"),
+        direct_support_proven=diagnostic.get("direct_support_proven"),
+        placement_contact_proof=diagnostic.get("contact_proof"),
+        placement_resolution_source=diagnostic.get("resolution_source"),
     )
     write_state_from_state_arg(state)
     return _ok(
@@ -3960,6 +5023,8 @@ def place(args: argparse.Namespace, state: dict[str, Any], *, relation: str) -> 
         contained_in=receptacle_id if relation == "inside" else None,
         location_relation=relation,
         placement_diagnostic=diagnostic,
+        placement_support_status=diagnostic.get("placement_support_status"),
+        direct_support_proven=diagnostic.get("direct_support_proven"),
         state_mutation="isaac_prim_transform",
         semantic_pose_event=event,
     )
@@ -4158,14 +5223,23 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         output_dir=args.output_dir,
         width=args.render_width,
         height=args.render_height,
+        semantic_pose_state=_dict(state.get("semantic_pose_state")),
     )
+    semantic_pose_application = _dict(capture.get("semantic_pose_stage_application"))
     state["scene_camera_view_capture"] = {
         "schema": "isaac_scene_camera_view_capture_v1",
         "capture_method": "isaac_lab_camera_rgb_scene_probe",
         "scene_usd": scene_usd,
         "render_steps": int(capture.get("render_steps") or 0),
         "view_count": len(capture.get("views") or []),
+        "semantic_pose_stage_application": semantic_pose_application,
+        "semantic_pose_rendered": semantic_pose_application.get("rendered_to_usd") is True,
     }
+    semantic_pose_state = _dict(state.get("semantic_pose_state"))
+    if semantic_pose_application.get("rendered_to_usd") is True:
+        semantic_pose_state["rendered_to_usd"] = True
+        semantic_pose_state["scene_camera_view_capture"] = dict(state["scene_camera_view_capture"])
+        state["semantic_pose_state"] = semantic_pose_state
     write_state_from_state_arg(state)
     view_variant = _camera_capture_variant(capture)
     provenance = _camera_capture_provenance(capture)
@@ -4187,6 +5261,8 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         images=capture.get("images") or {},
         shapes=capture.get("shapes") or {},
         scene_bounds=capture.get("scene_bounds"),
+        semantic_pose_stage_application=semantic_pose_application,
+        semantic_pose_rendered=semantic_pose_application.get("rendered_to_usd") is True,
         render_steps=int(capture.get("render_steps") or 0),
         render_resolution={"width": args.render_width, "height": args.render_height},
     )
@@ -4316,7 +5392,12 @@ def _receptacle_support_pose(state: dict[str, Any], receptacle_id: str) -> dict[
     for handle in (binding.get("usd_handle"), receptacle_id):
         support = _dict(_dict(state.get("receptacle_index")).get(str(handle))).get("support_pose")
         support_pose = _dict(support)
-        if _has_xy(support_pose) and support_pose.get("source") == "usd_world_bounds_top_center":
+        if _has_xy(support_pose) and support_pose.get("source") in {
+            "usd_world_bounds_top_center",
+            ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE,
+            ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE,
+            ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE,
+        }:
             metadata_room_id = _dict(_dict(state.get("receptacle_index")).get(str(handle))).get(
                 "metadata_room_id"
             )
@@ -4617,6 +5698,7 @@ def _capture_canonical_robot_fpv_verify(
                 width=width,
                 height=height,
                 simulation_app=simulation_app,
+                semantic_pose_state=_dict(state.get("semantic_pose_state")),
             )
         else:
             capture = capture_scene_camera_views(
@@ -4625,6 +5707,7 @@ def _capture_canonical_robot_fpv_verify(
                 output_dir=output_dir,
                 width=width,
                 height=height,
+                semantic_pose_state=_dict(state.get("semantic_pose_state")),
             )
     except Exception as exc:
         state.setdefault("mapping_gaps", []).append(
@@ -5144,9 +6227,10 @@ def _scenario_from_scene_index(
     object_index: dict[str, dict[str, Any]],
     receptacle_index: dict[str, dict[str, Any]],
 ) -> CleanupScenario | None:
+    cleanup_receptacle_index = _cleanup_receptacle_index_for_mess_generation(receptacle_index)
     receptacles = tuple(
         _cleanup_receptacle_from_scene_index(handle, entry)
-        for handle, entry in sorted(receptacle_index.items())
+        for handle, entry in sorted(cleanup_receptacle_index.items())
     )
     if not receptacles:
         return None
@@ -5155,10 +6239,14 @@ def _scenario_from_scene_index(
     targets: list[TargetRule] = []
     count = max(1, int(generated_mess_count))
     for handle, entry in sorted(object_index.items()):
-        target_id = _scene_target_receptacle_id(entry, receptacle_index)
+        target_id = _scene_target_receptacle_id(entry, cleanup_receptacle_index)
         if not target_id:
             continue
-        source_id = _scene_source_receptacle_id(entry, receptacle_index, target_id=target_id)
+        source_id = _scene_source_receptacle_id(
+            entry,
+            cleanup_receptacle_index,
+            target_id=target_id,
+        )
         objects.append(
             CleanupObject(
                 object_id=handle,
@@ -5186,6 +6274,17 @@ def _scenario_from_scene_index(
             success_threshold=len(targets),
         ),
     )
+
+
+def _cleanup_receptacle_index_for_mess_generation(
+    receptacle_index: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    cleanup = {
+        handle: entry
+        for handle, entry in receptacle_index.items()
+        if _norm(_scene_object_category(entry)) in MOLMOSPACES_CLEANUP_RECEPTACLE_CATEGORY_NORMS
+    }
+    return cleanup or receptacle_index
 
 
 def _cleanup_receptacle_from_scene_index(
