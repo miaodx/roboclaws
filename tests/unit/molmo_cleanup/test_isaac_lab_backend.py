@@ -1518,6 +1518,179 @@ def test_isaac_scene_index_can_generate_scene_specific_cleanup_scenario() -> Non
     assert bindings["selected_target_receptacle_bound_count"] == 1
 
 
+def test_isaac_scene_index_uses_shared_generated_mess_selection() -> None:
+    object_index = {
+        "alarmclock_a": {
+            "asset_id": "Alarm_Clock_1",
+            "category": "AlarmClock",
+            "kind": "object",
+            "parent": "bed_01",
+            "public_label": "AlarmClock AlarmClock|surface|1|1 Alarm_Clock_1",
+        },
+        "alarmclock_b": {
+            "asset_id": "Alarm_Clock_2",
+            "category": "AlarmClock",
+            "kind": "object",
+            "parent": "bed_02",
+            "public_label": "AlarmClock AlarmClock|surface|1|2 Alarm_Clock_2",
+        },
+        "apple_a": {
+            "asset_id": "Apple_1",
+            "category": "Apple",
+            "kind": "object",
+            "parent": "counter_01",
+            "public_label": "Apple Apple|surface|1|3 Apple_1",
+        },
+        "book_a": {
+            "asset_id": "Book_1",
+            "category": "Book",
+            "kind": "object",
+            "parent": "desk_01",
+            "public_label": "Book Book|surface|1|4 Book_1",
+        },
+        "plate_a": {
+            "asset_id": "Plate_1",
+            "category": "Plate",
+            "kind": "object",
+            "parent": "table_01",
+            "public_label": "Plate Plate|surface|1|5 Plate_1",
+        },
+        "pillow_a": {
+            "asset_id": "Pillow_1",
+            "category": "Pillow",
+            "kind": "object",
+            "parent": "sofa_01",
+            "public_label": "Pillow Pillow|surface|1|6 Pillow_1",
+        },
+        "remote_a": {
+            "asset_id": "Remote_1",
+            "category": "RemoteControl",
+            "kind": "object",
+            "parent": "desk_02",
+            "public_label": "RemoteControl RemoteControl|surface|1|7 Remote_1",
+        },
+    }
+    receptacle_index = {
+        "bed_01": {"category": "Bed", "kind": "receptacle", "public_label": "Bed Bed|1|1"},
+        "bed_02": {"category": "Bed", "kind": "receptacle", "public_label": "Bed Bed|1|2"},
+        "counter_01": {
+            "category": "CounterTop",
+            "kind": "receptacle",
+            "public_label": "CounterTop CounterTop|1|1",
+        },
+        "desk_01": {"category": "Desk", "kind": "receptacle", "public_label": "Desk Desk|1|1"},
+        "desk_02": {"category": "Desk", "kind": "receptacle", "public_label": "Desk Desk|1|2"},
+        "fridge_01": {
+            "category": "Fridge",
+            "kind": "receptacle",
+            "public_label": "Fridge Fridge|1|1",
+        },
+        "shelf_01": {
+            "category": "ShelvingUnit",
+            "kind": "receptacle",
+            "public_label": "ShelvingUnit ShelvingUnit|1|1",
+        },
+        "sink_01": {"category": "Sink", "kind": "receptacle", "public_label": "Sink Sink|1|1"},
+        "sofa_01": {"category": "Sofa", "kind": "receptacle", "public_label": "Sofa Sofa|1|1"},
+        "stand_01": {
+            "category": "TVStand",
+            "kind": "receptacle",
+            "public_label": "TVStand TVStand|1|1",
+        },
+    }
+
+    scenario = isaac_lab_backend_worker._scenario_from_scene_index(
+        scene_source="procthor-10k-val",
+        scene_index=0,
+        seed=7,
+        generated_mess_count=5,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+    assert scenario is not None
+    assert [item.category for item in scenario.objects] == [
+        "Plate",
+        "Book",
+        "Potato",
+        "RemoteControl",
+        "Pillow",
+    ]
+    assert [target.valid_receptacle_ids[0] for target in scenario.private_manifest.targets] == [
+        "sink_01",
+        "shelf_01",
+        "fridge_01",
+        "stand_01",
+        "bed_01",
+    ]
+    assert scenario.private_manifest.success_threshold == 4
+
+
+def test_isaac_scene_index_can_pin_generated_mess_object_ids() -> None:
+    object_index = {
+        "apple_01": {
+            "asset_id": "Apple_1",
+            "category": "Apple",
+            "kind": "object",
+            "parent": "counter_01",
+            "public_label": "Apple Apple|surface|1|3 Apple_1",
+        },
+        "bread_01": {
+            "asset_id": "Bread_1",
+            "category": "Bread",
+            "kind": "object",
+            "parent": "counter_01",
+            "public_label": "Bread Bread|surface|1|4 Bread_1",
+        },
+    }
+    receptacle_index = {
+        "counter_01": {
+            "category": "CounterTop",
+            "kind": "receptacle",
+            "public_label": "CounterTop CounterTop|1|1",
+        },
+        "fridge_01": {
+            "category": "Fridge",
+            "kind": "receptacle",
+            "public_label": "Fridge Fridge|1|1",
+        },
+    }
+
+    scenario = isaac_lab_backend_worker._scenario_from_scene_index(
+        scene_source="procthor-10k-val",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=1,
+        generated_mess_object_ids=("apple_01",),
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+    assert scenario is not None
+    assert [item.object_id for item in scenario.objects] == ["apple_01"]
+    assert [target.object_id for target in scenario.private_manifest.targets] == ["apple_01"]
+    assert scenario.private_manifest.targets[0].valid_receptacle_ids == ("fridge_01",)
+
+
+def test_isaac_scene_index_rejects_missing_pinned_generated_mess_id() -> None:
+    with pytest.raises(ValueError, match="explicit generated mess object id is unavailable"):
+        isaac_lab_backend_worker._scenario_from_scene_index(
+            scene_source="procthor-10k-val",
+            scene_index=0,
+            seed=6,
+            generated_mess_count=1,
+            generated_mess_object_ids=("missing_object",),
+            object_index={},
+            receptacle_index={
+                "fridge_01": {
+                    "category": "Fridge",
+                    "kind": "receptacle",
+                    "public_label": "Fridge Fridge|1|1",
+                },
+            },
+        )
+
+
 def test_isaac_worker_infers_scene_index_from_local_val_path() -> None:
     args = isaac_lab_backend_worker.parse_args(
         [

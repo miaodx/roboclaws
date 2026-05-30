@@ -16,6 +16,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    RICH_MAP_MODE,
 )
 from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
 from roboclaws.molmo_cleanup.realworld_mcp_semantic_tools import SEMANTIC_CLEANUP_TOOL_NAMES
@@ -84,6 +85,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         map_bundle_dir=PREBUILT_BUNDLE,
+        map_mode=RICH_MAP_MODE,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -120,6 +122,7 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
+        map_mode=RICH_MAP_MODE,
     )
     try:
         metric_map = prior_server.call_tool("metric_map")
@@ -143,6 +146,7 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         runtime_map_prior=prior_snapshot,
         runtime_map_prior_source="prior/runtime_metric_map.json",
+        map_mode=RICH_MAP_MODE,
     )
     try:
         runtime_map = server._agent_view_payload()["runtime_metric_map"]
@@ -202,12 +206,11 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     assert "household-cleanup direct world-labels" not in report
 
 
-def test_realworld_mcp_accepts_minimal_map_mode(tmp_path: Path) -> None:
+def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         metric_map = server.call_tool("metric_map")

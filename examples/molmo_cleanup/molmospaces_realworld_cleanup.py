@@ -59,6 +59,7 @@ from roboclaws.molmo_cleanup.profiles import (  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
+    DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
     DETERMINISTIC_SWEEP_POLICY,
     MAIN_CLEANUP_AGENT_PRODUCER,
@@ -66,7 +67,6 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
     REALWORLD_MAP_MODES,
-    RICH_MAP_MODE,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
@@ -163,10 +163,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--map-mode",
         choices=tuple(sorted(REALWORLD_MAP_MODES)),
-        default=RICH_MAP_MODE,
+        default=DEFAULT_MAP_MODE,
         help=(
-            "Agent-facing map projection: rich exposes authored public semantics; "
-            "minimal exposes occupancy geometry plus generated exploration candidates."
+            "Agent-facing map projection. Default minimal exposes occupancy geometry and "
+            "generated exploration candidates; rich is an explicit legacy/debug projection "
+            "with authored public semantics."
         ),
     )
     parser.add_argument(
@@ -178,6 +179,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument(
+        "--generated-mess-object-id",
+        action="append",
+        help="Private run-control object id to include in the generated mess set. Repeatable.",
+    )
     parser.add_argument("--scene-source", default="procthor-10k-val")
     parser.add_argument("--scene-index", type=int, default=0)
     parser.add_argument(
@@ -264,6 +270,7 @@ def run_realworld_cleanup(
     molmospaces_python: str | Path | None = None,
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
+    generated_mess_object_ids: tuple[str, ...] = (),
     scene_source: str = "procthor-10k-val",
     scene_index: int = 0,
     isaac_scene_usd_path: str | Path | None = None,
@@ -274,7 +281,7 @@ def run_realworld_cleanup(
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
     semantic_sweep: bool = False,
-    map_mode: str = RICH_MAP_MODE,
+    map_mode: str = DEFAULT_MAP_MODE,
     runtime_map_prior_path: str | Path | None = None,
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
@@ -320,6 +327,7 @@ def run_realworld_cleanup(
             include_robot=include_robot,
             robot_name=robot_name,
             generated_mess_count=generated_mess_count,
+            generated_mess_object_ids=generated_mess_object_ids,
             scene_source=scene_source,
             scene_index=scene_index,
         )
@@ -331,6 +339,7 @@ def run_realworld_cleanup(
             include_robot=include_robot,
             robot_name=robot_name,
             generated_mess_count=generated_mess_count,
+            generated_mess_object_ids=generated_mess_object_ids,
             scene_source=scene_source,
             scene_index=scene_index,
             map_bundle_dir=selected_bundle_dir,
@@ -1275,6 +1284,7 @@ def main(argv: list[str] | None = None) -> int:
         molmospaces_python=None,
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
+        generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
         scene_source=args.scene_source,
         scene_index=args.scene_index,
         isaac_scene_usd_path=args.isaac_scene_usd_path,

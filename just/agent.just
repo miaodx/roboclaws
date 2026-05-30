@@ -80,8 +80,9 @@ run task driver mode="" *overrides:
         map_bundle|map_mode|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
         profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
-        runtime|runtime_map_prior|molmospaces_python|\
-        scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
+        runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
+        scene|scene_index|scene_source|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
+        isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
           ;;
         *)
@@ -322,9 +323,14 @@ run task driver mode="" *overrides:
         if [[ "$task" == "semantic-map-build" ]]; then
           semantic_sweep="on"
         fi
-        map_mode="$(get map_mode rich)"
+        map_mode="$(get map_mode minimal)"
         runtime_map_prior="$(get runtime_map_prior "")"
         backend="$(get backend auto)"
+        min_generated_mess_count="$(get min_generated_mess_count auto)"
+        generated_mess_object_ids="$(get generated_mess_object_ids "")"
+        scene_source="$(get scene_source procthor-10k-val)"
+        scene_index="$(get scene_index 0)"
+        isaac_scene_usd_path="$(get isaac_scene_usd_path "")"
         if [[ "$backend" == "agibot_molmospaces_sim" && ! -v "kv[seeds]" && ! -v "kv[seed]" ]]; then
           seeds="7"
         fi
@@ -653,7 +659,8 @@ run task driver mode="" *overrides:
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
           "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \
           "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend" \
-          "$map_mode"
+          "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path" \
+          "$min_generated_mess_count" "$generated_mess_object_ids"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

@@ -374,7 +374,7 @@ def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
         "7",
         "output/custom-map",
     ]
-    assert route[-4:] == ["on", "", "auto", "minimal"]
+    assert route[15:] == ["on", "", "auto", "minimal", "procthor-10k-val", "0", "", "auto"]
 
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
@@ -437,7 +437,26 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "7",
         "output/household/household-cleanup/direct-report",
     ]
-    assert route[-2:] == ["isaaclab_subprocess", "rich"]
+    assert route[16:] == [
+        "",
+        "isaaclab_subprocess",
+        "minimal",
+        "procthor-10k-val",
+        "0",
+        "",
+        "auto",
+    ]
+
+
+def test_molmo_cleanup_route_allows_explicit_legacy_rich_map_mode() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "map_mode=rich",
+    )
+
+    assert route[18] == "rich"
 
 
 def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:

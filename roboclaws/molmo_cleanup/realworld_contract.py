@@ -45,6 +45,7 @@ CLEANUP_POLICY_TRACE_SCHEMA = "cleanup_policy_trace_v1"
 REAL_ROBOT_READINESS_SCHEMA = "real_robot_readiness_v1"
 RICH_MAP_MODE = "rich"
 MINIMAL_MAP_MODE = "minimal"
+DEFAULT_MAP_MODE = MINIMAL_MAP_MODE
 REALWORLD_MAP_MODES = frozenset({RICH_MAP_MODE, MINIMAL_MAP_MODE})
 DETERMINISTIC_SWEEP_POLICY = "deterministic_sweep_baseline"
 DEFAULT_REALWORLD_TASK = "帮我收拾这个房间"
@@ -90,6 +91,9 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         "and call navigate_to_visual_candidate only when acting on a plausible "
         "cleanup object. Use broad cleanup categories such as "
         f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain. "
+        "In minimal map mode, omit target_fixture_id until grounding returns a "
+        "public candidate_fixture_id; in rich legacy/debug mode, target_fixture_id "
+        "may come from non-empty fixture_hints. "
         "After a successful pick/place for an observed handle, do not act on "
         "that same handle again; if grounding resolves to an already-handled "
         "object, continue the waypoint sweep."
@@ -188,7 +192,7 @@ class RealWorldCleanupContract:
         visual_grounding_artifact_base_dir: str | Path | None = None,
         visual_grounding_run_id: str = "",
         runtime_map_prior: dict[str, Any] | None = None,
-        map_mode: str = RICH_MAP_MODE,
+        map_mode: str = DEFAULT_MAP_MODE,
     ) -> None:
         if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
             raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
@@ -890,7 +894,10 @@ class RealWorldCleanupContract:
             )
         declared = []
         for index, candidate in enumerate(candidate_inputs):
-            candidate_error = _visual_candidate_validation_error(candidate)
+            candidate_error = _visual_candidate_validation_error(
+                candidate,
+                require_target_fixture_id=self.map_mode != MINIMAL_MAP_MODE,
+            )
             if candidate_error is not None:
                 return self._error(
                     "declare_visual_candidates",
@@ -1764,6 +1771,17 @@ class RealWorldCleanupContract:
         }
         return infer_target_fixture_for_detection(detection, public_hints)
 
+    def _resolve_runtime_anchor_target_fixture_id(self, category: str) -> str:
+        if self.map_mode != MINIMAL_MAP_MODE:
+            return ""
+        pseudo_detection = {
+            "category": category,
+            "name": category,
+            "support_estimate": {"fixture_id": ""},
+        }
+        target = self._minimal_target_fixture_for_detection(pseudo_detection)
+        return str((target or {}).get("fixture_id") or "")
+
     def _public_fixture_reference_payload(self, value: Any) -> Any:
         if self.map_mode != MINIMAL_MAP_MODE:
             return value
@@ -2190,6 +2208,10 @@ class RealWorldCleanupContract:
             source_fixture_id = str(item.get("source_fixture_id") or "")
             if not candidate_fixture_id or candidate_fixture_id == source_fixture_id:
                 continue
+            internal_candidate_fixture_id = (
+                self.internal_fixture_id_for_public_reference(candidate_fixture_id)
+                or candidate_fixture_id
+            )
             pending.append(
                 {
                     "object_id": str(item.get("object_id") or ""),
@@ -2197,7 +2219,8 @@ class RealWorldCleanupContract:
                     "source_fixture_id": source_fixture_id,
                     "candidate_fixture_id": candidate_fixture_id,
                     "recommended_tool": _recommended_place_tool(
-                        candidate_fixture_id, self._fixtures
+                        internal_candidate_fixture_id,
+                        self._fixtures,
                     ),
                 }
             )
@@ -2502,6 +2525,10 @@ class RealWorldCleanupContract:
             }
         candidate_fixture_id = str(candidate.get("fixture_id") or "")
         source_fixture_id = str((detection.get("support_estimate") or {}).get("fixture_id") or "")
+        internal_candidate_fixture_id = (
+            self.internal_fixture_id_for_public_reference(candidate_fixture_id)
+            or candidate_fixture_id
+        )
         public_candidate_fixture_id = self._public_fixture_reference_id(candidate_fixture_id)
         public_source_fixture_id = self._public_fixture_reference_id(source_fixture_id)
         return {
@@ -2515,7 +2542,10 @@ class RealWorldCleanupContract:
             "candidate_source": "public_semantic_anchor"
             if self.map_mode == MINIMAL_MAP_MODE and candidate_fixture_id
             else "public_category_fixture_affordance",
-            "recommended_tool": _recommended_place_tool(candidate_fixture_id, self._fixtures),
+            "recommended_tool": _recommended_place_tool(
+                internal_candidate_fixture_id,
+                self._fixtures,
+            ),
         }
 
     def _record_raw_fpv_observation(
@@ -2909,9 +2939,17 @@ class RealWorldCleanupContract:
         producer_id: str,
     ) -> dict[str, Any]:
         image_region = _normalize_image_region(candidate.get("image_region"))
-        target_fixture_id = str(candidate.get("target_fixture_id") or "")
-        target_fixture = self._fixtures.get(target_fixture_id, {})
         category = str(candidate.get("category") or "object").strip() or "object"
+        target_fixture_id = str(candidate.get("target_fixture_id") or "")
+        target_resolution_source = "model_declared_target_fixture"
+        if not target_fixture_id:
+            target_fixture_id = self._resolve_runtime_anchor_target_fixture_id(category)
+            if target_fixture_id:
+                target_resolution_source = "runtime_metric_map_public_semantic_anchor"
+        target_fixture = self._fixtures.get(
+            self.internal_fixture_id_for_public_reference(target_fixture_id) or target_fixture_id,
+            {},
+        )
         confidence = candidate.get("confidence")
         try:
             confidence_value = float(confidence) if confidence is not None else None
@@ -2923,7 +2961,12 @@ class RealWorldCleanupContract:
             "room_id": str(raw_observation["room_id"]),
             "category": category,
             "target_fixture_id": target_fixture_id,
-            "target_fixture_category": str(target_fixture.get("category") or ""),
+            "target_fixture_category": str(
+                target_fixture.get("category") or target_fixture.get("name") or ""
+            ),
+            "target_fixture_resolution_source": target_resolution_source
+            if target_fixture_id
+            else "unresolved",
             "source_fixture_id": str(candidate.get("source_fixture_id") or ""),
             "evidence_note": str(candidate.get("evidence_note") or ""),
             "image_region": image_region,
@@ -3092,7 +3135,10 @@ class RealWorldCleanupContract:
             grounding_status = status
             actionability_status = "needs_clarification"
         target_fixture_id = str(candidate.get("target_fixture_id") or "")
-        target_fixture = self._fixtures.get(target_fixture_id, {})
+        internal_target_fixture_id = (
+            self.internal_fixture_id_for_public_reference(target_fixture_id) or target_fixture_id
+        )
+        target_fixture = self._fixtures.get(internal_target_fixture_id, {})
         target_plausibility = self._target_plausibility(
             category=str(candidate.get("category") or ""),
             target_fixture_id=target_fixture_id,
@@ -3106,7 +3152,9 @@ class RealWorldCleanupContract:
             "room_id": str(candidate["room_id"]),
             "category": str(candidate["category"]),
             "target_fixture_id": target_fixture_id,
-            "target_fixture_category": str(target_fixture.get("category") or ""),
+            "target_fixture_category": str(
+                target_fixture.get("category") or target_fixture.get("name") or ""
+            ),
             "source_fixture_id": str(candidate.get("source_fixture_id") or ""),
             "evidence_note": str(candidate.get("evidence_note") or ""),
             "image_region": candidate["image_region"],
@@ -3139,7 +3187,10 @@ class RealWorldCleanupContract:
         return declaration
 
     def _target_plausibility(self, *, category: str, target_fixture_id: str) -> dict[str, Any]:
-        fixture = self._fixtures.get(target_fixture_id)
+        internal_target_fixture_id = (
+            self.internal_fixture_id_for_public_reference(target_fixture_id) or target_fixture_id
+        )
+        fixture = self._fixtures.get(internal_target_fixture_id)
         if fixture is None:
             return {
                 "status": "unknown_fixture",
@@ -4811,14 +4862,19 @@ def _average_duplicate_rate(events: list[dict[str, Any]]) -> float:
     return round(sum(rates) / len(rates), 6)
 
 
-def _visual_candidate_validation_error(candidate: Any) -> dict[str, str] | None:
+def _visual_candidate_validation_error(
+    candidate: Any,
+    *,
+    require_target_fixture_id: bool = True,
+) -> dict[str, str] | None:
     if not isinstance(candidate, dict):
         return {"field": "candidate", "reason": "candidate must be an object"}
     for field in ("category", "evidence_note"):
         if not str(candidate.get(field) or "").strip():
             return {"field": field, "reason": f"{field} is required"}
     if (
-        str(candidate.get("producer_type") or "") != EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+        require_target_fixture_id
+        and str(candidate.get("producer_type") or "") != EXTERNAL_VISUAL_GROUNDING_PROVENANCE
         and not str(candidate.get("target_fixture_id") or "").strip()
     ):
         return {"field": "target_fixture_id", "reason": "target_fixture_id is required"}

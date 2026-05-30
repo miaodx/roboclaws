@@ -240,8 +240,11 @@ It narrows executable capability to navigation and perception. The backend is
 - `metric_map` returns backend-neutral public map semantics. Nav2-backed runs
   derive this from a Nav2-shaped map bundle; Agibot-backed runs derive it from
   an SDK-exported agent view generated from operator-authored map context.
-- `fixture_hints` returns authored static fixture semantics and preferred
-  waypoints without exposing backend map ids or private cleanup truth.
+- `fixture_hints` returns only the public fixture-hint surface for the selected
+  map projection. In default `map_mode=minimal`, authored fixture labels may be
+  empty and destination evidence comes from runtime semantic anchors; explicit
+  legacy/debug rich projections may still expose static public fixture
+  semantics. Neither path exposes backend map ids or private cleanup truth.
 - `navigate_to_room`, `navigate_to_waypoint`, `navigate_to_visual_candidate`,
   `navigate_to_object`, and `navigate_to_receptacle` resolve cleanup goals to
   bounded physical navigation actions when enough public grounding is available.

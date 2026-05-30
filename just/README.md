@@ -55,9 +55,12 @@ Household cleanup input/evidence lanes:
 - `camera-raw` withholds structured labels and provides raw camera artifacts.
 - `camera-labels` registers structured candidates from camera observations.
 
-These lanes do not choose online/offline map behavior. Use `map_mode=minimal`
-or `map_mode=rich` for the map projection, and `runtime_map_prior=...` when a
-cleanup run should consume a prebuilt runtime map snapshot.
+These lanes do not choose online/offline map behavior. `map_mode=minimal` is the
+default map projection: it exposes occupancy geometry, generated exploration
+candidates, and runtime semantic anchors. Use `runtime_map_prior=...` when a
+cleanup run should consume a prebuilt runtime map snapshot. `map_mode=rich`
+remains available only as an explicit legacy/debug projection with pre-authored
+public fixture semantics.
 
 For timing work that should skip per-tool robot-view capture, keep the normal
 `world-labels` profile and pass an explicit capture option such as
@@ -158,10 +161,10 @@ namespaces such as `mcp__<server>__`.
 just task::run semantic-map-build direct world-labels
 just task::run household-cleanup codex
 just task::run household-cleanup codex smoke
+just task::run household-cleanup direct world-labels runtime_map_prior=output/map/runtime_metric_map.json
 just task::run household-cleanup direct camera-raw
 just task::run household-cleanup direct camera-labels
 just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
-just task::run household-cleanup direct world-labels runtime_map_prior=output/map/runtime_metric_map.json
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60

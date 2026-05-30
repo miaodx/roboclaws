@@ -14,6 +14,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     RAW_FPV_ONLY_MODE,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REALWORLD_CONTRACT,
+    RICH_MAP_MODE,
     RUNTIME_METRIC_MAP_SCHEMA,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
@@ -34,8 +35,27 @@ from roboclaws.molmo_cleanup.types import (
 from roboclaws.molmo_cleanup.visual_grounding import VISUAL_GROUNDING_RESPONSE_SCHEMA
 
 
-def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventory() -> None:
+def _contract(
+    session: CleanupBackendSession,
+    **kwargs: object,
+) -> RealWorldCleanupContract:
+    kwargs.setdefault("map_mode", RICH_MAP_MODE)
+    return RealWorldCleanupContract(session, **kwargs)
+
+
+def test_realworld_contract_defaults_to_minimal_map_mode() -> None:
     contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+
+    metric_map = contract.metric_map()
+    fixture_hints = contract.fixture_hints()
+
+    assert contract.map_mode == MINIMAL_MAP_MODE
+    assert metric_map["mode"] == MINIMAL_MAP_MODE
+    assert fixture_hints["rooms"] == []
+
+
+def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventory() -> None:
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
     fixture_hints = contract.fixture_hints()
@@ -59,7 +79,7 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
 
 
 def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     metric_map = contract.metric_map()
     fixture_hints = contract.fixture_hints()
@@ -159,7 +179,7 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
     )
     session = CleanupBackendSession(scenario)
     session.backend.scenario_source = "isaac_scene_index"
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         session,
         map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
     )
@@ -259,7 +279,7 @@ def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
         },
     }
 
-    contract = RealWorldCleanupContract(session)
+    contract = _contract(session)
     metric_map = contract.metric_map()
     rooms = {room["room_id"]: room for room in metric_map["rooms"]}
     room_2 = rooms["room_2"]
@@ -395,7 +415,7 @@ def test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals
         },
     }
 
-    contract = RealWorldCleanupContract(session)
+    contract = _contract(session)
     metric_map = contract.metric_map()
     fixture_hints = contract.fixture_hints()
     waypoints = metric_map["inspection_waypoints"]
@@ -543,7 +563,7 @@ def test_cleanup_policy_trace_rejects_cached_cleanup_after_later_map_query() -> 
 
 
 def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
@@ -581,7 +601,7 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
 
 
 def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> None:
-    sweep_contract = RealWorldCleanupContract(
+    sweep_contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
@@ -595,7 +615,7 @@ def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> No
             break
     prior_snapshot = sweep_contract.agent_view_payload()["runtime_metric_map"]
 
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         runtime_map_prior=prior_snapshot,
@@ -629,7 +649,7 @@ def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> No
 
 
 def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         map_mode=MINIMAL_MAP_MODE,
     )
@@ -695,7 +715,7 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
 
 
 def test_minimal_map_mode_keeps_public_waypoint_after_receptacle_navigation() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         map_mode=MINIMAL_MAP_MODE,
     )
@@ -720,7 +740,7 @@ def test_minimal_map_mode_keeps_public_waypoint_after_receptacle_navigation() ->
 
 
 def test_minimal_map_mode_observe_marks_placed_object_non_actionable() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         map_mode=MINIMAL_MAP_MODE,
     )
@@ -774,7 +794,7 @@ def test_minimal_map_mode_observe_marks_placed_object_non_actionable() -> None:
 
 
 def test_minimal_map_mode_done_uses_generated_candidate_coverage() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(
             CleanupScenario(
                 scenario_id="minimal-map-done-gate-test",
@@ -817,7 +837,7 @@ def test_minimal_map_mode_done_uses_generated_candidate_coverage() -> None:
 
 
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -837,7 +857,7 @@ def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> 
 
 
 def test_realworld_contract_rejects_skipped_semantic_phases_without_private_truth() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -865,7 +885,7 @@ def test_realworld_contract_rejects_skipped_semantic_phases_without_private_trut
 
 
 def test_realworld_contract_rejects_done_with_pending_public_candidates() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     observation = _first_non_empty_observation(contract)
     recommended = next(
         item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
@@ -883,7 +903,7 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
 
 
 def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "food")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -915,7 +935,7 @@ def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None
 
 
 def test_realworld_contract_routes_bookshelf_as_inside_without_close() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "book")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
@@ -946,7 +966,7 @@ def test_realworld_contract_routes_bookshelf_as_inside_without_close() -> None:
 
 
 def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
     contract.metric_map()
     for waypoint in contract.metric_map()["inspection_waypoints"]:
@@ -962,7 +982,7 @@ def test_realworld_agent_view_payload_keeps_private_evaluation_out() -> None:
 
 
 def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1018,7 +1038,7 @@ def test_realworld_raw_fpv_done_gate_scales_to_small_generated_mess_count() -> N
             success_threshold=2,
         ),
     )
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(scenario),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1041,7 +1061,7 @@ def test_realworld_raw_fpv_done_gate_scales_to_small_generated_mess_count() -> N
 
 
 def test_realworld_raw_fpv_camera_adjustment_is_bounded_and_resets() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1062,7 +1082,7 @@ def test_realworld_raw_fpv_camera_adjustment_is_bounded_and_resets() -> None:
 
 
 def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1102,7 +1122,7 @@ def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
 
 
 def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1148,7 +1168,7 @@ def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
 
 
 def test_realworld_done_rejects_one_missing_public_waypoint() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(
             CleanupScenario(
                 scenario_id="missing-waypoint-gate-test",
@@ -1184,7 +1204,7 @@ def test_realworld_done_rejects_one_missing_public_waypoint() -> None:
 
 
 def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1216,8 +1236,57 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
     _assert_no_forbidden_keys(response)
 
 
+def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    fridge_waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["waypoint_id"] == "generated_exploration_003"
+    )
+    contract.navigate_to_waypoint(str(fridge_waypoint["waypoint_id"]))
+    contract.observe()
+    target_anchor_id = next(
+        item["anchor_id"]
+        for item in contract.agent_view_payload()["runtime_metric_map"]["public_semantic_anchors"]
+        if item["anchor_type"] == "receptacle" and item["category"] == "fridge"
+    )
+
+    tomato_waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["waypoint_id"] == "generated_exploration_007"
+    )
+    contract.navigate_to_waypoint(str(tomato_waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="tomato",
+        evidence_note="round produce item on the desk",
+        image_region={"type": "verbal_region", "value": "front of desk"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    declaration = response["model_declared_observation"]
+    assert response["ok"] is True
+    assert response["candidate_fixture_id"] == target_anchor_id
+    assert response["candidate_fixture_category"] == "fridge"
+    assert response["recommended_tool"] == "place_inside"
+    assert declaration["target_fixture_id"] == target_anchor_id
+    assert declaration["target_fixture_category"] == "fridge"
+    assert declaration["target_plausibility"]["status"] == "plausible"
+    assert declaration["target_plausibility"]["expected_fixture_id"] == target_anchor_id
+    assert contract.pick(response["object_id"])["ok"] is True
+    _assert_no_forbidden_keys(response)
+
+
 def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navigation() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1286,7 +1355,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
 
 
 def test_realworld_rejects_malformed_model_declared_candidate() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1337,7 +1406,7 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
 
 
 def test_realworld_model_declared_grounding_accepts_public_category_families() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1370,7 +1439,7 @@ def test_realworld_model_declared_grounding_accepts_public_category_families() -
 
 
 def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1404,7 +1473,7 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
 
 
 def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(_live_style_alias_scenario()),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1449,7 +1518,7 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
 
 
 def test_realworld_raw_fpv_grounding_uses_same_room_fallback() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(_same_room_fallback_scenario()),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1486,7 +1555,7 @@ def test_realworld_raw_fpv_grounding_uses_same_room_fallback() -> None:
 
 
 def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
@@ -1538,7 +1607,7 @@ def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> 
 
 
 def test_realworld_camera_raw_empty_declare_does_not_fall_back_to_sim_labels() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
     )
@@ -1556,7 +1625,7 @@ def test_realworld_camera_raw_empty_declare_does_not_fall_back_to_sim_labels() -
 
 
 def test_realworld_camera_model_policy_records_sim_pipeline_provenance() -> None:
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
@@ -1596,7 +1665,7 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() 
             "error": {"reason": "timeout", "message": "fake timeout"},
         }
     )
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         visual_grounding_client=client,
@@ -1662,7 +1731,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
             ],
         }
     )
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         visual_grounding_client=client,
@@ -1749,7 +1818,7 @@ def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> Non
             ],
         }
     )
-    contract = RealWorldCleanupContract(
+    contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         visual_grounding_client=client,

@@ -30,6 +30,10 @@ from roboclaws.molmo_cleanup.camera_control import (
     normalize_camera_control_request,
 )
 from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+from roboclaws.molmo_cleanup.generated_mess import (
+    generated_mess_success_threshold,
+    select_generated_mess_targets,
+)
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -115,6 +119,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     init.add_argument("--scene-source", default="procthor-10k-val")
     init.add_argument("--scene-index", type=int, default=0)
     init.add_argument("--generated-mess-count", type=int, default=1)
+    init.add_argument(
+        "--generated-mess-object-id",
+        action="append",
+        help="Private run-control object id to include in the generated mess set. Repeatable.",
+    )
     init.add_argument(
         "--generated-scene-kind",
         choices=GENERATED_SCENE_KINDS,
@@ -6213,6 +6222,7 @@ def _scene_specific_scenario_if_needed(
         scene_index=args.scene_index,
         seed=args.seed,
         generated_mess_count=args.generated_mess_count,
+        generated_mess_object_ids=tuple(getattr(args, "generated_mess_object_id", None) or ()),
         object_index=object_index,
         receptacle_index=receptacle_index,
     )
@@ -6224,6 +6234,7 @@ def _scenario_from_scene_index(
     scene_index: int,
     seed: int,
     generated_mess_count: int,
+    generated_mess_object_ids: tuple[str, ...] = (),
     object_index: dict[str, dict[str, Any]],
     receptacle_index: dict[str, dict[str, Any]],
 ) -> CleanupScenario | None:
@@ -6235,9 +6246,7 @@ def _scenario_from_scene_index(
     if not receptacles:
         return None
 
-    objects: list[CleanupObject] = []
-    targets: list[TargetRule] = []
-    count = max(1, int(generated_mess_count))
+    selectable_objects: list[dict[str, Any]] = []
     for handle, entry in sorted(object_index.items()):
         target_id = _scene_target_receptacle_id(entry, cleanup_receptacle_index)
         if not target_id:
@@ -6247,17 +6256,41 @@ def _scenario_from_scene_index(
             cleanup_receptacle_index,
             target_id=target_id,
         )
-        objects.append(
-            CleanupObject(
-                object_id=handle,
-                name=_scene_object_name(handle, entry),
-                category=_scene_object_category(entry),
-                location_id=source_id,
-            )
+        selectable_objects.append(
+            {
+                "object_id": handle,
+                "name": _scene_object_name(handle, entry),
+                "category": _scene_cleanup_object_category(entry),
+                "location_id": source_id,
+            }
         )
-        targets.append(TargetRule(object_id=handle, valid_receptacle_ids=(target_id,)))
-        if len(targets) >= count:
-            break
+
+    selected = select_generated_mess_targets(
+        selectable_objects,
+        [receptacle.to_public_dict() for receptacle in receptacles],
+        target_count=max(1, int(generated_mess_count)),
+        seed=seed,
+        object_ids=generated_mess_object_ids or None,
+    )
+    if not selected:
+        return None
+
+    objects = tuple(
+        CleanupObject(
+            object_id=str(item["object_id"]),
+            name=str(item["name"]),
+            category=str(item["category"]),
+            location_id=str(item["location_id"]),
+        )
+        for item in selected
+    )
+    targets = tuple(
+        TargetRule(
+            object_id=str(item["object_id"]),
+            valid_receptacle_ids=(str(item["target_receptacle_id"]),),
+        )
+        for item in selected
+    )
 
     if not targets:
         return None
@@ -6270,8 +6303,8 @@ def _scenario_from_scene_index(
         receptacles=receptacles,
         private_manifest=PrivateScoringManifest(
             scenario_id=scenario_id,
-            targets=tuple(targets),
-            success_threshold=len(targets),
+            targets=targets,
+            success_threshold=generated_mess_success_threshold(len(targets)),
         ),
     )
 
@@ -6313,12 +6346,31 @@ def _scene_object_category(entry: dict[str, Any]) -> str:
     return str(entry.get("category") or entry.get("asset_id") or "object")
 
 
+def _scene_cleanup_object_category(entry: dict[str, Any]) -> str:
+    category = _scene_object_category(entry)
+    tokens = _scene_entry_tokens("", entry)
+    for category_aliases, _target_aliases in _SCENE_STRICT_CLEANUP_TARGET_ALIASES:
+        if any(alias in tokens for alias in category_aliases):
+            return _canonical_cleanup_category(category, category_aliases)
+    return category
+
+
+def _canonical_cleanup_category(category: str, aliases: tuple[str, ...]) -> str:
+    category_norm = _norm(category)
+    for canonical, accepted in _CANONICAL_CLEANUP_CATEGORY_ALIASES:
+        accepted_norms = {_norm(item) for item in accepted}
+        alias_matches = any(_norm(alias) in accepted_norms for alias in aliases)
+        if category_norm in accepted_norms or alias_matches:
+            return canonical
+    return category
+
+
 def _scene_target_receptacle_id(
     entry: dict[str, Any],
     receptacle_index: dict[str, dict[str, Any]],
 ) -> str:
     entry_tokens = _scene_entry_tokens("", entry)
-    for category_aliases, target_aliases in _SCENE_CLEANUP_TARGET_ALIASES:
+    for category_aliases, target_aliases in _SCENE_STRICT_CLEANUP_TARGET_ALIASES:
         if any(alias in entry_tokens for alias in category_aliases):
             target_id = _first_receptacle_matching_aliases(receptacle_index, target_aliases)
             if target_id:
@@ -6383,6 +6435,30 @@ _SCENE_CLEANUP_TARGET_ALIASES = (
     (("pillow", "teddybear", "cushion"), ("bed", "sofa")),
     (("linen", "towel", "cloth", "blanket", "shirt", "clothing"), ("laundryhamper", "hamper")),
     (("toy", "toycar", "ball", "basketball", "soccer"), ("toybin",)),
+)
+
+_SCENE_STRICT_CLEANUP_TARGET_ALIASES = (
+    (("cup", "mug", "plate", "bowl"), ("sink",)),
+    (("book", "newspaper"), ("shelvingunit", "desk")),
+    (("apple", "bread", "egg", "potato", "lettuce"), ("fridge", "refrigerator")),
+    (("remotecontrol",), ("tvstand", "televisionstand")),
+    (("pillow", "teddybear"), ("bed", "sofa")),
+)
+
+_CANONICAL_CLEANUP_CATEGORY_ALIASES = (
+    ("Plate", ("dish", "plate", "bowl", "cup", "mug", "utensil", "fork", "knife", "spoon")),
+    ("Book", ("book", "newspaper", "notebook", "paper", "magazine")),
+    (
+        "Potato",
+        ("food", "apple", "bread", "egg", "potato", "lettuce", "tomato", "banana", "orange"),
+    ),
+    (
+        "RemoteControl",
+        ("remotecontrol", "remote", "phone", "cellphone", "laptop", "tablet", "alarmclock"),
+    ),
+    ("Pillow", ("pillow", "teddybear", "cushion")),
+    ("Towel", ("linen", "towel", "cloth", "blanket", "shirt", "clothing")),
+    ("ToyCar", ("toy", "toycar", "ball", "basketball", "soccer")),
 )
 
 
