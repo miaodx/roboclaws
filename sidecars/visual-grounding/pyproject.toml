@@ -1,0 +1,37 @@
+[project]
+name = "roboclaws-visual-grounding-sidecar"
+version = "0.1.0"
+description = "Isolated GPU visual-grounding sidecar dependencies for Roboclaws benchmarks"
+requires-python = ">=3.12"
+dependencies = [
+    "Pillow>=10.0",
+    "numpy>=1.24",
+    "transformers>=4.52,<5",
+    "accelerate>=1.0",
+    "ultralytics>=8.3",
+]
+
+[project.optional-dependencies]
+cuda = [
+    "torch>=2.7",
+    "torchvision>=0.22",
+]
+yoloe = [
+    "clip @ git+https://github.com/ultralytics/CLIP.git",
+]
+omdet = [
+    "timm>=1.0",
+]
+qwen3vl = [
+    "qwen-vl-utils>=0.0.14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = []
+
+[tool.uv]
+package = false

@@ -1,0 +1,1784 @@
+{
+  "category_family_map": {
+    "apple": "food",
+    "book": "book",
+    "bowl": "dish",
+    "cup": "dish",
+    "dish": "dish",
+    "electronics": "electronics",
+    "food": "food",
+    "linen": "linen",
+    "mug": "dish",
+    "pillow": "pillow",
+    "plate": "dish",
+    "potato": "food",
+    "remote": "electronics",
+    "remotecontrol": "electronics",
+    "towel": "linen",
+    "toy": "toy"
+  },
+  "description": "Corpus generated from stored MolmoSpaces RAW_FPV cleanup artifacts. Private labels are benchmark scoring data only and are not sent to the visual-grounding service.",
+  "label_source": "private_evaluation_room_presence",
+  "name": "codex-camera-raw-mcp-check-final-raw-fpv",
+  "observations": [
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_001.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_001",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_002.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_002",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_003.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_003",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3",
+          "name": "DiningTable (DiningTable|3|1|0)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Sofa",
+          "fixture_id": "sofa_26757136bf2f1a8029d685a42db38f2a_1_0_3",
+          "name": "Sofa (Sofa|3|0|1)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3",
+          "name": "TVStand (TVStand|3|0|0)",
+          "room_id": "room_3"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_004.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_004",
+      "private_labels": [
+        {
+          "category": "dish",
+          "category_family": "dish",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Plate",
+          "object_id": "plate_ac6a1b74f35572c9a1a82922f273449a_2_0_3"
+        }
+      ],
+      "room_id": "room_3",
+      "waypoint_id": "room_3_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3",
+          "name": "DiningTable (DiningTable|3|1|0)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Sofa",
+          "fixture_id": "sofa_26757136bf2f1a8029d685a42db38f2a_1_0_3",
+          "name": "Sofa (Sofa|3|0|1)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3",
+          "name": "TVStand (TVStand|3|0|0)",
+          "room_id": "room_3"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_005.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_005",
+      "private_labels": [
+        {
+          "category": "dish",
+          "category_family": "dish",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Plate",
+          "object_id": "plate_ac6a1b74f35572c9a1a82922f273449a_2_0_3"
+        }
+      ],
+      "room_id": "room_3",
+      "waypoint_id": "room_3_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3",
+          "name": "DiningTable (DiningTable|3|1|0)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Sofa",
+          "fixture_id": "sofa_26757136bf2f1a8029d685a42db38f2a_1_0_3",
+          "name": "Sofa (Sofa|3|0|1)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3",
+          "name": "TVStand (TVStand|3|0|0)",
+          "room_id": "room_3"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_006.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_006",
+      "private_labels": [
+        {
+          "category": "dish",
+          "category_family": "dish",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Plate",
+          "object_id": "plate_ac6a1b74f35572c9a1a82922f273449a_2_0_3"
+        }
+      ],
+      "room_id": "room_3",
+      "waypoint_id": "room_3_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_15d4d7c88896632c7f36ae642a41eb46_1_0_4",
+          "name": "DiningTable (DiningTable|4|0)",
+          "room_id": "room_4"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_1_0_4",
+          "name": "TVStand (TVStand|4|3)",
+          "room_id": "room_4"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_007.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_007",
+      "private_labels": [
+        {
+          "category": "electronics",
+          "category_family": "electronics",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "RemoteControl",
+          "object_id": "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_0_4"
+        },
+        {
+          "category": "dish",
+          "category_family": "dish",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Plate",
+          "object_id": "plate_ad540817fe2632d8b49916da70118c0a_1_0_4"
+        }
+      ],
+      "room_id": "room_4",
+      "waypoint_id": "room_4_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Sink",
+          "fixture_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5",
+          "name": "Sink (Sink|5|1|0)",
+          "room_id": "room_5"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_008.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_008",
+      "private_labels": [],
+      "room_id": "room_5",
+      "waypoint_id": "room_5_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_15d4d7c88896632c7f36ae642a41eb46_1_0_4",
+          "name": "DiningTable (DiningTable|4|0)",
+          "room_id": "room_4"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_1_0_4",
+          "name": "TVStand (TVStand|4|3)",
+          "room_id": "room_4"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_009.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_009",
+      "private_labels": [
+        {
+          "category": "electronics",
+          "category_family": "electronics",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "RemoteControl",
+          "object_id": "remotecontrol_dbbd4afce0b009e98224c7453fb4cfc5_1_0_4"
+        },
+        {
+          "category": "dish",
+          "category_family": "dish",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Plate",
+          "object_id": "plate_ad540817fe2632d8b49916da70118c0a_1_0_4"
+        }
+      ],
+      "room_id": "room_4",
+      "waypoint_id": "room_4_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_8f5567bbd792fad0b4ee3c2ca65e25b0_1_0_6",
+          "name": "Bed (Bed|6|0|0)",
+          "room_id": "room_6"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_2_0_6",
+          "name": "TVStand (TVStand|6|2|0)",
+          "room_id": "room_6"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_010.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_010",
+      "private_labels": [
+        {
+          "category": "electronics",
+          "category_family": "electronics",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "RemoteControl",
+          "object_id": "remotecontrol_bbeb7464bb8b20b11df78329c1bd9460_1_0_6"
+        }
+      ],
+      "room_id": "room_6",
+      "waypoint_id": "room_6_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Sink",
+          "fixture_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5",
+          "name": "Sink (Sink|5|1|0)",
+          "room_id": "room_5"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_011.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_011",
+      "private_labels": [],
+      "room_id": "room_5",
+      "waypoint_id": "room_5_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Sink",
+          "fixture_id": "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_5",
+          "name": "Sink (Sink|5|1|0)",
+          "room_id": "room_5"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_012.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_012",
+      "private_labels": [],
+      "room_id": "room_5",
+      "waypoint_id": "room_5_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_8f5567bbd792fad0b4ee3c2ca65e25b0_1_0_6",
+          "name": "Bed (Bed|6|0|0)",
+          "room_id": "room_6"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_2_0_6",
+          "name": "TVStand (TVStand|6|2|0)",
+          "room_id": "room_6"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_013.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_013",
+      "private_labels": [
+        {
+          "category": "electronics",
+          "category_family": "electronics",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "RemoteControl",
+          "object_id": "remotecontrol_bbeb7464bb8b20b11df78329c1bd9460_1_0_6"
+        }
+      ],
+      "room_id": "room_6",
+      "waypoint_id": "room_6_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_8f5567bbd792fad0b4ee3c2ca65e25b0_1_0_6",
+          "name": "Bed (Bed|6|0|0)",
+          "room_id": "room_6"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_2_0_6",
+          "name": "TVStand (TVStand|6|2|0)",
+          "room_id": "room_6"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_014.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_014",
+      "private_labels": [
+        {
+          "category": "electronics",
+          "category_family": "electronics",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "RemoteControl",
+          "object_id": "remotecontrol_bbeb7464bb8b20b11df78329c1bd9460_1_0_6"
+        }
+      ],
+      "room_id": "room_6",
+      "waypoint_id": "room_6_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_7",
+          "name": "Bed (Bed|7|0)",
+          "room_id": "room_7"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Desk",
+          "fixture_id": "desk_767b7ce268898119aaeb97804ba52bdd_1_0_7",
+          "name": "Desk (Desk|7|3)",
+          "room_id": "room_7"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_015.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_015",
+      "private_labels": [
+        {
+          "category": "pillow",
+          "category_family": "pillow",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Pillow",
+          "object_id": "pillow_874c097332ffacf84f31fb77733db15c_1_0_7"
+        }
+      ],
+      "room_id": "room_7",
+      "waypoint_id": "room_7_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_7",
+          "name": "Bed (Bed|7|0)",
+          "room_id": "room_7"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Desk",
+          "fixture_id": "desk_767b7ce268898119aaeb97804ba52bdd_1_0_7",
+          "name": "Desk (Desk|7|3)",
+          "room_id": "room_7"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_016.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_016",
+      "private_labels": [
+        {
+          "category": "pillow",
+          "category_family": "pillow",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Pillow",
+          "object_id": "pillow_874c097332ffacf84f31fb77733db15c_1_0_7"
+        }
+      ],
+      "room_id": "room_7",
+      "waypoint_id": "room_7_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_a830c3c80bd030e6cc4fe9d07eb42b2f_1_0_8",
+          "name": "Bed (Bed|8|0)",
+          "room_id": "room_8"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Desk",
+          "fixture_id": "desk_869732f43717e1c85a3df51d75404e51_1_0_8",
+          "name": "Desk (Desk|8|3)",
+          "room_id": "room_8"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_017.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_017",
+      "private_labels": [
+        {
+          "category": "book",
+          "category_family": "book",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Book",
+          "object_id": "book_c62db15891607d44173a3d995755f638_1_0_8"
+        },
+        {
+          "category": "pillow",
+          "category_family": "pillow",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Pillow",
+          "object_id": "pillow_85cf3d0100d7b2846b69018d65289a34_1_0_8"
+        },
+        {
+          "category": "book",
+          "category_family": "book",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Book",
+          "object_id": "book_be4d759484637aeb579b28e6a954b18d_1_0_8"
+        }
+      ],
+      "room_id": "room_8",
+      "waypoint_id": "room_8_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_018.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_018",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_a830c3c80bd030e6cc4fe9d07eb42b2f_1_0_8",
+          "name": "Bed (Bed|8|0)",
+          "room_id": "room_8"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Desk",
+          "fixture_id": "desk_869732f43717e1c85a3df51d75404e51_1_0_8",
+          "name": "Desk (Desk|8|3)",
+          "room_id": "room_8"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_019.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_019",
+      "private_labels": [
+        {
+          "category": "book",
+          "category_family": "book",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Book",
+          "object_id": "book_c62db15891607d44173a3d995755f638_1_0_8"
+        },
+        {
+          "category": "pillow",
+          "category_family": "pillow",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Pillow",
+          "object_id": "pillow_85cf3d0100d7b2846b69018d65289a34_1_0_8"
+        },
+        {
+          "category": "book",
+          "category_family": "book",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Book",
+          "object_id": "book_be4d759484637aeb579b28e6a954b18d_1_0_8"
+        }
+      ],
+      "room_id": "room_8",
+      "waypoint_id": "room_8_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_8f5567bbd792fad0b4ee3c2ca65e25b0_1_0_6",
+          "name": "Bed (Bed|6|0|0)",
+          "room_id": "room_6"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_2_0_6",
+          "name": "TVStand (TVStand|6|2|0)",
+          "room_id": "room_6"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_020.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_020",
+      "private_labels": [
+        {
+          "category": "electronics",
+          "category_family": "electronics",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "RemoteControl",
+          "object_id": "remotecontrol_bbeb7464bb8b20b11df78329c1bd9460_1_0_6"
+        }
+      ],
+      "room_id": "room_6",
+      "waypoint_id": "room_6_scan_1"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_a830c3c80bd030e6cc4fe9d07eb42b2f_1_0_8",
+          "name": "Bed (Bed|8|0)",
+          "room_id": "room_8"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Desk",
+          "fixture_id": "desk_869732f43717e1c85a3df51d75404e51_1_0_8",
+          "name": "Desk (Desk|8|3)",
+          "room_id": "room_8"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_021.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_021",
+      "private_labels": [
+        {
+          "category": "book",
+          "category_family": "book",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Book",
+          "object_id": "book_c62db15891607d44173a3d995755f638_1_0_8"
+        },
+        {
+          "category": "pillow",
+          "category_family": "pillow",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Pillow",
+          "object_id": "pillow_85cf3d0100d7b2846b69018d65289a34_1_0_8"
+        },
+        {
+          "category": "book",
+          "category_family": "book",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Book",
+          "object_id": "book_be4d759484637aeb579b28e6a954b18d_1_0_8"
+        }
+      ],
+      "room_id": "room_8",
+      "waypoint_id": "room_8_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_022.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_022",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_023.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_023",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_024.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_024",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "CounterTop",
+          "fixture_id": "countertop_aa26fd5b3d56251659034cbb8b20053d_1_0_2",
+          "name": "CounterTop (CounterTop|2|1)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+          "name": "DiningTable (DiningTable|2|0|0)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "open",
+            "place_inside",
+            "close"
+          ],
+          "category": "Fridge",
+          "fixture_id": "refrigerator_5e0d26d670a75ae0a52f2ceb08914b0e_1_0_2",
+          "name": "Fridge (Fridge|2|2)",
+          "room_id": "room_2"
+        },
+        {
+          "affordances": [
+            "place",
+            "place_inside"
+          ],
+          "category": "ShelvingUnit",
+          "fixture_id": "shelf_140ccb7e1f5028c7d773229dfe6e1a04_1_0_2",
+          "name": "ShelvingUnit (ShelvingUnit|2|3)",
+          "room_id": "room_2"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_025.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_025",
+      "private_labels": [
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Potato",
+          "object_id": "Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2"
+        },
+        {
+          "category": "food",
+          "category_family": "food",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Apple",
+          "object_id": "apple_9f56af06d43fe8692531302b5e0dc1df_1_0_2"
+        }
+      ],
+      "room_id": "room_2",
+      "waypoint_id": "room_2_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "DiningTable",
+          "fixture_id": "diningtable_f113cf7f8367e89f709b53cbee1a1c05_2_0_3",
+          "name": "DiningTable (DiningTable|3|1|0)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Sofa",
+          "fixture_id": "sofa_26757136bf2f1a8029d685a42db38f2a_1_0_3",
+          "name": "Sofa (Sofa|3|0|1)",
+          "room_id": "room_3"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_6bc09b7e2670723819cfaf03855284c1_1_0_3",
+          "name": "TVStand (TVStand|3|0|0)",
+          "room_id": "room_3"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_026.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_026",
+      "private_labels": [
+        {
+          "category": "dish",
+          "category_family": "dish",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Plate",
+          "object_id": "plate_ac6a1b74f35572c9a1a82922f273449a_2_0_3"
+        }
+      ],
+      "room_id": "room_3",
+      "waypoint_id": "room_3_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_8f5567bbd792fad0b4ee3c2ca65e25b0_1_0_6",
+          "name": "Bed (Bed|6|0|0)",
+          "room_id": "room_6"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "TVStand",
+          "fixture_id": "stand_b8ddf1bd8964dc767925bdd1f165a868_2_0_6",
+          "name": "TVStand (TVStand|6|2|0)",
+          "room_id": "room_6"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_027.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_027",
+      "private_labels": [
+        {
+          "category": "electronics",
+          "category_family": "electronics",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "RemoteControl",
+          "object_id": "remotecontrol_bbeb7464bb8b20b11df78329c1bd9460_1_0_6"
+        }
+      ],
+      "room_id": "room_6",
+      "waypoint_id": "room_6_scan_2"
+    },
+    {
+      "capture_context": {
+        "discovered_during": "waypoint_observe",
+        "source_artifact_status": "recorded"
+      },
+      "category_hints": [
+        "food",
+        "dish",
+        "book",
+        "linen",
+        "toy",
+        "electronics",
+        "pillow"
+      ],
+      "fixture_hints": [
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Bed",
+          "fixture_id": "bed_6181fe7d77a4ee8d4cda2b6e057cf7b8_1_0_7",
+          "name": "Bed (Bed|7|0)",
+          "room_id": "room_7"
+        },
+        {
+          "affordances": [
+            "place"
+          ],
+          "category": "Desk",
+          "fixture_id": "desk_767b7ce268898119aaeb97804ba52bdd_1_0_7",
+          "name": "Desk (Desk|7|3)",
+          "room_id": "room_7"
+        }
+      ],
+      "image": {
+        "height": 360,
+        "path": "raw_fpv/raw_fpv_028.png",
+        "source": "path",
+        "width": 540
+      },
+      "observation_id": "raw_fpv_028",
+      "private_labels": [
+        {
+          "category": "pillow",
+          "category_family": "pillow",
+          "label_source": "private_evaluation_room_presence",
+          "object_category": "Pillow",
+          "object_id": "pillow_874c097332ffacf84f31fb77733db15c_1_0_7"
+        }
+      ],
+      "room_id": "room_7",
+      "waypoint_id": "room_7_scan_1"
+    }
+  ],
+  "schema": "visual_grounding_benchmark_corpus_v1",
+  "source_run_result": "output/molmo/codex-camera-raw-mcp-check-final/0520_1421/seed-7/run_result.json"
+}

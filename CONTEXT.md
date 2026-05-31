@@ -163,6 +163,19 @@ Visible producer failure evidence containing status, reason, timeout, and
 latency. Failures should not fabricate simulator fallback labels.
 _Avoid_: silent fallback, fake success, hidden retry
 
+**Visual Grounding Evaluation Corpus**:
+A perception-only benchmark set built from fixed camera frames, public context,
+and private labels synchronized to the same scene state. For MolmoSpaces, it
+should sample multiple scene indices rather than only replay one stored room.
+_Avoid_: single-run artifact scrape, cleanup score, agent-facing dataset
+
+**Private BBox Ground Truth**:
+Hidden object-localization labels produced from simulator segmentation or manual
+annotation for benchmark scoring. These labels may include object id, category,
+visible pixels, and bounding boxes, but must not enter service requests, MCP
+responses, or Agent View.
+_Avoid_: public camera hint, detector output, synthetic placeholder bbox
+
 **Candidate Cleanup Destination**:
 A public destination hint for a detected object. It may guide cleanup but is not
 private acceptable-destination truth.

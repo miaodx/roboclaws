@@ -23,6 +23,13 @@ Evaluation, Score, Semantic Substeps, and Robot View Timeline. The timeline
 contains FPV, chase, map, and verification images when the backend can capture
 robot views.
 
+Current robot-view render defaults are intentionally conservative:
+FPV/chase/verify/snapshot images render at `540 x 360`, while map images render
+through a separate `620 x 420` report path. Do not raise the cleanup or RAW_FPV
+default resolution casually: visual-grounding corpora, bbox coordinates,
+latency, and image-token cost all depend on the frame size. Use the dedicated
+renderer comparison path for visual A/B checks before changing defaults.
+
 Do not use the synthetic dogfood kit as the main status artifact. It is useful
 for fast contract checks, but it has no robot camera timeline.
 
@@ -92,7 +99,8 @@ or detector produced the labels. Use pipeline provenance for that second axis:
 | `fake-http` | Contract-test HTTP service that returns deterministic public candidates. | First implementation phase. |
 | `grounding-dino` | Bbox-first open-vocabulary proposer over RAW_FPV images. | Conservative first proposer target. |
 | `yoloe` | YOLO-family promptable/open-vocabulary proposer over RAW_FPV images. | Proposer speed/latency comparison target. |
-| `yolo-custom` | Fixed/custom YOLO proposer for a closed cleanup ontology. | Optional only when trained weights or a fixed ontology exist. |
+| `yolo-world` | YOLO-World open-vocabulary proposer over RAW_FPV images. | YOLO-family comparison target. |
+| `omdet-turbo` | Transformers OmDet-Turbo open-vocabulary proposer over RAW_FPV images. | First-wave non-YOLO comparison target; current supported checkpoint is `omlab/omdet-turbo-swin-tiny-hf`. |
 | `grounding-dino+mimo-v2-omni` | Grounding DINO proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
 | `yoloe+mimo-v2-omni` | YOLOE proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
 | `grounding-dino+qwen3-vl` | Grounding DINO proposals refined by Qwen3-VL. | Design target; optional until local access is proven. |
@@ -106,9 +114,14 @@ just task::run household-cleanup direct camera-labels visual_grounding=sim
 just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
 just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino
 just task::run household-cleanup direct camera-labels visual_grounding=yoloe
+just task::run household-cleanup direct camera-labels visual_grounding=omdet-turbo
 just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2-omni
 just task::run household-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2-omni
 ```
+
+`yolo-custom` is not an active pipeline. Without a planned cleanup-ontology
+training set or supplied weights, it would only add dead configuration surface;
+use `yoloe` or `yolo-world` for YOLO-family open-vocabulary probes.
 
 For non-sim pipelines, Roboclaws should call an External Visual Grounding
 Service behind `declare_visual_candidates`. The agent should not receive service
@@ -159,6 +172,11 @@ Benchmark command shape:
 ```bash
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
+just agent::harness molmo-visual-grounding-benchmark \
+  matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json \
+  corpus=harness/visual_grounding/local_raw_fpv_corpus.json \
+  base_url=http://127.0.0.1:18880 \
+  timeout_s=60
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino
 just agent::harness molmo-visual-grounding-benchmark pipeline=yoloe
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino+mimo-v2-omni
@@ -195,6 +213,47 @@ To build a path-backed corpus from a stored cleanup run with RAW_FPV artifacts:
   --output harness/visual_grounding/local_raw_fpv_corpus.json
 ```
 
+That single-run builder is automated, but it is intentionally narrow: it
+exports one cleanup run's RAW_FPV observations. Use it for stable fixtures and
+apple-to-apple reruns, not as the only evidence for model-family ranking.
+
+For a more representative local benchmark corpus, generate a multi-run,
+image-deduped sample from stored run artifacts:
+
+```bash
+.venv/bin/python scripts/visual_grounding/build_representative_visual_grounding_corpus.py \
+  output \
+  --output output/visual-grounding-corpora/representative-raw-fpv/representative_raw_fpv_corpus.json \
+  --name representative-raw-fpv \
+  --max-observations 96 \
+  --min-raw-fpv 5
+```
+
+The representative builder scans for `run_result.json` files with RAW_FPV
+artifacts and private evaluation, drops exact duplicate image hashes by
+default, stratifies by room/category labels, and records source/dedupe
+statistics in `sampling`. Keep its output under ignored `output/` unless a
+specific published artifact is needed.
+
+For model selection, prefer a fresh bbox-labeled MolmoSpaces corpus generated
+from multiple scene indices:
+
+```bash
+.venv/bin/python scripts/visual_grounding/build_molmospaces_visual_grounding_bbox_corpus.py \
+  --output output/visual-grounding-corpora/molmospaces-bbox-10x10/corpus.json \
+  --name molmospaces-bbox-10x10 \
+  --scene-source procthor-10k-val \
+  --scene-indices 0-9 \
+  --targets-per-scene 10 \
+  --frame-classes target_focused_fpv
+```
+
+That builder actively creates MolmoSpaces scenes, focuses the robot FPV camera
+on generated cleanup targets, and writes MuJoCo segmentation bbox truth as
+private benchmark labels. Public requests still contain only the image, category
+hints, fixture hints, and non-target capture provenance. Use `--scene-indices 0
+--targets-per-scene 2` for a cheap local smoke before a 10x10 run.
+
 That builder copies the referenced RAW_FPV images next to the generated corpus
 and derives room-level private category-presence labels from the run's private
 evaluation. When MolmoSpaces mess-placement diagnostics are available, the
@@ -219,17 +278,46 @@ dispatcher:
 ```
 
 For real proposer probes, install optional sidecar dependencies and weights
-explicitly, then run:
+explicitly into the dedicated sidecar environment, then run:
 
 ```bash
-VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-tiny \
-  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline grounding-dino --adapter-mode real
+UV_PROJECT_ENVIRONMENT="$PWD/.venv-visual-grounding" \
+  uv sync --project sidecars/visual-grounding --extra cuda --extra yoloe --extra omdet
+
+.venv-visual-grounding/bin/python - <<'PY'
+import torch, transformers, ultralytics
+print("torch", torch.__version__, "cuda", torch.cuda.is_available())
+print("transformers", transformers.__version__)
+print("ultralytics", ultralytics.__version__)
+PY
+
+VISUAL_GROUNDING_DEVICE=auto \
+VISUAL_GROUNDING_TORCH_DTYPE=auto \
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base \
+VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 \
+VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
 
 VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
-  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline yoloe --adapter-mode real
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
+
+VISUAL_GROUNDING_OMDET_MODEL_ID=omlab/omdet-turbo-swin-tiny-hf \
+  .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline real-router --adapter-mode real
 ```
+
+The sidecar project intentionally does not change the core Roboclaws `.venv/`.
+Use a local PyTorch CUDA index or mirror when needed; keep that machine-local
+and out of committed project metadata.
+Current default: DINO base recall (`IDEA-Research/grounding-dino-base`,
+`box_threshold=0.25`, `text_threshold=0.20`). The older tiny-recall result came
+from category-presence scoring on historical frames; the bbox-aware 2026-05-27
+benchmark ranked base-recall first. Current OmDet support uses Transformers'
+built-in `OmDetTurboProcessor` and `OmDetTurboForObjectDetection`; the
+previously listed base checkpoint is not a valid public model id, so the
+first-wave matrix sweeps the tiny checkpoint with threshold variants instead.
 
 Hosted VLM refiner and direct-producer probes use an OpenAI-compatible
 chat-completions endpoint from the sidecar. MiMo uses the existing hosted route
@@ -454,6 +542,18 @@ Real visual status/review report:
 just molmo::review-report
 ```
 
+Renderer-only standard-vs-Filament comparison:
+
+```bash
+just molmo::renderer-comparison
+just molmo::renderer-comparison 7 10 output/molmo/renderer-comparison-1280x720 procthor-10k-val 0 rby1m 8 1280 720
+```
+
+The comparison recipe is positional. When overriding render width or height,
+also pass the intermediate scene, robot, and focus-count arguments so values do
+not shift into earlier slots. The high-resolution path changes only comparison
+artifacts; it does not change cleanup, RAW_FPV, or visual-grounding defaults.
+
 Real visual MCP smoke:
 
 ```bash
@@ -482,8 +582,9 @@ just molmo::openclaw-report
 
 `openclaw-report` keeps the repo work-network guard. `claude-report` is blocked
 on the work network unless the repo-local `.env` contains a supported MiMo or
-Kimi key. Run `just dev::network-status` first if you are unsure which network
-you are on.
+Kimi key. `codex-report` may run on the work network with the repo-local mify
+or codex-env route configured in `.env`. Run `just dev::network-status` first
+if you are unsure which network you are on.
 
 Planner proof-bundle dry run:
 

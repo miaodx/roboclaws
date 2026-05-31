@@ -743,3 +743,85 @@ ci-rehearsal-all dry_run="":
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" port="18788":
     just molmo::cleanup "openclaw-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"
+
+# Fast render-only comparison: current MuJoCo vs Python 3.11 MolmoSpaces Filament.
+renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/renderer-comparison" scene_source="procthor-10k-val" scene_index="0" robot_name="rby1m" focus_sample_count="4" render_width="540" render_height="360":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    seed="{{seed}}"
+    generated_mess_count="{{generated_mess_count}}"
+    output_dir="{{output_dir}}"
+    scene_source="{{scene_source}}"
+    scene_index="{{scene_index}}"
+    robot_name="{{robot_name}}"
+    focus_sample_count="{{focus_sample_count}}"
+    render_width="{{render_width}}"
+    render_height="{{render_height}}"
+    seed="${seed#seed=}"
+    generated_mess_count="${generated_mess_count#generated_mess_count=}"
+    output_dir="${output_dir#output_dir=}"
+    scene_source="${scene_source#scene_source=}"
+    scene_index="${scene_index#scene_index=}"
+    robot_name="${robot_name#robot_name=}"
+    focus_sample_count="${focus_sample_count#focus_sample_count=}"
+    render_width="${render_width#render_width=}"
+    render_height="${render_height#render_height=}"
+
+    standard_python="${ROBOCLAWS_MOLMOSPACES_STANDARD_PYTHON:-.venv/bin/python}"
+    filament_python="${ROBOCLAWS_MOLMOSPACES_FILAMENT_PYTHON:-.venv-molmospaces-filament/bin/python}"
+    filament_setup_command=(
+      'UV_PROJECT_ENVIRONMENT="$PWD/.venv-molmospaces-filament" \'
+      '  uv sync --project sidecars/molmospaces-filament \'
+      '  --python /home/mi/.local/share/uv/python/cpython-3.11.14-linux-x86_64-gnu/bin/python3.11 \'
+      '  --index-strategy unsafe-best-match'
+      'uv pip install --python .venv-molmospaces-filament/bin/python \'
+      '  --default-index https://pypi.org/simple \'
+      '  --index https://test.pypi.org/simple/ \'
+      '  --index-strategy unsafe-best-match \'
+      '  --reinstall-package mujoco-filament mujoco-filament==3.5.1'
+    )
+    if [[ ! -x "$standard_python" ]]; then
+      echo "error: missing standard MolmoSpaces runtime: ${standard_python}" >&2
+      echo "       run: uv sync --extra dev --extra molmospaces" >&2
+      exit 1
+    fi
+    if [[ ! -x "$filament_python" ]]; then
+      echo "error: missing Filament MolmoSpaces runtime: ${filament_python}" >&2
+      echo "       setup command:" >&2
+      printf '       %s\n' "${filament_setup_command[@]}" >&2
+      exit 1
+    fi
+    filament_probe="$(
+      "$filament_python" -c 'import importlib.metadata as m; import molmo_spaces, mujoco; print(mujoco.__version__ + "\t" + m.version("mujoco-filament"))' 2>/dev/null
+    )" || {
+      echo "error: incomplete Filament MolmoSpaces runtime: ${filament_python}" >&2
+      echo "       expected imports failed: mujoco, molmo_spaces" >&2
+      echo "       setup command:" >&2
+      printf '       %s\n' "${filament_setup_command[@]}" >&2
+      exit 1
+    }
+    mujoco_import_version="${filament_probe%%$'\t'*}"
+    filament_dist_version="${filament_probe#*$'\t'}"
+    if [[ "$mujoco_import_version" != "$filament_dist_version" ]]; then
+      echo "error: incomplete Filament MolmoSpaces runtime: ${filament_python}" >&2
+      echo "       mujoco imports version ${mujoco_import_version}, but mujoco-filament is ${filament_dist_version}" >&2
+      echo "       reinstall mujoco-filament after uv sync so it owns the top-level mujoco module" >&2
+      echo "       setup command:" >&2
+      printf '       %s\n' "${filament_setup_command[@]}" >&2
+      exit 1
+    fi
+
+    stamp="$({{timestamp_cmd}})"
+    run_dir="${output_dir}/${stamp}"
+    .venv/bin/python scripts/molmo_cleanup/run_molmospaces_renderer_comparison.py \
+      --output-dir "$run_dir" \
+      --standard-python "$standard_python" \
+      --filament-python "$filament_python" \
+      --seed "$seed" \
+      --generated-mess-count "$generated_mess_count" \
+      --scene-source "$scene_source" \
+      --scene-index "$scene_index" \
+      --robot-name "$robot_name" \
+      --focus-sample-count "$focus_sample_count" \
+      --render-width "$render_width" \
+      --render-height "$render_height"

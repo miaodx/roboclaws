@@ -1037,7 +1037,7 @@ class RealWorldCleanupContract:
                 ),
             )
         coverage = self._sweep_coverage()
-        if coverage["sweep_coverage_rate"] < 0.90:
+        if coverage["unvisited_waypoint_ids"]:
             next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
             return self._error(
                 "done",

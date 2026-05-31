@@ -156,6 +156,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument("--scene-source", default="procthor-10k-val")
+    parser.add_argument("--scene-index", type=int, default=0)
     parser.add_argument(
         "--map-bundle-dir",
         type=Path,
@@ -201,6 +203,8 @@ def run_realworld_cleanup(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     generated_mess_count: int = 10,
+    scene_source: str = "procthor-10k-val",
+    scene_index: int = 0,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
@@ -244,6 +248,8 @@ def run_realworld_cleanup(
             include_robot=include_robot,
             robot_name=robot_name,
             generated_mess_count=generated_mess_count,
+            scene_source=scene_source,
+            scene_index=scene_index,
         )
         scenario = backend_instance.scenario
     else:
@@ -995,6 +1001,8 @@ def main(argv: list[str] | None = None) -> int:
         robot_name=args.robot_name,
         record_robot_views=args.record_robot_views,
         generated_mess_count=args.generated_mess_count,
+        scene_source=args.scene_source,
+        scene_index=args.scene_index,
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,

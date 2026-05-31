@@ -114,6 +114,27 @@ class MolmoSpacesSubprocessBackend:
         self._run_worker("snapshot", "--output-path", str(output_path), "--title", title)
         return output_path
 
+    def write_snapshot_with_resolution(
+        self,
+        output_path: Path,
+        *,
+        title: str,
+        width: int,
+        height: int,
+    ) -> Path:
+        self._run_worker(
+            "snapshot",
+            "--output-path",
+            str(output_path),
+            "--title",
+            title,
+            "--render-width",
+            str(width),
+            "--render-height",
+            str(height),
+        )
+        return output_path
+
     def write_robot_views(
         self,
         output_dir: Path,
@@ -123,6 +144,32 @@ class MolmoSpacesSubprocessBackend:
         focus_receptacle_id: str | None = None,
     ) -> dict[str, Any]:
         args = ["--output-dir", str(output_dir), "--label", label]
+        if focus_object_id is not None:
+            args.extend(["--focus-object-id", focus_object_id])
+        if focus_receptacle_id is not None:
+            args.extend(["--focus-receptacle-id", focus_receptacle_id])
+        return self._run_worker("robot_views", *args)
+
+    def write_robot_views_with_resolution(
+        self,
+        output_dir: Path,
+        *,
+        label: str,
+        width: int,
+        height: int,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+    ) -> dict[str, Any]:
+        args = [
+            "--output-dir",
+            str(output_dir),
+            "--label",
+            label,
+            "--render-width",
+            str(width),
+            "--render-height",
+            str(height),
+        ]
         if focus_object_id is not None:
             args.extend(["--focus-object-id", focus_object_id])
         if focus_receptacle_id is not None:

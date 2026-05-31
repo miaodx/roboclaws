@@ -1,0 +1,218 @@
+{
+  "schema": "visual_grounding_benchmark_matrix_v1",
+  "rows": [
+    {
+      "row_id": "grounding-dino-tiny-default",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-tiny",
+      "size_tier": "tiny",
+      "runtime_parameters": {
+        "box_threshold": 0.35,
+        "text_threshold": 0.25,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "grounding-dino-tiny-recall",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-tiny",
+      "size_tier": "tiny",
+      "runtime_parameters": {
+        "box_threshold": 0.25,
+        "text_threshold": 0.2,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "grounding-dino-tiny-conservative",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-tiny",
+      "size_tier": "tiny",
+      "runtime_parameters": {
+        "box_threshold": 0.4,
+        "text_threshold": 0.3,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "grounding-dino-base-default",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-base",
+      "size_tier": "base",
+      "runtime_parameters": {
+        "box_threshold": 0.35,
+        "text_threshold": 0.25,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "grounding-dino-base-recall",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-base",
+      "size_tier": "base",
+      "runtime_parameters": {
+        "box_threshold": 0.25,
+        "text_threshold": 0.2,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "grounding-dino-base-conservative",
+      "pipeline_id": "grounding-dino",
+      "model_family": "grounding-dino",
+      "producer_id": "grounding-dino",
+      "model_id": "IDEA-Research/grounding-dino-base",
+      "size_tier": "base",
+      "runtime_parameters": {
+        "box_threshold": 0.4,
+        "text_threshold": 0.3,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "yoloe-11s-tuned",
+      "pipeline_id": "yoloe",
+      "model_family": "yoloe",
+      "producer_id": "yoloe",
+      "model_id": "yoloe-11s-seg.pt",
+      "size_tier": "small",
+      "runtime_parameters": {
+        "confidence_threshold": 0.2,
+        "image_size": 960,
+        "max_detections": 8,
+        "prompt_expansion": true
+      }
+    },
+    {
+      "row_id": "yoloe-11s-precision",
+      "pipeline_id": "yoloe",
+      "model_family": "yoloe",
+      "producer_id": "yoloe",
+      "model_id": "yoloe-11s-seg.pt",
+      "size_tier": "small",
+      "runtime_parameters": {
+        "confidence_threshold": 0.35,
+        "image_size": 960,
+        "max_detections": 6,
+        "prompt_expansion": true
+      }
+    },
+    {
+      "row_id": "yoloe-11m-recall",
+      "pipeline_id": "yoloe",
+      "model_family": "yoloe",
+      "producer_id": "yoloe",
+      "model_id": "yoloe-11m-seg.pt",
+      "size_tier": "medium",
+      "runtime_parameters": {
+        "confidence_threshold": 0.15,
+        "image_size": 960,
+        "max_detections": 12,
+        "prompt_expansion": true
+      }
+    },
+    {
+      "row_id": "yolo-world-small-tuned",
+      "pipeline_id": "yolo-world",
+      "model_family": "yolo-world",
+      "producer_id": "yolo-world",
+      "model_id": "yolov8s-world.pt",
+      "size_tier": "small",
+      "runtime_parameters": {
+        "confidence_threshold": 0.2,
+        "image_size": 960,
+        "max_detections": 8,
+        "prompt_expansion": true
+      }
+    },
+    {
+      "row_id": "yolo-world-small-precision",
+      "pipeline_id": "yolo-world",
+      "model_family": "yolo-world",
+      "producer_id": "yolo-world",
+      "model_id": "yolov8s-world.pt",
+      "size_tier": "small",
+      "runtime_parameters": {
+        "confidence_threshold": 0.35,
+        "image_size": 960,
+        "max_detections": 6,
+        "prompt_expansion": true
+      }
+    },
+    {
+      "row_id": "yolo-world-medium-recall",
+      "pipeline_id": "yolo-world",
+      "model_family": "yolo-world",
+      "producer_id": "yolo-world",
+      "model_id": "yolov8m-world.pt",
+      "size_tier": "medium",
+      "runtime_parameters": {
+        "confidence_threshold": 0.15,
+        "image_size": 960,
+        "max_detections": 12,
+        "prompt_expansion": true
+      }
+    },
+    {
+      "row_id": "omdet-turbo-tiny-default",
+      "pipeline_id": "omdet-turbo",
+      "model_family": "omdet-turbo",
+      "producer_id": "omdet-turbo",
+      "model_id": "omlab/omdet-turbo-swin-tiny-hf",
+      "size_tier": "tiny",
+      "runtime_parameters": {
+        "confidence_threshold": 0.25,
+        "nms_threshold": 0.5,
+        "max_detections": 8,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "omdet-turbo-tiny-recall",
+      "pipeline_id": "omdet-turbo",
+      "model_family": "omdet-turbo",
+      "producer_id": "omdet-turbo",
+      "model_id": "omlab/omdet-turbo-swin-tiny-hf",
+      "size_tier": "tiny",
+      "runtime_parameters": {
+        "confidence_threshold": 0.15,
+        "nms_threshold": 0.5,
+        "max_detections": 12,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    },
+    {
+      "row_id": "omdet-turbo-tiny-precision",
+      "pipeline_id": "omdet-turbo",
+      "model_family": "omdet-turbo",
+      "producer_id": "omdet-turbo",
+      "model_id": "omlab/omdet-turbo-swin-tiny-hf",
+      "size_tier": "tiny",
+      "runtime_parameters": {
+        "confidence_threshold": 0.35,
+        "nms_threshold": 0.45,
+        "max_detections": 6,
+        "device": "auto",
+        "torch_dtype": "auto"
+      }
+    }
+  ]
+}

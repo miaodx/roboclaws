@@ -34,6 +34,9 @@ def test_network_status_reports_work_when_probe_returns_http(tmp_path: Path) -> 
 
     assert "network: work" in result.stdout
     assert "api-router.evad.mioffice.cn" in result.stdout
+    assert "OpenClaw and system-provider Claude Code" in result.stdout
+    assert "Codex may run with repo-local mify or codex-env profiles from .env" in result.stdout
+    assert "system-provider Codex just recipes are blocked" not in result.stdout
 
 
 def test_assert_off_work_blocks_when_probe_is_reachable(tmp_path: Path) -> None:

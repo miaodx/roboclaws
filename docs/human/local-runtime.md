@@ -31,7 +31,10 @@ Claude Code prefers a MiMo key when available, then Kimi, and otherwise falls
 back to the host system provider only off the work network.
 
 Run `just dev::network-status` before OpenClaw, Claude Code, or Codex
-workflows; work-network restrictions are documented in
+workflows. On the work network, OpenClaw and system-provider Claude Code are
+blocked; repo-local `.env` Codex routes (`XM_LLM_API_KEY`, or
+`CODEX_BASE_URL` plus `CODEX_API_KEY`) remain allowed. Work-network
+restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 
 For the current model/provider compatibility table, see
