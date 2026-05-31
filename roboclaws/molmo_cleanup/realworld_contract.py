@@ -24,6 +24,17 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     SEMANTIC_LOOP_VARIANT,
 )
 from roboclaws.molmo_cleanup.types import CleanupScenario
+from roboclaws.molmo_cleanup.visual_grounding import (
+    EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+    SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    VisualGroundingClient,
+    VisualGroundingContractError,
+    image_payload_for_raw_observation,
+    pipeline_summary_from_response,
+    sim_visual_grounding_pipeline,
+    visual_grounding_failure_response,
+    visual_grounding_request,
+)
 
 REALWORLD_CONTRACT = "realworld_cleanup_v1"
 REAL_ROBOT_MAP_BUNDLE_SCHEMA = "real_robot_map_bundle_v1"
@@ -45,6 +56,15 @@ RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = "visual_candidate_already_handled"
+VISUAL_GROUNDING_CATEGORY_HINTS = [
+    "food",
+    "dish",
+    "book",
+    "linen",
+    "toy",
+    "electronics",
+    "pillow",
+]
 REALWORLD_PERCEPTION_MODES = frozenset(
     {
         VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -158,6 +178,10 @@ class RealWorldCleanupContract:
         fixture_hint_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
         map_bundle_dir: str | Path | None = None,
+        visual_grounding_client: VisualGroundingClient | None = None,
+        visual_grounding_pipeline_id: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
+        visual_grounding_artifact_base_dir: str | Path | None = None,
+        visual_grounding_run_id: str = "",
     ) -> None:
         if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
             raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
@@ -170,6 +194,18 @@ class RealWorldCleanupContract:
         self.task_prompt = task_prompt
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = perception_mode
+        self.visual_grounding_client = visual_grounding_client
+        self.visual_grounding_pipeline_id = str(
+            visual_grounding_pipeline_id
+            or getattr(visual_grounding_client, "pipeline_id", "")
+            or SIM_VISUAL_GROUNDING_PIPELINE_ID
+        )
+        self.visual_grounding_artifact_base_dir = (
+            Path(visual_grounding_artifact_base_dir)
+            if visual_grounding_artifact_base_dir is not None
+            else None
+        )
+        self.visual_grounding_run_id = visual_grounding_run_id
         self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
         self.map_bundle_validation: dict[str, Any] | None = None
         self._bundle_metric_map_template: dict[str, Any] | None = None
@@ -575,10 +611,59 @@ class RealWorldCleanupContract:
             )
 
         candidate_inputs = list(candidates or [])
+        visual_grounding_pipeline: dict[str, Any]
         if not candidate_inputs:
-            candidate_inputs = self._simulated_declaration_inputs_for_waypoint(
-                waypoint,
-                observation_id=str(raw_observation["observation_id"]),
+            if self.perception_mode == RAW_FPV_ONLY_MODE:
+                return self._error(
+                    "declare_visual_candidates",
+                    "empty_raw_fpv_candidate_registration",
+                    observation_id=str(raw_observation["observation_id"]),
+                    recovery_hint=(
+                        "In camera-raw mode, call navigate_to_visual_candidate with one "
+                        "explicit candidate when acting on public FPV evidence. Empty "
+                        "candidate registration is reserved for camera-labels producers."
+                    ),
+                )
+            producer_result = self._camera_label_producer_candidates(
+                raw_observation=raw_observation,
+                waypoint=waypoint,
+            )
+            visual_grounding_pipeline = producer_result["visual_grounding_pipeline"]
+            if not producer_result["ok"]:
+                return self._error(
+                    "declare_visual_candidates",
+                    str(producer_result["error_reason"]),
+                    observation_id=str(raw_observation["observation_id"]),
+                    visual_grounding_pipeline=visual_grounding_pipeline,
+                    recovery_hint=producer_result.get("recovery_hint", ""),
+                )
+            candidate_inputs = list(producer_result["candidates"])
+            if visual_grounding_pipeline.get("status") == "failed":
+                evidence = self._model_declared_observation_event(
+                    raw_observation=raw_observation,
+                    producer_type=EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+                    producer_id=self.visual_grounding_pipeline_id,
+                    declared=[],
+                    visual_grounding_pipeline=visual_grounding_pipeline,
+                )
+                self._camera_model_policy_events.append(evidence)
+                return self._ok(
+                    "declare_visual_candidates",
+                    contract=REALWORLD_CONTRACT,
+                    model_declared_observation_evidence=evidence,
+                    model_declared_observations=[],
+                    camera_model_candidates=[],
+                    visible_object_detections=[],
+                    private_target_truth_included=False,
+                )
+            if self.visual_grounding_pipeline_id != SIM_VISUAL_GROUNDING_PIPELINE_ID:
+                producer_type = EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+                producer_id = self.visual_grounding_pipeline_id
+        else:
+            visual_grounding_pipeline = _manual_visual_grounding_pipeline(
+                candidate_count=len(candidate_inputs),
+                producer_type=producer_type,
+                producer_id=producer_id,
             )
         declared = []
         for index, candidate in enumerate(candidate_inputs):
@@ -610,24 +695,15 @@ class RealWorldCleanupContract:
             if item.get("grounding_status") == "resolved"
             and str(item.get("object_id") or "") in self._detections_by_handle
         ]
-        evidence = {
-            "schema": MODEL_DECLARED_OBSERVATIONS_SCHEMA,
-            "perception_mode": self.perception_mode,
-            "observation_id": str(raw_observation["observation_id"]),
-            "waypoint_id": str(raw_observation["waypoint_id"]),
-            "room_id": str(raw_observation["room_id"]),
-            "producer_type": producer_type,
-            "producer_id": producer_id,
-            "candidate_count": len(declared),
-            "registered_observed_handles": [str(item["object_id"]) for item in declared],
-            "private_truth_included": False,
-            "policy_note": (
-                "Model-declared observations are derived from public camera evidence "
-                "and public fixture metadata; private scoring truth is not exposed."
-            ),
-        }
+        evidence = self._model_declared_observation_event(
+            raw_observation=raw_observation,
+            producer_type=producer_type,
+            producer_id=producer_id,
+            declared=declared,
+            visual_grounding_pipeline=visual_grounding_pipeline,
+        )
         _assert_no_forbidden_agent_view_keys(evidence)
-        if producer_type == SIMULATED_CAMERA_MODEL_PROVENANCE:
+        if self.perception_mode == CAMERA_MODEL_POLICY_MODE:
             self._camera_model_policy_events.append(evidence)
         return self._ok(
             "declare_visual_candidates",
@@ -1190,15 +1266,40 @@ class RealWorldCleanupContract:
 
     def camera_model_policy_payload(self) -> dict[str, Any]:
         events = [dict(item) for item in self._camera_model_policy_events]
+        pipeline_ids = [
+            str((item.get("visual_grounding_pipeline") or {}).get("pipeline_id") or "")
+            for item in events
+        ]
+        pipeline_ids = [item for item in pipeline_ids if item]
+        failure_count = sum(
+            1
+            for item in events
+            if (item.get("visual_grounding_pipeline") or {}).get("status") == "failed"
+        )
+        model_provenance = (
+            SIMULATED_CAMERA_MODEL_PROVENANCE
+            if not pipeline_ids or set(pipeline_ids) == {SIM_VISUAL_GROUNDING_PIPELINE_ID}
+            else EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+        )
         return {
             "schema": CAMERA_MODEL_POLICY_SCHEMA,
             "perception_mode": self.perception_mode,
             "enabled": self.perception_mode == CAMERA_MODEL_POLICY_MODE,
-            "model_provenance": SIMULATED_CAMERA_MODEL_PROVENANCE
+            "model_provenance": model_provenance
             if self.perception_mode == CAMERA_MODEL_POLICY_MODE
             else "",
+            "visual_grounding_pipeline_id": pipeline_ids[-1]
+            if pipeline_ids
+            else SIM_VISUAL_GROUNDING_PIPELINE_ID,
+            "visual_grounding_pipeline_ids": sorted(set(pipeline_ids)),
+            "visual_grounding_failure_count": failure_count,
             "event_count": len(events),
             "candidate_count": sum(int(item.get("candidate_count") or 0) for item in events),
+            "unresolved_count": sum(
+                int((item.get("visual_grounding_pipeline") or {}).get("unresolved_count") or 0)
+                for item in events
+            ),
+            "duplicate_rate": _average_duplicate_rate(events),
             "events": events,
             "private_truth_included": False,
             "policy_note": (
@@ -1513,6 +1614,244 @@ class RealWorldCleanupContract:
             )
         return inputs
 
+    def _camera_label_producer_candidates(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        waypoint: dict[str, Any],
+    ) -> dict[str, Any]:
+        if self.visual_grounding_pipeline_id == SIM_VISUAL_GROUNDING_PIPELINE_ID:
+            candidates = self._simulated_declaration_inputs_for_waypoint(
+                waypoint,
+                observation_id=str(raw_observation["observation_id"]),
+            )
+            return {
+                "ok": True,
+                "candidates": candidates,
+                "visual_grounding_pipeline": sim_visual_grounding_pipeline(
+                    candidate_count=len(candidates)
+                ),
+            }
+        if self.visual_grounding_client is None:
+            return {
+                "ok": True,
+                "candidates": [],
+                "visual_grounding_pipeline": pipeline_summary_from_response(
+                    visual_grounding_failure_response(
+                        pipeline_id=self.visual_grounding_pipeline_id,
+                        reason="missing_client",
+                        message=(
+                            "non-sim camera-labels visual grounding requires an "
+                            "External Visual Grounding Service client"
+                        ),
+                        latency_ms=0,
+                    )
+                ),
+            }
+        client_config = getattr(self.visual_grounding_client, "config", None)
+        request = visual_grounding_request(
+            run_id=self.visual_grounding_run_id or self.scenario.scenario_id,
+            raw_observation=raw_observation,
+            category_hints=list(VISUAL_GROUNDING_CATEGORY_HINTS),
+            fixture_hints=self._fixture_hints_for_visual_grounding_request(),
+            pipeline_id=self.visual_grounding_pipeline_id,
+            image=image_payload_for_raw_observation(
+                raw_observation,
+                base_dir=self.visual_grounding_artifact_base_dir,
+            ),
+            proposer={
+                "producer_id": str(getattr(client_config, "proposer_id", "") or ""),
+                "model_id": str(getattr(client_config, "proposer_model_id", "") or ""),
+            },
+            refiner={
+                "producer_id": str(getattr(client_config, "refiner_id", "") or ""),
+                "model_id": str(getattr(client_config, "refiner_model_id", "") or ""),
+            },
+        )
+        try:
+            response = self.visual_grounding_client.request_candidates(request)
+            auth_mode = str(getattr(client_config, "auth_mode", "none"))
+            pipeline = pipeline_summary_from_response(response, auth_mode=auth_mode)
+        except VisualGroundingContractError as exc:
+            return {
+                "ok": False,
+                "error_reason": "visual_grounding_contract_error",
+                "recovery_hint": str(exc),
+                "candidates": [],
+                "visual_grounding_pipeline": {
+                    "schema": "visual_grounding_pipeline_v1",
+                    "pipeline_id": self.visual_grounding_pipeline_id,
+                    "status": "contract_error",
+                    "stages": [],
+                    "candidate_count": 0,
+                    "unresolved_count": 0,
+                    "duplicate_rate": 0.0,
+                    "failure_reason": "contract_error",
+                    "failure_message": str(exc),
+                    "auth_mode": "none",
+                },
+            }
+        if pipeline.get("status") == "failed":
+            return {
+                "ok": True,
+                "candidates": [],
+                "visual_grounding_pipeline": pipeline,
+            }
+        return {
+            "ok": True,
+            "candidates": self._candidate_inputs_from_visual_grounding_response(
+                response,
+                raw_observation=raw_observation,
+                visual_grounding_pipeline=pipeline,
+            ),
+            "visual_grounding_pipeline": pipeline,
+        }
+
+    def _candidate_inputs_from_visual_grounding_response(
+        self,
+        response: dict[str, Any],
+        *,
+        raw_observation: dict[str, Any],
+        visual_grounding_pipeline: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        image = image_payload_for_raw_observation(
+            raw_observation,
+            base_dir=self.visual_grounding_artifact_base_dir,
+        )
+        candidates = []
+        for index, candidate in enumerate(response.get("candidates") or [], start=1):
+            category = str(candidate.get("category") or "object")
+            source_fixture_id = str(candidate.get("source_fixture_id") or "")
+            target_fixture_id = self._resolved_destination_fixture_id(
+                category=category,
+                source_fixture_id=source_fixture_id,
+            )
+            overlay_path = self._visual_grounding_overlay_for_candidate(
+                raw_observation=raw_observation,
+                candidate=candidate,
+                index=index,
+            )
+            candidates.append(
+                {
+                    "category": category,
+                    "source_fixture_id": source_fixture_id,
+                    "target_fixture_id": target_fixture_id,
+                    "evidence_note": str(candidate.get("evidence_note") or ""),
+                    "image_region": candidate.get("image_region"),
+                    "confidence": candidate.get("confidence"),
+                    "producer_type": EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+                    "producer_id": visual_grounding_pipeline.get("pipeline_id", ""),
+                    "visual_grounding_pipeline": visual_grounding_pipeline,
+                    "visual_grounding_stage_provenance": list(
+                        visual_grounding_pipeline.get("stages") or []
+                    ),
+                    "visual_grounding_destination_hint": candidate.get("destination_hint") or {},
+                    "tracking": candidate.get("tracking") or {},
+                    "image_dimensions": {
+                        "width": image.get("width", 0),
+                        "height": image.get("height", 0),
+                    },
+                    "visual_grounding_overlay": overlay_path,
+                }
+            )
+        return candidates
+
+    def _visual_grounding_overlay_for_candidate(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        candidate: dict[str, Any],
+        index: int,
+    ) -> str:
+        if self.visual_grounding_artifact_base_dir is None:
+            return ""
+        region = candidate.get("image_region") or {}
+        if region.get("type") != "bbox":
+            return ""
+        source_path = _raw_fpv_artifact_path(
+            raw_observation,
+            base_dir=self.visual_grounding_artifact_base_dir,
+        )
+        if source_path is None or not source_path.is_file():
+            return ""
+        observation_id = _safe_artifact_id(str(raw_observation.get("observation_id") or "raw_fpv"))
+        rel_path = (
+            Path("visual_grounding") / "overlays" / observation_id / f"candidate_{index:03d}.jpg"
+        )
+        output_path = self.visual_grounding_artifact_base_dir / rel_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            from PIL import Image, ImageDraw
+
+            with Image.open(source_path) as source:
+                image = source.convert("RGB")
+            draw = ImageDraw.Draw(image)
+            x, y, w, h = _normalized_bbox_pixels(
+                region.get("value") or [0, 0, 0, 0],
+                width=int(image.width),
+                height=int(image.height),
+            )
+            draw.rectangle((x, y, x + w, y + h), outline=(26, 115, 232), width=3)
+            label = str(candidate.get("category") or "candidate")
+            draw.text((x + 4, max(0, y - 14)), label, fill=(26, 77, 160))
+            image.save(output_path, format="JPEG", quality=80)
+        except Exception:
+            return ""
+        return str(rel_path)
+
+    def _resolved_destination_fixture_id(self, *, category: str, source_fixture_id: str) -> str:
+        pseudo_detection = {
+            "category": category,
+            "name": category,
+            "support_estimate": {"fixture_id": source_fixture_id},
+        }
+        target = infer_target_fixture_for_detection(pseudo_detection, self.fixture_hints())
+        return str((target or {}).get("fixture_id") or "")
+
+    def _fixture_hints_for_visual_grounding_request(self) -> list[dict[str, Any]]:
+        hints = self.fixture_hints()
+        rows = []
+        for room in hints.get("rooms") or []:
+            room_id = str(room.get("room_id") or "")
+            for fixture in room.get("fixtures") or []:
+                rows.append(
+                    {
+                        "fixture_id": str(fixture.get("fixture_id") or ""),
+                        "room_id": str(fixture.get("room_id") or room_id),
+                        "category": str(fixture.get("category") or ""),
+                        "name": str(fixture.get("name") or ""),
+                        "affordances": list(fixture.get("affordances") or []),
+                    }
+                )
+        return rows
+
+    def _model_declared_observation_event(
+        self,
+        *,
+        raw_observation: dict[str, Any],
+        producer_type: str,
+        producer_id: str,
+        declared: list[dict[str, Any]],
+        visual_grounding_pipeline: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "schema": MODEL_DECLARED_OBSERVATIONS_SCHEMA,
+            "perception_mode": self.perception_mode,
+            "observation_id": str(raw_observation["observation_id"]),
+            "waypoint_id": str(raw_observation["waypoint_id"]),
+            "room_id": str(raw_observation["room_id"]),
+            "producer_type": producer_type,
+            "producer_id": producer_id,
+            "candidate_count": len(declared),
+            "registered_observed_handles": [str(item["object_id"]) for item in declared],
+            "visual_grounding_pipeline": visual_grounding_pipeline,
+            "private_truth_included": False,
+            "policy_note": (
+                "Model-declared observations are derived from public camera evidence "
+                "and public fixture metadata; private scoring truth is not exposed."
+            ),
+        }
+
     def _register_model_declared_candidate(
         self,
         *,
@@ -1628,6 +1967,15 @@ class RealWorldCleanupContract:
             "producer_type": str(candidate.get("producer_type") or producer_type),
             "producer_id": str(candidate.get("producer_id") or producer_id),
             "supersedes_observation_id": str(candidate.get("supersedes_observation_id") or ""),
+            "visual_grounding_pipeline": candidate.get("visual_grounding_pipeline") or {},
+            "visual_grounding_stage_provenance": list(
+                candidate.get("visual_grounding_stage_provenance") or []
+            ),
+            "visual_grounding_destination_hint": candidate.get("visual_grounding_destination_hint")
+            or {},
+            "tracking": candidate.get("tracking") or {},
+            "image_dimensions": candidate.get("image_dimensions") or {},
+            "visual_grounding_overlay": str(candidate.get("visual_grounding_overlay") or ""),
         }
 
     def _resolve_visual_candidate(
@@ -1810,6 +2158,17 @@ class RealWorldCleanupContract:
             "actionability_status": actionability_status,
             "private_truth_included": False,
         }
+        for key in (
+            "visual_grounding_pipeline",
+            "visual_grounding_stage_provenance",
+            "visual_grounding_destination_hint",
+            "tracking",
+            "image_dimensions",
+            "visual_grounding_overlay",
+        ):
+            value = candidate.get(key)
+            if value:
+                declaration[key] = value
         if status == "already_handled":
             declaration["handled_state"] = str(lifecycle.get("state") or "handled")
         _assert_no_forbidden_agent_view_keys(declaration)
@@ -1871,9 +2230,8 @@ class RealWorldCleanupContract:
                 "source_observation_id": source_observation_id,
             },
         }
-        if producer_type == SIMULATED_CAMERA_MODEL_PROVENANCE:
-            detection["model_provenance"] = producer_type
-            detection["support_estimate"]["model_provenance"] = producer_type
+        detection["model_provenance"] = producer_type
+        detection["support_estimate"]["model_provenance"] = producer_type
         detection.update(self._public_candidate_hint(detection))
         _assert_no_forbidden_agent_view_keys(detection)
         return detection
@@ -2781,12 +3139,56 @@ def _normalize_image_region(value: Any) -> dict[str, Any]:
     return {"type": "verbal_region", "value": str(raw_region_value or "unspecified")}
 
 
+def _manual_visual_grounding_pipeline(
+    *,
+    candidate_count: int,
+    producer_type: str,
+    producer_id: str,
+) -> dict[str, Any]:
+    if producer_type == SIMULATED_CAMERA_MODEL_PROVENANCE:
+        return sim_visual_grounding_pipeline(candidate_count=candidate_count)
+    return {
+        "schema": "visual_grounding_pipeline_v1",
+        "pipeline_id": "manual",
+        "status": "ok",
+        "stages": [
+            {
+                "stage": "manual_declaration",
+                "producer_id": producer_id,
+                "model_id": producer_type,
+                "status": "ok",
+                "latency_ms": 0,
+            }
+        ],
+        "candidate_count": candidate_count,
+        "unresolved_count": 0,
+        "duplicate_rate": 0.0,
+    }
+
+
+def _average_duplicate_rate(events: list[dict[str, Any]]) -> float:
+    rates = []
+    for item in events:
+        pipeline = item.get("visual_grounding_pipeline") or {}
+        rate = _float_or_none(pipeline.get("duplicate_rate"))
+        if rate is not None:
+            rates.append(rate)
+    if not rates:
+        return 0.0
+    return round(sum(rates) / len(rates), 6)
+
+
 def _visual_candidate_validation_error(candidate: Any) -> dict[str, str] | None:
     if not isinstance(candidate, dict):
         return {"field": "candidate", "reason": "candidate must be an object"}
-    for field in ("category", "target_fixture_id", "evidence_note"):
+    for field in ("category", "evidence_note"):
         if not str(candidate.get(field) or "").strip():
             return {"field": field, "reason": f"{field} is required"}
+    if (
+        str(candidate.get("producer_type") or "") != EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+        and not str(candidate.get("target_fixture_id") or "").strip()
+    ):
+        return {"field": "target_fixture_id", "reason": "target_fixture_id is required"}
     region_error = _image_region_validation_error(candidate.get("image_region"))
     if region_error is not None:
         return region_error
@@ -2820,6 +3222,34 @@ def _image_region_validation_error(value: Any) -> dict[str, str] | None:
     if any(_float_or_none(item) is None for item in raw_region_value):
         return {"field": "image_region.value", "reason": f"{region_type} values must be numbers"}
     return None
+
+
+def _raw_fpv_artifact_path(
+    raw_observation: dict[str, Any],
+    *,
+    base_dir: Path,
+) -> Path | None:
+    image_artifacts = raw_observation.get("image_artifacts") or {}
+    value = image_artifacts.get("fpv") or raw_observation.get("fpv_image")
+    if not value:
+        return None
+    path = Path(str(value))
+    return path if path.is_absolute() else base_dir / path
+
+
+def _normalized_bbox_pixels(value: Any, *, width: int, height: int) -> tuple[int, int, int, int]:
+    numbers = [float(item) for item in value]
+    return (
+        round(numbers[0] * width),
+        round(numbers[1] * height),
+        round(numbers[2] * width),
+        round(numbers[3] * height),
+    )
+
+
+def _safe_artifact_id(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_.-]+", "_", value.strip())
+    return cleaned or "artifact"
 
 
 def _grounding_confidence(candidate: dict[str, Any], status: str) -> float:

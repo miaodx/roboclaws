@@ -1,0 +1,133 @@
+{
+  "schema": "visual_grounding_benchmark_corpus_v1",
+  "name": "molmospaces-synthetic-smoke-v1",
+  "description": "Small synthetic smoke corpus for visual-grounding artifact and contract checks. It is not a real proposer-quality benchmark.",
+  "category_family_map": {
+    "book": "book",
+    "dish": "dish",
+    "electronics": "electronics",
+    "food": "food",
+    "linen": "linen",
+    "pillow": "pillow",
+    "toy": "toy"
+  },
+  "observations": [
+    {
+      "observation_id": "raw_fpv_kitchen_dish_001",
+      "waypoint_id": "wp_kitchen_counter",
+      "room_id": "kitchen",
+      "capture_context": {
+        "discovered_during": "waypoint_observe"
+      },
+      "category_hints": ["dish", "food", "book", "linen", "toy", "electronics", "pillow"],
+      "fixture_hints": [
+        {
+          "fixture_id": "counter_01",
+          "room_id": "kitchen",
+          "category": "counter",
+          "affordances": ["surface"]
+        },
+        {
+          "fixture_id": "sink_01",
+          "room_id": "kitchen",
+          "category": "sink",
+          "affordances": ["inside"]
+        }
+      ],
+      "image": {
+        "source": "synthetic",
+        "width": 320,
+        "height": 240,
+        "background": [210, 217, 206],
+        "objects": [
+          {
+            "label": "dish",
+            "bbox": [0.40, 0.42, 0.22, 0.18],
+            "color": [245, 245, 235]
+          }
+        ]
+      },
+      "private_labels": [
+        {
+          "category": "dish",
+          "category_family": "dish",
+          "bbox": [0.40, 0.42, 0.22, 0.18]
+        }
+      ]
+    },
+    {
+      "observation_id": "raw_fpv_living_toy_001",
+      "waypoint_id": "wp_living_sofa",
+      "room_id": "living_room",
+      "capture_context": {
+        "discovered_during": "waypoint_observe"
+      },
+      "category_hints": ["toy", "book", "pillow", "electronics", "dish", "food", "linen"],
+      "fixture_hints": [
+        {
+          "fixture_id": "sofa_01",
+          "room_id": "living_room",
+          "category": "sofa",
+          "affordances": ["surface"]
+        },
+        {
+          "fixture_id": "toy_bin_01",
+          "room_id": "living_room",
+          "category": "toy_bin",
+          "affordances": ["inside"]
+        }
+      ],
+      "image": {
+        "source": "synthetic",
+        "width": 320,
+        "height": 240,
+        "background": [196, 208, 225],
+        "objects": [
+          {
+            "label": "toy",
+            "bbox": [0.39, 0.43, 0.22, 0.18],
+            "color": [232, 78, 65]
+          }
+        ]
+      },
+      "private_labels": [
+        {
+          "category": "toy",
+          "category_family": "toy",
+          "bbox": [0.39, 0.43, 0.22, 0.18]
+        }
+      ]
+    },
+    {
+      "observation_id": "raw_fpv_office_negative_001",
+      "waypoint_id": "wp_office_desk",
+      "room_id": "office",
+      "capture_context": {
+        "discovered_during": "waypoint_observe"
+      },
+      "category_hints": ["electronics", "book", "dish", "food", "linen", "toy", "pillow"],
+      "fixture_hints": [
+        {
+          "fixture_id": "desk_01",
+          "room_id": "office",
+          "category": "desk",
+          "affordances": ["surface"]
+        },
+        {
+          "fixture_id": "shelf_01",
+          "room_id": "office",
+          "category": "bookshelf",
+          "affordances": ["surface"]
+        }
+      ],
+      "image": {
+        "source": "synthetic",
+        "width": 320,
+        "height": 240,
+        "background": [224, 219, 205],
+        "objects": []
+      },
+      "private_labels": []
+    }
+  ]
+}

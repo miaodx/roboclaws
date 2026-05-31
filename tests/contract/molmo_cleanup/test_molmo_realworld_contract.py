@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from PIL import Image
+
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -10,6 +14,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     REALWORLD_CONTRACT,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
+    VISUAL_GROUNDING_CATEGORY_HINTS,
     RealWorldCleanupContract,
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
@@ -22,6 +27,7 @@ from roboclaws.molmo_cleanup.types import (
     PrivateScoringManifest,
     TargetRule,
 )
+from roboclaws.molmo_cleanup.visual_grounding import VISUAL_GROUNDING_RESPONSE_SCHEMA
 
 
 def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventory() -> None:
@@ -516,6 +522,24 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
     )
     _assert_no_forbidden_keys(declared)
 
+    missing_target = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"],
+        candidates=[
+            {
+                "category": "mug",
+                "evidence_note": "small item near the sink",
+                "image_region": {"type": "bbox", "value": [0.1, 0.1, 0.2, 0.2]},
+            }
+        ],
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert missing_target["ok"] is False
+    assert missing_target["error_reason"] == "invalid_visual_candidate"
+    assert missing_target["candidate_error"]["field"] == "target_fixture_id"
+    _assert_no_forbidden_keys(missing_target)
+
 
 def test_realworld_model_declared_grounding_accepts_public_category_families() -> None:
     contract = RealWorldCleanupContract(
@@ -718,6 +742,235 @@ def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> 
     _assert_no_forbidden_keys(agent_view)
 
 
+def test_realworld_camera_raw_empty_declare_does_not_fall_back_to_sim_labels() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    observation = contract.observe()
+    response = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"],
+    )
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "empty_raw_fpv_candidate_registration"
+    assert contract.model_declared_observations_payload()["observation_count"] == 0
+    assert contract.camera_model_policy_payload()["event_count"] == 0
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_camera_model_policy_records_sim_pipeline_provenance() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+
+    observation = contract.observe()
+    response = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"]
+    )
+    evidence = response["model_declared_observation_evidence"]
+    pipeline = evidence["visual_grounding_pipeline"]
+
+    assert pipeline["pipeline_id"] == "sim"
+    assert pipeline["stages"][0]["stage"] == "simulated_camera_model"
+    assert pipeline["candidate_count"] == evidence["candidate_count"]
+    assert contract.camera_model_policy_payload()["visual_grounding_pipeline_id"] == "sim"
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() -> None:
+    client = _StaticVisualGroundingClient(
+        {
+            "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
+            "status": "failed",
+            "pipeline": {
+                "pipeline_id": "fake-http",
+                "stages": [
+                    {
+                        "stage": "proposer",
+                        "producer_id": "fake-http",
+                        "model_id": "fake",
+                        "status": "timeout",
+                        "latency_ms": 20,
+                    }
+                ],
+            },
+            "candidates": [],
+            "error": {"reason": "timeout", "message": "fake timeout"},
+        }
+    )
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        visual_grounding_client=client,
+        visual_grounding_pipeline_id="fake-http",
+    )
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["room_id"] == "kitchen"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+
+    observation = contract.observe()
+    response = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"]
+    )
+    evidence = response["model_declared_observation_evidence"]
+    policy = contract.camera_model_policy_payload()
+
+    assert response["ok"] is True
+    assert response["model_declared_observations"] == []
+    assert response["camera_model_candidates"] == []
+    assert evidence["visual_grounding_pipeline"]["status"] == "failed"
+    assert evidence["visual_grounding_pipeline"]["failure_reason"] == "timeout"
+    assert evidence["candidate_count"] == 0
+    assert policy["model_provenance"] == "external_visual_grounding_service"
+    assert policy["visual_grounding_failure_count"] == 1
+    assert contract.model_declared_observations_payload()["observation_count"] == 0
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_camera_labels_http_success_uses_destination_resolver(
+    tmp_path: Path,
+) -> None:
+    client = _StaticVisualGroundingClient(
+        {
+            "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
+            "status": "ok",
+            "pipeline": {
+                "pipeline_id": "fake-http",
+                "stages": [
+                    {
+                        "stage": "proposer",
+                        "producer_id": "fake-http",
+                        "model_id": "fake",
+                        "status": "ok",
+                        "latency_ms": 4,
+                    }
+                ],
+            },
+            "candidates": [
+                {
+                    "category": "dish",
+                    "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
+                    "confidence": 0.8,
+                    "evidence_note": "fake dish on public camera frame",
+                    "source_fixture_id": "counter_01",
+                    "destination_hint": {
+                        "candidate_fixture_id": "bookshelf_01",
+                        "confidence": 0.9,
+                    },
+                }
+            ],
+        }
+    )
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        visual_grounding_client=client,
+        visual_grounding_pipeline_id="fake-http",
+        visual_grounding_artifact_base_dir=tmp_path,
+    )
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["room_id"] == "kitchen"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+
+    observation = contract.observe()
+    image_path = tmp_path / "robot_views" / "raw_fpv_001.png"
+    image_path.parent.mkdir(parents=True)
+    Image.new("RGB", (20, 10), (240, 240, 240)).save(image_path)
+    contract._raw_fpv_observations[-1]["image_artifacts"] = {  # noqa: SLF001
+        "fpv": "robot_views/raw_fpv_001.png"
+    }
+    response = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"]
+    )
+    declaration = response["model_declared_observations"][0]
+
+    assert client.last_request is not None
+    assert client.last_request["category_hints"] == VISUAL_GROUNDING_CATEGORY_HINTS
+    assert client.last_request["image"]["bytes_base64"]
+    assert client.last_request["image"]["width"] == 20
+    assert client.last_request["image"]["height"] == 10
+    assert declaration["producer_type"] == "external_visual_grounding_service"
+    assert declaration["visual_grounding_pipeline"]["pipeline_id"] == "fake-http"
+    assert declaration["visual_grounding_destination_hint"]["candidate_fixture_id"] == (
+        "bookshelf_01"
+    )
+    assert declaration["target_fixture_id"] == "sink_01"
+    assert declaration["visual_grounding_overlay"] == (
+        "visual_grounding/overlays/raw_fpv_001/candidate_001.jpg"
+    )
+    assert (tmp_path / declaration["visual_grounding_overlay"]).is_file()
+    assert (
+        response["model_declared_observation_evidence"]["visual_grounding_pipeline"][
+            "candidate_count"
+        ]
+        == 1
+    )
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> None:
+    client = _StaticVisualGroundingClient(
+        {
+            "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
+            "status": "ok",
+            "pipeline": {
+                "pipeline_id": "fake-http",
+                "stages": [
+                    {
+                        "stage": "proposer",
+                        "producer_id": "fake-http",
+                        "model_id": "fake",
+                        "status": "ok",
+                        "latency_ms": 4,
+                    }
+                ],
+            },
+            "candidates": [
+                {
+                    "category": "unknown_movable",
+                    "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
+                    "confidence": 0.7,
+                    "evidence_note": "fake unknown item with service-suggested destination",
+                    "source_fixture_id": "",
+                    "destination_hint": {
+                        "candidate_fixture_id": "bookshelf_01",
+                        "confidence": 0.9,
+                    },
+                }
+            ],
+        }
+    )
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        visual_grounding_client=client,
+        visual_grounding_pipeline_id="fake-http",
+    )
+
+    observation = contract.observe()
+    response = contract.declare_visual_candidates(
+        observation["raw_fpv_observation"]["observation_id"]
+    )
+    declaration = response["model_declared_observations"][0]
+
+    assert declaration["visual_grounding_destination_hint"]["candidate_fixture_id"] == (
+        "bookshelf_01"
+    )
+    assert declaration["target_fixture_id"] == ""
+    assert declaration["target_plausibility"]["status"] == "unknown_fixture"
+    assert declaration["grounding_status"] == "unresolved"
+    _assert_no_forbidden_keys(response)
+
+
 def _assert_no_forbidden_keys(payload: object) -> None:
     if isinstance(payload, dict):
         forbidden = forbidden_agent_view_keys().intersection(payload)
@@ -727,6 +980,29 @@ def _assert_no_forbidden_keys(payload: object) -> None:
     elif isinstance(payload, list):
         for value in payload:
             _assert_no_forbidden_keys(value)
+
+
+class _StaticVisualGroundingClient:
+    pipeline_id = "fake-http"
+    config = type(
+        "Config",
+        (),
+        {
+            "auth_mode": "none",
+            "proposer_id": "fake-http",
+            "proposer_model_id": "fake",
+            "refiner_id": "",
+            "refiner_model_id": "",
+        },
+    )()
+
+    def __init__(self, response: dict) -> None:
+        self.response = response
+        self.last_request: dict | None = None
+
+    def request_candidates(self, request: dict) -> dict:
+        self.last_request = request
+        return self.response
 
 
 def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:

@@ -60,6 +60,10 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
 )
 from roboclaws.molmo_cleanup.skill_scratchpad import read_or_create_skill_scratchpad
 from roboclaws.molmo_cleanup.types import CleanupScenario
+from roboclaws.molmo_cleanup.visual_grounding import (
+    SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    visual_grounding_client_from_env,
+)
 
 __all__ = ["MCP_SERVER_NAME", "RealWorldMolmoCleanupMCPServer", "make_molmo_realworld_cleanup_mcp"]
 
@@ -92,6 +96,9 @@ def make_molmo_realworld_cleanup_mcp(
     cleanup_profile: str | None = None,
     planner_proof_run_result: Path | None = None,
     map_bundle_dir: str | Path | None = None,
+    visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
+    visual_grounding_base_url: str | None = None,
+    visual_grounding_timeout_s: float | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
         run_dir=run_dir,
@@ -109,6 +116,9 @@ def make_molmo_realworld_cleanup_mcp(
         cleanup_profile=cleanup_profile,
         planner_proof_run_result=planner_proof_run_result,
         map_bundle_dir=map_bundle_dir,
+        visual_grounding=visual_grounding,
+        visual_grounding_base_url=visual_grounding_base_url,
+        visual_grounding_timeout_s=visual_grounding_timeout_s,
     )
 
 
@@ -133,6 +143,9 @@ class RealWorldMolmoCleanupMCPServer:
         cleanup_profile: str | None = None,
         planner_proof_run_result: Path | None = None,
         map_bundle_dir: str | Path | None = None,
+        visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
+        visual_grounding_base_url: str | None = None,
+        visual_grounding_timeout_s: float | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -151,6 +164,14 @@ class RealWorldMolmoCleanupMCPServer:
                 fixture_hint_mode=fixture_hint_mode,
                 perception_mode=perception_mode,
                 map_bundle_dir=self.map_bundle_dir,
+                visual_grounding_client=visual_grounding_client_from_env(
+                    visual_grounding,
+                    base_url=visual_grounding_base_url,
+                    timeout_s=visual_grounding_timeout_s,
+                ),
+                visual_grounding_pipeline_id=visual_grounding,
+                visual_grounding_artifact_base_dir=self.run_dir,
+                visual_grounding_run_id=f"seed-{scenario.seed if scenario else 'run'}",
             )
         self.contract = contract
         self.base_contract = contract.contract
@@ -192,6 +213,7 @@ class RealWorldMolmoCleanupMCPServer:
             agent_driven=self.agent_driven,
             perception_mode=self.perception_mode,
             cleanup_profile=self.cleanup_profile,
+            visual_grounding_pipeline_id=contract.visual_grounding_pipeline_id,
         )
 
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:
@@ -241,7 +263,9 @@ class RealWorldMolmoCleanupMCPServer:
             raw = augmented.get("raw_fpv_observation") or {}
             augmented["instruction"] = (
                 "Call declare_visual_candidates with observation_id="
-                f"{raw.get('observation_id', '')} before choosing cleanup candidates."
+                f"{raw.get('observation_id', '')} before choosing cleanup candidates. "
+                "Candidates may come from the configured visual-grounding pipeline; "
+                "service URLs, credentials, and image paths are server-side details."
             )
         if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
             raw = augmented.get("raw_fpv_observation") or {}
@@ -342,6 +366,7 @@ class RealWorldMolmoCleanupMCPServer:
             "planner_uses_private_manifest": False,
             "fixture_hint_mode": self.fixture_hint_mode,
             "perception_mode": self.perception_mode,
+            "visual_grounding_pipeline_id": self.contract.visual_grounding_pipeline_id,
             "requested_generated_mess_count": requested_count,
             "generated_mess_count": private_evaluation["generated_mess_count"],
             "mcp_server": MCP_SERVER_NAME,

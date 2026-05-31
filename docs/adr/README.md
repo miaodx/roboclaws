@@ -141,6 +141,7 @@ one decision per file, sequential numbering, explicit status.
 | [0130](0130-default-composition-to-trace-preserving-skill-routines.md) | Default Composition To Trace-Preserving Skill Routines | Accepted; Updated by ADR-0132 |
 | [0131](0131-use-agibot-sdk-runner-as-real-robot-cleanup-backend.md) | Use Agibot SDK Runner As Real Robot Cleanup Backend | Accepted |
 | [0132](0132-keep-cleanup-memory-skill-first-and-remove-promoted-composite.md) | Keep Cleanup Memory Skill-First And Remove Promoted Composite | Accepted |
+| [0133](0133-use-http-visual-grounding-service-for-real-camera-labels.md) | Use HTTP Visual Grounding Service For Real Camera Labels | Accepted |
 
 ## Adding a new ADR
 

@@ -17,6 +17,7 @@ venv/
 .coverage
 htmlcov/
 .tmp/
+tmp/
 
 # Editor
 .vscode/
@@ -33,3 +34,9 @@ output/
 .openclaw-token
 vis
 .gstack/
+
+# Local agent/model artifacts
+.worktrees/
+mobileclip_blt.ts
+mobileclip2_b.ts
+yoloe-*.pt

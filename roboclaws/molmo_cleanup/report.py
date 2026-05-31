@@ -5789,28 +5789,40 @@ def _camera_model_policy_section(run_result: dict[str, Any]) -> str:
     rows = []
     for event in evidence.get("events") or []:
         handles = ", ".join(str(item) for item in event.get("registered_observed_handles") or [])
+        pipeline = event.get("visual_grounding_pipeline") or {}
+        stages = pipeline.get("stages") or []
+        stage_text = ", ".join(
+            str(stage.get("stage") or stage.get("producer_id") or "") for stage in stages
+        )
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(event.get('observation_id', '')))}</td>"
             f"<td>{html.escape(str(event.get('room_id', '')))}</td>"
-            f"<td>{html.escape(str(event.get('model_provenance', '')))}</td>"
+            f"<td>{html.escape(str(pipeline.get('pipeline_id', '')))}</td>"
+            f"<td>{html.escape(str(pipeline.get('status', '')))}</td>"
+            f"<td>{html.escape(stage_text)}</td>"
+            f"<td>{html.escape(str(pipeline.get('failure_reason', '')))}</td>"
             f"<td>{html.escape(str(event.get('candidate_count', 0)))}</td>"
             f"<td>{html.escape(handles)}</td>"
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="5">No camera-model candidate events recorded.</td></tr>')
+        rows.append('<tr><td colspan="8">No camera-model candidate events recorded.</td></tr>')
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Events', evidence.get('event_count', 0))}"
         f"{_metric('Candidates', evidence.get('candidate_count', 0))}"
+        f"{_metric('Pipeline', evidence.get('visual_grounding_pipeline_id', 'sim'))}"
+        f"{_metric('Failures', evidence.get('visual_grounding_failure_count', 0))}"
+        f"{_metric('Duplicate rate', evidence.get('duplicate_rate', 0))}"
         f"{_metric('Model', evidence.get('model_provenance', 'unknown'))}"
         f"{_metric('Private truth', evidence.get('private_truth_included', 'unknown'))}"
         "</div>"
     )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Observation</th>'
-        "<th>Room</th><th>Model provenance</th><th>Candidates</th><th>Handles</th>"
+        "<th>Room</th><th>Pipeline</th><th>Status</th><th>Stages</th>"
+        "<th>Failure reason</th><th>Candidates</th><th>Handles</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
     note = evidence.get("policy_note") or (
@@ -5836,10 +5848,14 @@ def _model_declared_observations_section(run_result: dict[str, Any]) -> str:
     rows = []
     for item in observations:
         region = item.get("image_region") or {}
+        pipeline = item.get("visual_grounding_pipeline") or {}
+        overlay = str(item.get("visual_grounding_overlay") or "")
+        overlay_cell = f'<a href="{html.escape(overlay)}">overlay</a>' if overlay else ""
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(item.get('source_observation_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('producer_type', '')))}</td>"
+            f"<td>{html.escape(str(pipeline.get('pipeline_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('category', '')))}</td>"
             f"<td>{html.escape(str(item.get('target_fixture_id', '')))}</td>"
@@ -5849,6 +5865,7 @@ def _model_declared_observations_section(run_result: dict[str, Any]) -> str:
             f"({html.escape(str(item.get('grounding_confidence', '')))})</td>"
             f"<td>{html.escape(str(item.get('target_plausibility', {}).get('status', '')))}</td>"
             f"<td>{html.escape(str(item.get('acted_on', False)))}</td>"
+            f"<td>{overlay_cell}</td>"
             f"<td>{html.escape(str(item.get('evidence_note', '')))}</td>"
             f"<td>{html.escape(str(item.get('recovery_hint', '')))}</td>"
             "</tr>"
@@ -5863,9 +5880,9 @@ def _model_declared_observations_section(run_result: dict[str, Any]) -> str:
     )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Source observation</th>'
-        "<th>Producer</th><th>Handle</th><th>Category</th><th>Target fixture</th>"
+        "<th>Producer</th><th>Pipeline</th><th>Handle</th><th>Category</th><th>Target fixture</th>"
         "<th>Image region</th><th>Grounding</th><th>Target plausibility</th>"
-        "<th>Acted on</th><th>Evidence note</th><th>Recovery hint</th>"
+        "<th>Acted on</th><th>Overlay</th><th>Evidence note</th><th>Recovery hint</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
     return (

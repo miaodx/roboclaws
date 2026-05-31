@@ -13,6 +13,7 @@ AI agents should also read these docs when they need human-facing context.
 - [Skill-first MCP architecture](mcp-skills-and-semantic-profiles.md)
 - [Technical design](technical-design.md)
 - [MolmoSpaces settings](molmospaces-settings.md)
+- [MolmoSpaces visual grounding results](molmospaces-visual-grounding-results.md)
 - [MolmoSpaces cleanup profile architecture](molmospaces-cleanup-mode-architecture.md)
 - [Model matrix](model-matrix.md)
 
