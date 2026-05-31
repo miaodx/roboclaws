@@ -6,10 +6,21 @@ import json
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, ImageStat
+
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
+)
+from roboclaws.molmo_cleanup.isaac_lab_backend import (
+    ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
+    ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
+    ISAAC_SEMANTIC_POSE_PROVENANCE,
+    ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
+    ISAAC_SEMANTIC_POSE_STATE_SOURCE,
+    ISAACLAB_ROBOT_VIEW_VARIANT,
+    ISAACLAB_SUBPROCESS_BACKEND,
 )
 from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
     validate_planner_cleanup_bridge_evidence,
@@ -48,6 +59,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
 )
+from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
 from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
 from roboclaws.molmo_cleanup.semantic_timeline import (
     CANONICAL_INSIDE_CLEANUP_PHASES,
@@ -64,6 +76,8 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     successful_semantic_phases,
 )
 from roboclaws.molmo_cleanup.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+
+ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 
 
 def parse_args() -> argparse.Namespace:
@@ -133,6 +147,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-planner-cleanup-bridge-ready", action="store_true")
     parser.add_argument("--require-waypoint-honesty", action="store_true")
     parser.add_argument("--require-real-robot-alignment", action="store_true")
+    parser.add_argument("--require-isaac-runtime", action="store_true")
+    parser.add_argument("--require-isaac-real-runtime", action="store_true")
+    parser.add_argument("--require-isaac-scene-loaded", action="store_true")
+    parser.add_argument("--require-isaac-local-scene-usd", action="store_true")
+    parser.add_argument("--require-isaac-selected-usd-bindings", action="store_true")
+    parser.add_argument("--require-isaac-semantic-pose", action="store_true")
+    parser.add_argument("--require-isaac-robot-view-provenance", action="store_true")
+    parser.add_argument("--require-isaac-segmentation-evidence", action="store_true")
+    parser.add_argument("--require-isaac-snapshot-provenance", action="store_true")
     return parser.parse_args()
 
 
@@ -200,6 +223,15 @@ def main() -> None:
             require_planner_cleanup_bridge_ready=(args.require_planner_cleanup_bridge_ready),
             require_waypoint_honesty=args.require_waypoint_honesty,
             require_real_robot_alignment=args.require_real_robot_alignment,
+            require_isaac_runtime=args.require_isaac_runtime,
+            require_isaac_real_runtime=args.require_isaac_real_runtime,
+            require_isaac_scene_loaded=args.require_isaac_scene_loaded,
+            require_isaac_local_scene_usd=args.require_isaac_local_scene_usd,
+            require_isaac_selected_usd_bindings=args.require_isaac_selected_usd_bindings,
+            require_isaac_semantic_pose=args.require_isaac_semantic_pose,
+            require_isaac_robot_view_provenance=args.require_isaac_robot_view_provenance,
+            require_isaac_segmentation_evidence=args.require_isaac_segmentation_evidence,
+            require_isaac_snapshot_provenance=args.require_isaac_snapshot_provenance,
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
 
@@ -255,6 +287,15 @@ def _assert_result(
     require_planner_cleanup_bridge_ready: bool = False,
     require_waypoint_honesty: bool = False,
     require_real_robot_alignment: bool = False,
+    require_isaac_runtime: bool = False,
+    require_isaac_real_runtime: bool = False,
+    require_isaac_scene_loaded: bool = False,
+    require_isaac_local_scene_usd: bool = False,
+    require_isaac_selected_usd_bindings: bool = False,
+    require_isaac_semantic_pose: bool = False,
+    require_isaac_robot_view_provenance: bool = False,
+    require_isaac_segmentation_evidence: bool = False,
+    require_isaac_snapshot_provenance: bool = False,
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
@@ -439,6 +480,30 @@ def _assert_result(
         _assert_waypoint_honesty(data, report_text)
     if require_real_robot_alignment:
         _assert_real_robot_alignment(data, base, report_text)
+    if (
+        require_isaac_runtime
+        or require_isaac_real_runtime
+        or require_isaac_scene_loaded
+        or require_isaac_local_scene_usd
+        or require_isaac_selected_usd_bindings
+        or require_isaac_semantic_pose
+        or require_isaac_robot_view_provenance
+        or require_isaac_segmentation_evidence
+        or require_isaac_snapshot_provenance
+    ):
+        _assert_isaac_runtime(
+            data,
+            base,
+            report_text,
+            require_real_runtime=require_isaac_real_runtime,
+            require_scene_loaded=require_isaac_scene_loaded,
+            require_local_scene_usd=require_isaac_local_scene_usd,
+            require_selected_usd_bindings=require_isaac_selected_usd_bindings,
+            require_semantic_pose=require_isaac_semantic_pose,
+            require_robot_view_provenance=require_isaac_robot_view_provenance,
+            require_segmentation_evidence=require_isaac_segmentation_evidence,
+            require_snapshot_provenance=require_isaac_snapshot_provenance,
+        )
 
 
 def _assert_openclaw_minimum(data: dict[str, Any]) -> None:
@@ -774,7 +839,10 @@ def _assert_robot_views(
     *,
     require_complete_actions: bool = True,
 ) -> None:
-    assert data.get("view_variant") == "molmospaces-rby1m-fpv-map-chase-verify", data
+    expected_variants = {"molmospaces-rby1m-fpv-map-chase-verify"}
+    if data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND:
+        expected_variants.add(ISAACLAB_ROBOT_VIEW_VARIANT)
+    assert data.get("view_variant") in expected_variants, data
     artifacts = data.get("artifacts") or {}
     robot_views_dir = _resolve_path(base, artifacts.get("robot_views", ""))
     assert robot_views_dir.is_dir(), robot_views_dir
@@ -807,6 +875,720 @@ def _assert_robot_views(
             assert OPEN_RECEPTACLE_PHASE in focused_actions, data
             assert PLACE_INSIDE_PHASE in focused_actions, data
             assert CLOSE_RECEPTACLE_PHASE in focused_actions, data
+
+
+def _assert_isaac_runtime(
+    data: dict[str, Any],
+    base: Path,
+    report_text: str,
+    *,
+    require_real_runtime: bool,
+    require_scene_loaded: bool,
+    require_local_scene_usd: bool = False,
+    require_selected_usd_bindings: bool,
+    require_semantic_pose: bool,
+    require_robot_view_provenance: bool,
+    require_segmentation_evidence: bool,
+    require_snapshot_provenance: bool,
+) -> None:
+    assert data.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, data
+    isaac = data.get("isaac_runtime") or {}
+    assert isaac, data
+    assert "Isaac Runtime Diagnostics" in report_text, report_text[:500]
+
+    runtime = isaac.get("runtime") or {}
+    rendering = runtime.get("rendering") or {}
+    scene_load = isaac.get("scene_load") or {}
+    scene_bindings = isaac.get("scene_binding_diagnostics") or {}
+    segmentation = isaac.get("segmentation") or {}
+
+    assert runtime.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, runtime
+    assert segmentation.get("status") in {
+        "blocked_capability",
+        "available",
+        "unavailable",
+    }, segmentation
+    assert segmentation.get("agent_facing") is not True, segmentation
+    assert segmentation.get("no_simulator_label_fallback") is not False, segmentation
+
+    if require_real_runtime:
+        assert runtime.get("runtime_mode") == "real", runtime
+        _assert_isaac_real_runtime_diagnostics(runtime)
+        assert rendering.get("real_rendering_proven") is True, rendering
+        assert rendering.get("placeholder_visuals") is not True, rendering
+        assert rendering.get("status") == "real_rendering_proven", rendering
+
+    if require_scene_loaded:
+        _assert_isaac_scene_loaded(isaac, scene_load, base)
+
+    if require_local_scene_usd:
+        _assert_isaac_scene_loaded(isaac, scene_load, base)
+        assert scene_load.get("loaded_asset_kind") == "local_scene_usd", scene_load
+
+    scene_index_payload: dict[str, Any] | None = None
+    if require_selected_usd_bindings:
+        _assert_selected_isaac_usd_bindings(scene_bindings)
+        scene_index_payload = _assert_isaac_scene_index_artifact(data, isaac, base)
+        _assert_isaac_scene_index_matches_runtime_bindings(
+            scene_bindings,
+            scene_index_payload.get("scene_binding_diagnostics") or {},
+        )
+        _assert_isaac_scene_index_report_rows(
+            scene_index_payload.get("scene_binding_diagnostics") or scene_bindings,
+            report_text,
+        )
+
+    if require_semantic_pose:
+        assert data.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, data
+        evidence = data.get("manipulation_evidence") or {}
+        assert evidence.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, evidence
+        assert evidence.get("isaac_semantic_pose_edits") is True, evidence
+        assert evidence.get("planner_backed") is False, evidence
+        assert evidence.get("physical_robot") is False, evidence
+        assert ISAAC_SEMANTIC_POSE_PROVENANCE in report_text, report_text[:500]
+        for expected_label in (
+            "Semantic Pose State",
+            "Semantic Pose Events",
+            "Rendered to USD",
+            "Planner backed",
+        ):
+            assert expected_label in report_text, report_text[:1000]
+        for item in data.get("semantic_substeps") or []:
+            for step in item.get("steps") or []:
+                if step.get("phase") in SEMANTIC_RESPONSE_PHASES and step.get("status") == "ok":
+                    assert step.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, step
+                    assert step.get("planner_backed") is not True, step
+                    assert step.get("physical_robot") is not True, step
+        _assert_isaac_semantic_pose_state(
+            isaac,
+            scene_bindings=scene_bindings if require_selected_usd_bindings else None,
+            scene_index_payload=scene_index_payload,
+        )
+        _assert_isaac_semantic_pose_report_rows(
+            isaac.get("semantic_pose_state") or {},
+            report_text,
+        )
+        _assert_isaac_semantic_pose_trace(data, base, isaac.get("semantic_pose_state") or {})
+
+    if require_robot_view_provenance:
+        _assert_robot_views(data, base, require_complete_actions=False)
+        assert data.get("view_variant") == ISAACLAB_ROBOT_VIEW_VARIANT, data
+        steps = data.get("robot_view_steps") or []
+        assert steps, data
+        for step in steps:
+            provenance_text = json.dumps(step.get("view_provenance"), sort_keys=True).lower()
+            assert "placeholder" not in provenance_text, step
+            assert "isaac_lab_camera_rgb" in provenance_text, step
+            views = step.get("views") or {}
+            assert isinstance(views, dict), step
+            for key in ("fpv", "chase", "map", "verify"):
+                _assert_nonblank_image(
+                    _resolve_path(base, str(views.get(key) or "")),
+                    f"Isaac {key} robot view",
+                )
+
+    if require_segmentation_evidence:
+        assert segmentation.get("schema") == "isaac_segmentation_diagnostics_v1", segmentation
+        assert segmentation.get("status") == "available", segmentation
+        assert segmentation.get("available") is True, segmentation
+        assert segmentation.get("tensor_output_available") is True, segmentation
+        assert segmentation.get("candidate_overlay_status") == "available", segmentation
+        assert int(segmentation.get("candidate_bbox_count") or 0) > 0, segmentation
+        assert int(segmentation.get("selected_usd_prim_match_count") or 0) > 0, segmentation
+        assert segmentation.get("agent_facing") is False, segmentation
+        assert segmentation.get("no_simulator_label_fallback") is True, segmentation
+        assert "Segmentation" in report_text, report_text[:500]
+        if scene_index_payload is not None:
+            _assert_isaac_scene_index_matches_runtime_segmentation(
+                segmentation,
+                scene_index_payload.get("segmentation") or {},
+            )
+
+    if require_snapshot_provenance:
+        _assert_isaac_snapshot_provenance(isaac, base)
+
+
+def _assert_isaac_real_runtime_diagnostics(runtime: dict[str, Any]) -> None:
+    assert runtime.get("python_version"), runtime
+    assert runtime.get("isaac_sim_version"), runtime
+    assert runtime.get("isaac_lab_version"), runtime
+    assert runtime.get("cuda_available") is True, runtime
+    assert runtime.get("gpu_name"), runtime
+    assert int(runtime.get("gpu_vram_mb") or 0) > 0, runtime
+    assert runtime.get("renderer_mode"), runtime
+    camera_resolution = runtime.get("camera_resolution")
+    assert isinstance(camera_resolution, list), runtime
+    assert len(camera_resolution) == 2, runtime
+    assert all(int(value or 0) > 0 for value in camera_resolution), runtime
+
+
+def _assert_isaac_scene_loaded(
+    isaac: dict[str, Any],
+    scene_load: dict[str, Any],
+    base: Path,
+) -> None:
+    assert scene_load.get("status") == "loaded", scene_load
+    assert scene_load.get("usd_stage_loaded") is True, scene_load
+    assert scene_load.get("loaded_asset_kind"), scene_load
+    assert scene_load.get("manual_editor_steps_required") is False, scene_load
+    scene_usd = str(isaac.get("scene_usd") or scene_load.get("scene_usd") or "")
+    assert scene_usd, isaac
+    scene_path = Path(scene_usd)
+    if scene_path.is_absolute():
+        assert scene_path.is_file(), scene_path
+    else:
+        resolved = _resolve_path(base, scene_usd)
+        assert resolved.is_file(), resolved
+
+
+def _assert_selected_isaac_usd_bindings(scene_bindings: dict[str, Any]) -> None:
+    _assert_selected_isaac_usd_bindings_for_indexes(scene_bindings)
+
+
+def _assert_selected_isaac_usd_bindings_for_indexes(
+    scene_bindings: dict[str, Any],
+    *,
+    object_index: dict[str, Any] | None = None,
+    receptacle_index: dict[str, Any] | None = None,
+) -> None:
+    assert scene_bindings.get("schema") == ISAAC_PUBLIC_SCENE_BINDING_SCHEMA, scene_bindings
+    assert scene_bindings.get("status") == "selected_bound", scene_bindings
+    assert scene_bindings.get("source") == "usd_stage_traversal", scene_bindings
+    assert scene_bindings.get("private_manifest_exposed_to_agent") is False, scene_bindings
+    selected_object_count = int(scene_bindings.get("selected_object_count") or 0)
+    selected_receptacle_count = int(scene_bindings.get("selected_target_receptacle_count") or 0)
+    selected_object_bound_count = int(scene_bindings.get("selected_object_bound_count") or 0)
+    selected_receptacle_bound_count = int(
+        scene_bindings.get("selected_target_receptacle_bound_count") or 0
+    )
+    assert selected_object_count > 0, scene_bindings
+    assert selected_receptacle_count > 0, scene_bindings
+    assert selected_object_bound_count >= selected_object_count, scene_bindings
+    assert selected_receptacle_bound_count >= selected_receptacle_count, scene_bindings
+    assert not scene_bindings.get("blockers"), scene_bindings
+    _assert_bound_isaac_binding_rows(
+        scene_bindings.get("selected_object_bindings") or {},
+        expected_count=selected_object_count,
+        index=object_index,
+        index_label="object index",
+        label="object",
+    )
+    _assert_bound_isaac_binding_rows(
+        scene_bindings.get("selected_target_receptacle_bindings") or {},
+        expected_count=selected_receptacle_count,
+        index=receptacle_index,
+        index_label="receptacle index",
+        label="target receptacle",
+    )
+
+
+def _assert_isaac_scene_index_artifact(
+    data: dict[str, Any],
+    isaac: dict[str, Any],
+    base: Path,
+) -> dict[str, Any]:
+    artifacts = data.get("artifacts") or {}
+    artifact_path = str(
+        isaac.get("scene_index_artifact") or artifacts.get("isaac_scene_index") or ""
+    )
+    assert artifact_path, isaac
+    resolved = _resolve_path(base, artifact_path)
+    assert resolved.is_file(), resolved
+    payload = json.loads(resolved.read_text(encoding="utf-8"))
+    assert payload.get("schema") == ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA, payload
+    assert payload.get("backend") == ISAACLAB_SUBPROCESS_BACKEND, payload
+    assert payload.get("agent_facing") is False, payload
+    assert payload.get("private_manifest_exposed_to_agent") is False, payload
+    assert "private_manifest" not in payload, payload
+    assert payload.get("object_index"), payload
+    assert payload.get("receptacle_index"), payload
+    assert int(payload.get("object_index_count") or 0) == len(payload["object_index"]), payload
+    assert int(payload.get("receptacle_index_count") or 0) == len(payload["receptacle_index"]), (
+        payload
+    )
+    _assert_bound_isaac_index_rows(payload.get("object_index") or {})
+    _assert_bound_isaac_index_rows(payload.get("receptacle_index") or {})
+    _assert_isaac_scene_index_matches_runtime_indexes(isaac, payload)
+    _assert_selected_isaac_usd_bindings_for_indexes(
+        payload.get("scene_binding_diagnostics") or {},
+        object_index=payload.get("object_index") or {},
+        receptacle_index=payload.get("receptacle_index") or {},
+    )
+    return payload
+
+
+def _assert_isaac_scene_index_matches_runtime_indexes(
+    isaac: dict[str, Any],
+    payload: dict[str, Any],
+) -> None:
+    for index_key, count_key in (
+        ("object_index", "object_index_count"),
+        ("receptacle_index", "receptacle_index_count"),
+    ):
+        runtime_index = isaac.get(index_key) or {}
+        artifact_index = payload.get(index_key) or {}
+        assert runtime_index, (index_key, isaac)
+        assert runtime_index == artifact_index, (index_key, runtime_index, artifact_index)
+        assert int(isaac.get(count_key) or 0) == len(runtime_index), (count_key, isaac)
+        assert int(payload.get(count_key) or 0) == len(artifact_index), (count_key, payload)
+
+
+def _assert_isaac_scene_index_matches_runtime_bindings(
+    runtime_bindings: dict[str, Any],
+    artifact_bindings: dict[str, Any],
+) -> None:
+    for key in (
+        "schema",
+        "status",
+        "source",
+        "selected_object_count",
+        "selected_target_receptacle_count",
+        "selected_object_bound_count",
+        "selected_target_receptacle_bound_count",
+        "private_manifest_exposed_to_agent",
+    ):
+        assert artifact_bindings.get(key) == runtime_bindings.get(key), (
+            key,
+            runtime_bindings,
+            artifact_bindings,
+        )
+    for bindings_key in (
+        "selected_object_bindings",
+        "selected_target_receptacle_bindings",
+    ):
+        runtime_rows = runtime_bindings.get(bindings_key) or {}
+        artifact_rows = artifact_bindings.get(bindings_key) or {}
+        assert runtime_rows.keys() == artifact_rows.keys(), (
+            bindings_key,
+            runtime_rows,
+            artifact_rows,
+        )
+        for public_id, runtime_row in runtime_rows.items():
+            artifact_row = artifact_rows.get(public_id)
+            assert isinstance(runtime_row, dict), (bindings_key, public_id, runtime_row)
+            assert isinstance(artifact_row, dict), (bindings_key, public_id, artifact_row)
+            for row_key in (
+                "status",
+                "usd_handle",
+                "usd_prim_path",
+                "match_strategy",
+                "index_source",
+            ):
+                assert artifact_row.get(row_key) == runtime_row.get(row_key), (
+                    bindings_key,
+                    public_id,
+                    row_key,
+                    runtime_row,
+                    artifact_row,
+                )
+
+
+def _assert_isaac_scene_index_matches_runtime_segmentation(
+    runtime_segmentation: dict[str, Any],
+    artifact_segmentation: dict[str, Any],
+) -> None:
+    for key in (
+        "schema",
+        "status",
+        "available",
+        "source",
+        "capture_method",
+        "tensor_output_available",
+        "candidate_overlay_status",
+        "candidate_bbox_count",
+        "selected_usd_prim_match_count",
+        "agent_facing",
+        "no_simulator_label_fallback",
+    ):
+        assert artifact_segmentation.get(key) == runtime_segmentation.get(key), (
+            key,
+            runtime_segmentation,
+            artifact_segmentation,
+        )
+    for key in (
+        "requested_data_types",
+        "output_data_types",
+        "selected_usd_prim_paths",
+        "selected_candidate_bboxes",
+        "candidate_bboxes",
+    ):
+        assert artifact_segmentation.get(key) == runtime_segmentation.get(key), (
+            key,
+            runtime_segmentation,
+            artifact_segmentation,
+        )
+
+
+def _assert_isaac_scene_index_report_rows(
+    scene_bindings: dict[str, Any],
+    report_text: str,
+) -> None:
+    for expected in (
+        "Scene Index Artifact Rows",
+        "Selected USD Binding Rows",
+        "Selected USD Index Rows",
+    ):
+        assert expected in report_text, report_text[:1000]
+    for bindings_key in (
+        "selected_object_bindings",
+        "selected_target_receptacle_bindings",
+    ):
+        bindings = scene_bindings.get(bindings_key) or {}
+        assert bindings, scene_bindings
+        for binding in bindings.values():
+            assert isinstance(binding, dict), binding
+            if binding.get("status") != "bound":
+                continue
+            usd_handle = str(binding.get("usd_handle") or "")
+            usd_prim_path = str(binding.get("usd_prim_path") or "")
+            assert usd_handle in report_text, (usd_handle, report_text[:1000])
+            assert usd_prim_path in report_text, (usd_prim_path, report_text[:1000])
+
+
+def _assert_bound_isaac_index_rows(index: dict[str, Any]) -> None:
+    for handle, row in index.items():
+        assert isinstance(row, dict), (handle, row)
+        assert row.get("usd_prim_path"), row
+
+
+def _assert_isaac_snapshot_provenance(isaac: dict[str, Any], base: Path) -> None:
+    snapshots = isaac.get("snapshot_artifacts") or []
+    assert len(snapshots) >= 2, isaac
+    for snapshot in snapshots:
+        assert isinstance(snapshot, dict), snapshot
+        assert snapshot.get("placeholder_visuals") is False, snapshot
+        assert snapshot.get("visual_artifact_provenance") == "isaac_lab_camera_rgb", snapshot
+        output_path = _resolve_path(base, snapshot.get("output_path", ""))
+        _assert_nonblank_image(output_path, "Isaac snapshot")
+        provenance = snapshot.get("snapshot_provenance") or {}
+        assert provenance.get("placeholder_visuals") is False, provenance
+        assert provenance.get("visual_artifact_provenance") == "isaac_lab_camera_rgb", provenance
+        assert provenance.get("static_isaac_capture") is True, provenance
+        assert provenance.get("semantic_pose_rendered") is False, provenance
+        source_path = _resolve_path(base, provenance.get("source_path", ""))
+        _assert_nonblank_image(source_path, "Isaac snapshot source")
+        assert "placeholder_protocol_image" not in json.dumps(provenance, sort_keys=True).lower(), (
+            provenance
+        )
+
+
+def _assert_nonblank_image(path: Path, label: str) -> None:
+    assert path.is_file(), path
+    try:
+        with Image.open(path) as image:
+            image.verify()
+        with Image.open(path) as image:
+            rgb = image.convert("RGB")
+            extrema = rgb.getextrema()
+            stat = ImageStat.Stat(rgb)
+    except Exception as exc:
+        raise AssertionError(f"{label} is not a readable image: {path}") from exc
+    assert any(high > low for low, high in extrema), (label, path)
+    assert max(stat.stddev or [0.0]) > 0.0, (label, path)
+
+
+def _assert_isaac_semantic_pose_state(
+    isaac: dict[str, Any],
+    *,
+    scene_bindings: dict[str, Any] | None = None,
+    scene_index_payload: dict[str, Any] | None = None,
+) -> None:
+    state = isaac.get("semantic_pose_state") or {}
+    assert state.get("schema") == ISAAC_SEMANTIC_POSE_STATE_SCHEMA, state
+    assert state.get("state_source") == ISAAC_SEMANTIC_POSE_STATE_SOURCE, state
+    assert state.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, state
+    assert state.get("rendered_to_usd") is False, state
+    assert state.get("planner_backed") is False, state
+    assert state.get("physical_robot") is False, state
+    assert state.get("semantic_pose_only") is True, state
+    object_poses = state.get("object_poses") or {}
+    assert object_poses, state
+    events = state.get("transform_events") or []
+    assert events, state
+    tools = {str(event.get("tool") or "") for event in events if isinstance(event, dict)}
+    assert "pick" in tools, events
+    assert tools & {"place", "place_inside"}, events
+    event_object_ids = {
+        str(event.get("object_id") or "") for event in events if isinstance(event, dict)
+    }
+    assert any(object_id in object_poses for object_id in event_object_ids), (
+        event_object_ids,
+        object_poses,
+    )
+    for event in events:
+        assert event.get("schema") == ISAAC_SEMANTIC_POSE_EVENT_SCHEMA, event
+        assert event.get("state_source") == ISAAC_SEMANTIC_POSE_STATE_SOURCE, event
+        assert event.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, event
+        assert event.get("rendered_to_usd") is False, event
+        assert event.get("planner_backed") is False, event
+        assert event.get("physical_robot") is False, event
+        assert str(event.get("state_mutation") or "").startswith("isaac_"), event
+    for pose in object_poses.values():
+        assert pose.get("state_source") == ISAAC_SEMANTIC_POSE_STATE_SOURCE, pose
+        assert pose.get("rendered_to_usd") is False, pose
+    if scene_bindings is not None and scene_index_payload is not None:
+        _assert_isaac_semantic_pose_usd_paths_match_scene_index(
+            state,
+            scene_bindings=scene_bindings,
+            object_index=scene_index_payload.get("object_index") or {},
+            receptacle_index=scene_index_payload.get("receptacle_index") or {},
+        )
+
+
+def _assert_isaac_semantic_pose_usd_paths_match_scene_index(
+    state: dict[str, Any],
+    *,
+    scene_bindings: dict[str, Any],
+    object_index: dict[str, Any],
+    receptacle_index: dict[str, Any],
+) -> None:
+    object_paths = _index_usd_prim_paths(object_index)
+    receptacle_paths = _index_usd_prim_paths(receptacle_index)
+    selected_object_paths = _selected_binding_usd_prim_paths(
+        scene_bindings,
+        "selected_object_bindings",
+    )
+    selected_receptacle_paths = _selected_binding_usd_prim_paths(
+        scene_bindings,
+        "selected_target_receptacle_bindings",
+    )
+    object_poses = state.get("object_poses") or {}
+    assert isinstance(object_poses, dict), state
+    for object_id, pose in object_poses.items():
+        assert isinstance(pose, dict), (object_id, pose)
+        _assert_semantic_usd_path_matches_scene_index(
+            "semantic object pose",
+            public_id=str(object_id),
+            usd_prim_path=str(pose.get("usd_prim_path") or ""),
+            selected_paths=selected_object_paths,
+            index_paths=object_paths,
+        )
+        support_receptacle_id = str(pose.get("support_receptacle_id") or "")
+        if support_receptacle_id:
+            _assert_semantic_usd_path_matches_scene_index(
+                "semantic object support",
+                public_id=support_receptacle_id,
+                usd_prim_path=str(pose.get("support_usd_prim_path") or ""),
+                selected_paths=selected_receptacle_paths,
+                index_paths=receptacle_paths,
+            )
+
+    articulations = state.get("articulations") or {}
+    assert isinstance(articulations, dict), state
+    for receptacle_id, articulation in articulations.items():
+        assert isinstance(articulation, dict), (receptacle_id, articulation)
+        _assert_semantic_usd_path_matches_scene_index(
+            "semantic articulation",
+            public_id=str(receptacle_id),
+            usd_prim_path=str(articulation.get("usd_prim_path") or ""),
+            selected_paths=selected_receptacle_paths,
+            index_paths=receptacle_paths,
+        )
+
+    events = state.get("transform_events") or []
+    assert isinstance(events, list), state
+    for event in events:
+        assert isinstance(event, dict), event
+        object_id = str(event.get("object_id") or "")
+        if object_id:
+            _assert_semantic_usd_path_matches_scene_index(
+                "semantic pose event object",
+                public_id=object_id,
+                usd_prim_path=str(event.get("object_usd_prim_path") or ""),
+                selected_paths=selected_object_paths,
+                index_paths=object_paths,
+            )
+        receptacle_id = str(event.get("receptacle_id") or "")
+        if receptacle_id:
+            _assert_semantic_usd_path_matches_scene_index(
+                "semantic pose event receptacle",
+                public_id=receptacle_id,
+                usd_prim_path=str(event.get("receptacle_usd_prim_path") or ""),
+                selected_paths=selected_receptacle_paths,
+                index_paths=receptacle_paths,
+            )
+
+
+def _selected_binding_usd_prim_paths(
+    scene_bindings: dict[str, Any],
+    bindings_key: str,
+) -> dict[str, str]:
+    paths: dict[str, str] = {}
+    bindings = scene_bindings.get(bindings_key) or {}
+    assert isinstance(bindings, dict), scene_bindings
+    for public_id, binding in bindings.items():
+        assert isinstance(binding, dict), (bindings_key, public_id, binding)
+        if binding.get("status") != "bound":
+            continue
+        paths[str(public_id)] = str(binding.get("usd_prim_path") or "")
+    return paths
+
+
+def _index_usd_prim_paths(index: dict[str, Any]) -> dict[str, str]:
+    assert isinstance(index, dict) and index, index
+    paths: dict[str, str] = {}
+    for handle, row in index.items():
+        assert isinstance(row, dict), (handle, row)
+        usd_prim_path = str(row.get("usd_prim_path") or "")
+        assert usd_prim_path, (handle, row)
+        paths[str(handle)] = usd_prim_path
+    return paths
+
+
+def _assert_semantic_usd_path_matches_scene_index(
+    label: str,
+    *,
+    public_id: str,
+    usd_prim_path: str,
+    selected_paths: dict[str, str],
+    index_paths: dict[str, str],
+) -> None:
+    selected_path = selected_paths.get(public_id)
+    if selected_path is not None:
+        assert usd_prim_path == selected_path, (label, public_id, usd_prim_path, selected_path)
+    indexed_path = index_paths.get(public_id)
+    if indexed_path:
+        assert usd_prim_path == indexed_path, (label, public_id, usd_prim_path, indexed_path)
+        return
+    if not usd_prim_path:
+        return
+    assert usd_prim_path in index_paths.values(), (
+        label,
+        public_id,
+        usd_prim_path,
+        index_paths,
+    )
+
+
+def _assert_isaac_semantic_pose_report_rows(
+    state: dict[str, Any],
+    report_text: str,
+) -> None:
+    for expected in (
+        "Object USD",
+        "Support USD",
+        "USD prim",
+        "Mutation",
+        "Receptacle USD",
+    ):
+        assert expected in report_text, (expected, report_text[:1000])
+
+    object_poses = state.get("object_poses") or {}
+    assert isinstance(object_poses, dict), state
+    for object_id, pose in object_poses.items():
+        assert isinstance(pose, dict), (object_id, pose)
+        _assert_report_text_values(
+            report_text,
+            str(object_id),
+            str(pose.get("support_receptacle_id") or ""),
+            str(pose.get("usd_prim_path") or ""),
+            str(pose.get("support_usd_prim_path") or ""),
+        )
+
+    articulations = state.get("articulations") or {}
+    assert isinstance(articulations, dict), state
+    for receptacle_id, articulation in articulations.items():
+        assert isinstance(articulation, dict), (receptacle_id, articulation)
+        _assert_report_text_values(
+            report_text,
+            str(receptacle_id),
+            str(articulation.get("usd_prim_path") or ""),
+        )
+
+    events = state.get("transform_events") or []
+    assert isinstance(events, list), state
+    for event in events:
+        assert isinstance(event, dict), event
+        _assert_report_text_values(
+            report_text,
+            str(event.get("tool") or ""),
+            str(event.get("state_mutation") or ""),
+            str(event.get("object_id") or ""),
+            str(event.get("receptacle_id") or ""),
+            str(event.get("object_usd_prim_path") or ""),
+            str(event.get("receptacle_usd_prim_path") or ""),
+        )
+
+
+def _assert_report_text_values(report_text: str, *values: str) -> None:
+    for value in values:
+        if value:
+            assert value in report_text, (value, report_text[:1000])
+
+
+def _assert_isaac_semantic_pose_trace(
+    data: dict[str, Any],
+    base: Path,
+    state: dict[str, Any],
+) -> None:
+    artifacts = data.get("artifacts") or {}
+    trace_path = _resolve_path(base, artifacts.get("trace", ""))
+    assert trace_path.is_file(), (trace_path, data)
+    trace_responses = [
+        event.get("response")
+        for event in _trace_events_from_path(trace_path)
+        if event.get("event") == "response" and isinstance(event.get("response"), dict)
+    ]
+    successful_pose_responses = [
+        response
+        for response in trace_responses
+        if response.get("tool") in _ISAAC_SEMANTIC_POSE_TRACE_TOOLS and response.get("ok") is True
+    ]
+    assert successful_pose_responses, trace_path
+    trace_tools = {str(response.get("tool") or "") for response in successful_pose_responses}
+    assert "pick" in trace_tools, (trace_path, trace_tools)
+    assert trace_tools & {"place", "place_inside"}, (trace_path, trace_tools)
+
+    state_events = state.get("transform_events") or []
+    assert isinstance(state_events, list), state
+    state_tools = {
+        str(event.get("tool") or "")
+        for event in state_events
+        if isinstance(event, dict) and event.get("tool") in _ISAAC_SEMANTIC_POSE_TRACE_TOOLS
+    }
+    assert state_tools <= trace_tools, (state_tools, trace_tools, trace_path)
+    for response in successful_pose_responses:
+        assert response.get("primitive_provenance") == ISAAC_SEMANTIC_POSE_PROVENANCE, response
+        assert str(response.get("state_mutation") or "").startswith("isaac_"), response
+        assert response.get("planner_backed") is not True, response
+        assert response.get("physical_robot") is not True, response
+
+
+_ISAAC_SEMANTIC_POSE_TRACE_TOOLS = frozenset(ATOMIC_CLEANUP_TOOL_NAMES)
+
+
+def _assert_bound_isaac_binding_rows(
+    bindings: dict[str, Any],
+    *,
+    expected_count: int,
+    index: dict[str, Any] | None,
+    index_label: str,
+    label: str,
+) -> None:
+    assert bindings and len(bindings) >= expected_count, (label, expected_count, bindings)
+    for public_id, binding in bindings.items():
+        assert isinstance(binding, dict), (label, public_id, binding)
+        assert binding.get("status") == "bound", (label, public_id, binding)
+        usd_handle = str(binding.get("usd_handle") or "")
+        usd_prim_path = str(binding.get("usd_prim_path") or "")
+        assert usd_handle, (label, public_id, binding)
+        assert usd_prim_path, (label, public_id, binding)
+        assert binding.get("index_source") == "usd_stage_traversal", (label, public_id, binding)
+        assert binding.get("match_strategy") not in {"", "none"}, (label, public_id, binding)
+        assert "private_manifest" not in binding, (label, public_id, binding)
+        if index is None:
+            continue
+        index_row = index.get(usd_handle)
+        assert isinstance(index_row, dict), (label, public_id, usd_handle, index_label, index)
+        index_prim_path = str(index_row.get("usd_prim_path") or "")
+        assert index_prim_path, (label, public_id, usd_handle, index_row)
+        assert usd_prim_path == index_prim_path, (
+            label,
+            public_id,
+            usd_prim_path,
+            index_label,
+            index_prim_path,
+        )
 
 
 def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str) -> None:

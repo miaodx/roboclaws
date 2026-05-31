@@ -18,6 +18,7 @@ from roboclaws.molmo_cleanup.types import CleanupScenario
 AGIBOT_SDK_RUNNER_BACKEND = "agibot_sdk_runner"
 AGIBOT_GDK_BACKEND_VARIANT = "agibot_gdk"
 AGIBOT_GDK_NORMAL_NAVI_PROVENANCE = "agibot_gdk_normal_navi"
+AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE = "agibot_gdk_relative_move"
 AGIBOT_HEAD_COLOR_CAMERA_PROVENANCE = "agibot_gdk_head_color_camera"
 PHYSICAL_AGIBOT_PILOT_SCHEMA = "physical_agibot_cleanup_pilot_v1"
 PHYSICAL_AGIBOT_PILOT_POLICY = "physical_agibot_navigation_perception_pilot"
@@ -62,10 +63,17 @@ class AgibotSDKRunnerAdapter:
         )
         self.subphase_results: list[dict[str, Any]] = []
         self._agent_view_result: dict[str, Any] | None = None
+        self._context_payload: dict[str, Any] | None = None
 
     @property
     def agent_view_path(self) -> Path:
         return self.run_dir / "subphases" / "01-agent-view" / "agent_view.json"
+
+    @property
+    def context_payload(self) -> dict[str, Any]:
+        if self._context_payload is None:
+            self._context_payload = _load_json(self.context_json)
+        return self._context_payload
 
     def export_agent_view(self) -> dict[str, Any]:
         if self._agent_view_result is None:
@@ -96,6 +104,10 @@ class AgibotSDKRunnerAdapter:
 
     def observe(self, *, label: str = "observe") -> dict[str, Any]:
         self.export_agent_view()
+        gate_block = self._movement_gate_block(tool="observe")
+        if gate_block is not None:
+            gate_block.setdefault("observation_label", label)
+            return gate_block
         args = [
             "observe",
             "--agent-view-json",
@@ -115,6 +127,10 @@ class AgibotSDKRunnerAdapter:
 
     def navigate_to_waypoint(self, *, waypoint_id: str) -> dict[str, Any]:
         self.export_agent_view()
+        gate_block = self._movement_gate_block(tool="navigate_to_waypoint")
+        if gate_block is not None:
+            gate_block.setdefault("waypoint_id", waypoint_id)
+            return gate_block
         args = [
             "navigate-waypoint",
             "--agent-view-json",
@@ -129,6 +145,29 @@ class AgibotSDKRunnerAdapter:
         result = self._run_stage("03-navigate-waypoint", args)
         response = dict(result.get("tool_response") or {})
         response.setdefault("agibot_sdk_report", _relpath(result["report_path"], self.run_dir))
+        return response
+
+    def navigate_to_room(self, *, room_id: str) -> dict[str, Any]:
+        metric_map = self.metric_map()
+        waypoints = [
+            item
+            for item in metric_map.get("inspection_waypoints") or []
+            if isinstance(item, dict) and str(item.get("room_id") or "") == room_id
+        ]
+        if not waypoints:
+            return self._blocked_response(
+                tool="navigate_to_room",
+                failure_type="missing_room_waypoint",
+                message=f"Room {room_id!r} does not resolve to a public inspection waypoint.",
+                extra={"room_id": room_id},
+            )
+        waypoint_id = _preferred_verified_waypoint_id(waypoints) or str(
+            waypoints[0].get("waypoint_id") or ""
+        )
+        response = dict(self.navigate_to_waypoint(waypoint_id=waypoint_id))
+        response["tool"] = "navigate_to_room"
+        response["room_id"] = room_id
+        response["goal_source"] = "room_inspection_waypoint"
         return response
 
     def navigate_to_fixture_preferred_waypoint(self, *, fixture_id: str) -> dict[str, Any]:
@@ -154,6 +193,66 @@ class AgibotSDKRunnerAdapter:
         response["manipulation_ready"] = False
         return response
 
+    def navigate_to_object(
+        self,
+        *,
+        object_id: str,
+        waypoint_id: str = "",
+        fixture_id: str = "",
+    ) -> dict[str, Any]:
+        if waypoint_id:
+            response = dict(self.navigate_to_waypoint(waypoint_id=waypoint_id))
+        elif fixture_id:
+            response = dict(self.navigate_to_fixture_preferred_waypoint(fixture_id=fixture_id))
+        else:
+            response = self._blocked_response(
+                tool="navigate_to_object",
+                failure_type="object_not_mapped_to_public_waypoint",
+                message=(
+                    f"Object {object_id!r} does not resolve to a verified public waypoint "
+                    "in the AgiBot pilot map context."
+                ),
+            )
+        response["tool"] = "navigate_to_object"
+        response["object_id"] = object_id
+        response["fixture_id"] = fixture_id
+        response["manipulation_ready"] = False
+        return response
+
+    def navigate_to_visual_candidate(
+        self,
+        *,
+        source_observation_id: str,
+        candidate_id: str = "",
+        waypoint_id: str = "",
+        fixture_id: str = "",
+        target_fixture_id: str = "",
+    ) -> dict[str, Any]:
+        resolved_fixture_id = fixture_id or target_fixture_id
+        if waypoint_id:
+            response = dict(self.navigate_to_waypoint(waypoint_id=waypoint_id))
+        elif resolved_fixture_id:
+            response = dict(
+                self.navigate_to_fixture_preferred_waypoint(fixture_id=resolved_fixture_id)
+            )
+        else:
+            response = self._blocked_response(
+                tool="navigate_to_visual_candidate",
+                failure_type="visual_candidate_not_mapped_to_public_waypoint",
+                message=(
+                    "Visual candidate navigation requires a verified waypoint or "
+                    "fixture-preferred waypoint in the AgiBot pilot map context."
+                ),
+            )
+        response["tool"] = "navigate_to_visual_candidate"
+        response["source_observation_id"] = source_observation_id
+        response["candidate_id"] = candidate_id
+        response["fixture_id"] = resolved_fixture_id
+        response["target_fixture_id"] = target_fixture_id
+        response["bounded_local_nudge"] = _bounded_local_nudge_status(enabled=False)
+        response["manipulation_ready"] = False
+        return response
+
     def blocked_manipulation(
         self,
         *,
@@ -162,8 +261,15 @@ class AgibotSDKRunnerAdapter:
     ) -> dict[str, Any]:
         return self._blocked_response(tool=tool, failure_type=reason, message=reason)
 
-    def _blocked_response(self, *, tool: str, failure_type: str, message: str) -> dict[str, Any]:
-        return {
+    def _blocked_response(
+        self,
+        *,
+        tool: str,
+        failure_type: str,
+        message: str,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response = {
             "ok": False,
             "tool": tool,
             "status": "blocked_capability",
@@ -176,6 +282,39 @@ class AgibotSDKRunnerAdapter:
             "physical_cleanup_ready": False,
             "manipulation_ready": False,
         }
+        if extra:
+            response.update(extra)
+        return response
+
+    def _movement_gate_block(self, *, tool: str) -> dict[str, Any] | None:
+        if not self.real_movement_enabled:
+            return None
+        context = self.context_payload
+        localization_gate = _operator_localization_gate(context)
+        run_gate = _operator_run_enablement_gate(context, movement_enabled=True)
+        if not localization_gate["ok"]:
+            return self._blocked_response(
+                tool=tool,
+                failure_type="operator_localization_gate_not_confirmed",
+                message="Operator localization gate is required before AgiBot real movement.",
+                extra={
+                    "operator_localization_gate": localization_gate,
+                    "operator_run_enablement_gate": run_gate,
+                    "human_takeover_stop": True,
+                },
+            )
+        if not run_gate["ok"]:
+            return self._blocked_response(
+                tool=tool,
+                failure_type="operator_run_enablement_gate_not_confirmed",
+                message="Operator run enablement gate is required before AgiBot real movement.",
+                extra={
+                    "operator_localization_gate": localization_gate,
+                    "operator_run_enablement_gate": run_gate,
+                    "human_takeover_stop": True,
+                },
+            )
+        return None
 
     def _run_stage(self, stage_name: str, args: list[str]) -> dict[str, Any]:
         stage_dir = self.run_dir / "subphases" / stage_name
@@ -286,6 +425,7 @@ def run_physical_agibot_cleanup_pilot(
     )
 
     readiness = _readiness_payload(
+        context=adapter.context_payload,
         metric_map=metric_map,
         fixture_hints=fixture_hints,
         observation=observation,
@@ -383,7 +523,10 @@ def run_physical_agibot_cleanup_pilot(
                 "fixture_hints",
                 "observe",
                 "navigate_to_waypoint",
+                "navigate_to_room",
                 "navigate_to_receptacle",
+                "navigate_to_object",
+                "navigate_to_visual_candidate",
                 "done",
             ],
         },
@@ -447,6 +590,7 @@ def run_physical_agibot_cleanup_pilot(
 
 def _readiness_payload(
     *,
+    context: dict[str, Any],
     metric_map: dict[str, Any],
     fixture_hints: dict[str, Any],
     observation: dict[str, Any],
@@ -464,6 +608,8 @@ def _readiness_payload(
     complete = bool(navigation_complete and observation_complete and all_manipulation_blocked)
     backend = str(navigation.get("navigation_backend") or BLOCKED_CAPABILITY_PROVENANCE)
     pose_source = str(navigation.get("pose_source") or "")
+    localization_gate = _operator_localization_gate(context)
+    run_gate = _operator_run_enablement_gate(context, movement_enabled=real_movement_enabled)
     return {
         "schema": "real_robot_readiness_v1",
         "status": "physical_agibot_navigation_pilot_complete"
@@ -501,10 +647,9 @@ def _readiness_payload(
         else [],
         "manipulation_blocked": all_manipulation_blocked,
         "blocked_capabilities": list(BLOCKED_MANIPULATION_TOOLS),
-        "operator_run_enablement_gate": {
-            "movement_enabled": real_movement_enabled,
-            "scope": "session",
-        },
+        "operator_localization_gate": localization_gate,
+        "operator_run_enablement_gate": run_gate,
+        "human_takeover_stop": _human_takeover_stop_required(observation, navigation),
         "public_contract_note": (
             "AgiBot Navigation + Perception Pilot: Roboclaws keeps the public "
             "real_robot_cleanup_v1 tools stable while SDK runner artifacts own "
@@ -581,6 +726,119 @@ def _fixture_by_id(fixture_hints: dict[str, Any], fixture_id: str) -> dict[str, 
         if str(fixture.get("fixture_id") or fixture.get("receptacle_id") or "") == fixture_id:
             return fixture
     return None
+
+
+def _preferred_verified_waypoint_id(waypoints: list[dict[str, Any]]) -> str:
+    for waypoint in waypoints:
+        if str(waypoint.get("reachability_status") or "") == "verified":
+            return str(waypoint.get("waypoint_id") or "")
+    return ""
+
+
+def _operator_localization_gate(context: dict[str, Any]) -> dict[str, Any]:
+    gate = context.get("operator_localization_gate")
+    if not isinstance(gate, dict):
+        return {
+            "schema": "operator_localization_gate_v1",
+            "ok": False,
+            "status": "missing",
+            "selected_map_confirmed": False,
+            "g02_pad_relocalized": False,
+            "localization_ready": False,
+            "reason": "operator_localization_gate is missing from the AgiBot context.",
+        }
+    selected_map_confirmed = bool(
+        gate.get("selected_map_confirmed")
+        or gate.get("map_selected")
+        or gate.get("selected_map_confirmed_at")
+    )
+    g02_pad_relocalized = bool(
+        gate.get("g02_pad_relocalized")
+        or gate.get("relocalized_on_g02_pad")
+        or gate.get("relocalized")
+    )
+    localization_ready = bool(gate.get("localization_ready") or gate.get("ready"))
+    ok = selected_map_confirmed and g02_pad_relocalized and localization_ready
+    return {
+        "schema": "operator_localization_gate_v1",
+        "ok": ok,
+        "status": "confirmed" if ok else "incomplete",
+        "selected_map_confirmed": selected_map_confirmed,
+        "g02_pad_relocalized": g02_pad_relocalized,
+        "localization_ready": localization_ready,
+        "operator": str(gate.get("operator") or ""),
+        "confirmed_at": str(gate.get("confirmed_at") or ""),
+        "reason": ""
+        if ok
+        else "selected map, G02 Pad relocalization, and localization ready are required.",
+    }
+
+
+def _operator_run_enablement_gate(
+    context: dict[str, Any],
+    *,
+    movement_enabled: bool,
+) -> dict[str, Any]:
+    gate = context.get("operator_run_enablement_gate")
+    if not movement_enabled:
+        return {
+            "schema": "operator_run_enablement_gate_v1",
+            "ok": False,
+            "status": "not_requested",
+            "movement_enabled": False,
+            "scope": "session",
+            "reason": "real movement was not enabled for this rehearsal.",
+        }
+    if not isinstance(gate, dict):
+        return {
+            "schema": "operator_run_enablement_gate_v1",
+            "ok": False,
+            "status": "missing",
+            "movement_enabled": True,
+            "scope": "session",
+            "reason": "operator_run_enablement_gate is missing from the AgiBot context.",
+        }
+    enabled = bool(
+        gate.get("enabled")
+        or gate.get("confirmed")
+        or gate.get("autonomous_navigation_enabled")
+        or gate.get("run_enabled")
+    )
+    return {
+        "schema": "operator_run_enablement_gate_v1",
+        "ok": enabled,
+        "status": "confirmed" if enabled else "incomplete",
+        "movement_enabled": True,
+        "scope": str(gate.get("scope") or "session"),
+        "operator": str(gate.get("operator") or ""),
+        "confirmed_at": str(gate.get("confirmed_at") or ""),
+        "reason": "" if enabled else "operator run enablement was not confirmed.",
+    }
+
+
+def _bounded_local_nudge_status(*, enabled: bool) -> dict[str, Any]:
+    return {
+        "schema": "agibot_bounded_local_nudge_v1",
+        "status": "not_requested",
+        "enabled": enabled,
+        "primitive_provenance": AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE if enabled else "",
+        "safety_model": "Pnc.relative_move simple obstacle stop; no obstacle avoidance",
+        "agent_facing_tool": False,
+    }
+
+
+def _human_takeover_stop_required(
+    observation: dict[str, Any],
+    navigation: dict[str, Any],
+) -> bool:
+    failure_types = {
+        str(observation.get("failure_type") or ""),
+        str(navigation.get("failure_type") or ""),
+    }
+    return bool(
+        {"operator_localization_gate_not_confirmed", "operator_run_enablement_gate_not_confirmed"}
+        & failure_types
+    )
 
 
 def _map_fields_present(metric_map: dict[str, Any]) -> bool:

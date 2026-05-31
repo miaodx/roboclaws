@@ -158,6 +158,13 @@ producer, detector, refiner, or real VLM stack without changing the cleanup MCP
 contract.
 _Avoid_: cleanup runtime dependency, hidden fallback, private scorer
 
+**G2 Camera Grounding Lane**:
+The first Agibot G2 perception lane sends robot-local `head_color` / RAW_FPV
+image bytes through the existing External Visual Grounding Service, normally a
+workstation/GPU sidecar such as Grounding DINO. The robot captures observations;
+the sidecar produces public camera candidates.
+_Avoid_: simulator labels, robot-local model dependency, agent-visible service credentials
+
 **Visual Grounding Failure Evidence**:
 Visible producer failure evidence containing status, reason, timeout, and
 latency. Failures should not fabricate simulator fallback labels.
@@ -194,6 +201,12 @@ _Avoid_: simulator-only proof, robot-only task fork, hidden manual intervention
 An early physical-robot deployment milestone that proves public navigation goals
 and robot-local observations without claiming physical manipulation.
 _Avoid_: full cleanup deployment, physical manipulation proof
+
+**G2 Map-Build Pilot**:
+The first Agibot G2 hardware target for household world work: verified waypoint
+navigation, `head_color` observations, visual grounding, and Runtime Metric Map
+output. Cleanup actions and physical manipulation remain disabled or blocked.
+_Avoid_: cleanup execution, object navigation, physical pick/place proof
 
 **Simulator/Hardware Contract Parity**:
 The expectation that simulator and physical runs share public task/profile/tool
@@ -287,6 +300,17 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
   blocked-capability status.
 - First physical pilots should prove navigation and observation before claiming
   manipulation readiness.
+- The first Agibot G2 map-build pilot should accept only waypoint-level
+  navigation, robot-local observation, bounded camera control when proven,
+  visual-candidate declaration, and `done`; object/receptacle navigation and
+  manipulation remain blocked until a later gate.
+- For G2 readiness, `camera-labels` with real Grounding DINO-style external
+  visual grounding is the primary perception lane, while `camera-raw` is a
+  comparison or fallback lane. `world-labels` and `visual_grounding=sim` are
+  simulator/control evidence, not G2 readiness evidence.
+- A G2 Runtime Metric Map snapshot may seed a later online run only as
+  Observed Object Priors; current G2 camera evidence must confirm priors before
+  they become actionable.
 
 ## Resolved Ambiguities
 
@@ -314,6 +338,9 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
   cleanup, but private acceptable-destination truth remains evaluator-only.
 - **Placement success**: semantic assignment is not direct physical support.
   Report degraded placement separately.
+- **G2 first run vs cleanup**: the first G2 run is a map-build/navigation +
+  perception pilot. It may produce runtime-map evidence for later cleanup, but
+  it does not authorize object navigation or manipulation.
 
 ## Pointers
 

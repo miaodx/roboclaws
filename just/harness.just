@@ -18,6 +18,9 @@
 # - just harness::molmo-planner-proof-bundle-execute-rerun  local GPU proof-bundle execution
 # - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
 # - just harness::molmo-visual-grounding-benchmark  perception-isolated HTTP grounding harness
+# - just harness::molmo-isaac-runtime-preflight  Isaac Lab local runtime setup gate
+# - just harness::molmo-isaac-runtime-smoke  strict Isaac Lab renderer/USD smoke gate
+# - just harness::molmo-isaac-cleanup-smoke  strict Isaac Lab cleanup report gate
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -564,6 +567,418 @@ molmo-visual-grounding-benchmark *overrides:
     fi
     if [[ "$include_private_label_details" == "true" ]]; then
       check_cmd+=(--allow-private-label-details)
+    fi
+    "${check_cmd[@]}"
+
+# Isaac Lab local runtime preflight. This records host readiness and writes a
+# reproducible install script. It creates .venv-isaaclab/ only when both
+# install=true and accept_nvidia_eula=true are supplied.
+molmo-isaac-runtime-preflight *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    output_dir="output/isaaclab/preflight"
+    runtime_dir=".venv-isaaclab"
+    python="3.12"
+    python_executable=""
+    isaaclab_source=""
+    stamp=""
+    min_free_gb="80"
+    skip_gpu_probe="false"
+    install="false"
+    accept_nvidia_eula="false"
+    strict="false"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        output_dir|runtime_dir|python|python_executable|isaaclab_source|stamp|\
+        min_free_gb|skip_gpu_probe|install|accept_nvidia_eula|strict)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+    cmd=(.venv/bin/python scripts/isaac_lab_cleanup/check_isaac_lab_runtime.py \
+      --output-dir "$output_dir" \
+      --runtime-dir "$runtime_dir" \
+      --python "$python" \
+      --min-free-gb "$min_free_gb")
+    if [[ -n "$python_executable" ]]; then
+      cmd+=(--python-executable "$python_executable")
+    fi
+    if [[ -n "$isaaclab_source" ]]; then
+      cmd+=(--isaaclab-source "$isaaclab_source")
+    fi
+    if [[ -n "$stamp" ]]; then
+      cmd+=(--stamp "$stamp")
+    fi
+    if [[ "$skip_gpu_probe" == "true" ]]; then
+      cmd+=(--skip-gpu-probe)
+    fi
+    if [[ "$install" == "true" ]]; then
+      cmd+=(--install)
+    fi
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      cmd+=(--accept-nvidia-eula)
+    fi
+    if [[ "$strict" == "true" ]]; then
+      cmd+=(--strict)
+    fi
+    "${cmd[@]}"
+
+# Install MolmoSpaces USD object packages referenced by Isaac diagnostics. This
+# keeps upstream molmo_spaces_isaac as asset tooling and downloads only the
+# missing object archives needed by local scene evidence unless all_objects=true.
+molmo-isaac-usd-references *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    install_dir="output/isaaclab/molmospaces-usd"
+    cache_dir="${HOME}/.molmospaces"
+    source="thor"
+    version=""
+    state_path=""
+    asset_path=""
+    package=""
+    output_path="output/isaaclab/molmospaces-usd/usd_reference_install.json"
+    use_r2="true"
+    dry_run="false"
+    all_objects="false"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        install_dir|cache_dir|source|version|state_path|asset_path|package|\
+        output_path|use_r2|dry_run|all_objects)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+    cmd=(.venv/bin/python scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py \
+      --install-dir "$install_dir" \
+      --cache-dir "$cache_dir" \
+      --source "$source" \
+      --output-path "$output_path")
+    if [[ -n "$version" ]]; then
+      cmd+=(--version "$version")
+    fi
+    if [[ "$use_r2" == "true" ]]; then
+      cmd+=(--use-r2)
+    else
+      cmd+=(--no-use-r2)
+    fi
+    if [[ "$dry_run" == "true" ]]; then
+      cmd+=(--dry-run)
+    fi
+    if [[ "$all_objects" == "true" ]]; then
+      cmd+=(--all-objects)
+    fi
+    if [[ -n "$state_path" ]]; then
+      IFS=', ' read -r -a state_path_args <<< "$state_path"
+      for item in "${state_path_args[@]}"; do
+        [[ -n "$item" ]] && cmd+=(--state-path "$item")
+      done
+    fi
+    if [[ -n "$asset_path" ]]; then
+      IFS=', ' read -r -a asset_path_args <<< "$asset_path"
+      for item in "${asset_path_args[@]}"; do
+        [[ -n "$item" ]] && cmd+=(--asset-path "$item")
+      done
+    fi
+    if [[ -n "$package" ]]; then
+      IFS=', ' read -r -a package_args <<< "$package"
+      for item in "${package_args[@]}"; do
+        [[ -n "$item" ]] && cmd+=(--package "$item")
+      done
+    fi
+    "${cmd[@]}"
+
+# Strict local Isaac Lab runtime smoke. This intentionally fails until the
+# worker proves a real Isaac renderer capture and USD stage load; import-only or
+# placeholder evidence is rejected by the checker.
+molmo-isaac-runtime-smoke *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    runtime_python=".venv-isaaclab/bin/python"
+    output_dir="output/isaaclab/runtime-smoke"
+    stamp=""
+    scene_source="procthor-10k-val"
+    scene_index="0"
+    scene_usd_path=""
+    seed="7"
+    generated_mess_count="1"
+    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    include_robot="true"
+    robot_name="simple_camera_rig"
+    require_real_rendering="true"
+    require_usd_stage_loaded="true"
+    require_local_scene_usd="false"
+    require_usd_scene_index="true"
+    require_selected_usd_bindings="true"
+    require_robot_view_images="true"
+    require_nonblank_image="true"
+    require_segmentation_evidence="false"
+    segmentation_data_types=""
+    accept_nvidia_eula="true"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        runtime_python|output_dir|stamp|scene_source|scene_index|seed|\
+        scene_usd_path|generated_mess_count|map_bundle|include_robot|robot_name|\
+        require_real_rendering|require_usd_stage_loaded|require_local_scene_usd|\
+        require_usd_scene_index|\
+        require_selected_usd_bindings|require_robot_view_images|require_nonblank_image|\
+        require_segmentation_evidence|segmentation_data_types|accept_nvidia_eula)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+    if [[ -z "$stamp" ]]; then
+      stamp="$({{timestamp_cmd}})"
+    fi
+    run_dir="${output_dir}/${stamp}"
+    state_path="${run_dir}/state.json"
+    init_result="${run_dir}/init_result.json"
+    robot_views_result="${run_dir}/robot_views_result.json"
+    mkdir -p "$run_dir"
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      export OMNI_KIT_ACCEPT_EULA="YES"
+    fi
+    worker_cmd=("$runtime_python" scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
+      --state-path "$state_path" \
+      init \
+      --run-dir "$run_dir" \
+      --seed "$seed" \
+      --scene-source "$scene_source" \
+      --scene-index "$scene_index" \
+      --generated-mess-count "$generated_mess_count" \
+      --runtime-mode real)
+    if [[ -n "$scene_usd_path" ]]; then
+      worker_cmd+=(--scene-usd-path "$scene_usd_path")
+    fi
+    if [[ "$include_robot" == "true" ]]; then
+      worker_cmd+=(--include-robot --robot-name "$robot_name")
+    fi
+    if [[ "$require_segmentation_evidence" == "true" ]]; then
+      worker_cmd+=(--enable-segmentation)
+      if [[ -n "$segmentation_data_types" ]]; then
+        IFS=', ' read -r -a segmentation_type_args <<< "$segmentation_data_types"
+        for data_type in "${segmentation_type_args[@]}"; do
+          if [[ -n "$data_type" ]]; then
+            worker_cmd+=(--segmentation-data-type "$data_type")
+          fi
+        done
+      fi
+    fi
+    if [[ -n "$map_bundle" ]]; then
+      worker_cmd+=(--map-bundle-dir "$map_bundle")
+    fi
+    "${worker_cmd[@]}" 2>&1 | tee "$init_result"
+    if [[ ! -s "$state_path" ]]; then
+      echo "error: Isaac runtime smoke init did not write state: ${state_path}" >&2
+      exit 1
+    fi
+    robot_views_cmd=("$runtime_python" scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py \
+      --state-path "$state_path" \
+      robot_views \
+      --output-dir "${run_dir}/robot_views" \
+      --label "runtime_smoke")
+    "${robot_views_cmd[@]}" 2>&1 | tee "$robot_views_result"
+    check_cmd=(.venv/bin/python scripts/isaac_lab_cleanup/check_isaac_lab_runtime_smoke_result.py \
+      --init-result "$init_result" \
+      --state-path "$state_path" \
+      --robot-views-result "$robot_views_result")
+    if [[ "$require_real_rendering" == "true" ]]; then
+      check_cmd+=(--require-real-rendering)
+    fi
+    if [[ "$require_usd_stage_loaded" == "true" ]]; then
+      check_cmd+=(--require-usd-stage-loaded)
+    fi
+    if [[ "$require_local_scene_usd" == "true" ]]; then
+      check_cmd+=(--require-local-scene-usd)
+    fi
+    if [[ "$require_usd_scene_index" == "true" ]]; then
+      check_cmd+=(--require-usd-scene-index)
+    fi
+    if [[ "$require_selected_usd_bindings" == "true" ]]; then
+      check_cmd+=(--require-selected-usd-bindings)
+    fi
+    if [[ "$require_robot_view_images" == "true" ]]; then
+      check_cmd+=(--require-robot-view-images)
+    fi
+    if [[ "$require_nonblank_image" == "true" ]]; then
+      check_cmd+=(--require-nonblank-image)
+    fi
+    if [[ "$require_segmentation_evidence" == "true" ]]; then
+      check_cmd+=(--require-segmentation-evidence)
+    fi
+    "${check_cmd[@]}"
+
+# Strict local Isaac Lab cleanup report smoke. This uses the existing
+# household-cleanup backend selector, then applies report-level Isaac gates so a
+# full cleanup run cannot pass with fake runtime, placeholder visuals, or
+# unbound selected USD handles.
+molmo-isaac-cleanup-smoke *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    runtime_python=".venv-isaaclab/bin/python"
+    output_dir="output/isaaclab/cleanup-smoke"
+    stamp=""
+    seed="7"
+    task="帮我收拾这个房间"
+    scene_source="procthor-10k-val"
+    scene_index="0"
+    scene_usd_path=""
+    generated_mess_count="1"
+    map_bundle="assets/maps/molmospaces-procthor-val-0-7"
+    robot_name="simple_camera_rig"
+    require_real_runtime="true"
+    require_scene_loaded="true"
+    require_local_scene_usd="true"
+    require_selected_usd_bindings="true"
+    require_robot_view_provenance="true"
+    require_segmentation_evidence="false"
+    segmentation_data_types=""
+    require_snapshot_provenance="true"
+    accept_nvidia_eula="true"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        runtime_python|output_dir|stamp|seed|task|prompt|scene_source|scene_index|\
+        scene_usd_path|generated_mess_count|map_bundle|robot_name|\
+        require_real_runtime|require_scene_loaded|require_local_scene_usd|\
+        require_selected_usd_bindings|require_robot_view_provenance|\
+        require_segmentation_evidence|segmentation_data_types|\
+        require_snapshot_provenance|accept_nvidia_eula)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      if [[ "$key" == "prompt" ]]; then
+        key="task"
+      fi
+      printf -v "$key" '%s' "$value"
+    done
+    if [[ -z "$stamp" ]]; then
+      stamp="$({{timestamp_cmd}})"
+    fi
+    if [[ "$require_local_scene_usd" == "true" && -z "$scene_usd_path" ]]; then
+      echo "error: require_local_scene_usd=true needs scene_usd_path=<caller-supplied MolmoSpaces/local USD>" >&2
+      exit 1
+    fi
+    run_dir="${output_dir}/${stamp}"
+    mkdir -p "$run_dir"
+    export ROBOCLAWS_ISAACLAB_PYTHON="$runtime_python"
+    export ROBOCLAWS_ISAACLAB_RUNTIME_MODE="real"
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      export OMNI_KIT_ACCEPT_EULA="YES"
+    fi
+    run_cmd=(.venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
+      --output-dir "$run_dir" \
+      --seed "$seed" \
+      --task "$task" \
+      --backend isaaclab_subprocess \
+      --cleanup-profile world-labels \
+      --fixture-hint-mode room_only \
+      --generated-mess-count "$generated_mess_count" \
+      --scene-source "$scene_source" \
+      --scene-index "$scene_index" \
+      --include-robot \
+      --robot-name "$robot_name" \
+      --record-robot-views \
+      --map-bundle-dir "$map_bundle" \
+      --require-map-bundle)
+    if [[ -n "$scene_usd_path" ]]; then
+      run_cmd+=(--isaac-scene-usd-path "$scene_usd_path")
+    fi
+    if [[ "$require_segmentation_evidence" == "true" ]]; then
+      run_cmd+=(--isaac-enable-segmentation)
+      if [[ -n "$segmentation_data_types" ]]; then
+        IFS=', ' read -r -a segmentation_type_args <<< "$segmentation_data_types"
+        for data_type in "${segmentation_type_args[@]}"; do
+          if [[ -n "$data_type" ]]; then
+            run_cmd+=(--isaac-segmentation-data-type "$data_type")
+          fi
+        done
+      fi
+    fi
+    "${run_cmd[@]}"
+    check_cmd=(.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+      "$run_dir" \
+      --expect-backend isaaclab_subprocess \
+      --expect-policy deterministic_sweep_baseline \
+      --expect-profile world-labels \
+      --min-generated-mess-count "$generated_mess_count" \
+      --require-robot-views \
+      --require-advisory-scoring \
+      --min-semantic-accepted-count "$generated_mess_count" \
+      --min-sweep-coverage 1.0 \
+      --require-waypoint-honesty \
+      --require-real-robot-alignment \
+      --require-isaac-runtime \
+      --require-isaac-semantic-pose)
+    if [[ "$require_real_runtime" == "true" ]]; then
+      check_cmd+=(--require-isaac-real-runtime)
+    fi
+    if [[ "$require_scene_loaded" == "true" ]]; then
+      check_cmd+=(--require-isaac-scene-loaded)
+    fi
+    if [[ "$require_local_scene_usd" == "true" ]]; then
+      check_cmd+=(--require-isaac-local-scene-usd)
+    fi
+    if [[ "$require_selected_usd_bindings" == "true" ]]; then
+      check_cmd+=(--require-isaac-selected-usd-bindings)
+    fi
+    if [[ "$require_robot_view_provenance" == "true" ]]; then
+      check_cmd+=(--require-isaac-robot-view-provenance)
+    fi
+    if [[ "$require_segmentation_evidence" == "true" ]]; then
+      check_cmd+=(--require-isaac-segmentation-evidence)
+    fi
+    if [[ "$require_snapshot_provenance" == "true" ]]; then
+      check_cmd+=(--require-isaac-snapshot-provenance)
     fi
     "${check_cmd[@]}"
 

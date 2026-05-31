@@ -19,8 +19,15 @@ from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # no
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (  # noqa: E402
     cleanup_primitive_evidence_from_substeps,
 )
+from roboclaws.molmo_cleanup.isaac_lab_backend import (  # noqa: E402
+    ISAAC_SEMANTIC_POSE_PROVENANCE,
+    ISAACLAB_ROBOT_VIEW_VARIANT,
+    ISAACLAB_SUBPROCESS_BACKEND,
+    IsaacLabSubprocessBackend,
+)
 from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
+    isaac_semantic_pose_manipulation_evidence,
     planner_backed_cleanup_manipulation_evidence,
 )
 from roboclaws.molmo_cleanup.nav2_map_bundle import (  # noqa: E402
@@ -107,7 +114,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
     parser.add_argument(
         "--backend",
-        choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND),
+        choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND),
         default=SYNTHETIC_BACKEND,
     )
     parser.add_argument(
@@ -159,6 +166,35 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--scene-source", default="procthor-10k-val")
     parser.add_argument("--scene-index", type=int, default=0)
     parser.add_argument(
+        "--isaac-scene-usd-path",
+        type=Path,
+        help=(
+            "Optional local USD/USDA scene for backend=isaaclab_subprocess real-mode "
+            "scene parity checks."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-enable-segmentation",
+        action="store_true",
+        help=(
+            "Request Isaac semantic/instance segmentation tensors for "
+            "backend=isaaclab_subprocess local probes."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-segmentation-data-type",
+        action="append",
+        choices=(
+            "semantic_segmentation",
+            "instance_segmentation_fast",
+            "instance_id_segmentation_fast",
+        ),
+        help=(
+            "Isaac segmentation data type to request for backend=isaaclab_subprocess. "
+            "Repeat to probe individual annotators."
+        ),
+    )
+    parser.add_argument(
         "--map-bundle-dir",
         type=Path,
         help=(
@@ -205,6 +241,9 @@ def run_realworld_cleanup(
     generated_mess_count: int = 10,
     scene_source: str = "procthor-10k-val",
     scene_index: int = 0,
+    isaac_scene_usd_path: str | Path | None = None,
+    isaac_enable_segmentation: bool = False,
+    isaac_segmentation_data_types: tuple[str, ...] | None = None,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
@@ -218,11 +257,12 @@ def run_realworld_cleanup(
     visual_grounding_timeout_s: float | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
-        raise ValueError("robot inclusion requires backend=molmospaces_subprocess")
-    if record_robot_views and (backend != MOLMOSPACES_SUBPROCESS_BACKEND or not include_robot):
+    visual_backend_names = {MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND}
+    if include_robot and backend not in visual_backend_names:
+        raise ValueError("robot inclusion requires a visual subprocess backend")
+    if record_robot_views and (backend not in visual_backend_names or not include_robot):
         raise ValueError(
-            "record_robot_views requires backend=molmospaces_subprocess and include_robot"
+            "record_robot_views requires a visual subprocess backend and include_robot"
         )
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
@@ -250,6 +290,21 @@ def run_realworld_cleanup(
             generated_mess_count=generated_mess_count,
             scene_source=scene_source,
             scene_index=scene_index,
+        )
+        scenario = backend_instance.scenario
+    elif backend == ISAACLAB_SUBPROCESS_BACKEND:
+        backend_instance = IsaacLabSubprocessBackend(
+            run_dir=output_dir,
+            seed=seed,
+            include_robot=include_robot,
+            robot_name=robot_name,
+            generated_mess_count=generated_mess_count,
+            scene_source=scene_source,
+            scene_index=scene_index,
+            map_bundle_dir=selected_bundle_dir,
+            scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
+            enable_segmentation=isaac_enable_segmentation,
+            segmentation_data_types=isaac_segmentation_data_types,
         )
         scenario = backend_instance.scenario
     else:
@@ -494,15 +549,23 @@ def run_realworld_cleanup(
 
     primitive_summary = primitive_provenance_counts(trace_events)
     cleanup_primitives_planner_backed = cleanup_primitive_evidence.get("planner_backed") is True
-    run_primitive_provenance = (
-        "planner_backed" if cleanup_primitives_planner_backed else API_SEMANTIC_PROVENANCE
-    )
+    if cleanup_primitives_planner_backed:
+        run_primitive_provenance = "planner_backed"
+    elif backend == ISAACLAB_SUBPROCESS_BACKEND:
+        run_primitive_provenance = ISAAC_SEMANTIC_POSE_PROVENANCE
+    else:
+        run_primitive_provenance = API_SEMANTIC_PROVENANCE
     manipulation_evidence = (
         planner_backed_cleanup_manipulation_evidence(
             backend=backend,
             primitive_summary=primitive_summary,
         )
         if cleanup_primitives_planner_backed
+        else isaac_semantic_pose_manipulation_evidence(
+            backend=backend,
+            primitive_summary=primitive_summary,
+        )
+        if backend == ISAACLAB_SUBPROCESS_BACKEND
         else api_semantic_manipulation_evidence(
             backend=backend,
             primitive_summary=primitive_summary,
@@ -604,20 +667,57 @@ def run_realworld_cleanup(
         source_bundle_dir=selected_bundle_dir,
     )
     if backend_instance is not None:
-        run_result["molmospaces_runtime"] = {
-            "python_executable": str(backend_instance.python_executable),
-            "runtime": backend_instance.runtime,
-            "model_stats": backend_instance.model_stats,
-            "scene_xml": backend_instance.scene_xml,
-            "metadata_object_count": backend_instance.metadata_object_count,
-            "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
-            "generated_mess_count": backend_instance.generated_mess_count,
-        }
+        if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+            run_result["molmospaces_runtime"] = {
+                "python_executable": str(backend_instance.python_executable),
+                "runtime": backend_instance.runtime,
+                "model_stats": backend_instance.model_stats,
+                "scene_xml": backend_instance.scene_xml,
+                "metadata_object_count": backend_instance.metadata_object_count,
+                "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
+                "generated_mess_count": backend_instance.generated_mess_count,
+            }
+        elif backend == ISAACLAB_SUBPROCESS_BACKEND:
+            isaac_scene_index_path = output_dir / "isaac_scene_index.json"
+            isaac_scene_index_path.write_text(
+                json.dumps(
+                    backend_instance.scene_index_artifact_payload(),
+                    indent=2,
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            run_result["artifacts"]["isaac_scene_index"] = str(isaac_scene_index_path)
+            run_result["isaac_runtime"] = {
+                "python_executable": str(backend_instance.python_executable),
+                "runtime": backend_instance.runtime,
+                "scenario_source": backend_instance.scenario_source,
+                "scene_usd": backend_instance.scene_usd,
+                "scene_index": backend_instance.scene_index,
+                "scene_index_artifact": str(isaac_scene_index_path),
+                "object_index_count": len(backend_instance.object_index),
+                "receptacle_index_count": len(backend_instance.receptacle_index),
+                "object_index": backend_instance.object_index,
+                "receptacle_index": backend_instance.receptacle_index,
+                "scene_index_diagnostics": backend_instance.scene_index_diagnostics,
+                "scene_binding_diagnostics": backend_instance.scene_binding_diagnostics,
+                "segmentation": backend_instance.segmentation,
+                "scene_load": backend_instance.scene_load,
+                "mapping_gaps": backend_instance.mapping_gaps,
+                "snapshot_artifacts": backend_instance.snapshot_artifacts,
+                "semantic_pose_state": backend_instance.semantic_pose_state,
+                "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
+                "generated_mess_count": backend_instance.generated_mess_count,
+            }
         if getattr(backend_instance, "robot", None) is not None:
             run_result["robot"] = backend_instance.robot
             run_result["robot_name"] = backend_instance.robot.get("robot_name")
     if robot_view_steps:
-        run_result["view_variant"] = ROBOT_VIEW_VARIANT
+        run_result["view_variant"] = (
+            ISAACLAB_ROBOT_VIEW_VARIANT
+            if backend == ISAACLAB_SUBPROCESS_BACKEND
+            else ROBOT_VIEW_VARIANT
+        )
         run_result["robot_view_steps"] = robot_view_steps
         run_result["artifacts"]["robot_views"] = str(output_dir / "robot_views")
     if planner_proof_evidence is not None:
@@ -854,7 +954,7 @@ def _write_snapshot(
     output_path: Path,
     title: str,
 ) -> Path:
-    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+    if backend in {MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND}:
         return contract.backend.write_snapshot(output_path, title=title)
     return write_state_snapshot(
         scenario,
@@ -1003,6 +1103,9 @@ def main(argv: list[str] | None = None) -> int:
         generated_mess_count=args.generated_mess_count,
         scene_source=args.scene_source,
         scene_index=args.scene_index,
+        isaac_scene_usd_path=args.isaac_scene_usd_path,
+        isaac_enable_segmentation=args.isaac_enable_segmentation,
+        isaac_segmentation_data_types=tuple(args.isaac_segmentation_data_type or ()),
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,

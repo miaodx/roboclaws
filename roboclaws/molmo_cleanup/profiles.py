@@ -13,6 +13,7 @@ from roboclaws.molmo_cleanup.subprocess_backend import MOLMOSPACES_SUBPROCESS_BA
 CLEANUP_PROFILE_SCHEMA = "molmo_cleanup_profile_v1"
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
+ISAACLAB_SUBPROCESS_BACKEND = "isaaclab_subprocess"
 
 SMOKE_PROFILE = "smoke"
 WORLD_LABELS_PROFILE = "world-labels"
@@ -30,6 +31,7 @@ SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 
 SYNTHETIC_CONTRACT_BACKEND = "synthetic_contract"
 MOLMOSPACES_SIM_BACKEND = "molmospaces_sim"
+ISAAC_SIM_BACKEND = "isaac_sim"
 
 SEMANTIC_REPORT = "semantic_report"
 ROBOT_VIEW_REPORT = "robot_view_report"
@@ -204,7 +206,7 @@ def infer_cleanup_profile_name(
         return CAMERA_RAW_PROFILE
     if perception_mode == CAMERA_MODEL_POLICY_MODE:
         return CAMERA_LABELS_PROFILE
-    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+    if backend in {MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND}:
         return WORLD_LABELS_PROFILE
     return SMOKE_PROFILE
 
@@ -229,6 +231,17 @@ def cleanup_profile_metadata_for_run(
         record_robot_views=record_robot_views,
     )
     metadata = profile.metadata()
+    if profile.profile == WORLD_LABELS_PROFILE and backend == ISAACLAB_SUBPROCESS_BACKEND:
+        metadata["backend"] = backend
+        metadata["world_backend"] = ISAAC_SIM_BACKEND
+        metadata["summary"] = (
+            "Structured world-label cleanup with Isaac Lab semantic-pose backend artifacts."
+        )
+        metadata["model_input_note"] = (
+            "The agent receives observed object handles and structured labels. "
+            "Isaac FPV, chase, and verification images are report evidence, not "
+            "model input for this profile."
+        )
     metadata["record_robot_views"] = bool(record_robot_views)
     if profile.profile == WORLD_LABELS_PROFILE and not record_robot_views:
         metadata["report"] = SEMANTIC_REPORT
@@ -253,13 +266,23 @@ def validate_cleanup_profile_metadata(
     for key in (
         "agent_input",
         "input_provenance",
-        "world_backend",
-        "backend",
         "perception_mode",
         "include_robot",
         "requires_clean_success",
     ):
         assert metadata.get(key) == expected[key], (key, metadata, expected)
+    if profile.profile == WORLD_LABELS_PROFILE:
+        assert metadata.get("backend") in {
+            MOLMOSPACES_SUBPROCESS_BACKEND,
+            ISAACLAB_SUBPROCESS_BACKEND,
+        }, metadata
+        assert metadata.get("world_backend") in {MOLMOSPACES_SIM_BACKEND, ISAAC_SIM_BACKEND}, (
+            metadata,
+            expected,
+        )
+    else:
+        assert metadata.get("backend") == expected["backend"], metadata
+        assert metadata.get("world_backend") == expected["world_backend"], metadata
     if profile.profile == WORLD_LABELS_PROFILE:
         assert metadata.get("report") in {ROBOT_VIEW_REPORT, SEMANTIC_REPORT}, metadata
     else:
@@ -281,7 +304,9 @@ def _assert_profile_matches_run(
     perception_mode: str,
     record_robot_views: bool,
 ) -> None:
-    if profile.backend != backend:
+    if profile.profile == WORLD_LABELS_PROFILE and backend == ISAACLAB_SUBPROCESS_BACKEND:
+        pass
+    elif profile.backend != backend:
         raise ValueError(
             f"profile={profile.profile} requires backend={profile.backend}, got {backend}"
         )

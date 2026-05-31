@@ -49,20 +49,22 @@ perception-benchmark precision; it over-rejected in the cleanup loop. Keep
 preferred refiner: it works with a 240s timeout, but its same-matrix cleanup
 result is below both Gemini refiners.
 
-The clean 2026-05-26 apple-to-apple rerun kept this split: `grounding-dino`
-remains the default real visual-grounding baseline, while
-`grounding-dino+vertex_ai/gemini-3-flash-preview` is the direct-control quality
-route when seven-minute latency is acceptable. The live Codex + DINO + Gemini
-run improved over proposer-only DINO on semantic acceptability, but it was much
-slower and below RAW_FPV/direct-refiner exact-match quality, so do not make it
-the default live-agent path yet.
+The 2026-05-27 live Codex rerun with the current DINO base-recall sidecar
+changed the live-agent readout: Codex + `grounding-dino` matched `world-labels`
+on final cleanup quality for the scene-0 seed-7 task, but took longer because
+it produced many unresolved camera declarations. Treat that as a pass for the
+current DINO base lane, not proof that camera labels are cheaper than the
+privileged structured-label control. The same-day current mify `camera-raw`
+rerun did not produce a cleanup score: it placed only one object, called `done`
+with 6/14 waypoint coverage, and then hit the mify provider/tool namespace
+failure again. Keep the 2026-05-26 raw-FPV success as provider-route reference
+evidence only.
 
-Success/latency conclusion: for real-agent behavior, prefer Codex `raw_fpv_only`
-when the agent can reason over images directly; it matched the best exact score
-at 8/10 in 14m57s. Use Codex + `grounding-dino` only as the fast camera-label
-baseline; it finished in 8m18s but only reached 3/10 exact. Do not default
-Codex to DINO + Gemini yet: it improved to 5/10 exact and 9/10 semantic
-accepted, but took 20m47s and still trailed RAW_FPV.
+Success/latency conclusion: keep `grounding-dino` base-recall as the default
+real `camera-labels` visual-grounding pipeline. For live-agent comparison,
+`world-labels` remains the privileged sim/API control, `camera-labels` + DINO
+base is the current real camera-label pass, and `camera-raw` needs the current
+mify tool-route issue resolved before it can be compared apple-to-apple again.
 
 ## Selection Summary
 
@@ -313,6 +315,48 @@ DINO + Gemini and Codex RAW_FPV exact-match result. The refiner also encouraged
 more post-placement observations and declarations, so it is not the live-agent
 default despite being the direct-control quality route.
 
+## Current-DINO Live Codex Rerun
+
+Run date: 2026-05-27. Rows below use seed 7, `generated_mess_count=10`,
+`assets/maps/molmospaces-procthor-val-0-7`, robot-view reports, the same
+Chinese cleanup task prompt, and the Docker-backed Codex route through the
+repo-local `.env` mify configuration allowed on the work network. The DINO row
+used the current recommended sidecar config:
+`IDEA-Research/grounding-dino-base`, `box_threshold=0.25`,
+`text_threshold=0.20`.
+
+| Route | Input / pipeline | Candidates / declarations | Raw FPV observations | Robot view steps | Exact private matches | Semantic accepted | Sweep coverage | Wall time | Status |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Live Codex control | `world-labels` / sim API | n/a | 0 | 114 | 8/10 | 10/10 | 1.0 | 1025.2s | Cleanup success; runner checker failed on a fridge-sequence review gate. |
+| Live Codex camera labels | `grounding-dino` base-recall | 216 | 41 | 129 | 8/10 | 10/10 | 1.0 | 1520.0s | Success. |
+| Live Codex visual reasoning | `camera-raw` on current mify route | 2 model-declared objects | 11 | 29 | n/a | n/a | 0.428571 at rejected `done` | 1122.5s | Failed before score: only 1 object placed, `done` rejected for insufficient sweep coverage, then provider/tool namespace error. |
+
+Latency and behavior notes:
+
+| Route | Timing / behavior note |
+| --- | --- |
+| `world-labels` / sim API | 17m05s runner wall time, 16 Codex turns, 189 MCP tool calls, 12m41s MCP between-tool/model gap, and 3m43s robot-view capture. The report has `run_result.json` and a successful private cleanup score, but the runner exit status was 1 because the stricter checker flagged a fridge sequence. |
+| `camera-labels` + DINO base | 25m20s runner wall time, 7 Codex turns, 168 MCP tool calls, 39 `declare_visual_candidates` calls, 20 resolved declarations, 196 unresolved declarations, and 173 `needs_clarification` declarations. The sidecar provenance confirms `IDEA-Research/grounding-dino-base` on CUDA with the recommended thresholds. |
+| `camera-raw` current mify route | The final 2026-05-27 rerun used 9 Codex turns, 47 MCP tool calls, 11 `observe` responses, 3 `navigate_to_visual_candidate` calls, 1 `pick`, and 1 `place_inside`. It declared 2 objects from raw FPV: one unresolved linen candidate and one Potato that was placed in the fridge. The agent skipped most middle-room waypoint observations, called `done` anyway, and the server returned `insufficient_sweep_coverage` with 6/14 waypoints observed. After that, mify again emitted `function_call namespace 'mcp__roboclaws__' does not contain function 'metric_map'`, so the runner exited without `run_result.json` or `report.html`. This is not an apple-to-apple score row. |
+
+Artifacts:
+
+- `output/molmo/apple2apple-0527-codex-world-basecompare-rerun/0527_1733/seed-7/report.html`
+- `output/molmo/apple2apple-0527-codex-dino-base/0527_1752/seed-7/report.html`
+- `output/molmo/apple2apple-0527-codex-raw/0527_1818/seed-7/`
+- `output/molmo/apple2apple-0527-codex-raw-rerun/0527_1825/seed-7/`
+- `output/molmo/apple2apple-0527-codex-raw-promptfix/0527_1845/seed-7/`
+- `output/molmo/apple2apple-0527-codex-raw-namespacefix/0527_1911/seed-7/`
+
+Interpretation: the current DINO base row is good enough to keep as the
+recommended `camera-labels` default: it reached the same final cleanup quality
+as the structured-label control on this task. The cost is runtime and noisy
+actionability: many DINO proposals were unresolved or needed clarification, so
+the live agent spent more time declaring and filtering candidates. The 2026-05-26
+RAW_FPV success remains useful, but it used a different provider/model route;
+do not compare it as the current mify raw-FPV result until the tool namespace
+failure is fixed and the raw agent can satisfy the same sweep and cleanup gates.
+
 ## Multi-Scene Cleanup Check
 
 Run date: 2026-05-27. Both rows used direct deterministic `camera-labels`,
@@ -402,6 +446,16 @@ Cleanup artifacts:
 `grounding-dino` is the current default real pipeline because it is the best
 proposer-only option on recall and overall score, and it already has direct,
 MCP smoke, and live Codex cleanup evidence.
+
+Benchmark-design conclusion: use two separate gates. The bbox benchmark is the
+right model-selection gate because it is automated, samples fresh MolmoSpaces
+scene indices and target-focused FPV frames, and scores IoU against private
+MuJoCo segmentation boxes. The live cleanup apple-to-apple table is the
+right agent-behavior gate because it controls the task, seed, map, and prompt
+while changing the evidence lane. A single scene-0 live cleanup run should not
+be treated as a product-level model ranking. For the next representative pass,
+generate a fresh bbox corpus with about 10 scene indices x 10 targets and then
+run a smaller same-matrix cleanup subset across multiple scene categories.
 
 `yoloe` is now a credible ultra-fast lane, not just a placeholder. Expanding
 cleanup-family hints improved recall from 0.04878 to 0.121951, and the best

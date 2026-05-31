@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 PrimitiveProvenance = Literal[
     "api_semantic",
+    "isaac_semantic_pose",
     "real",
     "scripted",
     "shim",

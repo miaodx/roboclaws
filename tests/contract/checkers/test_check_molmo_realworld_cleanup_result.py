@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from roboclaws.molmo_cleanup.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
@@ -202,6 +203,505 @@ def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
         require_waypoint_honesty=True,
         require_real_robot_alignment=True,
     )
+
+
+def test_checker_accepts_isaac_selected_bindings_when_rows_match_scene_index(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=True,
+        require_semantic_pose=False,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_accepts_isaac_real_runtime_when_diagnostics_are_present(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    data["isaac_runtime"]["runtime"] = _isaac_real_runtime_diagnostics()
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings),
+        require_real_runtime=True,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=False,
+        require_semantic_pose=False,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_accepts_isaac_loaded_scene_when_usd_file_is_present(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_loaded_scene(data, tmp_path)
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings),
+        require_real_runtime=False,
+        require_scene_loaded=True,
+        require_local_scene_usd=True,
+        require_selected_usd_bindings=False,
+        require_semantic_pose=False,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_rejects_isaac_generated_usd_when_local_scene_required(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_loaded_scene(
+        data,
+        tmp_path,
+        loaded_asset_kind="generated_runtime_smoke_usd",
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=True,
+            require_local_scene_usd=True,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_blank_isaac_robot_view_images(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_robot_view_step(data, tmp_path, blank_key="verify")
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_local_scene_usd=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=True,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_blank_isaac_snapshot_provenance(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_snapshot_artifacts(data, tmp_path, blank_output=True)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_local_scene_usd=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=True,
+        )
+
+
+def test_checker_rejects_isaac_loaded_scene_when_manual_editor_steps_remain(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _add_isaac_loaded_scene(data, tmp_path, manual_editor_steps_required=True)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=True,
+            require_local_scene_usd=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_real_runtime_when_diagnostics_are_missing(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    data["isaac_runtime"]["runtime"] = {
+        "runtime_mode": "real",
+        "primitive_provenance": "isaac_semantic_pose",
+        "rendering": {
+            "status": "real_rendering_proven",
+            "real_rendering_proven": True,
+            "placeholder_visuals": False,
+        },
+    }
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=True,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=False,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_selected_binding_rows_without_usd_handle(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    scene_bindings["selected_object_bindings"]["mug_01"].pop("usd_handle")
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_selected_binding_index_mismatch(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        object_prim_path="/World/Objects/other_mug",
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_scene_index_binding_drift_from_run_result(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    artifact_scene_bindings = json.loads(json.dumps(scene_bindings))
+    artifact_scene_bindings["selected_object_bindings"]["mug_01"]["usd_prim_path"] = (
+        "/World/Objects/other_mug"
+    )
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        artifact_scene_bindings=artifact_scene_bindings,
+        object_prim_path="/World/Objects/other_mug",
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(artifact_scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_scene_index_object_index_drift_from_run_result(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    isaac_runtime = data["isaac_runtime"]
+    assert isinstance(isaac_runtime, dict)
+    object_index = isaac_runtime["object_index"]
+    assert isinstance(object_index, dict)
+    object_index["book_01"] = {"usd_prim_path": "/World/Objects/book_01"}
+    isaac_runtime["object_index_count"] = 2
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        extra_object_index={"book_01": {"usd_prim_path": "/World/Objects/book_renamed"}},
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_scene_index_segmentation_drift_from_run_result(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    runtime_segmentation = _isaac_available_segmentation()
+    artifact_segmentation = json.loads(json.dumps(runtime_segmentation))
+    artifact_segmentation["candidate_bbox_count"] = 2
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        segmentation=runtime_segmentation,
+    )
+    _write_isaac_scene_index(
+        tmp_path,
+        scene_bindings,
+        segmentation=artifact_segmentation,
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=False,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=True,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_accepts_isaac_semantic_pose_paths_when_rows_match_scene_index(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=True,
+        require_semantic_pose=True,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_rejects_isaac_semantic_pose_object_path_drift_from_scene_index(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state()
+    semantic_pose_state["object_poses"]["mug_01"]["usd_prim_path"] = "/World/Objects/other_mug"
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_semantic_pose_receptacle_path_drift_from_scene_index(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state()
+    semantic_pose_state["transform_events"][0]["receptacle_usd_prim_path"] = (
+        "/World/Receptacles/other_sink"
+    )
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_semantic_pose_when_report_omits_pose_rows(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(
+                scene_bindings,
+                semantic_pose_state=semantic_pose_state,
+                include_semantic_pose_rows=False,
+            ),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
+
+
+def test_checker_rejects_isaac_semantic_pose_when_trace_omits_provenance(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _write_trace(
+        tmp_path / "trace.jsonl",
+        _isaac_semantic_pose_trace_events(semantic_pose_state, include_provenance=False),
+    )
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=False,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
 
 
 def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() -> None:
@@ -1606,6 +2106,470 @@ def _write_trace(path: Path, events: list[dict[str, object]]) -> None:
         "".join(json.dumps(event, sort_keys=True) + "\n" for event in events),
         encoding="utf-8",
     )
+
+
+def _isaac_selected_scene_bindings() -> dict[str, object]:
+    return {
+        "schema": "isaac_public_scene_bindings_v1",
+        "status": "selected_bound",
+        "source": "usd_stage_traversal",
+        "selected_object_count": 1,
+        "selected_target_receptacle_count": 1,
+        "selected_object_bound_count": 1,
+        "selected_target_receptacle_bound_count": 1,
+        "selected_object_bindings": {
+            "mug_01": {
+                "status": "bound",
+                "usd_handle": "mug_01",
+                "usd_prim_path": "/World/Objects/mug_01",
+                "match_strategy": "exact_public_id",
+                "index_source": "usd_stage_traversal",
+            }
+        },
+        "selected_target_receptacle_bindings": {
+            "sink_01": {
+                "status": "bound",
+                "usd_handle": "sink_01",
+                "usd_prim_path": "/World/Receptacles/sink_01",
+                "match_strategy": "exact_public_id",
+                "index_source": "usd_stage_traversal",
+            }
+        },
+        "blockers": [],
+        "private_manifest_exposed_to_agent": False,
+    }
+
+
+def _isaac_runtime_result(
+    base: Path,
+    scene_bindings: dict[str, object],
+    *,
+    segmentation: dict[str, object] | None = None,
+    semantic_pose_state: dict[str, object] | None = None,
+) -> dict[str, object]:
+    if segmentation is None:
+        segmentation = {
+            "status": "blocked_capability",
+            "agent_facing": False,
+            "no_simulator_label_fallback": True,
+        }
+    result: dict[str, object] = {
+        "backend": "isaaclab_subprocess",
+        "artifacts": {"isaac_scene_index": str(base / "isaac_scene_index.json")},
+        "isaac_runtime": {
+            "runtime": {"primitive_provenance": "isaac_semantic_pose"},
+            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
+            "object_index_count": 1,
+            "receptacle_index": {
+                "sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"},
+            },
+            "receptacle_index_count": 1,
+            "scene_binding_diagnostics": scene_bindings,
+            "scene_index_artifact": str(base / "isaac_scene_index.json"),
+            "segmentation": segmentation,
+        },
+    }
+    if semantic_pose_state is not None:
+        trace_path = base / "trace.jsonl"
+        _write_trace(trace_path, _isaac_semantic_pose_trace_events(semantic_pose_state))
+        result["artifacts"]["trace"] = str(trace_path)
+        result["primitive_provenance"] = "isaac_semantic_pose"
+        result["manipulation_evidence"] = {
+            "primitive_provenance": "isaac_semantic_pose",
+            "isaac_semantic_pose_edits": True,
+            "planner_backed": False,
+            "physical_robot": False,
+        }
+        result["semantic_substeps"] = [
+            {
+                "steps": [
+                    {
+                        "phase": "pick",
+                        "status": "ok",
+                        "primitive_provenance": "isaac_semantic_pose",
+                        "planner_backed": False,
+                        "physical_robot": False,
+                    },
+                    {
+                        "phase": "place",
+                        "status": "ok",
+                        "primitive_provenance": "isaac_semantic_pose",
+                        "planner_backed": False,
+                        "physical_robot": False,
+                    },
+                ]
+            }
+        ]
+        result["isaac_runtime"]["semantic_pose_state"] = semantic_pose_state
+    return result
+
+
+def _isaac_real_runtime_diagnostics() -> dict[str, object]:
+    return {
+        "runtime_mode": "real",
+        "python_version": "3.12.3",
+        "isaac_sim_version": "unit-isaacsim",
+        "isaac_lab_version": "unit-isaaclab",
+        "cuda_available": True,
+        "gpu_name": "unit-gpu",
+        "gpu_vram_mb": 16384,
+        "renderer_mode": "isaac_lab_headless_rtx",
+        "camera_resolution": [540, 360],
+        "primitive_provenance": "isaac_semantic_pose",
+        "rendering": {
+            "status": "real_rendering_proven",
+            "real_rendering_proven": True,
+            "placeholder_visuals": False,
+        },
+    }
+
+
+def _add_isaac_loaded_scene(
+    data: dict[str, object],
+    base: Path,
+    *,
+    manual_editor_steps_required: bool = False,
+    loaded_asset_kind: str = "local_scene_usd",
+) -> Path:
+    scene_usd = base / "loaded_scene.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    isaac_runtime = data["isaac_runtime"]
+    assert isinstance(isaac_runtime, dict)
+    isaac_runtime["scene_usd"] = str(scene_usd)
+    isaac_runtime["scene_load"] = {
+        "status": "loaded",
+        "usd_stage_loaded": True,
+        "scene_usd": str(scene_usd),
+        "loaded_asset_kind": loaded_asset_kind,
+        "manual_editor_steps_required": manual_editor_steps_required,
+    }
+    return scene_usd
+
+
+def _add_isaac_robot_view_step(
+    data: dict[str, object],
+    base: Path,
+    *,
+    blank_key: str = "",
+) -> None:
+    view_dir = base / "isaac_robot_views"
+    view_dir.mkdir(parents=True, exist_ok=True)
+    views: dict[str, str] = {}
+    for key in ("fpv", "chase", "map", "verify"):
+        path = view_dir / f"step.{key}.png"
+        if key == blank_key:
+            _write_blank_png(path)
+        else:
+            _write_nonblank_png(path)
+        views[key] = str(path.relative_to(base))
+    report = base / "report.html"
+    report.write_text("<h2>Robot View Timeline</h2>", encoding="utf-8")
+    artifacts = data.setdefault("artifacts", {})
+    assert isinstance(artifacts, dict)
+    artifacts["robot_views"] = str(view_dir.relative_to(base))
+    artifacts["report"] = str(report.relative_to(base))
+    data["view_variant"] = "isaaclab-fpv-map-chase-verify"
+    data["robot_view_steps"] = [
+        {
+            "action": "observe mug_01",
+            "room_outline_count": 1,
+            "view_provenance": {
+                key: f"isaac_lab_camera_rgb_static_robot_views:{key}" for key in views
+            },
+            "views": views,
+        },
+        {
+            "action": "observe sink_01",
+            "room_outline_count": 1,
+            "view_provenance": {
+                key: f"isaac_lab_camera_rgb_static_robot_views:{key}" for key in views
+            },
+            "views": views,
+        },
+    ]
+
+
+def _add_isaac_snapshot_artifacts(
+    data: dict[str, object],
+    base: Path,
+    *,
+    blank_output: bool = False,
+) -> None:
+    snapshot_dir = base / "isaac_snapshots"
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    source_path = snapshot_dir / "source.png"
+    _write_nonblank_png(source_path)
+    snapshots: list[dict[str, object]] = []
+    for index in range(2):
+        output_path = snapshot_dir / f"snapshot_{index}.png"
+        if blank_output and index == 0:
+            _write_blank_png(output_path)
+        else:
+            _write_nonblank_png(output_path)
+        snapshots.append(
+            {
+                "title": f"snapshot {index}",
+                "output_path": str(output_path.relative_to(base)),
+                "visual_artifact_provenance": "isaac_lab_camera_rgb",
+                "placeholder_visuals": False,
+                "snapshot_provenance": {
+                    "source_path": str(source_path.relative_to(base)),
+                    "visual_artifact_provenance": "isaac_lab_camera_rgb",
+                    "placeholder_visuals": False,
+                    "static_isaac_capture": True,
+                    "semantic_pose_rendered": False,
+                },
+            }
+        )
+    isaac_runtime = data["isaac_runtime"]
+    assert isinstance(isaac_runtime, dict)
+    isaac_runtime["snapshot_artifacts"] = snapshots
+
+
+def _write_nonblank_png(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (8, 8), (24, 40, 72))
+    image.putpixel((0, 0), (220, 180, 40))
+    image.save(path)
+
+
+def _write_blank_png(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (8, 8), (0, 0, 0)).save(path)
+
+
+def _write_isaac_scene_index(
+    base: Path,
+    scene_bindings: dict[str, object],
+    *,
+    artifact_scene_bindings: dict[str, object] | None = None,
+    segmentation: dict[str, object] | None = None,
+    object_prim_path: str = "/World/Objects/mug_01",
+    extra_object_index: dict[str, object] | None = None,
+) -> None:
+    if artifact_scene_bindings is None:
+        artifact_scene_bindings = scene_bindings
+    if segmentation is None:
+        segmentation = {
+            "status": "blocked_capability",
+            "agent_facing": False,
+            "no_simulator_label_fallback": True,
+        }
+    object_index = {"mug_01": {"usd_prim_path": object_prim_path}}
+    object_index.update(extra_object_index or {})
+    payload = {
+        "schema": "isaac_scene_index_artifact_v1",
+        "backend": "isaaclab_subprocess",
+        "agent_facing": False,
+        "private_manifest_exposed_to_agent": False,
+        "object_index": object_index,
+        "object_index_count": len(object_index),
+        "receptacle_index": {
+            "sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"},
+        },
+        "receptacle_index_count": 1,
+        "scene_binding_diagnostics": artifact_scene_bindings,
+        "segmentation": segmentation,
+    }
+    (base / "isaac_scene_index.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _isaac_available_segmentation() -> dict[str, object]:
+    bbox = _isaac_segmentation_bbox()
+    return {
+        "schema": "isaac_segmentation_diagnostics_v1",
+        "status": "available",
+        "available": True,
+        "source": "isaac_lab_camera",
+        "capture_method": "isaac_lab_camera_segmentation",
+        "requested_data_types": [
+            "semantic_segmentation",
+            "instance_segmentation_fast",
+            "instance_id_segmentation_fast",
+        ],
+        "output_data_types": ["instance_id_segmentation_fast"],
+        "tensor_output_available": True,
+        "candidate_overlay_status": "available",
+        "candidate_bbox_count": 1,
+        "selected_usd_prim_match_count": 1,
+        "selected_usd_prim_paths": [
+            "/World/Objects/mug_01",
+            "/World/Receptacles/sink_01",
+        ],
+        "selected_candidate_bboxes": [bbox],
+        "candidate_bboxes": [bbox],
+        "agent_facing": False,
+        "no_simulator_label_fallback": True,
+    }
+
+
+def _isaac_semantic_pose_state() -> dict[str, object]:
+    event_base = {
+        "schema": "isaac_semantic_pose_event_v1",
+        "state_source": "backend_json_state",
+        "primitive_provenance": "isaac_semantic_pose",
+        "rendered_to_usd": False,
+        "planner_backed": False,
+        "physical_robot": False,
+        "object_id": "mug_01",
+        "object_usd_prim_path": "/World/Objects/mug_01",
+        "receptacle_id": "sink_01",
+        "receptacle_usd_prim_path": "/World/Receptacles/sink_01",
+    }
+    return {
+        "schema": "isaac_semantic_pose_state_v1",
+        "state_source": "backend_json_state",
+        "primitive_provenance": "isaac_semantic_pose",
+        "rendered_to_usd": False,
+        "planner_backed": False,
+        "physical_robot": False,
+        "semantic_pose_only": True,
+        "object_poses": {
+            "mug_01": {
+                "state_source": "backend_json_state",
+                "rendered_to_usd": False,
+                "usd_prim_path": "/World/Objects/mug_01",
+                "support_receptacle_id": "sink_01",
+                "support_usd_prim_path": "/World/Receptacles/sink_01",
+            }
+        },
+        "articulations": {
+            "sink_01": {
+                "state_source": "backend_json_state",
+                "rendered_to_usd": False,
+                "usd_prim_path": "/World/Receptacles/sink_01",
+            }
+        },
+        "transform_events": [
+            {
+                **event_base,
+                "sequence": 1,
+                "tool": "pick",
+                "state_mutation": "isaac_prim_attach",
+            },
+            {
+                **event_base,
+                "sequence": 2,
+                "tool": "place",
+                "state_mutation": "isaac_prim_transform",
+            },
+        ],
+    }
+
+
+def _isaac_semantic_pose_trace_events(
+    state: dict[str, object],
+    *,
+    include_provenance: bool = True,
+) -> list[dict[str, object]]:
+    events = state.get("transform_events") or []
+    trace_events: list[dict[str, object]] = []
+    if not isinstance(events, list):
+        return trace_events
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        response = {
+            "ok": True,
+            "status": "ok",
+            "tool": str(event.get("tool") or ""),
+            "object_id": str(event.get("object_id") or ""),
+            "receptacle_id": str(event.get("receptacle_id") or ""),
+            "state_mutation": str(event.get("state_mutation") or ""),
+        }
+        if include_provenance:
+            response["primitive_provenance"] = "isaac_semantic_pose"
+        trace_events.append(_trace_response(str(event.get("tool") or ""), response))
+    return trace_events
+
+
+def _isaac_segmentation_bbox() -> dict[str, object]:
+    return {
+        "view": "fpv",
+        "data_type": "instance_id_segmentation_fast",
+        "label_id": 3,
+        "label": "/World/Objects/mug_01",
+        "usd_prim_path": "/World/Objects/mug_01",
+        "bbox_xyxy": [8, 8, 32, 36],
+        "pixel_count": 144,
+        "image_size": [64, 48],
+    }
+
+
+def _isaac_report_text(
+    scene_bindings: dict[str, object],
+    *,
+    semantic_pose_state: dict[str, object] | None = None,
+    include_semantic_pose_rows: bool = True,
+) -> str:
+    selected_objects = scene_bindings.get("selected_object_bindings") or {}
+    selected_receptacles = scene_bindings.get("selected_target_receptacle_bindings") or {}
+    rows = [*selected_objects.values(), *selected_receptacles.values()]
+    row_text = " ".join(
+        f"{row.get('usd_handle', '')} {row.get('usd_prim_path', '')}"
+        for row in rows
+        if isinstance(row, dict)
+    )
+    semantic_pose_text = ""
+    if semantic_pose_state is not None and include_semantic_pose_rows:
+        semantic_pose_text = _isaac_semantic_pose_report_text(semantic_pose_state)
+    return (
+        "Isaac Runtime Diagnostics Segmentation Scene Index Artifact Rows "
+        "Selected USD Binding Rows Selected USD Index Rows "
+        "isaac_semantic_pose Semantic Pose State Semantic Pose Events "
+        "Rendered to USD Planner backed "
+        f"{row_text} {semantic_pose_text}"
+    )
+
+
+def _isaac_semantic_pose_report_text(state: dict[str, object]) -> str:
+    values: list[str] = [
+        "Object USD",
+        "Support USD",
+        "USD prim",
+        "Mutation",
+        "Receptacle USD",
+    ]
+    object_poses = state.get("object_poses") or {}
+    if isinstance(object_poses, dict):
+        for object_id, pose in object_poses.items():
+            if not isinstance(pose, dict):
+                continue
+            values.extend(
+                [
+                    str(object_id),
+                    str(pose.get("support_receptacle_id") or ""),
+                    str(pose.get("usd_prim_path") or ""),
+                    str(pose.get("support_usd_prim_path") or ""),
+                ]
+            )
+    articulations = state.get("articulations") or {}
+    if isinstance(articulations, dict):
+        for receptacle_id, articulation in articulations.items():
+            if not isinstance(articulation, dict):
+                continue
+            values.extend(
+                [
+                    str(receptacle_id),
+                    str(articulation.get("usd_prim_path") or ""),
+                ]
+            )
+    events = state.get("transform_events") or []
+    if isinstance(events, list):
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            values.extend(
+                [
+                    str(event.get("tool") or ""),
+                    str(event.get("state_mutation") or ""),
+                    str(event.get("object_id") or ""),
+                    str(event.get("receptacle_id") or ""),
+                    str(event.get("object_usd_prim_path") or ""),
+                    str(event.get("receptacle_usd_prim_path") or ""),
+                ]
+            )
+    return " ".join(value for value in values if value)
 
 
 def _seed7_cleanup_bindings() -> list[dict[str, object]]:
