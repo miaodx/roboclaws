@@ -22,12 +22,23 @@ from roboclaws.molmo_cleanup.report import runtime_timing_from_trace
 FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
 SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
+CODEX_CLEANUP_MCP_SERVER_NAME = "cleanup"
 CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION = (
     "Live MCP route constraint: do not call update_plan, do not create todo/checklist "
-    "tool items, and do not use any planning tool. In this Docker Codex + mify live "
-    "MCP route, the Codex checklist tool can be misrouted as a roboclaws MCP tool by "
-    "some Responses providers. Track progress in normal text only. When you call a "
-    "tool, call only declared roboclaws MCP tools."
+    "tool items, and do not use any planning tool. In this Docker Codex live MCP "
+    "route, planning/resource helpers can be misrouted as robot tools by some "
+    "Responses-compatible providers. Do not call read_mcp_resource or any "
+    "resources/read tool; the task skill is already copied into the task workspace "
+    "and the operative cleanup instructions are included in the prompt. Track "
+    "progress in normal text only. When you call a robot tool, choose the cleanup "
+    "MCP tool entry exactly as exposed by Codex: Codex events should show "
+    "server=cleanup and tool=metric_map/observe/pick/place/done. If the tool "
+    "protocol requires a function namespace, use namespace cleanup with the "
+    "unprefixed tool name; never emit a bare function_call named metric_map, "
+    "and never use mcp__cleanup__, mcp__roboclaws__, roboclaws__, or any other "
+    "double-underscore provider prefix. Do not call exec_command, "
+    "shell, bash, python, apply_patch, or any coding/developer tool; this live "
+    "route exposes only robot cleanup MCP tools."
 )
 CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION = (
     "Cleanup tool-order rule: after navigate_to_receptacle, use place_inside for "
@@ -213,16 +224,24 @@ class LiveCodexCleanupRunner:
             else str(last_message_host_path)
         )
 
+        for server_name in (CODEX_CLEANUP_MCP_SERVER_NAME, "roboclaws"):
+            subprocess.run(
+                [self.args.codex_bin, "mcp", "remove", server_name],
+                cwd=agent_task_dir,
+                env=env,
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
         subprocess.run(
-            [self.args.codex_bin, "mcp", "remove", "roboclaws"],
-            cwd=agent_task_dir,
-            env=env,
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        subprocess.run(
-            [self.args.codex_bin, "mcp", "add", "roboclaws", "--url", self.args.client_url],
+            [
+                self.args.codex_bin,
+                "mcp",
+                "add",
+                CODEX_CLEANUP_MCP_SERVER_NAME,
+                "--url",
+                self.args.client_url,
+            ],
             cwd=agent_task_dir,
             env=env,
             check=True,
@@ -240,7 +259,10 @@ class LiveCodexCleanupRunner:
             prompt = (
                 _codex_live_prompt(self.args.kickoff_prompt)
                 if is_initial_turn
-                else _codex_continuation_prompt(turn_index=turn_index)
+                else _codex_continuation_prompt(
+                    turn_index=turn_index,
+                    profile=self.args.profile,
+                )
             )
             suffix = "" if is_initial_turn else f"-continuation-{turn_index}"
             turn_last_message_cli_path = (
@@ -303,19 +325,18 @@ class LiveCodexCleanupRunner:
                     break
                 if (self.run_dir / "run_result.json").is_file():
                     break
-                if turn_index + 1 < max_turns and _is_update_plan_tool_error(
-                    codex_events_path, stderr_path
-                ):
+                recoverable_error = _recoverable_provider_tool_error(codex_events_path, stderr_path)
+                if turn_index + 1 < max_turns and recoverable_error:
                     print(
-                        "==> Codex attempted unsupported update_plan/todo tool; "
-                        "continuing with plan-tool recovery prompt"
+                        "==> Codex attempted an unsupported provider/tool call "
+                        f"({recoverable_error}); continuing with recovery prompt"
                     )
                     recoveries = self.live_timing.setdefault("codex_recoverable_errors", [])
                     if isinstance(recoveries, list):
                         recoveries.append(
                             {
                                 "turn": turn_index + 1,
-                                "type": "misrouted_update_plan_tool",
+                                "type": recoverable_error,
                             }
                         )
                     continue
@@ -327,7 +348,7 @@ class LiveCodexCleanupRunner:
             if (self.run_dir / "run_result.json").is_file():
                 break
             if turn_index + 1 < max_turns:
-                print("==> Codex turn ended before roboclaws__done; starting continuation")
+                print("==> Codex turn ended before done; starting continuation")
         self._mark_timing("codex_exec_end")
         self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)
         if (
@@ -335,9 +356,7 @@ class LiveCodexCleanupRunner:
             and self.server_proc.poll() is None
             and not (self.run_dir / "run_result.json").is_file()
         ):
-            raise RuntimeError(
-                f"Codex exec ended without roboclaws__done after {max_turns} turn(s)"
-            )
+            raise RuntimeError(f"Codex exec ended without done after {max_turns} turn(s)")
 
     def _wait_for_server_finish(self) -> None:
         assert self.server_proc is not None
@@ -679,21 +698,50 @@ def _combined_codex_event_summary(paths: list[Path]) -> dict[str, Any]:
     }
 
 
-def _codex_continuation_prompt(*, turn_index: int) -> str:
+def _codex_continuation_prompt(*, turn_index: int, profile: str) -> str:
+    if profile == "camera-raw":
+        perception_instruction = (
+            "For camera-raw observations, inspect the raw FPV image block yourself. "
+            "Do not call declare_visual_candidates. When you see a "
+            "plausible cleanup object, call navigate_to_visual_candidate "
+            "with source_observation_id, a broad category if uncertain, "
+            "a real target_fixture_id copied from fixture_hints, evidence_note, "
+            "and image_region. Prefer image_region type verbal_region; use bbox "
+            "only when you can estimate it confidently. Never send "
+            'bbox_normalized, bare x/y/width/height fields, target_fixture_id="", '
+            'target_fixture_id="None", or target_fixture_id=null. Continue with '
+            "pick -> navigate_to_receptacle -> open? -> place/place_inside only "
+            "after visual grounding resolves."
+        )
+    elif profile == "camera-labels":
+        perception_instruction = (
+            "For camera-labels observations, call declare_visual_candidates "
+            "with observation_id only and omit candidates so the configured "
+            "visual-grounding pipeline produces labels. Continue cleaning public "
+            "camera_model_candidates with navigate_to_object -> pick -> "
+            "navigate_to_receptacle -> open? -> place/place_inside."
+        )
+    else:
+        perception_instruction = (
+            "Continue cleaning public observed cleanup candidates with the profile's "
+            "available observation handles and cleanup tools."
+        )
     return _codex_live_prompt(
-        "Continue the same active roboclaws MCP cleanup server. This is automatic "
+        "Continue the same active cleanup MCP session. This is automatic "
         f"continuation turn {turn_index}; do not restart the scenario and do not read "
-        "private scoring artifacts. Use roboclaws MCP tools only. First call "
-        "roboclaws__metric_map if you need current public state, cleanup_worklist, "
+        "private scoring artifacts. Use the cleanup MCP tool entries exactly as "
+        "exposed by Codex: Codex events should show server=cleanup and "
+        "tool=metric_map/observe/pick/place/done. If the tool protocol requires "
+        "a function namespace, use namespace cleanup with the unprefixed tool "
+        "name; never emit bare metric_map without namespace, and never use "
+        "mcp__cleanup__ or roboclaws__. Do not call read_mcp_resource/resources "
+        "tools; continue from the prompt instructions. First call metric_map if "
+        "you need current public state, cleanup_worklist, "
         "visited waypoints, or held_object_id. If the previous turn ended by saying "
-        "it would call a tool, make that tool call now before writing progress text. "
-        "For camera-labels observations, call roboclaws__declare_visual_candidates "
-        "with observation_id only and omit candidates so the configured "
-        "visual-grounding pipeline produces labels. Continue cleaning public "
-        "camera_model_candidates with navigate_to_object -> pick -> "
-        "navigate_to_receptacle -> open? -> place/place_inside, observe after each "
-        "successful placement, sweep remaining inspection_waypoints with "
-        "navigate_to_waypoint -> observe, and call roboclaws__done only after every "
+        "it would call a tool, make that exact tool call "
+        f"now before writing progress text. {perception_instruction} "
+        "Observe after each successful placement, sweep remaining inspection_waypoints with "
+        "navigate_to_waypoint -> observe, and call done only after every "
         "inspection waypoint has an observe response and pending public cleanup "
         "candidates are handled."
     )
@@ -707,7 +755,7 @@ def _codex_live_prompt(prompt: str) -> str:
     )
 
 
-def _is_update_plan_tool_error(*paths: Path) -> bool:
+def _recoverable_provider_tool_error(*paths: Path) -> str | None:
     for path in paths:
         if not path.is_file():
             continue
@@ -715,8 +763,24 @@ def _is_update_plan_tool_error(*paths: Path) -> bool:
         if "update_plan" in text and (
             "not declared in tools" in text or "unsupported call" in text
         ):
-            return True
-    return False
+            return "misrouted_update_plan_tool"
+        if "read_mcp_resource" in text and (
+            "not declared in tools" in text
+            or "unknown mcp server" in text
+            or "resources/read failed" in text
+        ):
+            return "misrouted_read_mcp_resource_tool"
+        if "mcp__" in text and "does not contain function" in text:
+            return "misrouted_mcp_namespace_tool"
+        if "requires namespace for namespace function tools" in text:
+            return "missing_mcp_namespace_tool"
+        if "function_call name" in text and "not declared in tools" in text:
+            return "misrouted_undeclared_tool_call"
+    return None
+
+
+def _is_update_plan_tool_error(*paths: Path) -> bool:
+    return _recoverable_provider_tool_error(*paths) == "misrouted_update_plan_tool"
 
 
 def _model_api_durations_from_event(event: dict[str, Any]) -> list[float]:

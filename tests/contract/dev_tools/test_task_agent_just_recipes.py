@@ -396,6 +396,27 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     assert route[13] == "fake-http"
 
 
+def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "backend=isaaclab_subprocess",
+        "seed=7",
+        "generated_mess_count=1",
+    )
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "world-labels",
+        "7",
+        "output/household/household-cleanup/direct-report",
+    ]
+    assert route[-1] == "isaaclab_subprocess"
+
+
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
     match = re.search(r"camera-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
@@ -405,6 +426,28 @@ def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() 
     assert "--expect-visual-grounding-pipeline" in body
     assert "--allow-partial-cleanup" in body
     assert "--min-sweep-coverage 1.0" in body
+
+
+def test_molmo_apple2apple_grid_recipe_strips_key_value_prefixes(tmp_path: Path) -> None:
+    output_dir = tmp_path / "apple2apple-grid"
+    result = subprocess.run(
+        [
+            just_bin(),
+            "molmo::apple2apple-grid",
+            "dry-run",
+            f"output_dir={output_dir}",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert (output_dir / "apple2apple_test_grid.json").is_file()
+    assert (output_dir / "apple2apple_test_grid.html").is_file()
+    assert f"apple-to-apple grid manifest: {output_dir / 'apple2apple_test_grid.json'}" in (
+        result.stdout
+    )
 
 
 def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
@@ -517,11 +560,21 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
     assert "mark a waypoint complete only after" in prompt
-    assert "compare the checklist before roboclaws__done" in prompt
+    assert "cleanup MCP tool entries exactly as exposed by Codex" in prompt
+    assert "namespace cleanup" in prompt
+    assert "server named cleanup" not in prompt
+    assert "compare the checklist before done" in prompt
+    assert "never mcp__cleanup__" in prompt
+    assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
     assert "trace-preserving RAW_FPV skill lane" in prompt
-    assert "image_region={type:bbox,value:[x,y,width,height]}" in prompt
-    assert "do not send bare x/y/width/height fields" in prompt
+    assert "Prefer image_region={type:verbal_region,value:front of desk}" in prompt
+    assert "image_region={type:bbox,value:[x,y,width,height]} only when" in prompt
+    assert "Never send bbox_normalized" in prompt
+    assert 'target_fixture_id=\\"\\"' in prompt
+    assert 'target_fixture_id=\\"None\\"' in prompt
+    assert "target_fixture_id=null" in prompt
+    assert "bare x/y/width/height fields" in prompt
     assert "at least seven grounded cleanup chains have succeeded" in prompt
     assert "place/place_inside" in prompt
     assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
@@ -540,7 +593,12 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "mark a waypoint complete only after" in prompt
     assert "place/place_inside" in prompt
     assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
-    assert "compare the checklist before roboclaws__done" in prompt
+    assert "cleanup MCP tool entries exactly as exposed by Codex" in prompt
+    assert "namespace cleanup" in prompt
+    assert "server named cleanup" not in prompt
+    assert "compare the checklist before done" in prompt
+    assert "never mcp__cleanup__" in prompt
+    assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
 
 
@@ -663,6 +721,8 @@ def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -
         "-c",
         'model_providers.mify.wire_api="responses"',
         "-c",
+        "model_providers.mify.supports_parallel_tool_calls=false",
+        "-c",
         'web_search="disabled"',
     ]
 
@@ -708,6 +768,8 @@ def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_rout
         'model_providers.mify.env_key="XM_LLM_API_KEY"',
         "-c",
         'model_providers.mify.wire_api="responses"',
+        "-c",
+        "model_providers.mify.supports_parallel_tool_calls=false",
         "-c",
         'web_search="disabled"',
     ]

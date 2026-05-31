@@ -9,6 +9,7 @@ MANIPULATION_PROVENANCE_SCHEMA = "molmo_manipulation_provenance_v1"
 MANIPULATION_PROBE_CONTRACT = "planner_backed_manipulation_probe_v1"
 PLANNER_BACKED_PROVENANCE = "planner_backed"
 BLOCKED_CAPABILITY_PROVENANCE = "blocked_capability"
+ISAAC_SEMANTIC_POSE_PROVENANCE = "isaac_semantic_pose"
 
 
 def api_semantic_manipulation_evidence(
@@ -30,6 +31,33 @@ def api_semantic_manipulation_evidence(
         "evidence_note": (
             "Cleanup effects are semantic backend state updates. This artifact "
             "does not prove planner-backed robot manipulation."
+        ),
+        "strict_proof_requirements": planner_backed_proof_requirements(),
+    }
+
+
+def isaac_semantic_pose_manipulation_evidence(
+    *,
+    backend: str,
+    primitive_summary: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """Describe Isaac semantic-pose cleanup effects without planner claims."""
+    summary = dict(primitive_summary or {})
+    return {
+        "schema": MANIPULATION_PROVENANCE_SCHEMA,
+        "status": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
+        "planner_backed": False,
+        "strict_proof_eligible": False,
+        "api_semantic_state_edits": False,
+        "isaac_semantic_pose_edits": True,
+        "physical_robot": False,
+        "backend": backend,
+        "primitive_provenance_summary": summary,
+        "evidence_note": (
+            "Cleanup effects are Isaac backend semantic pose edits over USD prim "
+            "state. This artifact does not prove planner-backed manipulation or "
+            "physical robot execution."
         ),
         "strict_proof_requirements": planner_backed_proof_requirements(),
     }

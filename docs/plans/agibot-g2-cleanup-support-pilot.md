@@ -70,7 +70,9 @@ Nav2-backed robots:
   `reachability_status` values: `verified`, `blocked`, or `timeout`.
 - Agibot runtime `observe()` defaults to `head_color` as the Policy Observation
   Camera. Other cameras may be captured for report/debug artifacts.
-- `adjust_camera` remains `blocked_capability` in the first pilot.
+- `adjust_camera` may appear in the first map-build tool boundary, but real G2
+  camera motion remains `blocked_capability` or a no-op with explicit evidence
+  until bounded camera control is proven.
 - Before an agent run starts, an Operator Localization Gate must confirm the
   selected map, G02 Pad relocalization, and localization readiness.
 - Before autonomous motion starts, an Operator Run Enablement Gate must confirm
@@ -240,6 +242,38 @@ subphases intentionally render `blocked_capability` without `--execute`, so
 these artifacts prove the CLI boundary, report shape, privacy boundary, and
 movement gate, not physical PNC execution.
 
+2026-05-28 Agibot pilot gap closure:
+
+- Extended the `AgibotSDKRunnerAdapter` public-tool family beyond waypoint and
+  receptacle navigation: `navigate_to_room`, `navigate_to_object`, and
+  `navigate_to_visual_candidate` now resolve through verified public waypoints
+  or return structured `blocked_capability` responses without exposing raw GDK
+  primitives.
+- Added explicit Operator Localization Gate and Operator Run Enablement Gate
+  evidence before any real-movement path can pass `--execute` through the SDK
+  runner. Missing gates stop at `blocked_capability` / Human Takeover Stop
+  evidence before importing or calling `agibot_gdk`.
+- Wired the Isaac scene-index cleanup scenario path into public fixture hints
+  for map-bundle runs so scene-index receptacles can route cleanup without
+  leaking private target truth.
+
+2026-05-28 MolmoSpaces/G2 perception comparison grid:
+
+- Added a first-class apple-to-apple grid surface for the G2-adjacent
+  MolmoSpaces cleanup comparison:
+  `just molmo::apple2apple-grid dry-run`.
+- The grid contains one offline Runtime Metric Map setup row plus 12 cleanup
+  rows across two map modes (`online`, `offline`), three live-agent routes
+  (`codex-api-router`, `claude-kimi`, `claude-mimo-omni`), and two perception
+  lanes (`camera-labels` with `visual_grounding=grounding-dino`, and
+  `camera-raw` / RAW_FPV direct input with the same Grounding DINO grounding
+  boundary).
+- Dry-run evidence was generated at
+  `output/molmo/apple2apple-grid-0528-dry-run/apple2apple_test_grid.html` and
+  `output/molmo/apple2apple-grid-0528-just-dry-run/apple2apple_test_grid.html`.
+  These artifacts prove command coverage and provider/profile pinning, not live
+  provider execution or real G2 hardware behavior.
+
 ## Non-Goals
 
 - Do not claim physical cleanup.
@@ -273,6 +307,11 @@ movement gate, not physical PNC execution.
 - Existing public navigation tools resolve to verified waypoints and execute via
   GDK PNC without exposing new Agibot agent tools.
 - `observe()` uses `head_color` as the policy observation camera.
+- First G2 map-build runs use robot-local `head_color` / RAW_FPV evidence with
+  `camera-labels` plus real External Visual Grounding Service output as the
+  primary perception lane; `camera-raw` remains a comparison/fallback lane.
+- `world-labels` and `visual_grounding=sim` remain simulator/control evidence,
+  not G2 readiness evidence.
 - Manipulation tools remain blocked and report that physical cleanup is not
   ready.
 - Reports distinguish top-level `agibot_gdk_normal_navi` navigation evidence

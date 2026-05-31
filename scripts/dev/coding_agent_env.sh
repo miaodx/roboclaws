@@ -264,6 +264,7 @@ roboclaws_codex_provider_args() {
     -c "model_providers.${provider}.wire_api=$(roboclaws_toml_string "$wire_api")"
   )
   if [[ "$provider" == "mify" ]]; then
+    out_args+=(-c 'model_providers.mify.supports_parallel_tool_calls=false')
     out_args+=(-c 'web_search="disabled"')
   fi
   roboclaws_codex_transport_args out_args
