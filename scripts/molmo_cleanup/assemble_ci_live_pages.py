@@ -2,21 +2,36 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import shutil
 import sys
 from pathlib import Path
+from types import ModuleType
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.ci_live_reports import (  # noqa: E402
-    MODEL_ENTRIES,
-    collect_entry_statuses,
-    write_live_index,
-    write_manifest,
-)
+
+def _load_ci_live_reports() -> ModuleType:
+    module_path = (
+        Path(__file__).resolve().parents[2] / "roboclaws" / "molmo_cleanup" / ("ci_live_reports.py")
+    )
+    spec = importlib.util.spec_from_file_location("_roboclaws_ci_live_reports", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Unable to load {module_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_ci_live_reports = _load_ci_live_reports()
+MODEL_ENTRIES = _ci_live_reports.MODEL_ENTRIES
+collect_entry_statuses = _ci_live_reports.collect_entry_statuses
+write_live_index = _ci_live_reports.write_live_index
+write_manifest = _ci_live_reports.write_manifest
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

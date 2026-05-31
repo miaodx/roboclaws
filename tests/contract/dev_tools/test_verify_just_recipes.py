@@ -10,6 +10,7 @@ VERIFY_JUST = JUST_DIR / "verify.just"
 HARNESS_JUST = JUST_DIR / "harness.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
+CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
 
 def test_verify_module_is_registered() -> None:
@@ -28,12 +29,47 @@ def test_verify_layer_keeps_static_checks_out_of_harness_namespace() -> None:
     verify_text = VERIFY_JUST.read_text(encoding="utf-8")
     harness_text = HARNESS_JUST.read_text(encoding="utf-8")
 
-    assert "ruff check ." in verify_text
-    assert "ruff format --check ." in verify_text
+    assert '"$ruff_bin" check .' in verify_text
+    assert '"$ruff_bin" format --check .' in verify_text
     assert "git diff --check" in verify_text
-    assert "ruff check ." not in harness_text
-    assert "ruff format --check ." not in harness_text
+    assert "ruff_bin" not in harness_text
     assert "git diff --check" not in harness_text
+
+
+def test_required_ci_gate_has_one_local_verify_facade() -> None:
+    verify_text = VERIFY_JUST.read_text(encoding="utf-8")
+    agent_text = (JUST_DIR / "agent.just").read_text(encoding="utf-8")
+    workflow_text = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert re.search(
+        r"^ci-required output_dir=\"output/demo\" steps=\"30\":", verify_text, re.MULTILINE
+    )
+    ci_gate = re.search(
+        r"^ci-required output_dir=\"output/demo\" steps=\"30\":[\s\S]*?(?=^# |^[a-zA-Z0-9_-]+|\Z)",
+        verify_text,
+        re.MULTILINE,
+    )
+    assert ci_gate is not None
+    body = ci_gate.group(0)
+    assert "just verify::mock" in body
+    assert "scripts/reports/generate_demo_report.py" in body
+    assert '--output-dir "$output_dir"' in body
+    assert '--steps "$steps"' in body
+
+    assert "static|mock|ci-required|contract" in agent_text
+    assert "run: just agent::verify ci-required" in workflow_text
+
+
+def test_fast_dev_tests_clear_provider_env_for_deterministic_mock_gate() -> None:
+    script_text = (REPO_ROOT / "scripts" / "dev" / "run_pytest_standalone.sh").read_text(
+        encoding="utf-8"
+    )
+    dev_text = (JUST_DIR / "dev.just").read_text(encoding="utf-8")
+
+    assert "ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV" in script_text
+    assert 'KIMI_API_KEY=""' in script_text
+    assert 'MIMO_TP_KEY=""' in script_text
+    assert "ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1" in dev_text
 
 
 def test_verify_delegates_scenario_gates_to_harness() -> None:

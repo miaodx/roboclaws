@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 RUN_MATRIX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_ci_live_cleanup_matrix.py"
 RUN_CODEX_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 RUN_CLAUDE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
+ASSEMBLE_LIVE_PAGES_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "assemble_ci_live_pages.py"
 PAGES_INDEX_PATH = REPO_ROOT / "scripts" / "reports" / "write_pages_index.py"
 
 
@@ -1117,3 +1120,35 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
     html = out.read_text(encoding="utf-8")
     assert "molmo/live/kimi-k2.6/diagnostics/seed-7/diagnostics.html" in html
     assert "Kimi K2.6 diagnostics" in html
+
+
+def test_assemble_ci_live_pages_runs_without_site_packages(tmp_path: Path) -> None:
+    source_root = tmp_path / "molmo-live-src"
+    live_root = tmp_path / "site" / "molmo" / "live"
+    status = base_status(
+        entry_by_name("kimi-k2.6"),
+        seed=7,
+        generated_mess_count=5,
+        profile="world-labels",
+        task="帮我收拾这个房间",
+    )
+    status.update({"status": "skipped", "reason": "fixture"})
+    write_status(status_path_for_entry(source_root, "kimi-k2.6"), status)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-S",
+            str(ASSEMBLE_LIVE_PAGES_PATH),
+            str(source_root),
+            str(live_root),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (live_root / "live-report-manifest.json").is_file()
+    assert (live_root / "index.html").is_file()
