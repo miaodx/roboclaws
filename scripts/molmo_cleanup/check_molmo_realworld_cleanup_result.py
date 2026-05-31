@@ -38,6 +38,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_POLICY_TRACE_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
+    MAIN_CLEANUP_AGENT_PRODUCER,
     MODEL_DECLARED_OBSERVATION_SOURCE,
     MODEL_DECLARED_OBSERVATIONS_SCHEMA,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
@@ -61,6 +62,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     has_complete_semantic_sequence,
     successful_semantic_phases,
 )
+from roboclaws.molmo_cleanup.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
 
 
 def parse_args() -> argparse.Namespace:
@@ -77,11 +79,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-generated-mess-count", type=int, default=1)
     parser.add_argument("--require-agent-driven", action="store_true")
     parser.add_argument("--require-clean-agent-run", action="store_true")
+    parser.add_argument(
+        "--allow-partial-cleanup",
+        action="store_true",
+        help="Validate contract/report evidence without requiring cleanup success.",
+    )
     parser.add_argument("--require-openclaw-minimum", action="store_true")
     parser.add_argument("--require-robot-views", action="store_true")
     parser.add_argument("--require-advisory-scoring", action="store_true")
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
     parser.add_argument("--require-camera-model-policy", action="store_true")
+    parser.add_argument("--expect-visual-grounding-pipeline")
+    parser.add_argument("--require-visual-grounding-failure", action="store_true")
     parser.add_argument("--require-model-declared-observations", action="store_true")
     parser.add_argument("--min-model-declared-observations", type=int, default=1)
     parser.add_argument("--min-model-declared-actions", type=int, default=0)
@@ -153,11 +162,14 @@ def main() -> None:
             min_generated_mess_count=args.min_generated_mess_count,
             require_agent_driven=args.require_agent_driven,
             require_clean_agent_run=args.require_clean_agent_run,
+            allow_partial_cleanup=args.allow_partial_cleanup,
             require_openclaw_minimum=args.require_openclaw_minimum,
             require_robot_views=args.require_robot_views,
             require_advisory_scoring=args.require_advisory_scoring,
             require_raw_fpv_observations=args.require_raw_fpv_observations,
             require_camera_model_policy=args.require_camera_model_policy,
+            expect_visual_grounding_pipeline=args.expect_visual_grounding_pipeline,
+            require_visual_grounding_failure=args.require_visual_grounding_failure,
             require_model_declared_observations=args.require_model_declared_observations,
             min_model_declared_observations=args.min_model_declared_observations,
             min_model_declared_actions=args.min_model_declared_actions,
@@ -209,11 +221,14 @@ def _assert_result(
     min_generated_mess_count: int = 1,
     require_agent_driven: bool = False,
     require_clean_agent_run: bool = False,
+    allow_partial_cleanup: bool = False,
     require_openclaw_minimum: bool = False,
     require_robot_views: bool = False,
     require_advisory_scoring: bool = False,
     require_raw_fpv_observations: bool = False,
     require_camera_model_policy: bool = False,
+    expect_visual_grounding_pipeline: str | None = None,
+    require_visual_grounding_failure: bool = False,
     require_model_declared_observations: bool = False,
     min_model_declared_observations: int = 1,
     min_model_declared_actions: int = 0,
@@ -247,8 +262,10 @@ def _assert_result(
         and not require_clean_agent_run
     )
     enforce_success = (
-        require_clean_agent_run or not require_openclaw_minimum
-    ) and not raw_contract_only
+        (require_clean_agent_run or not require_openclaw_minimum)
+        and not raw_contract_only
+        and not allow_partial_cleanup
+    )
     semantic_success_gate = min_semantic_accepted_count is not None
     if enforce_success:
         assert data.get("sweep_coverage_rate", 0) >= 0.90, data
@@ -321,7 +338,7 @@ def _assert_result(
     _assert_planner_proof_requests(data, base, report_text)
     if require_openclaw_minimum:
         _assert_openclaw_minimum(data)
-    if require_clean_agent_run:
+    if require_clean_agent_run and not allow_partial_cleanup:
         _assert_clean_agent_run(data, min_complete_count=min_semantic_accepted_count)
     if require_robot_views:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
@@ -330,7 +347,13 @@ def _assert_result(
     if require_raw_fpv_observations:
         _assert_raw_fpv_observations(data, base, report_text)
     if require_camera_model_policy:
-        _assert_camera_model_policy(data, report_text)
+        _assert_camera_model_policy(
+            data,
+            base,
+            report_text,
+            expect_pipeline_id=expect_visual_grounding_pipeline,
+            require_failure=require_visual_grounding_failure,
+        )
     if require_model_declared_observations:
         _assert_model_declared_observations(
             data,
@@ -521,23 +544,36 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
         assert evidence.get("enabled") is True, evidence
         observed = agent_view.get("observed_objects") or []
         assert observed, agent_view
+        allowed_producer_types = {
+            SIMULATED_CAMERA_MODEL_PROVENANCE,
+            EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+            MAIN_CLEANUP_AGENT_PRODUCER,
+        }
         for item in observed:
             assert str(item.get("object_id", "")).startswith("observed_"), item
             assert item.get("perception_source") in {
                 CAMERA_MODEL_POLICY_MODE,
                 MODEL_DECLARED_OBSERVATION_SOURCE,
             }, item
-            assert item.get("producer_type") == SIMULATED_CAMERA_MODEL_PROVENANCE, item
+            assert item.get("producer_type") in allowed_producer_types, item
             assert item.get("model_provenance") in {
                 SIMULATED_CAMERA_MODEL_PROVENANCE,
+                EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+                MAIN_CLEANUP_AGENT_PRODUCER,
                 None,
             }, item
             assert item.get("source_observation_id"), item
             support = item.get("support_estimate") or {}
-            assert support.get("source") in {
-                CAMERA_MODEL_POLICY_MODE,
-                MODEL_DECLARED_OBSERVATION_SOURCE,
-            }, item
+            if support:
+                assert support.get("source") in {
+                    CAMERA_MODEL_POLICY_MODE,
+                    MODEL_DECLARED_OBSERVATION_SOURCE,
+                }, item
+            else:
+                assert item.get("producer_type") in {
+                    EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
+                    MAIN_CLEANUP_AGENT_PRODUCER,
+                }, item
             assert "is_misplaced" not in item, item
             assert "target_receptacle_id" not in item, item
         return
@@ -678,24 +714,73 @@ def _assert_raw_fpv_observations(
         assert fpv_path.stat().st_size > 0, (fpv_path, item)
 
 
-def _assert_camera_model_policy(data: dict[str, Any], report_text: str) -> None:
+def _assert_camera_model_policy(
+    data: dict[str, Any],
+    base: Path,
+    report_text: str,
+    *,
+    expect_pipeline_id: str | None = None,
+    require_failure: bool = False,
+) -> None:
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
     evidence = data.get("camera_model_policy_evidence") or (
         (data.get("agent_view") or {}).get("camera_model_policy_evidence") or {}
     )
     assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
     assert evidence.get("enabled") is True, evidence
-    assert evidence.get("model_provenance") == SIMULATED_CAMERA_MODEL_PROVENANCE, evidence
+    pipeline_id = str(evidence.get("visual_grounding_pipeline_id") or "sim")
+    pipeline_ids = [
+        str(item)
+        for item in (evidence.get("visual_grounding_pipeline_ids") or [pipeline_id])
+        if item
+    ]
+    if not pipeline_ids:
+        pipeline_ids = [pipeline_id]
+    if expect_pipeline_id is not None:
+        assert expect_pipeline_id in pipeline_ids, evidence
+        overlay_pipeline_id = expect_pipeline_id
+    else:
+        overlay_pipeline_id = next(
+            (item for item in pipeline_ids if item not in {"sim", "manual"}),
+            pipeline_id,
+        )
+    if set(pipeline_ids) == {"sim"}:
+        assert evidence.get("model_provenance") == SIMULATED_CAMERA_MODEL_PROVENANCE, evidence
+    else:
+        assert evidence.get("model_provenance") == "external_visual_grounding_service", evidence
     assert evidence.get("private_truth_included") is False, evidence
     assert int(evidence.get("event_count") or 0) >= 1, evidence
-    assert int(evidence.get("candidate_count") or 0) >= 1, evidence
+    failure_count = int(evidence.get("visual_grounding_failure_count") or 0)
+    if require_failure:
+        assert failure_count >= 1, evidence
+    else:
+        assert int(evidence.get("candidate_count") or 0) >= 1, evidence
     assert evidence.get("events"), evidence
+    for event in evidence.get("events") or []:
+        pipeline = event.get("visual_grounding_pipeline") or {}
+        assert pipeline.get("pipeline_id") in pipeline_ids, event
+        assert pipeline.get("schema") == "visual_grounding_pipeline_v1", event
+        assert pipeline.get("status") in {"ok", "failed"}, event
+        stages = pipeline.get("stages") or []
+        assert stages, event
+        for stage in stages:
+            assert stage.get("stage"), stage
+            assert "latency_ms" in stage, stage
     assert data.get("raw_fpv_observations"), data
     counts = data.get("tool_event_counts") or {}
     assert int(counts.get("declare_visual_candidates:request") or 0) >= 1, counts
     assert "Camera Model Policy" in report_text, report_text[:500]
     assert "Raw FPV Observations" in report_text, report_text[:500]
-    assert "simulated_camera_model" in report_text, report_text[:500]
+    assert overlay_pipeline_id in report_text, report_text[:500]
+    assert "Bearer " not in json.dumps(data), data
+    assert "Bearer " not in report_text, report_text[:500]
+    if overlay_pipeline_id not in {"sim", "manual"} and not require_failure:
+        _assert_external_visual_grounding_overlays(
+            data,
+            base,
+            report_text,
+            pipeline_id=overlay_pipeline_id,
+        )
 
 
 def _assert_model_declared_observations(
@@ -735,6 +820,64 @@ def _assert_model_declared_observations(
     )
     assert declaration_requests >= 1, counts
     assert "Model-Declared Observations" in report_text, report_text[:500]
+
+
+def _assert_external_visual_grounding_overlays(
+    data: dict[str, Any],
+    base: Path,
+    report_text: str,
+    *,
+    pipeline_id: str,
+) -> None:
+    evidence = data.get("model_declared_observation_evidence") or (
+        (data.get("agent_view") or {}).get("model_declared_observation_evidence") or {}
+    )
+    observations = data.get("model_declared_observations") or evidence.get("observations") or []
+    assert observations, data
+    bbox_candidates_with_source = 0
+    for item in observations:
+        pipeline = item.get("visual_grounding_pipeline") or {}
+        if str(pipeline.get("pipeline_id") or "") != pipeline_id:
+            continue
+        if item.get("producer_type") != EXTERNAL_VISUAL_GROUNDING_PROVENANCE:
+            continue
+        image_region = item.get("image_region") or {}
+        if image_region.get("type") != "bbox":
+            continue
+        source_image_path = _raw_fpv_image_path_for_observation(
+            data,
+            base,
+            observation_id=str(item.get("source_observation_id") or ""),
+        )
+        if source_image_path is None or not source_image_path.is_file():
+            continue
+        bbox_candidates_with_source += 1
+        overlay = str(item.get("visual_grounding_overlay") or "")
+        assert overlay, item
+        overlay_path = _resolve_path(base, overlay)
+        assert overlay_path.is_file(), (overlay_path, item)
+        assert overlay_path.stat().st_size > 0, (overlay_path, item)
+    if bbox_candidates_with_source:
+        assert "Overlay" in report_text, report_text[:500]
+
+
+def _raw_fpv_image_path_for_observation(
+    data: dict[str, Any],
+    base: Path,
+    *,
+    observation_id: str,
+) -> Path | None:
+    agent_view = data.get("agent_view") or {}
+    observations = data.get("raw_fpv_observations") or agent_view.get("raw_fpv_observations") or []
+    for item in observations:
+        if str(item.get("observation_id") or "") != observation_id:
+            continue
+        image_artifacts = item.get("image_artifacts") or {}
+        fpv = image_artifacts.get("fpv") or item.get("fpv_image")
+        if not fpv:
+            return None
+        return _resolve_path(base, str(fpv))
+    return None
 
 
 def _assert_planner_proof_attachment(

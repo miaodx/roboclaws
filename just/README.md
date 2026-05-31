@@ -145,12 +145,105 @@ just task::run molmo-cleanup codex
 just task::run molmo-cleanup codex smoke
 just task::run molmo-cleanup direct camera-raw
 just task::run molmo-cleanup direct camera-labels
+just task::run molmo-cleanup mcp-smoke camera-labels visual_grounding=fake-http
+just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
 just task::run ai2thor-nav openclaw
 just task::run photo-chairs codex
 just task::run territory vlm steps=20 agents=2
 just task::run coverage script output_dir=output/script/coverage-smoke
 just task::run molmo-planner-proof direct mode=dry-run
 ```
+
+For `pipeline=fake-http` visual-grounding runs, start the configurable service
+in fake mode first:
+
+```bash
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline fake-http
+```
+
+For named contract pipelines without real model weights, use the contract-fake
+dispatcher:
+
+```bash
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+  --pipeline contract-fake
+```
+
+For real proposer sidecar probes, install the optional model dependencies and
+weights explicitly in the sidecar environment, then start the same service in
+real mode:
+
+```bash
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-tiny \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline grounding-dino --adapter-mode real
+
+VISUAL_GROUNDING_YOLOE_MODEL_ID=yoloe-11s-seg.pt \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline yoloe --adapter-mode real
+```
+
+Hosted VLM refiner/direct-producer routes use the same sidecar binary and an
+OpenAI-compatible chat-completions endpoint. Configure the endpoint explicitly
+for local test servers, or use the MiMo defaults with `MIMO_TP_KEY`:
+
+```bash
+MIMO_TP_KEY=... \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline grounding-dino+mimo-v2-omni --adapter-mode real
+
+VISUAL_GROUNDING_QWEN_BASE_URL=http://127.0.0.1:8000/v1 \
+VISUAL_GROUNDING_QWEN_API_KEY=... \
+  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
+    --pipeline qwen3-vl-direct --adapter-mode real
+```
+
+To inspect the sidecar adapter slots without starting a service:
+
+```bash
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --list-adapters
+```
+
+The adapter catalog includes redacted `runtime` readiness for each slot. Local
+proposers report importable dependencies such as `torch`, `transformers`, and
+`ultralytics`; weights are verified only by a real adapter run. Hosted MiMo/Qwen
+routes report endpoint/auth readiness and auth mode without exposing raw keys or
+bearer tokens.
+
+Benchmark reports include API cost and memory telemetry slots. They are
+populated only when the configured sidecar reports stage usage/cost or memory
+metadata; otherwise the result records `not_reported_by_service`.
+The benchmark result also emits the capped end-to-end probe set: `sim`, the
+best proposer-only pipeline, the best proposer-plus-refiner pipeline, and at
+most one direct VLM pipeline.
+Promotion stays blocked until every selected non-sim pipeline has real or
+hosted stage provenance; mixed fake/real rows are still benchmark-shape
+evidence, not rollout evidence.
+`--require-success` on the benchmark checker means no pipeline failures; zero
+candidates remain a valid poor-recall result. Use `--require-candidates` only
+for fake smoke tests that should always emit candidates.
+
+To create a local path-backed RAW_FPV benchmark corpus from a stored cleanup run:
+
+```bash
+.venv/bin/python scripts/visual_grounding/build_visual_grounding_corpus_from_cleanup_run.py \
+  output/molmo/<run>/seed-7 \
+  --output harness/visual_grounding/local_raw_fpv_corpus.json
+```
+
+Real proposer pipeline ids such as `grounding-dino` and `yoloe` report
+`adapter_unavailable` or dependency failures unless the service is started with
+`--adapter-mode contract-fake` for contract tests or `--adapter-mode real` with
+installed sidecar dependencies and model weights. Hosted refiner/direct routes
+such as `grounding-dino+mimo-v2-omni`, `mimo-v2-omni-direct`, and
+`qwen3-vl-direct` report `missing_config` until their OpenAI-compatible
+endpoint and key/no-key local policy are configured. The adapter catalog records
+the optional sidecar extra, provider configuration slot, and current redacted
+runtime readiness for each target adapter. The older
+`scripts/visual_grounding/serve_fake_visual_grounding.py`
+entry point remains a compatibility shim for tests and local scripts that need
+the deterministic fake endpoint directly.
 
 Prompt mappings for agents:
 

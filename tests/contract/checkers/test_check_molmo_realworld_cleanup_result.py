@@ -929,6 +929,128 @@ def test_checker_can_require_camera_model_policy(tmp_path: Path) -> None:
     )
 
 
+def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: Path) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    raw_fpv = tmp_path / "robot_views" / "raw_fpv_001.jpg"
+    raw_fpv.parent.mkdir(parents=True)
+    raw_fpv.write_bytes(b"raw-fpv")
+    overlay = tmp_path / "visual_grounding" / "overlays" / "raw_fpv_001" / "candidate_001.jpg"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_bytes(b"overlay")
+    result = _external_visual_grounding_checker_result(
+        overlay="visual_grounding/overlays/raw_fpv_001/candidate_001.jpg"
+    )
+    result["model_declared_observations"][0]["perception_source"] = "model_declared_observation"
+    main_agent_retry = dict(result["model_declared_observations"][0])
+    main_agent_retry.update(
+        {
+            "object_id": "observed_002",
+            "producer_type": "main_cleanup_agent",
+            "producer_id": "cleanup_agent",
+            "model_provenance": None,
+            "support_estimate": None,
+            "grounding_status": "unresolved",
+            "grounding_confidence": 0.05,
+            "grounding_basis": "no public camera-context object matched",
+            "recovery_hint": "Reobserve from another waypoint.",
+        }
+    )
+    main_agent_retry.pop("visual_grounding_overlay", None)
+    main_agent_retry.pop("visual_grounding_pipeline", None)
+    manual_event = dict(result["camera_model_policy_evidence"]["events"][0])
+    manual_event.update(
+        {
+            "producer_type": "main_cleanup_agent",
+            "producer_id": "cleanup_agent",
+            "registered_observed_handles": ["observed_002"],
+            "visual_grounding_pipeline": {
+                "schema": "visual_grounding_pipeline_v1",
+                "pipeline_id": "manual",
+                "status": "ok",
+                "candidate_count": 1,
+                "unresolved_count": 0,
+                "duplicate_rate": 0.0,
+                "stages": [
+                    {
+                        "stage": "manual_declaration",
+                        "producer_id": "cleanup_agent",
+                        "model_id": "main_cleanup_agent",
+                        "status": "ok",
+                        "latency_ms": 0,
+                    }
+                ],
+            },
+        }
+    )
+    result["camera_model_policy_evidence"]["visual_grounding_pipeline_id"] = "manual"
+    result["camera_model_policy_evidence"]["visual_grounding_pipeline_ids"] = [
+        "fake-http",
+        "manual",
+    ]
+    result["camera_model_policy_evidence"]["events"].append(manual_event)
+
+    checker._assert_public_agent_view(
+        {
+            "contract": checker.REALWORLD_CONTRACT,
+            "forbidden_private_fields_absent": True,
+            "metric_map": {},
+            "fixture_hints": [],
+            "perception_mode": CAMERA_MODEL_POLICY_MODE,
+            "structured_detections_available": False,
+            "raw_fpv_observations": result["raw_fpv_observations"],
+            "camera_model_policy_evidence": result["camera_model_policy_evidence"],
+            "observed_objects": [
+                result["model_declared_observations"][0],
+                main_agent_retry,
+            ],
+        }
+    )
+    checker._assert_camera_model_policy(
+        result,
+        tmp_path,
+        "Camera Model Policy Raw FPV Observations fake-http manual Overlay",
+        expect_pipeline_id="fake-http",
+    )
+
+
+def test_checker_requires_external_visual_grounding_bbox_overlay(tmp_path: Path) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    raw_fpv = tmp_path / "robot_views" / "raw_fpv_001.jpg"
+    raw_fpv.parent.mkdir(parents=True)
+    raw_fpv.write_bytes(b"raw-fpv")
+    overlay = tmp_path / "visual_grounding" / "overlays" / "raw_fpv_001" / "candidate_001.jpg"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_bytes(b"overlay")
+    result = _external_visual_grounding_checker_result(
+        overlay="visual_grounding/overlays/raw_fpv_001/candidate_001.jpg"
+    )
+
+    checker._assert_camera_model_policy(
+        result,
+        tmp_path,
+        "Camera Model Policy Raw FPV Observations fake-http Overlay",
+        expect_pipeline_id="fake-http",
+    )
+
+
+def test_checker_rejects_external_visual_grounding_bbox_without_overlay(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    raw_fpv = tmp_path / "robot_views" / "raw_fpv_001.jpg"
+    raw_fpv.parent.mkdir(parents=True)
+    raw_fpv.write_bytes(b"raw-fpv")
+    result = _external_visual_grounding_checker_result(overlay="")
+
+    with pytest.raises(AssertionError):
+        checker._assert_camera_model_policy(
+            result,
+            tmp_path,
+            "Camera Model Policy Raw FPV Observations fake-http Overlay",
+            expect_pipeline_id="fake-http",
+        )
+
+
 def test_checker_rejects_unlabelled_camera_model_candidates(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -1178,6 +1300,101 @@ def test_checker_rejects_agent_view_private_leak(tmp_path: Path) -> None:
             expect_task=None,
             expect_backend="api_semantic_synthetic",
         )
+
+
+def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, object]:
+    pipeline = {
+        "schema": "visual_grounding_pipeline_v1",
+        "pipeline_id": "fake-http",
+        "status": "ok",
+        "stages": [
+            {
+                "stage": "proposer",
+                "producer_id": "fake-http",
+                "model_id": "fake",
+                "status": "ok",
+                "latency_ms": 1,
+            }
+        ],
+        "candidate_count": 1,
+        "unresolved_count": 0,
+        "duplicate_rate": 0.0,
+    }
+    observation = {
+        "schema": "model_declared_observation_v1",
+        "declaration_id": "declared_001",
+        "object_id": "observed_001",
+        "source_observation_id": "raw_fpv_001",
+        "waypoint_id": "wp_kitchen_01",
+        "room_id": "kitchen",
+        "category": "dish",
+        "target_fixture_id": "sink_01",
+        "target_fixture_category": "sink",
+        "source_fixture_id": "counter_01",
+        "evidence_note": "fake dish",
+        "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
+        "confidence": 0.8,
+        "producer_type": "external_visual_grounding_service",
+        "producer_id": "fake-http",
+        "grounding_status": "resolved",
+        "grounding_confidence": 0.8,
+        "grounding_basis": "single public camera-context object matched",
+        "recovery_hint": "",
+        "target_plausibility": {"status": "plausible"},
+        "actionability_status": "actionable",
+        "private_truth_included": False,
+        "visual_grounding_pipeline": pipeline,
+        "visual_grounding_overlay": overlay,
+    }
+    event = {
+        "schema": "model_declared_observations_v1",
+        "perception_mode": CAMERA_MODEL_POLICY_MODE,
+        "observation_id": "raw_fpv_001",
+        "waypoint_id": "wp_kitchen_01",
+        "room_id": "kitchen",
+        "producer_type": "external_visual_grounding_service",
+        "producer_id": "fake-http",
+        "candidate_count": 1,
+        "registered_observed_handles": ["observed_001"],
+        "visual_grounding_pipeline": pipeline,
+        "private_truth_included": False,
+    }
+    return {
+        "perception_mode": CAMERA_MODEL_POLICY_MODE,
+        "raw_fpv_observations": [
+            {
+                "observation_id": "raw_fpv_001",
+                "waypoint_id": "wp_kitchen_01",
+                "room_id": "kitchen",
+                "image_artifacts": {"fpv": "robot_views/raw_fpv_001.jpg"},
+            }
+        ],
+        "camera_model_policy_evidence": {
+            "schema": "camera_model_policy_v1",
+            "perception_mode": CAMERA_MODEL_POLICY_MODE,
+            "enabled": True,
+            "model_provenance": "external_visual_grounding_service",
+            "visual_grounding_pipeline_id": "fake-http",
+            "visual_grounding_pipeline_ids": ["fake-http"],
+            "visual_grounding_failure_count": 0,
+            "event_count": 1,
+            "candidate_count": 1,
+            "unresolved_count": 0,
+            "duplicate_rate": 0.0,
+            "events": [event],
+            "private_truth_included": False,
+        },
+        "model_declared_observation_evidence": {
+            "schema": "model_declared_observations_v1",
+            "observation_count": 1,
+            "resolved_count": 1,
+            "acted_count": 0,
+            "observations": [observation],
+            "private_truth_included": False,
+        },
+        "model_declared_observations": [observation],
+        "tool_event_counts": {"declare_visual_candidates:request": 1},
+    }
 
 
 def _robot_step(action: str) -> dict[str, object]:

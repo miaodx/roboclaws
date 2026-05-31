@@ -33,6 +33,36 @@ _Avoid_: Task, demo, scenario
 A public observed handle created from an agent's own interpretation of camera evidence.
 _Avoid_: Simulator detection, private target, local note
 
+**Candidate Cleanup Destination**:
+A public destination hint for an observed cleanup handle, derived from visible
+category evidence and public fixture affordances rather than private scoring truth.
+_Avoid_: Private target, target receptacle, acceptable destination set
+
+**Destination Hint Resolver**:
+A public semantic service that turns object-category evidence and fixture
+affordances into a Candidate Cleanup Destination.
+_Avoid_: Detector, private evaluator, hidden retargeting
+
+**External Visual Grounding Service**:
+A separately deployable Real Visual Grounding Producer reached across a service
+boundary so perception can run outside the cleanup runtime.
+_Avoid_: In-process model import, simulator oracle, MCP capability tool
+
+**Visual Grounding Service Failure**:
+A reported inability of an External Visual Grounding Service to return candidate
+evidence for public camera input.
+_Avoid_: Simulator-label fallback, hidden retry success, private evaluator repair
+
+**Visual Grounding Pipeline Failure Evidence**:
+Public run metadata that records a grounding pipeline failure, including stage,
+reason, timeout, and latency, without fabricating replacement candidates.
+_Avoid_: Contract validation error, silent fallback, private evaluator repair
+
+**Visual Grounding Diagnostic Evidence**:
+Report-only or benchmark-only evidence such as intermediate proposals, rejected
+candidates, overlays, stage latencies, and rejection reasons.
+_Avoid_: Agent view, MCP response payload, public cleanup candidate contract
+
 **Cleanup Worklist**:
 A public cleanup-progress view of observed handles, waypoint coverage, held-object
 state, and pending cleanup candidates derived only from agent-visible contract
@@ -47,6 +77,68 @@ _Avoid_: Cleanup Worklist, scorer state, MCP capability, private target truth
 **Camera Inference Producer**:
 The agent, model, detector, or perception service that interprets camera evidence into Model-Declared Observations.
 _Avoid_: Scorer, simulator oracle, execution backend
+
+**Real Visual Grounding Producer**:
+A Camera Inference Producer that consumes public robot-camera evidence and
+declares visually grounded cleanup candidates without simulator-only object truth.
+_Avoid_: Robot capability, cleanup tool, simulator detection replacement
+
+**Visual Grounding Producer Adapter**:
+A swappable adapter that binds one concrete detector, VLM, or hosted perception
+route to the External Visual Grounding Service request/response contract.
+_Avoid_: Contract profile, public MCP tool, destination policy
+
+**Visual Grounding Proposer**:
+A pipeline stage that proposes image regions and coarse categories from public
+camera evidence.
+_Avoid_: Final cleanup target, private evaluator, placement policy
+
+**Visual Grounding Refiner**:
+A pipeline stage that validates, rejects, relabels, or enriches proposed visual
+candidates using the full camera frame, crops, public hints, or model reasoning.
+_Avoid_: Region proposer, hidden scorer, destination resolver
+
+**Producer Provenance**:
+The declared origin of camera-derived cleanup candidates, such as the main
+agent, a simulator-state baseline, or a real visual grounding producer.
+_Avoid_: Contract profile, backend, tool name
+
+**Simulator-State Visible Detection Baseline**:
+A comparison lane where observed cleanup handles come from simulator state rather
+than from pixel inference over public robot-camera evidence.
+_Avoid_: Real visual grounding, model-declared observation, private scorer truth
+
+**Visual Grounding Quality**:
+The evidence quality of a camera-derived candidate's category and image region
+relative to public camera evidence.
+_Avoid_: Cleanup score, placement success, private target agreement
+
+**Destination Hint Quality**:
+The quality of a Candidate Cleanup Destination produced from public category and
+fixture-affordance evidence.
+_Avoid_: Visual grounding quality, private restoration score, hidden target match
+
+**Perception-Isolated Evaluation**:
+A comparison that holds waypoint sweep and cleanup routine behavior fixed while
+measuring candidate production, grounding status, duplicate rate, and latency.
+_Avoid_: End-to-end cleanup score, private scorer truth
+
+**Visual Grounding Benchmark Corpus**:
+A reusable set of public RAW_FPV observations, public waypoint/fixture context,
+and private evaluation labels used to compare grounding pipelines without
+running the full cleanup loop.
+_Avoid_: Live cleanup run, agent-facing training data, public target truth
+
+**Visual Grounding Benchmark Private Labels**:
+Private scoring labels for a Visual Grounding Benchmark Corpus, used only by the
+benchmark harness to score candidate recall, false positives, category quality,
+and region quality.
+_Avoid_: Agent input, MCP response, public cleanup hint, model training prompt
+
+**End-to-End Cleanup Evaluation**:
+A comparison of full cleanup runs after perception output has been consumed by
+navigation and manipulation capabilities.
+_Avoid_: Detector benchmark, isolated perception score
 
 **Active Camera Observation**:
 A public camera observation made after the agent deliberately changes a bounded camera orientation.
@@ -347,8 +439,53 @@ _Avoid_: Backend profile, task recipe
   what information they may expose.
 - A **Model-Declared Observation** must be traceable to public camera evidence
   and may become the handle used by manipulation **Capability Tools**.
+- A **Candidate Cleanup Destination** may guide cleanup selection, but it is not
+  private acceptable-destination truth.
+- A **Destination Hint Resolver** may add a **Candidate Cleanup Destination** to
+  observations produced by a **Camera Inference Producer**.
 - A **Camera Inference Producer** may be the main cleanup agent, a specialist
   model, a detector, or a robot perception service.
+- A **Real Visual Grounding Producer** is a **Camera Inference Producer**, not a
+  **Capability Tool**; it may support camera-label cleanup lanes by producing
+  **Model-Declared Observations** from public camera evidence.
+- A **Real Visual Grounding Producer** may provide visual category and image-region
+  evidence without choosing the **Candidate Cleanup Destination** itself.
+- An **External Visual Grounding Service** may implement a **Real Visual Grounding
+  Producer** when model dependencies, GPU placement, or deployment topology
+  should stay outside the cleanup runtime.
+- A **Visual Grounding Producer Adapter** should be replaceable under one HTTP
+  schema so Grounding DINO, Qwen3-VL, MiMo v2 Omni, or a fake producer can be
+  compared without changing the cleanup MCP contract.
+- A **Visual Grounding Producer Adapter** may implement a full producer or one
+  pipeline stage, such as a **Visual Grounding Proposer** or **Visual Grounding
+  Refiner**.
+- Grounding DINO, YOLOE, or a fixed/custom YOLO model may serve as a
+  **Visual Grounding Proposer**; Qwen3-VL or MiMo v2 Omni may serve as a
+  **Visual Grounding Refiner** and may also be tested as direct producers.
+- A **Visual Grounding Service Failure** should remain visible as producer
+  evidence and should not silently fall back to a **Simulator-State Visible
+  Detection Baseline**.
+- **Visual Grounding Pipeline Failure Evidence** should let the agent continue
+  sweeping public observations while reports/checkers preserve the failed
+  pipeline status.
+- **Visual Grounding Diagnostic Evidence** may appear in benchmark reports and
+  normal cleanup report diagnostics, but not in the agent-facing MCP response or
+  Agent View candidate list.
+- A cleanup **Contract Profile** describes the agent input shape, while
+  **Producer Provenance** describes where camera-derived candidates came from
+  inside that input shape.
+- A **Simulator-State Visible Detection Baseline** may serve as a control lane
+  for cleanup comparison, but it is not **Real Visual Grounding**.
+- **Perception-Isolated Evaluation** and **End-to-End Cleanup Evaluation** answer
+  different questions and should not be collapsed into one score.
+- A **Visual Grounding Benchmark Corpus** should be the first selector for
+  proposer/refiner pipelines; only promising pipelines need full end-to-end
+  cleanup probes.
+- **Visual Grounding Benchmark Private Labels** may live beside benchmark
+  fixtures under `harness/visual_grounding/`, but they must not be returned to
+  agents, grounding services, or normal cleanup reports.
+- **Visual Grounding Quality** and **Destination Hint Quality** should be
+  evaluated separately because different producers or services own them.
 - An **Active Camera Observation** is public perception evidence and may support
   a **Model-Declared Observation**.
 - Agibot G2 should use `head_color` as the default **Policy Observation
@@ -849,3 +986,7 @@ _Avoid_: Backend profile, task recipe
   `navigation_backend=agibot_gdk`,
   `primitive_provenance=agibot_gdk_normal_navi`, and normalized
   `reachability_status` values.
+- "target fixture" was used ambiguously for a public cleanup destination hint
+  and private evaluator truth. Resolved: use **Candidate Cleanup Destination**
+  for the public hint and reserve private target language for hidden scoring
+  truth.

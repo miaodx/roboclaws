@@ -1,12 +1,12 @@
 # Visual Grounding Perception Producer
 
-**Status:** Proposed reference plan; not yet ingested into `.planning/`
+**Status:** Research reference plan; not yet ingested into `.planning/`
 **Created:** 2026-05-25
 **Source:** ADR-0126 model-declared observations, `docs/plans/agibot-g2-cleanup-support-pilot.md`,
 `TODOS.md` "Async route perception during cleanup navigation", and a
 research round on open-vocabulary detectors and grounding-capable VLMs for
 edge deployment (RTX 3090, Jetson Thor).
-**Workflow:** Pre-GSD reference plan. Captures the design decision space for a
+**Workflow:** Research/reference input. Captures the design decision space for a
 dedicated perception service; concrete implementation should land its own
 GSD phase or split into bounded `docs/plans/` slices.
 

@@ -17,6 +17,7 @@
 # - just harness::molmo-planner-proof-bundle-runner  proof-request dry-run handoff
 # - just harness::molmo-planner-proof-bundle-execute-rerun  local GPU proof-bundle execution
 # - just harness::molmo-planner-manipulation-probe  ADR-0014 planner-backed manipulation proof gate
+# - just harness::molmo-visual-grounding-benchmark  perception-isolated HTTP grounding harness
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -472,6 +473,90 @@ molmo-planner-manipulation-probe output_dir="output/molmo-planner-manipulation-p
     .venv/bin/python scripts/molmo_cleanup/check_molmo_planner_manipulation_probe.py \
       --accept-blocked-capability \
       "${run_dir}/run_result.json"
+
+# ADR-0133 perception-isolated visual-grounding benchmark. This calls the
+# configured HTTP grounding service over fixed public RAW_FPV-style fixtures and
+# checks provenance, overlays, and private-label separation. Start the fake
+# service first for the CI-safe route:
+#   .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline fake-http
+molmo-visual-grounding-benchmark *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    pipeline="${VISUAL_GROUNDING_PIPELINE_ID:-fake-http}"
+    output_dir="output/visual-grounding-benchmark"
+    corpus="harness/visual_grounding/smoke_corpus.json"
+    base_url="${VISUAL_GROUNDING_BASE_URL:-}"
+    timeout_s="${VISUAL_GROUNDING_TIMEOUT_S:-20}"
+    include_private_label_details="false"
+    require_success="true"
+    require_candidates="false"
+    positional_pipeline_set="false"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        if [[ "$positional_pipeline_set" == "false" ]]; then
+          pipeline="$arg"
+          positional_pipeline_set="true"
+          continue
+        fi
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        pipeline|pipelines|output_dir|corpus|base_url|timeout_s|\
+        include_private_label_details|require_success|require_candidates)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      case "$key" in
+        pipeline|pipelines) pipeline="$value" ;;
+        output_dir) output_dir="$value" ;;
+        corpus) corpus="$value" ;;
+        base_url) base_url="$value" ;;
+        timeout_s) timeout_s="$value" ;;
+        include_private_label_details) include_private_label_details="$value" ;;
+        require_success) require_success="$value" ;;
+        require_candidates) require_candidates="$value" ;;
+      esac
+    done
+    stamp="$({{timestamp_cmd}})"
+    run_dir="${output_dir}/${stamp}"
+    mkdir -p "$run_dir"
+    echo "==> run dir: ${run_dir}"
+    cmd=(.venv/bin/python scripts/visual_grounding/run_visual_grounding_benchmark.py \
+      --corpus "$corpus" \
+      --output-dir "$run_dir" \
+      --pipeline "$pipeline" \
+      --timeout-s "$timeout_s")
+    if [[ -n "$base_url" ]]; then
+      cmd+=(--base-url "$base_url")
+    fi
+    if [[ "$include_private_label_details" == "true" ]]; then
+      cmd+=(--include-private-label-details)
+    fi
+    "${cmd[@]}"
+    check_cmd=(.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py \
+      "$run_dir")
+    if [[ "$pipeline" != *","* ]]; then
+      check_cmd+=(--expect-pipeline "$pipeline")
+    fi
+    if [[ "$require_success" == "true" ]]; then
+      check_cmd+=(--require-success)
+    fi
+    if [[ "$require_candidates" == "true" ]]; then
+      check_cmd+=(--require-candidates)
+    fi
+    if [[ "$include_private_label_details" == "true" ]]; then
+      check_cmd+=(--allow-private-label-details)
+    fi
+    "${check_cmd[@]}"
 
 # List task files available under harness/tasks/.
 list-tasks:
