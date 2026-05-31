@@ -12,11 +12,17 @@ cleanup/report parity now pass over `procthor-10k-val` scenes `val_0` and
 fallback, scene-index scenario generation selects real USD objects/receptacles
 when default selected handles do not bind, and the public cleanup worklist now
 prefers public USD scene-index fixture candidates over stale map-bundle fixture
-ids for scene-specific Isaac runs. Segmentation remains unavailable/blocked,
-and manipulation is still explicitly `isaac_semantic_pose`, not
-planner-backed.
+ids for scene-specific Isaac runs. Raw composed MolmoSpaces USD semantic AOV
+still collapses to `BACKGROUND`, but a flattened semantic USD with labels
+authored on final renderable descendants and
+`segmentation_semantic_filter=usd_prim_path` now proves selected-object
+segmentation evidence in runtime smoke and strict cleanup smoke on `val_1`
+and strict cleanup smoke on `val_0`. The current integration slice is explicit
+prepared-USD handoff and broader scene coverage, not default cleanup
+segmentation. Manipulation is still
+explicitly `isaac_semantic_pose`, not planner-backed.
 **Created:** 2026-05-27
-**Last updated:** 2026-05-28
+**Last updated:** 2026-05-29
 **Source:** MolmoSpaces renderer/backend research and Isaac Lab support
 discussion.
 **Workflow:** Pre-GSD plan reviewed through `intuitive-flow` autoplan intake;
@@ -89,6 +95,23 @@ contract tests.
 | 5 | Test strategy | Add CI-safe protocol/unit tests with a fake worker path, plus local-only real Isaac acceptance commands. | CI can prove routing, schema, provenance, and no-import boundaries; real renderer/GPU proof remains local-dev evidence. |
 | 6 | Report shape | Extend `run_result.json` with `isaac_runtime` diagnostics and segmentation status instead of changing agent-facing MCP fields. | Diagnostics belong in backend/report evidence; private or simulator segmentation must not leak into Agent View. |
 | 7 | Map source | Keep public map/fixture context from the existing map bundle until a separate USD map-projection parity gate exists. | Avoids silently changing the Runtime Metric Map contract while backend mapping is immature. |
+
+### Post-AOV Integration Decision
+
+On 2026-05-29, local GPU AOV probes narrowed the MolmoSpaces segmentation issue
+to raw composed USD semantics, not Isaac semantic AOV as a whole. The first
+integration path is a prepared-artifact boundary:
+
+- run `prepare_molmospaces_flattened_semantic_usd.py` before cleanup to produce
+  `scene_semantic.usda` and `summary.json`;
+- require the prep summary to be `ready`, with matched metadata entries and
+  renderable Mesh/Gprim labels;
+- pass the prepared USD explicitly into the local Isaac probe or cleanup smoke;
+- request segmentation with `segmentation_semantic_filter=usd_prim_path`;
+- keep online flatten/label prep out of cleanup backend init until multiple
+  scenes prove the prepared-artifact gate;
+- keep public `household-cleanup` defaults unchanged and keep this path on
+  maintainer/local-dev commands until the boundary is stable.
 
 ### Implementation Task Order
 
@@ -216,6 +239,32 @@ protocol:
   `--require-isaac-segmentation-evidence` reject missing tensors, missing bbox
   candidates, missing selected-USD matches, agent-facing leakage, and simulator
   label fallback.
+- The explicit prepared-USD handoff now reaches both local-dev entrypoints:
+  `molmo-isaac-runtime-smoke` and `molmo-isaac-cleanup-smoke` accept
+  `segmentation_semantic_filter=usd_prim_path`, and the cleanup CLI forwards
+  `--isaac-segmentation-semantic-filter` into `IsaacLabSubprocessBackend`
+  without enabling segmentation by default.
+- On 2026-05-29, the strict prepared-USD cleanup smoke passed on
+  `val_1`: `output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/`.
+  The checker accepted real Isaac runtime diagnostics, local prepared scene
+  USD loading, selected USD bindings, robot-view and snapshot provenance,
+  report-only segmentation evidence with
+  `semantic_filter=["usd_prim_path"]`, `candidate_bbox_count=24`,
+  `selected_usd_prim_match_count=2`, and cleanup/report parity with
+  `primitive_provenance=isaac_semantic_pose`.
+- On 2026-05-29, the same strict prepared-USD cleanup gate passed on `val_0`:
+  `output/isaaclab/cleanup-smoke/0529_val0_flattened_usdprimpath_cleanup/`.
+  The prepared-scene summary
+  `output/isaaclab/flattened-semantic-usd/0529_val0_flattened_semantic_scene/summary.json`
+  reported `status=ready`, `matched_entry_count=139`,
+  `renderable_labeled_prim_count=1124`, `mesh_labeled_prim_count=651`,
+  `missing_prim_count=0`, and no blockers. The cleanup checker accepted real
+  Isaac runtime diagnostics, local prepared scene USD loading, selected USD
+  bindings, robot-view and snapshot provenance, report-only segmentation
+  evidence with `semantic_filter=["usd_prim_path"]`,
+  `candidate_bbox_count=24`, `selected_usd_prim_match_count=1`, and
+  cleanup/report parity with `primitive_provenance=isaac_semantic_pose`,
+  completion status `success`, accepted count 1, and sweep coverage 1.0.
 - Real-mode snapshot calls now reuse the captured Isaac RGB frame instead of
   drawing placeholder images. `run_result.json` records `snapshot_artifacts`
   with provenance, static-capture status, and `semantic_pose_rendered=false`;
@@ -587,18 +636,24 @@ the returned tensors instead of crashing on our own parser.
   filter breadth.
 
 Remaining limitations after the passing MolmoSpaces USD smoke runs:
-segmentation is still recorded as `blocked_capability`. Default cleanup runs do
-not request segmentation tensors. Explicit local segmentation probes now show
-that `semantic_segmentation` and `instance_segmentation_fast` return tensors,
-but only background candidates with no selected-USD matches, even after
-scene-index labels are applied to the loaded USD prims. Meanwhile
-`instance_id_segmentation_fast` aborts inside Isaac/Omniverse before producing
-worker state;
+raw composed-scene segmentation remains a blocked capability. Default cleanup
+runs do not request segmentation tensors. Explicit local segmentation probes on
+the raw composed `val_1` scene show that `semantic_segmentation` and
+`instance_segmentation_fast` return tensors, but only background candidates
+with no selected-USD matches, even after scene-index labels are applied to the
+loaded USD prims. The proven route is to flatten the composed scene, author
+semantic labels on final renderable descendants, and request
+`segmentation_semantic_filter=usd_prim_path` against the prepared USD. That
+prepared route now passes strict runtime smoke and strict cleanup smoke on
+`val_1`, and strict cleanup smoke on `val_0`. Meanwhile
+`instance_id_segmentation_fast` still aborts inside Isaac/Omniverse before
+producing worker state;
 semantic pose edits are tracked in backend JSON state and snapshots rather than
 rendered back into the live USD stage; planner-backed/physics-backed
-manipulation is still out of scope for this slice; broader scene coverage should
-keep strict artifact gates enabled rather than relying on import success because
-Isaac/Omniverse runtime logs still include non-fatal USD/runtime warnings.
+manipulation is still out of scope for this slice; broader prepared-scene
+coverage should keep strict artifact gates enabled rather than relying on import
+success because Isaac/Omniverse runtime logs still include non-fatal USD/runtime
+warnings.
 
 ## Architecture
 
@@ -831,6 +886,11 @@ Acceptance:
 
 - FPV RGB remains available;
 - segmentation availability is recorded as explicit success or blocker;
+- MolmoSpaces semantic segmentation uses an explicit prepared USD artifact
+  first: `summary.json.status=ready`, matched metadata entries, renderable
+  Mesh/Gprim labels, and prepared scene handoff into the local Isaac probe;
+- prepared MolmoSpaces USD probes request `semantic_filter=["usd_prim_path"]`
+  so selected-object bbox rows can bind back to USD prim paths;
 - bbox/candidate overlays can be generated from Isaac camera evidence;
 - no fallback silently substitutes MuJoCo or simulator labels.
 - segmentation remains report/backend evidence or camera-label producer input,
@@ -866,6 +926,35 @@ just agent::harness molmo-isaac-renderer-comparison \
   resolution=1280x720
 ```
 
+Prepared MolmoSpaces semantic segmentation remains a maintainer/local-dev path
+until broader scene coverage passes. The first `val_1` cleanup proof passed at
+`output/isaaclab/cleanup-smoke/0529_val1_flattened_usdprimpath_cleanup_clean/`;
+the follow-up `val_0` proof passed at
+`output/isaaclab/cleanup-smoke/0529_val0_flattened_usdprimpath_cleanup/`.
+Repeat this flow for additional MolmoSpaces scenes before changing defaults:
+
+```bash
+.venv-isaaclab/bin/python scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py \
+  --scene-usd-path output/isaaclab/molmospaces-usd/scenes/procthor-10k-val/val_1/scene.usda \
+  --output-usd-path output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
+  --summary-output output/isaaclab/flattened-semantic-usd/val_1/summary.json
+
+just agent::harness molmo-isaac-runtime-smoke \
+  scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
+  require_local_scene_usd=true \
+  enable_segmentation=true \
+  require_segmentation_evidence=true \
+  segmentation_data_types=semantic_segmentation \
+  segmentation_semantic_filter=usd_prim_path
+
+just agent::harness molmo-isaac-cleanup-smoke \
+  scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1/scene_semantic.usda \
+  require_local_scene_usd=true \
+  require_segmentation_evidence=true \
+  segmentation_data_types=semantic_segmentation \
+  segmentation_semantic_filter=usd_prim_path
+```
+
 ## Risks
 
 | Risk | Impact | Mitigation |
@@ -873,6 +962,7 @@ just agent::harness molmo-isaac-renderer-comparison \
 | Isaac install/runtime is heavy or host-specific | Local setup takes longer than backend code | Keep isolated runtime and write diagnostics first |
 | MolmoSpaces USD metadata does not preserve every cleanup handle | Object/receptacle mapping gaps | Build `IsaacSceneIndex` with explicit unresolved rows |
 | RTX rendering memory pressure | 1280p or segmentation may fail | Keep 540x360 default and make 1280p comparison-only |
+| Implicit online USD prep hides failures | Cleanup errors become hard to separate from scene-prep errors | Use explicit prepared USD plus summary gate first; add online convenience only after multiple scenes pass |
 | Articulation or collision behavior differs from MuJoCo | Open/place semantics drift | Label phase-D as semantic pose and defer planner proof |
 | Report becomes backend-specific | Cleanup evidence gets harder to compare | Reuse existing report schema and add backend diagnostics only |
 

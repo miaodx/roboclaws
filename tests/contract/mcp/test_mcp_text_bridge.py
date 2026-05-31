@@ -37,11 +37,14 @@ def test_resolve_observe_delivery_auto_uses_text_bridge_for_text_only_mimo() -> 
         resolve_observe_delivery("mimo_openai/mimo-v2.5-pro", observe_mode="auto") == "text-bridge"
     )
     assert (
-        resolve_observe_delivery("mimo_anthropic/mimo-v2.5", observe_mode="auto") == "text-bridge"
+        resolve_observe_delivery("mimo_anthropic/mimo-v2.5-pro", observe_mode="auto")
+        == "text-bridge"
     )
 
 
 def test_resolve_observe_delivery_auto_keeps_images_for_image_capable_models() -> None:
+    assert resolve_observe_delivery("mimo_openai/mimo-v2.5", observe_mode="auto") == "images"
+    assert resolve_observe_delivery("mimo_anthropic/mimo-v2.5", observe_mode="auto") == "images"
     assert resolve_observe_delivery("mimo_openai/mimo-v2-omni", observe_mode="auto") == "images"
     assert resolve_observe_delivery("anthropic_kimi/k2p5", observe_mode="auto") == "images"
 

@@ -137,7 +137,7 @@ _MODELS: tuple[ModelMetadata, ...] = (
         "mimo",
         "mimo",
         ("MIMO_TP_KEY",),
-        False,
+        True,
         True,
         "mimo_openai/mimo-v2.5",
     ),

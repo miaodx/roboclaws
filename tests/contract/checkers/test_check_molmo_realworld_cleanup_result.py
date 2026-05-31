@@ -91,6 +91,78 @@ def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
     assert result["runtime_metric_map"]["observed_objects"]
 
 
+def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        map_mode="minimal",
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_minimal_map=True,
+    )
+    assert result["agent_view"]["metric_map"]["rooms"] == []
+    assert result["agent_view"]["fixture_hints"]["rooms"] == []
+    assert result["runtime_metric_map"]["static_map"]["fixtures"] == []
+    assert result["runtime_metric_map"]["generated_exploration_candidates"]
+    anchors = result["runtime_metric_map"]["public_semantic_anchors"]
+    assert anchors
+    assert any(item["anchor_type"] == "observation_waypoint" for item in anchors)
+    assert any(item["anchor_type"] in {"fixture", "receptacle"} for item in anchors)
+
+
+def test_checker_allows_semantic_sweep_robot_timeline_without_cleanup_actions(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        map_mode="minimal",
+    )
+    robot_views = tmp_path / "robot_views"
+    robot_views.mkdir()
+    for name in ("scene.fpv.png", "scene.chase.png", "scene.map.png", "scene.verify.png"):
+        (robot_views / name).write_bytes(b"placeholder")
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
+    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["artifacts"]["robot_views"] = str(robot_views)
+    result["robot_view_steps"] = [
+        _scene_context_robot_step("before"),
+        _scene_context_robot_step("after"),
+    ]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_minimal_map=True,
+        require_robot_views=True,
+    )
+    assert not any(
+        step.get("action", "").startswith(("pick ", "place "))
+        for step in result["robot_view_steps"]
+    )
+
+
 def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -107,6 +179,32 @@ def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None
             expect_backend="api_semantic_synthetic",
             min_generated_mess_count=5,
             require_runtime_metric_map=True,
+        )
+
+
+def test_checker_rejects_promoted_runtime_semantic_anchor(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        map_mode="minimal",
+    )
+    result["runtime_metric_map"]["public_semantic_anchors"][0]["promotion_status"] = "promoted"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_semantic_sweep=True,
+            require_minimal_map=True,
         )
 
 
@@ -203,6 +301,146 @@ def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
         require_waypoint_honesty=True,
         require_real_robot_alignment=True,
     )
+
+
+def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        map_mode="minimal",
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+
+
+def test_checker_allows_minimal_map_waypoint_honesty_for_survey_first_cleanup(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+    trace = result["cleanup_policy_trace"]
+    assert trace["waypoint_source"] == "generated_exploration_candidate"
+    assert trace["loop_style"] == "survey_first_cleanup_loop"
+    assert trace["first_cleanup_before_full_survey"] is False
+    assert trace["placed_object_count"] == 5
+    assert trace["post_place_observe_count"] >= trace["placed_object_count"]
+
+
+def test_checker_allows_minimal_map_waypoint_honesty_for_online_interleaved_cleanup(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    trace = result["cleanup_policy_trace"]
+    trace["loop_style"] = "interleaved_cleanup_loop"
+    trace["first_cleanup_before_full_survey"] = True
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+
+
+def test_checker_allows_minimal_map_without_semantic_sweep_metadata(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    result["semantic_sweep"] = None
+    result["semantic_sweep_mode"] = None
+    result["agent_metric_mode"] = "minimal"
+    result["agent_runtime_minimal"] = True
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+
+
+def test_checker_rejects_minimal_interleaved_cleanup_without_full_sweep(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    trace = result["cleanup_policy_trace"]
+    trace["loop_style"] = "interleaved_cleanup_loop"
+    trace["first_cleanup_before_full_survey"] = True
+    trace["observed_waypoint_count"] = max(0, int(trace["total_waypoints"]) - 1)
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_minimal_map=True,
+            require_waypoint_honesty=True,
+        )
 
 
 def test_checker_accepts_isaac_selected_bindings_when_rows_match_scene_index(
@@ -578,6 +816,68 @@ def test_checker_accepts_isaac_semantic_pose_paths_when_rows_match_scene_index(
         require_segmentation_evidence=False,
         require_snapshot_provenance=False,
     )
+
+
+def test_checker_accepts_isaac_semantic_pose_rerendered_robot_views(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state_with_refreshed_robot_views()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_robot_view_step(
+        data,
+        tmp_path,
+        capture_method="isaac_lab_camera_rgb_semantic_pose_robot_views",
+        semantic_pose_state_refreshed=True,
+    )
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=True,
+        require_semantic_pose=True,
+        require_robot_view_provenance=True,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+    )
+
+
+def test_checker_rejects_refreshed_isaac_semantic_pose_without_refreshed_views(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    semantic_pose_state = _isaac_semantic_pose_state_with_refreshed_robot_views()
+    data = _isaac_runtime_result(
+        tmp_path,
+        scene_bindings,
+        semantic_pose_state=semantic_pose_state,
+    )
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_robot_view_step(data, tmp_path)
+
+    with pytest.raises(AssertionError):
+        checker._assert_isaac_runtime(
+            data,
+            tmp_path,
+            _isaac_report_text(scene_bindings, semantic_pose_state=semantic_pose_state),
+            require_real_runtime=False,
+            require_scene_loaded=False,
+            require_selected_usd_bindings=True,
+            require_semantic_pose=True,
+            require_robot_view_provenance=True,
+            require_segmentation_evidence=False,
+            require_snapshot_provenance=False,
+        )
 
 
 def test_checker_rejects_isaac_semantic_pose_object_path_drift_from_scene_index(
@@ -2097,6 +2397,24 @@ def _robot_step(action: str) -> dict[str, object]:
     }
 
 
+def _scene_context_robot_step(action: str) -> dict[str, object]:
+    return {
+        "action": action,
+        "room_outline_count": 1,
+        "views": {
+            "fpv": "robot_views/scene.fpv.png",
+            "chase": "robot_views/scene.chase.png",
+            "map": "robot_views/scene.map.png",
+            "verify": "robot_views/scene.verify.png",
+        },
+        "focus": {
+            "has_focus": False,
+            "fpv_visibility": {"status": "ok"},
+            "visibility": {"status": "ok"},
+        },
+    }
+
+
 def _trace_response(tool: str, response: dict[str, object]) -> dict[str, object]:
     return {"event": "response", "tool": tool, "response": response}
 
@@ -2251,6 +2569,8 @@ def _add_isaac_robot_view_step(
     base: Path,
     *,
     blank_key: str = "",
+    capture_method: str = "isaac_lab_camera_rgb_static_robot_views",
+    semantic_pose_state_refreshed: bool = False,
 ) -> None:
     view_dir = base / "isaac_robot_views"
     view_dir.mkdir(parents=True, exist_ok=True)
@@ -2287,6 +2607,10 @@ def _add_isaac_robot_view_step(
             "views": views,
         },
     ]
+    for step in data["robot_view_steps"]:
+        provenance = {key: f"{capture_method}:{key}" for key in views}
+        provenance["semantic_pose_state_refreshed"] = semantic_pose_state_refreshed
+        step["view_provenance"] = provenance
 
 
 def _add_isaac_snapshot_artifacts(
@@ -2455,6 +2779,19 @@ def _isaac_semantic_pose_state() -> dict[str, object]:
             },
         ],
     }
+
+
+def _isaac_semantic_pose_state_with_refreshed_robot_views() -> dict[str, object]:
+    state = _isaac_semantic_pose_state()
+    state["rendered_to_usd"] = True
+    state["semantic_pose_view_capture"] = {
+        "schema": "isaac_semantic_pose_robot_view_capture_v1",
+        "capture_method": "isaac_lab_camera_rgb_semantic_pose_robot_views",
+        "rendered_to_usd": True,
+        "scene_usd": "loaded_scene.usda",
+        "render_steps": 4,
+    }
+    return state
 
 
 def _isaac_semantic_pose_trace_events(

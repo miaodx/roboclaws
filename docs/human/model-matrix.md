@@ -60,6 +60,15 @@ cosmetic one**.
 > MiMo variants accept `max_tokens=32768` (one even accepts 65 536) without
 > error. Set to 32 768 to match Kimi — a single tool-call round-trip with a
 > long rationale fits comfortably.
+>
+> Image input note: `mimo-v2.5` was live-probed on 2026-05-28 with both the
+> mify OpenAI-compatible route (`xiaomi/mimo-v2.5`, chat and responses) and
+> the mify Anthropic-compatible route
+> (`https://api.llm.mioffice.cn/anthropic`, `xiaomi/mimo-v2.5`). Both accepted
+> a PNG image and described image contents. The native MiMo OpenAI-compatible
+> route (`mimo-v2.5`, chat) and native MiMo Anthropic-compatible route
+> (`mimo-v2.5`) also accepted image blocks. Keep `mimo-v2.5-pro` text-only
+> until it is separately probed.
 
 ## Provider endpoints (for live probing)
 

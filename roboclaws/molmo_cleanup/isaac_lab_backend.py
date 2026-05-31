@@ -57,6 +57,7 @@ class IsaacLabSubprocessBackend:
         scene_usd_path: Path | None = None,
         enable_segmentation: bool | None = None,
         segmentation_data_types: tuple[str, ...] | None = None,
+        segmentation_semantic_filter: tuple[str, ...] | None = None,
         runtime_mode: str | None = None,
     ) -> None:
         self.run_dir = run_dir
@@ -101,12 +102,24 @@ class IsaacLabSubprocessBackend:
             segmentation_data_types = tuple(
                 item.strip() for item in env_data_types.split(",") if item.strip()
             )
+        if segmentation_semantic_filter is None:
+            env_semantic_filter = os.environ.get(
+                "ROBOCLAWS_ISAACLAB_SEGMENTATION_SEMANTIC_FILTER",
+                "",
+            )
+            segmentation_semantic_filter = tuple(
+                item.strip() for item in env_semantic_filter.split(",") if item.strip()
+            )
         if segmentation_data_types:
+            enable_segmentation = True
+        if segmentation_semantic_filter:
             enable_segmentation = True
         if enable_segmentation:
             init_args.append("--enable-segmentation")
             for data_type in segmentation_data_types or ():
                 init_args.extend(["--segmentation-data-type", data_type])
+            for instance_name in segmentation_semantic_filter or ():
+                init_args.extend(["--segmentation-semantic-filter", instance_name])
         result = self._run_worker("init", *init_args)
         self.backend = ISAACLAB_SUBPROCESS_BACKEND
         self.scenario = _scenario_from_worker_payload(
@@ -154,6 +167,16 @@ class IsaacLabSubprocessBackend:
         raw = self._read_state().get("semantic_pose_state") or {}
         return dict(raw) if isinstance(raw, dict) else {}
 
+    @property
+    def current_mapping_gaps(self) -> list[dict[str, Any]]:
+        raw = self._read_state().get("mapping_gaps") or []
+        return [dict(item) for item in raw if isinstance(item, dict)]
+
+    @property
+    def semantic_pose_view_capture(self) -> dict[str, Any]:
+        raw = self._read_state().get("semantic_pose_view_capture") or {}
+        return dict(raw) if isinstance(raw, dict) else {}
+
     def scene_index_artifact_payload(self) -> dict[str, Any]:
         """Return report-only USD scene index evidence without private scoring truth."""
 
@@ -172,7 +195,7 @@ class IsaacLabSubprocessBackend:
             "scene_index_diagnostics": self.scene_index_diagnostics,
             "scene_binding_diagnostics": self.scene_binding_diagnostics,
             "segmentation": self.segmentation,
-            "mapping_gaps": self.mapping_gaps,
+            "mapping_gaps": self.current_mapping_gaps,
             "requested_generated_mess_count": self.requested_generated_mess_count,
             "generated_mess_count": self.generated_mess_count,
             "agent_facing": False,

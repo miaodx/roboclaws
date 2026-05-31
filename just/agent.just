@@ -75,7 +75,7 @@ run task driver mode="" *overrides:
         agent_souls|agents|backend|baseline|candidate|cap|generated_mess_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
-        map_bundle|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
+        map_bundle|map_mode|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
         profile|runtime_map_prior|scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget)
@@ -318,12 +318,14 @@ run task driver mode="" *overrides:
         if [[ "$task" == "semantic-map-build" ]]; then
           semantic_sweep="on"
         fi
+        map_mode="$(get map_mode rich)"
         runtime_map_prior="$(get runtime_map_prior "")"
         backend="$(get backend auto)"
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
           "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \
-          "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend"
+          "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend" \
+          "$map_mode"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

@@ -8,27 +8,14 @@ stay short. Put implementation plans in `docs/plans/`, current status in
 
 ## Maintenance Contract
 
-Future agents should maintain this file as a compact context primer, not as a
-planning log.
-
-- Target size: keep this file under about 350 lines and 18KB. If it approaches
-  400 lines or 25KB, reduce or split before adding more.
-- Add content only when it changes durable vocabulary, public/private
-  boundaries, task/skill/profile layering, safety gates, or real-robot proof
-  claims.
-- Do not add progress notes, run results, implementation plans, command logs,
-  benchmark details, or historical discussion transcripts.
-- Prefer rewriting or merging an existing term over appending a near-duplicate.
-- Keep each term to one definition and one `_Avoid_` line unless a boundary
-  truly requires more.
-- Move detailed topic material to the right owner doc and link it from
-  **Pointers**: `docs/human/**` for human design, `docs/plans/**` for plans,
-  `docs/status/active/**` for active evidence, and `docs/adr/**` for durable
-  decisions.
-- When a grilling session resolves terminology, update this file immediately,
-  then rerun a saturation audit before asking more questions.
-- Read this file selectively when possible: search for the relevant term or
-  section instead of loading it as a general progress history.
+Maintain this as a compact context primer, not a planning log. Keep it under
+about 350 lines and 18KB; if it approaches 400 lines or 25KB, reduce or split.
+Add only durable vocabulary, boundaries, task/skill/profile layering, safety
+gates, or real-robot proof claims; never progress notes, command logs, run
+results, benchmark detail, or historical transcripts. Prefer merging terms over
+adding near-duplicates, keep detailed material in `docs/human/**`,
+`docs/plans/**`, `docs/status/active/**`, or `docs/adr/**`, and rerun a
+saturation audit after glossary updates.
 
 ## Current Architecture Vocabulary
 
@@ -84,28 +71,50 @@ _Avoid_: capability profile, skill, task prompt
 
 **Navigation Map Artifact**:
 A reusable static source of navigation geometry and public semantic annotations.
-It may be generated from simulator geometry or provided by a physical robot map
-workflow.
+Rich variants may include rooms, fixtures, inspection waypoints, and driveable
+links; minimal variants may contain only occupancy/free-space geometry, current
+pose, frame metadata, and safety bounds.
 _Avoid_: runtime observation memory, private scene graph, raw hidden truth
 
+**Minimal Navigation Map Artifact**:
+An intentionally sparse Navigation Map Artifact aligned with raw robot maps:
+occupancy/free-space geometry plus localization and safety context, without
+preauthored room, fixture, or object semantics. It is the preferred real-robot
+starting point; rich authored bundles are dev/test or explicit aids.
+_Avoid_: complete semantic map, arbitrary coordinate freedom, private scene graph
+
 **Metric Map Projection**:
-The agent-facing JSON view derived from a Navigation Map Artifact.
+The agent-facing JSON view derived from a Navigation Map Artifact. For minimal
+maps, it may expose sparse navigation geometry and generated exploration
+candidates instead of authored rooms, fixtures, or inspection waypoints.
 _Avoid_: raw occupancy map, independent map source, private backend metadata
 
 **Runtime Metric Map**:
 The current-run Metric Map Projection after public runtime evidence is added:
-observed object handles, loaded priors, and map update candidates.
+observed object handles, loaded priors, generated waypoint/area evidence, room
+or fixture candidates, public semantic anchors, and map update candidates.
 _Avoid_: source map artifact, hidden mutable global map, private target truth
+
+**Public Semantic Anchor**:
+A public-evidence-backed fixed or semi-static place the robot can reason about:
+room area, surface, receptacle, fixture, or observation waypoint, with stable id,
+label/category, pose or waypoint link, affordances, provenance, and confidence.
+Semantic-map-build may create these anchors from observations over a minimal
+source map; cleanup may use fixture/receptacle anchors as destination hints.
+_Avoid_: small movable object, private acceptable destination, unreviewed source-map mutation
 
 **Semantic Map Build Task**:
 A first-class Runnable Task that navigates and observes to produce a Runtime
 Metric Map snapshot for later robot tasks. It selects a map-building skill,
-requires household world capabilities, and disables manipulation.
+requires household world capabilities, and disables manipulation. In the
+minimal-map mainline, it turns sparse maps into cleanup-usable public evidence.
 _Avoid_: cleanup profile, private target discovery, source-map mutation, MCP tool
 
 **Household Cleanup Task**:
 A first-class Runnable Task that consumes household world evidence and combines
-it with manipulation capability requirements to tidy movable objects.
+it with manipulation capability requirements to tidy movable objects. It may use
+current fixture/receptacle anchors as destination hints; older movable-object
+priors need current-run confirmation before pick/place.
 _Avoid_: source-map builder, semantic-map owner, capability profile
 
 **Household World Capability Profile**:
@@ -126,8 +135,16 @@ _Avoid_: static fixture, current-run confirmed handle, private generated mess
 
 **Map Update Candidate**:
 A public-evidence-backed proposed update to static map semantics, usually for a
-large fixture or semi-static object.
+large fixture or semi-static object. It may be useful in the current Runtime
+Metric Map before a later review workflow writes source-map semantics.
 _Avoid_: automatic source-map mutation, small movable cleanup object
+
+**Generated Exploration Candidate**:
+A planner-generated safe navigation or observation candidate derived from public
+free space, safety bounds, and pose. First project candidates as generated
+waypoints for `navigate_to_waypoint`; add a tool only if later evidence shows
+waypoint projection is unclear. Physical execution still needs robot gates.
+_Avoid_: agent-created arbitrary coordinate goal, hidden route plan
 
 **Semantic Sweep Mode**:
 An internal no-cleanup-action execution mode behind `semantic-map-build`. It
@@ -273,25 +290,24 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
     -> Backend Variant
   ```
 
-- Runnable Tasks own command names, parameters, reports, and acceptance gates.
-- Agent Skills own prompt strategy, loops, scripts, examples, recovery, and
-  trace-preserving composition.
-- Capability Profiles are reusable environments required by skills. Compose
-  profiles by requirement; do not copy one profile into another task-specific
-  profile.
+- Runnable Tasks own command names, parameters, reports, and acceptance gates;
+  Agent Skills own strategy, recovery, scripts, examples, and trace-preserving
+  composition; Capability Profiles are reusable environments required by skills.
 - MCP tools expose bounded robot capabilities, not whole user tasks such as
-  `cleanup_room()`.
-- `semantic-map-build` is a Runnable Task, not a profile or MCP tool.
-- `household-cleanup` is a Runnable Task and a consumer of household world
-  evidence, not the owner of the semantic-map abstraction.
+  `cleanup_room()`. `semantic-map-build` and `household-cleanup` are Runnable
+  Tasks; cleanup consumes household world evidence and does not own mapping.
 - `household_world_v1` should exclude manipulation tools such as `pick`,
   `place`, `open_receptacle`, and `close_receptacle`.
 - Small movable cleanup objects belong in runtime observations/worklists, not
   static map semantics.
+- Minimal-map simulator runs should not receive richer public semantics than
+  the equivalent physical robot map path would provide.
+- Generated exploration candidates may seed semantic-map-build sweeps, but they
+  are not source-map semantics and are not direct permission for arbitrary robot
+  motion.
 - Runtime observations and map update candidates must not silently mutate the
-  source Navigation Map Artifact.
-- Observed Object Priors should be confirmed in the current run before they
-  become actionable cleanup handles.
+  source Navigation Map Artifact. Observed Object Priors need current-run
+  confirmation before becoming actionable cleanup handles.
 - Private generated mess sets, acceptable destinations, hidden target lists,
   private manifests, and scorer truth must not enter public profile metadata,
   Agent View, skill prompts, or MCP responses.
@@ -314,19 +330,22 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 
 ## Resolved Ambiguities
 
-- **Task vs skill**: use Runnable Task for public run surfaces; use Agent Skill
-  for reusable strategy.
-- **Profile vs task**: profiles describe reusable capability environments, not
-  task identity.
-- **Composition vs copy**: tasks and skills require multiple profiles/modules;
-  profiles should not duplicate another profile's tools just to form a bundle.
+- **Task/skill/profile**: use Runnable Task for public run surfaces, Agent Skill
+  for reusable strategy, and Capability Profile for reusable environments.
+  Compose profiles by requirement; do not copy one into a task-specific bundle.
 - **Metric map source vs runtime map**: Navigation Map Artifact is the source;
   Metric Map Projection is the public static view; Runtime Metric Map is the
   current-run enriched view.
+- **Rich vs minimal maps**: rich map bundles may contain authored public
+  semantics; minimal map artifacts intentionally start near raw occupancy maps
+  so online/offline semantic-map-build can enrich them through public evidence.
+  The real-robot mainline starts from minimal maps, not rich authored semantics.
 - **Semantic map build vs cleanup**: semantic-map-build creates world evidence;
-  cleanup consumes it.
-- **Simulator vs hardware proof**: simulator or dry-run evidence is useful, but
-  it is not physical execution proof.
+  cleanup consumes it. Simulator or dry-run evidence is useful, but it is not
+  physical execution proof.
+- **Anchors vs priors**: fixture/receptacle Public Semantic Anchors in a
+  current Runtime Metric Map can guide cleanup destinations; older movable
+  priors must be confirmed by current camera evidence before manipulation.
 - **Nav2 vs Agibot**: Nav2 and Agibot are backend variants/provenance choices
   when public tool shape remains stable.
 - **Recorded vs verified waypoint**: an operator-recorded waypoint is not
@@ -344,12 +363,10 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 
 ## Pointers
 
-- Human architecture: `ARCHITECTURE.md`
+- Architecture/current focus: `ARCHITECTURE.md`, `STATUS.md`
 - Skill/profile design: `docs/human/mcp-skills-and-semantic-profiles.md`
-- Current focus: `STATUS.md`
-- Auto semantic map build plan: `docs/plans/auto-semantic-map-build.md`
-- Visual grounding plan/status: `docs/plans/molmospaces-http-visual-grounding-service.md`,
-  `docs/status/active/molmospaces-http-visual-grounding-service.md`
-- Agibot and physical robot details: `docs/plans/agibot-g2-cleanup-support-pilot.md`,
+- Map/perception plans: `docs/plans/auto-semantic-map-build.md`,
+  `docs/plans/molmospaces-http-visual-grounding-service.md`
+- Agibot/physical details: `docs/plans/agibot-g2-cleanup-support-pilot.md`,
   `docs/plans/molmospaces-agibot-contract-rehearsal.md`,
   `docs/status/active/real-robot-nav2-cleanup-pilot.md`

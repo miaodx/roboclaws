@@ -216,7 +216,8 @@ def test_code_agent_mcp_server_receives_selected_model_for_observe_auto() -> Non
     assert ('roboclaws_code_agent_prepare_mcp_env "$claude_model" "$claude_provider"') in code_text
     assert ('roboclaws_code_agent_prepare_mcp_env "$codex_model" "$codex_provider"') in code_text
     assert 'export MODEL="$model"' in env_text
-    assert "mimo-v2.5|mimo-v2.5-pro" in env_text
+    assert "mimo-v2.5-pro" in env_text
+    assert "mimo-v2.5|mimo-v2.5-pro" not in env_text
     assert "MCP observe(auto) will not inline raw images" in env_text
 
 

@@ -206,6 +206,31 @@ def test_apple2apple_grid_accepts_prior_artifact_when_setup_exits_nonzero(
     assert "exited with status 1" in row["reason"]
 
 
+def test_apple2apple_grid_marks_explicit_prior_as_setup_evidence(tmp_path: Path) -> None:
+    run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_explicit_prior")
+    run_dir = tmp_path / "prior" / "0528_1200" / "seed-7"
+    run_dir.mkdir(parents=True)
+    prior_path = run_dir / "runtime_metric_map.json"
+    prior_path.write_text("{}", encoding="utf-8")
+    (run_dir / "report.html").write_text("<html>prior</html>", encoding="utf-8")
+    (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
+    grid = build_apple2apple_test_grid(
+        output_dir=tmp_path / "grid",
+        task="clean",
+        runtime_map_prior=str(prior_path),
+    )
+
+    run_grid._mark_explicit_runtime_map_prior(grid, str(prior_path))
+
+    row = grid["setup_rows"][0]
+    assert row["status"] == "artifact_success"
+    assert row["runtime_map_prior"] == str(prior_path)
+    assert row["run_dir"] == str(run_dir)
+    assert row["report_path"] == str(run_dir / "report.html")
+    assert row["run_result_path"] == str(run_dir / "run_result.json")
+    assert "explicit runtime_map_prior" in row["reason"]
+
+
 def test_apple2apple_grid_execute_waits_for_detached_live_status(tmp_path: Path) -> None:
     run_grid = _load_module(RUN_GRID_PATH, "run_molmo_apple2apple_test_grid_live_wait")
     output_dir = tmp_path / "grid"

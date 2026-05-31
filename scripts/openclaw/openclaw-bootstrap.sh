@@ -335,14 +335,14 @@ JSON
         case "$MIMO_PROVIDER_MODE" in
             openai)
                 # OpenAI-compatible endpoint. Two image-processing modes:
-                #   direct vision  — main model is mimo-v2-omni (vision+tools); IMAGE_MODEL=same.
-                #   IMAGE_MODEL    — main model is text-only (mimo-v2.5-pro or mimo-v2.5);
+                #   direct vision  — main model is image-capable (mimo-v2-omni or mimo-v2.5).
+                #   IMAGE_MODEL    — main model is text-only (mimo-v2.5-pro);
                 #                    IMAGE_MODEL auto-set to mimo_openai/mimo-v2-omni so the
                 #                    Gateway's image tool has a vision-capable model.
                 MODEL="${MODEL:-mimo_openai/mimo-v2-omni}"
                 # When the caller picked a text-only MiMo model, auto-delegate images to omni.
                 case "$MODEL" in
-                    *mimo-v2.5-pro*|*mimo-v2.5)
+                    *mimo-v2.5-pro*)
                         IMAGE_MODEL="${IMAGE_MODEL:-mimo_openai/mimo-v2-omni}"
                         ;;
                 esac
@@ -358,7 +358,7 @@ JSON
   "models": [
     {"id":"mimo-v2-omni","name":"MiMo V2 Omni (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":262144,"maxTokens":32768},
     {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768},
-    {"id":"mimo-v2.5","name":"MiMo V2.5 (text+tools)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
   ]
 }
 JSON
@@ -379,7 +379,7 @@ JSON
   "headers": {"anthropic-version": "2023-06-01"},
   "models": [
     {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (anthropic)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768},
-    {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
+    {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
   ]
 }
 JSON

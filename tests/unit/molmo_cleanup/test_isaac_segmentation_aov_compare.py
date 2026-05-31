@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from scripts.isaac_lab_cleanup.compare_isaac_segmentation_aov import compare_states
+from scripts.isaac_lab_cleanup.summarize_isaac_aov_matrix import summarize_entries
 
 
 def test_compare_states_identifies_candidate_tensor_collapse(tmp_path: Path) -> None:
@@ -28,12 +29,101 @@ def test_compare_states_identifies_candidate_tensor_collapse(tmp_path: Path) -> 
     )
     assert result["candidate"]["full_frame_background_view_count"] == 1
     assert result["control"]["non_background_label_count"] == 1
+    assert result["candidate"]["label_application"]["gprim_label_count"] == 1
+    assert result["candidate"]["label_application"]["mesh_label_count"] == 1
 
 
-def _state(*, unique_id_count: int, label: str) -> dict[str, object]:
+def test_aov_matrix_identifies_official_control_vs_molmospaces_collapse(
+    tmp_path: Path,
+) -> None:
+    generated = tmp_path / "generated.json"
+    official = tmp_path / "official.json"
+    molmospaces = tmp_path / "molmospaces.json"
+    preflight = tmp_path / "preflight.json"
+    generated.write_text(
+        json.dumps(
+            _state(
+                unique_id_count=4,
+                label="/World/Objects/mug_01",
+                loaded_asset_kind="generated_runtime_smoke_usd",
+                generated_scene_kind="roboclaws_smoke",
+            )
+        ),
+        encoding="utf-8",
+    )
+    official.write_text(
+        json.dumps(
+            _state(
+                unique_id_count=4,
+                label="asset,blue,cube,mug01",
+                loaded_asset_kind="generated_runtime_smoke_usd",
+                generated_scene_kind="isaac_official_blocks",
+            )
+        ),
+        encoding="utf-8",
+    )
+    molmospaces.write_text(
+        json.dumps(
+            _state(
+                unique_id_count=1,
+                label="BACKGROUND",
+                loaded_asset_kind="local_scene_usd",
+                generated_scene_kind="",
+                gprim_label_count=0,
+                mesh_label_count=0,
+            )
+        ),
+        encoding="utf-8",
+    )
+    preflight.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_isaac_lab_runtime_preflight_v1",
+                "status": "ready",
+                "runtime_dir": ".venv-isaaclab",
+                "isaaclab_source": ".venv-isaaclab-src/IsaacLab",
+                "checks": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = summarize_entries(
+        [
+            f"A={generated}",
+            f"B={official}",
+            f"C={molmospaces}",
+            f"D={preflight}",
+        ]
+    )
+
+    assert result["schema"] == "isaac_segmentation_aov_matrix_v1"
+    assert result["status"] == "decision_ready"
+    assert result["decision"]["official_control_has_non_background"] is True
+    assert result["decision"]["candidate_collapsed_to_background"] is True
+    assert result["decision"]["candidate_labelled_gprims_or_meshes"] is False
+    assert result["decision"]["root_cause_classification"] == (
+        "molmospaces_scene_usd_semantic_aov_projection"
+    )
+    assert result["decision"]["runtime_preflight_count"] == 1
+
+
+def _state(
+    *,
+    unique_id_count: int,
+    label: str,
+    loaded_asset_kind: str = "",
+    generated_scene_kind: str = "",
+    gprim_label_count: int = 1,
+    mesh_label_count: int = 1,
+) -> dict[str, object]:
     return {
         "scene_usd": "scene.usda",
-        "real_runtime_smoke": {"stage_prim_count": 10},
+        "scene_load": {"loaded_asset_kind": loaded_asset_kind},
+        "real_runtime_smoke": {
+            "stage_prim_count": 10,
+            "generated_scene_kind": generated_scene_kind,
+        },
         "segmentation": {
             "status": "available",
             "available": True,
@@ -46,6 +136,16 @@ def _state(*, unique_id_count: int, label: str) -> dict[str, object]:
                 "applied_count": 1,
                 "failed_count": 0,
                 "missing_prim_count": 0,
+                "gprim_label_count": gprim_label_count,
+                "mesh_label_count": mesh_label_count,
+                "target_samples": [
+                    {
+                        "source_prim_path": "/World/Objects/bowl_01",
+                        "target_prim_path": "/World/Objects/bowl_01/mesh",
+                        "target_type": "Mesh",
+                        "target_kind": "gprim:Mesh",
+                    }
+                ],
             },
             "candidate_bboxes": [
                 {

@@ -81,6 +81,8 @@ def _summarize_state(path: Path, state: dict[str, Any]) -> dict[str, Any]:
     return {
         "artifact": str(path),
         "scene_usd": state.get("scene_usd"),
+        "loaded_asset_kind": _dict(state.get("scene_load")).get("loaded_asset_kind"),
+        "generated_scene_kind": _dict(state.get("real_runtime_smoke")).get("generated_scene_kind"),
         "stage_prim_count": _dict(state.get("real_runtime_smoke")).get("stage_prim_count"),
         "segmentation_status": segmentation.get("status"),
         "segmentation_available": segmentation.get("available"),
@@ -96,6 +98,9 @@ def _summarize_state(path: Path, state: dict[str, Any]) -> dict[str, Any]:
             "missing_prim_count": _int(label_application.get("missing_prim_count")),
             "descendant_label_count": _int(label_application.get("descendant_label_count")),
             "labeled_prim_count": _int(label_application.get("labeled_prim_count")),
+            "gprim_label_count": _int(label_application.get("gprim_label_count")),
+            "mesh_label_count": _int(label_application.get("mesh_label_count")),
+            "target_samples": label_application.get("target_samples") or [],
         },
         "semantic_view_count": len(semantic_views),
         "semantic_views": semantic_views,
