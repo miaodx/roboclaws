@@ -2274,6 +2274,7 @@ class RealWorldCleanupContract:
         *,
         views: dict[str, Any],
         robot_view_label: str | None = None,
+        camera_control_contract: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         for item in self._raw_fpv_observations:
             if item.get("observation_id") != observation_id:
@@ -2285,6 +2286,8 @@ class RealWorldCleanupContract:
                 item["artifact_status"] = "recorded"
             if robot_view_label:
                 item["robot_view_label"] = robot_view_label
+            if camera_control_contract:
+                item["camera_control_contract"] = dict(camera_control_contract)
             _assert_no_forbidden_agent_view_keys(item)
             return dict(item)
         return None

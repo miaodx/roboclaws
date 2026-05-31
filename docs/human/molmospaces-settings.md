@@ -45,7 +45,7 @@ for fast contract checks, but it has no robot camera timeline.
 | Perception | `camera_model_policy` | Raw FPV observation first, then camera-derived candidates become observed handles. | Internal deterministic producer mode behind the `camera-labels` profile, using the shared Model-Declared Observation schema. |
 | Visuals | `--include-robot --record-robot-views` | Capture RBY1M robot-view timeline. | Required for FPV/chase/map/verification report. |
 | Visuals | omitted | No robot-view timeline. | Fast smoke only. |
-| Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup profiles. |
+| Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup lanes. |
 | Map bundle | `map_bundle=<path-or-assets-id>` | Operator override for a prepared environment bundle. | Fails before cleanup startup if missing or invalid. |
 | Fixture hints | `room_only` | Public room-level fixture hints. | Preferred ADR-0003 setting. |
 | Fixture hints | `exact_fixtures` | Easier exact fixture hints. | Fallback/debug only. |
@@ -555,6 +555,32 @@ The comparison recipe is positional. When overriding render width or height,
 also pass the intermediate scene, robot, and focus-count arguments so values do
 not shift into earlier slots. The high-resolution path changes only comparison
 artifacts; it does not change cleanup, RAW_FPV, or visual-grounding defaults.
+
+Render-only MuJoCo/Isaac scene camera comparison:
+
+```bash
+just molmo::scene-camera-comparison
+```
+
+This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo and a
+prepared Isaac USD with one external camera request. It is for scene/camera
+review only: it does not run cleanup, pick/place, private scoring, or pickup
+box annotation. The main lane now uses explicit canonical
+`eye`/`target`/`up` poses in the MolmoSpaces scene frame for both backends.
+Room-level views use MolmoSpaces room mesh world bounds, not MuJoCo mesh
+`geom_size`, so the room camera starts from a real room scale. The report also
+records camera-pose, camera-intrinsics, room-scale, lighting, and USD-bounds
+residuals separately. MuJoCo canonical views convert the explicit
+`eye`/`target` request into MuJoCo's free-camera azimuth/elevation convention
+before rendering; the manifest records the backend pose used for the parity
+check. Isaac uses the prepared USD's scene lights by default and reports the
+existing light count instead of adding extra fill lights. Target-vs-USD
+diagnostics are bounds-aware: large receptacles may aim the camera above a
+surface, so the report treats a target inside the USD XY footprint and within
+the configured surface-aim height allowance separately from a true target/scene
+frame mismatch. A passing camera-pose contract means the two backends accepted
+the same render-camera API pose; material differences or renderer lighting
+differences can still prevent full visual identity.
 
 Real visual MCP smoke:
 

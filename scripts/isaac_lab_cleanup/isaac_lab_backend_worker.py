@@ -21,6 +21,13 @@ if __package__ in {None, ""}:
 from PIL import Image, ImageDraw
 
 from roboclaws.molmo_cleanup.backend import HELD_LOCATION_ID
+from roboclaws.molmo_cleanup.camera_control import (
+    ANCHOR_ORBIT_CAMERA_MODEL,
+    CAMERA_CONTROL_API_NAME,
+    CANONICAL_CAMERA_MODEL,
+    load_camera_control_request,
+    normalize_camera_control_request,
+)
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -28,6 +35,11 @@ from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
+)
+from roboclaws.molmo_cleanup.robot_view_camera_control import (
+    backend_local_robot_view_camera_control_contract,
+    canonical_cleanup_robot_view_camera_request,
+    canonical_robot_view_camera_control_contract,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.scoring import score_cleanup
@@ -142,6 +154,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     robot_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
     robot_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
 
+    camera_views = subparsers.add_parser("camera_views")
+    camera_views.add_argument("--output-dir", type=Path, required=True)
+    camera_views.add_argument("--view-specs-path", type=Path)
+    camera_views.add_argument("--camera-request-path", type=Path)
+    camera_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
+    camera_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
+
     object_cmds = ("navigate_to_object", "pick")
     for command in object_cmds:
         item = subparsers.add_parser(command)
@@ -187,6 +206,8 @@ def main(argv: list[str] | None = None) -> int:
             result = write_snapshot(args, state)
         elif args.command == "robot_views":
             result = write_robot_views(args, state)
+        elif args.command == "camera_views":
+            result = write_camera_views(args, state)
         elif args.command == "observe":
             result = observe(args, state)
         elif args.command == "navigate_to_object":
@@ -790,6 +811,15 @@ def _annotate_usd_index_geometry(
                 usd_geom=usd_geom,
             )
             entry.update(diagnostics)
+            if str(entry.get("kind") or "") == "receptacle" or isinstance(
+                entry.get("support_pose"), dict
+            ):
+                support_pose = _support_pose_from_usd_bounds(
+                    entry.get("usd_world_bounds"),
+                    fallback=_dict(entry.get("support_pose")),
+                )
+                if support_pose is not None:
+                    entry["support_pose"] = support_pose
 
 
 def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) -> dict[str, Any]:
@@ -822,6 +852,7 @@ def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) 
         geometry_status = "missing_referenced_geometry"
     else:
         geometry_status = "no_renderable_descendants"
+    world_bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
     return {
         "prim_type": str(prim.GetTypeName() or ""),
         "valid_stage_prim": True,
@@ -834,7 +865,60 @@ def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) 
         "geometry_status": geometry_status,
         "is_instanceable": bool(prim.IsInstanceable()),
         "is_instance": bool(prim.IsInstance()),
+        "usd_world_bounds": world_bounds,
     }
+
+
+def _usd_world_bounds(prim: Any, *, usd_geom: Any) -> dict[str, Any] | None:
+    from pxr import Usd
+
+    bbox_cache = usd_geom.BBoxCache(
+        Usd.TimeCode.Default(),
+        [usd_geom.Tokens.default_, usd_geom.Tokens.render, usd_geom.Tokens.proxy],
+    )
+    bbox = bbox_cache.ComputeWorldBound(prim).ComputeAlignedBox()
+    min_point = [float(value) for value in bbox.GetMin()]
+    max_point = [float(value) for value in bbox.GetMax()]
+    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
+    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]):
+        return None
+    if max(size) <= 0:
+        return None
+    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
+    return {
+        "min": _round_vec3(min_point),
+        "max": _round_vec3(max_point),
+        "center": _round_vec3(center),
+        "size": _round_vec3(size),
+    }
+
+
+def _support_pose_from_usd_bounds(
+    bounds: Any,
+    *,
+    fallback: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    raw_bounds = bounds if isinstance(bounds, dict) else {}
+    center = _vec3(raw_bounds.get("center"))
+    max_point = _vec3(raw_bounds.get("max"))
+    if center is None:
+        return dict(fallback) if fallback else None
+    pose = {
+        "frame": "usd_world",
+        "x": center[0],
+        "y": center[1],
+        "z": max_point[2] if max_point is not None else center[2],
+        "yaw_deg": float(_dict(fallback).get("yaw_deg") or 0.0),
+        "source": "usd_world_bounds_top_center",
+    }
+    size = _vec3(raw_bounds.get("size"))
+    if size is not None:
+        pose["support_radius_m"] = round(max(size[0], size[1]) / 2.0, 6)
+    return pose
+
+
+def _round_vec3(values: list[float] | tuple[float, ...]) -> list[float]:
+    return [round(float(value), 6) for value in values[:3]]
 
 
 def _iter_usd_prim_range(prim: Any) -> Iterable[Any]:
@@ -1503,6 +1587,145 @@ def _capture_isaac_lab_camera_views(
     }
 
 
+def capture_scene_camera_views(
+    *,
+    scene_usd: Path,
+    camera_request: dict[str, Any] | list[dict[str, Any]],
+    output_dir: Path,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    from isaaclab.app import AppLauncher
+
+    launcher_args = _isaac_app_launcher_args(AppLauncher)
+    app_launcher = AppLauncher(launcher_args)
+    simulation_app = app_launcher.app
+    global _DEFERRED_SIMULATION_APP
+    _DEFERRED_SIMULATION_APP = simulation_app
+    return _capture_isaac_lab_scene_camera_views(
+        scene_usd=scene_usd,
+        camera_request=camera_request,
+        output_dir=output_dir,
+        width=width,
+        height=height,
+        simulation_app=simulation_app,
+    )
+
+
+def _capture_isaac_lab_scene_camera_views(
+    *,
+    scene_usd: Path,
+    camera_request: dict[str, Any] | list[dict[str, Any]],
+    output_dir: Path,
+    width: int,
+    height: int,
+    simulation_app: Any,
+) -> dict[str, Any]:
+    import isaaclab.sim as sim_utils
+    import isaacsim.core.utils.stage as stage_utils
+    import numpy as np
+    import torch
+    from isaaclab.sensors.camera import Camera, CameraCfg
+
+    opened = stage_utils.open_stage(str(scene_usd))
+    if opened is False:
+        raise RuntimeError(f"Isaac Sim failed to open generated USD stage: {scene_usd}")
+    _wait_for_stage_load(stage_utils, simulation_app)
+    _load_current_stage_payloads(stage_utils)
+    scene_bounds = _current_stage_bounds(stage_utils)
+    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
+    resolution = camera_request["render_resolution"]
+    width = int(resolution["width"])
+    height = int(resolution["height"])
+    lighting_diagnostics = _ensure_capture_lighting(
+        stage_utils,
+        profile=camera_request.get("lighting_profile"),
+    )
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
+    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    focal_length = float(lens.get("focal_length_mm", 24.0))
+    horizontal_aperture = _horizontal_aperture_from_lens(
+        lens,
+        width=width,
+        height=height,
+        focal_length=focal_length,
+    )
+    sim_utils.create_prim("/World/RoboclawsSceneProbeCameraRig", "Xform")
+    camera = Camera(
+        cfg=CameraCfg(
+            prim_path="/World/RoboclawsSceneProbeCameraRig/Camera",
+            update_period=0.0,
+            height=height,
+            width=width,
+            data_types=["rgb"],
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=focal_length,
+                focus_distance=4.0,
+                horizontal_aperture=horizontal_aperture,
+            ),
+        )
+    )
+    sim.reset()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved: dict[str, str] = {}
+    shapes: dict[str, list[int]] = {}
+    views: list[dict[str, Any]] = []
+    total_render_steps = 0
+    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
+        spec = _isaac_scene_camera_view_spec(
+            raw_spec,
+            index=index,
+            stage_utils=stage_utils,
+        )
+        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
+        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
+        camera.set_world_poses_from_view(position, target)
+        rgb_image = None
+        for _ in range(24):
+            sim.step()
+            total_render_steps += 1
+            camera.update(dt=sim.get_physics_dt())
+            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
+                break
+        if rgb_image is None:
+            raise RuntimeError(
+                f"Isaac Lab camera did not produce an RGB tensor for {spec['view_id']}"
+            )
+        if not _image_has_variance(rgb_image, np=np):
+            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
+        output_path = output_dir / f"{spec['view_id']}.png"
+        Image.fromarray(rgb_image, mode="RGB").save(output_path)
+        saved[str(spec["view_id"])] = str(output_path)
+        shapes[str(spec["view_id"])] = list(rgb_image.shape)
+        views.append(
+            {
+                **spec,
+                "image_path": str(output_path),
+                "shape": list(rgb_image.shape),
+            }
+        )
+    return {
+        "schema": "isaac_scene_camera_views_v1",
+        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
+        "camera_request_schema": camera_request.get("schema"),
+        "calibration_status": camera_request.get("calibration_status"),
+        "lighting_profile": camera_request.get("lighting_profile") or {},
+        "lighting_diagnostics": lighting_diagnostics,
+        "lens": camera_request.get("lens") or {},
+        "derived_lens": {
+            "focal_length_mm": focal_length,
+            "horizontal_aperture_mm": horizontal_aperture,
+        },
+        "render_steps": total_render_steps,
+        "scene_bounds": scene_bounds,
+        "views": views,
+        "images": saved,
+        "shapes": shapes,
+    }
+
+
 def _apply_semantic_pose_state_to_stage(
     *,
     stage_utils: Any,
@@ -2060,20 +2283,95 @@ def _current_stage_bounds(stage_utils: Any) -> dict[str, list[float]] | None:
     return {"min": min_point, "max": max_point, "size": size, "center": center}
 
 
-def _ensure_capture_lighting(stage_utils: Any) -> None:
+def _ensure_capture_lighting(
+    stage_utils: Any, profile: dict[str, Any] | None = None
+) -> dict[str, Any]:
     from pxr import Gf, UsdGeom, UsdLux
 
     get_current_stage = getattr(stage_utils, "get_current_stage", None)
     if not callable(get_current_stage):
-        return
+        return {"status": "missing_stage_api", "existing_light_count": 0, "added_light_count": 0}
     stage = get_current_stage()
     if stage is None:
-        return
-    dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
-    dome.CreateIntensityAttr(1500.0)
-    key = UsdLux.DistantLight.Define(stage, "/RoboclawsSmokeKeyLight")
-    key.CreateIntensityAttr(7000.0)
-    UsdGeom.XformCommonAPI(key).SetRotate(Gf.Vec3f(-55.0, 0.0, 35.0))
+        return {"status": "missing_stage", "existing_light_count": 0, "added_light_count": 0}
+    profile = profile if isinstance(profile, dict) else {}
+    dome_intensity = float(profile.get("isaac_dome_intensity", 1500.0))
+    key_intensity = float(profile.get("isaac_key_intensity", 7000.0))
+    key_rotation = profile.get("isaac_key_rotation_deg")
+    if not isinstance(key_rotation, (list, tuple)) or len(key_rotation) < 3:
+        key_rotation = [-55.0, 0.0, 35.0]
+    existing_lights = _stage_light_paths(stage, exclude_prefix="/RoboclawsSmoke")
+    added_lights = []
+    if dome_intensity > 0.0:
+        dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
+        dome.CreateIntensityAttr(dome_intensity)
+        added_lights.append("/RoboclawsSmokeDomeLight")
+    if key_intensity > 0.0:
+        key = UsdLux.DistantLight.Define(stage, "/RoboclawsSmokeKeyLight")
+        key.CreateIntensityAttr(key_intensity)
+        UsdGeom.XformCommonAPI(key).SetRotate(
+            Gf.Vec3f(float(key_rotation[0]), float(key_rotation[1]), float(key_rotation[2]))
+        )
+        added_lights.append("/RoboclawsSmokeKeyLight")
+    return {
+        "schema": "isaac_capture_lighting_diagnostics_v1",
+        "status": "using_existing_stage_lights" if not added_lights else "added_capture_lights",
+        "profile_id": str(profile.get("profile_id") or ""),
+        "existing_light_count": len(existing_lights),
+        "existing_light_paths": existing_lights,
+        "added_light_count": len(added_lights),
+        "added_light_paths": added_lights,
+        "requested_dome_intensity": dome_intensity,
+        "requested_key_intensity": key_intensity,
+    }
+
+
+def _stage_light_paths(
+    stage: Any, *, exclude_prefix: str = "", light_api: Any | None = None
+) -> list[str]:
+    if light_api is None:
+        from pxr import UsdLux
+
+        light_api = UsdLux.LightAPI
+    paths = []
+    for prim in stage.Traverse():
+        if not prim or not prim.IsValid():
+            continue
+        path = str(prim.GetPath())
+        if exclude_prefix and path.startswith(exclude_prefix):
+            continue
+        if prim.IsA(light_api) or _prim_type_is_light(prim):
+            paths.append(path)
+    return paths
+
+
+_USD_LIGHT_TYPE_NAMES = frozenset(
+    {
+        "CylinderLight",
+        "DiskLight",
+        "DistantLight",
+        "DomeLight",
+        "GeometryLight",
+        "PortalLight",
+        "RectLight",
+        "SphereLight",
+    }
+)
+
+
+def _prim_type_is_light(prim: Any) -> bool:
+    type_name = ""
+    get_type_name = getattr(prim, "GetTypeName", None)
+    if callable(get_type_name):
+        type_name = str(get_type_name() or "")
+    if not type_name:
+        get_type_info = getattr(prim, "GetPrimTypeInfo", None)
+        if callable(get_type_info):
+            type_info = get_type_info()
+            info_type_name = getattr(type_info, "GetTypeName", None)
+            if callable(info_type_name):
+                type_name = str(info_type_name() or "")
+    return type_name in _USD_LIGHT_TYPE_NAMES
 
 
 def _isaac_camera_view_poses(
@@ -2150,6 +2448,215 @@ def _rgb_tensor_to_uint8(value: Any, *, np: Any) -> Any:
         scale = 255.0 if float(array.max(initial=0.0)) <= 1.0 else 1.0
         array = array * scale
     return np.clip(array, 0, 255).astype("uint8")
+
+
+def _load_camera_view_specs(path: Path) -> list[dict[str, Any]]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw_views = payload.get("views") if isinstance(payload, dict) else payload
+    if not isinstance(raw_views, list):
+        raise ValueError("camera view spec must be a list or an object with a views list")
+    return [dict(item) for item in raw_views if isinstance(item, dict)]
+
+
+def _load_camera_request_from_args(
+    *,
+    view_specs_path: Path | None,
+    camera_request_path: Path | None,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    if camera_request_path is not None:
+        return load_camera_control_request(camera_request_path, width=width, height=height)
+    if view_specs_path is not None:
+        return normalize_camera_control_request(
+            _load_camera_view_specs(view_specs_path),
+            width=width,
+            height=height,
+        )
+    raise ValueError("camera_views requires --camera-request-path or --view-specs-path")
+
+
+def _isaac_scene_camera_view_spec(
+    raw_spec: dict[str, Any],
+    *,
+    index: int,
+    stage_utils: Any | None = None,
+) -> dict[str, Any]:
+    view_id = str(raw_spec.get("view_id") or raw_spec.get("id") or f"view_{index:02d}")
+    safe_view_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in view_id)
+    usd_prim_path = str(raw_spec.get("usd_prim_path") or "")
+    usd_bounds = _bounds_from_usd_prim_path(
+        stage_utils=stage_utils,
+        usd_prim_path=usd_prim_path,
+        min_target_z=float(raw_spec.get("min_target_z", 0.6)),
+    )
+    usd_bounds_target = usd_bounds.get("target") if isinstance(usd_bounds, dict) else None
+    target_source = "usd_prim_world_bounds" if usd_bounds_target is not None else ""
+    if raw_spec.get("camera_model") == CANONICAL_CAMERA_MODEL:
+        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
+        target_source = "canonical_explicit_target"
+    elif usd_bounds_target is not None:
+        target = usd_bounds_target
+    else:
+        target = _camera_vec3(raw_spec.get("target") or raw_spec.get("lookat"), default=[0, 0, 0])
+        target_source = "explicit_target_or_default"
+    backend_transform = _backend_transform_for_lane(raw_spec, "isaaclab-prepared-usd")
+    if "eye" in raw_spec and raw_spec.get("eye") is not None:
+        eye = _camera_vec3(
+            raw_spec.get("eye"),
+            default=[target[0], target[1] - 4.0, target[2] + 2.0],
+        )
+        if backend_transform:
+            eye = _apply_scene_transform_to_point(eye, backend_transform)
+            target = _apply_scene_transform_to_point(target, backend_transform)
+    else:
+        camera_orbit = _lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")
+        eye = _eye_from_lookat_spec(
+            target=target,
+            distance=float(camera_orbit.get("distance_m", raw_spec.get("distance", 4.0))),
+            azimuth=float(camera_orbit.get("azimuth_deg", raw_spec.get("azimuth", 225.0))),
+            elevation=abs(
+                float(camera_orbit.get("elevation_deg", raw_spec.get("elevation", 35.0)))
+            ),
+        )
+    return {
+        "view_id": safe_view_id,
+        "label": str(raw_spec.get("label") or view_id),
+        "anchor_id": str(raw_spec.get("anchor_id") or ""),
+        "anchor_kind": str(raw_spec.get("anchor_kind") or ""),
+        "usd_prim_path": usd_prim_path,
+        "eye": eye,
+        "target": target,
+        "lookat": target,
+        "backend_eye": eye,
+        "backend_target": target,
+        "usd_bounds_target": usd_bounds_target,
+        "usd_bounds": usd_bounds,
+        "target_source": target_source,
+        "camera_model": str(raw_spec.get("camera_model") or ANCHOR_ORBIT_CAMERA_MODEL),
+        "coordinate_frame": str(raw_spec.get("coordinate_frame") or ""),
+        "camera_orbit": dict(_lane_camera_orbit(raw_spec, "isaaclab-prepared-usd")),
+        "lens": dict(raw_spec.get("lens")) if isinstance(raw_spec.get("lens"), dict) else {},
+        "calibration_status": str(raw_spec.get("calibration_status") or ""),
+        "coordinate_convention": str(raw_spec.get("coordinate_convention") or ""),
+    }
+
+
+def _lane_camera_orbit(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
+    lane_orbits = raw_spec.get("lane_camera_orbits")
+    if isinstance(lane_orbits, dict):
+        lane_orbit = lane_orbits.get(lane_id)
+        if isinstance(lane_orbit, dict):
+            return lane_orbit
+    camera_orbit = raw_spec.get("camera_orbit")
+    return camera_orbit if isinstance(camera_orbit, dict) else {}
+
+
+def _backend_transform_for_lane(raw_spec: dict[str, Any], lane_id: str) -> dict[str, Any]:
+    transforms = raw_spec.get("backend_transforms")
+    if isinstance(transforms, dict):
+        transform = transforms.get(lane_id)
+        if isinstance(transform, dict):
+            return transform
+    return {}
+
+
+def _apply_scene_transform_to_point(point: list[float], transform: dict[str, Any]) -> list[float]:
+    scale = float(transform.get("xy_scale", 1.0))
+    rotation_rad = math.radians(float(transform.get("rotation_z_deg", 0.0)))
+    raw_translation = transform.get("translation")
+    translation = raw_translation if isinstance(raw_translation, list) else []
+    tx = float(translation[0]) if len(translation) > 0 else 0.0
+    ty = float(translation[1]) if len(translation) > 1 else 0.0
+    tz = float(translation[2]) if len(translation) > 2 else 0.0
+    x = float(point[0])
+    y = float(point[1])
+    return [
+        scale * (math.cos(rotation_rad) * x - math.sin(rotation_rad) * y) + tx,
+        scale * (math.sin(rotation_rad) * x + math.cos(rotation_rad) * y) + ty,
+        float(point[2]) + tz,
+    ]
+
+
+def _horizontal_aperture_from_lens(
+    lens: dict[str, Any],
+    *,
+    width: int,
+    height: int,
+    focal_length: float,
+) -> float:
+    if "vertical_fov_deg" in lens:
+        vertical_fov_rad = math.radians(float(lens["vertical_fov_deg"]))
+        vertical_aperture = 2.0 * focal_length * math.tan(vertical_fov_rad / 2.0)
+        return vertical_aperture * float(width) / float(height)
+    return float(lens.get("horizontal_aperture_mm", 20.955))
+
+
+def _bounds_from_usd_prim_path(
+    *,
+    stage_utils: Any | None,
+    usd_prim_path: str,
+    min_target_z: float,
+) -> dict[str, Any] | None:
+    if stage_utils is None or not usd_prim_path:
+        return None
+    from pxr import Usd, UsdGeom
+
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        return None
+    stage = get_current_stage()
+    if stage is None:
+        return None
+    prim = stage.GetPrimAtPath(usd_prim_path)
+    if not prim or not prim.IsValid():
+        return None
+    cache = UsdGeom.BBoxCache(
+        Usd.TimeCode.Default(),
+        [UsdGeom.Tokens.default_, UsdGeom.Tokens.render, UsdGeom.Tokens.proxy],
+    )
+    bbox = cache.ComputeWorldBound(prim).ComputeAlignedBox()
+    min_point = [float(value) for value in bbox.GetMin()]
+    max_point = [float(value) for value in bbox.GetMax()]
+    size = [max_v - min_v for min_v, max_v in zip(min_point, max_point, strict=True)]
+    if any(not math.isfinite(value) for value in [*min_point, *max_point, *size]):
+        return None
+    if max(size) <= 0:
+        return None
+    center = [(min_v + max_v) / 2.0 for min_v, max_v in zip(min_point, max_point, strict=True)]
+    target = list(center)
+    target[2] = max(target[2], min_target_z)
+    return {
+        "min": min_point,
+        "max": max_point,
+        "size": size,
+        "center": center,
+        "target": target,
+        "target_z_floor": min_target_z,
+    }
+
+
+def _eye_from_lookat_spec(
+    *,
+    target: list[float],
+    distance: float,
+    azimuth: float,
+    elevation: float,
+) -> list[float]:
+    azimuth_rad = math.radians(azimuth)
+    elevation_rad = math.radians(elevation)
+    horizontal = math.cos(elevation_rad) * distance
+    return [
+        float(target[0]) + math.sin(azimuth_rad) * horizontal,
+        float(target[1]) + math.cos(azimuth_rad) * horizontal,
+        float(target[2]) + math.sin(elevation_rad) * distance,
+    ]
+
+
+def _camera_vec3(value: Any, *, default: list[float]) -> list[float]:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return [float(default[0]), float(default[1]), float(default[2])]
+    return [float(value[0]), float(value[1]), float(value[2])]
 
 
 def _image_has_variance(array: Any, *, np: Any) -> bool:
@@ -2680,7 +3187,7 @@ def _initial_semantic_pose_state(
         "planner_backed": False,
         "physical_robot": False,
         "semantic_pose_only": True,
-        "robot_pose": _pose_near(initial_receptacle_id),
+        "robot_pose": _robot_pose_for_receptacle(state, initial_receptacle_id),
         "held_object_id": None,
         "open_receptacle_ids": [],
         "object_poses": _semantic_object_poses_from_state(state),
@@ -2729,7 +3236,10 @@ def _record_semantic_pose_event(
         "previous_location_id": previous_location_id,
         "location_id": location_id,
         "location_relation": relation,
-        "robot_pose": _pose_near(str(state.get("current_receptacle_id") or receptacle_id)),
+        "robot_pose": _robot_pose_for_receptacle(
+            state,
+            str(state.get("current_receptacle_id") or receptacle_id),
+        ),
     }
     event.update({key: value for key, value in extra.items() if value is not None})
     events.append(event)
@@ -2742,7 +3252,10 @@ def _record_semantic_pose_event(
             "planner_backed": False,
             "physical_robot": False,
             "semantic_pose_only": True,
-            "robot_pose": _pose_near(str(state.get("current_receptacle_id") or receptacle_id)),
+            "robot_pose": _robot_pose_for_receptacle(
+                state,
+                str(state.get("current_receptacle_id") or receptacle_id),
+            ),
             "held_object_id": state.get("held_object_id"),
             "open_receptacle_ids": sorted(state.get("open_receptacle_ids") or []),
             "object_poses": _semantic_object_poses_from_state(state),
@@ -2775,6 +3288,13 @@ def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[s
             current_receptacle_id if location_id == HELD_LOCATION_ID else location_id
         )
         relation = _dict(containment.get(object_id)).get("location_relation") or "on"
+        position = _semantic_object_position_from_state(
+            state,
+            object_id=object_id,
+            location_id=location_id,
+            original_location_id=str(item.get("location_id") or ""),
+            support_receptacle_id=support_receptacle_id,
+        )
         poses[object_id] = {
             "object_id": object_id,
             "usd_prim_path": _object_usd_prim_path(state, object_id),
@@ -2783,10 +3303,78 @@ def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[s
             "support_usd_prim_path": _receptacle_usd_prim_path(state, support_receptacle_id),
             "attached_to_robot": location_id == HELD_LOCATION_ID,
             "location_relation": relation,
+            "position": position,
+            "position_source": _semantic_object_position_source(
+                position,
+                location_id=location_id,
+                original_location_id=str(item.get("location_id") or ""),
+            ),
             "state_source": ISAAC_SEMANTIC_POSE_STATE_SOURCE,
             "rendered_to_usd": False,
         }
     return poses
+
+
+def _semantic_object_position_from_state(
+    state: dict[str, Any],
+    *,
+    object_id: str,
+    location_id: str,
+    original_location_id: str,
+    support_receptacle_id: str,
+) -> list[float] | None:
+    if location_id == original_location_id:
+        bounds_position = _object_usd_world_bounds_center(state, object_id)
+        if bounds_position is not None:
+            return bounds_position
+    if location_id == HELD_LOCATION_ID:
+        robot_pose = _robot_pose_for_receptacle(
+            state,
+            str(state.get("current_receptacle_id") or support_receptacle_id),
+        )
+        held_target = _vec3(robot_pose.get("target_position"))
+        if held_target is not None:
+            return _round_vec3(held_target)
+    target = _semantic_pose_target_position(
+        support_id=support_receptacle_id,
+        receptacle_index=_dict(state.get("receptacle_index")),
+        fallback_pose={},
+    )
+    if target is not None:
+        return _round_vec3(list(target))
+    return _object_usd_world_bounds_center(state, object_id)
+
+
+def _semantic_object_position_source(
+    position: list[float] | None,
+    *,
+    location_id: str,
+    original_location_id: str,
+) -> str:
+    if position is None:
+        return ""
+    if location_id == HELD_LOCATION_ID:
+        return "isaac_robot_target_position"
+    if location_id == original_location_id:
+        return "usd_world_bounds_center"
+    return "isaac_support_pose_semantic_location"
+
+
+def _object_usd_world_bounds_center(
+    state: dict[str, Any],
+    object_id: str,
+) -> list[float] | None:
+    binding = _binding_for_handle(
+        state.get("scene_binding_diagnostics"),
+        object_id,
+        ("selected_object_bindings", "object_bindings"),
+    )
+    for handle in (binding.get("usd_handle"), object_id):
+        entry = _dict(_dict(state.get("object_index")).get(str(handle)))
+        center = _vec3(_dict(entry.get("usd_world_bounds")).get("center"))
+        if center is not None:
+            return _round_vec3(center)
+    return None
 
 
 def _semantic_articulations_from_state(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -2887,7 +3475,7 @@ def navigate_to_object(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         source_receptacle_id=str(location_id),
         previous_receptacle_id=previous,
         location_id=str(location_id),
-        robot_pose=_pose_near(str(location_id)),
+        robot_pose=_robot_pose_for_receptacle(state, str(location_id)),
         state_mutation="isaac_root_pose",
         semantic_pose_event=event,
     )
@@ -2916,7 +3504,7 @@ def navigate_to_receptacle(args: argparse.Namespace, state: dict[str, Any]) -> d
         receptacle_id=receptacle_id,
         object_id=held_object_id,
         previous_receptacle_id=previous,
-        robot_pose=_pose_near(receptacle_id),
+        robot_pose=_robot_pose_for_receptacle(state, receptacle_id),
         state_mutation="isaac_root_pose",
         semantic_pose_event=event,
     )
@@ -3166,6 +3754,8 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         views,
         width=args.render_width,
         height=args.render_height,
+        focus_object_id=args.focus_object_id,
+        focus_receptacle_id=args.focus_receptacle_id,
     )
     semantic_pose_state_refreshed = bool(real_views)
     if not real_views:
@@ -3208,6 +3798,15 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
             )
             shapes[view_name] = [args.render_height, args.render_width, 3]
     write_state_from_state_arg(state)
+    robot_pose = _robot_pose_for_receptacle(
+        state,
+        str(state.get("current_receptacle_id") or "floor_01"),
+    )
+    focus = _focus_payload(
+        state=state,
+        focus_object_id=args.focus_object_id,
+        focus_receptacle_id=args.focus_receptacle_id,
+    )
     return _ok(
         "robot_views",
         output_dir=str(args.output_dir),
@@ -3216,17 +3815,216 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
             state,
             semantic_pose_state_refreshed=semantic_pose_state_refreshed,
         ),
-        robot_pose=_pose_near(str(state.get("current_receptacle_id") or "floor_01")),
-        robot_trajectory=[_pose_near(str(state.get("current_receptacle_id") or "floor_01"))],
-        room_outline_count=len(state.get("receptacle_index") or {}),
-        focus=_focus_payload(
-            focus_object_id=args.focus_object_id,
-            focus_receptacle_id=args.focus_receptacle_id,
+        camera_control_contract=_robot_view_camera_control_contract(
+            state,
+            robot_pose=robot_pose,
+            focus=focus,
         ),
+        robot_pose=robot_pose,
+        robot_trajectory=[robot_pose],
+        room_outline_count=len(state.get("receptacle_index") or {}),
+        focus=focus,
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
         render_resolution={"width": args.render_width, "height": args.render_height},
     )
+
+
+def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    _count(state, "camera_views")
+    runtime = _dict(state.get("runtime"))
+    scene_usd = str(state.get("scene_usd") or "")
+    if runtime.get("runtime_mode") != "real":
+        return _error("camera_views", "real_runtime_required")
+    if not scene_usd or not Path(scene_usd).is_file():
+        return _error("camera_views", "local_scene_usd_required", scene_usd=scene_usd)
+    camera_request = _load_camera_request_from_args(
+        view_specs_path=args.view_specs_path,
+        camera_request_path=args.camera_request_path,
+        width=args.render_width,
+        height=args.render_height,
+    )
+    capture = capture_scene_camera_views(
+        scene_usd=Path(scene_usd),
+        camera_request=camera_request,
+        output_dir=args.output_dir,
+        width=args.render_width,
+        height=args.render_height,
+    )
+    state["scene_camera_view_capture"] = {
+        "schema": "isaac_scene_camera_view_capture_v1",
+        "capture_method": "isaac_lab_camera_rgb_scene_probe",
+        "scene_usd": scene_usd,
+        "render_steps": int(capture.get("render_steps") or 0),
+        "view_count": len(capture.get("views") or []),
+    }
+    write_state_from_state_arg(state)
+    view_variant = _camera_capture_variant(capture)
+    provenance = _camera_capture_provenance(capture)
+    return _ok(
+        "camera_views",
+        camera_control_api=capture.get("camera_control_api") or CAMERA_CONTROL_API_NAME,
+        camera_request_schema=capture.get("camera_request_schema"),
+        calibration_status=capture.get("calibration_status"),
+        lighting_profile=capture.get("lighting_profile") or {},
+        lighting_diagnostics=capture.get("lighting_diagnostics") or {},
+        lens=capture.get("lens") or {},
+        derived_lens=capture.get("derived_lens") or {},
+        view_variant=view_variant,
+        visual_artifact_provenance=provenance,
+        scene_usd=scene_usd,
+        views=capture.get("views") or [],
+        images=capture.get("images") or {},
+        shapes=capture.get("shapes") or {},
+        scene_bounds=capture.get("scene_bounds"),
+        render_steps=int(capture.get("render_steps") or 0),
+        render_resolution={"width": args.render_width, "height": args.render_height},
+    )
+
+
+def _robot_view_camera_control_contract(
+    state: dict[str, Any],
+    *,
+    robot_pose: dict[str, Any] | None = None,
+    focus: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    provenance = _dict(state.get("robot_view_provenance"))
+    semantic_pose_state_refreshed = provenance.get("semantic_pose_state_refreshed")
+    request = _dict(state.get("canonical_robot_view_camera_control_request"))
+    if request:
+        contract = canonical_robot_view_camera_control_contract(
+            backend=ISAACLAB_SUBPROCESS_BACKEND,
+            pose_source=str(_dict(robot_pose).get("pose_source") or "isaac_usd_world_bounds"),
+            request=request,
+        )
+        contract.update(
+            {
+                "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
+                "robot_pose": dict(robot_pose or {}),
+                "focus": dict(focus or {}),
+                "evidence_note": (
+                    "Isaac cleanup FPV and verify views were rendered from the same "
+                    "Roboclaws canonical eye/target camera-control request used by "
+                    "MuJoCo. Chase/map views remain auxiliary report evidence."
+                ),
+            }
+        )
+        return contract
+    contract = backend_local_robot_view_camera_control_contract(
+        backend=ISAACLAB_SUBPROCESS_BACKEND,
+        status="backend_local_scene_bounds_camera",
+        fpv_source=str(provenance.get("fpv") or "isaac_lab_scene_bounds_fpv"),
+        verify_source=str(provenance.get("verify") or "isaac_lab_scene_bounds_verify"),
+        pose_source="isaac_support_pose_near_current_receptacle",
+        lens_source="isaac_robot_view_pinhole_defaults_24mm_20.955mm_aperture",
+    )
+    contract.update(
+        {
+            "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
+            "robot_pose": dict(robot_pose or {}),
+            "focus": dict(focus or {}),
+            "evidence_note": (
+                "Isaac cleanup robot views currently use backend-local scene-bounds/support-pose "
+                "camera placement, not roboclaws.camera_control.render_views. They are useful "
+                "report evidence, but they are not yet proof that the agent-facing FPV is "
+                "backend-swappable at identical scene-frame pose/FOV."
+            ),
+        }
+    )
+    return contract
+
+
+def _robot_pose_for_receptacle(
+    state: dict[str, Any],
+    receptacle_id: str,
+) -> dict[str, Any]:
+    support = _receptacle_support_pose(state, receptacle_id)
+    if not support:
+        pose = _pose_near(receptacle_id)
+        pose["pose_source"] = "hash_fallback_pose_near_receptacle"
+        return pose
+    x = float(support["x"])
+    y = float(support["y"])
+    z = float(support.get("z", 0.0))
+    stand_off = 1.15
+    center = _scene_index_center_xy(state)
+    preferred_angle = math.atan2(center[1] - y, center[0] - x)
+    robot_x = x + math.cos(preferred_angle) * stand_off
+    robot_y = y + math.sin(preferred_angle) * stand_off
+    theta = math.atan2(y - robot_y, x - robot_x)
+    return {
+        "frame": "usd_world",
+        "x": round(robot_x, 6),
+        "y": round(robot_y, 6),
+        "z": 0.0,
+        "theta": round(theta, 6),
+        "yaw_deg": round(math.degrees(theta), 6),
+        "head_pitch": 0.45,
+        "target_receptacle_id": receptacle_id,
+        "target_position": [round(x, 6), round(y, 6), round(z, 6)],
+        "pose_source": "usd_world_bounds_support_pose",
+        "support_pose_source": str(support.get("source") or ""),
+    }
+
+
+def _receptacle_support_pose(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
+    binding = _binding_for_handle(
+        state.get("scene_binding_diagnostics"),
+        receptacle_id,
+        ("selected_target_receptacle_bindings", "receptacle_bindings"),
+    )
+    for handle in (binding.get("usd_handle"), receptacle_id):
+        support = _dict(_dict(state.get("receptacle_index")).get(str(handle))).get("support_pose")
+        support_pose = _dict(support)
+        if _has_xy(support_pose) and support_pose.get("source") == "usd_world_bounds_top_center":
+            return support_pose
+    return {}
+
+
+def _binding_for_handle(
+    scene_binding_diagnostics: Any,
+    handle: str,
+    groups: tuple[str, ...],
+) -> dict[str, Any]:
+    bindings = _dict(scene_binding_diagnostics)
+    for group in groups:
+        item = _dict(_dict(bindings.get(group)).get(handle))
+        if item:
+            return item
+    return {}
+
+
+def _scene_index_center_xy(state: dict[str, Any]) -> tuple[float, float]:
+    centers: list[list[float]] = []
+    for index_name in ("receptacle_index", "object_index"):
+        for entry in _dict(state.get(index_name)).values():
+            center = _vec3(_dict(_dict(entry).get("usd_world_bounds")).get("center"))
+            if center is not None:
+                centers.append(center)
+    if not centers:
+        return (0.0, 0.0)
+    return (
+        sum(center[0] for center in centers) / len(centers),
+        sum(center[1] for center in centers) / len(centers),
+    )
+
+
+def _camera_capture_variant(capture: dict[str, Any]) -> str:
+    if any(
+        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
+        for item in capture.get("views") or []
+    ):
+        return "isaaclab-canonical-eye-target-camera-control-v1"
+    return "isaaclab-anchor-orbit-camera-control-v1"
+
+
+def _camera_capture_provenance(capture: dict[str, Any]) -> str:
+    if any(
+        isinstance(item, dict) and item.get("camera_model") == CANONICAL_CAMERA_MODEL
+        for item in capture.get("views") or []
+    ):
+        return "isaac_lab_camera_rgb_canonical_eye_target_scene_probe"
+    return "isaac_lab_camera_rgb_anchor_orbit_scene_probe"
 
 
 def _real_semantic_pose_robot_view_images(
@@ -3235,6 +4033,8 @@ def _real_semantic_pose_robot_view_images(
     *,
     width: int,
     height: int,
+    focus_object_id: str | None = None,
+    focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
     runtime = _dict(state.get("runtime"))
     scene_usd = str(state.get("scene_usd") or "")
@@ -3266,15 +4066,38 @@ def _real_semantic_pose_robot_view_images(
     }
     if not _has_required_robot_view_images(images):
         return {}
+    canonical_capture = _capture_canonical_robot_fpv_verify(
+        state,
+        scene_usd=Path(scene_usd),
+        target_images=target_images,
+        width=width,
+        height=height,
+        focus_object_id=focus_object_id,
+        focus_receptacle_id=focus_receptacle_id,
+    )
+    if canonical_capture:
+        for key, value in canonical_capture["images"].items():
+            images[key] = str(value)
     state["robot_view_images"] = images
-    state["robot_view_provenance"] = _semantic_pose_robot_view_provenance()
+    state["robot_view_provenance"] = _semantic_pose_robot_view_provenance(
+        canonical_camera_control=bool(canonical_capture),
+    )
     state["semantic_pose_view_capture"] = {
         "schema": "isaac_semantic_pose_robot_view_capture_v1",
         "capture_method": REAL_ROBOT_VIEW_RERENDER_METHOD,
         "scene_usd": scene_usd,
         "rendered_to_usd": True,
         "render_steps": int(capture.get("render_steps") or 0),
+        "canonical_camera_control": bool(canonical_capture),
     }
+    if canonical_capture:
+        state["canonical_robot_view_camera_control_request"] = canonical_capture["request"]
+        state["semantic_pose_view_capture"]["canonical_camera_control_render_steps"] = int(
+            canonical_capture.get("render_steps") or 0
+        )
+        state["semantic_pose_view_capture"]["canonical_camera_control_view_count"] = len(
+            canonical_capture.get("views") or []
+        )
     mapping_gaps = [
         item
         for item in state.get("mapping_gaps", [])
@@ -3286,10 +4109,11 @@ def _real_semantic_pose_robot_view_images(
             "status": "real_rendering_proven",
             "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
             "detail": (
-                "FPV, chase, map, and verification images were recaptured from the "
-                "loaded USD scene after applying backend semantic pose state. This is "
-                "semantic pose report evidence, not planner-backed or physics-backed "
-                "manipulation proof."
+                "Robot-view images were recaptured from the loaded USD scene after "
+                "applying backend semantic pose state. FPV/verify use canonical "
+                "camera-control when available; chase/map remain auxiliary report "
+                "views. This is semantic pose report evidence, not planner-backed "
+                "or physics-backed manipulation proof."
             ),
         }
     )
@@ -3308,12 +4132,141 @@ def _real_semantic_pose_robot_view_images(
     return images
 
 
-def _focus_payload(
+def _capture_canonical_robot_fpv_verify(
+    state: dict[str, Any],
+    *,
+    scene_usd: Path,
+    target_images: dict[str, Path],
+    width: int,
+    height: int,
+    focus_object_id: str | None,
+    focus_receptacle_id: str | None,
+) -> dict[str, Any]:
+    robot_pose = _robot_pose_for_receptacle(
+        state,
+        str(state.get("current_receptacle_id") or ""),
+    )
+    if robot_pose.get("pose_source") != "usd_world_bounds_support_pose":
+        return {}
+    request = canonical_cleanup_robot_view_camera_request(
+        label="isaac_robot_view",
+        robot_pose=robot_pose,
+        focus=_canonical_robot_view_focus(
+            state,
+            robot_pose,
+            focus_object_id=focus_object_id,
+            focus_receptacle_id=focus_receptacle_id,
+        ),
+        width=width,
+        height=height,
+    )
+    if request is None:
+        return {}
+    output_dir = (
+        target_images["fpv"].parent / f"{target_images['fpv'].stem}.canonical_camera_control"
+    )
+    try:
+        capture = capture_scene_camera_views(
+            scene_usd=scene_usd,
+            camera_request=request,
+            output_dir=output_dir,
+            width=width,
+            height=height,
+        )
+    except Exception as exc:
+        state.setdefault("mapping_gaps", []).append(
+            {
+                "area": "canonical_robot_view_camera_control",
+                "status": "blocked_capability",
+                "source": str(scene_usd),
+                "detail": str(exc),
+            }
+        )
+        return {}
+    copied: dict[str, str] = {}
+    for view in capture.get("views") or []:
+        item = _dict(view)
+        role = str(item.get("robot_view_role") or "")
+        if role not in {"fpv", "verify"}:
+            continue
+        source = Path(str(item.get("image_path") or ""))
+        target = target_images[role]
+        _copy_nonblank_rgb_image(
+            source,
+            target,
+            width=width,
+            height=height,
+            description=f"canonical Isaac {role} robot view",
+        )
+        copied[role] = str(target)
+    if not {"fpv", "verify"} <= set(copied):
+        return {}
+    return {
+        "request": request,
+        "images": copied,
+        "views": capture.get("views") or [],
+        "render_steps": int(capture.get("render_steps") or 0),
+    }
+
+
+def _canonical_robot_view_focus(
+    state: dict[str, Any],
+    robot_pose: dict[str, Any],
     *,
     focus_object_id: str | None,
     focus_receptacle_id: str | None,
 ) -> dict[str, Any]:
+    focus = _focus_payload(
+        state=state,
+        focus_object_id=focus_object_id,
+        focus_receptacle_id=focus_receptacle_id,
+    )
+    target = _vec3(focus.get("focus_position"))
+    source = str(focus.get("source") or "")
+    if target is None:
+        target = _vec3(robot_pose.get("target_position"))
+        source = "isaac_usd_world_bounds_robot_pose"
+    if target is None:
+        target = [0.0, 0.0, 0.0]
+        source = "isaac_semantic_pose_default_origin"
+    return {
+        "has_focus": True,
+        "focus_position": target,
+        "object_id": focus_object_id,
+        "receptacle_id": focus_receptacle_id,
+        "source": source,
+    }
+
+
+def _focus_payload(
+    *,
+    state: dict[str, Any] | None = None,
+    focus_object_id: str | None,
+    focus_receptacle_id: str | None,
+) -> dict[str, Any]:
+    state = state if isinstance(state, dict) else {}
+    object_pose = _semantic_object_pose_entry(state, focus_object_id) if focus_object_id else {}
+    receptacle_pose = (
+        _receptacle_support_pose(state, focus_receptacle_id) if focus_receptacle_id else {}
+    )
+    object_position = _vec3(object_pose.get("position"))
+    receptacle_position = _support_pose_position(receptacle_pose)
+    focus_position = (
+        object_position
+        if object_position is not None
+        else receptacle_position
+        if receptacle_position is not None
+        else None
+    )
     has_focus = bool(focus_object_id or focus_receptacle_id)
+    focus_mode = "object_closeup" if object_position is not None else "receptacle_context"
+    source = (
+        "isaac_semantic_pose_object_pose"
+        if object_position is not None
+        else "isaac_usd_world_bounds_support_pose"
+        if receptacle_position is not None
+        else "isaac_semantic_pose"
+    )
     segmentation_unavailable = {
         "status": "segmentation_unavailable",
         "reason": "Isaac semantic-pose worker has no segmentation mask evidence.",
@@ -3322,10 +4275,38 @@ def _focus_payload(
         "has_focus": has_focus,
         "object_id": focus_object_id,
         "receptacle_id": focus_receptacle_id,
-        "source": "isaac_semantic_pose",
+        "source": source,
+        "focus_mode": focus_mode,
+        "focus_position": focus_position,
+        "object_position": object_position,
+        "receptacle_position": receptacle_position,
         "visibility": dict(segmentation_unavailable),
         "fpv_visibility": dict(segmentation_unavailable),
     }
+
+
+def _semantic_object_pose_entry(
+    state: dict[str, Any],
+    object_id: str | None,
+) -> dict[str, Any]:
+    if not object_id:
+        return {}
+    semantic_pose = _dict(state.get("semantic_pose_state"))
+    object_poses = _dict(semantic_pose.get("object_poses"))
+    return _dict(object_poses.get(object_id))
+
+
+def _support_pose_position(pose: dict[str, Any]) -> list[float] | None:
+    if not _has_xy(pose):
+        return None
+    try:
+        return [
+            float(pose["x"]),
+            float(pose["y"]),
+            float(pose.get("z", 0.0)),
+        ]
+    except (TypeError, ValueError):
+        return None
 
 
 def _real_robot_view_images(state: dict[str, Any]) -> dict[str, str]:
@@ -3476,17 +4457,29 @@ def _robot_view_command_provenance(
     semantic_pose_state_refreshed: bool,
 ) -> dict[str, Any]:
     if semantic_pose_state_refreshed:
-        return _semantic_pose_robot_view_provenance()
+        return _semantic_pose_robot_view_provenance(
+            canonical_camera_control=bool(
+                _dict(state.get("semantic_pose_view_capture")).get("canonical_camera_control")
+            )
+        )
     return _dict(state.get("robot_view_provenance"))
 
 
-def _semantic_pose_robot_view_provenance() -> dict[str, Any]:
+def _semantic_pose_robot_view_provenance(
+    *,
+    canonical_camera_control: bool = False,
+) -> dict[str, Any]:
     provenance = {key: f"{REAL_ROBOT_VIEW_RERENDER_METHOD}:{key}" for key in ROBOT_VIEW_KEYS}
+    if canonical_camera_control:
+        provenance["fpv"] = "isaac_lab_camera_rgb_canonical_robot_view:fpv"
+        provenance["verify"] = "isaac_lab_camera_rgb_canonical_robot_view:verify"
     provenance["semantic_pose_state_refreshed"] = True
+    provenance["canonical_camera_control"] = canonical_camera_control
     provenance["evidence_note"] = (
         "Robot-view images were recaptured from the loaded USD scene after applying "
-        "backend semantic pose state. This is still semantic pose rendering, not "
-        "planner-backed or physics-backed manipulation."
+        "backend semantic pose state. FPV/verify use canonical camera-control when "
+        "available; chase/map remain auxiliary report views. This is still semantic "
+        "pose rendering, not planner-backed or physics-backed manipulation."
     )
     return provenance
 
@@ -4025,6 +5018,26 @@ def _norm(value: Any) -> str:
 
 def _dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _vec3(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
+
+
+def _has_xy(value: dict[str, Any]) -> bool:
+    if "x" not in value or "y" not in value:
+        return False
+    try:
+        float(value["x"])
+        float(value["y"])
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def _index_or_default(

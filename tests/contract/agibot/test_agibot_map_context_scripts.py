@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CAPTURE_PATH = REPO_ROOT / "scripts" / "agibot" / "capture_map_context_views.py"
@@ -39,6 +40,45 @@ def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> No
     assert fixture_hints["fixture_hint_mode"] == "operator_authored_semantic_map"
     assert fixture_hints["contains_runtime_observations"] is False
     assert "agibot_gdk" not in json.dumps(agent_view)
+    assert (output_dir / "semantic_preview.png").is_file()
+
+
+def test_generate_metric_map_from_minimal_agibot_context(tmp_path: Path) -> None:
+    generator = _load_module(GENERATOR_PATH, "generate_metric_map_from_minimal_context")
+    context_path = tmp_path / "agibot_map_context.minimal.json"
+    output_dir = tmp_path / "generated"
+    context_path.write_text(json.dumps(_minimal_context()), encoding="utf-8")
+
+    generator.main([str(context_path), "--output-dir", str(output_dir)])
+
+    metric_map = json.loads((output_dir / "metric_map.json").read_text(encoding="utf-8"))
+    fixture_hints = json.loads((output_dir / "fixture_hints.json").read_text(encoding="utf-8"))
+    agent_view = json.loads((output_dir / "agent_view.json").read_text(encoding="utf-8"))
+    first_waypoint = metric_map["inspection_waypoints"][0]
+    payload_text = json.dumps(agent_view).lower()
+
+    assert metric_map["schema"] == "real_robot_map_bundle_v1"
+    assert metric_map["mode"] == "minimal"
+    assert metric_map["rooms"] == []
+    assert metric_map["minimal_map"]["source_rooms_hidden"] is True
+    assert metric_map["minimal_map"]["source_fixtures_hidden"] is True
+    assert metric_map["minimal_map"]["generated_candidate_count"] == 3
+    assert metric_map["safety_bounds"]["polygon"]
+    assert len(metric_map["inspection_waypoints"]) == 3
+    assert len(metric_map["generated_exploration_candidates"]) == 3
+    assert first_waypoint["waypoint_id"] == "generated_exploration_001"
+    assert first_waypoint["waypoint_source"] == "generated_exploration_candidate"
+    assert first_waypoint["purpose"] == "minimal_map_exploration"
+    assert first_waypoint["reachability_status"] == "verified"
+    assert first_waypoint["candidate_provenance"]["source"] == "public_free_space_sample"
+    assert "verification" not in first_waypoint
+    assert fixture_hints["mode"] == "minimal"
+    assert fixture_hints["fixture_hint_mode"] == "minimal_map_no_fixtures"
+    assert fixture_hints["rooms"] == []
+    assert "agibot_gdk" not in payload_text
+    assert "map_source" not in payload_text
+    assert "verification" not in payload_text
+    assert "pnc" not in payload_text
     assert (output_dir / "semantic_preview.png").is_file()
 
 
@@ -156,6 +196,34 @@ def test_verify_helpers_select_map_check_and_record_status() -> None:
     assert selected[0]["verification"]["primitive_provenance"] == "agibot_gdk_normal_navi"
 
 
+def test_verify_waypoint_timeout_records_cancel_evidence(monkeypatch) -> None:
+    verifier = _load_module(VERIFY_PATH, "verify_waypoints_with_pnc_timeout")
+    waypoint = _completed_context()["inspection_waypoints"][0]
+    pnc = _TimeoutPnc()
+
+    monkeypatch.setattr(verifier.time, "sleep", lambda seconds: None)
+
+    result = verifier.verify_waypoint(
+        gdk=_FakeAgibotGDK(),
+        pnc=pnc,
+        waypoint=waypoint,
+        timeout_s=0.0,
+        poll_s=0.0,
+        map_check={"ok": True},
+    )
+
+    assert result["reachability_status"] == "timeout"
+    assert result["navigation_backend"] == "agibot_gdk"
+    assert result["cancel_attempted"] is True
+    assert result["cancel_task_id"] == 42
+    assert result["cancel_requested"] is True
+    assert result["cancel_error"] == ""
+    assert result["final_task_before_cancel"]["state_name"] == "running"
+    assert result["final_task_after_cancel"]["state_name"] == "canceled"
+    assert result["final_task"]["state_name"] == "canceled"
+    assert pnc.cancel_task_calls == [42]
+
+
 def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> None:
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
@@ -207,6 +275,50 @@ def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> N
     assert navigate_result["tool_response"]["primitive_provenance"] == "blocked_capability"
 
 
+def test_sdk_runner_exports_minimal_context_generated_candidates(tmp_path: Path) -> None:
+    context_path = tmp_path / "agibot_map_context.minimal.json"
+    context_path.write_text(json.dumps(_minimal_context()), encoding="utf-8")
+    root = tmp_path / "sdk-runner"
+    agent_view_dir = root / "01-agent-view"
+    navigate_dir = root / "03-navigate"
+
+    _run_sdk(
+        "agent-view",
+        "--context-json",
+        str(context_path),
+        "--output-dir",
+        str(agent_view_dir),
+    )
+    _run_sdk(
+        "navigate-waypoint",
+        "--agent-view-json",
+        str(agent_view_dir / "agent_view.json"),
+        "--output-dir",
+        str(navigate_dir),
+        "--waypoint-id",
+        "generated_exploration_001",
+    )
+
+    agent_view = json.loads((agent_view_dir / "agent_view.json").read_text(encoding="utf-8"))
+    run_result = json.loads((agent_view_dir / "run_result.json").read_text(encoding="utf-8"))
+    navigate_result = json.loads((navigate_dir / "run_result.json").read_text(encoding="utf-8"))
+    payload_text = json.dumps(agent_view).lower()
+    waypoint = agent_view["metric_map"]["inspection_waypoints"][0]
+
+    assert agent_view["metric_map"]["mode"] == "minimal"
+    assert agent_view["metric_map"]["rooms"] == []
+    assert waypoint["waypoint_source"] == "generated_exploration_candidate"
+    assert waypoint["reachability_status"] == "verified"
+    assert agent_view["fixture_hints"]["fixture_hint_mode"] == "minimal_map_no_fixtures"
+    assert run_result["summary"]["generated_exploration_candidates"] == 3
+    assert run_result["privacy_check"]["ok"] is True
+    assert "agibot_gdk" not in payload_text
+    assert "map_source" not in payload_text
+    assert "verification" not in payload_text
+    assert navigate_result["tool_response"]["navigation_status"] == "dry_run_not_executed"
+    assert navigate_result["tool_response"]["waypoint_id"] == "generated_exploration_001"
+
+
 def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_path: Path) -> None:
     context = _completed_context()
     context["inspection_waypoints"][0]["reachability_status"] = "unverified"
@@ -241,8 +353,166 @@ def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_pat
     assert navigate_result["tool_response"]["navigation_status"] == "blocked"
 
 
+def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_success")
+    waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
+        "inspection_waypoints"
+    ][0]
+    fake_gdk = _FakeAgibotGDK()
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    response = runner._execute_waypoint_navigation(
+        waypoint=waypoint,
+        context_json=None,
+        output_dir=tmp_path,
+        robot_host="127.0.0.1",
+        init_wait_s=0.0,
+        timeout_s=1.0,
+        poll_s=0.0,
+        arrival_observe=False,
+        image_timeout_ms=1.0,
+    )
+
+    assert response["ok"] is True
+    assert response["navigation_status"] == "succeeded"
+    assert response["navigation_backend"] == "agibot_gdk"
+    assert response["primitive_provenance"] == "agibot_gdk_normal_navi"
+    assert response["pose_source"] == "agibot_gdk_pnc_arrival"
+    assert response["navi_request"]["sent"] is True
+    assert response["navi_request"]["not_sent"] is False
+    assert fake_gdk.pnc.normal_navi_calls == 1
+    assert fake_gdk.gdk_release_calls == 1
+
+
+def test_sdk_runner_timeout_cancels_gdk_navigation_and_records_evidence(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_timeout")
+    waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
+        "inspection_waypoints"
+    ][0]
+    fake_gdk = _FakeAgibotGDK(pnc=_TimeoutPnc())
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    response = runner._execute_waypoint_navigation(
+        waypoint=waypoint,
+        context_json=None,
+        output_dir=tmp_path,
+        robot_host="127.0.0.1",
+        init_wait_s=0.0,
+        timeout_s=0.0,
+        poll_s=0.0,
+        arrival_observe=False,
+        image_timeout_ms=1.0,
+    )
+
+    assert response["ok"] is False
+    assert response["status"] == "blocked_capability"
+    assert response["failure_type"] == "timeout"
+    assert response["navigation_status"] == "blocked"
+    assert response["final_task"]["state_name"] == "running"
+    assert response["final_task_after_cancel"]["state_name"] == "canceled"
+    assert response["cancel_attempted"] is True
+    assert response["cancel_task_id"] == 42
+    assert response["cancel_requested"] is True
+    assert response["cancel_error"] == ""
+    assert fake_gdk.pnc.normal_navi_calls == 1
+    assert fake_gdk.pnc.cancel_task_calls == [42]
+    assert fake_gdk.gdk_release_calls == 1
+
+
+def test_sdk_runner_execute_blocks_current_map_mismatch_before_normal_navi(
+    monkeypatch, tmp_path: Path
+) -> None:
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_map_mismatch")
+    waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
+        "inspection_waypoints"
+    ][0]
+    context_path = tmp_path / "agibot_map_context.completed.json"
+    context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
+    fake_gdk = _FakeAgibotGDK(map_item=SimpleNamespace(id=99, name="wrong_map", is_curr_map=True))
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    response = runner._execute_waypoint_navigation(
+        waypoint=waypoint,
+        context_json=context_path,
+        output_dir=tmp_path,
+        robot_host="127.0.0.1",
+        init_wait_s=0.0,
+        timeout_s=1.0,
+        poll_s=0.0,
+        arrival_observe=False,
+        image_timeout_ms=1.0,
+    )
+
+    assert response["ok"] is False
+    assert response["status"] == "blocked_capability"
+    assert response["failure_type"] == "map_mismatch"
+    assert response["navigation_status"] == "blocked"
+    assert response["map_check"]["ok"] is False
+    assert response["map_check"]["expected_map_name"] == "office_floor_1"
+    assert response["map_check"]["current_map_name"] == "wrong_map"
+    assert fake_gdk.map_calls == 1
+    assert fake_gdk.pnc.normal_navi_calls == 0
+    assert fake_gdk.gdk_release_calls == 1
+
+
 def _completed_context() -> dict:
     return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
+
+
+def _minimal_context() -> dict:
+    return {
+        "schema": "agibot_gdk_map_context_authoring_v1",
+        "environment_id": "agibot-minimal-office",
+        "map_version": "minimal-navigation-map-v1",
+        "frame_id": "map",
+        "map_source": {
+            "type": "agibot_gdk_map_context",
+            "map_id": 7,
+            "map_name": "minimal_office",
+            "is_curr_map": True,
+        },
+        "robot_pose": {
+            "pose_source": "agibot_gdk_slam_get_curr_pose",
+            "x": 0.0,
+            "y": 0.0,
+            "yaw": 0.0,
+        },
+        "safety_bounds": {
+            "frame_id": "map",
+            "polygon": [
+                {"x": -1.0, "y": -1.0},
+                {"x": 3.0, "y": -1.0},
+                {"x": 3.0, "y": 3.0},
+                {"x": -1.0, "y": 3.0},
+            ],
+            "max_linear_speed_mps": 0.25,
+        },
+        "free_space_samples": [
+            {"x": 0.5, "y": 0.0, "yaw": 0.0, "reachability_status": "verified"},
+            {"x": 1.5, "y": 0.8, "yaw": 1.57, "reachability_status": "verified"},
+            {"x": 2.2, "y": 2.0, "yaw": 3.14, "reachability_status": "verified"},
+        ],
+        "rooms": [],
+        "fixtures": [],
+        "inspection_waypoints": [],
+        "driveable_ways": [],
+    }
 
 
 def _capture_manifest(waypoint_id: str, *, x: float, y: float) -> dict:
@@ -278,8 +548,99 @@ def _load_module(path: Path, name: str):
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
-    spec.loader.exec_module(module)
+    sys.path.insert(0, str(path.parent))
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.path.pop(0)
     return module
+
+
+class _FakeTask:
+    def __init__(self, state: int, *, task_id: int = 1, message: str = "") -> None:
+        self.id = task_id
+        self.state = state
+        self.type = "normal_navi"
+        self.message = message
+
+
+class _FakePnc:
+    def __init__(self) -> None:
+        self._tasks = [_FakeTask(0, message="idle"), _FakeTask(9, message="success")]
+        self.normal_navi_calls = 0
+        self.last_request: object | None = None
+
+    def get_task_state(self) -> _FakeTask:
+        if len(self._tasks) > 1:
+            return self._tasks.pop(0)
+        return self._tasks[0]
+
+    def normal_navi(self, request: object) -> None:
+        self.normal_navi_calls += 1
+        self.last_request = request
+
+
+class _TimeoutPnc:
+    def __init__(self) -> None:
+        self._canceled = False
+        self.normal_navi_calls = 0
+        self.cancel_task_calls: list[int] = []
+        self.last_request: object | None = None
+
+    def get_task_state(self) -> _FakeTask:
+        if self.normal_navi_calls == 0:
+            return _FakeTask(0, task_id=42, message="idle")
+        if self._canceled:
+            return _FakeTask(7, task_id=42, message="canceled")
+        return _FakeTask(2, task_id=42, message="running")
+
+    def normal_navi(self, request: object) -> None:
+        self.normal_navi_calls += 1
+        self.last_request = request
+
+    def cancel_task(self, task_id: int) -> None:
+        self.cancel_task_calls.append(task_id)
+        self._canceled = True
+
+
+class _FakeAgibotGDK:
+    class GDKRes:
+        kSuccess = 0
+
+    class NaviReq:
+        def __init__(self) -> None:
+            self.target = SimpleNamespace(
+                position=SimpleNamespace(x=0.0, y=0.0, z=0.0),
+                orientation=SimpleNamespace(x=0.0, y=0.0, z=0.0, w=1.0),
+            )
+            self.timestamp_ns = 0
+
+    def __init__(self, pnc: object | None = None, map_item: object | None = None) -> None:
+        self.pnc = pnc or _FakePnc()
+        self.map_item = map_item
+        self.map_calls = 0
+        self.gdk_release_calls = 0
+
+    def gdk_init(self) -> int:
+        return self.GDKRes.kSuccess
+
+    def gdk_release(self) -> None:
+        self.gdk_release_calls += 1
+
+    def Pnc(self) -> _FakePnc:
+        return self.pnc
+
+    def Map(self) -> object:
+        self.map_calls += 1
+        return _FakeMap(self.map_item)
+
+
+class _FakeMap:
+    def __init__(self, item: object | None) -> None:
+        self.item = item
+
+    def get_curr_map(self) -> object | None:
+        return self.item
 
 
 def _run_sdk(*args: str) -> subprocess.CompletedProcess[str]:

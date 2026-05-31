@@ -50,6 +50,7 @@ SUPPORTED_ROUTES: set[tuple[str, str]] = {
     ("photo-chairs", "codex"),
     ("photo-chairs", "claude"),
     ("semantic-map-build", "direct"),
+    ("semantic-map-build", "codex"),
     ("household-cleanup", "direct"),
     ("household-cleanup", "mcp-smoke"),
     ("household-cleanup", "codex"),
@@ -139,7 +140,7 @@ def _resolve_dispatch_mode(task: str, raw_mode: str) -> str:
         profile = raw_mode or "world-labels"
         if profile not in MOLMO_CLEANUP_PROFILES:
             raise CommandError(
-                f"unsupported household profile '{raw_mode}'",
+                f"unsupported household cleanup lane '{raw_mode}'",
                 "expected smoke|world-labels|camera-raw|camera-labels",
             )
         return profile

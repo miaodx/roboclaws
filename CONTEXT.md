@@ -220,10 +220,20 @@ and robot-local observations without claiming physical manipulation.
 _Avoid_: full cleanup deployment, physical manipulation proof
 
 **G2 Map-Build Pilot**:
-The first Agibot G2 hardware target for household world work: verified waypoint
-navigation, `head_color` observations, visual grounding, and Runtime Metric Map
-output. Cleanup actions and physical manipulation remain disabled or blocked.
+The first Agibot G2 hardware target for household world work: a Codex-driven
+agent loop over verified waypoint navigation, `head_color` observations, visual
+grounding, and Runtime Metric Map output. Cleanup actions and physical
+manipulation remain disabled or blocked.
 _Avoid_: cleanup execution, object navigation, physical pick/place proof
+
+**Agibot Minimal Map Context**:
+The G2 real-robot starting context: Agibot GDK map source, occupancy/free-space
+artifacts, frame/origin/resolution metadata, current pose or localization
+evidence, safety bounds, operator gates, and system-generated exploration
+candidates. It must not require hand-authored rooms, fixtures, fixture labels,
+or manually tagged semantic waypoints; `semantic-map-build` creates Runtime
+Metric Map semantics from robot-local observations.
+_Avoid_: manually authored Agibot semantic map, GDK internals in Agent View, arbitrary coordinates
 
 **Simulator/Hardware Contract Parity**:
 The expectation that simulator and physical runs share public task/profile/tool
@@ -236,9 +246,9 @@ A named robot pose prepared by an operator before a run.
 _Avoid_: agent-created map edit, arbitrary coordinate goal
 
 **PNC-Verified Waypoint**:
-An operator-recorded waypoint with current reachability evidence from the robot
-navigation stack.
-_Avoid_: merely recorded waypoint, private route plan
+A public waypoint or generated exploration candidate with current reachability
+evidence from the robot navigation stack.
+_Avoid_: merely recorded coordinates, private route plan
 
 **Operator Localization Gate**:
 The operator-owned preparation gate for map selection, relocalization, and
@@ -246,13 +256,15 @@ localization readiness before robot navigation.
 _Avoid_: agent-facing relocalization tool, automatic map switch
 
 **Operator Run Enablement Gate**:
-The run-level safety gate before autonomous agent navigation starts. It does
-not enable manipulation.
-_Avoid_: per-action approval loop, manipulation permission
+The run-level safety gate before autonomous agent navigation starts. After this
+gate, Codex controls task-level tool choice over the approved capability surface
+while the robot stack and human operator provide safety stops. It does not
+enable manipulation.
+_Avoid_: per-action approval loop, manipulation permission, human task planning
 
 **Human Takeover Stop**:
-A terminal or paused safety state after physical navigation/local-motion failure
-in an early pilot.
+A terminal or paused safety state after physical navigation/local-motion
+failure, robot obstacle-stop, or human emergency stop in an early pilot.
 _Avoid_: hidden fallback, unverified exploration, silent retry
 
 **Backend-Replaceable Navigation**:

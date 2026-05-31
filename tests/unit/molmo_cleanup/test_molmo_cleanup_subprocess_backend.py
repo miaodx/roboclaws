@@ -5,12 +5,16 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
 from roboclaws.molmo_cleanup import subprocess_backend
 from roboclaws.molmo_cleanup.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
+)
+from roboclaws.molmo_cleanup.robot_view_camera_control import (
+    canonical_cleanup_robot_view_camera_request,
 )
 from roboclaws.molmo_cleanup.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
@@ -158,6 +162,7 @@ def test_worker_registers_filament_resource_provider_when_assets_exist(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pytest.importorskip("mujoco")
     worker = _load_worker_module()
     worker._FILAMENT_RESOURCE_PROVIDER = None
     assets_dir = tmp_path / "mujoco" / "filament" / "assets" / "data"
@@ -193,6 +198,7 @@ def test_worker_registers_filament_resource_provider_when_assets_exist(
 def test_worker_normalizes_filament_renderer_frame_orientation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    pytest.importorskip("mujoco")
     worker = _load_worker_module()
     import numpy as np
 
@@ -225,6 +231,138 @@ def test_worker_kwargs_parse_render_resolution_args() -> None:
 
     assert kwargs["render_width"] == "1280"
     assert kwargs["render_height"] == "720"
+
+
+def test_subprocess_backend_exposes_camera_control_request_api(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_python = tmp_path / "python"
+    fake_python.write_text("", encoding="utf-8")
+    backend = MolmoSpacesSubprocessBackend.__new__(MolmoSpacesSubprocessBackend)
+    backend.state_path = tmp_path / "state.json"
+    backend.python_executable = fake_python
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {"ok": True}
+
+    monkeypatch.setattr(backend, "_run_worker", fake_run_worker)
+    request_path = tmp_path / "camera_control_request.json"
+    request_path.write_text(
+        json.dumps({"render_resolution": {"width": 960, "height": 640}, "views": []}),
+        encoding="utf-8",
+    )
+
+    result = backend.render_camera_control_request(
+        tmp_path / "camera_views",
+        request_path=request_path,
+    )
+
+    assert result["ok"] is True
+    assert captured["command"] == "camera_views"
+    assert captured["args"] == (
+        "--output-dir",
+        str(tmp_path / "camera_views"),
+        "--camera-request-path",
+        str(request_path),
+        "--render-width",
+        "960",
+        "--render-height",
+        "640",
+    )
+
+
+def test_molmospaces_worker_normalizes_camera_control_request() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    request = worker.normalize_camera_control_request(
+        {
+            "camera_orbit": {"distance_m": 4.4, "azimuth_deg": 225.0, "elevation_deg": 28.0},
+            "lens": {"vertical_fov_deg": 45.0},
+            "views": [
+                {
+                    "view_id": "view 01/table",
+                    "lookat": [2.7, 5.9, 1.0],
+                    "camera_model": "anchor_orbit_lookat_camera_v1",
+                    "lane_camera_orbits": {
+                        "molmospaces-mujoco": {
+                            "distance_m": 4.4,
+                            "azimuth_deg": 90.0,
+                            "elevation_deg": 28.0,
+                        }
+                    },
+                    "calibration_status": "anchor_orbit_relative_calibrated_v1",
+                }
+            ],
+        },
+        width=960,
+        height=640,
+    )
+
+    spec = worker._camera_view_spec(request["views"][0], index=1)
+
+    assert spec["view_id"] == "view_01_table"
+    assert spec["camera_model"] == "anchor_orbit_lookat_camera_v1"
+    assert spec["calibration_status"] == "anchor_orbit_relative_calibrated_v1"
+    assert spec["distance"] == pytest.approx(4.4)
+    assert spec["azimuth"] == pytest.approx(90.0)
+    assert spec["elevation"] == pytest.approx(-28.0)
+    assert spec["lookat"] == pytest.approx([2.7, 5.9, 1.0])
+    assert spec["eye"][2] > spec["lookat"][2]
+    assert spec["backend_eye"] == pytest.approx(spec["eye"])
+    assert spec["backend_target"] == pytest.approx(spec["lookat"])
+
+
+def test_molmospaces_worker_converts_canonical_eye_to_mujoco_free_camera_angles() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    requested_eye = [1.9435, 3.23895, 1.45]
+    requested_target = [2.99, 4.983, 1.45]
+
+    spec = worker._camera_view_spec(
+        {
+            "view_id": "room 01/room 2",
+            "camera_model": "canonical_eye_target_camera_v1",
+            "eye": requested_eye,
+            "target": requested_target,
+        },
+        index=1,
+    )
+
+    assert spec["view_id"] == "room_01_room_2"
+    assert spec["lookat"] == pytest.approx(requested_target)
+    assert spec["eye"] == pytest.approx(requested_eye)
+    assert spec["backend_eye"] == pytest.approx(requested_eye)
+    assert spec["backend_target"] == pytest.approx(requested_target)
+    assert spec["azimuth"] == pytest.approx(59.03455257875734)
+    assert spec["elevation"] == pytest.approx(0.0)
+    reconstructed_eye = worker._eye_from_mujoco_free_camera(
+        lookat=spec["lookat"],
+        distance=spec["distance"],
+        azimuth=spec["azimuth"],
+        elevation=spec["elevation"],
+    )
+    assert reconstructed_eye == pytest.approx(requested_eye)
+
+
+def test_molmospaces_worker_preserves_robot_view_role_on_camera_spec() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    request = canonical_cleanup_robot_view_camera_request(
+        label="0001 observe",
+        robot_pose={"x": 1.0, "y": 2.0, "z": 0.0, "theta": 0.0, "head_pitch": 0.25},
+        focus={"focus_position": [3.0, 2.0, 0.6]},
+        width=320,
+        height=240,
+    )
+
+    spec = worker._camera_view_spec(request["views"][0], index=1)
+
+    assert spec["robot_view_role"] == "fpv"
+    assert spec["camera_basis"] == "robot_pose_eye_target"
 
 
 class _FakeCFunc:
@@ -580,6 +718,45 @@ def test_worker_support_surface_accepts_rotated_collision_slab() -> None:
     assert surfaces[0]["half_extents"] == pytest.approx([0.6, 0.4])
 
 
+def test_worker_room_outlines_use_mesh_world_bounds_not_geom_size() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = worker.mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <asset>
+            <mesh name="room_1"
+                  vertex="0 0 0  0 2 0  4 0 0  4 2 0
+                          0 0 .1  0 2 .1  4 0 .1  4 2 .1"/>
+          </asset>
+          <worldbody>
+            <body name="room_1" pos="1 2 0">
+              <geom name="room_1_visual_0" type="mesh" mesh="room_1"/>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = worker.mujoco.MjData(model)
+    worker.mujoco.mj_forward(model, data)
+
+    outlines = worker._collect_room_outlines(
+        model,
+        data,
+        {"receptacles": {}, "objects": {}},
+    )
+
+    assert outlines == [
+        {
+            "room_id": "room_1",
+            "label": "Room 1",
+            "center": pytest.approx([3.0, 3.0]),
+            "half_extents": pytest.approx([2.0, 1.0]),
+            "provenance": "mujoco_room_mesh_world_bounds",
+        }
+    ]
+
+
 def test_worker_allows_open_shelf_place_inside_without_open(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -713,6 +890,130 @@ def test_worker_reuses_grounded_fpv_when_verify_closeup_misses_focus() -> None:
     }
 
     assert worker._should_use_fpv_as_verify_focus(focus) is True
+
+
+def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() -> None:
+    request = canonical_cleanup_robot_view_camera_request(
+        label="0001 observe",
+        robot_pose={"x": 1.0, "y": 2.0, "z": 0.0, "theta": 0.0, "head_pitch": 0.25},
+        focus={"focus_position": [3.0, 2.0, 0.6]},
+        width=320,
+        height=240,
+    )
+
+    assert request is not None
+    assert request["api_name"] == "roboclaws.camera_control.render_views"
+    assert request["camera_model"] == "canonical_eye_target_camera_v1"
+    assert request["render_resolution"] == {"width": 320, "height": 240}
+    assert [item["robot_view_role"] for item in request["views"]] == ["fpv", "verify"]
+    assert request["views"][0]["eye"] == [1.0, 2.0, 1.55]
+    assert request["views"][0]["target"] == [3.0, 2.0, 0.8]
+
+
+def test_worker_robot_views_prefers_canonical_camera_control(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    frame = np.zeros((12, 16, 3), dtype=np.uint8)
+    state = {
+        "robot_included": True,
+        "robot_name": "rby1m",
+        "robot_pose": {"x": 1.0, "y": 2.0, "z": 0.0, "theta": 0.0, "head_pitch": 0.25},
+        "robot_trajectory": [],
+        "robot_view_provenance": {},
+        "objects": {},
+        "receptacles": {},
+        "room_outlines": [],
+        "qpos": [],
+        "tool_event_counts": {},
+    }
+
+    monkeypatch.setattr(worker, "_load_model_data_for_state", lambda _state: (object(), object()))
+    monkeypatch.setattr(worker, "_apply_qpos", lambda *_args: None)
+    monkeypatch.setattr(worker, "_refresh_object_positions", lambda *_args: None)
+    monkeypatch.setattr(worker.mujoco, "mj_forward", lambda *_args: None)
+    monkeypatch.setattr(worker, "_render_fixed_camera", lambda *_args, **_kwargs: frame.copy())
+    monkeypatch.setattr(
+        worker, "_render_robot_map", lambda *_args, **_kwargs: worker.Image.new("RGB", (4, 4))
+    )
+    monkeypatch.setattr(
+        worker,
+        "_focus_visibility",
+        lambda *_args, **_kwargs: {"status": "ok", "object_pixels": 1, "boxes": []},
+    )
+
+    def fake_render_camera_views(
+        _model: object,
+        _data: object,
+        *,
+        state: dict[str, object],
+        output_dir: Path,
+        camera_request: dict[str, object],
+        width: int,
+        height: int,
+    ) -> dict[str, object]:
+        del _model, _data, state
+        output_dir.mkdir(parents=True, exist_ok=True)
+        views = []
+        for item in camera_request["views"]:
+            assert isinstance(item, dict)
+            image_path = output_dir / f"{item['view_id']}.png"
+            worker.Image.fromarray(frame).save(image_path)
+            views.append({**item, "image_path": str(image_path), "shape": list(frame.shape)})
+        return {"ok": True, "views": views, "render_resolution": {"width": width, "height": height}}
+
+    monkeypatch.setattr(worker, "_render_camera_views_with_model_data", fake_render_camera_views)
+    result = worker.write_robot_views(state, tmp_path, "0001_observe", width=16, height=12)
+
+    assert result["ok"] is True
+    assert state["tool_event_counts"] == {"robot_views": 1}
+    assert result["camera_control_contract"]["same_pose_api"] is True
+    assert result["camera_control_contract"]["camera_model"] == "canonical_eye_target_camera_v1"
+    assert result["camera_control_contract"]["agent_facing_fpv"]["canonical_camera_control"] is True
+    assert Path(result["views"]["fpv"]).is_file()
+
+
+def test_worker_robot_views_keeps_backend_local_fallback_without_pose(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    frame = np.zeros((12, 16, 3), dtype=np.uint8)
+    state = {
+        "robot_included": True,
+        "robot_name": "rby1m",
+        "robot_trajectory": [],
+        "robot_view_provenance": {},
+        "objects": {},
+        "receptacles": {},
+        "room_outlines": [],
+        "qpos": [],
+    }
+
+    monkeypatch.setattr(worker, "_load_model_data_for_state", lambda _state: (object(), object()))
+    monkeypatch.setattr(worker, "_apply_qpos", lambda *_args: None)
+    monkeypatch.setattr(worker, "_refresh_object_positions", lambda *_args: None)
+    monkeypatch.setattr(worker.mujoco, "mj_forward", lambda *_args: None)
+    monkeypatch.setattr(worker, "_render_fixed_camera", lambda *_args, **_kwargs: frame.copy())
+    monkeypatch.setattr(worker, "_render_free_camera", lambda *_args, **_kwargs: frame.copy())
+    monkeypatch.setattr(
+        worker, "_render_robot_map", lambda *_args, **_kwargs: worker.Image.new("RGB", (4, 4))
+    )
+    monkeypatch.setattr(worker, "_focus_camera", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        worker,
+        "_focus_visibility",
+        lambda *_args, **_kwargs: {"status": "ok", "object_pixels": 1, "boxes": []},
+    )
+
+    result = worker.write_robot_views(state, tmp_path, "0001_observe", width=16, height=12)
+
+    assert result["ok"] is True
+    assert result["camera_control_contract"]["same_pose_api"] is False
+    assert result["camera_control_contract"]["status"] == "backend_local_robot_camera"
 
 
 def test_worker_focus_payload_uses_held_object_closeup_before_receptacle_place() -> None:

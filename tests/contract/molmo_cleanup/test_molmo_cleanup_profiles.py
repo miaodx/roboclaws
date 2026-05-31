@@ -59,14 +59,19 @@ def test_cleanup_profile_expands_to_contract_metadata(
     assert metadata["report"] == report
 
 
-def test_world_labels_profile_is_not_image_reasoning() -> None:
+def test_world_labels_lane_is_not_image_reasoning_or_map_mode() -> None:
     metadata = cleanup_profile_metadata(WORLD_LABELS_PROFILE)
 
     assert metadata["backend"] == MOLMOSPACES_SUBPROCESS_BACKEND
     assert metadata["agent_input"] == "world_labels"
     assert metadata["input_provenance"] == "simulator_state"
-    assert "not model input" in metadata["model_input_note"]
+    assert "input lane" in metadata["summary"].lower()
+    assert "not model input for this lane" in metadata["model_input_note"]
+    assert "map_mode" in metadata["model_input_note"]
+    assert "runtime_map_prior" in metadata["model_input_note"]
     assert "image reasoning" not in metadata["summary"].lower()
+    assert "online" not in metadata["summary"].lower()
+    assert "offline" not in metadata["summary"].lower()
 
 
 def test_world_labels_run_metadata_can_disable_robot_view_capture() -> None:

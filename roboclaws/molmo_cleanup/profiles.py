@@ -114,11 +114,12 @@ _PROFILES: dict[str, CleanupProfile] = {
         include_robot=True,
         record_robot_views=True,
         requires_clean_success=True,
-        summary="Structured world-label cleanup with RBY1M robot-view report artifacts.",
+        summary=("Structured-label cleanup input lane with RBY1M robot-view report artifacts."),
         model_input_note=(
             "The agent receives observed object handles and structured labels. "
             "FPV, chase, map, and verification images are report evidence, not "
-            "model input for this profile."
+            "model input for this lane. This lane does not select online/offline "
+            "map behavior; use map_mode and runtime_map_prior for that."
         ),
     ),
     CAMERA_RAW_PROFILE: CleanupProfile(
@@ -235,12 +236,13 @@ def cleanup_profile_metadata_for_run(
         metadata["backend"] = backend
         metadata["world_backend"] = ISAAC_SIM_BACKEND
         metadata["summary"] = (
-            "Structured world-label cleanup with Isaac Lab semantic-pose backend artifacts."
+            "Structured-label cleanup input lane with Isaac Lab semantic-pose backend artifacts."
         )
         metadata["model_input_note"] = (
             "The agent receives observed object handles and structured labels. "
             "Isaac FPV, chase, and verification images are report evidence, not "
-            "model input for this profile."
+            "model input for this lane. This lane does not select online/offline "
+            "map behavior; use map_mode and runtime_map_prior for that."
         )
     metadata["record_robot_views"] = bool(record_robot_views)
     if profile.profile == WORLD_LABELS_PROFILE and not record_robot_views:

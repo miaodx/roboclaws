@@ -546,6 +546,7 @@ def _cleanup_summary_section(
           {_badge("MCP server", run_result.get("mcp_server", "none"))}
           {_confidence_layer_badges(run_result)}
           {_robot_badge(run_result)}
+          {_robot_view_camera_badges(run_result)}
         </div>
       </details>
     </section>
@@ -1329,13 +1330,22 @@ def _robot_badge(run_result: dict[str, Any]) -> str:
     return _badge("Robot", robot_name)
 
 
+def _robot_view_camera_badges(run_result: dict[str, Any]) -> str:
+    summary = run_result.get("robot_view_camera_control")
+    if not isinstance(summary, dict):
+        return ""
+    return _badge("Robot-view camera", summary.get("status", "unknown")) + _badge(
+        "Same-pose robot FPV", summary.get("same_pose_api", False)
+    )
+
+
 def _cleanup_profile_badges(run_result: dict[str, Any]) -> str:
     metadata = run_result.get("cleanup_profile_metadata") or {}
     if not metadata:
         return ""
     return "".join(
         (
-            _badge("Profile", metadata.get("profile", run_result.get("cleanup_profile", ""))),
+            _badge("Input lane", metadata.get("profile", run_result.get("cleanup_profile", ""))),
             _badge("Agent input", metadata.get("agent_input", "")),
             _badge("Input provenance", metadata.get("input_provenance", "")),
             _badge("Report", metadata.get("report", "")),
@@ -1397,7 +1407,10 @@ def _cleanup_profile_note(run_result: dict[str, Any]) -> str:
     profile = metadata.get("profile", run_result.get("cleanup_profile", "unknown"))
     verifiers = ", ".join(str(item) for item in metadata.get("verifiers") or [])
     note = (
-        f"Cleanup profile {profile}: {metadata.get('summary', '')} "
+        f"Cleanup input/evidence lane {profile}: {metadata.get('summary', '')} "
+        "This lane selects what the agent receives and what evidence/report gates "
+        "the run produces; map shape and map priors are controlled separately by "
+        "map_mode and runtime_map_prior. "
         f"Agent input: {metadata.get('agent_input', 'unknown')}; "
         f"input provenance: {metadata.get('input_provenance', 'unknown')}; "
         f"report: {metadata.get('report', 'unknown')}; verifier gates: {verifiers}. "
@@ -5461,8 +5474,19 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
     trace = run_result.get("cleanup_policy_trace") or {}
     if not trace:
         return ""
+    events = [item for item in trace.get("events") or [] if isinstance(item, dict)]
+    has_review_fields = any(
+        item.get("decision") or item.get("progress") or item.get("reason") for item in events
+    )
     rows = []
-    for item in trace.get("events") or []:
+    for item in events:
+        review_cells = ""
+        if has_review_fields:
+            review_cells = (
+                f"<td>{html.escape(str(item.get('decision', '')))}</td>"
+                f"<td>{html.escape(str(item.get('progress', '')))}</td>"
+                f"<td>{html.escape(str(item.get('reason', '')))}</td>"
+            )
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(item.get('index', '')))}</td>"
@@ -5471,12 +5495,14 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('waypoint_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('fixture_id', '')))}</td>"
+            f"{review_cells}"
             "</tr>"
         )
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Waypoint source', trace.get('waypoint_source', 'unknown'))}"
         f"{_metric('Loop style', trace.get('loop_style', 'unknown'))}"
+        f"{_metric('Review kind', trace.get('agent_review_kind', 'n/a'))}"
         f"{_metric('Waypoint observes', trace.get('scan_observe_count', 0))}"
         f"{_metric('Cleanup actions', trace.get('cleanup_action_count', 0))}"
         f"{_metric('Post-place observes', trace.get('post_place_observe_count', 0))}"
@@ -5489,21 +5515,33 @@ def _cleanup_policy_trace_section(run_result: dict[str, Any]) -> str:
                 trace.get("first_cleanup_before_full_survey", False),
             ),
             _badge("Post-place observe complete", trace.get("post_place_observe_complete", False)),
+            _badge("Agent reasoning visible", trace.get("agent_reasoning_visible", False)),
         )
     )
+    review_headers = ""
+    if has_review_fields:
+        review_headers = "<th>Decision</th><th>Progress</th><th>Reason</th>"
     table = (
         '<div class="table-wrap"><table><thead><tr><th>#</th><th>Tool</th>'
-        "<th>Role</th><th>Waypoint</th><th>Object</th><th>Fixture</th></tr></thead>"
+        "<th>Role</th><th>Waypoint</th><th>Object</th><th>Fixture</th>"
+        f"{review_headers}</tr></thead>"
         "<tbody>" + "".join(rows) + "</tbody></table></div>"
     )
+    notes = [
+        "inspection_waypoints are static_map_fixture_coverage inputs. Coverage scans, "
+        "cleanup actions, and post-place observes are labelled so reviewers can tell "
+        "whether the run was interleaved or survey-first. The current public MCP surface "
+        "models open_receptacle and close_receptacle as semantic access state around "
+        "place_inside."
+    ]
+    operator_review_note = str(trace.get("operator_review_note") or "").strip()
+    if operator_review_note:
+        notes.append(operator_review_note)
+    note_html = "".join(f'<p class="note">{html.escape(note)}</p>' for note in notes)
     return (
         '<section class="panel cleanup-policy-trace">'
         "<h2>Waypoint Honesty & Cleanup Loop</h2>"
-        '<p class="note">inspection_waypoints are static_map_fixture_coverage inputs. '
-        "Coverage scans, cleanup actions, and post-place observes are labelled so "
-        "reviewers can tell whether the run was interleaved or survey-first. "
-        "The current public MCP surface models open_receptacle and close_receptacle "
-        "as semantic access state around place_inside.</p>"
+        f"{note_html}"
         f'{metrics}<div class="badges">{badges}</div>{table}</section>'
     )
 
@@ -6343,6 +6381,7 @@ def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
         artifacts = item.get("image_artifacts") or {}
         fpv_path = artifacts.get("fpv") or item.get("fpv_image")
         offset = item.get("camera_offset") or {}
+        camera_contract = _robot_view_camera_contract_summary(item.get("camera_control_contract"))
         cards.append(
             '<article class="raw-fpv-card">'
             "<div>"
@@ -6352,6 +6391,7 @@ def _raw_fpv_observations_section(run_result: dict[str, Any]) -> str:
             f'<p class="pose">camera yaw={html.escape(str(offset.get("yaw_delta_deg", 0)))} '
             f"pitch={html.escape(str(offset.get('pitch_delta_deg', 0)))}</p>"
             f'<p class="note">{html.escape(str(item.get("artifact_status", "")))}</p>'
+            f"{camera_contract}"
             "</div>"
             f"{_view_figure(fpv_path, 'FPV')}"
             "</article>"
@@ -6500,6 +6540,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
             f"{_focus_summary(step, focus)}"
             f"{_robot_evidence_summary(step)}"
             f"{_robot_view_provenance_summary(step)}"
+            f"{_robot_view_camera_contract_summary(step.get('camera_control_contract'))}"
             '<div class="views robot-primary-views">'
             f"{_view_figure(views.get('fpv'), 'FPV')}"
             f"{_view_figure(views.get('map'), 'Map')}"
@@ -6580,6 +6621,29 @@ def _step_uses_refreshed_isaac_semantic_pose_capture(step: dict[str, Any]) -> bo
         provenance,
         sort_keys=True,
     )
+
+
+def _robot_view_camera_contract_summary(contract: Any) -> str:
+    if not isinstance(contract, dict):
+        return ""
+    badges = "".join(
+        [
+            _badge("Camera contract", contract.get("status", "unknown")),
+            _badge("Camera model", contract.get("camera_model", "unknown")),
+            _badge("Same-pose API", contract.get("same_pose_api", False)),
+        ]
+    )
+    fpv = (
+        contract.get("agent_facing_fpv")
+        if isinstance(contract.get("agent_facing_fpv"), dict)
+        else {}
+    )
+    fpv_source = fpv.get("source")
+    if fpv_source:
+        badges += _badge("FPV source", fpv_source)
+    note = str(contract.get("evidence_note") or "")
+    note_html = f'<p class="note">{html.escape(note)}</p>' if note else ""
+    return f'<div class="semantic-badges robot-view-camera-contract">{badges}</div>{note_html}'
 
 
 def _write_fpv_bbox_verification(

@@ -77,6 +77,8 @@ Key pieces:
 - `roboclaws/molmo_cleanup/realworld_mcp_server.py` exposes the cleanup MCP
   surface for coding agents and OpenClaw-style clients.
 - `roboclaws/molmo_cleanup/report.py` renders the shared report.
+- `roboclaws/molmo_cleanup/camera_control.py` owns the external render-camera
+  request schema used by MuJoCo/Isaac scene probes.
 - `roboclaws/molmo_cleanup/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.
@@ -105,6 +107,12 @@ just task::run ai2thor-nav codex visual
 just task::run semantic-map-build direct world-labels seed=7
 just task::run household-cleanup direct world-labels seed=7
 ```
+
+For household tasks, the third positional token is a cleanup input/evidence
+lane. `world-labels` means the agent receives structured object handles and
+labels; it does not select online/offline map behavior. Use `map_mode=...` to
+choose the map projection and `runtime_map_prior=...` to consume a prebuilt
+runtime map snapshot.
 
 The clean-slate household naming is the public surface: `semantic-map-build`
 produces Runtime Metric Map snapshots, and `household-cleanup` consumes

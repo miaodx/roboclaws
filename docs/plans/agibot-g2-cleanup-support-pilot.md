@@ -4,7 +4,8 @@
 execution still unrun
 **Created:** 2026-05-19
 **Source:** grill-with-docs session on Agibot G2 GDK docs, local
-`vendors/agibot/app` examples, and `docs/plans/real-robot-nav2-cleanup-pilot.md`
+`vendors/agibot_sdk/` docs/examples, and
+`docs/plans/real-robot-nav2-cleanup-pilot.md`
 **Workflow:** Pre-GSD plan. Ingest into `.planning/` before implementation.
 
 ## Problem
@@ -34,14 +35,14 @@ Nav2-backed robots:
   `fixture_hints`, `observe`, `navigate_to_waypoint`, `navigate_to_room`,
   `navigate_to_receptacle`, `navigate_to_object`,
   `navigate_to_visual_candidate`, and blocked manipulation tools.
-- Generate Agibot agent map context from an operator-authored Agibot GDK Map
-  Context, not from a required Nav2 map bundle.
+- Generate Agibot agent map context from a minimal Agibot GDK map context, not
+  from a required Nav2 map bundle or hand-authored semantic map.
 - Support a minimal-map path from Agibot occupancy/free-space artifacts where
   semantic-map-build enriches rooms, fixtures, and observation targets through
   public robot-local evidence.
-- Let operators capture robot views and fill or review public map semantics
-  when needed, without making complete manual semantics the long-term
-  prerequisite for map-build pilots.
+- Let operators choose maps, relocalize, set safety bounds, and approve run
+  gates, while `semantic-map-build` creates public map semantics automatically
+  from robot-local observations.
 - Verify public or generated navigation targets through GDK PNC before treating
   them as hardware-ready.
 - Execute existing navigation tools through Agibot GDK PNC without adding
@@ -49,6 +50,9 @@ Nav2-backed robots:
 - Preserve honest evidence in reports: map/localization gates, waypoint
   verification, backend/provenance labels, local nudge substeps, and failure
   handoff.
+- Use the existing public task grammar for hardware runs, e.g.
+  `semantic-map-build` with `driver=codex` and `backend=agibot_gdk`; do not add
+  an Agibot-only public task taxonomy.
 
 ## Decisions Locked
 
@@ -57,19 +61,21 @@ Nav2-backed robots:
 - `real_robot_cleanup_v1` should describe a shared physical robot cleanup pilot
   boundary, with metadata equivalent to `backend=physical_robot` and a backend
   variant set such as `nav2_ros2` and `agibot_gdk`.
+- Agibot G2 is selected as a backend variant such as `backend=agibot_gdk` under
+  the existing `just task::run <task> <driver> ...` command grammar. It is not
+  a separate public task name.
 - `metric_map()` is backend-agnostic agent input. In rich-map mode it may
   contain public rooms, fixtures, waypoints, driveable links, reachability
   status, and preview artifacts. In minimal-map mode it may start from
   occupancy/free-space geometry, pose/frame metadata, safety bounds, and
   generated exploration candidates. It must not expose backend variant metadata,
   Agibot map ids/names, current-map evidence, raw GDK map data, or PNC internals.
-- Agibot G2 uses an Agibot GDK Map Context plus Cleanup Map Semantics as its
-  Navigation Map Artifact. A Nav2 Map Artifact is not required unless a real
-  Agibot-to-Nav2 bridge is later proven.
-- Operator-Recorded Waypoints remain the safest first-pilot navigation source,
-  but minimal-map rehearsals should add system-generated exploration candidates
-  derived from public free-space geometry. The agent may select or order those
-  candidates; it may not invent arbitrary physical coordinates.
+- Agibot G2 uses an Agibot Minimal Map Context as its Navigation Map Artifact.
+  A Nav2 Map Artifact and a hand-authored cleanup semantic map are not required
+  unless explicitly selected for a comparison run.
+- System-generated exploration candidates derived from public free-space
+  geometry are the first-pilot navigation source. The agent may select or order
+  those candidates; it may not invent arbitrary physical coordinates.
 - A waypoint or generated exploration candidate is hardware-ready only after
   PNC verification or an equivalent backend reachability gate. Verification is
   an operator/backend preparation action, not an agent-facing cleanup tool.
@@ -86,14 +92,18 @@ Nav2-backed robots:
   selected map, G02 Pad relocalization, and localization readiness.
 - Before autonomous motion starts, an Operator Run Enablement Gate must confirm
   that the robot may run within the allowed tool boundary. This is a run-level
-  gate, not per-action human approval.
+  gate, not per-action human approval. After the gate, Codex should control
+  task-level tool choice and print or record its reasoning/progress; humans
+  remain safety supervisors through robot-side obstacle stop and manual
+  emergency stop.
 - Manipulation remains blocked: `pick`, `place`, `place_inside`,
   `open_receptacle`, and `close_receptacle` return structured
   `blocked_capability`.
 - Navigation failure, local-motion failure, map mismatch, or missing
-  localization enters Human Takeover Stop. The first pilot should not try hidden
-  fallback waypoints, unverified goals, map switching, relocalization, arbitrary
-  coordinates, or extra local nudges.
+  localization enters Human Takeover Stop. Robot-side obstacle stops and human
+  emergency stops also enter Human Takeover Stop. The first pilot should not try
+  hidden fallback waypoints, unverified goals, map switching, relocalization,
+  arbitrary coordinates, or extra local nudges.
 - Bounded Local Nudge is backend-internal only. It is not a new agent-facing
   tool and should not replace waypoint navigation as the primary route
   mechanism.
@@ -127,7 +137,8 @@ Agent-facing `metric_map()` output:
 - `schema="real_robot_map_bundle_v1"` for shared real-robot map projection
   compatibility.
 - Rich-map mode: public rooms, fixture ids/labels/categories, public inspection
-  waypoints, and optional driveable links.
+  waypoints, and optional driveable links, only for explicit comparison/dev
+  runs.
 - Minimal-map mode: occupancy/free-space metadata, current pose/frame context,
   safety bounds, and generated exploration candidates. Runtime rooms, fixture
   candidates, and observed objects are added only from public observation
@@ -177,30 +188,33 @@ Tool behavior:
 
 1. **Agibot Docs And Example Mirror**
    Keep the Agibot GDK 2.6.3 docs and relevant example code under
-   `vendors/agibot/` so implementation decisions can cite local source
+   `vendors/agibot_sdk/` so implementation decisions can cite local source
    material. Keep these files vendored evidence, not runtime package code.
 
-2. **Map Context Capture Script**
-   Add or harden a script that runs on the Agibot GDK machine, records current
-   map evidence, SLAM pose, and camera images, and creates or updates an
-   `agibot_gdk_map_context_authoring_v1` JSON file. The script should support
-   repeated captures so an operator can mark multiple waypoints.
+2. **Minimal Map Context Capture Script**
+   Replace the old human semantic authoring flow with a script that runs on the
+   Agibot GDK machine and records current map evidence, occupancy/free-space
+   artifacts, frame/origin/resolution metadata, robot pose/localization
+   evidence, camera images for report review, and operator safety bounds. The
+   output is an Agibot Minimal Map Context and must not require hand-authored
+   rooms, fixtures, fixture labels, or manually tagged semantic waypoints.
 
 2A. **Minimal Map Context Path**
-   Add a sparse context path that can start from Agibot occupancy/free-space
-   artifacts, current pose, frame metadata, and operator safety bounds without
-   requiring complete room/fixture semantics. This path is for
-   `semantic-map-build` pilots, not physical cleanup.
+   Generate safe exploration candidates from Agibot occupancy/free-space
+   artifacts, current pose, frame metadata, and operator safety bounds. Project
+   those candidates as generated waypoint entries for `navigate_to_waypoint`.
 
-3. **Human Semantic Authoring Path**
-   Define the operator-filled fields for rooms, fixtures, fixture categories,
-   fixture footprints or poses, waypoint labels, waypoint purposes, and optional
-   capture links. Treat incomplete TODO fields as invalid for generation.
+3. **Remove Human Semantic Authoring Path**
+   Remove the Agibot runtime path that requires operators to fill rooms,
+   fixtures, fixture categories, fixture footprints, and manually tagged
+   semantic waypoints. Do not preserve the old Agibot rich semantic authoring
+   route for backward compatibility.
 
 4. **Metric Map Projection Generator**
-   Convert completed Agibot context JSON into `metric_map.json`,
-   `fixture_hints.json`, `agent_view.json`, and a semantic preview image.
-   The generated agent view must remain backend-agnostic and must not include
+   Convert an Agibot Minimal Map Context into `metric_map.json`,
+   `fixture_hints.json`, `agent_view.json`, and map preview artifacts.
+   `fixture_hints` may be empty before observation-derived anchors exist. The
+   generated agent view must remain backend-agnostic and must not include
    Agibot map source or PNC verification internals.
 
 5. **Waypoint PNC Verification Script**
@@ -221,9 +235,9 @@ Tool behavior:
 
 8. **Observation And Report Integration**
    Wire Agibot `observe()` to the `head_color` policy camera and include
-   captured authoring images, runtime observations, waypoint verification, and
-   backend provenance in the cleanup report. Debug cameras should stay report
-   artifacts, not policy inputs.
+   runtime observations, waypoint verification, visual-grounding evidence or
+   visible visual-grounding failure evidence, and backend provenance in the
+   report. Debug cameras should stay report artifacts, not policy inputs.
 
 9. **Profile And Checker Alignment**
    Update `real_robot_cleanup_v1` metadata and contract tests so physical robot
@@ -231,12 +245,12 @@ Tool behavior:
    `nav2_action`-only provenance. The profile should allow both `nav2_ros2` and
    `agibot_gdk` backend variants while preserving the same public tool list.
 
-10. **Physical Pilot Runbook**
-    Document the Agibot operator workflow: relocalize on G02 Pad, capture
-    context views, fill missing semantics, verify waypoints with PNC, generate
-    agent map projection, run the navigation + perception pilot, and review the
-    report. Include real-hardware warnings and note that scripts are unvalidated
-    until exercised on a G2.
+10. **Codex-Driven Physical Pilot Runbook**
+    Document the Agibot operator workflow: relocalize on G02 Pad, capture a
+    minimal map context, set safety bounds, generate and approve exploration
+    candidates, run the Codex-driven navigation + perception pilot, and review
+    the report. Include real-hardware warnings and note that physical
+    manipulation remains blocked.
 
 ## Implementation Evidence
 
@@ -280,6 +294,258 @@ movement gate, not physical PNC execution.
 - Wired the Isaac scene-index cleanup scenario path into public fixture hints
   for map-bundle runs so scene-index receptacles can route cleanup without
   leaking private target truth.
+
+2026-05-29 Agibot minimal-map context gap closure:
+
+- Updated `scripts/agibot/generate_metric_map_from_context.py` so an Agibot
+  context with safety bounds and generated/free-space exploration samples can
+  emit `metric_map.json`, `fixture_hints.json`, `agent_view.json`, and a preview
+  without hand-authored rooms, fixtures, or semantic waypoints.
+- Mirrored the same minimal projection in the vendored SDK runner
+  `agent-view` export. Generated exploration candidates are projected as public
+  `inspection_waypoints` with `waypoint_source=generated_exploration_candidate`
+  and `purpose=minimal_map_exploration`, preserving the existing
+  `navigate_to_waypoint` tool path.
+- Minimal Agibot Agent View now marks `mode=minimal`, leaves `rooms` and
+  `fixture_hints.rooms` empty before runtime observations, carries public
+  safety bounds and candidate provenance, and still excludes Agibot map source,
+  raw GDK/PNC evidence, and verification payloads.
+- Focused mock verification now covers direct generator output, SDK-runner
+  agent-view export, dry-run navigation to a generated candidate, existing rich
+  context behavior, unverified-waypoint blocking, and physical pilot adapter
+  regressions.
+
+2026-05-29 Agibot public task routing slice:
+
+- Added public `just task::run ... backend=agibot_gdk` routing for the existing
+  `semantic-map-build` and `household-cleanup` tasks through
+  `scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py`.
+- The route requires `context_json=<agibot map context JSON>` and may pass
+  `waypoint_id`, `run_dir`, `runner_python`, `runner_script`,
+  `agibot_map_artifact_dir`, and `real_movement_enabled`. This keeps Agibot G2
+  as a backend variant under the shared task grammar instead of adding an
+  Agibot-only public task name.
+- The routed `household-cleanup` shape still uses the Agibot Navigation +
+  Perception Pilot artifact and keeps manipulation blocked; it is not a
+  physical cleanup success claim.
+- Focused route tests cover `semantic-map-build direct camera-labels
+  backend=agibot_gdk`, cleanup-shaped direct routing, and the required
+  `context_json` guard. At that direct-routing slice, Codex-driven task control
+  remained a later acceptance layer; the later Codex Agibot semantic-map-build
+  route slice adds the live MCP route without claiming hardware validation.
+
+2026-05-29 Agibot pilot report trace slice:
+
+- Extended the physical Agibot pilot `cleanup_policy_trace` with
+  `agent_review_kind=agibot_navigation_perception_pilot_review`,
+  `agent_reasoning_visible=true`, selected/skipped waypoint counts, and
+  operator-review notes.
+- Each pilot trace event now records the visible tool choice plus
+  `decision`, `progress`, and `reason` fields for `observe_head_color`,
+  `visit_public_waypoint`, `skip_public_waypoint`, and
+  `block_manipulation` decisions. This makes dry-run movement-gate blocks and
+  intentionally blocked physical manipulation reviewable in the shared cleanup
+  report.
+- Shared report rendering now shows the richer decision/progress/reason columns
+  only when those fields are present, preserving the existing generic cleanup
+  policy trace shape for non-Agibot reports.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`,
+  `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_sdk_runner.py roboclaws/molmo_cleanup/report.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  and `./.venv/bin/ruff format --check roboclaws/molmo_cleanup/agibot_sdk_runner.py roboclaws/molmo_cleanup/report.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
+  This remains dry-run/report evidence, not real G2 hardware validation.
+
+2026-05-29 Agibot G2 pilot runbook slice:
+
+- Added `docs/human/agibot-g2-cleanup-pilot.md` and linked it from
+  `docs/human/README.md`.
+- The runbook covers operator map capture, minimal context projection,
+  PNC waypoint verification, dry-run report review, movement enablement, and
+  the acceptance checklist for `real_robot_cleanup_v1` on Agibot G2.
+- It explicitly documented the then-current limitation that Agibot hardware
+  routing was the SDK-backed direct CLI boundary behind `just task::run`, before
+  the later Codex Agibot semantic-map-build route slice added the live MCP
+  route. Real Codex provider and G2 hardware validation still must not be
+  claimed from direct-run artifacts.
+
+2026-05-29 mocked Agibot GDK navigation gate:
+
+- Aligned this plan's vendored-doc path references with the actual SDK mirror at
+  `vendors/agibot_sdk/`.
+- Added a focused contract test that injects a fake `agibot_gdk` module into
+  the SDK runner execute path and verifies successful `Pnc.normal_navi`
+  evidence: `navigation_status=succeeded`,
+  `navigation_backend=agibot_gdk`,
+  `primitive_provenance=agibot_gdk_normal_navi`, and
+  `pose_source=agibot_gdk_pnc_arrival`.
+- Corrected SDK-runner navigation request evidence so dry-run requests render
+  `sent=false` / `not_sent=true`, while mocked successful execution renders
+  `sent=true` / `not_sent=false`.
+- Added mocked timeout coverage for both the standalone waypoint verifier and
+  the SDK runner execute path. Timeout artifacts now record positive
+  cancellation evidence (`cancel_attempted`, `cancel_task_id`,
+  `cancel_requested`, `cancel_error`) and final task state after cancel; the SDK
+  runner calls `Pnc.cancel_task()` on timeout instead of only reporting the
+  timed-out `Pnc.normal_navi` state.
+- Tightened Human Takeover Stop readiness classification so runtime navigation
+  failures such as timeout, PNC failure, `normal_navi` exception, map mismatch,
+  and bounded local nudge failure require takeover evidence, while dry-run
+  movement-gate blocks and unverified-waypoint refusals remain ordinary blocked
+  capability outcomes.
+- Added an execute-only current-map check to the SDK runner navigation path:
+  when real movement is enabled, Roboclaws passes the Agibot context JSON to
+  `navigate-waypoint`, the runner compares `Map.get_curr_map()` with
+  `map_source`, and a mismatch returns `failure_type=map_mismatch` before
+  `Pnc.normal_navi` is called.
+- Made bounded local nudge evidence explicit in the Agibot adapter: nudge
+  remains disabled/backend-internal, reports conservative default limits
+  (`max_distance_m=0.25`, `max_yaw_rad=0.35`, `timeout_s=3.0`), and records
+  `operator_config_required=true` before any future `relative_move` enablement.
+- Extended the Operator Localization Gate evidence to enforce optional
+  operator-configured `min_localization_confidence` and
+  `accepted_localization_states` fields when a real G2 context supplies them.
+  If those fields are omitted, the gate continues to require selected-map,
+  G02-Pad relocalization, and localization-ready confirmation without
+  inventing hardware confidence defaults.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_adapter_resolves_public_navigation_tool_family -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_localization_gate_enforces_optional_thresholds tests/contract/molmo_cleanup/test_physical_agibot_pilot.py -q`,
+  `./.venv/bin/ruff check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
+  `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  `./.venv/bin/ruff check vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  `./.venv/bin/ruff format --check scripts/agibot/verify_waypoints_with_pnc.py vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py tests/contract/agibot/test_agibot_map_context_scripts.py`,
+  `./.venv/bin/ruff format --check roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`,
+  and `./.venv/bin/ruff format --check vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py roboclaws/molmo_cleanup/agibot_sdk_runner.py tests/contract/agibot/test_agibot_map_context_scripts.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py`.
+  This is mocked SDK evidence, not real G2 hardware validation.
+
+2026-05-29 Codex Agibot semantic-map-build route slice:
+
+- Added an Agibot-specific `agibot_semantic_map_build` MCP server for
+  `semantic-map-build` with `backend=agibot_gdk`. It exposes public map,
+  fixture, navigation, observation, blocked camera/manipulation, and `done`
+  tools backed by the Agibot SDK runner boundary.
+- Added the live Codex runner wrapper
+  `scripts/molmo_cleanup/run_live_codex_agibot_map_build.py` plus the public
+  route `just task::run semantic-map-build codex <lane> backend=agibot_gdk
+  context_json=...`. Non-Agibot `semantic-map-build codex` remains rejected
+  until intentionally supported.
+- The MCP `done` artifact now writes `run_result.json`, `trace.jsonl`,
+  `runtime_metric_map.json`, and `report.html` with
+  `agent_driven=true`, `mcp_server=agibot_semantic_map_build`, and
+  `backend_variant=agibot_gdk`.
+- The Agibot MCP artifact now carries the public evidence lane through the
+  server. `camera-labels` records `perception_mode=camera_model_policy`, the
+  requested visual-grounding pipeline, robot-local `head_color` RAW_FPV intent,
+  and explicit no-live-camera/no-external-label failure evidence instead of
+  implying camera labels existed in dry-run.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
+  `./.venv/bin/ruff check roboclaws/devtools/commands.py roboclaws/molmo_cleanup/agibot_map_build_mcp_server.py examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py scripts/molmo_cleanup/run_live_codex_agibot_map_build.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  and `./.venv/bin/ruff format --check` over the same touched files.
+- Live Codex fixture dry-run verification:
+  `just task::run semantic-map-build codex camera-labels backend=agibot_gdk context_json=tests/fixtures/agibot_map_context.completed.json output_dir=output/agibot/semantic-map-build-codex-live-validation policy=codex_agibot_semantic_map_build_pilot visual_grounding=grounding-dino`
+  produced `output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/`
+  with `agent_driven=true`, `mcp_server=agibot_semantic_map_build`,
+  `backend_variant=agibot_gdk`, `cleanup_status=physical_agibot_semantic_map_build_rehearsal`,
+  `sweep_coverage_rate=1.0`, `evidence_lane=camera-labels`,
+  `perception_mode=camera_model_policy`,
+  `visual_grounding_pipeline_id=grounding-dino`,
+  `camera_model_policy_evidence.private_truth_included=false`, and explicit
+  `live_camera_capture_not_enabled` / `external_visual_grounding_not_invoked`
+  failure evidence for the dry-run camera lane. `trace.jsonl` records Codex MCP
+  calls to `metric_map`, `fixture_hints`, `navigate_to_waypoint`, `observe`, and
+  `done`. Movement and live camera capture were disabled, so this is
+  live-provider/fixture dry-run evidence; real G2 hardware validation remains
+  unrun.
+- The artifact checker now accepts this no-cleanup map-build shape only through
+  an explicit semantic-sweep gate. Verification command:
+  `./.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py output/agibot/semantic-map-build-codex-live-validation/0529_1849/seed-7/run_result.json --expect-backend agibot_gdk --expect-mcp-server agibot_semantic_map_build --require-agent-driven --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --require-visual-grounding-failure --require-runtime-metric-map --require-semantic-sweep --min-generated-mess-count 0 --min-sweep-coverage 1.0 --allow-partial-cleanup`.
+
+2026-05-29 Agibot hardware acceptance gate slice:
+
+- Wired the Agibot `semantic-map-build` MCP camera-labels path so successful live
+  `head_color` observations call the configured External Visual Grounding Service
+  instead of only recording `external_visual_grounding_not_invoked`. Dry-run or
+  blocked camera captures still record explicit failure evidence without
+  fabricated labels.
+- Added the checker flag `--require-agibot-g2-hardware` for final hardware
+  acceptance. It rejects rehearsal artifacts and requires
+  `physical_agibot_semantic_map_build_complete`, `real_movement_enabled`,
+  successful `agibot_gdk_normal_navi`, live `agibot_gdk_head_color_camera`
+  observations with image artifacts, no Human Takeover Stop, full waypoint
+  coverage, and successful External Visual Grounding Service candidates.
+- Updated the runbook with the hardware-only verification command. This remains a
+  machine-checkable gate, not evidence that a real G2 run has happened.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_semantic_map_build_artifact tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_agibot_rehearsal_as_hardware_validation tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_hardware_semantic_map_build_shape tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_semantic_map_build_camera_labels_call_external_grounding -q`.
+
+2026-05-29 Codex hardware run configurability slice:
+
+- Threaded `visual_grounding_timeout_s` from
+  `just task::run semantic-map-build codex ... backend=agibot_gdk` into the
+  Agibot semantic-map-build MCP server and the External Visual Grounding Service
+  client. This keeps the G2 hardware route configurable through the same public
+  facade as other household tasks.
+- Updated the runbook with an explicit Codex-controlled hardware command using
+  `real_movement_enabled=true`, `visual_grounding=grounding-dino`, and
+  `visual_grounding_timeout_s=20`.
+- Focused verification covers route propagation and MCP server timeout
+  configuration. This is still not real G2 hardware validation.
+
+2026-05-29 shared cleanup MCP integration slice:
+
+- Added an Agibot adapter-backed cleanup contract for the existing
+  `molmo_cleanup_realworld` MCP server. It reuses the shared public cleanup
+  tool list, delegates map/navigation/observation to `AgibotSDKRunnerAdapter`,
+  keeps physical manipulation blocked, and reports
+  `cleanup_profile=real_robot_cleanup_v1` / `backend_variant=agibot_gdk`
+  without exposing Agibot-specific agent-facing tools.
+- Extended the generic cleanup agent-server entrypoint so
+  `--backend agibot_gdk --context-json ...` can construct that shared MCP
+  contract. The existing Agibot `semantic-map-build` MCP server remains the
+  first hardware acceptance target; this closes the cleanup-shaped shared-MCP
+  contract gap without claiming physical cleanup.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
+  `./.venv/bin/ruff check roboclaws/molmo_cleanup/agibot_cleanup_contract.py roboclaws/molmo_cleanup/realworld_mcp_server.py examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py tests/contract/molmo_cleanup/test_physical_agibot_pilot.py tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  and `./.venv/bin/ruff format --check` over the same touched files.
+  This is still shared-MCP contract evidence, not real G2 hardware validation.
+
+2026-05-29 Agibot hardware visual-grounding gate tightening:
+
+- Tightened `--require-agibot-g2-hardware` so it rejects `sim` and `manual`
+  visual-grounding pipeline ids even when the rest of the artifact is promoted
+  into the hardware-shaped status. Final G2 acceptance now requires a real
+  External Visual Grounding Service pipeline, not a simulator/control placeholder.
+- Made the hardware-only checker self-contained for the first acceptance target:
+  it now requires the Codex-driven `agibot_semantic_map_build` MCP server,
+  `policy=codex_agibot_semantic_map_build_pilot`, `evidence_lane=camera-labels`,
+  `perception_mode=camera_model_policy`, `agent_driven=true`, and runtime metric
+  map evidence directly under `--require-agibot-g2-hardware`.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_agibot_hardware_semantic_map_build_shape tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_rejects_agibot_rehearsal_as_hardware_validation -q`,
+  the broader focused Agibot/checker route test set including non-Codex/lane and
+  missing runtime-map rejection cases, and ruff check/format over the checker
+  and checker contract test.
+  This is still a hardware-gate tightening, not real G2 hardware validation.
+
+2026-05-29 Agibot bounded local nudge configuration slice:
+
+- Added operator-provided `operator_bounded_local_nudge` parsing to the Agibot
+  SDK runner adapter. Bounded local nudge remains disabled and non-agent-facing,
+  but the evidence now distinguishes missing, valid, and invalid operator config.
+- Conservative caps remain `max_distance_m=0.25`, `max_yaw_rad=0.35`, and
+  `timeout_s=3.0`. Operator config may only tighten those limits; unconfirmed or
+  looser values fall back to the conservative defaults with invalid-config
+  evidence.
+- Focused verification:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_adapter_resolves_public_navigation_tool_family tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_bounded_local_nudge_uses_operator_config_with_conservative_caps tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_bounded_local_nudge_rejects_unconfirmed_or_loose_operator_config tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_physical_agibot_localization_gate_enforces_optional_thresholds -q`,
+  plus ruff check/format over the runner and focused test.
+  This is still configuration/evidence support, not `relative_move` execution.
 
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
@@ -336,6 +602,10 @@ movement gate, not physical PNC execution.
 - Do not expose `relative_move`, `move_chassis`, map switching, map removal, or
   relocalization as agent-facing cleanup tools.
 - Do not require Agibot G2 to export or import Nav2 maps for the first pilot.
+- Do not require human-authored Agibot room, fixture, fixture-label, or semantic
+  waypoint tagging for the mainline hardware path.
+- Do not keep the previous Agibot human semantic-map tagging implementation for
+  backward compatibility.
 - Do not put Agibot map ids, current-map evidence, or raw GDK map data in the
   agent-facing `metric_map()`.
 - Do not use unverified waypoints in runtime navigation unless an explicit
@@ -345,25 +615,33 @@ movement gate, not physical PNC execution.
 
 ## Acceptance Criteria
 
-- Agibot GDK docs/examples are mirrored under `vendors/agibot/` for local
+- Agibot GDK docs/examples are mirrored under `vendors/agibot_sdk/` for local
   reference.
-- An operator can capture Agibot map context views and append multiple
-  waypoints to one context JSON.
-- The metric map generator rejects incomplete TODO context and emits
-  backend-agnostic `metric_map.json`, `fixture_hints.json`, `agent_view.json`,
-  and a semantic preview.
+- An operator can capture an Agibot Minimal Map Context without hand-tagging
+  rooms, fixtures, or semantic waypoints.
+- The metric map generator emits backend-agnostic `metric_map.json`,
+  `fixture_hints.json`, `agent_view.json`, and preview artifacts from the
+  minimal context; pre-observation `fixture_hints` may be empty.
 - Agent-facing Agibot metric map output contains no backend labels, no Agibot
   map source, and no PNC verification payload.
-- A waypoint verification script records normalized statuses and canonical
-  backend/provenance labels after `Pnc.normal_navi` checks.
+- Generated exploration candidates are accepted, blocked, or timed out through
+  normalized GDK PNC reachability evidence with canonical backend/provenance
+  labels.
 - Agibot runtime navigation blocks missing, unverified, blocked, unresolved, or
   map-mismatched goals.
-- Existing public navigation tools resolve to verified waypoints and execute via
-  GDK PNC without exposing new Agibot agent tools.
+- Existing public navigation tools resolve to verified generated waypoints and
+  execute via GDK PNC without exposing new Agibot agent tools.
 - `observe()` uses `head_color` as the policy observation camera.
 - First G2 map-build runs use robot-local `head_color` / RAW_FPV evidence with
   `camera-labels` plus real External Visual Grounding Service output as the
   primary perception lane; `camera-raw` remains a comparison/fallback lane.
+- The first Codex-driven hardware target is `semantic-map-build`. The code
+  should support both `semantic-map-build` and a cleanup-shaped
+  `household-cleanup` path for Agibot, but the cleanup-shaped path keeps
+  manipulation blocked and does not claim physical cleanup success. Full
+  `household-cleanup` is not the first hardware acceptance gate.
+- The pilot report captures Codex-driven tool choices and progress/reasoning so
+  the operator can review why each generated waypoint was visited or skipped.
 - `world-labels` and `visual_grounding=sim` remain simulator/control evidence,
   not G2 readiness evidence.
 - Manipulation tools remain blocked and report that physical cleanup is not
@@ -375,12 +653,13 @@ movement gate, not physical PNC execution.
 - Real Agibot hardware validation remains explicitly marked unrun until tested
   on a G2.
 
-## Open Implementation Choices
+## Implementation Defaults
 
-- Exact runtime packaging and command recipe for the Agibot pilot.
-- Whether the Agibot backend adapter is integrated directly into the existing
-  Molmo cleanup MCP server first or introduced as a separate physical pilot
-  runner with the same contract.
+- Runtime packaging and command recipe should reuse the existing public
+  `just task::run <task> <driver> [lane] key=value...` facade with
+  `backend=agibot_gdk`.
+- The Agibot backend adapter should integrate into the existing cleanup MCP
+  server while keeping the same public tool contract.
 - The maximum distance, yaw, and timeout limits for Bounded Local Nudge and
   Toward-Object Nudge. Defaults should be conservative and operator-configured.
 - The minimum localization confidence/state values accepted by the Operator

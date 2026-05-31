@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from roboclaws.molmo_cleanup.camera_control import load_camera_control_request
 from roboclaws.molmo_cleanup.subprocess_backend import (
     _parse_last_json_object,
     _scenario_from_worker_payload,
@@ -24,6 +25,7 @@ ISAAC_WORKER_TIMEOUTS_S = {
     "init": 300.0,
     "snapshot": 120.0,
     "robot_views": 120.0,
+    "camera_views": 180.0,
 }
 ISAAC_WORKER_SCRIPT = (
     Path(__file__).resolve().parents[2]
@@ -285,6 +287,48 @@ class IsaacLabSubprocessBackend:
         if focus_receptacle_id is not None:
             args.extend(["--focus-receptacle-id", focus_receptacle_id])
         return self._run_worker("robot_views", *args)
+
+    def write_camera_views_with_resolution(
+        self,
+        output_dir: Path,
+        *,
+        view_specs_path: Path,
+        width: int,
+        height: int,
+    ) -> dict[str, Any]:
+        return self._run_worker(
+            "camera_views",
+            "--output-dir",
+            str(output_dir),
+            "--view-specs-path",
+            str(view_specs_path),
+            "--render-width",
+            str(width),
+            "--render-height",
+            str(height),
+        )
+
+    def render_camera_control_request(
+        self,
+        output_dir: Path,
+        *,
+        request_path: Path,
+    ) -> dict[str, Any]:
+        """Render externally supplied Roboclaws camera-control views."""
+
+        request = load_camera_control_request(request_path)
+        resolution = request["render_resolution"]
+        return self._run_worker(
+            "camera_views",
+            "--output-dir",
+            str(output_dir),
+            "--camera-request-path",
+            str(request_path),
+            "--render-width",
+            str(resolution["width"]),
+            "--render-height",
+            str(resolution["height"]),
+        )
 
     def observe(self) -> dict[str, Any]:
         return self._run_worker("observe")

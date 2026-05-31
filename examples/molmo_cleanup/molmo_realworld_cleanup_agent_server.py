@@ -17,6 +17,9 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.molmo_cleanup.agibot_cleanup_contract import (  # noqa: E402
+    AgibotCleanupMCPContract,
+)
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
 from roboclaws.molmo_cleanup.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
 from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
@@ -46,6 +49,7 @@ from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
+AGIBOT_GDK_BACKEND = "agibot_gdk"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -61,9 +65,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
     parser.add_argument(
         "--backend",
-        choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND),
+        choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND, AGIBOT_GDK_BACKEND),
         default=SYNTHETIC_BACKEND,
     )
+    parser.add_argument(
+        "--context-json",
+        type=Path,
+        help="Agibot map context JSON, required when --backend=agibot_gdk.",
+    )
+    parser.add_argument("--runner-python", help="Python executable for the Agibot SDK runner.")
+    parser.add_argument("--runner-script", type=Path, help="Override Agibot SDK runner path.")
+    parser.add_argument("--agibot-map-artifact-dir", type=Path)
+    parser.add_argument("--real-movement-enabled", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
     parser.add_argument(
         "--map-bundle-dir",
@@ -217,12 +230,19 @@ def run_molmo_realworld_cleanup_agent_server(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    context_json: str | Path | None = None,
+    runner_python: str | Path | None = None,
+    runner_script: str | Path | None = None,
+    agibot_map_artifact_dir: str | Path | None = None,
+    real_movement_enabled: bool = False,
     rerun_command: str | None = None,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    if generated_mess_count < 1:
+    if backend == AGIBOT_GDK_BACKEND:
+        generated_mess_count = 0
+    if generated_mess_count < 1 and backend != AGIBOT_GDK_BACKEND:
         raise ValueError("generated_mess_count must be >= 1")
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
@@ -235,7 +255,28 @@ def run_molmo_realworld_cleanup_agent_server(
         raise ValueError(
             "record_robot_views requires backend=molmospaces_subprocess and include_robot"
         )
-    if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+    agibot_contract: AgibotCleanupMCPContract | None = None
+    if backend == AGIBOT_GDK_BACKEND:
+        if context_json is None or str(context_json) == "":
+            raise ValueError("backend=agibot_gdk requires --context-json")
+        scenario = build_cleanup_scenario(seed=seed)
+        agibot_contract = AgibotCleanupMCPContract(
+            run_dir=output_dir,
+            context_json=Path(context_json),
+            runner_script=Path(runner_script) if runner_script is not None else None,
+            runner_python=runner_python,
+            real_movement_enabled=real_movement_enabled,
+            agibot_map_artifact_dir=Path(agibot_map_artifact_dir)
+            if agibot_map_artifact_dir is not None
+            else None,
+            scenario=scenario,
+            task_prompt=task_prompt,
+        )
+        base_contract = agibot_contract.contract
+        perception_mode = agibot_contract.perception_mode
+        map_mode = agibot_contract.map_mode
+        cleanup_profile = None
+    elif backend == MOLMOSPACES_SUBPROCESS_BACKEND:
         backend_instance = MolmoSpacesSubprocessBackend(
             run_dir=output_dir,
             seed=seed,
@@ -259,6 +300,7 @@ def run_molmo_realworld_cleanup_agent_server(
             run_dir=output_dir,
             scenario=scenario,
             base_contract=base_contract,
+            contract=agibot_contract,
             host=host,
             port=port,
             policy=policy,
@@ -344,6 +386,11 @@ def main(argv: list[str] | None = None) -> int:
             visual_grounding=args.visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+            context_json=args.context_json,
+            runner_python=args.runner_python,
+            runner_script=args.runner_script,
+            agibot_map_artifact_dir=args.agibot_map_artifact_dir,
+            real_movement_enabled=args.real_movement_enabled,
             rerun_command=args.rerun_command,
         )
     except Exception as exc:
