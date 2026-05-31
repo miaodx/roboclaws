@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (
     BLOCKED_MANIPULATION_TOOLS,
     CLEANUP_ACTION_CONFIDENCE_LAYER,
@@ -23,6 +25,11 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "molmo_cleanup" / ("run_molmospaces_agibot_contract_rehearsal.py")
 ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
 ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
+
+
+def _require_robot_map_9_artifact() -> None:
+    if not (ROBOT_MAP_9_ARTIFACT / "source.json").is_file():
+        pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
 
 
 def test_molmospaces_agibot_contract_rehearsal_writes_simulated_report(
@@ -149,6 +156,7 @@ def test_molmospaces_agibot_contract_rehearsal_cli_runs_without_gdk(
 def test_molmospaces_agibot_backend_records_old_map_as_reference_only(
     tmp_path: Path,
 ) -> None:
+    _require_robot_map_9_artifact()
     run_dir = tmp_path / "robot-map-9-reference"
 
     result = run_molmospaces_agibot_contract_rehearsal(
@@ -242,6 +250,7 @@ def test_molmospaces_agibot_cleanup_action_rehearsal_records_simulated_substeps(
 def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_map(
     tmp_path: Path,
 ) -> None:
+    _require_robot_map_9_artifact()
     run_dir = tmp_path / "prehardware-map-build"
 
     result = run_molmospaces_agibot_prehardware_rehearsal(

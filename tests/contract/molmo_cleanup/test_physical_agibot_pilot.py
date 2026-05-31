@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from roboclaws.molmo_cleanup.agibot_cleanup_contract import AgibotCleanupMCPContract
 from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import (
     MCP_SERVER_NAME,
@@ -29,11 +31,25 @@ ROBOT_MAP_9_CONTEXT_FIXTURE = (
     REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
 )
 ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
+AGIBOT_SDK_RUNNER_PATH = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
+)
+
+
+def _require_agibot_sdk_runner() -> None:
+    if not AGIBOT_SDK_RUNNER_PATH.is_file():
+        pytest.skip("Agibot SDK vendor runner is unavailable in this checkout")
+
+
+def _require_robot_map_9_artifact() -> None:
+    if not (ROBOT_MAP_9_ARTIFACT / "source.json").is_file():
+        pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
 
 
 def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     tmp_path: Path,
 ) -> None:
+    _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
 
@@ -97,6 +113,8 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
 
 
 def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
+    _require_robot_map_9_artifact()
     context_path = tmp_path / "agibot_robot_map_9_context.completed.json"
     context_path.write_text(json.dumps(_robot_map_9_context()), encoding="utf-8")
 
@@ -151,6 +169,7 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
 
 
 def test_agibot_adapter_resolves_public_navigation_tool_family(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
     adapter = AgibotSDKRunnerAdapter(
@@ -189,6 +208,7 @@ def test_agibot_adapter_resolves_public_navigation_tool_family(tmp_path: Path) -
 def test_agibot_bounded_local_nudge_uses_operator_config_with_conservative_caps(
     tmp_path: Path,
 ) -> None:
+    _require_agibot_sdk_runner()
     context = _completed_context()
     context["operator_bounded_local_nudge"] = {
         "operator_configured": True,
@@ -224,6 +244,7 @@ def test_agibot_bounded_local_nudge_uses_operator_config_with_conservative_caps(
 def test_agibot_bounded_local_nudge_rejects_unconfirmed_or_loose_operator_config(
     tmp_path: Path,
 ) -> None:
+    _require_agibot_sdk_runner()
     context = _completed_context()
     context["operator_bounded_local_nudge"] = {
         "operator_configured": True,
@@ -256,6 +277,7 @@ def test_agibot_bounded_local_nudge_rejects_unconfirmed_or_loose_operator_config
 def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     tmp_path: Path,
 ) -> None:
+    _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
     run_dir = tmp_path / "run"
@@ -388,6 +410,7 @@ def test_agibot_semantic_map_build_camera_labels_call_external_grounding(
 def test_agibot_semantic_map_build_server_accepts_visual_grounding_timeout(
     tmp_path: Path,
 ) -> None:
+    _require_agibot_sdk_runner()
     server = make_agibot_semantic_map_build_mcp(
         run_dir=tmp_path / "run",
         context_json=COMPLETED_CONTEXT_FIXTURE,
@@ -405,6 +428,7 @@ def test_agibot_semantic_map_build_server_accepts_visual_grounding_timeout(
 
 
 def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
     contract = AgibotCleanupMCPContract(
         run_dir=tmp_path / "run",
         context_json=COMPLETED_CONTEXT_FIXTURE,
@@ -448,6 +472,7 @@ def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Pa
 
 
 def test_physical_agibot_real_movement_requires_operator_gates(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
 

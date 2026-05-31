@@ -54,6 +54,16 @@ def just_bin() -> str:
     pytest.skip("just binary is not available")
 
 
+def _require_official_render_sources() -> None:
+    missing = [
+        reference["path"]
+        for reference in _render_domain_source_diagnostics(_manifest())["source_references"]
+        if reference["status"] != "available"
+    ]
+    if missing:
+        pytest.skip("MolmoSpaces official renderer source refs unavailable: " + ", ".join(missing))
+
+
 def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (64, 48), color=color).save(path)
@@ -597,7 +607,7 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "mujoco_housegen_materials" in html
     assert "isaac_preview_surface_material_conversion" in html
     assert "USD PreviewSurface" in html
-    assert "doNotCastShadows" in html
+    assert "isaac_shadow_disabled_prims=1" in html
     assert "same_backend_pose_within_threshold" in html
     assert "same_projected_geometry_within_threshold" in html
     assert "intrinsics_consistent" in html
@@ -898,6 +908,7 @@ def test_backend_swap_geometry_contract_blocks_room_scale_mismatch() -> None:
 
 
 def test_render_domain_source_diagnostics_cite_official_renderer_paths() -> None:
+    _require_official_render_sources()
     manifest = _manifest()
     manifest["visual_diagnostics"] = {
         "render_domain_calibration": {"status": "view_dependent_render_domain_delta"},

@@ -19,6 +19,14 @@ DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cl
 CHECKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "check_molmo_realworld_cleanup_result.py"
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
 AGIBOT_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
+AGIBOT_SDK_RUNNER_PATH = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
+)
+
+
+def _require_agibot_sdk_runner() -> None:
+    if not AGIBOT_SDK_RUNNER_PATH.is_file():
+        pytest.skip("Agibot SDK vendor runner is unavailable in this checkout")
 
 
 def _load_module(path: Path, name: str):
@@ -268,6 +276,7 @@ def test_checker_rejects_agibot_hardware_without_runtime_metric_map(
 def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
     tmp_path: Path,
 ) -> None:
+    _require_agibot_sdk_runner()
     agibot = _load_module(
         REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
         "agibot_map_build_mcp_server_no_gate",
@@ -2803,6 +2812,7 @@ def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, obje
 
 
 def _write_agibot_map_build_fixture(tmp_path: Path) -> Path:
+    _require_agibot_sdk_runner()
     agibot = _load_module(
         REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
         f"agibot_map_build_mcp_server_{id(tmp_path)}",
