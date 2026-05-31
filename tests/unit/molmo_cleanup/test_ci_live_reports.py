@@ -40,9 +40,9 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
     assert [entry.name for entry in MODEL_ENTRIES] == [
         "kimi-k2.6",
         "mimo-v2.5-pro",
-        "mimo-v2-omni",
+        "mimo-v2.5",
         "kimi-k2.6-camera-raw",
-        "mimo-v2-omni-camera-raw",
+        "mimo-v2.5-camera-raw",
     ]
     assert {
         entry.name: (entry.provider_profile, entry.model, entry.secret_env, entry.profile)
@@ -55,9 +55,9 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
             "MIMO_TP_KEY",
             "world-labels",
         ),
-        "mimo-v2-omni": (
+        "mimo-v2.5": (
             "mimo-anthropic",
-            "mimo-v2-omni",
+            "mimo-v2.5",
             "MIMO_TP_KEY",
             "world-labels",
         ),
@@ -67,9 +67,9 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
             "KIMI_API_KEY",
             "camera-raw",
         ),
-        "mimo-v2-omni-camera-raw": (
+        "mimo-v2.5-camera-raw": (
             "mimo-anthropic",
-            "mimo-v2-omni",
+            "mimo-v2.5",
             "MIMO_TP_KEY",
             "camera-raw",
         ),
@@ -169,7 +169,7 @@ def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> Non
     status = run_matrix.main(
         [
             "--entry",
-            "mimo-v2-omni-camera-raw",
+            "mimo-v2.5-camera-raw",
             "--generated-mess-count",
             "12",
             "--dry-run",
@@ -184,7 +184,7 @@ def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> Non
     )
 
     assert status == 0
-    status_path = tmp_path / "site" / "molmo" / "live" / "mimo-v2-omni-camera-raw" / "status.json"
+    status_path = tmp_path / "site" / "molmo" / "live" / "mimo-v2.5-camera-raw" / "status.json"
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["generated_mess_count"] == 12
     assert "generated_mess_count=12" in payload["command"]
@@ -556,7 +556,7 @@ def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
         repo_root=REPO_ROOT,
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2-omni",
+        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
         codex_max_continuations=1,
         kickoff_prompt="clean",
         codex_model_arg=[],
@@ -629,7 +629,7 @@ def test_live_codex_recovers_from_misrouted_read_mcp_resource_tool_error(
         repo_root=REPO_ROOT,
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2-omni",
+        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
         codex_max_continuations=1,
         kickoff_prompt="clean",
         codex_model_arg=[],
@@ -701,7 +701,7 @@ def test_live_codex_recovers_from_misrouted_mcp_namespace_tool_error(
         repo_root=REPO_ROOT,
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2-omni",
+        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
         codex_max_continuations=1,
         kickoff_prompt="clean",
         codex_model_arg=[],
@@ -768,7 +768,7 @@ def test_live_codex_recovers_from_missing_mcp_namespace_tool_error(
         repo_root=REPO_ROOT,
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2-omni",
+        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
         codex_max_continuations=1,
         kickoff_prompt="clean",
         codex_model_arg=[],
@@ -832,7 +832,7 @@ def test_live_codex_recovers_from_misrouted_undeclared_coding_tool_error(
         repo_root=REPO_ROOT,
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2-omni",
+        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
         codex_max_continuations=1,
         kickoff_prompt="clean",
         codex_model_arg=[],

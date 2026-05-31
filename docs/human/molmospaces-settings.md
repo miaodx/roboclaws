@@ -101,10 +101,10 @@ or detector produced the labels. Use pipeline provenance for that second axis:
 | `yoloe` | YOLO-family promptable/open-vocabulary proposer over RAW_FPV images. | Proposer speed/latency comparison target. |
 | `yolo-world` | YOLO-World open-vocabulary proposer over RAW_FPV images. | YOLO-family comparison target. |
 | `omdet-turbo` | Transformers OmDet-Turbo open-vocabulary proposer over RAW_FPV images. | First-wave non-YOLO comparison target; current supported checkpoint is `omlab/omdet-turbo-swin-tiny-hf`. |
-| `grounding-dino+mimo-v2-omni` | Grounding DINO proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
-| `yoloe+mimo-v2-omni` | YOLOE proposals refined by hosted MiMo v2 Omni reasoning. | Refiner comparison target. |
+| `grounding-dino+mimo-v2.5` | Grounding DINO proposals refined by hosted MiMo v2.5 reasoning. | Refiner comparison target. |
+| `yoloe+mimo-v2.5` | YOLOE proposals refined by hosted MiMo v2.5 reasoning. | Refiner comparison target. |
 | `grounding-dino+qwen3-vl` | Grounding DINO proposals refined by Qwen3-VL. | Design target; optional until local access is proven. |
-| `mimo-v2-omni-direct` | Hosted VLM proposes candidates without a detector proposer. | Experimental direct-producer comparison. |
+| `mimo-v2.5-direct` | Hosted VLM proposes candidates without a detector proposer. | Experimental direct-producer comparison. |
 | `qwen3-vl-direct` | Qwen3-VL proposes candidates without a detector proposer. | Experimental and optional. |
 
 Recommended command shape for the future pipeline comparison:
@@ -115,8 +115,8 @@ just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-h
 just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino
 just task::run household-cleanup direct camera-labels visual_grounding=yoloe
 just task::run household-cleanup direct camera-labels visual_grounding=omdet-turbo
-just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2-omni
-just task::run household-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2-omni
+just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2.5
+just task::run household-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2.5
 ```
 
 `yolo-custom` is not an active pipeline. Without a planned cleanup-ontology
@@ -158,7 +158,7 @@ install model dependencies and weights deliberately in the sidecar environment
 before using it. Live Codex is a useful best-effort confidence check for that
 slice, but direct and MCP-smoke fake HTTP runs are the hard gates.
 
-Qwen3-VL and MiMo v2 Omni should first be treated as refiners over detector
+Qwen3-VL and MiMo v2.5 should first be treated as refiners over detector
 proposals. They can also be tested as direct producer replacements, but that is
 a comparison mode rather than the first recommended path. Qwen3-VL should not
 be a core cleanup dependency. A local Transformers/vLLM/SGLang probe is
@@ -171,7 +171,7 @@ Benchmark command shape:
 
 ```bash
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
-just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2-omni
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
 just agent::harness molmo-visual-grounding-benchmark \
   matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json \
   corpus=harness/visual_grounding/local_raw_fpv_corpus.json \
@@ -179,7 +179,7 @@ just agent::harness molmo-visual-grounding-benchmark \
   timeout_s=60
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino
 just agent::harness molmo-visual-grounding-benchmark pipeline=yoloe
-just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino+mimo-v2-omni
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino+mimo-v2.5
 ```
 
 That benchmark should compare candidate recall, false positives, duplicate
@@ -327,7 +327,7 @@ a local or remote serving endpoint:
 ```bash
 MIMO_TP_KEY=... \
   .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline grounding-dino+mimo-v2-omni --adapter-mode real
+    --pipeline grounding-dino+mimo-v2.5 --adapter-mode real
 
 VISUAL_GROUNDING_QWEN_BASE_URL=http://127.0.0.1:8000/v1 \
 VISUAL_GROUNDING_QWEN_API_KEY=... \
@@ -360,8 +360,8 @@ Real proposer pipeline ids such as `grounding-dino` and `yoloe` report visible
 `adapter_unavailable`, `missing_dependency`, or adapter-error failures unless
 the service is started with `--adapter-mode contract-fake` for contract tests or
 `--adapter-mode real` with installed sidecar dependencies and model weights.
-Hosted refiner and direct-producer ids such as `grounding-dino+mimo-v2-omni`,
-`mimo-v2-omni-direct`, and `qwen3-vl-direct` report visible `missing_config`
+Hosted refiner and direct-producer ids such as `grounding-dino+mimo-v2.5`,
+`mimo-v2.5-direct`, and `qwen3-vl-direct` report visible `missing_config`
 failures until their endpoint and key/no-key local policy are configured. The
 adapter catalog names the optional sidecar extra or provider configuration slot
 for each target producer/refiner. The older `serve_fake_visual_grounding.py`
@@ -460,7 +460,7 @@ KIMI_API_KEY=...
 ```
 
 Codex repo workflows default to the internal multi-model aggregator when
-`XM_LLM_API_KEY` is present (`mify`, `xiaomi/mimo-v2-omni`, Responses API, web
+`XM_LLM_API_KEY` is present (`mify`, `xiaomi/mimo-v2.5`, Responses API, web
 search disabled). `CODEX_BASE_URL` and `CODEX_API_KEY` remain available only
 for explicit non-mify Codex debugging. Claude Code prefers MiMo when
 `MIMO_TP_KEY` is present, then Kimi when `KIMI_API_KEY` is present, then mify

@@ -40,6 +40,13 @@ contract before real robot testing:
 - emit Agibot-shaped runtime artifacts and Roboclaws cleanup report evidence;
 - label every result as simulated and never as physical Agibot GDK execution.
 
+The original contract rehearsal remains a lightweight contract smoke. The
+current pre-hardware direction is stricter: `backend=agibot_molmospaces_sim`
+should also provide a **minimal-map pre-hardware rehearsal** that starts from a
+sparse/minimal map view, performs an online `semantic-map-build` sweep, writes
+`runtime_metric_map.json`, and then allows `household-cleanup` to consume the
+same runtime-map evidence before a real G2 session.
+
 ## Locked Boundary
 
 This rehearsal is not:
@@ -99,6 +106,10 @@ Default behavior remains contract-only:
 The new action layer is opt-in:
 
 - `--rehearsal-mode cleanup-actions` enables simulated semantic cleanup actions.
+- In the pre-hardware flow, `household-cleanup` includes this cleanup-action
+  rehearsal by default so local testing can exercise semantic-map-build plus
+  cleanup before hardware. The evidence is still simulated and does not claim
+  physical manipulation readiness.
 - The run should select a small deterministic public target set from observed
   visible detections and public fixture hints.
 - The action sequence should preserve public substeps:
@@ -199,6 +210,16 @@ execution or real-robot readiness by itself.
 - Focused tests prove that `cleanup-actions` mode includes `pick` and `place`
   or `place_inside` substeps while still reporting `physical_robot=false` and
   not claiming planner-backed or Agibot GDK manipulation proof.
+- `backend=agibot_molmospaces_sim` can run `semantic-map-build` through the
+  pre-hardware flow with `map_mode=minimal`, generated exploration candidates,
+  online observations, and `runtime_metric_map.json`.
+- The pre-hardware `semantic-map-build` gate is local-run oriented, not
+  CI-oriented: use `camera-labels visual_grounding=grounding-dino` or
+  `camera-raw`/RAW_FPV with `runtime=molmospaces-subprocess` for the evidence
+  that matters before hardware.
+- `household-cleanup backend=agibot_molmospaces_sim` can consume the same
+  minimal-map runtime evidence and perform simulated cleanup-action rehearsal
+  before real hardware testing.
 
 ## Implementation Evidence
 
@@ -256,6 +277,10 @@ The scope-preserving review decisions accepted into this plan are:
 - CLI spelling is
   `scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py
   --runtime fixture|molmospaces-subprocess --rehearsal-mode contract|cleanup-actions`.
+- The stricter pre-hardware path uses the same script with `--flow prehardware
+  --task-name semantic-map-build|household-cleanup --profile
+  camera-labels|camera-raw|world-labels`. Public routing uses
+  `just task::run <task> direct <lane> backend=agibot_molmospaces_sim ...`.
 - The first runner is a dedicated Roboclaws script under
   `scripts/molmo_cleanup/`; it does not modify the Agibot SDK runner.
 - Agibot-shaped preflight artifacts live under `preflight/`; runtime exports
@@ -263,3 +288,6 @@ The scope-preserving review decisions accepted into this plan are:
 - CI-safe evidence uses a deterministic fixture projection. Local evidence can
   opt into `--runtime molmospaces-subprocess` to use a real MolmoSpaces scene
   generated from the cleanup scenario.
+- For pre-hardware confidence, prefer local `runtime=molmospaces-subprocess`
+  with RAW_FPV or `camera-labels visual_grounding=grounding-dino`; fixture runs
+  are only fast contract checks.

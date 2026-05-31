@@ -1,9 +1,10 @@
 # Model Matrix — declared vs. vendor-spec
 
-Canonical reference for every model we advertise to the OpenClaw Gateway via
-`scripts/openclaw/openclaw-bootstrap.sh`. Update this file whenever the bootstrap
-provider JSON changes; CI does not cross-check the numbers against vendor
-docs, so this is the audit trail.
+Canonical reference for every current model we advertise to the OpenClaw
+Gateway via `scripts/openclaw/openclaw-bootstrap.sh`. Update this file whenever
+the bootstrap provider JSON changes; CI does not cross-check the numbers
+against vendor docs, so this is the audit trail. Historical rows are kept only
+when they explain an incident or benchmark artifact and must be labeled as such.
 
 Why this file exists: on 2026-04-23 a MiMo chat run crashed because
 `contextWindow: 32768` was declared for `mimo-v2-omni` while the vendor
@@ -14,6 +15,7 @@ an on-turn-one trigger. See
 in `docs/retrospectives/` for the full incident write-up.
 
 Last full audit: 2026-04-23 (bootstrap `fd2b878`).
+MiMo v2.5 migration audit: 2026-05-30.
 
 ## Gateway flush-threshold formula
 
@@ -45,7 +47,6 @@ cosmetic one**.
 | `kimi/k2p5`                       | `anthropic_kimi/k2p5`  | 262 144      | 32 768           | 256K — Moonshot K2.5 release                     | 238 144         | OK — live-probed end-to-end                      |
 | `kimi/k2.6`                       | `anthropic_kimi/k2.6`  | 262 144      | 32 768           | 256K — Moonshot K2.6 release                     | 238 144         | OK — live-probed end-to-end                      |
 | `nvidia/nemotron-nano-12b-v2-vl`  | `nvidia/…`             | 131 072      | 4 096            | 128K — NVIDIA NIM model card                     | 107 072         | OK — CI-verified                                 |
-| `mimo-v2-omni` *(openai)*         | `mimo_openai/…`        | 262 144      | 32 768           | 256K — MiMo 2026-03-18 release note              | 238 144         | OK — aligned 2026-04-23; `maxTokens` probed live |
 | `mimo-v2.5-pro` *(openai)*        | `mimo_openai/…`        | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 | `mimo-v2.5` *(openai)*            | `mimo_openai/…`        | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 | `mimo-v2.5-pro` *(anthropic)*     | `mimo_anthropic/…`     | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
@@ -70,6 +71,17 @@ cosmetic one**.
 > (`mimo-v2.5`) also accepted image blocks. Keep `mimo-v2.5-pro` text-only
 > until it is separately probed.
 
+## Historical MiMo incident row
+
+The row below is not an active route after the 2026-05-30 v2.5 migration. It is
+retained only to explain the 2026-04-23 Gateway flush-threshold incident and
+older benchmark/report artifacts. Xiaomi's model-deprecation page maps the old
+full-modal id to `mimo-v2.5` and says the old id expires on 2026-06-30.
+
+| Model id (upstream)               | Gateway namespace      | Declared ctx | Declared out cap | Vendor ctx (source)                              | Flush threshold | Status                                           |
+|-----------------------------------|------------------------|--------------|------------------|--------------------------------------------------|-----------------|--------------------------------------------------|
+| `mimo-v2-omni` *(openai)*         | `mimo_openai/…`        | 262 144      | 32 768           | 256K — MiMo 2026-03-18 release note              | 238 144         | Historical only — replaced by `mimo-v2.5`        |
+
 ## Provider endpoints (for live probing)
 
 ```
@@ -88,10 +100,10 @@ NV_API_KEY          — NVIDIA NIM (NVIDIA_API_KEY also accepted)
 MIMO_TP_KEY         — MiMo token-plan (xiaomimimo.com)
 ```
 
-## MiMo `/v1/models` (live, 2026-04-23)
+## Historical MiMo `/v1/models` snapshot (live, 2026-04-23)
 
 Returned ids on `https://token-plan-cn.xiaomimimo.com/v1/models` with
-`MIMO_TP_KEY` set:
+`MIMO_TP_KEY` set during the 2026-04-23 audit:
 
 ```
 mimo-v2-omni
@@ -104,14 +116,17 @@ mimo-v2.5-tts-voiceclone
 mimo-v2.5-tts-voicedesign
 ```
 
-`mimo-v2-pro` ≠ `mimo-v2.5-pro`. If we ever want a text-only companion for
-`mimo-v2-omni` on the v2 line, that's a separate probe target.
+`mimo-v2-pro` ≠ `mimo-v2.5-pro`. Do not add new active v2-line routes; the
+current full-modal route is `mimo-v2.5` and the current text-only coding route
+is `mimo-v2.5-pro`.
 
 ## Vendor links (authoritative)
 
 - MiMo — <https://platform.xiaomimimo.com/docs/updates/model>
   (release notes index; `mimo-v2-omni` entry dated 2026-03-18 states
   "Supports up to 256K context length")
+- MiMo deprecation — <https://platform.xiaomimimo.com/docs/zh-CN/updates/deprecate>
+  (`mimo-v2-omni` maps to `mimo-v2.5` and expires on 2026-06-30)
 - Moonshot / Kimi — <https://platform.moonshot.ai/docs/pricing/chat>
   (K2, K2.5, K2.6 pricing + spec pages)
 - NVIDIA Nemotron Nano 12B V2 VL — <https://build.nvidia.com/nvidia/nemotron-nano-12b-v2-vl>

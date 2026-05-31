@@ -22,7 +22,6 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
-    infer_target_fixture_for_detection,
 )
 from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
     make_molmo_realworld_cleanup_mcp,
@@ -56,6 +55,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=SYNTHETIC_BACKEND,
     )
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument(
+        "--generated-mess-object-id",
+        action="append",
+        help="Private run-control object id to include in the generated mess set. Repeatable.",
+    )
     parser.add_argument(
         "--map-bundle-dir",
         type=Path,
@@ -94,6 +98,7 @@ def run_smoke(
     policy: str = "realworld_contract_smoke_agent",
     backend: str = SYNTHETIC_BACKEND,
     generated_mess_count: int = 10,
+    generated_mess_object_ids: tuple[str, ...] = (),
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -128,6 +133,7 @@ def run_smoke(
             include_robot=include_robot,
             robot_name=robot_name,
             generated_mess_count=generated_mess_count,
+            generated_mess_object_ids=generated_mess_object_ids,
         )
         scenario = backend_instance.scenario
         base_contract = CleanupBackendSession(scenario, backend=backend_instance)
@@ -173,7 +179,7 @@ def _drive_public_sweep(
     server: Any,
 ) -> None:
     metric_map = server.call_tool("metric_map")
-    fixture_hints = server.call_tool("fixture_hints")
+    server.call_tool("fixture_hints")
     handled_handles: set[str] = set()
     for waypoint in metric_map["inspection_waypoints"]:
         waypoint_id = str(waypoint["waypoint_id"])
@@ -184,7 +190,7 @@ def _drive_public_sweep(
             handle = str(detection["object_id"])
             if handle in handled_handles:
                 continue
-            target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+            target_fixture = _target_fixture_for_detection(server, detection)
             if target_fixture is None:
                 continue
             fixture_id = str(target_fixture["fixture_id"])
@@ -198,6 +204,43 @@ def _drive_public_sweep(
             )
             server.call_tool("observe")
             handled_handles.add(handle)
+        _clean_pending_worklist(server, handled_handles)
+    _clean_pending_worklist(server, handled_handles)
+
+
+def _clean_pending_worklist(server: Any, handled_handles: set[str]) -> None:
+    while True:
+        agent_view = server._agent_view_payload()
+        pending = [
+            dict(item)
+            for item in agent_view.get("cleanup_worklist", {}).get("objects", [])
+            if item.get("cleanup_recommended") and str(item.get("state") or "") == "pending"
+        ]
+        next_item = next(
+            (item for item in pending if str(item.get("object_id") or "") not in handled_handles),
+            None,
+        )
+        if next_item is None:
+            return
+        handle = str(next_item.get("object_id") or "")
+        fixture = _target_fixture_for_detection(server, next_item)
+        if fixture is None:
+            handled_handles.add(handle)
+            continue
+        _clean_handle(server, handle=handle, fixture=fixture)
+        server.call_tool("observe")
+        handled_handles.add(handle)
+
+
+def _target_fixture_for_detection(server: Any, detection: dict[str, Any]) -> dict[str, Any] | None:
+    fixture_id = str(detection.get("candidate_fixture_id") or "")
+    if not fixture_id:
+        return None
+    fixtures = server.contract.public_receptacles_by_id()
+    fixture = fixtures.get(fixture_id)
+    if fixture is None:
+        return None
+    return dict(fixture)
 
 
 def _detections_for_observation(server: Any, observation: dict[str, Any]) -> list[dict[str, Any]]:
@@ -276,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
         policy=args.policy,
         backend=args.backend,
         generated_mess_count=args.generated_mess_count,
+        generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         perception_mode=args.perception_mode,

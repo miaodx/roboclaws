@@ -88,6 +88,10 @@ The clean-slate direction is:
 - `semantic-map-build` is a Runnable Task for producing Runtime Metric Map
   snapshots.
 - `household-cleanup` is a Runnable Task for cleanup runs.
+- The canonical map flow is minimal-first: start from occupancy/free-space
+  navigation context, run `semantic-map-build`, then feed the resulting
+  `runtime_metric_map.json` to cleanup with `runtime_map_prior=...` when a
+  prior sweep is useful.
 - `household_world_v1` is the reusable world-understanding capability profile.
 - Manipulation capability should be composed as a separate requirement when a
   skill needs `pick`, `place`, `open_receptacle`, or `close_receptacle`.
@@ -110,9 +114,12 @@ just task::run household-cleanup direct world-labels seed=7
 
 For household tasks, the third positional token is a cleanup input/evidence
 lane. `world-labels` means the agent receives structured object handles and
-labels; it does not select online/offline map behavior. Use `map_mode=...` to
-choose the map projection and `runtime_map_prior=...` to consume a prebuilt
-runtime map snapshot.
+labels; it does not select online/offline map behavior. The default map
+projection is `map_mode=minimal`, which exposes occupancy geometry, generated
+exploration candidates, and runtime semantic anchors instead of authored room
+or fixture labels. Use `runtime_map_prior=...` to consume a prebuilt runtime map
+snapshot. `map_mode=rich` remains only as an explicit legacy/debug shortcut for
+tests that need pre-authored public fixture semantics.
 
 The clean-slate household naming is the public surface: `semantic-map-build`
 produces Runtime Metric Map snapshots, and `household-cleanup` consumes

@@ -38,7 +38,7 @@ default:
 
 # Explicit cleanup lane runner. The parameter remains named `profile` for
 # command compatibility with existing artifacts and recipes.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="rich":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -59,6 +59,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     runtime_map_prior="{{runtime_map_prior}}"
     backend_override="{{backend_override}}"
     map_mode="{{map_mode}}"
+    scene_source="{{scene_source}}"
+    scene_index="{{scene_index}}"
+    isaac_scene_usd_path="{{isaac_scene_usd_path}}"
+    min_generated_mess_count_override="{{min_generated_mess_count_override}}"
+    generated_mess_object_ids="{{generated_mess_object_ids}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -83,6 +88,12 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     backend_override="${backend_override#backend=}"
     backend_override="${backend_override#backend_override=}"
     map_mode="${map_mode#map_mode=}"
+    scene_source="${scene_source#scene_source=}"
+    scene_index="${scene_index#scene_index=}"
+    isaac_scene_usd_path="${isaac_scene_usd_path#isaac_scene_usd_path=}"
+    min_generated_mess_count_override="${min_generated_mess_count_override#min_generated_mess_count=}"
+    min_generated_mess_count_override="${min_generated_mess_count_override#min_generated_mess_count_override=}"
+    generated_mess_object_ids="${generated_mess_object_ids#generated_mess_object_ids=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -219,10 +230,14 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         ;;
     esac
     if [[ "$profile" == "world-labels" && "$backend" == "isaaclab_subprocess" ]]; then
+      isaac_min_semantic_accepted_count="$generated_mess_count"
+      if [[ "$min_generated_mess_count_override" != "auto" && -n "$min_generated_mess_count_override" ]]; then
+        isaac_min_semantic_accepted_count="$min_generated_mess_count_override"
+      fi
       checker_visual_args=(
         --require-waypoint-honesty
         --require-real-robot-alignment
-        --min-semantic-accepted-count "$generated_mess_count"
+        --min-semantic-accepted-count "$isaac_min_semantic_accepted_count"
         --min-sweep-coverage 1.0
       )
       if [[ "$robot_views" != "off" && "$robot_views" != "false" && "$robot_views" != "0" ]]; then
@@ -231,6 +246,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     fi
     if [[ "$cleanup_routine" == "auto" ]]; then
       cleanup_routine="skill"
+    fi
+    if [[ "$min_generated_mess_count_override" != "auto" && -n "$min_generated_mess_count_override" ]]; then
+      min_generated_mess_count="$min_generated_mess_count_override"
     fi
     semantic_sweep_args=()
     checker_semantic_args=()
@@ -282,12 +300,31 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       .venv/bin/python scripts/maps/check_bundle.py "$map_bundle_dir" >/dev/null
       map_bundle_args=(--map-bundle-dir "$map_bundle_dir")
     fi
+    isaac_scene_args=()
+    if [[ -n "$isaac_scene_usd_path" ]]; then
+      isaac_scene_args=(--isaac-scene-usd-path "$isaac_scene_usd_path")
+    fi
+    generated_mess_object_args=()
+    if [[ -n "$generated_mess_object_ids" ]]; then
+      IFS=',' read -r -a generated_mess_object_id_items <<< "$generated_mess_object_ids"
+      for generated_mess_object_id in "${generated_mess_object_id_items[@]}"; do
+        generated_mess_object_id="${generated_mess_object_id#"${generated_mess_object_id%%[![:space:]]*}"}"
+        generated_mess_object_id="${generated_mess_object_id%"${generated_mess_object_id##*[![:space:]]}"}"
+        if [[ -n "$generated_mess_object_id" ]]; then
+          generated_mess_object_args+=(--generated-mess-object-id "$generated_mess_object_id")
+        fi
+      done
+    fi
     if [[ "$profile" != "smoke" ]]; then
       if [[ -z "$map_bundle_dir" ]]; then
-        echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
-        exit 1
+        if [[ "$backend" != "molmospaces_subprocess" && "$backend" != "isaaclab_subprocess" ]]; then
+          echo "error: profile '$profile' requires a selected prebuilt Nav2 map bundle" >&2
+          exit 1
+        fi
+        echo "==> no map bundle selected; using backend-derived public metric map"
+      else
+        map_bundle_args+=(--require-map-bundle)
       fi
-      map_bundle_args+=(--require-map-bundle)
     fi
 
     stamp="$({{timestamp_cmd}})"
@@ -362,7 +399,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
         case "$profile" in
           camera-raw)
-            kickoff_prompt="Use the bundled molmo-realworld-cleanup skill instructions. This is the trace-preserving RAW_FPV skill lane. Use the cleanup MCP tool entries exactly as exposed by Codex; in text, refer to unprefixed tool names, and if the tool protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or roboclaws__. Call metric_map and fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, sweep every inspection waypoint with navigate_to_waypoint then observe, and mark a waypoint complete only after that waypoint_id has an observe response. Inspect each raw FPV image block returned by observe, do not expect structured labels, and when you see a plausible cleanup object call navigate_to_visual_candidate with source_observation_id, a broad category when uncertain (food, dish, book, linen, toy, electronics, pillow), a real target_fixture_id copied from fixture_hints, evidence_note, and image_region before pick. Prefer image_region={type:verbal_region,value:front of desk}; use image_region={type:bbox,value:[x,y,width,height]} only when you can estimate it confidently. Never send bbox_normalized, bare x/y/width/height fields, target_fixture_id=\"\", target_fixture_id=\"None\", or target_fixture_id=null. Omit source_fixture_id unless you are confident. If visual candidate grounding is unresolved, continue the waypoint sweep instead of calling done; if your successful cleanup count is still below seven, reobserve from another public waypoint or retry the candidate at most once with a broader category or clearer verbal_region. When grounding succeeds, pick the returned object and place it using candidate_fixture_id and recommended_tool from the response when present, use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets, and increment your successful cleanup count only after the place/place_inside succeeds. Do not pre-register raw-FPV candidates with declare_visual_candidates. Clean at least seven grounded visual candidates with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->place/place_inside when grounding succeeds, do not call scene_objects or read private scoring artifacts, compare the checklist before done, visit any missing waypoint_id, and call done only after every metric_map.inspection_waypoints waypoint_id has been observed and at least seven grounded cleanup chains have succeeded so the report is generated."
+            kickoff_prompt="Use the bundled molmo-realworld-cleanup skill instructions. This is the trace-preserving RAW_FPV skill lane. Use the cleanup MCP tool entries exactly as exposed by Codex; in text, refer to unprefixed tool names, and if the tool protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or roboclaws__. Call metric_map and fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, sweep every inspection waypoint with navigate_to_waypoint then observe, and mark a waypoint complete only after that waypoint_id has an observe response. Inspect each raw FPV image block returned by observe, do not expect structured labels, and when you see a plausible cleanup object call navigate_to_visual_candidate with source_observation_id, a broad category when uncertain (food, dish, book, linen, toy, electronics, pillow), evidence_note, and image_region before pick. In minimal map mode, do not invent fixture ids from empty fixture_hints; omit target_fixture_id and use the candidate_fixture_id/recommended_tool returned by navigate_to_visual_candidate plus runtime_metric_map.public_semantic_anchors. In explicit rich legacy/debug mode only, target_fixture_id may come from non-empty fixture_hints. Prefer image_region={type:verbal_region,value:front of desk}; use image_region={type:bbox,value:[x,y,width,height]} only when you can estimate it confidently. Never send bbox_normalized, bare x/y/width/height fields, target_fixture_id=\"\", target_fixture_id=\"None\", or target_fixture_id=null. Omit source_fixture_id unless you are confident. If visual candidate grounding is unresolved, continue the waypoint sweep instead of calling done; if your successful cleanup count is still below seven, reobserve from another public waypoint or retry the candidate at most once with a broader category or clearer verbal_region. When grounding succeeds, pick the returned object and place it using candidate_fixture_id and recommended_tool from the response when present, use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets, and increment your successful cleanup count only after the place/place_inside succeeds. Do not pre-register raw-FPV candidates with declare_visual_candidates. Clean at least seven grounded visual candidates with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->place/place_inside when grounding succeeds, do not call scene_objects or read private scoring artifacts, compare the checklist before done, visit any missing waypoint_id, and call done only after every metric_map.inspection_waypoints waypoint_id has been observed and at least seven grounded cleanup chains have succeeded so the report is generated."
             ;;
           camera-labels)
             kickoff_prompt="Use the bundled molmo-realworld-cleanup skill instructions. Use the cleanup MCP tool entries exactly as exposed by Codex; in text, refer to unprefixed tool names, and if the tool protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or roboclaws__. When the next action is an MCP tool call, make that tool call before writing progress text and never end a turn by saying you will call a tool later. After every successful place/place_inside, immediately call observe before ending the turn or choosing another object. Call metric_map and fixture_hints first, build an exact waypoint checklist from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only through metric_map/fixture_hints and not raw occupancy images, sweep every waypoint with navigate_to_waypoint then observe, mark a waypoint complete only after that waypoint_id has an observe response, call declare_visual_candidates for each raw FPV observation before choosing cleanup candidates with observation_id only and omit candidates so the configured visual-grounding pipeline produces labels, and treat returned candidates as coming from that pipeline without asking for service URLs, credentials, image paths, or model hosts. Clean plausible observed_* camera candidates with navigate->pick->navigate->open?->place/place_inside following required_tool if returned, use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets, do not call scene_objects or read private scoring artifacts, compare the checklist before done, visit any missing waypoint_id, and call done only after every metric_map.inspection_waypoints waypoint_id has been observed so the report is generated."
@@ -381,14 +418,20 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --backend "$backend"
           --task "$task"
           --generated-mess-count "$generated_mess_count"
+          "${generated_mess_object_args[@]}"
           --perception-mode "$perception_mode"
           --cleanup-profile "$profile"
+          --scene-source "$scene_source"
+          --scene-index "$scene_index"
           "${map_bundle_args[@]}"
           "${visual_args[@]}"
           "${visual_grounding_args[@]}"
           "${runtime_map_prior_args[@]}"
           --map-mode "$map_mode"
         )
+        if [[ -n "$isaac_scene_usd_path" ]]; then
+          server_args+=(--isaac-scene-usd-path "$isaac_scene_usd_path")
+        fi
 
         if [[ "$driver" == "codex-live" ]]; then
           if ! command -v tmux >/dev/null 2>&1; then
@@ -653,10 +696,14 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --cleanup-profile "$profile" \
             "${map_bundle_args[@]}" \
             --generated-mess-count "$generated_mess_count" \
+            "${generated_mess_object_args[@]}" \
+            --scene-source "$scene_source" \
+            --scene-index "$scene_index" \
             "${visual_args[@]}" \
             "${visual_grounding_args[@]}" \
             "${runtime_map_prior_args[@]}" \
             "${semantic_sweep_args[@]}" \
+            "${isaac_scene_args[@]}" \
             --output-dir "$run_dir"
           ;;
         mcp-smoke|openclaw-smoke)
@@ -670,6 +717,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --task "$task" \
             --policy "$policy" \
             --generated-mess-count "$generated_mess_count" \
+            "${generated_mess_object_args[@]}" \
             --perception-mode "$perception_mode" \
             --cleanup-profile "$profile" \
             "${map_bundle_args[@]}" \

@@ -106,8 +106,8 @@ Unity build if `just chat::run` already downloaded it.
 
    ```bash
    PROVIDER=mimo
-   MODEL=mimo_openai/mimo-v2-omni
-   IMAGE_MODEL=mimo_openai/mimo-v2-omni
+   MODEL=mimo_openai/mimo-v2.5
+   IMAGE_MODEL=mimo_openai/mimo-v2.5
    ROBOCLAWS_OBSERVE_MODE=auto
    ROBOCLAWS_PUBLIC_URL=https://<railway-domain>
    OPENCLAW_ALLOWED_ORIGINS=https://<extra-domain>

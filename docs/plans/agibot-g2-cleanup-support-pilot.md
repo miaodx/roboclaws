@@ -547,6 +547,29 @@ movement gate, not physical PNC execution.
   plus ruff check/format over the runner and focused test.
   This is still configuration/evidence support, not `relative_move` execution.
 
+2026-05-29 Agibot/MolmoSpaces pre-hardware rehearsal correction:
+
+- `backend=agibot_molmospaces_sim` now has a stricter local pre-hardware path
+  instead of only the earlier contract/report smoke. The old smoke remains
+  useful for contract shape, but it is not the "similar to real robot" layer by
+  itself.
+- `semantic-map-build direct camera-labels backend=agibot_molmospaces_sim`
+  routes to the pre-hardware flow: minimal map first, generated exploration
+  candidates, online observations, `runtime_metric_map.json`, and explicit
+  simulated Agibot-shaped provenance.
+- Local evidence is the gate for this direction. Prefer
+  `runtime=molmospaces-subprocess` with `camera-labels
+  visual_grounding=grounding-dino` or `camera-raw`/RAW_FPV. Fixture runtime is
+  only a fast contract check and should not be treated as the main confidence
+  signal.
+- `household-cleanup direct camera-raw|camera-labels
+  backend=agibot_molmospaces_sim` is included in the same direction. It consumes
+  the minimal-map runtime-map path and performs simulated cleanup-action
+  rehearsal before real G2 testing, while still reporting `physical_robot=false`
+  and no Agibot GDK movement/manipulation proof.
+- `robot_map_9` or other old Agibot map artifacts remain reference-only for
+  this backend unless a true digital-twin source is explicitly built later.
+
 2026-05-28 MolmoSpaces/G2 perception comparison grid:
 
 - Added a first-class apple-to-apple grid surface for the G2-adjacent
@@ -644,6 +667,10 @@ movement gate, not physical PNC execution.
   the operator can review why each generated waypoint was visited or skipped.
 - `world-labels` and `visual_grounding=sim` remain simulator/control evidence,
   not G2 readiness evidence.
+- For the Agibot/MolmoSpaces pre-hardware layer, the evidence that matters is a
+  local run with RAW_FPV or a real External Visual Grounding Service such as
+  Grounding DINO. Do not treat CI-safe fake/sim labels as sufficient for this
+  direction.
 - Manipulation tools remain blocked and report that physical cleanup is not
   ready.
 - Reports distinguish top-level `agibot_gdk_normal_navi` navigation evidence

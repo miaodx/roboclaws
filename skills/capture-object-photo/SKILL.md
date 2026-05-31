@@ -30,12 +30,12 @@ privileged helper surface enabled.
 Before the first raw `roboclaws__observe`, check whether the current model is
 vision-capable enough for inline image tool results.
 
-- Known text-only models include `mimo-v2.5-pro` and `mimo-v2.5` across
-  `mimo_openai/` and `mimo_anthropic/` profiles. For those, do not call raw
-  `roboclaws__observe`. Use `roboclaws__scene_objects`,
-  `roboclaws__goto`, and `roboclaws__observe_archived` only. If the operator
-  asks for visual framing judgment rather than artifact capture, stop and say a
-  vision-capable model such as `mimo-v2-omni` is required.
+- Known text-only MiMo models include `mimo-v2.5-pro` across `mimo_openai/`
+  and `mimo_anthropic/` profiles. For those, do not call raw
+  `roboclaws__observe`. Use `roboclaws__scene_objects`, `roboclaws__goto`, and
+  `roboclaws__observe_archived` only. If the operator asks for visual framing
+  judgment rather than artifact capture, stop and say a vision-capable model
+  such as `mimo-v2.5` is required.
 - Kimi K2.6 is image-capable, but the Claude Code Kimi coding profile can return
   a generic upstream server error when a long skill-reading context is followed
   by multiple inline PNG image blocks from `roboclaws__observe`. For batch photo

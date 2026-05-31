@@ -374,7 +374,7 @@ def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
         "7",
         "output/custom-map",
     ]
-    assert route[-4:] == ["on", "", "auto", "minimal"]
+    assert route[15:] == ["on", "", "auto", "minimal", "procthor-10k-val", "0", "", "auto"]
 
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
@@ -437,7 +437,26 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "7",
         "output/household/household-cleanup/direct-report",
     ]
-    assert route[-2:] == ["isaaclab_subprocess", "rich"]
+    assert route[16:] == [
+        "",
+        "isaaclab_subprocess",
+        "minimal",
+        "procthor-10k-val",
+        "0",
+        "",
+        "auto",
+    ]
+
+
+def test_molmo_cleanup_route_allows_explicit_legacy_rich_map_mode() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "map_mode=rich",
+    )
+
+    assert route[18] == "rich"
 
 
 def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
@@ -550,6 +569,12 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "output/agibot/molmospaces-sim/test-run" in route
     assert "--runtime" in route
     assert "fixture" in route
+    assert "--flow" in route
+    assert "prehardware" in route
+    assert "--task-name" in route
+    assert "household-cleanup" in route
+    assert "--profile" in route
+    assert "world-labels" in route
     assert "--rehearsal-mode" in route
     assert "cleanup-actions" in route
     assert "--context-json" in route
@@ -560,6 +585,37 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "7" in route
     assert "--cleanup-object-count" in route
     assert "1" in route
+
+
+def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehardware() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "direct",
+        "camera-labels",
+        "backend=agibot_molmospaces_sim",
+        "run_dir=output/agibot/molmospaces-sim/map-build-test",
+        "runtime=molmospaces-subprocess",
+        "visual_grounding=grounding-dino",
+        "generated_mess_count=5",
+    )
+
+    assert route[:3] == [
+        "cmd",
+        ".venv/bin/python",
+        "scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py",
+    ]
+    assert "--flow" in route
+    assert "prehardware" in route
+    assert "--task-name" in route
+    assert "semantic-map-build" in route
+    assert "--profile" in route
+    assert "camera-labels" in route
+    assert "--visual-grounding" in route
+    assert "grounding-dino" in route
+    assert "--runtime" in route
+    assert "molmospaces-subprocess" in route
+    assert "--include-robot" in route
+    assert "--record-robot-views" in route
 
 
 def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
@@ -899,12 +955,12 @@ def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -
 
     assert result.stdout.splitlines() == [
         (
-            "mify model=xiaomi/mimo-v2-omni "
+            "mify model=xiaomi/mimo-v2.5 "
             "base_url=https://api.llm.mioffice.cn/v1 key_env=XM_LLM_API_KEY "
             "protocol=responses"
         ),
         "-c",
-        'model="xiaomi/mimo-v2-omni"',
+        'model="xiaomi/mimo-v2.5"',
         "-c",
         'model_provider="mify"',
         "-c",
@@ -952,7 +1008,7 @@ def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_rout
     assert result.stdout.splitlines() == [
         "mify",
         "-c",
-        'model="xiaomi/mimo-v2-omni"',
+        'model="xiaomi/mimo-v2.5"',
         "-c",
         'model_provider="mify"',
         "-c",

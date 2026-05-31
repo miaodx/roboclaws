@@ -15,37 +15,62 @@ if __package__ in {None, ""}:
 from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (  # noqa: E402
     REHEARSAL_MODE_CLEANUP_ACTIONS,
     REHEARSAL_MODE_CONTRACT,
+    REHEARSAL_TASK_HOUSEHOLD_CLEANUP,
+    REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
     RUNTIME_FIXTURE,
     RUNTIME_MOLMOSPACES_SUBPROCESS,
     run_molmospaces_agibot_contract_rehearsal,
+    run_molmospaces_agibot_prehardware_rehearsal,
 )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     run_dir = args.run_dir or args.output_dir / _stamp()
-    result = run_molmospaces_agibot_contract_rehearsal(
-        run_dir=run_dir,
-        seed=args.seed,
-        generated_mess_count=args.generated_mess_count,
-        runtime=args.runtime,
-        waypoint_id=args.waypoint_id,
-        molmospaces_python=args.molmospaces_python,
-        include_robot=args.include_robot,
-        robot_name=args.robot_name,
-        rehearsal_mode=args.rehearsal_mode,
-        cleanup_object_count=args.cleanup_object_count,
-        record_robot_views=args.record_robot_views,
-        context_json=args.context_json,
-        agibot_map_artifact_dir=args.agibot_map_artifact_dir,
-    )
+    if args.flow == "prehardware":
+        result = run_molmospaces_agibot_prehardware_rehearsal(
+            run_dir=run_dir,
+            task_name=args.task_name,
+            profile=args.profile,
+            seed=args.seed,
+            generated_mess_count=args.generated_mess_count,
+            runtime=args.runtime,
+            molmospaces_python=args.molmospaces_python,
+            include_robot=args.include_robot,
+            robot_name=args.robot_name,
+            cleanup_object_count=args.cleanup_object_count,
+            record_robot_views=args.record_robot_views,
+            context_json=args.context_json,
+            agibot_map_artifact_dir=args.agibot_map_artifact_dir,
+            visual_grounding=args.visual_grounding,
+            visual_grounding_base_url=args.visual_grounding_base_url,
+            visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+        )
+    else:
+        result = run_molmospaces_agibot_contract_rehearsal(
+            run_dir=run_dir,
+            seed=args.seed,
+            generated_mess_count=args.generated_mess_count,
+            runtime=args.runtime,
+            waypoint_id=args.waypoint_id,
+            molmospaces_python=args.molmospaces_python,
+            include_robot=args.include_robot,
+            robot_name=args.robot_name,
+            rehearsal_mode=args.rehearsal_mode,
+            cleanup_object_count=args.cleanup_object_count,
+            record_robot_views=args.record_robot_views,
+            context_json=args.context_json,
+            agibot_map_artifact_dir=args.agibot_map_artifact_dir,
+        )
     print(
         json.dumps(
             {
                 "run_dir": str(run_dir),
                 "status": result["cleanup_status"],
                 "confidence_layer": result["confidence_layer"],
-                "rehearsal_mode": result["rehearsal_mode"],
+                "flow": args.flow,
+                "task_name": args.task_name,
+                "rehearsal_mode": result.get("rehearsal_mode", ""),
                 "runtime": result["runtime"],
                 "simulated": result["simulated"],
                 "physical_robot": result["physical_robot"],
@@ -78,6 +103,44 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--generated-mess-count", type=int, default=5)
     parser.add_argument("--waypoint-id", help="Waypoint id to use for simulated navigation.")
+    parser.add_argument(
+        "--flow",
+        choices=("contract-rehearsal", "prehardware"),
+        default="contract-rehearsal",
+        help=(
+            "contract-rehearsal runs the original one-waypoint contract smoke; "
+            "prehardware runs the minimal-map online semantic-map/cleanup rehearsal."
+        ),
+    )
+    parser.add_argument(
+        "--task-name",
+        choices=(REHEARSAL_TASK_SEMANTIC_MAP_BUILD, REHEARSAL_TASK_HOUSEHOLD_CLEANUP),
+        default=REHEARSAL_TASK_HOUSEHOLD_CLEANUP,
+        help="Public task shape to rehearse when --flow prehardware is selected.",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("world-labels", "camera-raw", "camera-labels"),
+        default="camera-labels",
+        help="Input/evidence lane for --flow prehardware.",
+    )
+    parser.add_argument(
+        "--visual-grounding",
+        default="grounding-dino",
+        help=(
+            "camera-labels producer pipeline id for --flow prehardware. Use a "
+            "local Visual Grounding Service such as grounding-dino for local proof."
+        ),
+    )
+    parser.add_argument(
+        "--visual-grounding-base-url",
+        help="External Visual Grounding Service base URL for --flow prehardware.",
+    )
+    parser.add_argument(
+        "--visual-grounding-timeout-s",
+        type=float,
+        help="External Visual Grounding Service timeout for --flow prehardware.",
+    )
     parser.add_argument(
         "--rehearsal-mode",
         choices=(REHEARSAL_MODE_CONTRACT, REHEARSAL_MODE_CLEANUP_ACTIONS),

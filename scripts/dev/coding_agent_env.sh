@@ -64,7 +64,7 @@ roboclaws_code_agent_profile_default_model() {
       printf 'gpt-5.5\n'
       ;;
     mify)
-      printf 'xiaomi/mimo-v2-omni\n'
+      printf 'xiaomi/mimo-v2.5\n'
       ;;
     kimi-anthropic)
       printf 'kimi-k2.6\n'

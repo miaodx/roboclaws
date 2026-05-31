@@ -241,6 +241,16 @@ shape while reports distinguish backend variant, provenance, and blocked
 capabilities.
 _Avoid_: simulator proof as hardware proof, robot-specific tool namespace
 
+**Agibot MolmoSpaces Pre-Hardware Rehearsal**:
+A simulated pre-hardware layer behind `backend=agibot_molmospaces_sim` that
+starts from a minimal map projection, runs online `semantic-map-build` over
+generated exploration candidates, writes Runtime Metric Map evidence, and can
+then rehearse cleanup actions in MolmoSpaces before G2 hardware testing. It may
+use RAW_FPV or a real External Visual Grounding Service such as Grounding DINO
+for local confidence, but it remains simulated evidence and not Agibot GDK
+execution proof.
+_Avoid_: contract-only smoke, digital twin claim, hardware validation, fixture-only CI gate
+
 **Operator-Recorded Waypoint**:
 A named robot pose prepared by an operator before a run.
 _Avoid_: agent-created map edit, arbitrary coordinate goal

@@ -21,14 +21,18 @@ from roboclaws.molmo_cleanup.agibot_cleanup_contract import (  # noqa: E402
     AgibotCleanupMCPContract,
 )
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
+from roboclaws.molmo_cleanup.isaac_lab_backend import (  # noqa: E402
+    ISAACLAB_SUBPROCESS_BACKEND,
+    IsaacLabSubprocessBackend,
+)
 from roboclaws.molmo_cleanup.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
 from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
 from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
+    DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
     REALWORLD_MAP_MODES,
-    RICH_MAP_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
 from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
@@ -65,7 +69,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
     parser.add_argument(
         "--backend",
-        choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND, AGIBOT_GDK_BACKEND),
+        choices=(
+            SYNTHETIC_BACKEND,
+            MOLMOSPACES_SUBPROCESS_BACKEND,
+            ISAACLAB_SUBPROCESS_BACKEND,
+            AGIBOT_GDK_BACKEND,
+        ),
         default=SYNTHETIC_BACKEND,
     )
     parser.add_argument(
@@ -78,6 +87,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agibot-map-artifact-dir", type=Path)
     parser.add_argument("--real-movement-enabled", action="store_true")
     parser.add_argument("--generated-mess-count", type=int, default=10)
+    parser.add_argument(
+        "--generated-mess-object-id",
+        action="append",
+        help="Private run-control object id to include in the generated mess set. Repeatable.",
+    )
     parser.add_argument(
         "--map-bundle-dir",
         type=Path,
@@ -102,15 +116,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--map-mode",
         choices=tuple(sorted(REALWORLD_MAP_MODES)),
-        default=RICH_MAP_MODE,
+        default=DEFAULT_MAP_MODE,
         help=(
-            "Agent-facing map projection: rich exposes authored public semantics; "
-            "minimal exposes occupancy geometry plus generated exploration candidates."
+            "Agent-facing map projection. Default minimal exposes occupancy geometry and "
+            "generated exploration candidates; rich is an explicit legacy/debug projection "
+            "with authored public semantics."
         ),
     )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
+    parser.add_argument("--scene-source", default="procthor-10k-val")
+    parser.add_argument("--scene-index", type=int, default=0)
+    parser.add_argument(
+        "--isaac-scene-usd-path",
+        type=Path,
+        help="Prepared local USD/USDA scene for backend=isaaclab_subprocess real-mode runs.",
+    )
     parser.add_argument("--visual-grounding", default=SIM_VISUAL_GROUNDING_PIPELINE_ID)
     parser.add_argument("--visual-grounding-base-url")
     parser.add_argument("--visual-grounding-timeout-s", type=float)
@@ -218,15 +240,19 @@ def run_molmo_realworld_cleanup_agent_server(
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     backend: str = SYNTHETIC_BACKEND,
     generated_mess_count: int = 10,
+    generated_mess_object_ids: tuple[str, ...] = (),
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     include_robot: bool = False,
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
+    scene_source: str = "procthor-10k-val",
+    scene_index: int = 0,
+    isaac_scene_usd_path: str | Path | None = None,
     cleanup_profile: str | None = None,
     runtime_map_prior_path: str | Path | None = None,
-    map_mode: str = RICH_MAP_MODE,
+    map_mode: str = DEFAULT_MAP_MODE,
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
@@ -249,11 +275,12 @@ def run_molmo_realworld_cleanup_agent_server(
         required=require_map_bundle,
     )
     runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
-    if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
-        raise ValueError("robot inclusion requires backend=molmospaces_subprocess")
-    if record_robot_views and (backend != MOLMOSPACES_SUBPROCESS_BACKEND or not include_robot):
+    visual_backends = {MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND}
+    if include_robot and backend not in visual_backends:
+        raise ValueError("robot inclusion requires a visual subprocess backend")
+    if record_robot_views and (backend not in visual_backends or not include_robot):
         raise ValueError(
-            "record_robot_views requires backend=molmospaces_subprocess and include_robot"
+            "record_robot_views requires a visual subprocess backend and include_robot"
         )
     agibot_contract: AgibotCleanupMCPContract | None = None
     if backend == AGIBOT_GDK_BACKEND:
@@ -283,6 +310,24 @@ def run_molmo_realworld_cleanup_agent_server(
             include_robot=include_robot,
             robot_name=robot_name,
             generated_mess_count=generated_mess_count,
+            generated_mess_object_ids=generated_mess_object_ids,
+            scene_source=scene_source,
+            scene_index=scene_index,
+        )
+        scenario = backend_instance.scenario
+        base_contract = CleanupBackendSession(scenario, backend=backend_instance)
+    elif backend == ISAACLAB_SUBPROCESS_BACKEND:
+        backend_instance = IsaacLabSubprocessBackend(
+            run_dir=output_dir,
+            seed=seed,
+            include_robot=include_robot,
+            robot_name=robot_name,
+            generated_mess_count=generated_mess_count,
+            generated_mess_object_ids=generated_mess_object_ids,
+            scene_source=scene_source,
+            scene_index=scene_index,
+            map_bundle_dir=selected_bundle_dir,
+            scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
         )
         scenario = backend_instance.scenario
         base_contract = CleanupBackendSession(scenario, backend=backend_instance)
@@ -374,12 +419,16 @@ def main(argv: list[str] | None = None) -> int:
             task_prompt=args.task,
             backend=args.backend,
             generated_mess_count=args.generated_mess_count,
+            generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
             map_bundle_dir=args.map_bundle_dir,
             require_map_bundle=args.require_map_bundle,
             perception_mode=args.perception_mode,
             include_robot=args.include_robot,
             robot_name=args.robot_name,
             record_robot_views=args.record_robot_views,
+            scene_source=args.scene_source,
+            scene_index=args.scene_index,
+            isaac_scene_usd_path=args.isaac_scene_usd_path,
             cleanup_profile=args.cleanup_profile,
             runtime_map_prior_path=args.runtime_map_prior,
             map_mode=args.map_mode,

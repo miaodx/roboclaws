@@ -39,7 +39,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
     assert [item["route_id"] for item in grid["axes"]["agent_routes"]] == [
         "codex-api-router",
         "claude-kimi",
-        "claude-mimo-omni",
+        "claude-mimo-v25",
     ]
     assert [item["lane_id"] for item in grid["axes"]["perception_lanes"]] == [
         "grounding-dino",
@@ -76,10 +76,10 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
     assert "visual_grounding=grounding-dino" in codex_dino["command"]
     assert not any(item.startswith("runtime_map_prior=") for item in codex_dino["command"])
 
-    offline_raw = rows["offline-claude-mimo-omni-raw-fpv"]
+    offline_raw = rows["offline-claude-mimo-v25-raw-fpv"]
     assert offline_raw["env"] == {
         "ROBOCLAWS_CLAUDE_PROVIDER": "mimo-anthropic",
-        "ROBOCLAWS_CLAUDE_MODEL": "mimo-v2-omni",
+        "ROBOCLAWS_CLAUDE_MODEL": "mimo-v2.5",
     }
     assert offline_raw["command"][:5] == [
         "just",
@@ -175,7 +175,7 @@ def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Pat
         "run_result.json"
     )
     assert rows["online-claude-kimi-raw-fpv"]["status"] == "success"
-    assert rows["online-claude-mimo-omni-grounding-dino"]["status"] == "not_selected"
+    assert rows["online-claude-mimo-v25-grounding-dino"]["status"] == "not_selected"
 
 
 def test_apple2apple_grid_accepts_prior_artifact_when_setup_exits_nonzero(
