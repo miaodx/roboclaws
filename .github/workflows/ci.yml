@@ -63,25 +63,21 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -y xvfb libgl1 libglib2.0-0
 
+      - name: Install just
+        env:
+          JUST_VERSION: "1.50.0"
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C "$HOME/.local/bin" just
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/just" --version
+
       - name: Install Python dependencies
         run: pip install -e ".[dev]"
 
-      - name: Lint (ruff check)
-        run: ruff check .
-
-      - name: Format check (ruff format --check)
-        run: ruff format --check .
-
-      # All current tests use unittest.mock — no Unity build needed.
-      # Future AI2-THOR integration tests should be wrapped with xvfb-run.
-      - name: Run tests
-        run: pytest
-
-      # Drive the territory and coverage examples against a mocked engine so
-      # every push produces a browsable report.html artifact (issue #15).
-      # No AI2-THOR / Unity / API keys required.
-      - name: Generate demo HTML reports
-        run: python scripts/reports/generate_demo_report.py --output-dir output/demo --steps 30
+      - name: Run required PR gate
+        run: just agent::verify ci-required
 
       - name: Upload HTML reports
         uses: actions/upload-artifact@v4

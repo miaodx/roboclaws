@@ -301,5 +301,9 @@ just agent::mcp up
 just agent::gateway up
 ```
 
+The required PR gate is reproducible locally with
+`just agent::verify ci-required`. Use `just agent::verify mock` for a faster
+loop when you do not need the mock HTML report artifact.
+
 For tests, set `ROBOCLAWS_JUST_TRACE=1` to print the lower-level command route
 without launching the underlying simulator, Gateway, or agent.

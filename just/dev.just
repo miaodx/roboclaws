@@ -40,19 +40,20 @@ test kind="all":
     set -euo pipefail
     case "{{kind}}" in
       fast)
-        {{standalone_pytest}} -m "not integration" -q --durations=5
+        ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1 {{standalone_pytest}} \
+          -m "not integration" -q --durations=5
         ;;
 
       unit)
-        {{standalone_pytest}} -m unit -q --durations=5
+        ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1 {{standalone_pytest}} -m unit -q --durations=5
         ;;
 
       contract)
-        {{standalone_pytest}} -m contract -q --durations=5
+        ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1 {{standalone_pytest}} -m contract -q --durations=5
         ;;
 
       regression)
-        {{standalone_pytest}} -m regression -q --durations=5
+        ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1 {{standalone_pytest}} -m regression -q --durations=5
         ;;
 
       integration)

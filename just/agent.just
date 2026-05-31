@@ -723,7 +723,7 @@ verify target="mock" *args:
     }
 
     case "$target" in
-      static|mock|contract|regression-mock|local-sim|local-openclaw|navigator|\
+      static|mock|ci-required|contract|regression-mock|local-sim|local-openclaw|navigator|\
       molmo-realworld-cleanup|molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\

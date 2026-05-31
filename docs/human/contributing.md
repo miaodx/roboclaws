@@ -61,6 +61,7 @@ Invoke recipes with the `module::recipe` form:
 just task::run ai2thor-nav openclaw
 just task::run household-cleanup codex smoke
 just agent::verify mock
+just agent::verify ci-required
 ```
 
 `just <module> <recipe>` (space-separated) also works, but `module::recipe`
@@ -115,7 +116,7 @@ CI has one required fast job plus several push-to-`main` smoke/report jobs:
 
 | Job | Trigger | Purpose |
 |-----|---------|---------|
-| `lint-and-mock` | every push + PR | ruff lint, format check, pytest, mock-engine HTML demo |
+| `lint-and-mock` | every push + PR | `just agent::verify ci-required`: ruff lint, format check, pytest, mock-engine HTML demo |
 | `real-model-smoke` | push to `main` only | 100-step Kimi + real AI2-THOR territory + coverage games |
 | `openclaw-smoke` | push to `main` only (`continue-on-error`) | ephemeral Gateway + Kimi navigation smoke |
 | `territory-openclaw-smoke` | push to `main` only (`continue-on-error`) | OpenClaw-backed territory smoke |

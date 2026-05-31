@@ -20,6 +20,15 @@ if [[ ! -x "$PYTEST_BIN" ]]; then
     PYTEST_BIN="$(command -v pytest)"
 fi
 
+if [[ "${ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV:-}" == "1" ]]; then
+    KIMI_API_KEY=""
+    OPENAI_API_KEY=""
+    ANTHROPIC_API_KEY=""
+    NV_API_KEY=""
+    NVIDIA_API_KEY=""
+    MIMO_TP_KEY=""
+fi
+
 env -i \
   PATH="$REPO_ROOT/.venv/bin:/usr/bin:/bin" \
   HOME="${HOME:-$REPO_ROOT}" \

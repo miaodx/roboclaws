@@ -6,6 +6,7 @@
 # Preferred entrypoints:
 # - just verify::static            lint/format/whitespace
 # - just verify::mock              static + fast unit/mock tests
+# - just verify::ci-required       required PR gate: mock + HTML report artifact
 # - just verify::contract          focused fixture/schema/report contracts
 # - just verify::regression-mock   baseline/candidate regression harness
 # - just verify::local-sim         real AI2-THOR regression harness
@@ -33,8 +34,16 @@ default:
 static:
     #!/usr/bin/env bash
     set -euo pipefail
-    .venv/bin/ruff check .
-    .venv/bin/ruff format --check .
+    ruff_bin="${ROBOCLAWS_RUFF:-}"
+    if [[ -z "$ruff_bin" ]]; then
+      if [[ -x ".venv/bin/ruff" ]]; then
+        ruff_bin=".venv/bin/ruff"
+      else
+        ruff_bin="ruff"
+      fi
+    fi
+    "$ruff_bin" check .
+    "$ruff_bin" format --check .
     git diff --check
 
 # L1: static checks plus fast unit/mock tests.
@@ -43,6 +52,28 @@ mock:
     set -euo pipefail
     just verify::static
     just dev::test fast
+
+# Required PR gate: deterministic checks plus the mock HTML report artifact
+# uploaded by hosted CI.
+ci-required output_dir="output/demo" steps="30":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    output_dir="{{output_dir}}"
+    steps="{{steps}}"
+    output_dir="${output_dir#output_dir=}"
+    steps="${steps#steps=}"
+    python_bin="${ROBOCLAWS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x ".venv/bin/python" ]]; then
+        python_bin=".venv/bin/python"
+      else
+        python_bin="python"
+      fi
+    fi
+    just verify::mock
+    "$python_bin" scripts/reports/generate_demo_report.py \
+      --output-dir "$output_dir" \
+      --steps "$steps"
 
 # L2: focused fixture/schema/report contracts.
 contract:

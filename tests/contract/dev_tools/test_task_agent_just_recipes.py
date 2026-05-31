@@ -95,6 +95,22 @@ def trace_agent_harness(*args: str) -> list[str]:
     return result.stdout.strip().split("\t")
 
 
+def trace_agent_verify(*args: str) -> list[str]:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "agent::verify", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip().split("\t")
+
+
 def assert_task_run_fails(*args: str) -> str:
     binary = just_bin()
     env = os.environ.copy()
@@ -191,6 +207,17 @@ def test_agent_module_exposes_compact_dispatchers() -> None:
     )
     for alias in removed_combo_aliases:
         assert not re.search(rf"^{alias}\b", text, re.MULTILINE)
+
+
+def test_agent_verify_routes_required_ci_gate_to_verify_module() -> None:
+    route = trace_agent_verify("ci-required", "output_dir=output/custom-demo", "steps=3")
+
+    assert route == [
+        "just",
+        "verify::ci-required",
+        "output_dir=output/custom-demo",
+        "steps=3",
+    ]
 
 
 def test_agent_harness_allows_molmo_codex_perf_target() -> None:
