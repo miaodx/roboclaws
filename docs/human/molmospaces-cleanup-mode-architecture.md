@@ -43,15 +43,15 @@ metadata and report metadata.
 Preferred command shape:
 
 ```bash
-just task::run molmo-cleanup <driver> <profile>
+just task::run household-cleanup <driver> <profile>
 ```
 
 Examples:
 
 ```bash
-just task::run molmo-cleanup claude world-labels
-just task::run molmo-cleanup claude camera-raw
-just task::run molmo-cleanup direct camera-labels
+just task::run household-cleanup claude world-labels
+just task::run household-cleanup claude camera-raw
+just task::run household-cleanup direct camera-labels
 ```
 
 No backward compatibility is required for this refactor. The new names can
@@ -338,7 +338,7 @@ profile=camera-raw must fail if structured object labels leak into agent input.
 Implemented in the command facade, Molmo cleanup runners, artifact metadata,
 report summary, checker, and focused tests:
 
-1. `just task::run molmo-cleanup <driver> <profile>` treats the third
+1. `just task::run household-cleanup <driver> <profile>` treats the third
    positional argument as the cleanup profile.
 2. The public profiles are `smoke`, `world-labels`, `camera-raw`, and
    `camera-labels`.

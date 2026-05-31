@@ -9,6 +9,9 @@ from typing import Any
 PROFILE_SCHEMA = "roboclaws_mcp_contract_profile_v1"
 
 AI2THOR_NAVIGATION_PROFILE = "ai2thor_navigation_v1"
+HOUSEHOLD_WORLD_PROFILE = "household_world_v1"
+HOUSEHOLD_MANIPULATION_PROFILE = "household_manipulation_v1"
+HOUSEHOLD_EPISODE_PROFILE = "household_episode_v1"
 MOLMOSPACES_CLEANUP_PROFILE = "molmospaces_cleanup_v1"
 REAL_ROBOT_CLEANUP_PROFILE = "real_robot_cleanup_v1"
 
@@ -322,10 +325,270 @@ _MOLMO_PRIVATE_EXCLUSIONS = (
     "target_count",
 )
 
+_HOUSEHOLD_WORLD_TOOLS = (
+    _tool(
+        "metric_map",
+        "mapping.metric_map",
+        FAMILY_MAPPING,
+        CLASSIFICATION_CANONICAL,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
+        ),
+        (
+            "Return public room topology, static fixtures, runtime-map slots, "
+            "and inspection waypoints."
+        ),
+    ),
+    _tool(
+        "fixture_hints",
+        "mapping.fixture_hints",
+        FAMILY_MAPPING,
+        CLASSIFICATION_CANONICAL,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
+        ),
+        "Return public fixture identities, affordances, and preferred waypoints.",
+    ),
+    _tool(
+        "navigate_to_room",
+        "navigation.navigate_to_room",
+        FAMILY_NAVIGATION,
+        CLASSIFICATION_CANONICAL,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Navigate to a public room waypoint.",
+    ),
+    _tool(
+        "navigate_to_waypoint",
+        "navigation.navigate_to_waypoint",
+        FAMILY_NAVIGATION,
+        CLASSIFICATION_CANONICAL,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Navigate to a public inspection waypoint.",
+    ),
+    _tool(
+        "observe",
+        "perception.observe",
+        FAMILY_PERCEPTION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_API_SEMANTIC, PROVENANCE_BLOCKED_CAPABILITY),
+        "Observe robot-local public candidates and camera evidence at the current waypoint.",
+    ),
+    _tool(
+        "adjust_camera",
+        "perception.adjust_camera",
+        FAMILY_PERCEPTION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
+        "Adjust bounded active camera yaw/pitch at the current waypoint.",
+    ),
+    _tool(
+        "declare_visual_candidates",
+        "perception.declare_visual_candidates",
+        FAMILY_PERCEPTION,
+        CLASSIFICATION_COMPOSED,
+        (
+            PROVENANCE_CAMERA_ARTIFACT,
+            PROVENANCE_SIMULATED_CAMERA_MODEL,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Register public model-declared candidates from camera evidence.",
+    ),
+    _tool(
+        "navigate_to_visual_candidate",
+        "navigation.navigate_to_visual_candidate",
+        FAMILY_NAVIGATION,
+        CLASSIFICATION_COMPOSED,
+        (
+            PROVENANCE_CAMERA_ARTIFACT,
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Ground one public visual candidate and navigate toward it when possible.",
+    ),
+    _tool(
+        "inspect_visible_object",
+        "perception.inspect_visible_object",
+        FAMILY_PERCEPTION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_API_SEMANTIC, PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
+        "Inspect a previously observed public object handle.",
+    ),
+)
+
+_HOUSEHOLD_MANIPULATION_TOOLS = (
+    _tool(
+        "navigate_to_object",
+        "navigation.navigate_to_object",
+        FAMILY_NAVIGATION,
+        CLASSIFICATION_CANONICAL,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_CAMERA_ARTIFACT,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Navigate toward a public observed object handle before manipulation.",
+    ),
+    _tool(
+        "pick",
+        "manipulation.pick",
+        FAMILY_MANIPULATION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
+        "Pick a public observed object handle.",
+    ),
+    _tool(
+        "navigate_to_receptacle",
+        "navigation.navigate_to_receptacle",
+        FAMILY_NAVIGATION,
+        CLASSIFICATION_CANONICAL,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Navigate to a public fixture before placement.",
+    ),
+    _tool(
+        "open_receptacle",
+        "manipulation.open_receptacle",
+        FAMILY_MANIPULATION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
+        "Open a public receptacle before inside placement.",
+    ),
+    _tool(
+        "place",
+        "manipulation.place",
+        FAMILY_MANIPULATION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
+        "Place the held object on or at a public fixture.",
+    ),
+    _tool(
+        "place_inside",
+        "manipulation.place_inside",
+        FAMILY_MANIPULATION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
+        "Place the held object inside an opened public fixture.",
+    ),
+    _tool(
+        "close_receptacle",
+        "manipulation.close_receptacle",
+        FAMILY_MANIPULATION,
+        CLASSIFICATION_CANONICAL,
+        (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
+        "Close a public receptacle after inside placement.",
+    ),
+)
+
+_HOUSEHOLD_DONE_TOOL = _tool(
+    "done",
+    "episode.done",
+    FAMILY_EPISODE,
+    CLASSIFICATION_CANONICAL,
+    (
+        PROVENANCE_API_SEMANTIC,
+        PROVENANCE_NAV2_ACTION,
+        PROVENANCE_AGIBOT_GDK_NORMAL_NAVI,
+        PROVENANCE_BLOCKED_CAPABILITY,
+    ),
+    "Terminate the selected household task and write artifacts.",
+)
+
+_HOUSEHOLD_WORLD_PROFILE = ContractProfile(
+    profile_id=HOUSEHOLD_WORLD_PROFILE,
+    version=1,
+    backend="multi_backend",
+    domain="household_world",
+    backend_variants=(
+        "api_semantic_synthetic",
+        "molmospaces_subprocess",
+        "nav2_ros2",
+        "agibot_gdk",
+    ),
+    capability_families=(
+        FAMILY_PERCEPTION,
+        FAMILY_LOCALIZATION,
+        FAMILY_MAPPING,
+        FAMILY_NAVIGATION,
+        FAMILY_MEMORY,
+    ),
+    public_tools=_HOUSEHOLD_WORLD_TOOLS,
+    privileged_tools=(),
+    privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
+    summary=(
+        "Task-neutral household world profile for metric-map projection, runtime "
+        "map evidence, observation, visual candidate declaration, and bounded navigation."
+    ),
+)
+
+_HOUSEHOLD_MANIPULATION_PROFILE = ContractProfile(
+    profile_id=HOUSEHOLD_MANIPULATION_PROFILE,
+    version=1,
+    backend="multi_backend",
+    domain="household_manipulation",
+    backend_variants=(
+        "api_semantic_synthetic",
+        "molmospaces_subprocess",
+        "nav2_ros2",
+        "agibot_gdk",
+    ),
+    capability_families=(
+        FAMILY_NAVIGATION,
+        FAMILY_MANIPULATION,
+    ),
+    public_tools=_HOUSEHOLD_MANIPULATION_TOOLS,
+    privileged_tools=(),
+    privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
+    summary=(
+        "Composable household manipulation profile. Physical backends may return "
+        "blocked-capability responses until manipulation is proven."
+    ),
+)
+
+_HOUSEHOLD_EPISODE_PROFILE = ContractProfile(
+    profile_id=HOUSEHOLD_EPISODE_PROFILE,
+    version=1,
+    backend="multi_backend",
+    domain="household_task_lifecycle",
+    backend_variants=(
+        "api_semantic_synthetic",
+        "molmospaces_subprocess",
+        "nav2_ros2",
+        "agibot_gdk",
+    ),
+    capability_families=(FAMILY_EPISODE,),
+    public_tools=(_HOUSEHOLD_DONE_TOOL,),
+    privileged_tools=(),
+    privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
+    summary="Composable household task lifecycle profile for explicit run completion.",
+)
+
 _MOLMO_PROFILE = ContractProfile(
     profile_id=MOLMOSPACES_CLEANUP_PROFILE,
     version=1,
     backend="molmospaces",
+    backend_variants=("api_semantic_synthetic", "molmospaces_subprocess"),
     domain="cleanup",
     capability_families=(
         FAMILY_PERCEPTION,
@@ -336,146 +599,16 @@ _MOLMO_PROFILE = ContractProfile(
         FAMILY_EPISODE,
     ),
     public_tools=(
-        _tool(
-            "metric_map",
-            "mapping.metric_map",
-            FAMILY_MAPPING,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC,),
-            "Return public room topology and inspection waypoints.",
-        ),
-        _tool(
-            "fixture_hints",
-            "mapping.fixture_hints",
-            FAMILY_MAPPING,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC,),
-            "Return public fixture identities and affordances.",
-        ),
-        _tool(
-            "navigate_to_room",
-            "navigation.navigate_to_room",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_BLOCKED_CAPABILITY),
-            "Navigate to a public room waypoint.",
-        ),
-        _tool(
-            "navigate_to_waypoint",
-            "navigation.navigate_to_waypoint",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_BLOCKED_CAPABILITY),
-            "Navigate to a public inspection waypoint.",
-        ),
-        _tool(
-            "observe",
-            "perception.observe",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_API_SEMANTIC),
-            "Observe robot-local public candidates at the current waypoint.",
-        ),
-        _tool(
-            "adjust_camera",
-            "perception.adjust_camera",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_CAMERA_ARTIFACT,),
-            "Adjust bounded active camera yaw/pitch at the current waypoint.",
-        ),
-        _tool(
-            "declare_visual_candidates",
-            "perception.declare_visual_candidates",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_COMPOSED,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_SIMULATED_CAMERA_MODEL),
-            "Register model-declared cleanup candidates from public camera evidence.",
-        ),
-        _tool(
-            "navigate_to_visual_candidate",
-            "navigation.navigate_to_visual_candidate",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_COMPOSED,
-            (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_API_SEMANTIC),
-            "Declare one visual cleanup candidate and navigate to it when grounded.",
-        ),
-        _tool(
-            "inspect_visible_object",
-            "perception.inspect_visible_object",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC,),
-            "Inspect a previously observed public object handle.",
-        ),
-        _tool(
-            "navigate_to_object",
-            "navigation.navigate_to_object",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_BLOCKED_CAPABILITY),
-            "Navigate to a public observed object handle.",
-        ),
-        _tool(
-            "pick",
-            "manipulation.pick",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
-            "Pick a public observed object handle.",
-        ),
-        _tool(
-            "navigate_to_receptacle",
-            "navigation.navigate_to_receptacle",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_BLOCKED_CAPABILITY),
-            "Navigate to a public fixture before placement.",
-        ),
-        _tool(
-            "open_receptacle",
-            "manipulation.open_receptacle",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
-            "Open a public receptacle before inside placement.",
-        ),
-        _tool(
-            "place",
-            "manipulation.place",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
-            "Place the held object on or at a public fixture.",
-        ),
-        _tool(
-            "place_inside",
-            "manipulation.place_inside",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
-            "Place the held object inside an opened public fixture.",
-        ),
-        _tool(
-            "close_receptacle",
-            "manipulation.close_receptacle",
-            FAMILY_MANIPULATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC, PROVENANCE_PLANNER_BACKED, PROVENANCE_BLOCKED_CAPABILITY),
-            "Close a public receptacle after inside placement.",
-        ),
-        _tool(
-            "done",
-            "episode.done",
-            FAMILY_EPISODE,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC,),
-            "Terminate the cleanup episode and write artifacts.",
-        ),
+        *_HOUSEHOLD_WORLD_TOOLS,
+        *_HOUSEHOLD_MANIPULATION_TOOLS,
+        _HOUSEHOLD_DONE_TOOL,
     ),
     privileged_tools=(),
     privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
-    summary="MolmoSpaces cleanup profile preserving the ADR-0003 public agent boundary.",
+    summary=(
+        "Legacy cleanup-shaped MolmoSpaces profile composed from the household "
+        "world, manipulation, and lifecycle capability modules."
+    ),
 )
 
 _REAL_ROBOT_PROFILE = ContractProfile(
@@ -666,6 +799,9 @@ _REAL_ROBOT_PROFILE = ContractProfile(
 
 _PROFILES = {
     AI2THOR_NAVIGATION_PROFILE: _AI2THOR_PROFILE,
+    HOUSEHOLD_WORLD_PROFILE: _HOUSEHOLD_WORLD_PROFILE,
+    HOUSEHOLD_MANIPULATION_PROFILE: _HOUSEHOLD_MANIPULATION_PROFILE,
+    HOUSEHOLD_EPISODE_PROFILE: _HOUSEHOLD_EPISODE_PROFILE,
     MOLMOSPACES_CLEANUP_PROFILE: _MOLMO_PROFILE,
     REAL_ROBOT_CLEANUP_PROFILE: _REAL_ROBOT_PROFILE,
 }

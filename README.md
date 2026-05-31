@@ -14,7 +14,7 @@ Roboclaws is a thin demo repo for making AI-driven robotics behavior reviewable:
 frames, maps, tool traces, scores, and public/private evaluation boundaries are
 published as HTML reports instead of buried in terminal logs.
 
-![Skill-first robotics](docs/human/skill-first-robotics.svg)
+![Task, skill, and capability profile architecture](docs/human/mcp-skills-and-semantic-profiles.svg)
 
 It answers three practical questions:
 
@@ -30,9 +30,10 @@ bounded public robot capability surface.
 | Principle | Practice |
 | --- | --- |
 | Start from open-ended goals | A user asks for work such as "clean the room" or "take useful photos"; an agent selects or creates a skill to do it. |
+| Keep tasks as run surfaces | Public commands such as `semantic-map-build` and `household-cleanup` own parameters, reports, and acceptance gates. |
 | Keep strategy in skills | Skills own prompt strategy, scripts, examples, checks, and task-specific loops such as photo capture or cleanup. |
 | Keep MCP bounded | MCP tools expose semantic robot capabilities like observe, move, pick, place, and done; they should not hide a whole task behind one opaque call. |
-| Profile public capabilities | Semantic profiles describe the public tool contract for a backend/domain, currently `ai2thor_navigation_v1` and `molmospaces_cleanup_v1`. |
+| Profile public capabilities | Semantic profiles describe reusable capability environments that skills can require; profiles compose by requirement, not by copying another profile's tools. |
 | Label privileged help | Simulator or demo helpers such as full object inventory and target-relative teleport are useful, but they stay labeled as privileged tools, not canonical robot abilities. |
 | Protect private evaluation truth | Hidden mess sets, acceptable destinations, private manifests, and scoring truth stay out of public profile metadata and agent-facing skill inputs. |
 | Let reports improve skills | Traces, artifacts, and evals feed the skill lifecycle: improve, split, merge, prune, or promote behavior only when the boundary is stable. |
@@ -41,17 +42,19 @@ The working abstraction ladder is:
 
 ```text
 open-ended goal
+  -> runnable task
   -> agent skill
-  -> composite action
-  -> semantic capability
-  -> environment primitive
-  -> execution backend
+  -> capability profile requirements
+  -> MCP capability tools
+  -> backend variant
 ```
 
-Default decision: improve or add a skill. Promote behavior into MCP only when
-multiple skills need it, the input/output shape is stable, public/private
-boundaries are clear, and traces can preserve the important substeps. The
-detailed profile and skill reference is
+Default decision: improve or add a skill when behavior changes; add or rename a
+runnable task only when the public command, parameters, report shape, or
+acceptance gates change. Promote behavior into MCP only when multiple skills
+need it, the input/output shape is stable, public/private boundaries are clear,
+and traces can preserve the important substeps. The detailed profile and skill
+reference is
 [docs/human/mcp-skills-and-semantic-profiles.md](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ## Run Demos With Just
@@ -91,8 +94,9 @@ Pages republishes from successful `main` runs.
 | OpenClaw navigation | OpenClaw Gateway agents control robots through the shared Roboclaws APIs. | `just task::run ai2thor-nav openclaw visual` | [openclaw/demo/report.html](https://miaodx.com/roboclaws/openclaw/demo/report.html) |
 | Coding-agent MCP control | Docker-backed Codex or Claude Code drives the robot directly through MCP tools. | `just task::run ai2thor-nav codex visual` or `just task::run ai2thor-nav claude visual` | Local-only today; reports write to `output/runs/<stamp>/`. |
 | Photo task | A robot navigates the room and photographs chairs/sofas. | `just task::run photo-chairs openclaw visual` | Local/OpenClaw report artifact. |
-| MolmoSpaces cleanup | A cleanup agent tidies a generated household mess while private scoring stays hidden. | `just task::run molmo-cleanup direct world-labels seed=7 generated_mess_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2 Omni](https://miaodx.com/roboclaws/molmo/live/mimo-v2-omni/seed-7/report.html) |
-| MolmoSpaces live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
+| Semantic map build | A no-cleanup sweep builds a `runtime_metric_map.json` snapshot from public observations. | `just task::run semantic-map-build direct world-labels seed=7 generated_mess_count=5` | Local artifact today. |
+| Household cleanup | A cleanup agent tidies a generated household mess while private scoring stays hidden. | `just task::run household-cleanup direct world-labels seed=7 generated_mess_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2 Omni](https://miaodx.com/roboclaws/molmo/live/mimo-v2-omni/seed-7/report.html) |
+| Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just task::run household-cleanup claude world-labels seed=7 generated_mess_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
 | Railway appliance | Single-container hosted demo with UI, viewer, Gateway, and AI2-THOR. | `DEMO_PASSWORD=demo just appliance::run local` | Local appliance surface. |
 | Maintainer gate | Fast mock confidence check before shipping repo changes. | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
 

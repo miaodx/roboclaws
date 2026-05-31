@@ -353,6 +353,45 @@ def test_semantic_diagnostics_allows_normal_visual_cleanup_sequence() -> None:
     assert diagnostics["duplicate_post_place_navigation_handles"] == []
 
 
+def test_semantic_diagnostics_tracks_recovered_semantic_order_errors() -> None:
+    diagnostics = semantic_diagnostics(
+        [
+            _trace_response(
+                "place",
+                {
+                    "ok": False,
+                    "tool": "place",
+                    "object_id": "observed_001",
+                    "error_reason": "semantic_order",
+                    "required_tool": "place_inside",
+                },
+            )
+        ],
+        [
+            {
+                "object_id": "observed_001",
+                "target_receptacle_category": "ShelvingUnit",
+                "steps": [
+                    {"phase": "navigate_to_object", "ok": True},
+                    {"phase": "pick", "ok": True},
+                    {"phase": "navigate_to_receptacle", "ok": True},
+                    {
+                        "phase": "place",
+                        "ok": False,
+                        "error_reason": "semantic_order",
+                    },
+                    {"phase": "place_inside", "ok": True},
+                ],
+            }
+        ],
+        {"score": {"restored_count": 1, "total_targets": 1}},
+    )
+
+    assert diagnostics["semantic_order_errors"] == 1
+    assert diagnostics["semantic_order_recovered_errors"] == 1
+    assert diagnostics["semantic_order_unrecovered_errors"] == 0
+
+
 def test_visual_grounding_only_hides_closed_container_contents() -> None:
     visibility = {"status": "ok", "object_pixels": 0}
 

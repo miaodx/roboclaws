@@ -16,14 +16,19 @@ KIMI_API_KEY=        # Kimi / Moonshot
 MIMO_TP_KEY=        # MiMo
 NV_API_KEY=          # NVIDIA NIM, optional
 
-CODEX_BASE_URL=      # Codex Responses-compatible endpoint
-CODEX_API_KEY=       # Codex endpoint key
+XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1  # Internal multi-model aggregator
+XM_LLM_API_KEY=      # Default Codex mify route
+
+CODEX_BASE_URL=      # Optional non-mify Codex Responses-compatible endpoint
+CODEX_API_KEY=       # Optional non-mify Codex endpoint key
 ```
 
 The launch recipes infer the repo-local runtime route from those keys. Codex
-uses `CODEX_BASE_URL` / `CODEX_API_KEY`. Claude Code prefers a MiMo key when
-available, then Kimi, and otherwise falls back to the host system provider only
-off the work network.
+prefers the internal multi-model aggregator when `XM_LLM_API_KEY` is present
+(`mify`, `xiaomi/mimo-v2-omni`, Responses API, web search disabled). Explicit
+`CODEX_BASE_URL` / `CODEX_API_KEY` remains available for non-mify debugging.
+Claude Code prefers a MiMo key when available, then Kimi, and otherwise falls
+back to the host system provider only off the work network.
 
 Run `just dev::network-status` before OpenClaw, Claude Code, or Codex
 workflows; work-network restrictions are documented in

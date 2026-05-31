@@ -344,8 +344,9 @@ just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
 
 Expected prerequisites:
 
-- `.env` provides the repo-local Codex route, including `CODEX_BASE_URL` and
-  `CODEX_API_KEY`.
+- `.env` provides the repo-local Codex route. The default route uses
+  `XM_LLM_API_KEY` for the internal mify profile; explicit `CODEX_BASE_URL` /
+  `CODEX_API_KEY` remains available for non-mify debugging.
 - The run uses the supported Docker-backed coding-agent path.
 - OpenClaw is not required and should not be used for this gate.
 

@@ -216,6 +216,8 @@ run_cli() {
     CODEX_API_KEY \
     KIMI_API_KEY \
     MIMO_TP_KEY \
+    XM_LLM_API_KEY \
+    XM_LLM_BASE_URL \
     HTTP_PROXY \
     HTTPS_PROXY \
     ALL_PROXY \

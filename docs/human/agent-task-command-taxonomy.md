@@ -57,7 +57,8 @@ Tasks:
 - `territory`
 - `coverage`
 - `photo-chairs`
-- `molmo-cleanup`
+- `semantic-map-build`
+- `household-cleanup`
 - `molmo-planner-proof`
 
 Drivers:
@@ -116,7 +117,8 @@ run is required for this command taxonomy refactor.
 
 ## Implementation Evidence
 
-Completed on 2026-05-12:
+Completed on 2026-05-12 and updated on 2026-05-26 for the household task
+rename plus `semantic-map-build`:
 
 - Collapsed public task recipes into `task::run`.
 - Collapsed public agent recipes into compact dispatchers.
@@ -128,8 +130,9 @@ Completed on 2026-05-12:
 Verification run:
 
 - `just --summary`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run molmo-cleanup codex smoke`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run household-cleanup codex`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run household-cleanup codex smoke`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run semantic-map-build direct world-labels`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run ai2thor-nav openclaw`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools`
 - `.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py`

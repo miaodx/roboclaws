@@ -47,16 +47,16 @@ for fast contract checks, but it has no robot camera timeline.
 
 ## Semantic Contract Profile
 
-`molmospaces_cleanup_v1` is the MCP contract profile for the ADR-0003 cleanup
-surface. It describes semantic capability tools such as `metric_map`,
-`fixture_hints`, `observe`, `navigate_to_object`, `pick`, `place`, and `done`;
-the user's instruction, for example "clean the room", remains a Task Prompt
-that the agent plans over those capabilities.
+`household_world_v1` is the task-neutral MCP contract profile for household
+world evidence. Cleanup skills compose it with `household_manipulation_v1` and
+`household_episode_v1` when they need tools such as `navigate_to_object`,
+`pick`, `place`, and `done`; the user's instruction, for example "clean the
+room", remains a Task Prompt that the agent plans over those capabilities.
 
 The profile is public-agent metadata only. It must not expose generated mess
 sets, acceptable destinations, private manifests, hidden target lists,
 `is_misplaced`, private scoring truth, or the AI2-THOR `scene_objects` oracle.
-Demo recipes such as `just task::run molmo-cleanup ...` choose a run shape; they
+Demo recipes such as `just task::run household-cleanup ...` choose a run shape; they
 are not whole-task MCP tools.
 
 ## Model-Declared Camera Bridge
@@ -102,12 +102,12 @@ or detector produced the labels. Use pipeline provenance for that second axis:
 Recommended command shape for the future pipeline comparison:
 
 ```bash
-just task::run molmo-cleanup direct camera-labels visual_grounding=sim
-just task::run molmo-cleanup mcp-smoke camera-labels visual_grounding=fake-http
-just task::run molmo-cleanup direct camera-labels visual_grounding=grounding-dino
-just task::run molmo-cleanup direct camera-labels visual_grounding=yoloe
-just task::run molmo-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2-omni
-just task::run molmo-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2-omni
+just task::run household-cleanup direct camera-labels visual_grounding=sim
+just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
+just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino
+just task::run household-cleanup direct camera-labels visual_grounding=yoloe
+just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2-omni
+just task::run household-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2-omni
 ```
 
 For non-sim pipelines, Roboclaws should call an External Visual Grounding
@@ -364,17 +364,19 @@ way as the direct navigation demos. Normal users configure keys only; command
 shape controls behavior.
 
 ```bash
-CODEX_BASE_URL=https://example.internal/v1
-CODEX_API_KEY=...
+XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+XM_LLM_API_KEY=...
 MIMO_TP_KEY=...
 KIMI_API_KEY=...
 ```
 
-Codex repo workflows infer the endpoint from `CODEX_BASE_URL` and
-`CODEX_API_KEY`. Claude Code prefers MiMo when `MIMO_TP_KEY` is present, then
-Kimi when `KIMI_API_KEY` is present. Bare system CLIs are outside the supported
-path unless a human explicitly asks for a debugging run. Before a long Codex
-visual cleanup run, use:
+Codex repo workflows default to the internal multi-model aggregator when
+`XM_LLM_API_KEY` is present (`mify`, `xiaomi/mimo-v2-omni`, Responses API, web
+search disabled). `CODEX_BASE_URL` and `CODEX_API_KEY` remain available only
+for explicit non-mify Codex debugging. Claude Code prefers MiMo when
+`MIMO_TP_KEY` is present, then Kimi when `KIMI_API_KEY` is present. Bare system
+CLIs are outside the supported path unless a human explicitly asks for a
+debugging run. Before a long Codex visual cleanup run, use:
 
 ```bash
 just code::codex-provider-smoke
@@ -386,7 +388,7 @@ support Codex, but may run supported Claude Code and OpenClaw routes. Use the
 same key set when comparing Kimi/MiMo results across machines:
 
 ```bash
-just task::run molmo-cleanup claude world-labels seed=7 generated_mess_count=5
+just task::run household-cleanup claude world-labels seed=7 generated_mess_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
