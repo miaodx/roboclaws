@@ -17,8 +17,13 @@ CANONICAL_TASKS: set[str] = {
     "territory",
     "coverage",
     "photo-chairs",
-    "molmo-cleanup",
+    "semantic-map-build",
+    "household-cleanup",
     "molmo-planner-proof",
+}
+
+LEGACY_TASK_ALIASES: dict[str, str] = {
+    "molmo-cleanup": "household-cleanup",
 }
 
 CANONICAL_DRIVERS: set[str] = {
@@ -44,11 +49,12 @@ SUPPORTED_ROUTES: set[tuple[str, str]] = {
     ("photo-chairs", "openclaw"),
     ("photo-chairs", "codex"),
     ("photo-chairs", "claude"),
-    ("molmo-cleanup", "direct"),
-    ("molmo-cleanup", "mcp-smoke"),
-    ("molmo-cleanup", "codex"),
-    ("molmo-cleanup", "claude"),
-    ("molmo-cleanup", "openclaw"),
+    ("semantic-map-build", "direct"),
+    ("household-cleanup", "direct"),
+    ("household-cleanup", "mcp-smoke"),
+    ("household-cleanup", "codex"),
+    ("household-cleanup", "claude"),
+    ("household-cleanup", "openclaw"),
     ("molmo-planner-proof", "direct"),
     ("molmo-planner-proof", "script"),
     ("molmo-planner-proof", "mcp-smoke"),
@@ -91,11 +97,12 @@ def _strip_named(value: str, name: str) -> str:
 
 def _normalize_task(value: str) -> str:
     task = _strip_named(value, "task")
+    task = LEGACY_TASK_ALIASES.get(task, task)
     if task not in CANONICAL_TASKS:
         raise CommandError(
             f"unsupported task '{task}'",
             "expected ai2thor-nav|territory|coverage|photo-chairs|"
-            "molmo-cleanup|molmo-planner-proof",
+            "semantic-map-build|household-cleanup|molmo-planner-proof",
         )
     return task
 
@@ -128,11 +135,11 @@ def _split_mode_and_overrides(
 
 
 def _resolve_dispatch_mode(task: str, raw_mode: str) -> str:
-    if task == "molmo-cleanup":
+    if task in {"semantic-map-build", "household-cleanup"}:
         profile = raw_mode or "world-labels"
         if profile not in MOLMO_CLEANUP_PROFILES:
             raise CommandError(
-                f"unsupported molmo-cleanup profile '{raw_mode}'",
+                f"unsupported household profile '{raw_mode}'",
                 "expected smoke|world-labels|camera-raw|camera-labels",
             )
         return profile

@@ -4907,6 +4907,9 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         return ""
     agent_view = run_result.get("agent_view") or {}
     metric_map = agent_view.get("metric_map") or {}
+    runtime_metric_map = (
+        agent_view.get("runtime_metric_map") or run_result.get("runtime_metric_map") or {}
+    )
     fixture_hints = agent_view.get("fixture_hints") or {}
     observed = agent_view.get("observed_objects") or []
     raw_observations = agent_view.get("raw_fpv_observations") or []
@@ -4970,13 +4973,70 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         f"{len(observed)} observed object handles, "
         f"{len(raw_observations)} raw FPV observations."
     )
+    sweep_note = (
+        '<p class="note">Semantic Sweep Mode: cleanup actions were disabled. '
+        "This report shows runtime-map evidence from public observations, not "
+        "private cleanup target truth.</p>"
+        if run_result.get("semantic_sweep_mode") is True
+        else ""
+    )
     return (
         '<section class="panel agent-view"><h2>Agent View</h2>'
         f'<p class="note">{html.escape(summary)} No Generated Mess Set, target count, '
         "acceptable destination sets, is_misplaced labels, or global movable-object "
         "inventory are present here.</p>"
+        f"{sweep_note}"
+        f"{_runtime_metric_map_table(runtime_metric_map)}"
         f"{_worklist_summary_table(worklist)}"
         f"{_skill_scratchpad_table(scratchpad)}{observed_table}</section>"
+    )
+
+
+def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
+    if not runtime_metric_map:
+        return ""
+    static_map = runtime_metric_map.get("static_map") or {}
+    observed = runtime_metric_map.get("observed_objects") or []
+    candidates = runtime_metric_map.get("map_update_candidates") or []
+    summary = (
+        f"schema={runtime_metric_map.get('schema', '')}, "
+        f"static fixtures={len(static_map.get('fixtures') or [])}, "
+        f"observed objects={len(observed)}, update candidates={len(candidates)}, "
+        f"source map mutated={runtime_metric_map.get('source_map_mutated')}"
+    )
+    rows = []
+    for item in observed:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('state', '')))}</td>"
+            f"<td>{html.escape(str(item.get('actionability', '')))}</td>"
+            f"<td>{html.escape(str(item.get('producer_type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('source_observation_id', '')))}</td>"
+            "</tr>"
+        )
+    observed_table = (
+        "<p>No runtime observed objects yet.</p>"
+        if not rows
+        else (
+            '<div class="table-wrap"><table><thead><tr><th>Handle</th>'
+            "<th>Category</th><th>State</th><th>Actionability</th>"
+            "<th>Producer</th><th>Observation</th></tr></thead><tbody>"
+            + "".join(rows)
+            + "</tbody></table></div>"
+        )
+    )
+    candidate_note = (
+        "<p>No map update candidates proposed.</p>"
+        if not candidates
+        else f"<p>{len(candidates)} map update candidates proposed for review.</p>"
+    )
+    return (
+        "<h3>Runtime Metric Map</h3>"
+        f'<p class="note">{html.escape(summary)}. Static map, observed objects, '
+        "and map update candidates remain separate.</p>"
+        f"{observed_table}{candidate_note}"
     )
 
 
@@ -6528,7 +6588,7 @@ def _cleanup_local_rerun_command(run_result: dict[str, Any]) -> str:
         [
             "just",
             "task::run",
-            "molmo-cleanup",
+            "household-cleanup",
             "direct",
             profile,
             f"seed={seed}",

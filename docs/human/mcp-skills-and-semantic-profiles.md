@@ -5,8 +5,6 @@ design principles. This note is the companion reference for how Roboclaws
 connects agent skills, MCP tools, semantic robot capabilities, and execution
 backends without making teammates read the GSD phase logs.
 
-![Skill-first robotics](skill-first-robotics.svg)
-
 ![MCP skills and semantic profile architecture](mcp-skills-and-semantic-profiles.svg)
 
 ## Reference Summary
@@ -15,11 +13,13 @@ Roboclaws uses a **skill-first, MCP-bounded** architecture:
 
 1. A user gives an **open-ended goal**, such as "clean the room" or "take
    useful photos."
-2. The agent searches for, uses, or creates an **agent skill**.
-3. The skill may call scripts, examples, checks, and MCP tools.
-4. The **MCP profile** keeps the public robot capability boundary stable.
-5. The execution backend runs environment-specific primitives.
-6. Reports and evals feed the skill library lifecycle.
+2. A known goal may resolve to a **runnable task** such as
+   `semantic-map-build` or `household-cleanup`.
+3. The task selects, defaults, or creates an **agent skill**.
+4. The skill may call scripts, examples, checks, and MCP tools.
+5. The **MCP capability profile** keeps the public robot capability boundary stable.
+6. The execution backend runs environment-specific primitives.
+7. Reports and evals feed the task and skill lifecycle.
 
 The design bias is to keep reusable behavior in skills and to resist adding
 new MCP tools unless the behavior clearly belongs in the robot capability
@@ -29,8 +29,15 @@ This aligns with the "skill issue" framing discussed by Andrej Karpathy on
 [No Priors](https://www.youtube.com/watch?v=kwSVtQ7dziU): with capable agents,
 the bottleneck shifts to how well we define tasks, give context, build tools,
 run loops, evaluate outputs, and maintain reusable agent behavior. Roboclaws
-applies that idea to robotics by letting skills evolve while MCP profiles stay
-bounded and auditable.
+applies that idea to robotics by letting skills evolve while MCP capability
+profiles stay bounded and auditable.
+
+A profile is not a task recipe. It is closer to the capability side of a skill
+manifest: a named, reusable environment of public tools, evidence boundaries,
+blocked capabilities, provenance expectations, and private-data exclusions. A
+runnable task answers "what public run is this and how is it accepted?", a
+skill answers "how should I accomplish this goal?", and a profile answers
+"which stable robot capabilities may this skill rely on?"
 
 ## Abstraction Ladder
 
@@ -39,6 +46,7 @@ Build from the bottom up, but let the agent enter from the top:
 | Level | Owns | Examples | What to watch |
 | --- | --- | --- | --- |
 | Open-ended goal | Human intent | "clean the room", "inspect this room" | Do not turn this into one opaque MCP tool. |
+| Runnable task | Public command, parameters, report shape, acceptance gates | `semantic-map-build`, `household-cleanup` | Keep it separate from strategy and backend implementation. |
 | Agent skill | Reusable behavior package | `capture-object-photo`, `cleanup-generated-mess` | Skills can evolve, merge, split, and be pruned. |
 | Trace-preserving skill routine | Skill-side reusable execution shape | scripted cleanup loop, `locate -> navigate -> observe_archived` | Default home for reusable composition before MCP promotion. |
 | Composite action | Describes a skill's internal behavior shape | `locate -> navigate -> observe_archived` | Descriptive by default, not a separate artifact. |
@@ -46,6 +54,26 @@ Build from the bottom up, but let the agent enter from the top:
 | Atomic semantic capability | Small public robot action | observe, move, turn, pick, place, open, close | Prefer these for MCP capability contracts. |
 | Environment primitive | Backend-specific implementation | AI2-THOR step, MuJoCo actuation, robot API call | Not agent-facing by default. |
 | Execution backend | Actual environment | mock, AI2-THOR, MolmoSpaces, Unitree G1, RBY1M, AGIbot G2 | Backends differ; profiles should not pretend otherwise. |
+
+Capability profiles sit beside this ladder as reusable public environments for
+skills. For example, a `semantic-map-build` task can select a map-building skill
+that requires household world capabilities and forbids manipulation, while a
+`household-cleanup` task can select a cleanup skill that requires the same world
+capabilities plus manipulation. Both tasks can share the same world profile
+without making the profile own either task.
+
+Composition is the rule. A task or skill may require multiple capability
+profiles or capability modules, but a new profile should not be made by copying
+another profile's tool list and adding more tools. For example,
+`household-cleanup` should require `household_world_v1` plus manipulation
+capabilities; it should not define a cleanup profile that duplicates the whole
+world profile. The selected skill is where composite behavior such as
+`navigate_to_object -> pick -> navigate_to_receptacle -> open? -> place` lives.
+
+Real-robot deployment should use the same public layers. A physical run should
+change backend variant, provenance, safety gate, and blocked-capability status;
+it should not need a separate robot-only task taxonomy when the public task,
+skill requirement, and profile shape already fit.
 
 `capture_object_photo(object)` is a good example: maintain it as an agent skill
 with a script by default. Internally, it may perform a composite action such as
@@ -67,9 +95,10 @@ Open-ended goal
 ```
 
 The skill layer can hold long-running behavior, prompt strategy, scripts,
-examples, checks, and maintenance notes. It is the right home for task-like
-behavior such as photo capture, generated-mess cleanup, grocery placement, or
-room inspection.
+examples, checks, and maintenance notes. It is the right home for reusable
+strategy such as photo capture, generated-mess cleanup, grocery placement, or
+room inspection. Public command names, parameters, reports, and acceptance gates
+belong to runnable tasks.
 
 MCP is different: it is the public robot capability boundary. A skill can call
 many MCP tools, but the skill itself is not automatically a robot capability
@@ -87,7 +116,7 @@ Maintained skills include a small `skill.json` manifest next to `SKILL.md`.
 The manifest is not another runtime API. It is a human/test-readable contract
 for the skill library:
 
-- which MCP profiles the skill expects;
+- which MCP capability profiles or modules the skill expects;
 - which tools are required, optional, or privileged;
 - which scripts belong to the skill;
 - which artifacts count as evidence;
@@ -102,7 +131,7 @@ Resist adding MCP tools by default. Promote behavior from a skill or script
 into an MCP tool only when all of these are true:
 
 1. Multiple skills need it.
-2. Inputs and outputs are stable for one contract profile.
+2. Inputs and outputs are stable for one capability profile.
 3. It has traceable substeps or a clear atomic meaning.
 4. It uses only public allowed information.
 5. It belongs in the robot capability boundary, not just agent strategy.
@@ -138,7 +167,11 @@ Examples:
 | `goto(object_id)` | Privileged tool unless decomposed | The current AI2-THOR version is target-relative teleport-style help. |
 | Hidden acceptable-destination lookup | Privileged/private evaluator data | It must never enter public profile metadata. |
 
-## Current Profiles
+## Current Capability Profiles
+
+The current household profile head is task-neutral. Runnable tasks such as
+`semantic-map-build` and `household-cleanup` select skills and acceptance gates;
+profiles describe reusable capability environments and backend variants.
 
 ### `ai2thor_navigation_v1`
 
@@ -159,26 +192,50 @@ must opt in explicitly when it needs the AI2-THOR inventory oracle or
 target-relative teleport helper. They are not presented as real robot perception
 or real robot navigation capabilities.
 
-### `molmospaces_cleanup_v1`
+### `household_world_v1`
 
-Canonical public capability tools include the ADR-0003 cleanup surface:
+Canonical public capability tools cover household world evidence only:
 
-- public map and fixture context;
-- waypoint/object/receptacle navigation;
-- public observation and inspection;
-- pick/place/open/close operations;
-- episode completion.
+- public metric map and fixture context;
+- runtime metric map snapshots, observed-object priors, and update candidates
+  exposed through `metric_map()` / Agent View;
+- room and waypoint navigation for evidence capture;
+- public observation, camera adjustment, visual candidate declaration, and
+  visible-object inspection.
 
-The profile is public-agent metadata only. It must not expose generated mess
-sets, acceptable destinations, private manifests, hidden target lists,
-`is_misplaced`, private scoring truth, or AI2-THOR object inventory helpers.
+`household_world_v1` is shared by `semantic-map-build`, `household-cleanup`,
+inspection, search, and future household tasks. It excludes manipulation and
+task-completion tools such as `pick`, `place`, `open_receptacle`,
+`close_receptacle`, and `done`.
 
-### `real_robot_cleanup_v1`
+Backend variants such as `api_semantic_synthetic`, `molmospaces_subprocess`,
+`nav2_ros2`, and `agibot_gdk` are profile metadata/config. They are not new
+public task names or copied profile ids.
 
-The first physical cleanup-facing profile keeps the cleanup-shaped public tool
-list but narrows executable capability to navigation and perception. The
-backend is `physical_robot` with backend variants currently represented by
-`nav2_ros2` and `agibot_gdk`; both variants preserve the same public tool names.
+### `household_manipulation_v1` and `household_episode_v1`
+
+Cleanup skills compose `household_world_v1` with manipulation and lifecycle
+capabilities when they need to move objects:
+
+- `household_manipulation_v1` owns object/receptacle navigation plus
+  `pick`, `place`, `place_inside`, `open_receptacle`, and `close_receptacle`.
+- `household_episode_v1` owns explicit task completion through `done`.
+
+Physical backends may expose these tools as structured `blocked_capability`
+responses until manipulation is proven.
+
+### Legacy cleanup-shaped profiles
+
+`molmospaces_cleanup_v1` remains a legacy cleanup-shaped profile composed from
+the household world, manipulation, and lifecycle capabilities. It is kept for
+older contract tests and archived report interpretation, not as the clean public
+capability head.
+
+`real_robot_cleanup_v1` remains a legacy physical cleanup-shaped profile while
+the Agibot/Nav2 pilot artifacts migrate to the task-neutral household profiles.
+It narrows executable capability to navigation and perception. The backend is
+`physical_robot` with backend variants currently represented by `nav2_ros2` and
+`agibot_gdk`; both variants preserve the same public tool names.
 
 - `metric_map` returns backend-neutral public map semantics. Nav2-backed runs
   derive this from a Nav2-shaped map bundle; Agibot-backed runs derive it from
@@ -204,16 +261,45 @@ evidence outside the Roboclaws Python runtime.
 
 ## Design Considerations
 
-### Keep Profiles Backend/Domain Specific
+### Keep Profiles Capability-Oriented
 
 There is no premature universal robot API here. A navigation-only AI2-THOR
-profile and a cleanup-oriented MolmoSpaces profile can share capability-family
-names while exposing different tools.
+profile and a household-world profile can share capability-family names while
+exposing different tools.
 
-Future profiles can combine environment and task domain, for example:
+Prefer names that describe reusable capability environments:
 
-- `ai2thor_photo_v1`
-- `molmospaces_camera_cleanup_v1`
+- `household_world_v1`
+- `household_manipulation_v1`
+- `ai2thor_navigation_v1`
+
+Task-like public names belong in the runnable task catalog:
+
+- `semantic-map-build`
+- `household-cleanup`
+
+Reusable strategy names belong in skills:
+
+- `capture-object-photo`
+
+Backend variants such as `molmospaces_subprocess`, `api_semantic_synthetic`,
+`agibot_g2`, or `ros2_nav2` should be profile metadata or run configuration,
+not the primary task or skill name.
+
+### Compose Requirements, Do Not Copy Profiles
+
+Reusable capability profiles should remain small enough to be shared:
+
+- `household_world_v1` owns world understanding and evidence capture.
+- A manipulation capability profile owns `pick`, `place`, `open_receptacle`,
+  and `close_receptacle` when those tools are available or blocked.
+- Agent skills declare the profiles they require, then compose tools into
+  strategy.
+
+This keeps future household tasks cheap to add. Object search, inspection,
+photo capture, navigation rehearsal, and cleanup can share the same world
+profile without each creating a copied profile with the same map, observation,
+and waypoint tools.
 
 ### Keep Planning in the Agent and Skills
 
@@ -241,9 +327,10 @@ live at the current profile head.
 
 ```text
 Open-ended goal
+  -> runnable task selection
   -> skill library search / skill creation
   -> selected skill calls scripts and MCP tools
-  -> semantic profile constrains public capabilities
+  -> capability profile constrains public capabilities
   -> execution backend runs primitives
   -> trace/report/eval feeds skill maintenance
 ```
@@ -260,16 +347,20 @@ honest about whether the result is `api_semantic`, `planner_backed`, or
 
 ## Adding a New Profile
 
-When adding a profile, start from the capability contract, not the skill:
+When adding a profile, start from the capability contract, not the task or skill:
 
-1. Name the backend/domain profile, such as `<environment>_<task-domain>_v1`.
-2. List capability families: perception, localization, mapping, navigation,
+1. Name the reusable capability environment, such as `household_world_v1`, or
+   keep an existing backend/domain id only while migrating older surfaces.
+2. Check whether the new need can be represented as a skill requirement over
+   existing profiles. Do not copy one profile's tools into another profile just
+   to make a task-specific bundle.
+3. List capability families: perception, localization, mapping, navigation,
    manipulation, memory, and episode.
-3. List canonical public tools.
-4. List privileged tools separately.
-5. List private terms that must never appear in public metadata.
-6. Add contract tests that prove profile validation fails closed.
-7. Update the relevant human doc if the new profile changes how teammates
+4. List canonical public tools.
+5. List privileged tools separately.
+6. List private terms that must never appear in public metadata.
+7. Add contract tests that prove profile validation fails closed.
+8. Update the relevant human doc if the new profile changes how teammates
    should reason about the system.
 
 Do not add a new profile just to rename a demo recipe or skill. Demo recipes
@@ -290,7 +381,6 @@ describe what public robot capabilities the agent is allowed to rely on.
 | ADR-0003 Molmo cleanup skill | `skills/molmo-realworld-cleanup/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
 | Skill manifest tests | `tests/contract/skills/test_skill_manifests.py` |
-| Skill-first hero diagram | `docs/human/skill-first-robotics.svg` |
 | Shareable architecture diagram | `docs/human/mcp-skills-and-semantic-profiles.svg` |
 
 Planning artifacts for Phase 136 explain the implementation history, but this

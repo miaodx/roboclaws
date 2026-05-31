@@ -18,6 +18,7 @@ AGENT_JUST = JUST_DIR / "agent.just"
 CODE_JUST = JUST_DIR / "code.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
+CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_PROVIDER",
@@ -32,6 +33,8 @@ CODE_AGENT_ENV_VARS = (
     "OPENAI_API_KEY",
     "CODEX_BASE_URL",
     "CODEX_API_KEY",
+    "XM_LLM_BASE_URL",
+    "XM_LLM_API_KEY",
 )
 
 
@@ -247,8 +250,8 @@ def test_task_module_exposes_only_run_publicly() -> None:
     assert "task::cleanup-report" not in summary
 
 
-def test_prompt_mapping_molmo_cleanup_codex_world_labels_default() -> None:
-    route = trace_task_run("molmo-cleanup", "codex")
+def test_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
+    route = trace_task_run("household-cleanup", "codex")
 
     assert route[:6] == [
         "just",
@@ -256,12 +259,12 @@ def test_prompt_mapping_molmo_cleanup_codex_world_labels_default() -> None:
         "codex-live",
         "world-labels",
         "7",
-        "output/molmo/codex-report",
+        "output/household/household-cleanup/codex-report",
     ]
 
 
-def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
-    route = trace_task_run("molmo-cleanup", "codex", "smoke")
+def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
+    route = trace_task_run("household-cleanup", "codex", "smoke")
 
     assert route[:6] == [
         "just",
@@ -269,7 +272,7 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
         "codex-live",
         "smoke",
         "7",
-        "output/molmo/codex-smoke",
+        "output/household/household-cleanup/codex-smoke",
     ]
 
 
@@ -279,13 +282,16 @@ def test_prompt_mapping_molmo_cleanup_codex_smoke_override() -> None:
         (("molmospace-cleanup", "codex"), "unsupported task 'molmospace-cleanup'"),
         (("molmospaces-cleanup", "codex"), "unsupported task 'molmospaces-cleanup'"),
         (("cleanup-report", "direct"), "unsupported task 'cleanup-report'"),
-        (("molmo-cleanup", "codex-live"), "unsupported driver 'codex-live'"),
-        (("molmo-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
-        (("molmo-cleanup", "codex", "world-labels-perf"), "unsupported molmo-cleanup profile"),
-        (("molmo-cleanup", "codex", "minimal"), "unsupported molmo-cleanup profile"),
-        (("molmo-cleanup", "codex", "visual"), "unsupported molmo-cleanup profile"),
+        (("household-cleanup", "codex-live"), "unsupported driver 'codex-live'"),
+        (("household-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
         (
-            ("molmo-cleanup", "codex", "camera-raw", "cleanup_routine=mcp"),
+            ("household-cleanup", "codex", "world-labels-perf"),
+            "unsupported household profile",
+        ),
+        (("household-cleanup", "codex", "minimal"), "unsupported household profile"),
+        (("household-cleanup", "codex", "visual"), "unsupported household profile"),
+        (
+            ("household-cleanup", "codex", "camera-raw", "cleanup_routine=mcp"),
             "unsupported cleanup_routine",
         ),
     ),
@@ -298,20 +304,24 @@ def test_task_router_rejects_removed_compatibility_aliases(
 
 def test_task_router_is_importable_source_of_truth() -> None:
     resolved = resolve_task_run(
-        ("molmo-cleanup", "codex", "profile=smoke", "output_dir=output/custom")
+        ("household-cleanup", "codex", "profile=smoke", "output_dir=output/custom")
     )
 
     assert resolved.argv == (
         "just",
         "agent::run",
-        "molmo-cleanup",
+        "household-cleanup",
         "codex",
         "smoke",
         "output_dir=output/custom",
     )
-    assert resolved.task == "molmo-cleanup"
+    assert resolved.task == "household-cleanup"
     assert resolved.driver == "codex"
     assert resolved.mode == "smoke"
+
+    legacy = resolve_task_run(("molmo-cleanup", "direct", "smoke"))
+    assert legacy.task == "household-cleanup"
+    assert legacy.argv[:5] == ("just", "agent::run", "household-cleanup", "direct", "smoke")
 
     with pytest.raises(CommandError, match="unsupported task 'molmospace-cleanup'"):
         resolve_task_run(("molmospace-cleanup", "codex"))
@@ -332,7 +342,7 @@ def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
 
 
 def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
-    route = trace_task_run("molmo-cleanup", "codex", "output_dir=output/custom")
+    route = trace_task_run("household-cleanup", "codex", "output_dir=output/custom")
 
     assert route[:6] == [
         "just",
@@ -346,7 +356,7 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_task_run(
-        "molmo-cleanup",
+        "household-cleanup",
         "codex",
         "world-labels",
         "map_bundle=molmo-cleanup-default-7",
@@ -358,7 +368,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "codex-live",
         "world-labels",
         "7",
-        "output/molmo/codex-report",
+        "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
         "10",
         "127.0.0.1",
@@ -369,7 +379,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
 
 def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     route = trace_task_run(
-        "molmo-cleanup",
+        "household-cleanup",
         "mcp-smoke",
         "camera-labels",
         "visual_grounding=fake-http",
@@ -381,7 +391,7 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
         "mcp-smoke",
         "camera-labels",
         "7",
-        "output/molmo/mcp-smoke-camera-labels",
+        "output/household/household-cleanup/mcp-smoke-camera-labels",
     ]
     assert route[13] == "fake-http"
 
@@ -420,7 +430,7 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
 
 def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
     route = trace_task_run(
-        "molmo-cleanup",
+        "household-cleanup",
         "codex",
         "world-labels",
         "robot_views=off",
@@ -432,7 +442,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
         "codex-live",
         "world-labels",
         "7",
-        "output/molmo/codex-report",
+        "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
         "10",
         "127.0.0.1",
@@ -444,8 +454,8 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
 
 
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
-    raw_route = trace_task_run("molmo-cleanup", "direct", "camera-raw")
-    labels_route = trace_task_run("molmo-cleanup", "direct", "camera-labels")
+    raw_route = trace_task_run("household-cleanup", "direct", "camera-raw")
+    labels_route = trace_task_run("household-cleanup", "direct", "camera-labels")
 
     assert raw_route[:7] == [
         "just",
@@ -453,7 +463,7 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
         "direct",
         "camera-raw",
         "7",
-        "output/molmo/direct-camera-raw",
+        "output/household/household-cleanup/direct-camera-raw",
         "帮我收拾这个房间",
     ]
     assert labels_route[:7] == [
@@ -462,10 +472,37 @@ def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
         "direct",
         "camera-labels",
         "7",
-        "output/molmo/direct-camera-labels",
+        "output/household/household-cleanup/direct-camera-labels",
         "帮我收拾这个房间",
     ]
     assert raw_route[11] == "skill"
+
+
+def test_prompt_mapping_semantic_map_build_direct_enables_sweep() -> None:
+    route = trace_task_run("semantic-map-build", "direct", "smoke")
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "smoke",
+        "7",
+        "output/household/semantic-map-build/direct-smoke",
+    ]
+    assert route[6] == "帮我建立这个房间的语义地图"
+    assert route[15] == "on"
+
+
+def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "smoke",
+        "runtime_map_prior=output/prior/runtime_metric_map.json",
+    )
+
+    assert route[15] == "off"
+    assert route[16] == "output/prior/runtime_metric_map.json"
 
 
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
@@ -486,6 +523,8 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "image_region={type:bbox,value:[x,y,width,height]}" in prompt
     assert "do not send bare x/y/width/height fields" in prompt
     assert "at least seven grounded cleanup chains have succeeded" in prompt
+    assert "place/place_inside" in prompt
+    assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
@@ -499,6 +538,8 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "selected Nav2 map bundle" in prompt
     assert "not raw occupancy images" in prompt
     assert "mark a waypoint complete only after" in prompt
+    assert "place/place_inside" in prompt
+    assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
     assert "compare the checklist before roboclaws__done" in prompt
     assert "visit any missing waypoint_id" in prompt
 
@@ -577,6 +618,125 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
         "claude_model_args=0",
         "claude_env_args=0",
     ]
+
+
+def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            XM_LLM_API_KEY=fake-xm-key
+            args=()
+            roboclaws_codex_provider_args args
+            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        (
+            "mify model=xiaomi/mimo-v2-omni "
+            "base_url=https://api.llm.mioffice.cn/v1 key_env=XM_LLM_API_KEY "
+            "protocol=responses"
+        ),
+        "-c",
+        'model="xiaomi/mimo-v2-omni"',
+        "-c",
+        'model_provider="mify"',
+        "-c",
+        'model_providers.mify.name="mify"',
+        "-c",
+        'model_providers.mify.base_url="https://api.llm.mioffice.cn/v1"',
+        "-c",
+        'model_providers.mify.env_key="XM_LLM_API_KEY"',
+        "-c",
+        'model_providers.mify.wire_api="responses"',
+        "-c",
+        'web_search="disabled"',
+    ]
+
+
+def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_router() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            XM_LLM_API_KEY=fake-xm-key
+            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+            CODEX_BASE_URL=https://api-router.evad.mioffice.cn/v1
+            CODEX_API_KEY=fake-codex-key
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "mify",
+        "-c",
+        'model="xiaomi/mimo-v2-omni"',
+        "-c",
+        'model_provider="mify"',
+        "-c",
+        'model_providers.mify.name="mify"',
+        "-c",
+        'model_providers.mify.base_url="https://api.llm.mioffice.cn/v1"',
+        "-c",
+        'model_providers.mify.env_key="XM_LLM_API_KEY"',
+        "-c",
+        'model_providers.mify.wire_api="responses"',
+        "-c",
+        'web_search="disabled"',
+    ]
+
+
+def test_coding_agent_codex_mify_base_url_alone_does_not_shadow_codex_env() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.strip() == "codex-env"
 
 
 def test_coding_agent_codex_can_disable_responses_websockets() -> None:
@@ -824,6 +984,7 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     code_text = CODE_JUST.read_text(encoding="utf-8")
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
     helper_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
+    docker_text = CODING_AGENT_DOCKER.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     assert "source scripts/dev/coding_agent_env.sh" in code_text
@@ -849,6 +1010,10 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert 'scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir"' in molmo_text
     assert '"--codex-model-arg=$arg"' in molmo_text
     assert "--codex-provider-summary" in molmo_text
+    assert "XM_LLM_API_KEY" in molmo_text
+    assert "XM_LLM_BASE_URL" in molmo_text
+    assert "XM_LLM_API_KEY" in docker_text
+    assert "XM_LLM_BASE_URL" in docker_text
     assert "*self.args.codex_model_arg" in runner_text
     assert "codex_provider_summary" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text

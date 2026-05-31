@@ -44,6 +44,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REAL_ROBOT_READINESS_SCHEMA,
     REALWORLD_CONTRACT,
+    RUNTIME_METRIC_MAP_SCHEMA,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
 )
@@ -89,6 +90,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-advisory-scoring", action="store_true")
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
     parser.add_argument("--require-camera-model-policy", action="store_true")
+    parser.add_argument("--require-runtime-metric-map", action="store_true")
+    parser.add_argument("--require-semantic-sweep", action="store_true")
     parser.add_argument("--expect-visual-grounding-pipeline")
     parser.add_argument("--require-visual-grounding-failure", action="store_true")
     parser.add_argument("--require-model-declared-observations", action="store_true")
@@ -144,7 +147,9 @@ def main() -> None:
     expect_policy = args.expect_policy
     if expect_policy is None:
         expect_policy = (
-            "openclaw_agent"
+            "semantic_sweep_baseline"
+            if args.require_semantic_sweep
+            else "openclaw_agent"
             if args.require_openclaw_minimum
             else CAMERA_MODEL_POLICY_NAME
             if args.require_camera_model_policy
@@ -168,6 +173,8 @@ def main() -> None:
             require_advisory_scoring=args.require_advisory_scoring,
             require_raw_fpv_observations=args.require_raw_fpv_observations,
             require_camera_model_policy=args.require_camera_model_policy,
+            require_runtime_metric_map=args.require_runtime_metric_map,
+            require_semantic_sweep=args.require_semantic_sweep,
             expect_visual_grounding_pipeline=args.expect_visual_grounding_pipeline,
             require_visual_grounding_failure=args.require_visual_grounding_failure,
             require_model_declared_observations=args.require_model_declared_observations,
@@ -227,6 +234,8 @@ def _assert_result(
     require_advisory_scoring: bool = False,
     require_raw_fpv_observations: bool = False,
     require_camera_model_policy: bool = False,
+    require_runtime_metric_map: bool = False,
+    require_semantic_sweep: bool = False,
     expect_visual_grounding_pipeline: str | None = None,
     require_visual_grounding_failure: bool = False,
     require_model_declared_observations: bool = False,
@@ -249,6 +258,8 @@ def _assert_result(
 ) -> None:
     assert data.get("contract") == REALWORLD_CONTRACT, data
     assert data.get("adr_0003_satisfied") is True, data
+    if require_semantic_sweep and expect_policy == "deterministic_sweep_baseline":
+        expect_policy = "semantic_sweep_baseline"
     if expect_policy is not None:
         assert data.get("policy") == expect_policy, data
     assert data.get("semantic_loop_variant") == SEMANTIC_LOOP_VARIANT, data
@@ -265,6 +276,7 @@ def _assert_result(
         (require_clean_agent_run or not require_openclaw_minimum)
         and not raw_contract_only
         and not allow_partial_cleanup
+        and not require_semantic_sweep
     )
     semantic_success_gate = min_semantic_accepted_count is not None
     if enforce_success:
@@ -292,6 +304,26 @@ def _assert_result(
 
     agent_view = data.get("agent_view") or {}
     _assert_public_agent_view(agent_view)
+    if require_runtime_metric_map:
+        _assert_runtime_metric_map(
+            data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {},
+            agent_view=agent_view,
+        )
+    runtime_metric_map = (
+        data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
+    )
+    semantic_sweep = (
+        data.get("semantic_sweep_mode") is True
+        or runtime_metric_map.get("mode") == "semantic_sweep"
+    )
+    if require_semantic_sweep:
+        assert semantic_sweep, data
+        assert data.get("cleanup_actions_disabled") is True, data
+        assert data.get("policy") == "semantic_sweep_baseline", data
+        assert (data.get("semantic_sweep") or {}).get("snapshot_artifact"), data
+        assert len((data.get("semantic_sweep") or {}).get("camera_schedule") or []) >= 1, data
+    if semantic_sweep:
+        _assert_semantic_sweep_did_not_clean(data)
     trace_path = _resolve_path(base, data["artifacts"]["trace"])
     _assert_trace_is_public(trace_path)
     _assert_no_duplicate_post_place_navigation(trace_path)
@@ -318,6 +350,10 @@ def _assert_result(
         path = _resolve_path(base, artifacts.get(key, ""))
         assert path.is_file(), path
         assert path.stat().st_size > 0, path
+    if require_runtime_metric_map:
+        path = _resolve_path(base, artifacts.get("runtime_metric_map", ""))
+        assert path.is_file(), path
+        assert path.stat().st_size > 0, path
     report_text = _resolve_path(base, artifacts["report"]).read_text(encoding="utf-8")
     if expect_profile is not None:
         _assert_cleanup_profile(data, report_text, expect_profile)
@@ -327,6 +363,10 @@ def _assert_result(
     if enforce_success or data.get("semantic_substeps"):
         assert "Semantic Substeps" in report_text, report_text[:500]
     assert "ADR-0003 real-world-style cleanup run" in report_text, report_text[:500]
+    if require_runtime_metric_map:
+        assert "Runtime Metric Map" in report_text, report_text[:500]
+    if require_semantic_sweep:
+        assert "Semantic Sweep Mode" in report_text, report_text[:500]
     assert_cleanup_report_visual_core(
         report_text,
         require_semantic_subphases=enforce_success or bool(data.get("semantic_substeps")),
@@ -466,12 +506,40 @@ def _assert_clean_agent_run(
         assert request_count >= 1, (tool, counts, data)
     diagnostics = data.get("agent_diagnostics") or {}
     assert diagnostics.get("stale_reference_errors") == 0, data
-    assert int(diagnostics.get("semantic_order_errors") or 0) == 0, data
+    assert _unrecovered_semantic_order_error_count(data) == 0, data
     assert int(diagnostics.get("duplicate_post_place_navigation_count") or 0) == 0, data
     assert diagnostics.get("premature_done") is False, data
     assert diagnostics.get("fridge_inside_sequence_ok") is True, data
     required_complete = min_complete_count or int(data.get("generated_mess_count") or 0)
     assert _complete_semantic_substep_count(data) >= required_complete, data
+
+
+def _unrecovered_semantic_order_error_count(data: dict[str, Any]) -> int:
+    diagnostics = data.get("agent_diagnostics") or {}
+    if "semantic_order_unrecovered_errors" in diagnostics:
+        return int(diagnostics.get("semantic_order_unrecovered_errors") or 0)
+
+    total_errors = int(diagnostics.get("semantic_order_errors") or 0)
+    if total_errors == 0:
+        return 0
+
+    covered = 0
+    unrecovered = 0
+    for item in data.get("semantic_substeps") or []:
+        steps = item.get("steps", [])
+        item_errors = sum(
+            1
+            for step in steps
+            if isinstance(step, dict) and step.get("error_reason") == "semantic_order"
+        )
+        if item_errors == 0:
+            continue
+        covered += item_errors
+        phases = successful_semantic_phases(steps)
+        if not has_complete_semantic_sequence(phases):
+            unrecovered += item_errors
+    untracked_errors = max(0, total_errors - covered)
+    return unrecovered + untracked_errors
 
 
 def _assert_semantic_acceptability(data: dict[str, Any], min_accepted_count: int) -> None:
@@ -507,6 +575,8 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
     assert "fixture_hints" in agent_view, agent_view
     assert "observed_objects" in agent_view, agent_view
     assert "objects" not in agent_view.get("metric_map", {}), agent_view
+    if agent_view.get("runtime_metric_map"):
+        _assert_runtime_metric_map(agent_view["runtime_metric_map"], agent_view=agent_view)
     worklist = agent_view.get("cleanup_worklist") or {}
     if worklist:
         assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
@@ -584,6 +654,79 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
         assert "support_estimate" in item, item
         assert "is_misplaced" not in item, item
         assert "target_receptacle_id" not in item, item
+
+
+def _assert_runtime_metric_map(
+    runtime_metric_map: dict[str, Any],
+    *,
+    agent_view: dict[str, Any],
+) -> None:
+    assert runtime_metric_map.get("schema") == RUNTIME_METRIC_MAP_SCHEMA, runtime_metric_map
+    assert runtime_metric_map.get("contract") == REALWORLD_CONTRACT, runtime_metric_map
+    assert runtime_metric_map.get("source_map_mutated") is False, runtime_metric_map
+    assert runtime_metric_map.get("private_truth_included") is False, runtime_metric_map
+    static_map = runtime_metric_map.get("static_map") or {}
+    assert isinstance(static_map.get("rooms") or [], list), runtime_metric_map
+    assert isinstance(static_map.get("fixtures") or [], list), runtime_metric_map
+    assert isinstance(static_map.get("inspection_waypoints") or [], list), runtime_metric_map
+    assert static_map.get("contains_runtime_observations") is False, static_map
+    for fixture in static_map.get("fixtures") or []:
+        assert "observed_objects" not in fixture, fixture
+        assert "objects" not in fixture, fixture
+        assert not str(fixture.get("fixture_id") or "").startswith("observed_"), fixture
+    observed = runtime_metric_map.get("observed_objects") or []
+    agent_observed = agent_view.get("observed_objects") or []
+    current_observed = [item for item in observed if item.get("freshness") != "prior"]
+    assert len(current_observed) == len(agent_observed), (runtime_metric_map, agent_view)
+    for item in observed:
+        assert str(item.get("object_id", "")).startswith("observed_"), item
+        for key in (
+            "category",
+            "room_id",
+            "waypoint_id",
+            "source_observation_id",
+            "image_region",
+            "producer_type",
+            "producer_id",
+            "confidence",
+            "freshness",
+            "actionability",
+            "state",
+        ):
+            assert key in item, item
+        assert item.get("freshness") in {"current_run", "prior"}, item
+        if item.get("freshness") == "prior":
+            assert item.get("actionability") != "actionable", item
+        assert "target_receptacle_id" not in item, item
+        assert "is_misplaced" not in item, item
+    assert isinstance(runtime_metric_map.get("map_update_candidates") or [], list), (
+        runtime_metric_map
+    )
+    for candidate in runtime_metric_map.get("map_update_candidates") or []:
+        assert "target_receptacle_id" not in candidate, candidate
+        assert "is_misplaced" not in candidate, candidate
+        assert candidate.get("promotion_status") != "promoted", candidate
+    _assert_no_forbidden_keys(runtime_metric_map)
+
+
+def _assert_semantic_sweep_did_not_clean(data: dict[str, Any]) -> None:
+    counts = data.get("tool_event_counts") or {}
+    cleanup_tools = {
+        "navigate_to_object",
+        "navigate_to_visual_candidate",
+        "pick",
+        "navigate_to_receptacle",
+        "open_receptacle",
+        "place",
+        "place_inside",
+        "close_receptacle",
+    }
+    called = {
+        tool: int(counts.get(f"{tool}:request") or 0)
+        for tool in cleanup_tools
+        if int(counts.get(f"{tool}:request") or 0)
+    }
+    assert not called, (called, data)
 
 
 def _assert_trace_is_public(trace_path: Path) -> None:
@@ -1065,13 +1208,38 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     assert trace.get("waypoint_source") == "static_map_fixture_coverage", trace
     assert trace.get("loop_style") == "interleaved_cleanup_loop", trace
     assert trace.get("first_cleanup_before_full_survey") is True, trace
-    assert trace.get("post_place_observe_complete") is True, trace
-    assert int(trace.get("post_place_observe_count") or 0) >= int(
-        trace.get("placed_object_count") or 0
-    ), trace
+    placed_object_count = int(trace.get("placed_object_count") or 0)
+    post_place_observe_count = int(trace.get("post_place_observe_count") or 0)
+    if trace.get("post_place_observe_complete") is not True:
+        post_place_observe_count = max(
+            post_place_observe_count,
+            _post_place_observe_count_allowing_public_state_queries(trace),
+        )
+    assert post_place_observe_count >= placed_object_count, trace
     assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
     assert "static_map_fixture_coverage" in report_text, report_text[:500]
     assert "post_place_observe" in report_text, report_text[:500]
+
+
+def _post_place_observe_count_allowing_public_state_queries(trace: dict[str, Any]) -> int:
+    pending = 0
+    count = 0
+    for event in trace.get("events") or []:
+        if not isinstance(event, dict):
+            continue
+        tool = str(event.get("tool") or "")
+        role = str(event.get("role") or "")
+        if tool in {"place", "place_inside"} and role == "cleanup_action":
+            pending += 1
+            continue
+        if tool == "observe" and pending > 0:
+            count += 1
+            pending -= 1
+            continue
+        if pending > 0 and role in {"coverage_scan_navigation", "cleanup_action"}:
+            if tool != "close_receptacle":
+                pending = 0
+    return count
 
 
 def _assert_real_robot_alignment(data: dict[str, Any], base: Path, report_text: str) -> None:

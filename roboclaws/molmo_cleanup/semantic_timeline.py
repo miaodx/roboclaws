@@ -417,11 +417,16 @@ def semantic_diagnostics(
             and response.get("error_reason") == "semantic_order"
         ):
             semantic_order_errors += 1
+    recovered_semantic_order_errors, unrecovered_semantic_order_errors = (
+        _semantic_order_recovery_counts(substeps, total_errors=semantic_order_errors)
+    )
     duplicate_navigation = duplicate_post_place_navigations(trace_events)
     score = done_response.get("score", {})
     return {
         "stale_reference_errors": stale_reference_errors,
         "semantic_order_errors": semantic_order_errors,
+        "semantic_order_recovered_errors": recovered_semantic_order_errors,
+        "semantic_order_unrecovered_errors": unrecovered_semantic_order_errors,
         "duplicate_post_place_navigation_count": len(duplicate_navigation),
         "duplicate_post_place_navigation_handles": sorted(
             {str(item["object_id"]) for item in duplicate_navigation}
@@ -433,6 +438,33 @@ def semantic_diagnostics(
         "complete_semantic_substep_objects": complete_objects,
         "fridge_inside_sequence_ok": fridge_inside_sequence_ok,
     }
+
+
+def _semantic_order_recovery_counts(
+    substeps: list[dict[str, Any]],
+    *,
+    total_errors: int,
+) -> tuple[int, int]:
+    recovered = 0
+    unrecovered = 0
+    covered = 0
+    for item in substeps:
+        steps = item.get("steps", [])
+        item_errors = sum(
+            1
+            for step in steps
+            if isinstance(step, dict) and step.get("error_reason") == "semantic_order"
+        )
+        if item_errors == 0:
+            continue
+        covered += item_errors
+        phases = successful_semantic_phases(steps)
+        if has_complete_semantic_sequence(phases):
+            recovered += item_errors
+        else:
+            unrecovered += item_errors
+    untracked_errors = max(0, total_errors - covered)
+    return recovered, unrecovered + untracked_errors
 
 
 def duplicate_post_place_navigations(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:

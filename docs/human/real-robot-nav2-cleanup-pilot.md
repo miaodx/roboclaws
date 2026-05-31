@@ -22,7 +22,7 @@ uv run python scripts/maps/check_bundle.py assets/maps/<environment_id>
 ```
 
 For Molmo rehearsal profiles other than `smoke`, the public `just task::run
-molmo-cleanup ...` facade selects the checked-in
+household-cleanup ...` facade selects the checked-in
 `assets/maps/molmo-cleanup-default-7` bundle by default and fails before
 cleanup startup if it is missing or invalid. Override the selection with
 `map_bundle=<path-or-assets-id>` when testing another prepared environment.
@@ -99,22 +99,22 @@ deterministic client with an operator-approved ROS/Nav2 action client.
 Use the MolmoSpaces world-label report before hardware:
 
 ```bash
-just task::run molmo-cleanup direct world-labels seed=7 generated_mess_count=10
+just task::run household-cleanup direct world-labels seed=7 generated_mess_count=10
 ```
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
-`CODEX_BASE_URL`, `CODEX_API_KEY`, and the desired repo-supported Codex model in
-the repo-local `.env`, then run:
+`XM_LLM_API_KEY` in the repo-local `.env` to use the default internal mify route
+(`xiaomi/mimo-v2-omni`, Responses API), then run:
 
 ```bash
-just task::run molmo-cleanup codex world-labels seed=7 generated_mess_count=10
+just task::run household-cleanup codex world-labels seed=7 generated_mess_count=10
 ```
 
 For a local Codex Nav2 acceptance rehearsal, write to a stable proof root and use
 the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
-just task::run molmo-cleanup codex world-labels \
+just task::run household-cleanup codex world-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \
   generated_mess_count=5 \

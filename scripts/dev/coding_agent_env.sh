@@ -27,7 +27,9 @@ roboclaws_code_agent_provider() {
   if [[ -z "$provider" ]]; then
     case "$primary_var" in
       ROBOCLAWS_CODEX_PROVIDER)
-        if [[ -n "${CODEX_BASE_URL:-}" || -n "${CODEX_API_KEY:-}" ]]; then
+        if [[ -n "${XM_LLM_API_KEY:-}" ]]; then
+          provider="mify"
+        elif [[ -n "${CODEX_BASE_URL:-}" || -n "${CODEX_API_KEY:-}" ]]; then
           provider="codex-env"
         else
           provider="system"
@@ -59,6 +61,9 @@ roboclaws_code_agent_profile_default_model() {
     codex-env)
       printf 'gpt-5.5\n'
       ;;
+    mify)
+      printf 'xiaomi/mimo-v2-omni\n'
+      ;;
     kimi-anthropic)
       printf 'kimi-k2.6\n'
       ;;
@@ -82,6 +87,9 @@ roboclaws_code_agent_profile_base_url() {
       fi
       printf '%s\n' "${CODEX_BASE_URL}"
       ;;
+    mify)
+      printf '%s\n' "${XM_LLM_BASE_URL:-https://api.llm.mioffice.cn/v1}"
+      ;;
     kimi-anthropic)
       printf 'https://api.kimi.com/coding/\n'
       ;;
@@ -104,6 +112,9 @@ roboclaws_code_agent_profile_key_env() {
     codex-env)
       printf 'CODEX_API_KEY\n'
       ;;
+    mify)
+      printf 'XM_LLM_API_KEY\n'
+      ;;
     kimi-anthropic)
       printf 'KIMI_API_KEY\n'
       ;;
@@ -123,7 +134,7 @@ roboclaws_code_agent_profile_key_env() {
 roboclaws_code_agent_profile_wire_api() {
   local provider="$1"
   case "$provider" in
-    codex-env)
+    codex-env|mify)
       printf 'responses\n'
       ;;
     kimi-anthropic|mimo-anthropic)
@@ -226,14 +237,14 @@ roboclaws_codex_provider_args() {
   out_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var")" || return
   case "$provider" in
-    codex-env)
+    codex-env|mify)
       ;;
     system)
-      echo "error: Codex repo workflows require CODEX_BASE_URL and CODEX_API_KEY; add them to the repo-local .env or export them for this shell" >&2
+      echo "error: Codex repo workflows require XM_LLM_API_KEY for the mify profile, or CODEX_BASE_URL and CODEX_API_KEY for the codex-env profile; add them to the repo-local .env or export them for this shell" >&2
       return 2
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected codex-env" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected mify or codex-env" >&2
       return 2
       ;;
   esac
@@ -252,6 +263,9 @@ roboclaws_codex_provider_args() {
     -c "model_providers.${provider}.env_key=$(roboclaws_toml_string "$key_env")"
     -c "model_providers.${provider}.wire_api=$(roboclaws_toml_string "$wire_api")"
   )
+  if [[ "$provider" == "mify" ]]; then
+    out_args+=(-c 'web_search="disabled"')
+  fi
   roboclaws_codex_transport_args out_args
 }
 
@@ -348,10 +362,10 @@ roboclaws_assert_codex_network_allowed() {
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
   case "$provider" in
-    system|codex-env)
+    system|codex-env|mify)
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected codex-env" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected mify or codex-env" >&2
       return 2
       ;;
   esac
@@ -367,7 +381,7 @@ roboclaws_assert_codex_network_allowed() {
     0)
       if [[ "$provider" == "system" ]]; then
         echo "error: work network detected; ${label} is blocked while using system Codex provider." >&2
-        echo "       Configure CODEX_BASE_URL and CODEX_API_KEY in the repo-local .env, or switch off the work network." >&2
+        echo "       Configure XM_LLM_API_KEY for mify, or CODEX_BASE_URL and CODEX_API_KEY for codex-env, in the repo-local .env; or switch off the work network." >&2
         return 1
       fi
       echo "==> network guard ok: work network with repo-local Codex provider (${provider})" >&2

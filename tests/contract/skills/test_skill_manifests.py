@@ -54,14 +54,16 @@ def test_manifest_mcp_tools_match_declared_profiles() -> None:
         mcp = manifest["mcp"]
         profiles = mcp.get("profiles", [])
         assert isinstance(profiles, list)
+        public_names: set[str] = set()
+        privileged_names: set[str] = set()
         for profile_id in profiles:
             assert profile_id in profile_names
             profile = contract_profile(profile_id)
-            public_names = set(profile.public_tool_names())
-            privileged_names = set(profile.privileged_tool_names())
-            assert set(mcp.get("required_tools", [])) <= public_names
-            assert set(mcp.get("optional_tools", [])) <= public_names
-            assert set(mcp.get("privileged_tools", [])) <= privileged_names
+            public_names.update(profile.public_tool_names())
+            privileged_names.update(profile.privileged_tool_names())
+        assert set(mcp.get("required_tools", [])) <= public_names
+        assert set(mcp.get("optional_tools", [])) <= public_names
+        assert set(mcp.get("privileged_tools", [])) <= privileged_names
 
 
 def test_manifest_scripts_exist_and_stay_inside_skill_dir() -> None:

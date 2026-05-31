@@ -91,10 +91,11 @@ If that command reports `network: work`, do not run `just openclaw::*`,
 verification gates. Do not run system-provider Claude Code or Codex workflows
 on the work network. Claude Code recipes may run there only when the repo-local
 `.env` contains a supported MiMo or Kimi key. Codex recipes may run there only
-when `CODEX_BASE_URL` and `CODEX_API_KEY` configure the repo-local Codex route.
-Model-only overrides do not bypass the guard. Guarded recipes should fail
-before launching when the work-network probe is reachable and no allowed
-repo-local key route is available.
+when `XM_LLM_API_KEY` configures the default repo-local mify route, or when
+`CODEX_BASE_URL` and `CODEX_API_KEY` configure an explicit non-mify Codex route.
+Model-only overrides do not bypass the guard. Guarded recipes should fail before
+launching when the work-network probe is reachable and no allowed repo-local key
+route is available.
 
 ### 1.1.2 Coding-agent permissions
 
@@ -128,13 +129,15 @@ set -a && source .env && set +a
 #   KIMI_API_KEY         — Kimi (Moonshot) coding-tier key, used by OpenClaw demos
 #   NV_API_KEY           — Nvidia inference endpoints (optional)
 #   MIMO_TP_KEY          — MiMo, default for the interactive chat path
-#   CODEX_BASE_URL / CODEX_API_KEY — Codex-compatible endpoint for live agents
+#   XM_LLM_API_KEY       — internal multi-model aggregator, default Codex route
+#   XM_LLM_BASE_URL      — optional override; defaults to https://api.llm.mioffice.cn/v1
+#   CODEX_BASE_URL / CODEX_API_KEY — optional non-mify Codex endpoint for live agents
 ```
 
 Sanity check:
 
 ```bash
-python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('CODEX_API_KEY'), 'No provider key set — did you source .env?'"
+python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('XM_LLM_API_KEY') or os.environ.get('CODEX_API_KEY'), 'No provider key set — did you source .env?'"
 ```
 
 `.env` is in `.gitignore` — do not commit, do not paste into logs / PRs / SUMMARY files.
@@ -190,7 +193,7 @@ Or use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
 just task::run ai2thor-nav openclaw              # normal OpenClaw navigation
-just task::run molmo-cleanup codex smoke          # cheap synthetic cleanup iteration
+just task::run household-cleanup codex smoke      # cheap synthetic cleanup iteration
 just agent::verify mock                          # maintainer confidence gate
 ```
 
@@ -352,8 +355,9 @@ semantic, or fast AI-agent iteration evidence.
 
 Examples:
 
-- "run the molmospace cleanup task with codex" -> `just task::run molmo-cleanup codex world-labels`
-- "run the molmospace cleanup task with codex with smoke profile" -> `just task::run molmo-cleanup codex smoke`
+- "run the semantic map build task" -> `just task::run semantic-map-build direct world-labels`
+- "run the household cleanup task with codex" -> `just task::run household-cleanup codex world-labels`
+- "run the household cleanup task with codex with smoke profile" -> `just task::run household-cleanup codex smoke`
 - "run the ai2thor nav task with openclaw" -> `just task::run ai2thor-nav openclaw visual`
 
 Use `agent::*` for deeper maintainer control:

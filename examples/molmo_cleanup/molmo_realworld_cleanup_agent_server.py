@@ -79,6 +79,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=cleanup_profile_names(),
         help="Public Molmo cleanup profile selected by the command facade.",
     )
+    parser.add_argument(
+        "--runtime-map-prior",
+        type=Path,
+        help="Prior runtime_metric_map.json snapshot to seed as non-actionable priors.",
+    )
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
@@ -169,6 +174,12 @@ def _is_loopback_url(url: str) -> bool:
     return hostname in {"127.0.0.1", "localhost"}
 
 
+def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
+    if path is None or str(path) == "":
+        return None
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
 def run_molmo_realworld_cleanup_agent_server(
     *,
     output_dir: Path,
@@ -186,6 +197,7 @@ def run_molmo_realworld_cleanup_agent_server(
     robot_name: str = "rby1m",
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    runtime_map_prior_path: str | Path | None = None,
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
@@ -199,6 +211,7 @@ def run_molmo_realworld_cleanup_agent_server(
         map_bundle_dir,
         required=require_map_bundle,
     )
+    runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
     if include_robot and backend != MOLMOSPACES_SUBPROCESS_BACKEND:
         raise ValueError("robot inclusion requires backend=molmospaces_subprocess")
     if record_robot_views and (backend != MOLMOSPACES_SUBPROCESS_BACKEND or not include_robot):
@@ -238,6 +251,8 @@ def run_molmo_realworld_cleanup_agent_server(
             map_bundle_dir=selected_bundle_dir,
             record_robot_views=record_robot_views,
             cleanup_profile=cleanup_profile,
+            runtime_map_prior=runtime_map_prior,
+            runtime_map_prior_source=str(runtime_map_prior_path or ""),
             visual_grounding=visual_grounding,
             visual_grounding_base_url=visual_grounding_base_url,
             visual_grounding_timeout_s=visual_grounding_timeout_s,
@@ -305,6 +320,7 @@ def main(argv: list[str] | None = None) -> int:
             robot_name=args.robot_name,
             record_robot_views=args.record_robot_views,
             cleanup_profile=args.cleanup_profile,
+            runtime_map_prior_path=args.runtime_map_prior,
             visual_grounding=args.visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,

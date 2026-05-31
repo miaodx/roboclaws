@@ -44,6 +44,127 @@ def test_checker_accepts_single_realworld_run(tmp_path: Path) -> None:
     )
 
 
+def test_checker_can_require_runtime_metric_map(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+    )
+    runtime_map = json.loads((tmp_path / "runtime_metric_map.json").read_text())
+    assert runtime_map["schema"] == checker.RUNTIME_METRIC_MAP_SCHEMA
+    assert "Runtime Metric Map" in (tmp_path / "report.html").read_text()
+
+
+def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_camera_model_policy=True,
+    )
+    counts = result["tool_event_counts"]
+    assert counts["adjust_camera:request"] >= 1
+    assert counts.get("pick:request") is None
+    assert result["runtime_metric_map"]["observed_objects"]
+
+
+def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    result["runtime_metric_map"]["observed_objects"][0]["target_receptacle_id"] = "sink_01"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+        )
+
+
+def test_checker_rejects_actionable_runtime_map_prior(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    sweep = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "sweep",
+        seed=7,
+        semantic_sweep=True,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "cleanup",
+        seed=7,
+        runtime_map_prior_path=sweep["artifacts"]["runtime_metric_map"],
+    )
+    prior = next(
+        item
+        for item in result["runtime_metric_map"]["observed_objects"]
+        if item["freshness"] == "prior"
+    )
+    prior["actionability"] = "actionable"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path / "cleanup",
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+        )
+
+
+def test_checker_allows_actionable_current_run_confirmation_of_prior(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    current = result["runtime_metric_map"]["observed_objects"][0]
+    current["freshness"] = "current_run"
+    current["prior_object_id"] = "observed_prior_001"
+    current["snapshot_object_id"] = "observed_prior_001"
+    current["actionability"] = "actionable"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+    )
+
+
 def test_checker_accepts_smoke_profile_metadata_and_report_note(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -81,6 +202,22 @@ def test_checker_can_require_waypoint_honesty_and_real_robot_alignment(
         require_waypoint_honesty=True,
         require_real_robot_alignment=True,
     )
+
+
+def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    count = checker._post_place_observe_count_allowing_public_state_queries(
+        {
+            "events": [
+                {"tool": "place", "role": "cleanup_action"},
+                {"tool": "metric_map", "role": "setup_or_completion"},
+                {"tool": "observe", "role": "coverage_scan_observe"},
+            ]
+        }
+    )
+
+    assert count == 1
 
 
 def test_checker_rejects_waypoint_honesty_when_loop_is_survey_first(
@@ -280,6 +417,7 @@ def test_checker_rejects_clean_run_with_semantic_order_errors(tmp_path: Path) ->
 
     result = smoke.run_smoke(output_dir=tmp_path, seed=7)
     result["agent_diagnostics"]["semantic_order_errors"] = 1
+    result["agent_diagnostics"]["semantic_order_unrecovered_errors"] = 1
 
     with pytest.raises(AssertionError):
         checker._assert_result(
@@ -293,6 +431,50 @@ def test_checker_rejects_clean_run_with_semantic_order_errors(tmp_path: Path) ->
             require_agent_driven=True,
             require_clean_agent_run=True,
         )
+
+
+def test_checker_accepts_clean_run_with_recovered_semantic_order_error(
+    tmp_path: Path,
+) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(output_dir=tmp_path, seed=7)
+    retried_item = result["semantic_substeps"][0]
+    placement_index = next(
+        index
+        for index, step in enumerate(retried_item["steps"])
+        if step.get("phase") in {"place", "place_inside"} and step.get("ok") is True
+    )
+    recovered_tool = retried_item["steps"][placement_index]["phase"]
+    failed_placement = dict(retried_item["steps"][placement_index])
+    failed_placement.update(
+        {
+            "ok": False,
+            "status": "error",
+            "error_reason": "semantic_order",
+            "required_tool": recovered_tool,
+            "primitive_provenance": None,
+            "location_id": None,
+            "contained_in": None,
+        }
+    )
+    retried_item["steps"].insert(placement_index, failed_placement)
+    result["agent_diagnostics"]["semantic_order_errors"] = 1
+    result["agent_diagnostics"].pop("semantic_order_recovered_errors", None)
+    result["agent_diagnostics"].pop("semantic_order_unrecovered_errors", None)
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_policy="realworld_contract_smoke_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=5,
+        require_agent_driven=True,
+        require_clean_agent_run=True,
+    )
 
 
 def test_checker_accepts_clean_run_with_successful_retry_after_failed_attempt(

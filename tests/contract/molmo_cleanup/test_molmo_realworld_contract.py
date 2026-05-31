@@ -12,10 +12,12 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     RAW_FPV_ONLY_MODE,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REALWORLD_CONTRACT,
+    RUNTIME_METRIC_MAP_SCHEMA,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
     VISUAL_GROUNDING_CATEGORY_HINTS,
     RealWorldCleanupContract,
+    cleanup_policy_trace_from_events,
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
 )
@@ -78,6 +80,7 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert contract.pick(detection["object_id"])["ok"] is True
     receptacle_nav = contract.navigate_to_receptacle(str(fixture["fixture_id"]))
     agent_view = contract.agent_view_payload()
+    live_metric_map = contract.metric_map()
 
     assert metric_map["schema"] == REAL_ROBOT_MAP_BUNDLE_SCHEMA
     assert metric_map["frame_id"] == "map"
@@ -102,9 +105,136 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert receptacle_nav["navigation_backend"] == "api_semantic"
     assert receptacle_nav["pose_source"] == "fixture_semantic_map"
     assert agent_view["policy_view"]["chase_camera_policy_input"] is False
+    assert "runtime_metric_map" in agent_view["policy_view"]["allowed_inputs"]
+    assert agent_view["runtime_metric_map"]["schema"] == RUNTIME_METRIC_MAP_SCHEMA
+    assert live_metric_map["runtime_metric_map"]["schema"] == RUNTIME_METRIC_MAP_SCHEMA
+    assert live_metric_map["runtime_metric_map"]["observed_objects"][0]["state"] == "held"
+    assert agent_view["runtime_metric_map"]["source_map_mutated"] is False
+    assert agent_view["runtime_metric_map"]["static_map"]["contains_runtime_observations"] is False
+    assert agent_view["runtime_metric_map"]["observed_objects"][0]["state"] == "held"
     assert agent_view["cleanup_worklist"]["schema"] == CLEANUP_WORKLIST_SCHEMA
     assert agent_view["cleanup_worklist"]["objects"][0]["state"] == "held"
     _assert_no_forbidden_keys(agent_view)
+
+
+def test_cleanup_policy_trace_allows_public_map_query_before_post_place_observe() -> None:
+    trace = cleanup_policy_trace_from_events(
+        [
+            _trace_response("navigate_to_waypoint", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+            _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+            _trace_response("navigate_to_object", {"ok": True, "object_id": "observed_001"}),
+            _trace_response("pick", {"ok": True, "object_id": "observed_001"}),
+            _trace_response(
+                "navigate_to_receptacle",
+                {
+                    "ok": True,
+                    "object_id": "observed_001",
+                    "fixture_id": "sink_01",
+                },
+            ),
+            _trace_response(
+                "place",
+                {
+                    "ok": True,
+                    "object_id": "observed_001",
+                    "fixture_id": "sink_01",
+                },
+            ),
+            _trace_response("metric_map", {"ok": True}),
+            _trace_response("observe", {"ok": True, "waypoint_id": "room_1_scan_1"}),
+        ],
+        {"metric_map": {"inspection_waypoints": [{"waypoint_id": "room_1_scan_1"}]}},
+    )
+
+    assert trace["placed_object_count"] == 1
+    assert trace["post_place_observe_count"] == 1
+    assert trace["post_place_observe_complete"] is True
+    assert trace["events"][-1]["role"] == "post_place_observe"
+
+
+def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+
+    observation = {}
+    declared = {}
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        declared = contract.declare_visual_candidates(
+            observation["raw_fpv_observation"]["observation_id"]
+        )
+        if declared["model_declared_observations"]:
+            break
+    agent_view = contract.agent_view_payload()
+    runtime_map = agent_view["runtime_metric_map"]
+
+    assert declared["ok"] is True
+    assert runtime_map["schema"] == RUNTIME_METRIC_MAP_SCHEMA
+    assert runtime_map["private_truth_included"] is False
+    assert runtime_map["source_map_mutated"] is False
+    assert runtime_map["static_map"]["fixtures"]
+    assert runtime_map["map_update_candidates"] == []
+    assert runtime_map["observed_objects"]
+    observed = runtime_map["observed_objects"][0]
+    assert observed["object_id"].startswith("observed_")
+    assert observed["source_observation_id"] == observation["raw_fpv_observation"]["observation_id"]
+    assert observed["producer_type"] == SIMULATED_CAMERA_MODEL_PROVENANCE
+    assert observed["actionability"] in {"actionable", "pending"}
+    for fixture in runtime_map["static_map"]["fixtures"]:
+        assert "observed_objects" not in fixture
+        assert not fixture["fixture_id"].startswith("observed_")
+    _assert_no_forbidden_keys(runtime_map)
+
+
+def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> None:
+    sweep_contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    for waypoint in sweep_contract.metric_map()["inspection_waypoints"]:
+        sweep_contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = sweep_contract.observe()
+        declared = sweep_contract.declare_visual_candidates(
+            observation["raw_fpv_observation"]["observation_id"]
+        )
+        if declared["model_declared_observations"]:
+            break
+    prior_snapshot = sweep_contract.agent_view_payload()["runtime_metric_map"]
+
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        runtime_map_prior=prior_snapshot,
+    )
+    prior_only_map = contract.agent_view_payload()["runtime_metric_map"]
+
+    prior_rows = [
+        item for item in prior_only_map["observed_objects"] if item["freshness"] == "prior"
+    ]
+    assert prior_rows
+    assert all(item["actionability"] == "needs_confirm" for item in prior_rows)
+    assert contract.agent_view_payload()["observed_objects"] == []
+
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        declared = contract.declare_visual_candidates(
+            observation["raw_fpv_observation"]["observation_id"]
+        )
+        if declared["model_declared_observations"]:
+            break
+
+    runtime_map = contract.agent_view_payload()["runtime_metric_map"]
+    current_rows = [
+        item for item in runtime_map["observed_objects"] if item["freshness"] == "current_run"
+    ]
+    assert current_rows
+    assert current_rows[0]["prior_object_id"] == prior_rows[0]["prior_object_id"]
+    assert current_rows[0]["snapshot_object_id"] == prior_rows[0]["snapshot_object_id"]
+    _assert_no_forbidden_keys(runtime_map)
 
 
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:
@@ -914,6 +1044,11 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
         ]
         == 1
     )
+    runtime_observed = contract.agent_view_payload()["runtime_metric_map"]["observed_objects"][0]
+    assert runtime_observed["producer_type"] == "external_visual_grounding_service"
+    assert runtime_observed["producer_id"] == "fake-http"
+    assert runtime_observed["source_observation_id"] == declaration["source_observation_id"]
+    assert runtime_observed["image_region"]["type"] == "bbox"
     _assert_no_forbidden_keys(response)
 
 
@@ -1110,3 +1245,7 @@ def _same_room_fallback_scenario() -> CleanupScenario:
             success_threshold=1,
         ),
     )
+
+
+def _trace_response(tool: str, response: dict[str, object]) -> dict[str, object]:
+    return {"event": "response", "tool": tool, "response": response}

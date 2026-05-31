@@ -115,6 +115,10 @@ def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: P
     env = _fake_curl(tmp_path, "204")
     env.pop("ROBOCLAWS_CODEX_PROVIDER", None)
     env.pop("ROBOCLAWS_CODE_AGENT_PROVIDER", None)
+    env.pop("CODEX_BASE_URL", None)
+    env.pop("CODEX_API_KEY", None)
+    env.pop("XM_LLM_BASE_URL", None)
+    env.pop("XM_LLM_API_KEY", None)
 
     result = subprocess.run(
         [
@@ -136,8 +140,34 @@ def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: P
     assert "blocked while using system Codex provider" in result.stderr
 
 
+def test_codex_provider_guard_allows_mify_profile_on_work_network(tmp_path: Path) -> None:
+    env = _fake_curl(tmp_path, "204")
+    env["XM_LLM_API_KEY"] = "fake-xm-key"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_assert_codex_network_allowed "Codex"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "repo-local Codex provider (mify)" in result.stderr
+
+
 def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
+    env.pop("XM_LLM_BASE_URL", None)
+    env.pop("XM_LLM_API_KEY", None)
     env["CODEX_BASE_URL"] = "https://codex.example.test/v1"
     env["CODEX_API_KEY"] = "fake-codex-key"
 
