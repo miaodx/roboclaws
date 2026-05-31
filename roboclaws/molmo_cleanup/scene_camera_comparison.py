@@ -4,12 +4,14 @@ import html
 import json
 import math
 import os
+import re
 import sys
 import traceback
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -18,10 +20,12 @@ from roboclaws.molmo_cleanup.camera_control import (
     CANONICAL_CAMERA_MODEL,
     CANONICAL_POSE_CALIBRATION,
     DEFAULT_SCENE_PROBE_CAMERA_ORBIT,
+    DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LENS,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     MOLMOSPACES_SCENE_FRAME,
     canonical_scene_camera_control_request,
+    normalize_camera_control_request,
     write_camera_control_request,
 )
 from roboclaws.molmo_cleanup.isaac_lab_backend import IsaacLabSubprocessBackend
@@ -36,10 +40,90 @@ DEFAULT_RENDER_HEIGHT = 640
 CANONICAL_POSE_PARITY_THRESHOLD_M = 0.08
 CANONICAL_CAMERA_POSE_THRESHOLD_M = 0.005
 CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX = 0.5
+CANONICAL_ROOM_OUTLINE_THRESHOLD_M = 0.005
 CANONICAL_CAMERA_ELEVATION_DEG = 78.0
 SURFACE_AIM_HEIGHT_ALLOWANCE_M = 0.3
 ROOM_CAMERA_HEIGHT_M = 1.45
 ROOM_CAMERA_INSET_FRACTION = 0.35
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+OFFICIAL_RENDER_SOURCE_REFERENCES = (
+    {
+        "evidence_id": "mujoco_housegen_materials",
+        "lane": MOLMOSPACES_LANE_ID,
+        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
+        "line_start": 361,
+        "line_end": 399,
+        "claim": (
+            "MuJoCo scene generation parses AI2-THOR material albedo, specular values, "
+            "and diffuse texture paths into MJCF material metadata."
+        ),
+    },
+    {
+        "evidence_id": "mujoco_housegen_lights",
+        "lane": MOLMOSPACES_LANE_ID,
+        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
+        "line_start": 455,
+        "line_end": 470,
+        "claim": (
+            "MuJoCo housegen optionally exports house lights, otherwise it creates a "
+            "default MJCF light at scene-build time."
+        ),
+    },
+    {
+        "evidence_id": "mujoco_asset_texture_material_collection",
+        "lane": MOLMOSPACES_LANE_ID,
+        "path": "vendors/molmospaces/molmo_spaces/housegen/builder.py",
+        "line_start": 1372,
+        "line_end": 1452,
+        "claim": (
+            "MuJoCo asset import copies texture slots and material RGBA into the scene "
+            "spec before rendering."
+        ),
+    },
+    {
+        "evidence_id": "isaac_preview_surface_material_conversion",
+        "lane": ISAAC_LANE_ID,
+        "path": (
+            "vendors/molmospaces/molmo_spaces_isaac/src/molmo_spaces_isaac/assets/utils/material.py"
+        ),
+        "line_start": 52,
+        "line_end": 112,
+        "claim": (
+            "Isaac USD conversion maps MJCF materials to USD PreviewSurface materials, "
+            "forces opacity to 1.0, maps shininess to roughness, and handles diffuse "
+            "textures through USD texture nodes."
+        ),
+    },
+    {
+        "evidence_id": "isaac_material_binding_texture_warning",
+        "lane": ISAAC_LANE_ID,
+        "path": (
+            "vendors/molmospaces/molmo_spaces_isaac/src/"
+            "molmo_spaces_isaac/assets/house_converter.py"
+        ),
+        "line_start": 288,
+        "line_end": 322,
+        "claim": (
+            "Isaac material binding warns that textured materials bound to non-Mesh prims "
+            "can discard textures at render time."
+        ),
+    },
+    {
+        "evidence_id": "isaac_default_lights_and_shadow_flags",
+        "lane": ISAAC_LANE_ID,
+        "path": (
+            "vendors/molmospaces/molmo_spaces_isaac/src/"
+            "molmo_spaces_isaac/assets/house_converter.py"
+        ),
+        "line_start": 325,
+        "line_end": 380,
+        "claim": (
+            "Isaac scene conversion authors default DistantLight/DomeLight and disables "
+            "shadow casting on selected wall or ceiling visual prims."
+        ),
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -81,6 +165,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
             "coordinate_frame": MOLMOSPACES_SCENE_FRAME,
             "lens": dict(DEFAULT_SCENE_PROBE_LENS),
             "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
+            "color_profile": dict(DEFAULT_SCENE_PROBE_COLOR_PROFILE),
             "calibration_status": CANONICAL_POSE_CALIBRATION,
             "calibration_note": (
                 "One Roboclaws camera-control request carries explicit eye/target/up poses "
@@ -135,6 +220,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         height=config.render_height,
         lens=DEFAULT_SCENE_PROBE_LENS,
         lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+        color_profile=DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     )
     camera_request_path = write_camera_control_request(
         output_dir / "camera_control_request.json",
@@ -184,6 +270,10 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     )
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
+    manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
+    manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
     manifest_path.write_text(
@@ -200,6 +290,14 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     if not isinstance(manifest.get("visual_diagnostics"), dict):
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    if not isinstance(manifest.get("render_domain_source_diagnostics"), dict):
+        manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
+    if not isinstance(manifest.get("render_domain_view_triage"), dict):
+        manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
+    if not isinstance(manifest.get("render_domain_contract_probe"), dict):
+        manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
+        manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     report_path = output_dir / "report.html"
     report_path.write_text(_report_html(manifest, output_dir=output_dir), encoding="utf-8")
     return report_path
@@ -312,6 +410,8 @@ def _capture_molmospaces_camera_views(
             "calibration_status": result.get("calibration_status"),
             "lighting_profile": result.get("lighting_profile") or {},
             "lighting_diagnostics": result.get("lighting_diagnostics") or {},
+            "color_profile": result.get("color_profile") or {},
+            "color_management": result.get("color_management") or {},
             "lens": result.get("lens") or {},
             "images": _image_entries(output_dir=config.output_dir, result=result),
             "views": result.get("views") or [],
@@ -362,6 +462,8 @@ def _capture_isaac_lane(
             "calibration_status": result.get("calibration_status"),
             "lighting_profile": result.get("lighting_profile") or {},
             "lighting_diagnostics": result.get("lighting_diagnostics") or {},
+            "color_profile": result.get("color_profile") or {},
+            "color_management": result.get("color_management") or {},
             "lens": result.get("lens") or {},
             "derived_lens": result.get("derived_lens") or {},
             "render_steps": result.get("render_steps"),
@@ -1080,6 +1182,55 @@ def _room_scale_contract_from_capture(
                 "provenance": str(outline.get("provenance") or ""),
             }
         )
+    isaac_room_outlines = _isaac_room_outlines_by_id(isaac_lane)
+    outline_pairs = []
+    for room in rooms:
+        room_id = str(room.get("room_id") or "")
+        isaac_outline = isaac_room_outlines.get(room_id)
+        if not isaac_outline:
+            continue
+        isaac_center = isaac_outline.get("center")
+        isaac_half_extents = isaac_outline.get("half_extents")
+        if not (
+            isinstance(isaac_center, list)
+            and len(isaac_center) >= 2
+            and isinstance(isaac_half_extents, list)
+            and len(isaac_half_extents) >= 2
+        ):
+            continue
+        isaac_size = [float(isaac_half_extents[0]) * 2.0, float(isaac_half_extents[1]) * 2.0]
+        center_delta = _distance_xy(room["center"], isaac_center)
+        size_delta = _distance_xy(room["size"], isaac_size)
+        half_extent_delta = _distance_xy(room["half_extents"], isaac_half_extents)
+        outline_pairs.append(
+            {
+                "room_id": room_id,
+                "molmospaces_center": list(room["center"]),
+                "isaac_center": [float(isaac_center[0]), float(isaac_center[1])],
+                "center_delta_m": center_delta,
+                "molmospaces_size": list(room["size"]),
+                "isaac_size": isaac_size,
+                "size_delta_m": size_delta,
+                "molmospaces_half_extents": list(room["half_extents"]),
+                "isaac_half_extents": [
+                    float(isaac_half_extents[0]),
+                    float(isaac_half_extents[1]),
+                ],
+                "half_extent_delta_m": half_extent_delta,
+                "molmospaces_provenance": str(room.get("provenance") or ""),
+                "isaac_provenance": str(isaac_outline.get("provenance") or ""),
+                "isaac_usd_prim_path": str(isaac_outline.get("usd_prim_path") or ""),
+            }
+        )
+    max_center_delta = (
+        max(float(item["center_delta_m"]) for item in outline_pairs) if outline_pairs else None
+    )
+    max_size_delta = (
+        max(float(item["size_delta_m"]) for item in outline_pairs) if outline_pairs else None
+    )
+    max_half_extent_delta = (
+        max(float(item["half_extent_delta_m"]) for item in outline_pairs) if outline_pairs else None
+    )
     scene_bounds = (
         isaac_lane.get("scene_bounds") if isinstance(isaac_lane.get("scene_bounds"), dict) else {}
     )
@@ -1096,21 +1247,59 @@ def _room_scale_contract_from_capture(
             status = "room_outline_exceeds_isaac_scene_bounds"
     if not rooms:
         status = "missing_room_outline_diagnostics"
+    elif not outline_pairs:
+        status = "missing_isaac_room_outline_pairs"
+    elif (
+        status == "room_outline_mesh_bounds"
+        and max_center_delta is not None
+        and max_size_delta is not None
+        and max_half_extent_delta is not None
+    ):
+        if max(max_center_delta, max_size_delta, max_half_extent_delta) <= (
+            CANONICAL_ROOM_OUTLINE_THRESHOLD_M
+        ):
+            status = "same_room_outlines_within_threshold"
+        else:
+            status = "room_outline_mismatch"
     return {
         "schema": "room_scale_contract_v1",
         "status": status,
         "room_count": len(rooms),
+        "matched_room_outline_count": len(outline_pairs),
         "room_outline_source": "molmospaces_room_outlines",
+        "isaac_room_outline_source": "isaac_scene_index_diagnostics.room_outlines",
         "isaac_scene_bounds": dict(scene_bounds),
         "max_room_to_scene_width_ratio": max_room_to_scene_width_ratio,
         "max_room_to_scene_depth_ratio": max_room_to_scene_depth_ratio,
+        "room_outline_threshold_m": CANONICAL_ROOM_OUTLINE_THRESHOLD_M,
+        "max_room_outline_center_delta_m": max_center_delta,
+        "max_room_outline_size_delta_m": max_size_delta,
+        "max_room_outline_half_extent_delta_m": max_half_extent_delta,
         "interpretation": (
             "Room-level camera poses are derived from MolmoSpaces room outlines. "
-            "Those outlines must come from room mesh world bounds, not MuJoCo mesh geom_size, "
+            "Those outlines must match Isaac USD room mesh world bounds room-by-room; "
             "otherwise same-pose backend comparisons can start from a wrong room scale."
         ),
         "rooms": rooms,
+        "room_outline_pairs": outline_pairs,
     }
+
+
+def _isaac_room_outlines_by_id(isaac_lane: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    diagnostics = (
+        isaac_lane.get("scene_index_diagnostics")
+        if isinstance(isaac_lane.get("scene_index_diagnostics"), dict)
+        else {}
+    )
+    outlines = diagnostics.get("room_outlines") if isinstance(diagnostics, dict) else []
+    result: dict[str, dict[str, Any]] = {}
+    for item in outlines or []:
+        if not isinstance(item, dict):
+            continue
+        room_id = str(item.get("room_id") or "")
+        if room_id:
+            result[room_id] = item
+    return result
 
 
 def _projection_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
@@ -1484,6 +1673,16 @@ def _contact_sheet_entries(manifest: dict[str, Any], *, output_dir: Path) -> lis
 def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[str, Any]:
     entries = _contact_sheet_entries(manifest, output_dir=output_dir)
     view_results = []
+    replay_results = []
+    camera_control = (
+        manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
+    )
+    color_profile = (
+        camera_control.get("color_profile")
+        if isinstance(camera_control.get("color_profile"), dict)
+        else DEFAULT_SCENE_PROBE_COLOR_PROFILE
+    )
+    color_profile = _normalize_color_profile_for_replay(color_profile)
     for entry in entries:
         molmo_path = entry["images"].get(MOLMOSPACES_LANE_ID)
         isaac_path = entry["images"].get(ISAAC_LANE_ID)
@@ -1514,6 +1713,15 @@ def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[s
                     ],
                 },
             }
+        )
+        replay_results.append(
+            _offline_color_profile_replay(
+                view_id=entry["view_id"],
+                label=entry.get("label") or "",
+                molmo_path=molmo_path,
+                isaac_path=isaac_path,
+                color_profile=color_profile,
+            )
         )
     luminance_deltas = [
         abs(float(item["delta"]["mean_luminance_delta"]))
@@ -1557,8 +1765,1400 @@ def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[s
         "mean_absolute_pixel_delta": sum(mae_values) / len(mae_values) if mae_values else None,
         "max_overexposed_fraction": max_overexposed_fraction,
         "max_underexposed_fraction": max_underexposed_fraction,
+        "render_domain_calibration": _render_domain_calibration(view_results),
+        "color_profile_replay": _color_profile_replay_summary(replay_results),
+        "candidate_color_calibrations": _candidate_color_calibrations(
+            view_results,
+            entries=entries,
+            base_color_profile=color_profile,
+        ),
         "views": view_results,
     }
+
+
+def _candidate_color_calibrations(
+    view_results: list[dict[str, Any]],
+    *,
+    entries: list[dict[str, Any]],
+    base_color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    if not view_results:
+        return {
+            "schema": "scene_camera_candidate_color_calibrations_v1",
+            "status": "missing_view_metrics",
+            "candidates": [],
+        }
+    entry_by_id = {str(item.get("view_id") or ""): item for item in entries}
+    candidates = [
+        _candidate_color_calibration(
+            "current_profile",
+            view_results,
+            entry_by_id=entry_by_id,
+            base_color_profile=base_color_profile,
+            color_profile=base_color_profile,
+            interpretation="Current camera-control color profile replay.",
+        ),
+        _candidate_color_calibration(
+            "ideal_per_view_luminance_gain",
+            view_results,
+            entry_by_id=entry_by_id,
+            base_color_profile=base_color_profile,
+            color_profile=_candidate_per_view_luminance_profile(view_results, base_color_profile),
+            interpretation=(
+                "Upper-bound diagnostic: per-view scalar gains match mean luminance. "
+                "Do not promote directly without broader scene validation."
+            ),
+        ),
+        _candidate_color_calibration(
+            "ideal_per_view_rgb_gain",
+            view_results,
+            entry_by_id=entry_by_id,
+            base_color_profile=base_color_profile,
+            color_profile=_candidate_per_view_rgb_profile(view_results, base_color_profile),
+            interpretation=(
+                "Upper-bound diagnostic: per-view RGB channel gains match mean RGB. "
+                "Useful for separating color response from geometry/material residuals."
+            ),
+        ),
+    ]
+    best = min(
+        (item for item in candidates if item.get("status") == "computed"),
+        key=lambda item: float(item.get("mean_absolute_pixel_delta") or 1e12),
+        default=None,
+    )
+    return {
+        "schema": "scene_camera_candidate_color_calibrations_v1",
+        "status": "computed",
+        "interpretation": (
+            "Candidate calibrations replay existing PNGs with generated gain tables. They are "
+            "diagnostics for choosing the next renderer slice, not fresh backend renders."
+        ),
+        "candidate_count": len(candidates),
+        "best_candidate": best.get("candidate_id") if isinstance(best, dict) else None,
+        "candidates": candidates,
+    }
+
+
+def _candidate_color_calibration(
+    candidate_id: str,
+    view_results: list[dict[str, Any]],
+    *,
+    entry_by_id: dict[str, dict[str, Any]],
+    base_color_profile: dict[str, Any],
+    color_profile: dict[str, Any],
+    interpretation: str,
+) -> dict[str, Any]:
+    replay_results = []
+    for item in view_results:
+        view_id = str(item.get("view_id") or "")
+        entry = entry_by_id.get(view_id)
+        if not isinstance(entry, dict):
+            continue
+        molmo_path = entry["images"].get(MOLMOSPACES_LANE_ID)
+        isaac_path = entry["images"].get(ISAAC_LANE_ID)
+        if molmo_path is None or isaac_path is None:
+            continue
+        replay_results.append(
+            _offline_color_profile_replay(
+                view_id=view_id,
+                label=str(item.get("label") or ""),
+                molmo_path=molmo_path,
+                isaac_path=isaac_path,
+                color_profile=color_profile,
+            )
+        )
+    summary = _color_profile_replay_summary(replay_results)
+    return {
+        "candidate_id": candidate_id,
+        "status": summary.get("status"),
+        "interpretation": interpretation,
+        "gain_delta": _candidate_gain_delta(base_color_profile, color_profile),
+        "view_count": summary.get("view_count"),
+        "mean_abs_mean_luminance_delta": summary.get("mean_abs_mean_luminance_delta"),
+        "mean_absolute_pixel_delta": summary.get("mean_absolute_pixel_delta"),
+        "render_domain_calibration": summary.get("render_domain_calibration"),
+    }
+
+
+def _candidate_per_view_luminance_profile(
+    view_results: list[dict[str, Any]],
+    base_color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    profile = json.loads(json.dumps(base_color_profile))
+    gains: dict[str, float] = {}
+    for item in view_results:
+        view_id = str(item.get("view_id") or "")
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        molmo = lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes, dict) else {}
+        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes, dict) else {}
+        molmo_luminance = _optional_float(
+            molmo.get("mean_luminance") if isinstance(molmo, dict) else None
+        )
+        isaac_luminance = _optional_float(
+            isaac.get("mean_luminance") if isinstance(isaac, dict) else None
+        )
+        if not view_id or molmo_luminance is None or isaac_luminance is None:
+            continue
+        gains[view_id] = molmo_luminance / isaac_luminance if isaac_luminance > 0 else 1.0
+    if gains:
+        profile["backend_view_luminance_gain"] = {ISAAC_LANE_ID: gains}
+        profile["backend_view_luminance_gain_source"] = "candidate_from_current_view_metrics"
+    return profile
+
+
+def _candidate_per_view_rgb_profile(
+    view_results: list[dict[str, Any]],
+    base_color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    profile = json.loads(json.dumps(base_color_profile))
+    gains: dict[str, list[float]] = {}
+    for item in view_results:
+        view_id = str(item.get("view_id") or "")
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        molmo = lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes, dict) else {}
+        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes, dict) else {}
+        molmo_rgb = molmo.get("mean_rgb") if isinstance(molmo, dict) else None
+        isaac_rgb = isaac.get("mean_rgb") if isinstance(isaac, dict) else None
+        if not view_id or not isinstance(molmo_rgb, list) or not isinstance(isaac_rgb, list):
+            continue
+        channel_gains = []
+        for molmo_value, isaac_value in zip(molmo_rgb[:3], isaac_rgb[:3], strict=False):
+            molmo_float = _optional_float(molmo_value)
+            isaac_float = _optional_float(isaac_value)
+            if molmo_float is None or isaac_float is None or isaac_float <= 0:
+                channel_gains.append(1.0)
+            else:
+                channel_gains.append(molmo_float / isaac_float)
+        if len(channel_gains) == 3:
+            gains[view_id] = channel_gains
+    if gains:
+        profile["backend_view_rgb_gain"] = {ISAAC_LANE_ID: gains}
+        profile["backend_view_rgb_gain_source"] = "candidate_from_current_view_metrics"
+        profile["backend_view_luminance_gain"] = {
+            ISAAC_LANE_ID: {view_id: 1.0 for view_id in gains}
+        }
+        profile["backend_view_luminance_gain_source"] = (
+            "candidate_rgb_gain_already_includes_luminance"
+        )
+    return profile
+
+
+def _candidate_gain_delta(
+    base_color_profile: dict[str, Any],
+    color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    keys = (
+        "backend_view_luminance_gain",
+        "backend_view_rgb_gain",
+        "backend_luminance_gain",
+        "backend_rgb_gain",
+    )
+    return {
+        key: color_profile.get(key)
+        for key in keys
+        if color_profile.get(key) != base_color_profile.get(key)
+    }
+
+
+def _offline_color_profile_replay(
+    *,
+    view_id: str,
+    label: str,
+    molmo_path: Path,
+    isaac_path: Path,
+    color_profile: dict[str, Any],
+) -> dict[str, Any]:
+    import numpy as np
+
+    molmo_replay_path = _color_profile_replay_image(
+        molmo_path,
+        np=np,
+        color_profile=color_profile,
+        backend=MOLMOSPACES_LANE_ID,
+        view_id=view_id,
+    )
+    isaac_replay_path = _color_profile_replay_image(
+        isaac_path,
+        np=np,
+        color_profile=color_profile,
+        backend=ISAAC_LANE_ID,
+        view_id=view_id,
+    )
+    molmo_metrics = _image_visual_metrics(molmo_replay_path)
+    isaac_metrics = _image_visual_metrics(isaac_replay_path)
+    diff_metrics = _image_pair_visual_delta(molmo_replay_path, isaac_replay_path)
+    return {
+        "view_id": view_id,
+        "label": label,
+        "lanes": {
+            MOLMOSPACES_LANE_ID: molmo_metrics,
+            ISAAC_LANE_ID: isaac_metrics,
+        },
+        "delta": {
+            **diff_metrics,
+            "mean_luminance_delta": isaac_metrics["mean_luminance"]
+            - molmo_metrics["mean_luminance"],
+        },
+    }
+
+
+def _normalize_color_profile_for_replay(color_profile: dict[str, Any]) -> dict[str, Any]:
+    request = normalize_camera_control_request(
+        {
+            "render_resolution": {"width": 1, "height": 1},
+            "color_profile": color_profile,
+            "views": [],
+        }
+    )
+    return dict(request.get("color_profile") or {})
+
+
+def _color_profile_replay_image(
+    path: Path,
+    *,
+    np: Any,
+    color_profile: dict[str, Any],
+    backend: str,
+    view_id: str,
+) -> Path:
+    with Image.open(path).convert("RGB") as image:
+        array = np.asarray(image)
+    rgb_gain = _color_profile_backend_rgb_gain(
+        color_profile,
+        backend=backend,
+        view_id=view_id,
+    )
+    adjusted = array.astype("float32") * np.asarray(rgb_gain, dtype="float32").reshape(1, 1, 3)
+    gain = _color_profile_backend_luminance_gain(
+        color_profile,
+        backend=backend,
+        view_id=view_id,
+    )
+    adjusted = np.clip(adjusted * gain, 0, 255).astype("uint8")
+    replay_path = path.with_name(f"{path.stem}.color_profile_replay.png")
+    Image.fromarray(adjusted).save(replay_path)
+    return replay_path
+
+
+def _color_profile_backend_luminance_gain(
+    color_profile: dict[str, Any],
+    *,
+    backend: str,
+    view_id: str,
+) -> float:
+    view_gains = color_profile.get("backend_view_luminance_gain")
+    if isinstance(view_gains, dict):
+        backend_view_gains = view_gains.get(backend)
+        if isinstance(backend_view_gains, dict) and view_id in backend_view_gains:
+            try:
+                return float(backend_view_gains[view_id])
+            except (TypeError, ValueError):
+                return 1.0
+    gains = color_profile.get("backend_luminance_gain")
+    if not isinstance(gains, dict) or backend not in gains:
+        return 1.0
+    try:
+        return float(gains[backend])
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _color_profile_backend_rgb_gain(
+    color_profile: dict[str, Any],
+    *,
+    backend: str,
+    view_id: str,
+) -> list[float]:
+    view_gains = color_profile.get("backend_view_rgb_gain")
+    if isinstance(view_gains, dict):
+        backend_view_gains = view_gains.get(backend)
+        if isinstance(backend_view_gains, dict) and view_id in backend_view_gains:
+            return _rgb_gain_or_identity(backend_view_gains[view_id])
+    gains = color_profile.get("backend_rgb_gain")
+    if isinstance(gains, dict) and backend in gains:
+        return _rgb_gain_or_identity(gains[backend])
+    return [1.0, 1.0, 1.0]
+
+
+def _rgb_gain_or_identity(value: Any) -> list[float]:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return [1.0, 1.0, 1.0]
+    try:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return [1.0, 1.0, 1.0]
+
+
+def _color_profile_replay_summary(view_results: list[dict[str, Any]]) -> dict[str, Any]:
+    if not view_results:
+        return {
+            "schema": "scene_camera_color_profile_replay_v1",
+            "status": "missing_view_images",
+            "view_count": 0,
+        }
+    luminance_deltas = [
+        abs(float(item["delta"]["mean_luminance_delta"]))
+        for item in view_results
+        if isinstance(item.get("delta"), dict)
+    ]
+    mae_values = [
+        float(item["delta"]["mean_absolute_pixel_delta"])
+        for item in view_results
+        if isinstance(item.get("delta"), dict)
+    ]
+    return {
+        "schema": "scene_camera_color_profile_replay_v1",
+        "status": "computed",
+        "interpretation": (
+            "Offline replay applies only the current backend_luminance_gain delta to "
+            "existing already-color-managed PNGs. It estimates the expected direction of "
+            "renderer calibration without claiming a fresh backend rerender."
+        ),
+        "view_count": len(view_results),
+        "mean_abs_mean_luminance_delta": (
+            sum(luminance_deltas) / len(luminance_deltas) if luminance_deltas else None
+        ),
+        "max_abs_mean_luminance_delta": max(luminance_deltas) if luminance_deltas else None,
+        "mean_absolute_pixel_delta": sum(mae_values) / len(mae_values) if mae_values else None,
+        "max_mean_absolute_pixel_delta": max(mae_values) if mae_values else None,
+        "render_domain_calibration": _render_domain_calibration(view_results),
+        "views": view_results,
+    }
+
+
+def _render_domain_calibration(view_results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Estimate whether one global Isaac luminance gain explains the visual delta."""
+
+    pairs = []
+    for item in view_results:
+        lanes = item.get("lanes") if isinstance(item.get("lanes"), dict) else {}
+        molmo = (
+            lanes.get(MOLMOSPACES_LANE_ID)
+            if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict)
+            else {}
+        )
+        isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
+        molmo_luminance = _optional_float(molmo.get("mean_luminance"))
+        isaac_luminance = _optional_float(isaac.get("mean_luminance"))
+        if molmo_luminance is None or isaac_luminance is None or isaac_luminance <= 0:
+            continue
+        pairs.append(
+            {
+                "view_id": str(item.get("view_id") or ""),
+                "molmospaces_luminance": molmo_luminance,
+                "isaac_luminance": isaac_luminance,
+            }
+        )
+    if not pairs:
+        return {
+            "schema": "scene_camera_render_domain_calibration_v1",
+            "status": "missing_luminance_pairs",
+            "pair_count": 0,
+        }
+
+    numerator = sum(pair["molmospaces_luminance"] * pair["isaac_luminance"] for pair in pairs)
+    denominator = sum(pair["isaac_luminance"] ** 2 for pair in pairs)
+    gain = numerator / denominator if denominator > 0 else 1.0
+    residuals = []
+    original_abs_deltas = []
+    for pair in pairs:
+        calibrated = pair["isaac_luminance"] * gain
+        residual = calibrated - pair["molmospaces_luminance"]
+        original_delta = pair["isaac_luminance"] - pair["molmospaces_luminance"]
+        original_abs_deltas.append(abs(original_delta))
+        residuals.append(
+            {
+                **pair,
+                "calibrated_isaac_luminance": calibrated,
+                "original_luminance_delta": original_delta,
+                "calibrated_luminance_residual": residual,
+                "abs_calibrated_luminance_residual": abs(residual),
+            }
+        )
+    mean_original_delta = sum(original_abs_deltas) / len(original_abs_deltas)
+    abs_residuals = [item["abs_calibrated_luminance_residual"] for item in residuals]
+    mean_residual = sum(abs_residuals) / len(abs_residuals)
+    max_residual = max(abs_residuals)
+    improvement_fraction = (
+        1.0 - mean_residual / mean_original_delta if mean_original_delta > 0 else 1.0
+    )
+    if mean_original_delta <= 10.0:
+        status = "already_luminance_matched"
+        next_action = "Do not tune exposure from this artifact; inspect material/texture deltas."
+    elif mean_residual <= 12.0 and max_residual <= 20.0:
+        status = "global_luminance_gain_sufficient"
+        next_action = "A global Isaac exposure/gain adjustment is a plausible next renderer slice."
+    else:
+        status = "view_dependent_render_domain_delta"
+        next_action = (
+            "A single global gain leaves large residuals; inspect per-room lights, material "
+            "albedo, indirect lighting, and tone response before changing camera geometry."
+        )
+    return {
+        "schema": "scene_camera_render_domain_calibration_v1",
+        "status": status,
+        "pair_count": len(pairs),
+        "global_isaac_luminance_gain": gain,
+        "mean_abs_original_luminance_delta": mean_original_delta,
+        "mean_abs_calibrated_luminance_residual": mean_residual,
+        "max_abs_calibrated_luminance_residual": max_residual,
+        "mean_luminance_delta_improvement_fraction": improvement_fraction,
+        "recommended_next_action": next_action,
+        "residuals": residuals,
+    }
+
+
+def _backend_swap_geometry_contract(manifest: dict[str, Any]) -> dict[str, Any]:
+    camera = (
+        manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
+    )
+    pose = (
+        manifest.get("camera_pose_contract")
+        if isinstance(manifest.get("camera_pose_contract"), dict)
+        else {}
+    )
+    intrinsics = (
+        manifest.get("camera_intrinsics_contract")
+        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
+        else {}
+    )
+    room_scale = (
+        manifest.get("room_scale_contract")
+        if isinstance(manifest.get("room_scale_contract"), dict)
+        else {}
+    )
+    projection = (
+        manifest.get("projection_diagnostics")
+        if isinstance(manifest.get("projection_diagnostics"), dict)
+        else {}
+    )
+    transform = (
+        manifest.get("scene_frame_transform")
+        if isinstance(manifest.get("scene_frame_transform"), dict)
+        else {}
+    )
+    visual = (
+        manifest.get("visual_diagnostics")
+        if isinstance(manifest.get("visual_diagnostics"), dict)
+        else {}
+    )
+    render_calibration = (
+        visual.get("render_domain_calibration")
+        if isinstance(visual.get("render_domain_calibration"), dict)
+        else {}
+    )
+    required_checks = [
+        {
+            "check": "same_camera_api",
+            "status": "pass" if camera.get("api_name") == CAMERA_CONTROL_API_NAME else "fail",
+            "value": camera.get("api_name"),
+            "expected": CAMERA_CONTROL_API_NAME,
+        },
+        {
+            "check": "same_explicit_eye_target_pose",
+            "status": "pass"
+            if pose.get("status") == "same_backend_pose_within_threshold"
+            else "fail",
+            "value": pose.get("status"),
+            "max_delta_m": pose.get("max_pose_delta_m"),
+            "threshold_m": pose.get("pose_threshold_m"),
+        },
+        {
+            "check": "same_intrinsics",
+            "status": "pass" if intrinsics.get("status") == "intrinsics_consistent" else "fail",
+            "value": intrinsics.get("status"),
+            "vertical_fov_deg": projection.get("vertical_fov_deg"),
+            "resolution": projection.get("resolution") or intrinsics.get("resolution"),
+        },
+        {
+            "check": "same_room_scale",
+            "status": "pass"
+            if room_scale.get("status") == "same_room_outlines_within_threshold"
+            else "fail",
+            "value": room_scale.get("status"),
+            "max_center_delta_m": room_scale.get("max_room_outline_center_delta_m"),
+            "max_size_delta_m": room_scale.get("max_room_outline_size_delta_m"),
+            "threshold_m": room_scale.get("room_outline_threshold_m"),
+        },
+        {
+            "check": "same_projected_geometry",
+            "status": "pass"
+            if projection.get("status") == "same_projected_geometry_within_threshold"
+            else "fail",
+            "value": projection.get("status"),
+            "max_pixel_delta": projection.get("max_pixel_delta"),
+            "threshold_px": projection.get("projection_threshold_px"),
+        },
+    ]
+    geometry_pass = all(item["status"] == "pass" for item in required_checks)
+    mean_pixel_delta = _optional_float(visual.get("mean_absolute_pixel_delta"))
+    mean_luminance_delta = _optional_float(visual.get("mean_abs_mean_luminance_delta"))
+    render_domain_status = str(render_calibration.get("status") or "")
+    visual_residual_status = (
+        "render_domain_residual_high"
+        if render_domain_status == "view_dependent_render_domain_delta"
+        else "render_domain_luminance_matched"
+        if render_domain_status == "already_luminance_matched"
+        else render_domain_status or "missing_visual_diagnostics"
+    )
+    status = (
+        "geometry_swap_ready_render_domain_pending"
+        if geometry_pass and visual_residual_status == "render_domain_residual_high"
+        else "geometry_swap_ready"
+        if geometry_pass
+        else "geometry_swap_not_ready"
+    )
+    return {
+        "schema": "backend_swap_geometry_contract_v1",
+        "status": status,
+        "geometry_contract_status": "pass" if geometry_pass else "fail",
+        "visual_residual_status": visual_residual_status,
+        "required_checks": required_checks,
+        "same_api_agent_swap_claim": geometry_pass,
+        "view_count": pose.get("pair_count") or projection.get("pair_count"),
+        "target_definition_status": transform.get("target_residual_status"),
+        "max_target_center_residual_m": transform.get("max_residual_m"),
+        "max_target_distance_to_usd_bounds_m": transform.get("max_distance_to_usd_bounds_m"),
+        "max_surface_aim_distance_to_usd_bounds_m": transform.get(
+            "max_surface_aim_distance_to_usd_bounds_m"
+        ),
+        "mean_absolute_pixel_delta": mean_pixel_delta,
+        "mean_abs_mean_luminance_delta": mean_luminance_delta,
+        "render_domain_status": render_domain_status,
+        "recommended_next_action": render_calibration.get("recommended_next_action"),
+        "interpretation": (
+            "This is the backend-swap contract for agent-facing camera control: the same "
+            "Roboclaws camera API, explicit eye/target pose, vertical FOV, room scale, and "
+            "pinhole projection must pass before an agent can treat MuJoCo and Isaac as "
+            "geometry-compatible backends. Visual residuals are tracked separately because "
+            "material, texture, light, shadow, and tone-response differences can still make "
+            "the images look different."
+        ),
+    }
+
+
+def _render_domain_source_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
+    visual = (
+        manifest.get("visual_diagnostics")
+        if isinstance(manifest.get("visual_diagnostics"), dict)
+        else {}
+    )
+    calibration = (
+        visual.get("render_domain_calibration")
+        if isinstance(visual.get("render_domain_calibration"), dict)
+        else {}
+    )
+    source_refs = [_render_source_reference(item) for item in OFFICIAL_RENDER_SOURCE_REFERENCES]
+    missing = [item for item in source_refs if item.get("status") != "available"]
+    lane_summary = {
+        MOLMOSPACES_LANE_ID: {
+            "renderer_contract": "MJCF materials/textures/lights rendered by MuJoCo",
+            "evidence_count": sum(
+                1 for item in source_refs if item.get("lane") == MOLMOSPACES_LANE_ID
+            ),
+        },
+        ISAAC_LANE_ID: {
+            "renderer_contract": "USD PreviewSurface materials/lights rendered by Isaac",
+            "evidence_count": sum(1 for item in source_refs if item.get("lane") == ISAAC_LANE_ID),
+        },
+    }
+    status = "official_sources_available" if not missing else "missing_official_source_refs"
+    root_cause_status = (
+        "render_contract_mismatch_evidence"
+        if calibration.get("status") == "view_dependent_render_domain_delta" and not missing
+        else "source_evidence_available"
+        if not missing
+        else "source_evidence_incomplete"
+    )
+    return {
+        "schema": "scene_camera_render_domain_source_diagnostics_v1",
+        "status": status,
+        "root_cause_status": root_cause_status,
+        "official_source": "vendors/molmospaces",
+        "source_reference_count": len(source_refs),
+        "available_source_reference_count": len(source_refs) - len(missing),
+        "missing_source_reference_count": len(missing),
+        "lane_summary": lane_summary,
+        "source_references": source_refs,
+        "recommended_next_action": (
+            "Tune renderer parity at the material/light/texture contract boundary before "
+            "changing camera geometry: compare MJCF material/texture/light inputs against "
+            "the converted USD PreviewSurface, default light, shadow, and texture-binding "
+            "outputs for each high-delta view."
+        ),
+        "interpretation": (
+            "These diagnostics cite the official MolmoSpaces code paths that feed each "
+            "backend's renderer. They explain why equal camera geometry can still produce "
+            "different images: MuJoCo renders MJCF material/light state, while Isaac renders "
+            "converted USD PreviewSurface materials, authored USD lights, shadow flags, and "
+            "texture bindings."
+        ),
+    }
+
+
+def _render_domain_view_triage(manifest: dict[str, Any]) -> dict[str, Any]:
+    visual = (
+        manifest.get("visual_diagnostics")
+        if isinstance(manifest.get("visual_diagnostics"), dict)
+        else {}
+    )
+    projection = (
+        manifest.get("projection_diagnostics")
+        if isinstance(manifest.get("projection_diagnostics"), dict)
+        else {}
+    )
+    source = (
+        manifest.get("render_domain_source_diagnostics")
+        if isinstance(manifest.get("render_domain_source_diagnostics"), dict)
+        else _render_domain_source_diagnostics(manifest)
+    )
+    source_ids = [
+        str(item.get("evidence_id"))
+        for item in source.get("source_references") or []
+        if isinstance(item, dict) and item.get("status") == "available"
+    ]
+    projection_by_view = {
+        str(item.get("view_id") or ""): item
+        for item in projection.get("pairs") or []
+        if isinstance(item, dict)
+    }
+    views = [item for item in visual.get("views") or [] if isinstance(item, dict)]
+    rows = []
+    for item in views:
+        view_id = str(item.get("view_id") or "")
+        delta = item.get("delta") if isinstance(item.get("delta"), dict) else {}
+        pixel_delta = _optional_float(delta.get("mean_absolute_pixel_delta"))
+        luminance_delta = _optional_float(delta.get("mean_luminance_delta"))
+        luminance_abs = abs(luminance_delta) if luminance_delta is not None else None
+        projection_pair = projection_by_view.get(view_id, {})
+        projection_delta = _optional_float(projection_pair.get("max_pixel_delta"))
+        anchor_kind = _view_anchor_kind(manifest, view_id)
+        usd_prim_path = _view_usd_prim_path(manifest, view_id)
+        residual_class = _view_render_residual_class(
+            pixel_delta=pixel_delta,
+            luminance_abs=luminance_abs,
+        )
+        suspicion = _view_render_suspicion(
+            residual_class=residual_class,
+            anchor_kind=anchor_kind,
+            usd_prim_path=usd_prim_path,
+        )
+        rows.append(
+            {
+                "view_id": view_id,
+                "label": item.get("label"),
+                "anchor_kind": anchor_kind,
+                "usd_prim_path": usd_prim_path,
+                "mean_absolute_pixel_delta": pixel_delta,
+                "abs_mean_luminance_delta": luminance_abs,
+                "max_projection_delta_px": projection_delta,
+                "geometry_status": "projection_pass"
+                if projection_delta is not None
+                and projection_delta <= CANONICAL_CAMERA_PROJECTION_THRESHOLD_PX
+                else "projection_missing_or_failed",
+                "render_residual_class": residual_class,
+                "suspected_contract": suspicion,
+                "next_probe": _view_render_next_probe(suspicion),
+            }
+        )
+    high = [
+        item
+        for item in rows
+        if item.get("render_residual_class") in {"high_pixel_and_luminance", "high_pixel_delta"}
+    ]
+    rows.sort(
+        key=lambda item: (
+            float(item.get("mean_absolute_pixel_delta") or 0.0),
+            float(item.get("abs_mean_luminance_delta") or 0.0),
+        ),
+        reverse=True,
+    )
+    return {
+        "schema": "scene_camera_render_domain_view_triage_v1",
+        "status": "computed" if rows else "missing_visual_view_metrics",
+        "view_count": len(rows),
+        "high_residual_view_count": len(high),
+        "source_evidence_ids": source_ids,
+        "top_residual_view_id": rows[0].get("view_id") if rows else None,
+        "views": rows,
+        "recommended_next_action": (
+            "Start with the highest-residual object/receptacle views. For object views, "
+            "compare the MuJoCo MJCF material/texture assigned to the anchor against the "
+            "Isaac USD material binding and PreviewSurface inputs for the same prim. For "
+            "room views, compare exported/default lights and wall or ceiling shadow flags."
+        ),
+        "interpretation": (
+            "This view-level triage keeps camera geometry separate from renderer-domain "
+            "work. A view can have projection_pass while still carrying a material, "
+            "texture, lighting, shadow, or tone-response residual."
+        ),
+    }
+
+
+def _view_anchor_kind(manifest: dict[str, Any], view_id: str) -> str:
+    for view in manifest.get("canonical_camera_views") or []:
+        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
+            return str(view.get("anchor_kind") or "")
+    return ""
+
+
+def _view_usd_prim_path(manifest: dict[str, Any], view_id: str) -> str:
+    anchor_id = ""
+    for view in ((manifest.get("lanes") or {}).get(ISAAC_LANE_ID) or {}).get("views") or []:
+        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
+            usd_prim_path = str(view.get("usd_prim_path") or "")
+            if usd_prim_path:
+                return usd_prim_path
+            anchor_id = str(view.get("anchor_id") or "")
+            break
+    for view in manifest.get("canonical_camera_views") or []:
+        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
+            usd_prim_path = str(view.get("usd_prim_path") or "")
+            if usd_prim_path:
+                return usd_prim_path
+            if not anchor_id:
+                anchor_id = str(view.get("anchor_id") or "")
+            break
+    if anchor_id:
+        for anchor in manifest.get("anchors") or []:
+            if isinstance(anchor, dict) and str(anchor.get("anchor_id") or "") == anchor_id:
+                return str(anchor.get("isaac_usd_prim_path") or "")
+    return ""
+
+
+def _view_render_residual_class(
+    *,
+    pixel_delta: float | None,
+    luminance_abs: float | None,
+) -> str:
+    if pixel_delta is None:
+        return "missing_pixel_delta"
+    pixel_high = pixel_delta >= 50.0
+    luminance_high = luminance_abs is not None and luminance_abs >= 30.0
+    if pixel_high and luminance_high:
+        return "high_pixel_and_luminance"
+    if pixel_high:
+        return "high_pixel_delta"
+    if luminance_high:
+        return "high_luminance_delta"
+    return "moderate_or_low_residual"
+
+
+def _view_render_suspicion(
+    *,
+    residual_class: str,
+    anchor_kind: str,
+    usd_prim_path: str,
+) -> str:
+    if residual_class == "moderate_or_low_residual":
+        return "lower_priority_renderer_delta"
+    if anchor_kind == "room":
+        return "room_light_wall_shadow_contract"
+    if usd_prim_path:
+        return "object_material_texture_binding_contract"
+    return "object_material_texture_contract_missing_usd_prim"
+
+
+def _view_render_next_probe(suspicion: str) -> str:
+    if suspicion == "room_light_wall_shadow_contract":
+        return "Compare MuJoCo default/exported lights with Isaac USD lights and wall shadow flags."
+    if suspicion == "object_material_texture_binding_contract":
+        return "Compare MJCF material/texture inputs with the matched Isaac USD material binding."
+    if suspicion == "object_material_texture_contract_missing_usd_prim":
+        return "Resolve the Isaac USD prim path before comparing material or texture contracts."
+    return "Keep as lower priority until high-residual views are explained."
+
+
+def _render_domain_contract_probe(manifest: dict[str, Any]) -> dict[str, Any]:
+    triage = (
+        manifest.get("render_domain_view_triage")
+        if isinstance(manifest.get("render_domain_view_triage"), dict)
+        else _render_domain_view_triage(manifest)
+    )
+    artifacts = _render_domain_artifact_paths(manifest)
+    mujoco = _mujoco_render_contract_from_xml(artifacts.get("mujoco_scene_xml"))
+    isaac = _isaac_render_contract_from_usda(artifacts.get("isaac_scene_usd"))
+    views = []
+    for item in triage.get("views") or []:
+        if not isinstance(item, dict):
+            continue
+        suspicion = str(item.get("suspected_contract") or "")
+        if suspicion not in {
+            "object_material_texture_binding_contract",
+            "object_material_texture_contract_missing_usd_prim",
+            "room_light_wall_shadow_contract",
+        }:
+            continue
+        view_id = str(item.get("view_id") or "")
+        anchor_id = _view_anchor_id(manifest, view_id)
+        usd_prim_path = str(item.get("usd_prim_path") or _view_usd_prim_path(manifest, view_id))
+        mujoco_contract = _mujoco_view_render_contract(mujoco, anchor_id=anchor_id)
+        isaac_contract = _isaac_view_render_contract(isaac, usd_prim_path=usd_prim_path)
+        view_probe = {
+            "view_id": view_id,
+            "anchor_id": anchor_id,
+            "anchor_kind": item.get("anchor_kind"),
+            "suspected_contract": suspicion,
+            "render_residual_class": item.get("render_residual_class"),
+            "mean_absolute_pixel_delta": item.get("mean_absolute_pixel_delta"),
+            "abs_mean_luminance_delta": item.get("abs_mean_luminance_delta"),
+            "mujoco": mujoco_contract,
+            "isaac": isaac_contract,
+            "contract_delta": _view_render_contract_delta(
+                suspicion=suspicion,
+                mujoco=mujoco_contract,
+                isaac=isaac_contract,
+            ),
+        }
+        views.append(view_probe)
+    status = "computed" if views else "missing_triaged_views"
+    if mujoco.get("status") != "parsed" or isaac.get("status") != "parsed":
+        status = "partial_artifact_parse"
+    high_priority = [
+        item
+        for item in views
+        if (item.get("contract_delta") or {}).get("status")
+        in {
+            "material_or_texture_name_delta",
+            "light_or_shadow_contract_delta",
+            "missing_object_binding_evidence",
+        }
+    ]
+    return {
+        "schema": "scene_camera_render_domain_contract_probe_v1",
+        "status": status,
+        "artifact_paths": artifacts,
+        "mujoco_parse_status": mujoco.get("status"),
+        "isaac_parse_status": isaac.get("status"),
+        "view_count": len(views),
+        "high_priority_delta_count": len(high_priority),
+        "mujoco_light_count": len(mujoco.get("lights") or []),
+        "isaac_light_count": len(isaac.get("lights") or []),
+        "isaac_shadow_disabled_prim_count": len(isaac.get("shadow_disabled_prims") or []),
+        "views": views,
+        "recommended_next_action": _render_domain_contract_probe_next_action(views),
+        "interpretation": (
+            "This probe reads the actual scene artifacts behind the rendered images. It is "
+            "not a screenshot metric: it checks whether high-residual views have matching "
+            "MJCF material/texture inputs and Isaac USD material bindings, and whether room "
+            "views share compatible light and shadow contracts."
+        ),
+    }
+
+
+def _render_domain_artifact_paths(manifest: dict[str, Any]) -> dict[str, str]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    mujoco_lane = (
+        lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict) else {}
+    )
+    isaac_lane = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
+    scene = manifest.get("scene") if isinstance(manifest.get("scene"), dict) else {}
+    return {
+        "mujoco_scene_xml": str(mujoco_lane.get("scene_xml") or ""),
+        "isaac_scene_usd": str(isaac_lane.get("scene_usd") or scene.get("scene_usd_path") or ""),
+    }
+
+
+def _mujoco_render_contract_from_xml(path_text: str | None) -> dict[str, Any]:
+    path = Path(str(path_text or ""))
+    if not path.is_file():
+        return {"status": "missing_scene_xml", "path": str(path)}
+    try:
+        root = ElementTree.parse(path).getroot()
+    except ElementTree.ParseError as exc:
+        return {"status": "parse_failed", "path": str(path), "error": str(exc)}
+    textures: dict[str, dict[str, Any]] = {}
+    materials: dict[str, dict[str, Any]] = {}
+    lights = []
+    body_visuals: dict[str, list[dict[str, Any]]] = {}
+    for texture in root.findall(".//texture"):
+        name = str(texture.attrib.get("name") or "")
+        if name:
+            textures[name] = {
+                "name": name,
+                "type": texture.attrib.get("type"),
+                "file": texture.attrib.get("file"),
+            }
+    for material in root.findall(".//material"):
+        name = str(material.attrib.get("name") or "")
+        if name:
+            texture_name = str(material.attrib.get("texture") or "")
+            materials[name] = {
+                "name": name,
+                "rgba": _float_list(material.attrib.get("rgba")),
+                "texture": texture_name,
+                "texture_file": textures.get(texture_name, {}).get("file")
+                if texture_name
+                else None,
+            }
+    for light in root.findall(".//light"):
+        lights.append(dict(light.attrib))
+    for body in root.findall(".//body"):
+        body_name = str(body.attrib.get("name") or "")
+        if not body_name:
+            continue
+        visuals = []
+        for geom in body.findall(".//geom"):
+            geom_name = str(geom.attrib.get("name") or "")
+            geom_class = str(geom.attrib.get("class") or "")
+            if "_visual_" not in geom_name and "__VISUAL" not in geom_class:
+                continue
+            material_name = str(geom.attrib.get("material") or "")
+            material = materials.get(material_name, {})
+            visuals.append(
+                {
+                    "geom_name": geom_name,
+                    "mesh": geom.attrib.get("mesh"),
+                    "material": material_name,
+                    "rgba": material.get("rgba") or _float_list(geom.attrib.get("rgba")),
+                    "texture": material.get("texture"),
+                    "texture_file": material.get("texture_file"),
+                }
+            )
+        if visuals:
+            body_visuals[body_name] = visuals
+    return {
+        "status": "parsed",
+        "path": str(path),
+        "texture_count": len(textures),
+        "material_count": len(materials),
+        "light_count": len(lights),
+        "textures": textures,
+        "materials": materials,
+        "lights": lights,
+        "body_visuals": body_visuals,
+    }
+
+
+def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
+    path = Path(str(path_text or ""))
+    if not path.is_file():
+        return {"status": "missing_scene_usd", "path": str(path)}
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    material_blocks = _usda_material_blocks(text)
+    prim_blocks = _usda_prim_blocks(text)
+    material_bindings: dict[str, list[dict[str, Any]]] = {}
+    shadow_disabled = []
+    for prim_path, block in prim_blocks.items():
+        direct_block = _usda_direct_prim_block(block)
+        binding_paths = re.findall(r"rel material:binding = <([^>]+)>", direct_block)
+        if binding_paths:
+            material_bindings[prim_path] = [
+                {
+                    "material_path": binding_path,
+                    **material_blocks.get(binding_path, {}),
+                }
+                for binding_path in binding_paths
+            ]
+        if "primvars:doNotCastShadows" in direct_block and re.search(
+            r"primvars:doNotCastShadows\s*=\s*(1|true)", direct_block
+        ):
+            shadow_disabled.append(prim_path)
+    lights = _usda_light_contracts(text)
+    return {
+        "status": "parsed",
+        "path": str(path),
+        "material_count": len(material_blocks),
+        "bound_prim_count": len(material_bindings),
+        "light_count": len(lights),
+        "shadow_disabled_prim_count": len(shadow_disabled),
+        "materials": material_blocks,
+        "material_bindings": material_bindings,
+        "lights": lights,
+        "shadow_disabled_prims": shadow_disabled,
+    }
+
+
+def _usda_material_blocks(text: str) -> dict[str, dict[str, Any]]:
+    materials: dict[str, dict[str, Any]] = {}
+    material_name_by_path = _usda_named_prim_paths(text, "Material")
+    for path, block_text in _usda_named_prim_blocks(text, "Material").items():
+        name = material_name_by_path.get(path) or Path(path).name
+        parsed = _parse_usda_material_block(name, block_text)
+        materials[path] = parsed
+        materials[f"/{name}"] = parsed
+    return materials
+
+
+def _parse_usda_material_block(name: str, block_text: str) -> dict[str, Any]:
+    texture_files = re.findall(r"asset inputs:file = @([^@]+)@", block_text)
+    diffuse_match = re.search(r"color3f inputs:diffuseColor = \(([^)]+)\)", block_text)
+    return {
+        "material_name": name,
+        "has_preview_surface": "UsdPreviewSurface" in block_text,
+        "diffuse_color": _float_list(diffuse_match.group(1).replace(",", " "))
+        if diffuse_match
+        else None,
+        "diffuse_texture_files": texture_files,
+        "has_diffuse_texture": bool(texture_files) or "inputs:diffuseColor.connect" in block_text,
+    }
+
+
+def _usda_prim_blocks(text: str) -> dict[str, str]:
+    return _usda_named_prim_blocks(text)
+
+
+def _usda_direct_prim_block(block: str) -> str:
+    direct_lines = []
+    skipping_child = False
+    child_body_started = False
+    child_depth = 0
+    for index, line in enumerate(block.splitlines()):
+        stripped = line.strip()
+        if index > 0 and not skipping_child and re.match(r'(?:def|over)\s+\w+\s+"', stripped):
+            skipping_child = True
+            child_body_started = False
+            child_depth = 0
+            continue
+        if skipping_child:
+            if not child_body_started and stripped == "{":
+                child_body_started = True
+                child_depth = 1
+                continue
+            if child_body_started:
+                child_depth += line.count("{") - line.count("}")
+                if child_depth <= 0:
+                    skipping_child = False
+            continue
+        direct_lines.append(line)
+    return "\n".join(direct_lines)
+
+
+def _usda_named_prim_paths(text: str, type_name: str | None = None) -> dict[str, str]:
+    names = {}
+    for path, block in _usda_named_prim_blocks(text, type_name).items():
+        first_line = block.splitlines()[0] if block else ""
+        match = re.search(r'(?:def|over)\s+\w+\s+"([^"]+)"', first_line.strip())
+        if match:
+            names[path] = match.group(1)
+    return names
+
+
+def _usda_named_prim_blocks(text: str, type_name: str | None = None) -> dict[str, str]:
+    blocks: dict[str, str] = {}
+    lines = text.splitlines()
+    active_stack: list[dict[str, Any]] = []
+    pending: dict[str, Any] | None = None
+    brace_depth = 0
+    index = 0
+    type_pattern = r"\w+" if type_name is None else re.escape(type_name)
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+        prim_match = re.match(rf'(?:def|over)\s+{type_pattern}\s+"([^"]+)"', stripped)
+        generic_match = re.match(r'(?:def|over)\s+(?P<type>\w+)\s+"(?P<name>[^"]+)"', stripped)
+        if generic_match:
+            name = generic_match.group("name")
+            parent_path = str(active_stack[-1]["path"]) if active_stack else ""
+            current_path = f"{parent_path}/{name}" if parent_path else f"/{name}"
+            if prim_match:
+                block_lines, _ = _collect_usda_prim_block(lines, index)
+                blocks[current_path] = "\n".join(block_lines)
+            pending = {"path": current_path}
+        if pending is not None and stripped == "{":
+            active_stack.append({"path": pending["path"], "close_depth": brace_depth})
+            pending = None
+        brace_depth += line.count("{") - line.count("}")
+        while active_stack and brace_depth <= int(active_stack[-1]["close_depth"]):
+            active_stack.pop()
+        index += 1
+    return blocks
+
+
+def _collect_usda_prim_block(lines: list[str], start_index: int) -> tuple[list[str], int]:
+    block = []
+    body_started = False
+    depth = 0
+    for index in range(start_index, len(lines)):
+        line = lines[index]
+        block.append(line)
+        if not body_started:
+            if line.strip() != "{":
+                continue
+            body_started = True
+        depth += line.count("{") - line.count("}")
+        if body_started and depth <= 0:
+            return block, index
+    return block, len(lines) - 1
+
+
+def _usda_light_contracts(text: str) -> list[dict[str, Any]]:
+    lights = []
+    for match in re.finditer(
+        r'def\s+(?P<type>DomeLight|DistantLight|RectLight|SphereLight|DiskLight)\s+"(?P<name>[^"]+)"(?P<body>.*?)(?=\n\s*def\s|\Z)',
+        text,
+        re.S,
+    ):
+        body = match.group("body")
+        intensity_match = re.search(r"inputs:intensity = ([^\s]+)", body)
+        color_match = re.search(r"inputs:color = \(([^)]+)\)", body)
+        lights.append(
+            {
+                "name": match.group("name"),
+                "type": match.group("type"),
+                "intensity": _optional_float(intensity_match.group(1)) if intensity_match else None,
+                "color": _float_list(color_match.group(1).replace(",", " "))
+                if color_match
+                else None,
+            }
+        )
+    return lights
+
+
+def _mujoco_view_render_contract(
+    mujoco: dict[str, Any],
+    *,
+    anchor_id: str,
+) -> dict[str, Any]:
+    if mujoco.get("status") != "parsed":
+        return {"status": mujoco.get("status")}
+    visuals = []
+    body_visuals = (
+        mujoco.get("body_visuals") if isinstance(mujoco.get("body_visuals"), dict) else {}
+    )
+    if anchor_id:
+        visuals = list(body_visuals.get(anchor_id) or [])
+    if not visuals and anchor_id:
+        for body_name, body_entries in body_visuals.items():
+            if str(body_name).startswith(anchor_id):
+                visuals.extend(body_entries)
+    return {
+        "status": "bound" if visuals else "missing_anchor_visuals",
+        "visual_geom_count": len(visuals),
+        "materials": sorted(
+            {str(item.get("material") or "") for item in visuals if item.get("material")}
+        ),
+        "textures": sorted(
+            {str(item.get("texture") or "") for item in visuals if item.get("texture")}
+        ),
+        "texture_files": sorted(
+            {str(item.get("texture_file") or "") for item in visuals if item.get("texture_file")}
+        ),
+        "visuals": visuals[:8],
+        "lights": mujoco.get("lights") or [],
+    }
+
+
+def _isaac_view_render_contract(
+    isaac: dict[str, Any],
+    *,
+    usd_prim_path: str,
+) -> dict[str, Any]:
+    if isaac.get("status") != "parsed":
+        return {"status": isaac.get("status")}
+    bindings_by_prim = (
+        isaac.get("material_bindings") if isinstance(isaac.get("material_bindings"), dict) else {}
+    )
+    bindings = []
+    if usd_prim_path:
+        prefix = usd_prim_path.rstrip("/") + "/"
+        for prim_path, prim_bindings in bindings_by_prim.items():
+            if prim_path == usd_prim_path or str(prim_path).startswith(prefix):
+                for binding in prim_bindings:
+                    bindings.append({"prim_path": prim_path, **binding})
+    shadow_disabled_prims = [
+        prim
+        for prim in isaac.get("shadow_disabled_prims") or []
+        if not usd_prim_path
+        or str(prim) == usd_prim_path
+        or str(prim).startswith(usd_prim_path + "/")
+    ]
+    return {
+        "status": "bound" if bindings else "missing_usd_material_bindings",
+        "bound_prim_count": len({str(item.get("prim_path") or "") for item in bindings}),
+        "material_binding_count": len(bindings),
+        "materials": sorted(
+            {
+                str(item.get("material_name") or Path(str(item.get("material_path") or "")).name)
+                for item in bindings
+                if item.get("material_path")
+            }
+        ),
+        "texture_files": sorted(
+            {
+                str(texture)
+                for item in bindings
+                for texture in item.get("diffuse_texture_files") or []
+            }
+        ),
+        "has_diffuse_texture_count": sum(1 for item in bindings if item.get("has_diffuse_texture")),
+        "shadow_disabled_prim_count": len(shadow_disabled_prims),
+        "bindings": bindings[:8],
+        "lights": isaac.get("lights") or [],
+        "shadow_disabled_prims": shadow_disabled_prims[:8],
+    }
+
+
+def _view_render_contract_delta(
+    *,
+    suspicion: str,
+    mujoco: dict[str, Any],
+    isaac: dict[str, Any],
+) -> dict[str, Any]:
+    if suspicion == "room_light_wall_shadow_contract":
+        mujoco_lights = len(mujoco.get("lights") or [])
+        isaac_lights = len(isaac.get("lights") or [])
+        shadow_disabled = int(isaac.get("shadow_disabled_prim_count") or 0)
+        status = (
+            "light_or_shadow_contract_delta"
+            if mujoco_lights != isaac_lights or shadow_disabled > 0
+            else "light_count_matched"
+        )
+        return {
+            "status": status,
+            "mujoco_light_count": mujoco_lights,
+            "isaac_light_count": isaac_lights,
+            "isaac_shadow_disabled_prim_count": shadow_disabled,
+        }
+    if mujoco.get("status") != "bound" or isaac.get("status") != "bound":
+        return {
+            "status": "missing_object_binding_evidence",
+            "mujoco_status": mujoco.get("status"),
+            "isaac_status": isaac.get("status"),
+        }
+    mujoco_materials = set(mujoco.get("materials") or [])
+    isaac_materials = set(isaac.get("materials") or [])
+    mujoco_textures = {Path(str(item)).name for item in mujoco.get("texture_files") or []}
+    isaac_textures = {Path(str(item)).name for item in isaac.get("texture_files") or []}
+    status = (
+        "material_or_texture_name_delta"
+        if mujoco_materials != isaac_materials or mujoco_textures != isaac_textures
+        else "material_texture_names_match"
+    )
+    return {
+        "status": status,
+        "mujoco_material_count": len(mujoco_materials),
+        "isaac_material_count": len(isaac_materials),
+        "mujoco_texture_count": len(mujoco_textures),
+        "isaac_texture_count": len(isaac_textures),
+        "material_names_only_in_mujoco": sorted(mujoco_materials - isaac_materials),
+        "material_names_only_in_isaac": sorted(isaac_materials - mujoco_materials),
+        "texture_files_only_in_mujoco": sorted(mujoco_textures - isaac_textures),
+        "texture_files_only_in_isaac": sorted(isaac_textures - mujoco_textures),
+    }
+
+
+def _render_domain_contract_probe_next_action(views: list[dict[str, Any]]) -> str:
+    for item in views:
+        delta = item.get("contract_delta") if isinstance(item.get("contract_delta"), dict) else {}
+        if delta.get("status") == "material_or_texture_name_delta":
+            return (
+                "Compare the top object view's MJCF material names and texture file basenames "
+                "against the USD PreviewSurface bindings; fix converter naming or texture "
+                "copy/binding before tuning camera or exposure."
+            )
+        if delta.get("status") == "light_or_shadow_contract_delta":
+            return (
+                "Align room-level light count/intensity and wall or ceiling shadow flags before "
+                "treating room-view residuals as camera differences."
+            )
+    return (
+        "Use this probe to choose the next renderer parity edit; geometry remains a separate pass."
+    )
+
+
+def _view_anchor_id(manifest: dict[str, Any], view_id: str) -> str:
+    for view in manifest.get("canonical_camera_views") or []:
+        if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
+            return str(view.get("anchor_id") or "")
+    return ""
+
+
+def _float_list(value: Any) -> list[float] | None:
+    if value is None:
+        return None
+    result = []
+    for token in str(value).replace(",", " ").split():
+        try:
+            result.append(float(token))
+        except ValueError:
+            return None
+    return result or None
+
+
+def _render_source_reference(reference: dict[str, Any]) -> dict[str, Any]:
+    rel_path = Path(str(reference.get("path") or ""))
+    path = REPO_ROOT / rel_path
+    line_start = int(reference.get("line_start") or 1)
+    line_end = int(reference.get("line_end") or line_start)
+    exists = path.is_file()
+    snippet_status = "missing"
+    snippet = ""
+    if exists:
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+            selected = lines[max(line_start - 1, 0) : max(line_end, line_start)]
+            snippet_status = "available" if selected else "empty"
+            snippet = _render_source_snippet(selected)
+        except OSError:
+            snippet_status = "unreadable"
+    return {
+        "evidence_id": reference.get("evidence_id"),
+        "lane": reference.get("lane"),
+        "path": str(rel_path),
+        "line_start": line_start,
+        "line_end": line_end,
+        "status": "available" if exists and snippet_status == "available" else snippet_status,
+        "claim": reference.get("claim"),
+        "snippet_summary": snippet,
+    }
+
+
+def _render_source_snippet(lines: list[str]) -> str:
+    priority_keywords = (
+        "doNotCastShadows",
+        "opacity=1.0",
+        "definePreviewMaterial",
+        "addDiffuseTextureToPreviewMaterial",
+        "UsdLux.DistantLight",
+        "defineDomeLight",
+        "add_light",
+        "add_texture",
+    )
+    keywords = (
+        "material",
+        "texture",
+        "light",
+        "shadow",
+        "opacity",
+        "roughness",
+        "specular",
+        "Preview",
+        "DistantLight",
+        "DomeLight",
+        "doNotCastShadows",
+    )
+    matching = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if (
+            stripped.startswith("def ")
+            or stripped.startswith("#")
+            or stripped.endswith(":")
+            or stripped in {")", "("}
+        ):
+            continue
+        if any(keyword.lower() in stripped.lower() for keyword in keywords):
+            matching.append(stripped)
+    selected = []
+    for keyword in priority_keywords:
+        for line in matching:
+            if keyword.lower() in line.lower() and line not in selected:
+                selected.append(line)
+            if len(selected) >= 5:
+                break
+        if len(selected) >= 5:
+            break
+    for line in matching:
+        if line not in selected:
+            selected.append(line)
+        if len(selected) >= 5:
+            break
+    if not selected:
+        selected = [line.strip() for line in lines if line.strip()][:3]
+    return " | ".join(selected)
 
 
 def _image_visual_metrics(path: Path) -> dict[str, Any]:
@@ -1778,6 +3378,10 @@ def _distance_3d(left: list[float], right: list[float]) -> float:
     )
 
 
+def _distance_xy(left: list[float], right: list[float]) -> float:
+    return math.hypot(float(left[0]) - float(right[0]), float(left[1]) - float(right[1]))
+
+
 def _is_vec3(value: Any) -> bool:
     return isinstance(value, list) and len(value) >= 3
 
@@ -1876,9 +3480,13 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _pose_contract_section(manifest),
             _intrinsics_contract_section(manifest),
             _room_scale_section(manifest),
+            _backend_swap_geometry_section(manifest),
             _transform_section(manifest),
             _projection_diagnostics_section(manifest),
             _visual_diagnostics_section(manifest),
+            _render_domain_source_section(manifest),
+            _render_domain_view_triage_section(manifest),
+            _render_domain_contract_probe_section(manifest),
             _anchor_section(manifest),
             _runtime_section(manifest),
             _failure_section(manifest),
@@ -2011,6 +3619,7 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
     lighting = (
         camera.get("lighting_profile") if isinstance(camera.get("lighting_profile"), dict) else {}
     )
+    color = camera.get("color_profile") if isinstance(camera.get("color_profile"), dict) else {}
     transform = (
         manifest.get("scene_frame_transform")
         if isinstance(manifest.get("scene_frame_transform"), dict)
@@ -2067,6 +3676,7 @@ def _summary_section(title: str, manifest: dict[str, Any]) -> str:
                 ("max projection delta", _pixels_text(projection.get("max_pixel_delta"))),
                 ("FOV", f"{lens.get('vertical_fov_deg')} deg" if lens else ""),
                 ("lighting", lighting.get("profile_id") if lighting else ""),
+                ("color", color.get("profile_id") if color else ""),
             ]
         )
     }</div>
@@ -2200,9 +3810,13 @@ def _room_scale_section(manifest: dict[str, Any]) -> str:
     )
     note = (
         f"status={contract.get('status')}; rooms={contract.get('room_count')}; "
+        f"matched_room_outlines={contract.get('matched_room_outline_count')}; "
         f"isaac_scene_size={_vec_text(bounds.get('size'))}; "
         f"max_width_ratio={_ratio_text(contract.get('max_room_to_scene_width_ratio'))}; "
-        f"max_depth_ratio={_ratio_text(contract.get('max_room_to_scene_depth_ratio'))}. "
+        f"max_depth_ratio={_ratio_text(contract.get('max_room_to_scene_depth_ratio'))}; "
+        f"max_center_delta={_meters_text(contract.get('max_room_outline_center_delta_m'))}; "
+        f"max_size_delta={_meters_text(contract.get('max_room_outline_size_delta_m'))}; "
+        f"threshold={_meters_text(contract.get('room_outline_threshold_m'))}. "
         f"{contract.get('interpretation') or ''}"
     )
     headers = "".join(
@@ -2213,6 +3827,108 @@ def _room_scale_section(manifest: dict[str, Any]) -> str:
 <section class="panel">
   <h2>Room Scale Contract</h2>
   <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+  {_room_outline_pairs_table(contract)}
+</section>
+"""
+
+
+def _room_outline_pairs_table(contract: dict[str, Any]) -> str:
+    pairs = [item for item in contract.get("room_outline_pairs") or [] if isinstance(item, dict)]
+    if not pairs:
+        return ""
+    rows = []
+    for item in pairs:
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('room_id', '')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('molmospaces_center')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('isaac_center')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('center_delta_m')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('molmospaces_size')))}</td>"
+            f"<td>{html.escape(_vec_text(item.get('isaac_size')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('size_delta_m')))}</td>"
+            f"<td>{html.escape(str(item.get('isaac_usd_prim_path', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Room",
+            "MuJoCo center",
+            "Isaac center",
+            "Center delta",
+            "MuJoCo size",
+            "Isaac size",
+            "Size delta",
+            "Isaac room prim",
+        )
+    )
+    return f"""
+  <h3>Matched Room Outlines</h3>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+"""
+
+
+def _backend_swap_geometry_section(manifest: dict[str, Any]) -> str:
+    contract = (
+        manifest.get("backend_swap_geometry_contract")
+        if isinstance(manifest.get("backend_swap_geometry_contract"), dict)
+        else _backend_swap_geometry_contract(manifest)
+    )
+    if not contract:
+        return ""
+    rows = []
+    for item in contract.get("required_checks") or []:
+        if not isinstance(item, dict):
+            continue
+        detail_parts = []
+        for key in (
+            "value",
+            "expected",
+            "max_delta_m",
+            "threshold_m",
+            "max_center_delta_m",
+            "max_size_delta_m",
+            "vertical_fov_deg",
+            "resolution",
+            "max_pixel_delta",
+            "threshold_px",
+        ):
+            value = item.get(key)
+            if value is None or value == "":
+                continue
+            detail_parts.append(f"{key}={value}")
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('check', '')))}</td>"
+            f"<td>{html.escape(str(item.get('status', '')))}</td>"
+            f"<td>{html.escape('; '.join(detail_parts))}</td>"
+            "</tr>"
+        )
+    headers = "".join(f"<th>{html.escape(label)}</th>" for label in ("Check", "Status", "Evidence"))
+    note = (
+        f"status={contract.get('status')}; "
+        f"geometry={contract.get('geometry_contract_status')}; "
+        f"visual_residual={contract.get('visual_residual_status')}; "
+        f"target_definition={contract.get('target_definition_status')}; "
+        f"max_target_center_residual={_meters_text(contract.get('max_target_center_residual_m'))}; "
+        f"mean_pixel_delta={_float_text(contract.get('mean_absolute_pixel_delta'))}; "
+        f"mean_luminance_delta={_float_text(contract.get('mean_abs_mean_luminance_delta'))}. "
+        f"{contract.get('interpretation') or ''}"
+    )
+    next_action = str(contract.get("recommended_next_action") or "")
+    return f"""
+<section class="panel">
+  <h2>Backend Swap Geometry Contract</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(next_action)}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
@@ -2511,10 +4227,252 @@ def _visual_diagnostics_section(manifest: dict[str, Any]) -> str:
         f"max_underexposed={_percent_text(diagnostics.get('max_underexposed_fraction'))}. "
         f"{diagnostics.get('interpretation') or ''}"
     )
+    calibration = (
+        diagnostics.get("render_domain_calibration")
+        if isinstance(diagnostics.get("render_domain_calibration"), dict)
+        else {}
+    )
+    calibration_note = ""
+    if calibration:
+        calibration_note = (
+            f"Render-domain calibration: status={calibration.get('status')}; "
+            f"global_isaac_luminance_gain="
+            f"{_float_text(calibration.get('global_isaac_luminance_gain'))}; "
+            f"mean_residual="
+            f"{_float_text(calibration.get('mean_abs_calibrated_luminance_residual'))}; "
+            f"max_residual="
+            f"{_float_text(calibration.get('max_abs_calibrated_luminance_residual'))}; "
+            f"{calibration.get('recommended_next_action') or ''}"
+        )
+    replay = (
+        diagnostics.get("color_profile_replay")
+        if isinstance(diagnostics.get("color_profile_replay"), dict)
+        else {}
+    )
+    replay_note = ""
+    if replay:
+        replay_calibration = (
+            replay.get("render_domain_calibration")
+            if isinstance(replay.get("render_domain_calibration"), dict)
+            else {}
+        )
+        replay_note = (
+            f"Color-profile replay: status={replay.get('status')}; "
+            f"mean_luminance_delta="
+            f"{_float_text(replay.get('mean_abs_mean_luminance_delta'))}; "
+            f"mean_pixel_delta={_float_text(replay.get('mean_absolute_pixel_delta'))}; "
+            f"residual_status={replay_calibration.get('status') or ''}. "
+            f"{replay.get('interpretation') or ''}"
+        )
+    candidates = (
+        diagnostics.get("candidate_color_calibrations")
+        if isinstance(diagnostics.get("candidate_color_calibrations"), dict)
+        else {}
+    )
+    candidate_note = ""
+    if candidates:
+        candidate_rows = []
+        for item in candidates.get("candidates") or []:
+            if not isinstance(item, dict):
+                continue
+            candidate_rows.append(
+                f"{item.get('candidate_id')}("
+                f"lum={_float_text(item.get('mean_abs_mean_luminance_delta'))}, "
+                f"px={_float_text(item.get('mean_absolute_pixel_delta'))})"
+            )
+        candidate_note = (
+            f"Candidate color calibrations: best={candidates.get('best_candidate')}; "
+            f"{'; '.join(candidate_rows)}. {candidates.get('interpretation') or ''}"
+        )
     return f"""
 <section class="panel">
   <h2>Visual Diagnostics</h2>
   <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(calibration_note)}</p>
+  <p class="note">{html.escape(replay_note)}</p>
+  <p class="note">{html.escape(candidate_note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _render_domain_source_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("render_domain_source_diagnostics")
+        if isinstance(manifest.get("render_domain_source_diagnostics"), dict)
+        else _render_domain_source_diagnostics(manifest)
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("source_references") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('evidence_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('lane', '')))}</td>"
+            f"<td>{html.escape(str(item.get('path', '')))}:"
+            f"{html.escape(str(item.get('line_start', '')))}</td>"
+            f"<td>{html.escape(str(item.get('status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('claim', '')))}</td>"
+            f"<td>{html.escape(str(item.get('snippet_summary', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in ("Evidence", "Lane", "Source", "Status", "Claim", "Snippet")
+    )
+    lane_summary = (
+        diagnostics.get("lane_summary") if isinstance(diagnostics.get("lane_summary"), dict) else {}
+    )
+    lane_note = "; ".join(
+        f"{lane}: {summary.get('renderer_contract')} ({summary.get('evidence_count')} refs)"
+        for lane, summary in lane_summary.items()
+        if isinstance(summary, dict)
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"root_cause={diagnostics.get('root_cause_status')}; "
+        f"source_refs={diagnostics.get('available_source_reference_count')}/"
+        f"{diagnostics.get('source_reference_count')}; {lane_note}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Render Domain Source Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _render_domain_view_triage_section(manifest: dict[str, Any]) -> str:
+    triage = (
+        manifest.get("render_domain_view_triage")
+        if isinstance(manifest.get("render_domain_view_triage"), dict)
+        else _render_domain_view_triage(manifest)
+    )
+    if not triage:
+        return ""
+    rows = []
+    for item in triage.get("views") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('anchor_kind', '')))}</td>"
+            f"<td>{html.escape(str(item.get('render_residual_class', '')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('abs_mean_luminance_delta')))}</td>"
+            f"<td>{html.escape(_pixels_text(item.get('max_projection_delta_px')))}</td>"
+            f"<td>{html.escape(str(item.get('suspected_contract', '')))}</td>"
+            f"<td>{html.escape(str(item.get('usd_prim_path', '')))}</td>"
+            f"<td>{html.escape(str(item.get('next_probe', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "View",
+            "Anchor",
+            "Residual",
+            "Mean pixel delta",
+            "Mean luminance delta",
+            "Projection delta",
+            "Suspected contract",
+            "Isaac USD prim",
+            "Next probe",
+        )
+    )
+    note = (
+        f"status={triage.get('status')}; views={triage.get('view_count')}; "
+        f"high_residual_views={triage.get('high_residual_view_count')}; "
+        f"top={triage.get('top_residual_view_id')}. "
+        f"{triage.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Render Domain View Triage</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(triage.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _render_domain_contract_probe_section(manifest: dict[str, Any]) -> str:
+    probe = (
+        manifest.get("render_domain_contract_probe")
+        if isinstance(manifest.get("render_domain_contract_probe"), dict)
+        else _render_domain_contract_probe(manifest)
+    )
+    if not probe:
+        return ""
+    rows = []
+    for item in probe.get("views") or []:
+        if not isinstance(item, dict):
+            continue
+        mujoco = item.get("mujoco") if isinstance(item.get("mujoco"), dict) else {}
+        isaac = item.get("isaac") if isinstance(item.get("isaac"), dict) else {}
+        delta = item.get("contract_delta") if isinstance(item.get("contract_delta"), dict) else {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('suspected_contract', '')))}</td>"
+            f"<td>{html.escape(str(delta.get('status', '')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(str(mujoco.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(mujoco.get('materials')))}</td>"
+            f"<td>{html.escape(_short_list_text(mujoco.get('texture_files')))}</td>"
+            f"<td>{html.escape(str(isaac.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(isaac.get('materials')))}</td>"
+            f"<td>{html.escape(_short_list_text(isaac.get('texture_files')))}</td>"
+            f"<td>{html.escape(str(isaac.get('shadow_disabled_prim_count', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "View",
+            "Suspected contract",
+            "Contract delta",
+            "Mean pixel delta",
+            "MuJoCo status",
+            "MuJoCo materials",
+            "MuJoCo textures",
+            "Isaac status",
+            "Isaac materials",
+            "Isaac textures",
+            "Isaac shadow-off prims",
+        )
+    )
+    note = (
+        f"status={probe.get('status')}; views={probe.get('view_count')}; "
+        f"high_priority_deltas={probe.get('high_priority_delta_count')}; "
+        f"mujoco_parse={probe.get('mujoco_parse_status')}; "
+        f"isaac_parse={probe.get('isaac_parse_status')}; "
+        f"mujoco_lights={probe.get('mujoco_light_count')}; "
+        f"isaac_lights={probe.get('isaac_light_count')}; "
+        f"isaac_shadow_disabled_prims={probe.get('isaac_shadow_disabled_prim_count')}. "
+        f"{probe.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Render Domain Contract Probe</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(probe.get("recommended_next_action") or ""))}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
@@ -2542,6 +4500,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(lane.get('calibration_status', '')))}</td>"
             f"<td>{html.escape(str(_lighting_profile_id(lane)))}</td>"
             f"<td>{html.escape(str(_lighting_diagnostics_text(lane)))}</td>"
+            f"<td>{html.escape(str(_color_profile_id(lane)))}</td>"
             "</tr>"
         )
     headers = "".join(
@@ -2558,6 +4517,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             "Calibration",
             "Lighting",
             "Lighting diagnostics",
+            "Color",
         )
     )
     return f"""
@@ -2580,6 +4540,11 @@ def _lighting_profile_id(lane: dict[str, Any]) -> str:
         lane.get("lighting_profile") if isinstance(lane.get("lighting_profile"), dict) else {}
     )
     return str(lighting.get("profile_id") or "")
+
+
+def _color_profile_id(lane: dict[str, Any]) -> str:
+    color = lane.get("color_profile") if isinstance(lane.get("color_profile"), dict) else {}
+    return str(color.get("profile_id") or "")
 
 
 def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:
@@ -2775,6 +4740,15 @@ def _pixels_text(value: Any) -> str:
         return f"{float(value):.3f} px"
     except (TypeError, ValueError):
         return str(value)
+
+
+def _short_list_text(value: Any, *, limit: int = 4) -> str:
+    if not isinstance(value, list):
+        return ""
+    items = [str(item) for item in value if item is not None and str(item) != ""]
+    if len(items) <= limit:
+        return ", ".join(items)
+    return f"{', '.join(items[:limit])}, ... (+{len(items) - limit})"
 
 
 def _badges(items: list[tuple[str, Any]]) -> str:

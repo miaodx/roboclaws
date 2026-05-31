@@ -27,6 +27,7 @@ from roboclaws.molmo_cleanup.camera_control import (
     load_camera_control_request,
     normalize_camera_control_request,
 )
+from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
 from roboclaws.molmo_cleanup.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
@@ -35,6 +36,14 @@ from roboclaws.molmo_cleanup.robot_view_camera_control import (
     backend_local_robot_view_camera_control_contract,
     canonical_cleanup_robot_view_camera_request,
     canonical_robot_view_camera_control_contract,
+)
+from roboclaws.molmo_cleanup.robot_view_pose import (
+    angle_delta,
+    point_inside_room_outline,
+    resolve_cleanup_robot_pose,
+    robot_head_pitch_for_target,
+    room_for_point,
+    room_outline_clearance,
 )
 
 BACKEND = "molmospaces_subprocess"
@@ -632,6 +641,7 @@ def write_robot_views(
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> dict[str, Any]:
     width, height = _render_dimensions(width, height)
+    _count(state, "robot_views")
     if not state.get("robot_included"):
         return _error("robot_views", "robot_not_included")
     if focus_object_id is not None and focus_object_id not in state["objects"]:
@@ -696,9 +706,13 @@ def write_robot_views(
         )
         camera_control_contract = canonical_robot_view_camera_control_contract(
             backend="molmospaces-mujoco",
-            pose_source="rby1m_robot_qpos_scene_frame",
+            pose_source=str(
+                (state.get("robot_pose") or {}).get("pose_source")
+                or "roboclaws_shared_scene_frame_support_pose"
+            ),
             request=camera_request,
         )
+        camera_control_contract["robot_pose"] = dict(state.get("robot_pose") or {})
     else:
         fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
         verify_camera = _focus_camera(state, focus)
@@ -815,19 +829,31 @@ def _render_camera_views_with_model_data(
     previous_fovy = float(model.vis.global_.fovy)
     model.vis.global_.fovy = float(lens.get("vertical_fov_deg", previous_fovy))
     output_dir.mkdir(parents=True, exist_ok=True)
+    color_profile = camera_request.get("color_profile") or {}
 
     try:
         saved: dict[str, str] = {}
         shapes: dict[str, list[int]] = {}
+        color_diagnostics: dict[str, dict[str, Any]] = {}
         views: list[dict[str, Any]] = []
         for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
             spec = _camera_view_spec(raw_spec, index=index)
             camera = _camera_from_view_spec(state, spec)
             frame = _render_free_camera(model, data, camera, width=width, height=height)
+            import numpy as np
+
+            frame, color_diagnostic = apply_camera_color_profile(
+                frame,
+                np=np,
+                profile=color_profile,
+                backend="molmospaces-mujoco",
+                view_id=str(spec["view_id"]),
+            )
             output_path = output_dir / f"{spec['view_id']}.png"
             Image.fromarray(frame).save(output_path)
             saved[str(spec["view_id"])] = str(output_path)
             shapes[str(spec["view_id"])] = list(frame.shape)
+            color_diagnostics[str(spec["view_id"])] = color_diagnostic
             views.append(
                 {
                     **spec,
@@ -844,6 +870,8 @@ def _render_camera_views_with_model_data(
         camera_request_schema=camera_request.get("schema"),
         calibration_status=camera_request.get("calibration_status"),
         lighting_profile=camera_request.get("lighting_profile") or {},
+        color_profile=color_profile,
+        color_management=color_diagnostics,
         lens=camera_request.get("lens") or {},
         view_variant=_camera_request_variant(camera_request),
         visual_artifact_provenance=_camera_request_provenance(camera_request),
@@ -2372,7 +2400,6 @@ def _robot_pose_near_object(
         {
             "target_room_id": target_room_id,
             "same_room_as_target": robot_room_id == target_room_id,
-            "room_relation_source": "mujoco_room_outline",
             "room_plausibility": "same_room"
             if robot_room_id == target_room_id
             else "room_mismatch",
@@ -2389,51 +2416,16 @@ def _robot_pose_near_position(
     target_receptacle_id: str | None = None,
     target_object_id: str | None = None,
 ) -> dict[str, float]:
-    center = _scene_center(list(state["receptacles"].values()))
     stand_off = _robot_stand_off_for_target(state, target_object_id)
-    preferred_angle = math.atan2(center[1] - target[1], center[0] - target[0])
-    target_room = _room_outline_for_id(state, target_room_id)
-    candidate_angles = [preferred_angle] + [index * math.tau / 24.0 for index in range(24)]
-    candidates = []
-    for angle in candidate_angles:
-        x = float(target[0]) + math.cos(angle) * stand_off
-        y = float(target[1]) + math.sin(angle) * stand_off
-        robot_room = _room_for_point(state, [x, y])
-        same_room = robot_room == target_room_id
-        inside_target_room = target_room is not None and _point_inside_outline(
-            [x, y], target_room, margin=0.08
-        )
-        clearance = _outline_clearance([x, y], target_room) if target_room is not None else 0.0
-        angle_penalty = _angle_delta(angle, preferred_angle)
-        candidates.append(
-            (
-                1 if same_room or inside_target_room else 0,
-                clearance,
-                -angle_penalty,
-                x,
-                y,
-                robot_room,
-            )
-        )
-    _, _, _, x, y, robot_room = max(candidates)
-    if robot_room is None and target_room_id is not None:
-        robot_room = target_room_id
-    theta = math.atan2(float(target[1]) - y, float(target[0]) - x)
-    head_pitch = _robot_head_pitch_for_target(target, [x, y])
-    pose = {
-        "x": round(float(x), 6),
-        "y": round(float(y), 6),
-        "z": 0.0,
-        "theta": round(float(theta), 6),
-        "theta_source": "target_facing_base_yaw",
-        "head_yaw": 0.0,
-        "head_yaw_source": "base_yaw_handles_target_bearing",
-        "head_pitch": head_pitch,
-        "head_pitch_source": "target_framing_head_pitch",
-        "target_receptacle_id": target_receptacle_id,
-        "target_object_id": target_object_id,
-        "robot_room_id": robot_room,
-    }
+    pose = resolve_cleanup_robot_pose(
+        target_position=target,
+        target_room_id=target_room_id,
+        target_receptacle_id=target_receptacle_id,
+        target_object_id=target_object_id,
+        room_outlines=state.get("room_outlines") or [],
+        scene_center=_scene_center(list(state["receptacles"].values())),
+        stand_off_m=stand_off,
+    )
     return {key: value for key, value in pose.items() if value is not None}
 
 
@@ -2449,15 +2441,7 @@ def _robot_stand_off_for_target(state: dict[str, Any], target_object_id: str | N
 
 
 def _robot_head_pitch_for_target(target: list[float], robot_xy: list[float]) -> float:
-    horizontal = math.hypot(
-        float(target[0]) - float(robot_xy[0]),
-        float(target[1]) - float(robot_xy[1]),
-    )
-    horizontal = max(horizontal, 0.25)
-    camera_height = 1.55
-    focus_height = float(target[2]) + 0.2
-    pitch = math.atan2(camera_height - focus_height, horizontal)
-    return round(max(0.25, min(0.75, pitch)), 6)
+    return robot_head_pitch_for_target(target, robot_xy)
 
 
 def _scene_center(items: list[dict[str, Any]]) -> tuple[float, float]:
@@ -3294,14 +3278,7 @@ def _room_outline_for_id(
 
 
 def _room_for_point(state: dict[str, Any], point: list[float]) -> str | None:
-    containing = [
-        outline
-        for outline in state.get("room_outlines", [])
-        if _point_inside_outline(point, outline, margin=0.0)
-    ]
-    if not containing:
-        return None
-    return max(containing, key=lambda outline: _outline_clearance(point, outline)).get("room_id")
+    return room_for_point(state.get("room_outlines") or [], point)
 
 
 def _point_inside_outline(
@@ -3310,33 +3287,15 @@ def _point_inside_outline(
     *,
     margin: float,
 ) -> bool:
-    center = outline["center"]
-    half_x, half_y = outline["half_extents"]
-    return (
-        float(center[0]) - float(half_x) + margin
-        <= float(point[0])
-        <= float(center[0]) + float(half_x) - margin
-        and float(center[1]) - float(half_y) + margin
-        <= float(point[1])
-        <= float(center[1]) + float(half_y) - margin
-    )
+    return point_inside_room_outline(point, outline, margin=margin)
 
 
 def _outline_clearance(point: list[float], outline: dict[str, Any] | None) -> float:
-    if outline is None:
-        return 0.0
-    center = outline["center"]
-    half_x, half_y = outline["half_extents"]
-    return min(
-        float(point[0]) - (float(center[0]) - float(half_x)),
-        (float(center[0]) + float(half_x)) - float(point[0]),
-        float(point[1]) - (float(center[1]) - float(half_y)),
-        (float(center[1]) + float(half_y)) - float(point[1]),
-    )
+    return room_outline_clearance(point, outline)
 
 
 def _angle_delta(a: float, b: float) -> float:
-    return abs((a - b + math.pi) % math.tau - math.pi)
+    return angle_delta(a, b)
 
 
 def _collect_room_outlines(

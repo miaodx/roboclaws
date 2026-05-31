@@ -4,6 +4,7 @@ from pathlib import Path
 
 from PIL import Image
 
+from roboclaws.maps.route import validate_metric_map_route
 from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -189,6 +190,231 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
         contract.observe()
     assert contract.done("scene-index overlay cleanup")["cleanup_status"] == "success"
     _assert_no_forbidden_keys(fixture_hints)
+
+
+def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
+    scenario = CleanupScenario(
+        scenario_id="isaac-scene-index-procthor-10k-val-1-7-1",
+        task="Clean up this loaded Isaac scene.",
+        seed=7,
+        objects=(
+            CleanupObject(
+                object_id="bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+                name="Bowl (Bowl_12)",
+                category="Bowl",
+                location_id="diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+            ),
+        ),
+        receptacles=(
+            CleanupReceptacle(
+                "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+                "DiningTable DiningTable|2|1|0 Dining_Table_203_1",
+                "isaac_scene",
+                category="DiningTable",
+            ),
+            CleanupReceptacle(
+                "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",
+                "Sink Sink|3|1|0 Sink_1",
+                "isaac_scene",
+                category="Sink",
+            ),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id="isaac-scene-index-procthor-10k-val-1-7-1",
+            targets=(
+                TargetRule(
+                    object_id="bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+                    valid_receptacle_ids=("sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",),
+                ),
+            ),
+            success_threshold=1,
+        ),
+    )
+    session = CleanupBackendSession(scenario)
+    session.backend.scenario_source = "isaac_scene_index"
+    session.backend.room_outlines = [
+        {
+            "room_id": "room_2",
+            "label": "Room 2",
+            "center": [2.99, 4.983],
+            "half_extents": [2.99, 4.983],
+            "provenance": "isaac_usd_room_mesh_world_bounds",
+            "usd_prim_path": "/val_1/Geometry/room_2_visual_0",
+        },
+        {
+            "room_id": "room_3",
+            "label": "Room 3",
+            "center": [7.973, 2.99],
+            "half_extents": [1.993, 2.99],
+            "provenance": "isaac_usd_room_mesh_world_bounds",
+            "usd_prim_path": "/val_1/Geometry/room_3_visual_0",
+        },
+    ]
+    session.backend.receptacle_index = {
+        "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2": {
+            "usd_world_bounds": {"center": [2.717858, 5.93953, 0.374628]}
+        },
+        "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3": {
+            "usd_world_bounds": {"center": [9.578895, 1.843155, 0.52296]}
+        },
+    }
+
+    contract = RealWorldCleanupContract(session)
+    metric_map = contract.metric_map()
+    rooms = {room["room_id"]: room for room in metric_map["rooms"]}
+    room_2 = rooms["room_2"]
+    room_3 = rooms["room_3"]
+
+    assert room_2["scene_room_outline"]["provenance"] == "isaac_usd_room_mesh_world_bounds"
+    assert room_2["polygon"] == [
+        {"x": 0.0, "y": 0.0},
+        {"x": 5.98, "y": 0.0},
+        {"x": 5.98, "y": 9.966},
+        {"x": 0.0, "y": 9.966},
+    ]
+    assert room_3["polygon"] == [
+        {"x": 5.98, "y": 0.0},
+        {"x": 9.966, "y": 0.0},
+        {"x": 9.966, "y": 5.98},
+        {"x": 5.98, "y": 5.98},
+    ]
+    assert all(
+        waypoint["x"] != 1.0 or waypoint["y"] != 1.0
+        for waypoint in metric_map["inspection_waypoints"]
+        if waypoint["room_id"] in {"room_2", "room_3"}
+    )
+    assert contract.fixture_hints()["rooms"][0]["fixtures"][0]["pose"]["x"] == 2.717858
+
+
+def test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals() -> None:
+    scenario = CleanupScenario(
+        scenario_id="isaac-scene-index-procthor-10k-val-1-7-1",
+        task="Clean up this loaded Isaac scene.",
+        seed=7,
+        objects=(
+            CleanupObject(
+                object_id="bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+                name="Bowl (Bowl_12)",
+                category="Bowl",
+                location_id="diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+            ),
+        ),
+        receptacles=(
+            CleanupReceptacle("bed_258d27d5fe50e324961c7a8698ace951_1_0_2", "Bed", "isaac_scene"),
+            CleanupReceptacle(
+                "bed_aed5602affd158c34e7eda83481af599_1_0_2",
+                "Bed",
+                "isaac_scene",
+            ),
+            CleanupReceptacle(
+                "chair_bfd87bce6390b5a5bb5fcae097e899f7_1_0_2",
+                "Chair",
+                "isaac_scene",
+            ),
+            CleanupReceptacle(
+                "chair_bfd87bce6390b5a5bb5fcae097e899f7_2_0_2",
+                "Chair",
+                "isaac_scene",
+            ),
+            CleanupReceptacle(
+                "chair_bfd87bce6390b5a5bb5fcae097e899f7_3_0_2",
+                "Chair",
+                "isaac_scene",
+            ),
+            CleanupReceptacle(
+                "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_0_2",
+                "Dresser",
+                "isaac_scene",
+            ),
+            CleanupReceptacle(
+                "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2",
+                "DiningTable",
+                "isaac_scene",
+            ),
+            CleanupReceptacle(
+                "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",
+                "Sink",
+                "isaac_scene",
+            ),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id="isaac-scene-index-procthor-10k-val-1-7-1",
+            targets=(
+                TargetRule(
+                    object_id="bowl_847a24bfa9d8b1a1f26661ebbb850f56_1_0_2",
+                    valid_receptacle_ids=("sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3",),
+                ),
+            ),
+            success_threshold=1,
+        ),
+    )
+    session = CleanupBackendSession(scenario)
+    session.backend.scenario_source = "isaac_scene_index"
+    session.backend.room_outlines = [
+        {
+            "room_id": "room_2",
+            "label": "Room 2",
+            "center": [2.99, 4.983],
+            "half_extents": [2.99, 4.983],
+            "provenance": "isaac_usd_room_mesh_world_bounds",
+            "usd_prim_path": "/val_1/Geometry/room_2_visual_0",
+        },
+        {
+            "room_id": "room_3",
+            "label": "Room 3",
+            "center": [7.973, 2.99],
+            "half_extents": [1.993, 2.99],
+            "provenance": "isaac_usd_room_mesh_world_bounds",
+            "usd_prim_path": "/val_1/Geometry/room_3_visual_0",
+        },
+    ]
+    session.backend.receptacle_index = {
+        "bed_258d27d5fe50e324961c7a8698ace951_1_0_2": {
+            "usd_world_bounds": {"center": [2.818349, 8.99204, 0.856923]}
+        },
+        "bed_aed5602affd158c34e7eda83481af599_1_0_2": {
+            "usd_world_bounds": {"center": [2.809145, 1.200613, 0.5965]}
+        },
+        "chair_bfd87bce6390b5a5bb5fcae097e899f7_1_0_2": {
+            "usd_world_bounds": {"center": [3.308217, 5.945434, 0.4]}
+        },
+        "chair_bfd87bce6390b5a5bb5fcae097e899f7_2_0_2": {
+            "usd_world_bounds": {"center": [2.70468, 6.83613, 0.4]}
+        },
+        "chair_bfd87bce6390b5a5bb5fcae097e899f7_3_0_2": {
+            "usd_world_bounds": {"center": [2.11708, 5.932897, 0.4]}
+        },
+        "chestofdrawers_7a2e462b2666d3558113b2d84da9dc74_1_0_2": {
+            "usd_world_bounds": {"center": [5.716285, 0.639941, 0.5]}
+        },
+        "diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2": {
+            "usd_world_bounds": {"center": [2.717858, 5.93953, 0.374628]}
+        },
+        "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3": {
+            "usd_world_bounds": {"center": [9.578895, 1.843155, 0.52296]}
+        },
+    }
+
+    contract = RealWorldCleanupContract(session)
+    metric_map = contract.metric_map()
+    fixture_hints = contract.fixture_hints()
+    waypoints = metric_map["inspection_waypoints"]
+    routes = [
+        validate_metric_map_route(
+            metric_map,
+            fixture_hints,
+            start_waypoint_id=str(waypoints[0]["waypoint_id"]),
+            goal_waypoint_id=str(waypoint["waypoint_id"]),
+        )
+        for waypoint in waypoints
+    ]
+
+    assert len(waypoints) == 4
+    assert all(route.ok for route in routes), [route.as_dict() for route in routes]
+    assert (waypoints[1]["x"], waypoints[1]["y"]) != (2.99, 9.216)
+    for waypoint in waypoints:
+        navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        assert navigation["ok"] is True, navigation
 
 
 def test_cleanup_policy_trace_allows_public_map_query_before_post_place_observe() -> None:

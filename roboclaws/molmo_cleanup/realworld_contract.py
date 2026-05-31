@@ -14,6 +14,7 @@ from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.planner_observed_binding import (
     observed_handle_planner_binding,
 )
+from roboclaws.molmo_cleanup.robot_view_pose import room_for_point
 from roboclaws.molmo_cleanup.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
@@ -251,6 +252,9 @@ class RealWorldCleanupContract:
             self._fixtures = {
                 item.receptacle_id: item.to_public_dict() for item in self.scenario.receptacles
             }
+            scene_room_outlines = _scene_room_outlines_from_backend(self.backend)
+            if scene_room_outlines:
+                self._apply_scene_room_outlines_to_fixtures(scene_room_outlines)
             self._rooms = _rooms_from_fixtures(self._fixtures)
             self._waypoints = _inspection_waypoints(self._rooms)
             self._scene_index_fixture_overlay = {}
@@ -302,6 +306,33 @@ class RealWorldCleanupContract:
         self._opened_receptacle_for_handle: tuple[str, str] | None = None
         self._pending_close_receptacle_for_handle: tuple[str, str] | None = None
         self._initial_locations = self.backend.object_locations()
+
+    def _apply_scene_room_outlines_to_fixtures(
+        self,
+        room_outlines: list[dict[str, Any]],
+    ) -> None:
+        for fixture_id, fixture in list(self._fixtures.items()):
+            pose = _scene_index_fixture_pose(self.backend, fixture_id)
+            if pose is None:
+                continue
+            room_id = room_for_point(room_outlines, pose[:2]) or str(
+                room_outlines[0].get("room_id")
+                or fixture.get("room_id")
+                or fixture.get("room_area")
+            )
+            outline = _room_outline_by_id(room_outlines, room_id) or room_outlines[0]
+            fixture["room_id"] = room_id
+            fixture["room_area"] = room_id
+            fixture["scene_room_outline"] = dict(outline)
+            fixture["pose"] = {
+                "frame_id": "map",
+                "x": round(float(pose[0]), 6),
+                "y": round(float(pose[1]), 6),
+                "yaw": 0.0,
+            }
+            fixture["scene_room_outline_provenance"] = str(
+                outline.get("provenance") or "scene_room_outline"
+            )
 
     def public_tool_names(self) -> list[str]:
         return [
@@ -483,15 +514,7 @@ class RealWorldCleanupContract:
                 map_id=map_id,
                 map_version=map_version,
             ),
-            rooms=[
-                {
-                    "room_id": room["room_id"],
-                    "room_label": room["room_label"],
-                    "fixture_count": len(room["fixture_ids"]),
-                    "polygon": room.get("polygon", []),
-                }
-                for room in self._rooms
-            ],
+            rooms=[_metric_map_room_payload(room) for room in self._rooms],
             driveable_ways=_driveable_ways(self._rooms),
             robot_pose={
                 "frame_id": frame_id,
@@ -3398,15 +3421,7 @@ class RealWorldCleanupContract:
                 map_id=map_id,
                 map_version=map_version,
             ),
-            "rooms": [
-                {
-                    "room_id": room["room_id"],
-                    "room_label": room["room_label"],
-                    "fixture_count": len(room["fixture_ids"]),
-                    "polygon": room.get("polygon", []),
-                }
-                for room in self._rooms
-            ],
+            "rooms": [_metric_map_room_payload(room) for room in self._rooms],
             "driveable_ways": _driveable_ways(self._rooms),
             "inspection_waypoints": [
                 {
@@ -4069,6 +4084,61 @@ def _scene_index_public_fixture_overlay(
     return overlay
 
 
+def _metric_map_room_payload(room: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "room_id": room["room_id"],
+        "room_label": room["room_label"],
+        "fixture_count": len(room["fixture_ids"]),
+        "polygon": room.get("polygon", []),
+    }
+    if isinstance(room.get("scene_room_outline"), dict):
+        payload["scene_room_outline"] = dict(room["scene_room_outline"])
+    return payload
+
+
+def _scene_room_outlines_from_backend(backend: Any) -> list[dict[str, Any]]:
+    if str(getattr(backend, "scenario_source", "")) != "isaac_scene_index":
+        return []
+    outlines = getattr(backend, "room_outlines", None)
+    if outlines is None:
+        diagnostics = getattr(backend, "scene_index_diagnostics", {})
+        if isinstance(diagnostics, dict):
+            outlines = diagnostics.get("room_outlines")
+    return [
+        dict(item)
+        for item in (outlines or [])
+        if isinstance(item, dict) and item.get("center") and item.get("half_extents")
+    ]
+
+
+def _scene_index_fixture_pose(backend: Any, fixture_id: str) -> list[float] | None:
+    receptacle_index = getattr(backend, "receptacle_index", {})
+    if not isinstance(receptacle_index, dict):
+        return None
+    entry = receptacle_index.get(fixture_id)
+    if not isinstance(entry, dict):
+        return None
+    support_pose = entry.get("support_pose")
+    if isinstance(support_pose, dict):
+        position = support_pose.get("position")
+        pose = _vec3(position)
+        if pose is not None:
+            return pose
+    bounds = entry.get("usd_world_bounds")
+    if isinstance(bounds, dict):
+        pose = _vec3(bounds.get("center"))
+        if pose is not None:
+            return pose
+    return None
+
+
+def _room_outline_by_id(
+    room_outlines: list[dict[str, Any]],
+    room_id: str,
+) -> dict[str, Any] | None:
+    return next((item for item in room_outlines if str(item.get("room_id") or "") == room_id), None)
+
+
 def _fixture_hints_with_scene_index_overlay(
     rooms: list[Any],
     overlay_fixtures: dict[str, dict[str, Any]],
@@ -4260,19 +4330,34 @@ def _rooms_from_fixtures(fixtures: dict[str, dict[str, Any]]) -> list[dict[str, 
         labels[room_id] = raw_room.replace("_", " ")
     rooms = []
     for index, (room_id, fixture_ids) in enumerate(sorted(by_room.items())):
-        x0 = float(index * 3)
+        outline = _room_outline_by_id_from_fixtures(fixtures, room_id, fixture_ids)
+        if outline is not None:
+            polygon = _polygon_from_room_outline(outline)
+            center_xy = _room_outline_center(outline)
+            room_label = str(outline.get("label") or labels[room_id])
+            map_center = {"x": center_xy[0], "y": center_xy[1]}
+        else:
+            x0 = float(index * 3)
+            polygon = [
+                {"x": x0, "y": 0.0},
+                {"x": x0 + 2.0, "y": 0.0},
+                {"x": x0 + 2.0, "y": 2.0},
+                {"x": x0, "y": 2.0},
+            ]
+            room_label = labels[room_id]
+            map_center = {"x": x0 + 1.0, "y": 1.0}
         rooms.append(
             {
                 "room_id": room_id,
-                "room_label": labels[room_id],
+                "room_label": room_label,
                 "fixture_ids": sorted(fixture_ids),
-                "polygon": [
-                    {"x": x0, "y": 0.0},
-                    {"x": x0 + 2.0, "y": 0.0},
-                    {"x": x0 + 2.0, "y": 2.0},
-                    {"x": x0, "y": 2.0},
-                ],
-                "map_center": {"x": x0 + 1.0, "y": 1.0},
+                "polygon": polygon,
+                "map_center": map_center,
+                "fixture_navigation_obstacles": _fixture_navigation_obstacles(
+                    fixtures,
+                    fixture_ids,
+                ),
+                **_room_outline_metadata(outline),
             }
         )
     return rooms
@@ -4283,10 +4368,9 @@ def _inspection_waypoints(rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for room in rooms:
         fixture_ids = list(room["fixture_ids"])
         groups = _split_fixture_groups(fixture_ids)
+        slots = _waypoint_slots_for_room(room, len(groups))
         for index, group in enumerate(groups, start=1):
-            center = room.get("map_center") or {}
-            x = float(center.get("x", 0.0))
-            y = float(center.get("y", 0.0)) + (index - 1) * 0.45
+            x, y = slots[index - 1]
             waypoints.append(
                 {
                     "waypoint_id": f"{room['room_id']}_scan_{index}",
@@ -4302,6 +4386,183 @@ def _inspection_waypoints(rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 }
             )
     return waypoints
+
+
+def _room_outline_by_id_from_fixtures(
+    fixtures: dict[str, dict[str, Any]],
+    room_id: str,
+    fixture_ids: list[str],
+) -> dict[str, Any] | None:
+    for fixture_id in fixture_ids:
+        outline = fixtures.get(fixture_id, {}).get("scene_room_outline")
+        if isinstance(outline, dict) and str(outline.get("room_id") or "") == room_id:
+            return dict(outline)
+    return None
+
+
+def _polygon_from_room_outline(outline: dict[str, Any]) -> list[dict[str, float]]:
+    center = _vec2(outline.get("center"))
+    half_extents = _vec2(outline.get("half_extents"))
+    if center is None or half_extents is None:
+        return []
+    cx, cy = center
+    hx, hy = abs(half_extents[0]), abs(half_extents[1])
+    return [
+        {"x": round(cx - hx, 6), "y": round(cy - hy, 6)},
+        {"x": round(cx + hx, 6), "y": round(cy - hy, 6)},
+        {"x": round(cx + hx, 6), "y": round(cy + hy, 6)},
+        {"x": round(cx - hx, 6), "y": round(cy + hy, 6)},
+    ]
+
+
+def _room_outline_center(outline: dict[str, Any]) -> tuple[float, float]:
+    center = _vec2(outline.get("center"))
+    if center is None:
+        return (0.0, 0.0)
+    return (round(center[0], 6), round(center[1], 6))
+
+
+def _room_outline_metadata(outline: dict[str, Any] | None) -> dict[str, Any]:
+    if outline is None:
+        return {}
+    return {
+        "scene_room_outline": {
+            "room_id": str(outline.get("room_id") or ""),
+            "center": list(_room_outline_center(outline)),
+            "half_extents": list(_vec2(outline.get("half_extents")) or (0.0, 0.0)),
+            "provenance": str(outline.get("provenance") or "scene_room_outline"),
+            "usd_prim_path": str(outline.get("usd_prim_path") or ""),
+        }
+    }
+
+
+def _waypoint_slots_for_room(
+    room: dict[str, Any],
+    count: int,
+) -> list[tuple[float, float]]:
+    count = max(1, int(count))
+    polygon = room.get("polygon") or []
+    xs = [float(point.get("x", 0.0)) for point in polygon if isinstance(point, dict)]
+    ys = [float(point.get("y", 0.0)) for point in polygon if isinstance(point, dict)]
+    if not xs or not ys:
+        center = room.get("map_center") or {}
+        x = float(center.get("x", 0.0))
+        y = float(center.get("y", 0.0))
+        return [(x, y + index * 0.45) for index in range(count)]
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
+    center = room.get("map_center") or {}
+    x = float(center.get("x", (min_x + max_x) / 2.0))
+    y = float(center.get("y", (min_y + max_y) / 2.0))
+    if isinstance(room.get("scene_room_outline"), dict):
+        return _scene_outline_waypoint_slots_for_room(
+            room,
+            count=count,
+            center=(x, y),
+            bounds=(min_x, max_x, min_y, max_y),
+        )
+    if count == 1:
+        return [(round(x, 3), round(y, 3))]
+    margin = min(0.75, max((max_y - min_y) * 0.15, 0.25))
+    start_y = min_y + margin
+    end_y = max_y - margin
+    if end_y < start_y:
+        start_y = end_y = y
+    step = (end_y - start_y) / max(count - 1, 1)
+    return [(round(x, 3), round(start_y + step * index, 3)) for index in range(count)]
+
+
+def _scene_outline_waypoint_slots_for_room(
+    room: dict[str, Any],
+    *,
+    count: int,
+    center: tuple[float, float],
+    bounds: tuple[float, float, float, float],
+) -> list[tuple[float, float]]:
+    min_x, max_x, min_y, max_y = bounds
+    width = max_x - min_x
+    depth = max_y - min_y
+    radius = min(0.8, max(min(width, depth) * 0.12, 0.35))
+    candidates = _scene_outline_waypoint_candidates(center, radius)
+    obstacles = [
+        item for item in room.get("fixture_navigation_obstacles") or [] if isinstance(item, dict)
+    ]
+    slots: list[tuple[float, float]] = []
+    for raw_x, raw_y in candidates:
+        x = _clamp(raw_x, min_x + 0.35, max_x - 0.35)
+        y = _clamp(raw_y, min_y + 0.35, max_y - 0.35)
+        if _point_overlaps_fixture_obstacle(x, y, obstacles):
+            continue
+        point = (round(x, 3), round(y, 3))
+        if point not in slots:
+            slots.append(point)
+        if len(slots) >= count:
+            return slots
+    fallback = (round(center[0], 3), round(center[1], 3))
+    if not slots:
+        slots.append(fallback)
+    while len(slots) < count:
+        slots.append(slots[len(slots) % len(slots)])
+    return slots[:count]
+
+
+def _scene_outline_waypoint_candidates(
+    center: tuple[float, float],
+    radius: float,
+) -> list[tuple[float, float]]:
+    cx, cy = center
+    return [
+        (cx, cy),
+        (cx, cy - radius),
+        (cx, cy + radius),
+        (cx - radius, cy),
+        (cx + radius, cy),
+        (cx - radius, cy - radius),
+        (cx + radius, cy - radius),
+        (cx - radius, cy + radius),
+        (cx + radius, cy + radius),
+        (cx, cy - radius * 1.6),
+        (cx, cy + radius * 1.6),
+        (cx - radius * 1.6, cy),
+        (cx + radius * 1.6, cy),
+    ]
+
+
+def _fixture_navigation_obstacles(
+    fixtures: dict[str, dict[str, Any]],
+    fixture_ids: list[str],
+) -> list[dict[str, float]]:
+    obstacles = []
+    for fixture_id in fixture_ids:
+        fixture = fixtures.get(fixture_id, {})
+        pose = fixture.get("pose") if isinstance(fixture.get("pose"), dict) else {}
+        if not pose:
+            continue
+        footprint = _fixture_footprint(fixture_id)
+        obstacles.append(
+            {
+                "x": float(pose.get("x", 0.0)),
+                "y": float(pose.get("y", 0.0)),
+                "half_width": float(footprint.get("width_m") or 0.45) / 2.0,
+                "half_depth": float(footprint.get("depth_m") or 0.35) / 2.0,
+            }
+        )
+    return obstacles
+
+
+def _point_overlaps_fixture_obstacle(
+    x: float,
+    y: float,
+    obstacles: list[dict[str, float]],
+) -> bool:
+    clearance_m = 0.2
+    for obstacle in obstacles:
+        if (
+            abs(x - obstacle["x"]) <= obstacle["half_width"] + clearance_m
+            and abs(y - obstacle["y"]) <= obstacle["half_depth"] + clearance_m
+        ):
+            return True
+    return False
 
 
 def _split_fixture_groups(fixture_ids: list[str]) -> list[list[str]]:
@@ -4632,6 +4893,24 @@ def _category_alias_families(text_norm: str) -> set[str]:
 def _room_id(room_area: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "_", room_area.strip().lower()).strip("_")
     return slug or "unknown"
+
+
+def _vec2(value: Any) -> tuple[float, float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 2:
+        return None
+    try:
+        return (float(value[0]), float(value[1]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _vec3(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
 
 
 def _norm(value: Any) -> str:
