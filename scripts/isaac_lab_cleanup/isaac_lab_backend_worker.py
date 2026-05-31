@@ -3868,9 +3868,7 @@ def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
     if not wrong_pool:
         return
     diagnostics = [
-        dict(item)
-        for item in state.get("mess_placement_diagnostics", [])
-        if isinstance(item, dict)
+        dict(item) for item in state.get("mess_placement_diagnostics", []) if isinstance(item, dict)
     ]
     for index, target in enumerate(targets):
         object_id = str(target.get("object_id") or "")
@@ -4327,9 +4325,10 @@ def _isaac_candidate_is_clear_of_dynamic_objects(
             margin=0.025,
         ):
             continue
-        if candidate_bottom - 0.015 <= other_aabb["max_z"] and candidate_top + 0.015 >= other_aabb[
-            "min_z"
-        ]:
+        if (
+            candidate_bottom - 0.015 <= other_aabb["max_z"]
+            and candidate_top + 0.015 >= other_aabb["min_z"]
+        ):
             return False
     return True
 
@@ -4675,9 +4674,7 @@ def _semantic_object_poses_from_state(state: dict[str, Any]) -> dict[str, dict[s
         if pose_override:
             poses[object_id]["placement_support_status"] = pose_override.get("support_status")
             poses[object_id]["placement_contact_proof"] = pose_override.get("contact_proof")
-            poses[object_id]["placement_resolution_source"] = pose_override.get(
-                "resolution_source"
-            )
+            poses[object_id]["placement_resolution_source"] = pose_override.get("resolution_source")
     return poses
 
 

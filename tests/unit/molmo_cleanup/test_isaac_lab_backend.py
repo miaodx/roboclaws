@@ -129,9 +129,10 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert done["final_locations"][object_id] == receptacle_id
     assert place["placement_diagnostic"]["schema"] == "molmospaces_semantic_placement_diagnostic_v1"
     assert place["placement_diagnostic"]["diagnostic_source"] == "cleanup_place"
-    assert place["placement_support_status"] == place["placement_diagnostic"][
-        "placement_support_status"
-    ]
+    assert (
+        place["placement_support_status"]
+        == place["placement_diagnostic"]["placement_support_status"]
+    )
     semantic_pose_state = backend.semantic_pose_state
     assert semantic_pose_state["schema"] == ISAAC_SEMANTIC_POSE_STATE_SCHEMA
     assert semantic_pose_state["primitive_provenance"] == ISAAC_SEMANTIC_POSE_PROVENANCE
@@ -1022,9 +1023,7 @@ def test_isaac_mess_seed_updates_locations_and_pose_overrides() -> None:
         "isaac_support_placement_resolver"
     )
     assert state["mess_placement_diagnostics"][0]["diagnostic_source"] == "mess_seed"
-    assert state["mess_placement_diagnostics"][0]["placement_support_status"] == (
-        "direct_support"
-    )
+    assert state["mess_placement_diagnostics"][0]["placement_support_status"] == ("direct_support")
 
 
 def test_isaac_usd_scene_index_extracts_room_outlines(monkeypatch: pytest.MonkeyPatch) -> None:
