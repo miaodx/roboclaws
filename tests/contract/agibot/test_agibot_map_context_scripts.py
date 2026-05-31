@@ -7,12 +7,19 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CAPTURE_PATH = REPO_ROOT / "scripts" / "agibot" / "capture_map_context_views.py"
 GENERATOR_PATH = REPO_ROOT / "scripts" / "agibot" / "generate_metric_map_from_context.py"
 VERIFY_PATH = REPO_ROOT / "scripts" / "agibot" / "verify_waypoints_with_pnc.py"
 SDK_RUNNER_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
 COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
+
+
+def _require_agibot_sdk_runner() -> None:
+    if not SDK_RUNNER_PATH.is_file():
+        pytest.skip("Agibot SDK vendor runner is unavailable in this checkout")
 
 
 def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> None:
@@ -225,6 +232,7 @@ def test_verify_waypoint_timeout_records_cancel_evidence(monkeypatch) -> None:
 
 
 def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.completed.json"
     context_path.write_text(json.dumps(_completed_context()), encoding="utf-8")
     root = tmp_path / "sdk-runner"
@@ -276,6 +284,7 @@ def test_sdk_runner_writes_three_reviewable_dry_run_reports(tmp_path: Path) -> N
 
 
 def test_sdk_runner_exports_minimal_context_generated_candidates(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
     context_path = tmp_path / "agibot_map_context.minimal.json"
     context_path.write_text(json.dumps(_minimal_context()), encoding="utf-8")
     root = tmp_path / "sdk-runner"
@@ -320,6 +329,7 @@ def test_sdk_runner_exports_minimal_context_generated_candidates(tmp_path: Path)
 
 
 def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_path: Path) -> None:
+    _require_agibot_sdk_runner()
     context = _completed_context()
     context["inspection_waypoints"][0]["reachability_status"] = "unverified"
     context["inspection_waypoints"][0].pop("verification")
@@ -356,6 +366,7 @@ def test_sdk_runner_blocks_unverified_waypoint_before_dry_run_navigation(tmp_pat
 def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
     monkeypatch, tmp_path: Path
 ) -> None:
+    _require_agibot_sdk_runner()
     runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_success")
     waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
         "inspection_waypoints"
@@ -393,6 +404,7 @@ def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
 def test_sdk_runner_timeout_cancels_gdk_navigation_and_records_evidence(
     monkeypatch, tmp_path: Path
 ) -> None:
+    _require_agibot_sdk_runner()
     runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_timeout")
     waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
         "inspection_waypoints"
@@ -434,6 +446,7 @@ def test_sdk_runner_timeout_cancels_gdk_navigation_and_records_evidence(
 def test_sdk_runner_execute_blocks_current_map_mismatch_before_normal_navi(
     monkeypatch, tmp_path: Path
 ) -> None:
+    _require_agibot_sdk_runner()
     runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_map_mismatch")
     waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
         "inspection_waypoints"

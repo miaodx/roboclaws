@@ -37,6 +37,11 @@ ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "map
 ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
 
 
+def _require_robot_map_9_artifact() -> None:
+    if not (ROBOT_MAP_9_ARTIFACT / "source.json").is_file():
+        pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
+
+
 def _load_demo_module():
     spec = importlib.util.spec_from_file_location("molmospaces_realworld_cleanup", DEMO_PATH)
     assert spec is not None
@@ -143,6 +148,7 @@ def test_realworld_cleanup_demo_writes_public_private_artifacts(tmp_path: Path) 
 def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
     tmp_path: Path,
 ) -> None:
+    _require_robot_map_9_artifact()
     demo = _load_demo_module()
     bundle_dir = tmp_path / "agibot-robot-map-9-bundle"
     write_agibot_nav2_map_bundle(
@@ -180,6 +186,7 @@ def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
 
 
 def test_agibot_robot_map_9_semantic_actions_rehearsal(tmp_path: Path) -> None:
+    _require_robot_map_9_artifact()
     rehearsal = _load_agibot_semantic_actions_module()
 
     result = rehearsal.run_agibot_robot_map_9_semantic_actions(

@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -633,7 +634,7 @@ def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
 def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> None:
     result = subprocess.run(
         [
-            ".venv/bin/python",
+            os.environ.get("ROBOCLAWS_DEVTOOLS_PYTHON") or sys.executable,
             "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py",
             "--help",
         ],
