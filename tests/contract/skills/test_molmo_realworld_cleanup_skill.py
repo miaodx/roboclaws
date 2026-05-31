@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PROFILE
+from roboclaws.molmo_cleanup.realworld_contract import RICH_MAP_MODE
 from roboclaws.molmo_cleanup.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
@@ -42,6 +43,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         cleanup_profile=WORLD_LABELS_PROFILE,
+        map_mode=RICH_MAP_MODE,
     )
     try:
         fixture_hints = server.call_tool("fixture_hints")
@@ -76,6 +78,7 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hin
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
+        map_mode=RICH_MAP_MODE,
     )
     try:
         fixture_hints = server.call_tool("fixture_hints")
