@@ -30,6 +30,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    RICH_MAP_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
     cleanup_policy_trace_from_events,
@@ -98,6 +99,7 @@ def make_molmo_realworld_cleanup_mcp(
     map_bundle_dir: str | Path | None = None,
     runtime_map_prior: dict[str, Any] | None = None,
     runtime_map_prior_source: str = "",
+    map_mode: str = RICH_MAP_MODE,
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
@@ -120,6 +122,7 @@ def make_molmo_realworld_cleanup_mcp(
         map_bundle_dir=map_bundle_dir,
         runtime_map_prior=runtime_map_prior,
         runtime_map_prior_source=runtime_map_prior_source,
+        map_mode=map_mode,
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
@@ -149,6 +152,7 @@ class RealWorldMolmoCleanupMCPServer:
         map_bundle_dir: str | Path | None = None,
         runtime_map_prior: dict[str, Any] | None = None,
         runtime_map_prior_source: str = "",
+        map_mode: str = RICH_MAP_MODE,
         visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
         visual_grounding_base_url: str | None = None,
         visual_grounding_timeout_s: float | None = None,
@@ -172,6 +176,7 @@ class RealWorldMolmoCleanupMCPServer:
                 perception_mode=perception_mode,
                 map_bundle_dir=self.map_bundle_dir,
                 runtime_map_prior=runtime_map_prior,
+                map_mode=map_mode,
                 visual_grounding_client=visual_grounding_client_from_env(
                     visual_grounding,
                     base_url=visual_grounding_base_url,
@@ -282,11 +287,21 @@ class RealWorldMolmoCleanupMCPServer:
                 str(raw.get("observation_id") or "")
             )
         if tool == "fixture_hints":
-            augmented["instruction"] = (
-                "Use room-level fixture ids and affordances as static public landmarks. "
-                "Runtime movable objects come only from observe; acceptable destination "
-                "sets and generated mess truth are private."
-            )
+            if self.contract.map_mode == "minimal":
+                augmented["instruction"] = (
+                    "Minimal map mode hides authored rooms and fixture hints. Use "
+                    "runtime_metric_map.public_semantic_anchors and each observed object's "
+                    "cleanup_worklist.candidate_fixture_id as public destination anchors. "
+                    "Those anchor_fixture_* ids are valid for navigate_to_receptacle, place, "
+                    "place_inside, open_receptacle, and close_receptacle. Acceptable "
+                    "destination sets and generated mess truth are private."
+                )
+            else:
+                augmented["instruction"] = (
+                    "Use room-level fixture ids and affordances as static public landmarks. "
+                    "Runtime movable objects come only from observe; acceptable destination "
+                    "sets and generated mess truth are private."
+                )
         if tool == "declare_visual_candidates" and augmented.get("ok"):
             augmented = _compact_declare_visual_candidates_response(augmented)
             augmented["instruction"] = (
@@ -392,6 +407,8 @@ class RealWorldMolmoCleanupMCPServer:
             "planner_uses_private_manifest": False,
             "fixture_hint_mode": self.fixture_hint_mode,
             "perception_mode": self.perception_mode,
+            "map_mode": runtime_metric_map.get("map_mode", self.contract.map_mode),
+            "minimal_map_mode": runtime_metric_map.get("minimal_map_mode", False),
             "runtime_metric_map_prior": {
                 "loaded": bool(runtime_prior_rows),
                 "source": self.runtime_map_prior_source,
@@ -654,6 +671,9 @@ class RealWorldMolmoCleanupMCPServer:
             return None
         return self.contract._internal_object_id(handle)
 
+    def _internal_fixture_id(self, fixture_id: str | None) -> str | None:
+        return self.contract.internal_fixture_id_for_public_reference(fixture_id)
+
     def _record_robot_view(
         self,
         action: str,
@@ -679,7 +699,7 @@ class RealWorldMolmoCleanupMCPServer:
                 action=action,
                 label_suffix=label_suffix,
                 focus_object_id=focus_object_id,
-                focus_receptacle_id=focus_receptacle_id,
+                focus_receptacle_id=self._internal_fixture_id(focus_receptacle_id),
                 semantic_phase=semantic_phase,
             )
         except Exception as exc:

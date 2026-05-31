@@ -35,6 +35,7 @@ def test_network_status_reports_work_when_probe_returns_http(tmp_path: Path) -> 
     assert "network: work" in result.stdout
     assert "api-router.evad.mioffice.cn" in result.stdout
     assert "OpenClaw and system-provider Claude Code" in result.stdout
+    assert "mify-anthropic" in result.stdout
     assert "Codex may run with repo-local mify or codex-env profiles from .env" in result.stdout
     assert "system-provider Codex just recipes are blocked" not in result.stdout
 
@@ -69,6 +70,9 @@ def test_claude_provider_guard_blocks_system_provider_on_work_network(tmp_path: 
     env = _fake_curl(tmp_path, "204")
     env.pop("ROBOCLAWS_CLAUDE_PROVIDER", None)
     env.pop("ROBOCLAWS_CODE_AGENT_PROVIDER", None)
+    env.pop("KIMI_API_KEY", None)
+    env.pop("MIMO_TP_KEY", None)
+    env.pop("XM_LLM_API_KEY", None)
 
     result = subprocess.run(
         [
@@ -112,6 +116,31 @@ def test_claude_provider_guard_allows_repo_local_provider_on_work_network(tmp_pa
     )
 
     assert "repo-local Claude provider (kimi-anthropic)" in result.stderr
+
+
+def test_claude_provider_guard_allows_mify_anthropic_on_work_network(tmp_path: Path) -> None:
+    env = _fake_curl(tmp_path, "204")
+    env["ROBOCLAWS_CLAUDE_PROVIDER"] = "mify-anthropic"
+    env["XM_LLM_API_KEY"] = "fake-xm-key"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_assert_claude_code_network_allowed "Claude Code"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "repo-local Claude provider (mify-anthropic)" in result.stderr
 
 
 def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: Path) -> None:

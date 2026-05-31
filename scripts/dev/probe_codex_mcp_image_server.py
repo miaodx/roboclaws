@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,7 @@ def make_synthetic_png() -> bytes:
     return buffer.getvalue()
 
 
-def make_server(*, host: str, port: int, fpv_path: Path) -> FastMCP:
+def make_server(*, host: str, port: int, fpv_paths: tuple[Path, ...]) -> FastMCP:
     mcp = FastMCP("vision_smoke", host=host, port=port)
 
     @mcp.tool(structured_output=False)
@@ -38,16 +39,21 @@ def make_server(*, host: str, port: int, fpv_path: Path) -> FastMCP:
         ]
 
     @mcp.tool(structured_output=False)
-    def fpv_image_probe() -> Any:
-        """Return one FPV PNG for image transport testing."""
+    def fpv_image_probe(index: int = 1) -> Any:
+        """Return one indexed FPV PNG for image transport testing."""
 
-        resolved = fpv_path.expanduser().resolve()
+        if index < 1 or index > len(fpv_paths):
+            return [f"FPV image index out of range: {index}; expected 1..{len(fpv_paths)}"]
+        resolved = fpv_paths[index - 1].expanduser().resolve()
         if not resolved.is_file():
             return [f"FPV image not found: {resolved}"]
+        data = resolved.read_bytes()
+        digest = hashlib.sha256(data).hexdigest()
         return [
-            "Inspect this robot FPV image. List visible cleanup-relevant objects "
-            "and approximate locations.",
-            MCPImage(data=resolved.read_bytes(), format="png"),
+            f"Inspect robot FPV image {index} of {len(fpv_paths)}. "
+            "List visible cleanup-relevant objects and approximate locations. "
+            f"basename={resolved.name} sha256={digest}",
+            MCPImage(data=data, format="png"),
         ]
 
     return mcp
@@ -57,10 +63,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18891)
-    parser.add_argument("--fpv-path", type=Path, required=True)
+    parser.add_argument("--fpv-path", type=Path, action="append", required=True)
     args = parser.parse_args()
 
-    make_server(host=args.host, port=args.port, fpv_path=args.fpv_path).run(
+    make_server(host=args.host, port=args.port, fpv_paths=tuple(args.fpv_path)).run(
         transport="streamable-http"
     )
     return 0

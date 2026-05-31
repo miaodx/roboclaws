@@ -61,8 +61,11 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     DEFAULT_REALWORLD_TASK,
     DETERMINISTIC_SWEEP_POLICY,
     MAIN_CLEANUP_AGENT_PRODUCER,
+    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    REALWORLD_MAP_MODES,
+    RICH_MAP_MODE,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
@@ -155,6 +158,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--map-mode",
+        choices=tuple(sorted(REALWORLD_MAP_MODES)),
+        default=RICH_MAP_MODE,
+        help=(
+            "Agent-facing map projection: rich exposes authored public semantics; "
+            "minimal exposes occupancy geometry plus generated exploration candidates."
+        ),
+    )
+    parser.add_argument(
         "--runtime-map-prior",
         type=Path,
         help="Prior runtime_metric_map.json snapshot to seed this run as non-actionable priors.",
@@ -192,6 +204,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Isaac segmentation data type to request for backend=isaaclab_subprocess. "
             "Repeat to probe individual annotators."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-segmentation-semantic-filter",
+        action="append",
+        help=(
+            "Isaac camera semantic filter instance name for "
+            "backend=isaaclab_subprocess. Repeat to probe prepared USD labels "
+            "such as usd_prim_path."
         ),
     )
     parser.add_argument(
@@ -244,10 +265,12 @@ def run_realworld_cleanup(
     isaac_scene_usd_path: str | Path | None = None,
     isaac_enable_segmentation: bool = False,
     isaac_segmentation_data_types: tuple[str, ...] | None = None,
+    isaac_segmentation_semantic_filter: tuple[str, ...] | None = None,
     map_bundle_dir: str | Path | None = None,
     require_map_bundle: bool = False,
     cleanup_profile: str | None = None,
     semantic_sweep: bool = False,
+    map_mode: str = RICH_MAP_MODE,
     runtime_map_prior_path: str | Path | None = None,
     planner_proof_run_result: Path | None = None,
     planner_proof_run_results: list[Path] | None = None,
@@ -266,6 +289,9 @@ def run_realworld_cleanup(
         )
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
+    if map_mode not in REALWORLD_MAP_MODES:
+        allowed = ", ".join(sorted(REALWORLD_MAP_MODES))
+        raise ValueError(f"map_mode must be one of: {allowed}")
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
         required=require_map_bundle,
@@ -305,6 +331,7 @@ def run_realworld_cleanup(
             scene_usd_path=Path(isaac_scene_usd_path) if isaac_scene_usd_path else None,
             enable_segmentation=isaac_enable_segmentation,
             segmentation_data_types=isaac_segmentation_data_types,
+            segmentation_semantic_filter=isaac_segmentation_semantic_filter,
         )
         scenario = backend_instance.scenario
     else:
@@ -326,6 +353,7 @@ def run_realworld_cleanup(
         visual_grounding_artifact_base_dir=output_dir,
         visual_grounding_run_id=f"seed-{seed}",
         runtime_map_prior=runtime_map_prior,
+        map_mode=map_mode,
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:
@@ -376,6 +404,7 @@ def run_realworld_cleanup(
     )
     agent_scratchpad["policy"] = policy_name
     handled_handles: set[str] = set()
+    pending_minimal_detections: dict[str, dict[str, Any]] = {}
 
     for waypoint in metric_map["inspection_waypoints"]:
         waypoint_id = str(waypoint["waypoint_id"])
@@ -430,30 +459,16 @@ def run_realworld_cleanup(
         if semantic_sweep:
             continue
         for detection in detections:
-            handle = str(detection["object_id"])
-            if handle in handled_handles:
+            if map_mode == MINIMAL_MAP_MODE:
+                pending_minimal_detections[str(detection["object_id"])] = dict(detection)
                 continue
-            agent_scratchpad["observed_handles"].setdefault(handle, {"object_id": handle})
-            target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
-            if target_fixture is None:
-                agent_scratchpad["failed_attempts"].append(
-                    {"object_id": handle, "reason": "no_public_fixture_match"}
-                )
-                continue
-            target_fixture_id = str(target_fixture["fixture_id"])
-            support = detection.get("support_estimate") or {}
-            if support.get("fixture_id") == target_fixture_id:
-                agent_scratchpad["notes"].append(
-                    {"object_id": handle, "reason": "already_on_inferred_fixture"}
-                )
-                continue
-            view_index = _clean_visible_object(
+            view_index = _maybe_clean_visible_object(
                 trace_events=trace_events,
                 started_at=started_at,
                 contract=contract,
                 base_contract=base_contract,
                 detection=detection,
-                target_fixture=target_fixture,
+                fixture_hints=fixture_hints,
                 robot_view_steps=robot_view_steps,
                 output_dir=output_dir,
                 view_index=view_index,
@@ -461,20 +476,30 @@ def run_realworld_cleanup(
                 planner_proof_evidence=(
                     planner_proof_evidence if use_planner_proof_for_cleanup_primitives else None
                 ),
+                agent_scratchpad=agent_scratchpad,
+                handled_handles=handled_handles,
+                perception_mode=perception_mode,
             )
-            handled_handles.add(handle)
-            agent_scratchpad["observed_handles"][handle].update(
-                {
-                    "object_id": handle,
-                    "category": detection.get("category"),
-                    "from_fixture_id": support.get("fixture_id"),
-                    "to_fixture_id": target_fixture_id,
-                    "reason": _decision_reason(perception_mode),
-                    "perception_source": detection.get("perception_source", "visible_detection"),
-                    "model_provenance": detection.get("model_provenance"),
-                    "source_observation_id": detection.get("source_observation_id"),
-                    "handled": True,
-                }
+
+    if not semantic_sweep and map_mode == MINIMAL_MAP_MODE:
+        for detection in pending_minimal_detections.values():
+            view_index = _maybe_clean_visible_object(
+                trace_events=trace_events,
+                started_at=started_at,
+                contract=contract,
+                base_contract=base_contract,
+                detection=detection,
+                fixture_hints=fixture_hints,
+                robot_view_steps=robot_view_steps,
+                output_dir=output_dir,
+                view_index=view_index,
+                record_robot_views=record_robot_views,
+                planner_proof_evidence=(
+                    planner_proof_evidence if use_planner_proof_for_cleanup_primitives else None
+                ),
+                agent_scratchpad=agent_scratchpad,
+                handled_handles=handled_handles,
+                perception_mode=perception_mode,
             )
 
     done = _call_tool(
@@ -604,6 +629,7 @@ def run_realworld_cleanup(
         "planner_proof_cleanup_executor_enabled": use_planner_proof_for_cleanup_primitives,
         "fixture_hint_mode": fixture_hint_mode,
         "perception_mode": perception_mode,
+        "map_mode": map_mode,
         "semantic_sweep_mode": semantic_sweep,
         "cleanup_actions_disabled": semantic_sweep,
         "runtime_metric_map_prior": {
@@ -634,6 +660,8 @@ def run_realworld_cleanup(
         ),
         "semantic_sweep": {
             "enabled": semantic_sweep,
+            "map_mode": map_mode,
+            "minimal_map_mode": map_mode == MINIMAL_MAP_MODE,
             "camera_schedule": list(SEMANTIC_SWEEP_CAMERA_SCHEDULE) if semantic_sweep else [],
             "snapshot_artifact": str(runtime_metric_map_path) if semantic_sweep else "",
             "cleanup_actions_disabled": semantic_sweep,
@@ -703,9 +731,10 @@ def run_realworld_cleanup(
                 "scene_binding_diagnostics": backend_instance.scene_binding_diagnostics,
                 "segmentation": backend_instance.segmentation,
                 "scene_load": backend_instance.scene_load,
-                "mapping_gaps": backend_instance.mapping_gaps,
+                "mapping_gaps": backend_instance.current_mapping_gaps,
                 "snapshot_artifacts": backend_instance.snapshot_artifacts,
                 "semantic_pose_state": backend_instance.semantic_pose_state,
+                "semantic_pose_view_capture": backend_instance.semantic_pose_view_capture,
                 "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
                 "generated_mess_count": backend_instance.generated_mess_count,
             }
@@ -892,7 +921,9 @@ def _clean_visible_object(
             action=str(capture["action"]),
             label_suffix=str(capture["label_suffix"]),
             focus_object_id=capture.get("focus_object_id"),
-            focus_receptacle_id=capture.get("focus_receptacle_id"),
+            focus_receptacle_id=contract.internal_fixture_id_for_public_reference(
+                capture.get("focus_receptacle_id")
+            ),
             semantic_phase=capture.get("semantic_phase"),
         )
 
@@ -944,6 +975,73 @@ def _clean_visible_object(
         view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
 
     return view_index
+
+
+def _maybe_clean_visible_object(
+    *,
+    trace_events: list[dict[str, Any]],
+    started_at: float,
+    contract: RealWorldCleanupContract,
+    base_contract: CleanupBackendSession,
+    detection: dict[str, Any],
+    fixture_hints: dict[str, Any],
+    robot_view_steps: list[dict[str, Any]],
+    output_dir: Path,
+    view_index: int,
+    record_robot_views: bool,
+    planner_proof_evidence: dict[str, Any] | None,
+    agent_scratchpad: dict[str, Any],
+    handled_handles: set[str],
+    perception_mode: str,
+) -> int:
+    handle = str(detection["object_id"])
+    if handle in handled_handles:
+        return view_index
+    agent_scratchpad["observed_handles"].setdefault(handle, {"object_id": handle})
+    live_detection = contract.inspect_visible_object(handle)
+    if live_detection.get("ok") and isinstance(live_detection.get("detection"), dict):
+        detection = dict(live_detection["detection"])
+    target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+    if target_fixture is None:
+        agent_scratchpad["failed_attempts"].append(
+            {"object_id": handle, "reason": "no_public_fixture_match"}
+        )
+        return view_index
+    target_fixture_id = str(target_fixture["fixture_id"])
+    support = detection.get("support_estimate") or {}
+    if support.get("fixture_id") == target_fixture_id:
+        agent_scratchpad["notes"].append(
+            {"object_id": handle, "reason": "already_on_inferred_fixture"}
+        )
+        return view_index
+    next_view_index = _clean_visible_object(
+        trace_events=trace_events,
+        started_at=started_at,
+        contract=contract,
+        base_contract=base_contract,
+        detection=detection,
+        target_fixture=target_fixture,
+        robot_view_steps=robot_view_steps,
+        output_dir=output_dir,
+        view_index=view_index,
+        record_robot_views=record_robot_views,
+        planner_proof_evidence=planner_proof_evidence,
+    )
+    handled_handles.add(handle)
+    agent_scratchpad["observed_handles"][handle].update(
+        {
+            "object_id": handle,
+            "category": detection.get("category"),
+            "from_fixture_id": support.get("fixture_id"),
+            "to_fixture_id": target_fixture_id,
+            "reason": _decision_reason(perception_mode),
+            "perception_source": detection.get("perception_source", "visible_detection"),
+            "model_provenance": detection.get("model_provenance"),
+            "source_observation_id": detection.get("source_observation_id"),
+            "handled": True,
+        }
+    )
+    return next_view_index
 
 
 def _write_snapshot(
@@ -1106,10 +1204,12 @@ def main(argv: list[str] | None = None) -> int:
         isaac_scene_usd_path=args.isaac_scene_usd_path,
         isaac_enable_segmentation=args.isaac_enable_segmentation,
         isaac_segmentation_data_types=tuple(args.isaac_segmentation_data_type or ()),
+        isaac_segmentation_semantic_filter=tuple(args.isaac_segmentation_semantic_filter or ()),
         map_bundle_dir=args.map_bundle_dir,
         require_map_bundle=args.require_map_bundle,
         cleanup_profile=args.cleanup_profile,
         semantic_sweep=args.semantic_sweep,
+        map_mode=args.map_mode,
         runtime_map_prior_path=args.runtime_map_prior,
         planner_proof_run_results=args.planner_proof_run_result,
         use_planner_proof_for_cleanup_primitives=args.use_planner_proof_for_cleanup_primitives,

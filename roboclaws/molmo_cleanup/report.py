@@ -1428,6 +1428,13 @@ def _isaac_runtime_section(run_dir: Path, run_result: dict[str, Any]) -> str:
     semantic_pose_state = isaac.get("semantic_pose_state")
     if not isinstance(semantic_pose_state, dict):
         semantic_pose_state = {}
+    semantic_pose_view_capture = (
+        semantic_pose_state.get("semantic_pose_view_capture")
+        if isinstance(semantic_pose_state.get("semantic_pose_view_capture"), dict)
+        else isaac.get("semantic_pose_view_capture")
+    )
+    if not isinstance(semantic_pose_view_capture, dict):
+        semantic_pose_view_capture = {}
     semantic_pose_events = [
         item for item in semantic_pose_state.get("transform_events", []) if isinstance(item, dict)
     ]
@@ -1437,6 +1444,8 @@ def _isaac_runtime_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         f"{scene_bindings.get('selected_target_receptacle_bound_count', 0)}/"
         f"{scene_bindings.get('selected_target_receptacle_count', 0)} receptacles"
     )
+    pose_view_capture_method = semantic_pose_view_capture.get("capture_method") or "none"
+    pose_render_steps = semantic_pose_view_capture.get("render_steps", 0)
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Runtime mode', runtime.get('runtime_mode', 'unknown'))}"
@@ -1458,6 +1467,8 @@ def _isaac_runtime_section(run_dir: Path, run_result: dict[str, Any]) -> str:
         f"{_metric('Snapshots', f'{real_snapshots}/{len(snapshots)} real')}"
         f"{_metric('Semantic pose events', len(semantic_pose_events))}"
         f"{_metric('Pose rendered to USD', _yes_no(semantic_pose_state.get('rendered_to_usd')))}"
+        f"{_metric('Pose view capture', pose_view_capture_method)}"
+        f"{_metric('Pose render steps', pose_render_steps)}"
         f"{_metric('Mapping gaps', len(mapping_gaps))}"
         "</div>"
     )
@@ -5328,13 +5339,42 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
     if not runtime_metric_map:
         return ""
     static_map = runtime_metric_map.get("static_map") or {}
+    anchors = runtime_metric_map.get("public_semantic_anchors") or []
     observed = runtime_metric_map.get("observed_objects") or []
     candidates = runtime_metric_map.get("map_update_candidates") or []
+    map_mode = runtime_metric_map.get("map_mode", "rich")
+    generated = runtime_metric_map.get("generated_exploration_candidates") or []
     summary = (
         f"schema={runtime_metric_map.get('schema', '')}, "
+        f"map mode={map_mode}, "
         f"static fixtures={len(static_map.get('fixtures') or [])}, "
+        f"public semantic anchors={len(anchors)}, "
         f"observed objects={len(observed)}, update candidates={len(candidates)}, "
+        f"generated exploration candidates={len(generated)}, "
         f"source map mutated={runtime_metric_map.get('source_map_mutated')}"
+    )
+    anchor_rows = []
+    for item in anchors:
+        anchor_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('anchor_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('anchor_type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('waypoint_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('producer_type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('promotion_status', '')))}</td>"
+            "</tr>"
+        )
+    anchor_table = (
+        "<p>No public semantic anchors yet.</p>"
+        if not anchor_rows
+        else (
+            '<div class="table-wrap"><table><thead><tr><th>Anchor</th>'
+            "<th>Type</th><th>Category</th><th>Waypoint</th>"
+            "<th>Producer</th><th>Promotion</th></tr></thead><tbody>"
+            + "".join(anchor_rows)
+            + "</tbody></table></div>"
+        )
     )
     rows = []
     for item in observed:
@@ -5367,8 +5407,8 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
     return (
         "<h3>Runtime Metric Map</h3>"
         f'<p class="note">{html.escape(summary)}. Static map, observed objects, '
-        "and map update candidates remain separate.</p>"
-        f"{observed_table}{candidate_note}"
+        "public semantic anchors, and map update candidates remain separate.</p>"
+        f"{anchor_table}{observed_table}{candidate_note}"
     )
 
 
@@ -6410,6 +6450,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
             )
             + "</section>"
         )
+    static_capture = _timeline_uses_static_isaac_captures(steps)
     cards = []
     previous_action = ""
     for index, step in enumerate(steps, start=1):
@@ -6455,6 +6496,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
             f"{_observation_role_summary(step, previous_action)}"
             f"{_focus_summary(step, focus)}"
             f"{_robot_evidence_summary(step)}"
+            f"{_robot_view_provenance_summary(step)}"
             '<div class="views robot-primary-views">'
             f"{_view_figure(views.get('fpv'), 'FPV')}"
             f"{_view_figure(views.get('map'), 'Map')}"
@@ -6467,6 +6509,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
     step_label = "step" if len(cards) == 1 else "steps"
     return (
         '<section class="panel robot-timeline"><h2>Robot View Timeline</h2>'
+        f"{_isaac_static_robot_view_notice(static_capture)}"
         '<p class="note">FPV and map are the default review surfaces. FPV+bbox '
         "verification is generated from public visual-grounding boxes when present. "
         "Chase and top-view bbox verification are simulation/report-only evidence, "
@@ -6476,6 +6519,63 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
         "that bound object is actually visible in the current frame.</p>"
         f'<details class="robot-timeline-details" open><summary>Show {len(cards)} captured '
         f"robot-view {step_label}</summary>" + "".join(cards) + "</details></section>"
+    )
+
+
+def _timeline_uses_static_isaac_captures(steps: list[dict[str, Any]]) -> bool:
+    return any(_step_uses_static_isaac_capture(step) for step in steps)
+
+
+def _step_uses_static_isaac_capture(step: dict[str, Any]) -> bool:
+    provenance = step.get("view_provenance")
+    if not isinstance(provenance, dict):
+        return False
+    if provenance.get("semantic_pose_state_refreshed") is False:
+        return True
+    return "isaac_lab_camera_rgb_static_robot_views" in json.dumps(provenance, sort_keys=True)
+
+
+def _isaac_static_robot_view_notice(enabled: bool) -> str:
+    if not enabled:
+        return ""
+    return (
+        '<p class="note robot-view-caveat"><strong>Isaac report-only view caveat:</strong> '
+        "these FPV/map/chase/verify frames are static captures from the loaded USD "
+        "scene, reused across semantic cleanup steps. The cleanup state changes are "
+        "recorded in backend JSON as isaac_semantic_pose; they are not rendered back "
+        "into the Isaac USD stage yet.</p>"
+    )
+
+
+def _robot_view_provenance_summary(step: dict[str, Any]) -> str:
+    provenance = (
+        step.get("view_provenance") if isinstance(step.get("view_provenance"), dict) else {}
+    )
+    if not provenance:
+        return ""
+    note = str(provenance.get("evidence_note") or "")
+    if _step_uses_static_isaac_capture(step):
+        badges = _badge("Isaac view", "static report-only")
+        badges += _badge("Step render", "not refreshed")
+    elif _step_uses_refreshed_isaac_semantic_pose_capture(step):
+        badges = _badge("Isaac view", "semantic pose rerender")
+        badges += _badge("Step render", "refreshed")
+    else:
+        return ""
+    if note:
+        badges += _badge("Evidence note", note)
+    return '<div class="semantic-badges robot-view-provenance">' + badges + "</div>"
+
+
+def _step_uses_refreshed_isaac_semantic_pose_capture(step: dict[str, Any]) -> bool:
+    provenance = step.get("view_provenance")
+    if not isinstance(provenance, dict):
+        return False
+    if provenance.get("semantic_pose_state_refreshed") is True:
+        return True
+    return "isaac_lab_camera_rgb_semantic_pose_robot_views" in json.dumps(
+        provenance,
+        sort_keys=True,
     )
 
 

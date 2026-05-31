@@ -5,7 +5,7 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE' >&2
-usage: scripts/dev/probe_codex_mcp_image_compare.sh <fpv_png> [both|mify|codex-env] [output_dir]
+usage: scripts/dev/probe_codex_mcp_image_compare.sh <fpv_png[,fpv_png...]> [both|mify|codex-env] [output_dir]
 
 Environment:
   PORT                  MCP server port (default: 18891)
@@ -25,7 +25,7 @@ fi
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
-fpv_path="$1"
+fpv_arg="$1"
 provider_filter="${2:-both}"
 output_root="${3:-.tmp/codex-vision-smoke/$(date +%Y%m%d_%H%M%S)-mcp-image-compare}"
 host="${HOST:-127.0.0.1}"
@@ -41,10 +41,17 @@ case "$provider_filter" in
     ;;
 esac
 
-if [[ ! -f "$fpv_path" ]]; then
-  echo "error: FPV image not found: $fpv_path" >&2
+IFS=',' read -r -a fpv_paths <<<"$fpv_arg"
+if [[ "${#fpv_paths[@]}" -lt 1 ]]; then
+  echo "error: at least one FPV image is required" >&2
   exit 2
 fi
+for fpv_path in "${fpv_paths[@]}"; do
+  if [[ ! -f "$fpv_path" ]]; then
+    echo "error: FPV image not found: $fpv_path" >&2
+    exit 2
+  fi
+done
 
 # shellcheck disable=SC1091
 source scripts/dev/coding_agent_env.sh
@@ -53,10 +60,13 @@ roboclaws_load_dotenv .env
 scripts/dev/coding_agent_docker.sh ensure
 mkdir -p "$output_root"
 
+server_args=(--host "$host" --port "$port")
+for fpv_path in "${fpv_paths[@]}"; do
+  server_args+=(--fpv-path "$fpv_path")
+done
+
 .venv/bin/python scripts/dev/probe_codex_mcp_image_server.py \
-  --host "$host" \
-  --port "$port" \
-  --fpv-path "$fpv_path" \
+  "${server_args[@]}" \
   >"$output_root/server.log" \
   2>&1 &
 server_pid=$!
@@ -81,7 +91,12 @@ PY
   sleep 0.1
 done
 
-prompt='This is a live MCP image transport test. Call synthetic_image_probe first, inspect its returned image. Then call fpv_image_probe second, inspect its returned image. Output only strict JSON with this shape: {"synthetic_image_received": boolean, "synthetic_objects": [string], "fpv_image_received": boolean, "fpv_visible_cleanup_objects": [string], "fpv_scene_summary": string}. Do not use markdown. Do not guess from tool names; use the returned image contents.'
+if [[ "${#fpv_paths[@]}" -eq 1 ]]; then
+  prompt='This is a live MCP image transport test. Call synthetic_image_probe first, inspect its returned image. Then call fpv_image_probe second with index=1, inspect its returned image. Output only strict JSON with this shape: {"synthetic_image_received": boolean, "synthetic_objects": [string], "fpv_image_received": boolean, "fpv_visible_cleanup_objects": [string], "fpv_scene_summary": string}. Do not use markdown. Do not guess from tool names; use the returned image contents.'
+else
+  fpv_count="${#fpv_paths[@]}"
+  prompt="This is a live MCP image transport/cache test. Call synthetic_image_probe first and inspect its returned image. Then call fpv_image_probe ${fpv_count} times in order with index=1 through index=${fpv_count}; inspect every returned image separately. Output only strict JSON with this shape: {\"synthetic_image_received\": boolean, \"synthetic_objects\": [string], \"fpv_images\": [{\"index\": number, \"image_received\": boolean, \"visible_cleanup_objects\": [string], \"scene_summary\": string}]}. Do not use markdown. Do not reuse observations across indices. Do not guess from file names, hashes, or tool names; use each returned image contents."
+fi
 
 run_provider() {
   local provider="$1"
@@ -98,8 +113,13 @@ run_provider() {
   {
     printf 'profile=%s\n' "$summary"
     printf 'mcp_url=http://%s:%s/mcp\n' "$host" "$port"
-    printf 'fpv_path=%s\n' "$fpv_path"
-    sha256sum "$fpv_path"
+    printf 'fpv_count=%s\n' "${#fpv_paths[@]}"
+    local index=1
+    for fpv_path in "${fpv_paths[@]}"; do
+      printf 'fpv_path_%s=%s\n' "$index" "$fpv_path"
+      sha256sum "$fpv_path"
+      index=$((index + 1))
+    done
   } >"$out_dir/run-meta.txt"
 
   scripts/dev/coding_agent_docker.sh run codex mcp remove vision_smoke >/dev/null 2>&1 || true

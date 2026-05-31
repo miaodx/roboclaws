@@ -354,6 +354,26 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
+def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "direct",
+        "world-labels",
+        "map_mode=minimal",
+        "output_dir=output/custom-map",
+    )
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "world-labels",
+        "7",
+        "output/custom-map",
+    ]
+    assert route[-4:] == ["on", "", "auto", "minimal"]
+
+
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_task_run(
         "household-cleanup",
@@ -414,7 +434,7 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "7",
         "output/household/household-cleanup/direct-report",
     ]
-    assert route[-1] == "isaaclab_subprocess"
+    assert route[-2:] == ["isaaclab_subprocess", "rich"]
 
 
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
@@ -469,6 +489,15 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     assert "--require-real-robot-alignment" in body
     assert "--min-semantic-accepted-count 5" in body
     assert "--min-sweep-coverage 1.0" in body
+
+
+def test_molmo_semantic_sweep_strips_cleanup_quality_gate() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert 'if [[ "$semantic_sweep_enabled" == "true" ]]; then' in text
+    assert "--min-semantic-accepted-count|--min-model-declared-actions" in text
+    assert "filtered_checker_visual_args" in text
+    assert 'checker_visual_args=("${filtered_checker_visual_args[@]}")' in text
 
 
 def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
@@ -1010,6 +1039,42 @@ def test_coding_agent_claude_profile_builds_scoped_env() -> None:
         "model:mimo-v2.5-pro",
         "env:ANTHROPIC_API_KEY=fake-mimo-key",
         "env:ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic",
+        "env:CLAUDE_CODE_SIMPLE=1",
+    ]
+
+
+def test_coding_agent_claude_mify_anthropic_profile_builds_scoped_env() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CLAUDE_PROVIDER=mify-anthropic
+            XM_LLM_API_KEY=fake-xm-key
+            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
+            model_args=()
+            env_args=()
+            roboclaws_claude_provider_args model_args env_args
+            printf 'model:%s\n' "${model_args[@]}"
+            printf 'env:%s\n' "${env_args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "model:--model",
+        "model:xiaomi/mimo-v2.5",
+        "env:ANTHROPIC_API_KEY=fake-xm-key",
+        "env:ANTHROPIC_BASE_URL=https://api.llm.mioffice.cn/anthropic",
         "env:CLAUDE_CODE_SIMPLE=1",
     ]
 

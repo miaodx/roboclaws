@@ -40,6 +40,8 @@ roboclaws_code_agent_provider() {
           provider="mimo-anthropic"
         elif [[ -n "${KIMI_API_KEY:-}" ]]; then
           provider="kimi-anthropic"
+        elif [[ -n "${XM_LLM_API_KEY:-}" ]]; then
+          provider="mify-anthropic"
         else
           provider="system"
         fi
@@ -67,6 +69,9 @@ roboclaws_code_agent_profile_default_model() {
     kimi-anthropic)
       printf 'kimi-k2.6\n'
       ;;
+    mify-anthropic)
+      printf 'xiaomi/mimo-v2.5\n'
+      ;;
     mimo-anthropic)
       printf 'mimo-v2.5-pro\n'
       ;;
@@ -75,6 +80,29 @@ roboclaws_code_agent_profile_default_model() {
       return 2
       ;;
   esac
+}
+
+roboclaws_mify_anthropic_base_url() {
+  local base="${XM_LLM_ANTHROPIC_BASE_URL:-}"
+  if [[ -z "$base" ]]; then
+    base="${XM_LLM_BASE_URL:-}"
+    if [[ -n "$base" ]]; then
+      base="${base%/}"
+      case "$base" in
+        */anthropic)
+          ;;
+        */v1)
+          base="${base%/v1}/anthropic"
+          ;;
+        *)
+          base="${base}/anthropic"
+          ;;
+      esac
+    else
+      base="https://api.llm.mioffice.cn/anthropic"
+    fi
+  fi
+  printf '%s\n' "$base"
 }
 
 roboclaws_code_agent_profile_base_url() {
@@ -92,6 +120,9 @@ roboclaws_code_agent_profile_base_url() {
       ;;
     kimi-anthropic)
       printf 'https://api.kimi.com/coding/\n'
+      ;;
+    mify-anthropic)
+      roboclaws_mify_anthropic_base_url
       ;;
     mimo-anthropic)
       printf 'https://token-plan-cn.xiaomimimo.com/anthropic\n'
@@ -118,6 +149,9 @@ roboclaws_code_agent_profile_key_env() {
     kimi-anthropic)
       printf 'KIMI_API_KEY\n'
       ;;
+    mify-anthropic)
+      printf 'XM_LLM_API_KEY\n'
+      ;;
     mimo-anthropic)
       printf 'MIMO_TP_KEY\n'
       ;;
@@ -137,7 +171,7 @@ roboclaws_code_agent_profile_wire_api() {
     codex-env|mify)
       printf 'responses\n'
       ;;
-    kimi-anthropic|mimo-anthropic)
+    kimi-anthropic|mify-anthropic|mimo-anthropic)
       printf 'anthropic\n'
       ;;
     system)
@@ -182,7 +216,7 @@ roboclaws_code_agent_model_supports_images() {
   local model="${1:-}"
   model="${model##*/}"
   case "$model" in
-    mimo-v2.5|mimo-v2.5-pro)
+    mimo-v2.5-pro)
       return 1
       ;;
     *)
@@ -293,10 +327,10 @@ roboclaws_claude_provider_args() {
   out_env_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var")" || return
   case "$provider" in
-    system|kimi-anthropic|mimo-anthropic)
+    system|kimi-anthropic|mify-anthropic|mimo-anthropic)
       ;;
     *)
-      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, or mimo-anthropic" >&2
+      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, mify-anthropic, or mimo-anthropic" >&2
       return 2
       ;;
   esac
@@ -324,10 +358,10 @@ roboclaws_assert_claude_code_network_allowed() {
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_CLAUDE_PROVIDER)" || return
   case "$provider" in
-    system|kimi-anthropic|mimo-anthropic)
+    system|kimi-anthropic|mify-anthropic|mimo-anthropic)
       ;;
     *)
-      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, or mimo-anthropic" >&2
+      echo "error: unsupported Claude provider '${provider}'; expected system, kimi-anthropic, mify-anthropic, or mimo-anthropic" >&2
       return 2
       ;;
   esac
@@ -343,7 +377,7 @@ roboclaws_assert_claude_code_network_allowed() {
     0)
       if [[ "$provider" == "system" ]]; then
         echo "error: work network detected; ${label} is blocked while using system Claude Code provider." >&2
-        echo "       Configure MIMO_TP_KEY or KIMI_API_KEY in the repo-local .env, or switch off the work network." >&2
+        echo "       Configure MIMO_TP_KEY, KIMI_API_KEY, or XM_LLM_API_KEY in the repo-local .env, or switch off the work network." >&2
         return 1
       fi
       echo "==> network guard ok: work network with repo-local Claude provider (${provider})" >&2

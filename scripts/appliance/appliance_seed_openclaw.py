@@ -175,8 +175,8 @@ def _provider_config(env: dict[str, str]) -> ProviderConfig:
                     },
                     {
                         "id": "mimo-v2.5",
-                        "name": "MiMo V2.5 (text+tools)",
-                        "input": ["text"],
+                        "name": "MiMo V2.5 (vision+tools)",
+                        "input": ["text", "image"],
                         "reasoning": False,
                         "contextWindow": 1048576,
                         "maxTokens": 32768,

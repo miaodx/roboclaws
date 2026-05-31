@@ -13,6 +13,7 @@ from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
 from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PROFILE
 from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
+    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
 )
@@ -164,6 +165,73 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         "source": "prior/runtime_metric_map.json",
         "observed_object_count": len(prior_rows),
     }
+
+
+def test_realworld_mcp_accepts_minimal_map_mode(tmp_path: Path) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        fixture_hints = server.call_tool("fixture_hints")
+        runtime_map = server._agent_view_payload()["runtime_metric_map"]
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            server.call_tool("observe")
+        agent_view = server._agent_view_payload()
+    finally:
+        server.close()
+
+    assert metric_map["mode"] == MINIMAL_MAP_MODE
+    assert metric_map["rooms"] == []
+    assert metric_map["driveable_ways"] == []
+    assert fixture_hints["rooms"] == []
+    assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
+    assert runtime_map["static_map"]["fixtures"] == []
+    assert agent_view["runtime_metric_map"]["map_mode"] == MINIMAL_MAP_MODE
+    assert agent_view["cleanup_worklist"]["objects"]
+
+
+def test_realworld_mcp_minimal_map_exposes_actionable_runtime_anchors(
+    tmp_path: Path,
+) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        fixture_hints = server.call_tool("fixture_hints")
+        observed = None
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            observation = server.call_tool("observe")
+            if observation["visible_object_detections"]:
+                observed = observation["visible_object_detections"][0]
+        assert observed is not None
+
+        agent_view = server._agent_view_payload()
+        worklist_item = next(
+            item
+            for item in agent_view["cleanup_worklist"]["objects"]
+            if item["object_id"] == observed["object_id"]
+        )
+        target_anchor_id = worklist_item["candidate_fixture_id"]
+        server.call_tool("navigate_to_object", object_id=observed["object_id"])
+        server.call_tool("pick", object_id=observed["object_id"])
+        navigation = server.call_tool("navigate_to_receptacle", fixture_id=target_anchor_id)
+    finally:
+        server.close()
+
+    assert fixture_hints["rooms"] == []
+    assert "runtime_metric_map.public_semantic_anchors" in fixture_hints["instruction"]
+    assert target_anchor_id.startswith("anchor_fixture_")
+    assert navigation["fixture_id"] == target_anchor_id
 
 
 def test_realworld_mcp_rejects_removed_cleanup_composite(

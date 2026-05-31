@@ -93,7 +93,7 @@ behavior.
 ```bash
 cp .env.example .env
 # Fill XM_LLM_API_KEY for the default Codex mify route.
-# Fill MIMO_TP_KEY or KIMI_API_KEY for Claude Code and OpenClaw routes.
+# Fill MIMO_TP_KEY, KIMI_API_KEY, or XM_LLM_API_KEY for Claude Code routes.
 # Optional: fill CODEX_BASE_URL / CODEX_API_KEY only for non-mify Codex debugging.
 ```
 

@@ -164,6 +164,60 @@ def test_isaac_lab_backend_can_request_segmentation(
     ]
 
 
+def test_isaac_lab_backend_can_request_segmentation_semantic_filter(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured_init_args: list[str] = []
+    original_run_worker = IsaacLabSubprocessBackend._run_worker
+
+    def wrapped_run_worker(
+        self: IsaacLabSubprocessBackend,
+        command: str,
+        *args: str,
+    ) -> dict[str, object]:
+        if command == "init":
+            captured_init_args.extend(args)
+        return original_run_worker(self, command, *args)
+
+    monkeypatch.setattr(IsaacLabSubprocessBackend, "_run_worker", wrapped_run_worker)
+
+    IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        segmentation_data_types=("semantic_segmentation",),
+        segmentation_semantic_filter=("usd_prim_path",),
+    )
+
+    assert "--enable-segmentation" in captured_init_args
+    assert [
+        "--segmentation-data-type",
+        "semantic_segmentation",
+        "--segmentation-semantic-filter",
+        "usd_prim_path",
+    ] == captured_init_args[-4:]
+
+
+def test_isaac_worker_can_request_semantic_filter_override(tmp_path: Path) -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(tmp_path / "state.json"),
+            "init",
+            "--run-dir",
+            str(tmp_path),
+            "--runtime-mode",
+            "fake",
+            "--enable-segmentation",
+            "--segmentation-semantic-filter",
+            "usd_prim_path",
+        ]
+    )
+
+    assert getattr(args, "segmentation_semantic_filter") == ["usd_prim_path"]
+
+
 def test_isaac_lab_fake_worker_can_align_to_nav2_map_bundle(tmp_path: Path) -> None:
     map_bundle = Path("assets/maps/molmospaces-procthor-val-0-7")
     backend = IsaacLabSubprocessBackend(
@@ -475,6 +529,27 @@ def test_isaac_worker_infers_scene_index_from_local_val_path() -> None:
     )
 
     assert isaac_lab_backend_worker._effective_scene_index(args) == 12
+
+
+def test_isaac_worker_infers_scene_index_from_prepared_val_path() -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            "state.json",
+            "init",
+            "--run-dir",
+            "run",
+            "--scene-index",
+            "0",
+            "--scene-usd-path",
+            (
+                "output/isaaclab/flattened-semantic-usd/"
+                "0529_val1_flattened_semantic_scene/scene_semantic.usda"
+            ),
+        ]
+    )
+
+    assert isaac_lab_backend_worker._effective_scene_index(args) == 1
 
 
 def test_isaac_lab_real_init_uses_phase_a_smoke_evidence(
@@ -825,16 +900,17 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims(
     records: list[tuple[str, str, tuple[str, ...]]] = []
 
     class Prim:
-        def __init__(self, path: str, valid: bool = True) -> None:
+        def __init__(self, path: str, valid: bool = True, type_name: str = "") -> None:
             self.path = path
             self.valid = valid
+            self.type_name = type_name
 
         def IsValid(self) -> bool:
             return self.valid
 
     bowl = Prim("/World/Objects/bowl_01")
-    bowl_mesh = Prim("/World/Objects/bowl_01/mesh")
-    sink = Prim("/World/Receptacles/sink_01")
+    bowl_mesh = Prim("/World/Objects/bowl_01/mesh", type_name="Mesh")
+    sink = Prim("/World/Receptacles/sink_01", type_name="Cube")
 
     class Stage:
         def __init__(self) -> None:
@@ -899,7 +975,15 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims(
     assert result["applied_count"] == 2
     assert result["labeled_prim_count"] == 3
     assert result["descendant_label_count"] == 1
+    assert result["gprim_label_count"] == 2
+    assert result["mesh_label_count"] == 1
     assert result["missing_prim_count"] == 1
+    assert {
+        "source_prim_path": "/World/Objects/bowl_01",
+        "target_prim_path": "/World/Objects/bowl_01/mesh",
+        "target_type": "Mesh",
+        "target_kind": "gprim:Mesh",
+    } in result["target_samples"]
     assert ("/World/Objects/bowl_01", "class", ("Bowl",)) in records
     assert ("/World/Objects/bowl_01/mesh", "class", ("Bowl",)) in records
     assert (
@@ -908,6 +992,30 @@ def test_isaac_scene_index_semantic_labels_are_applied_to_stage_prims(
         ("/World/Objects/bowl_01",),
     ) in records
     assert ("/World/Receptacles/sink_01", "kind", ("receptacle",)) in records
+
+
+def test_isaac_runtime_smoke_accepts_official_blocks_generated_scene(
+    tmp_path: Path,
+) -> None:
+    args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(tmp_path / "state.json"),
+            "init",
+            "--run-dir",
+            str(tmp_path / "run"),
+            "--runtime-mode",
+            "fake",
+            "--generated-scene-kind",
+            "isaac_official_blocks",
+        ]
+    )
+
+    assert args.generated_scene_kind == "isaac_official_blocks"
+    assert (
+        isaac_lab_backend_worker._generated_scene_filename(args.generated_scene_kind)
+        == "roboclaws_isaac_official_blocks_scene.usda"
+    )
 
 
 def test_isaac_lab_generated_count_selects_private_targets_not_first_object(
@@ -1027,6 +1135,241 @@ def test_isaac_lab_real_worker_views_reuse_real_smoke_images(
     assert result["shapes"]["fpv"] == [48, 64, 3]
     for path in result["views"].values():
         assert Path(path).is_file()
+
+
+def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    state_path = tmp_path / "state.json"
+    image_path = run_dir / "isaac_runtime_smoke.png"
+    robot_view_images = _write_robot_view_images(run_dir)
+    scene_usd = run_dir / "scene.usda"
+    scene_usd.parent.mkdir(parents=True, exist_ok=True)
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    _write_nonblank_image(image_path)
+
+    def fake_real_runtime_smoke(
+        args: object,
+        scenario: object,
+    ) -> dict[str, object]:
+        del args, scenario
+        return {
+            "image_path": str(image_path),
+            "scene_usd": str(scene_usd),
+            "loaded_asset_kind": "local_scene_usd",
+            "requested_scene_source": "procthor-10k-val",
+            "requested_scene_index": 0,
+            "requested_molmospaces_scene_usd": "molmospaces://procthor-10k-val/scene-0.usd",
+            "isaac_lab_version": "unit-isaaclab",
+            "isaac_sim_version": "unit-isaacsim",
+            "renderer_mode": "isaac_lab_headless_rtx",
+            "capture_method": "isaac_lab_camera_rgb",
+            "robot_view_capture_method": "isaac_lab_camera_rgb_static_robot_views",
+            "robot_view_images": robot_view_images,
+            "camera_resolution": [540, 360],
+            "stage_prim_count": 6,
+            "render_steps": 4,
+            "scene_index_diagnostics": {
+                "schema": "isaac_usd_scene_index_v1",
+                "status": "indexed",
+                "source": str(scene_usd),
+                "stage_prim_count": 6,
+                "object_candidate_count": 1,
+                "receptacle_candidate_count": 1,
+                "blockers": [],
+            },
+            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
+            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+        }
+
+    def fake_capture_semantic_pose_robot_views(
+        *,
+        state: dict[str, object],
+        scene_usd: Path,
+        view_paths: dict[str, Path],
+        width: int,
+        height: int,
+    ) -> dict[str, object]:
+        assert scene_usd == run_dir / "scene.usda"
+        assert width == 64
+        assert height == 48
+        semantic_pose = state["semantic_pose_state"]
+        assert isinstance(semantic_pose, dict)
+        assert semantic_pose["rendered_to_usd"] is False
+        for path in view_paths.values():
+            _write_nonblank_image(path)
+        return {
+            "robot_view_images": {key: str(path) for key, path in view_paths.items()},
+            "render_steps": 9,
+        }
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "real_runtime_smoke",
+        fake_real_runtime_smoke,
+    )
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "capture_semantic_pose_robot_views",
+        fake_capture_semantic_pose_robot_views,
+    )
+    init_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "init",
+            "--run-dir",
+            str(run_dir),
+            "--runtime-mode",
+            "real",
+            "--include-robot",
+            "--scene-usd-path",
+            str(scene_usd),
+        ]
+    )
+    isaac_lab_backend_worker.init_state(init_args)
+    result = isaac_lab_backend_worker.write_robot_views(
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                str(state_path),
+                "robot_views",
+                "--output-dir",
+                str(run_dir / "robot_views"),
+                "--label",
+                "0001_semantic_pose",
+                "--render-width",
+                "64",
+                "--render-height",
+                "48",
+            ]
+        ),
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+
+    assert result["ok"] is True
+    assert result["view_provenance"]["semantic_pose_state_refreshed"] is True
+    assert "isaac_lab_camera_rgb_semantic_pose_robot_views" in json.dumps(result["view_provenance"])
+    state = isaac_lab_backend_worker.read_state(state_path)
+    assert state["semantic_pose_state"]["rendered_to_usd"] is True
+    assert state["robot_view_provenance"]["semantic_pose_state_refreshed"] is True
+    assert state["semantic_pose_view_capture"]["render_steps"] == 9
+    assert state["semantic_pose_state"]["semantic_pose_view_capture"]["render_steps"] == 9
+    robot_view_gap = next(
+        item for item in state["mapping_gaps"] if item["area"] == "robot_view_variants"
+    )
+    assert robot_view_gap["source"] == "isaac_lab_camera_rgb_semantic_pose_robot_views"
+    assert "recaptured from the loaded USD scene" in robot_view_gap["detail"]
+    assert "static Phase B" not in robot_view_gap["detail"]
+
+
+def test_isaac_lab_real_worker_views_fallback_when_semantic_pose_rerender_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    state_path = tmp_path / "state.json"
+    image_path = run_dir / "isaac_runtime_smoke.png"
+    robot_view_images = _write_robot_view_images(run_dir)
+    scene_usd = run_dir / "scene.usda"
+    scene_usd.parent.mkdir(parents=True, exist_ok=True)
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    _write_nonblank_image(image_path)
+
+    def fake_real_runtime_smoke(
+        args: object,
+        scenario: object,
+    ) -> dict[str, object]:
+        del args, scenario
+        return {
+            "image_path": str(image_path),
+            "scene_usd": str(scene_usd),
+            "loaded_asset_kind": "local_scene_usd",
+            "requested_scene_source": "procthor-10k-val",
+            "requested_scene_index": 0,
+            "requested_molmospaces_scene_usd": "molmospaces://procthor-10k-val/scene-0.usd",
+            "isaac_lab_version": "unit-isaaclab",
+            "isaac_sim_version": "unit-isaacsim",
+            "renderer_mode": "isaac_lab_headless_rtx",
+            "capture_method": "isaac_lab_camera_rgb",
+            "robot_view_capture_method": "isaac_lab_camera_rgb_static_robot_views",
+            "robot_view_images": robot_view_images,
+            "camera_resolution": [540, 360],
+            "stage_prim_count": 6,
+            "render_steps": 4,
+            "scene_index_diagnostics": {
+                "schema": "isaac_usd_scene_index_v1",
+                "status": "indexed",
+                "source": str(scene_usd),
+                "stage_prim_count": 6,
+                "object_candidate_count": 1,
+                "receptacle_candidate_count": 1,
+                "blockers": [],
+            },
+            "object_index": {"mug_01": {"usd_prim_path": "/World/Objects/mug_01"}},
+            "receptacle_index": {"sink_01": {"usd_prim_path": "/World/Receptacles/sink_01"}},
+        }
+
+    def fail_capture_semantic_pose_robot_views(**_: object) -> dict[str, object]:
+        raise RuntimeError("unit rerender failure")
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "real_runtime_smoke",
+        fake_real_runtime_smoke,
+    )
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "capture_semantic_pose_robot_views",
+        fail_capture_semantic_pose_robot_views,
+    )
+    init_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "init",
+            "--run-dir",
+            str(run_dir),
+            "--runtime-mode",
+            "real",
+            "--include-robot",
+            "--scene-usd-path",
+            str(scene_usd),
+        ]
+    )
+    isaac_lab_backend_worker.init_state(init_args)
+    result = isaac_lab_backend_worker.write_robot_views(
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                str(state_path),
+                "robot_views",
+                "--output-dir",
+                str(run_dir / "robot_views"),
+                "--label",
+                "0001_semantic_pose",
+                "--render-width",
+                "64",
+                "--render-height",
+                "48",
+            ]
+        ),
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+
+    assert result["ok"] is True
+    assert result["view_provenance"]["semantic_pose_state_refreshed"] is False
+    assert "isaac_lab_camera_rgb_static_robot_views" in json.dumps(result["view_provenance"])
+    state = isaac_lab_backend_worker.read_state(state_path)
+    assert state["semantic_pose_state"]["rendered_to_usd"] is False
+    assert any(
+        item["area"] == "semantic_pose_robot_view_rerender"
+        and item["status"] == "blocked_capability"
+        and "unit rerender failure" in item["detail"]
+        for item in state["mapping_gaps"]
+    )
 
 
 def test_isaac_lab_real_worker_snapshot_reuses_real_smoke_image(

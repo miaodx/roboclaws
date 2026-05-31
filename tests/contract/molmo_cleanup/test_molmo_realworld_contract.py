@@ -9,6 +9,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
+    MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REALWORLD_CONTRACT,
@@ -249,6 +250,7 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
     assert runtime_map["private_truth_included"] is False
     assert runtime_map["source_map_mutated"] is False
     assert runtime_map["static_map"]["fixtures"]
+    assert runtime_map["public_semantic_anchors"] == []
     assert runtime_map["map_update_candidates"] == []
     assert runtime_map["observed_objects"]
     observed = runtime_map["observed_objects"][0]
@@ -308,6 +310,194 @@ def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> No
     assert current_rows[0]["prior_object_id"] == prior_rows[0]["prior_object_id"]
     assert current_rows[0]["snapshot_object_id"] == prior_rows[0]["snapshot_object_id"]
     _assert_no_forbidden_keys(runtime_map)
+
+
+def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    metric_map = contract.metric_map()
+    fixture_hints = contract.fixture_hints()
+    waypoint = metric_map["inspection_waypoints"][0]
+    navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    for candidate in metric_map["inspection_waypoints"][1:]:
+        if observation["visible_object_detections"]:
+            break
+        waypoint = candidate
+        navigation = contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+    agent_view = contract.agent_view_payload()
+    runtime_map = agent_view["runtime_metric_map"]
+
+    assert metric_map["mode"] == MINIMAL_MAP_MODE
+    assert metric_map["rooms"] == []
+    assert metric_map["driveable_ways"] == []
+    assert fixture_hints["rooms"] == []
+    assert waypoint["waypoint_id"].startswith("generated_")
+    assert waypoint["waypoint_source"] == "generated_exploration_candidate"
+    assert waypoint["candidate_provenance"]["source"] == "public_occupancy_free_space"
+    assert waypoint["candidate_provenance"]["source_pose"] == "free_space_sample"
+    assert waypoint["candidate_provenance"]["source_room_hidden"] is True
+    assert waypoint["candidate_provenance"]["source_fixtures_hidden"] is True
+    assert waypoint["candidate_provenance"]["source_waypoint_hidden"] is True
+    assert "source_waypoint_id" not in waypoint["candidate_provenance"]
+    assert navigation["ok"] is True
+    assert observation["visible_object_detections"]
+    assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
+    assert runtime_map["minimal_map_mode"] is True
+    assert runtime_map["static_map"]["rooms"] == []
+    assert runtime_map["static_map"]["fixtures"] == []
+    assert runtime_map["static_map"]["driveable_ways"] == []
+    assert runtime_map["generated_exploration_candidates"]
+    assert runtime_map["public_semantic_anchors"]
+    waypoint_anchor = next(
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_type"] == "observation_waypoint"
+        and item["waypoint_id"] == waypoint["waypoint_id"]
+    )
+    assert waypoint_anchor["anchor_id"].startswith("anchor_waypoint_generated_")
+    assert waypoint_anchor["waypoint_id"] == waypoint["waypoint_id"]
+    assert waypoint_anchor["producer_type"] == "generated_exploration_candidate"
+    assert waypoint_anchor["promotion_status"] == "run_local"
+    fixture_anchor = next(
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_type"] in {"fixture", "receptacle"}
+    )
+    assert fixture_anchor["anchor_id"].startswith("anchor_fixture_")
+    assert fixture_anchor["source_observation_id"]
+    assert runtime_map["observed_objects"]
+    assert runtime_map["observed_objects"][0]["source_fixture_id"].startswith("anchor_fixture_")
+    assert agent_view["observed_objects"][0]["support_estimate"]["fixture_id"].startswith(
+        "anchor_fixture_"
+    )
+    _assert_no_forbidden_keys(agent_view)
+
+
+def test_minimal_map_mode_keeps_public_waypoint_after_receptacle_navigation() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    observation = _first_non_empty_observation(contract)
+    detection = next(
+        item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
+    )
+    fixture_id = str(detection["candidate_fixture_id"])
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    navigation = contract.navigate_to_receptacle(fixture_id)
+    post_nav_map = contract.metric_map()
+
+    assert navigation["ok"] is True
+    assert post_nav_map["robot_pose"]["waypoint_id"].startswith("generated_exploration_")
+    assert post_nav_map["robot_pose"]["room_id"] == "generated_area"
+    assert post_nav_map["robot_pose"]["waypoint_id"] in {
+        str(item["waypoint_id"]) for item in post_nav_map["inspection_waypoints"]
+    }
+
+
+def test_minimal_map_mode_observe_marks_placed_object_non_actionable() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    observation = _first_non_empty_observation(contract)
+    detection = next(
+        item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
+    )
+    fixture_id = str(detection["candidate_fixture_id"])
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    assert contract.navigate_to_receptacle(fixture_id)["ok"] is True
+    if detection.get("recommended_tool") == "place_inside":
+        opened = contract.open_receptacle(fixture_id)
+        if opened["ok"]:
+            assert contract.place_inside(fixture_id)["ok"] is True
+            closed = contract.close_receptacle(fixture_id)
+            if closed["ok"]:
+                expected_state = "placed_closed"
+            else:
+                expected_state = "placed"
+        else:
+            assert contract.place_inside(fixture_id)["ok"] is True
+            expected_state = "placed"
+    else:
+        assert contract.place(fixture_id)["ok"] is True
+        expected_state = "placed"
+
+    later = contract.observe()
+    later_detection = next(
+        item
+        for item in later["visible_object_detections"]
+        if item["object_id"] == detection["object_id"]
+    )
+    worklist_item = next(
+        item
+        for item in contract.cleanup_worklist_payload()["objects"]
+        if item["object_id"] == detection["object_id"]
+    )
+    duplicate_nav = contract.navigate_to_object(detection["object_id"])
+    duplicate_pick = contract.pick(detection["object_id"])
+
+    assert later_detection["cleanup_recommended"] is False
+    assert worklist_item["state"] == expected_state
+    assert worklist_item["cleanup_recommended"] is False
+    assert duplicate_nav["ok"] is False
+    assert duplicate_nav["error_reason"] == "already_handled"
+    assert duplicate_pick["ok"] is False
+    assert duplicate_pick["error_reason"] == "already_handled"
+
+
+def test_minimal_map_mode_done_uses_generated_candidate_coverage() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(
+            CleanupScenario(
+                scenario_id="minimal-map-done-gate-test",
+                task="build minimal map",
+                seed=7,
+                objects=(),
+                receptacles=(
+                    CleanupReceptacle("sink_01", "Sink", "kitchen", category="Sink"),
+                    CleanupReceptacle("desk_01", "Desk", "office", category="Desk"),
+                ),
+                private_manifest=PrivateScoringManifest(
+                    scenario_id="minimal-map-done-gate-test",
+                    targets=(),
+                    success_threshold=0,
+                ),
+            )
+        ),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    waypoints = contract.metric_map()["inspection_waypoints"]
+    for waypoint in waypoints[:-1]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    early_done = contract.done("almost finished minimal sweep")
+
+    assert early_done["ok"] is False
+    assert early_done["error_reason"] == "insufficient_sweep_coverage"
+    assert early_done["next_waypoint_id"] == waypoints[-1]["waypoint_id"]
+    assert early_done["observed_waypoint_count"] == len(waypoints) - 1
+    assert early_done["total_waypoints"] == len(waypoints)
+    assert all(item.startswith("generated_") for item in early_done["unvisited_waypoint_ids"])
+
+    contract.navigate_to_waypoint(str(waypoints[-1]["waypoint_id"]))
+    contract.observe()
+    done = contract.done("finished minimal sweep")
+
+    assert done["ok"] is True
 
 
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:
