@@ -221,6 +221,11 @@ def main(argv: list[str] | None = None) -> None:
     init.add_argument("--include-robot", action="store_true")
     init.add_argument("--robot-name", default="rby1m")
     init.add_argument("--generated-mess-count", type=int, default=5)
+    init.add_argument(
+        "--generated-mess-object-id",
+        action="append",
+        help="Private run-control object id to include in the generated mess set. Repeatable.",
+    )
 
     subparsers.add_parser("observe")
     subparsers.add_parser("locations")
@@ -285,6 +290,7 @@ def main(argv: list[str] | None = None) -> None:
             include_robot=args.include_robot,
             robot_name=args.robot_name,
             generated_mess_count=args.generated_mess_count,
+            generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
         )
     else:
         state = _read_state(args.state_path)
@@ -469,6 +475,7 @@ def init_state(
     include_robot: bool = False,
     robot_name: str = "rby1m",
     generated_mess_count: int = 5,
+    generated_mess_object_ids: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     from molmo_spaces.molmo_spaces_constants import get_robot_path, get_scenes_root
     from molmo_spaces.utils.lazy_loading_utils import install_scene_from_source_index
@@ -500,6 +507,7 @@ def init_state(
         receptacles,
         target_count=generated_mess_count,
         seed=seed,
+        object_ids=generated_mess_object_ids or None,
     )
     if len(targets) < generated_mess_count:
         raise RuntimeError(

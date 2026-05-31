@@ -75,8 +75,8 @@
 #                                                    upstream which is currently
 #                                                    Kimi 2.6 — see
 #                                                    /app/dist/provider-catalog-BCrO6TZn.js)
-#   mimo   → mimo_openai/mimo-v2-omni                 (token-plan; vision+tool-calls
-#                                                    confirmed 2026-04-23; v2-omni only)
+#   mimo   → mimo_openai/mimo-v2.5                 (token-plan; vision+tool-calls
+#                                                    confirmed 2026-05-28)
 #
 # Auto-detection order when PROVIDER is unset: nvidia → mimo → kimi (prefers
 # the verified-working provider; first provider with an API key in env wins).
@@ -335,15 +335,15 @@ JSON
         case "$MIMO_PROVIDER_MODE" in
             openai)
                 # OpenAI-compatible endpoint. Two image-processing modes:
-                #   direct vision  — main model is image-capable (mimo-v2-omni or mimo-v2.5).
+                #   direct vision  — main model is image-capable (mimo-v2.5).
                 #   IMAGE_MODEL    — main model is text-only (mimo-v2.5-pro);
-                #                    IMAGE_MODEL auto-set to mimo_openai/mimo-v2-omni so the
+                #                    IMAGE_MODEL auto-set to mimo_openai/mimo-v2.5 so the
                 #                    Gateway's image tool has a vision-capable model.
-                MODEL="${MODEL:-mimo_openai/mimo-v2-omni}"
-                # When the caller picked a text-only MiMo model, auto-delegate images to omni.
+                MODEL="${MODEL:-mimo_openai/mimo-v2.5}"
+                # When the caller picked a text-only MiMo model, auto-delegate images to v2.5.
                 case "$MODEL" in
                     *mimo-v2.5-pro*)
-                        IMAGE_MODEL="${IMAGE_MODEL:-mimo_openai/mimo-v2-omni}"
+                        IMAGE_MODEL="${IMAGE_MODEL:-mimo_openai/mimo-v2.5}"
                         ;;
                 esac
                 PROVIDER_ID_OVERRIDE="mimo_openai"
@@ -356,7 +356,6 @@ JSON
   "auth": "api-key",
   "api": "openai-completions",
   "models": [
-    {"id":"mimo-v2-omni","name":"MiMo V2 Omni (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":262144,"maxTokens":32768},
     {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768},
     {"id":"mimo-v2.5","name":"MiMo V2.5 (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
   ]

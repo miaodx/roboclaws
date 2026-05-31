@@ -34,7 +34,7 @@ REAL_ROUTER_PIPELINE_ID = "real-router"
 ADAPTER_CATALOG_SCHEMA = "visual_grounding_adapter_catalog_v1"
 _MIMO_OPENAI_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS = (
-    "xiaomi/mimo-v2-omni",
+    "xiaomi/mimo-v2.5",
     "vertex_ai/gemini-3.1-flash-lite-preview",
     "vertex_ai/gemini-3-flash-preview",
     "tongyi/qwen3-vl-flash",
@@ -42,7 +42,7 @@ _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS = (
     "siliconflow/Qwen/Qwen3-VL-8B-Instruct",
 )
 _HOSTED_VLM_MODEL_IDS = {
-    "mimo-v2-omni": "mimo-v2-omni",
+    "mimo-v2.5": "mimo-v2.5",
     "qwen3-vl": "Qwen/Qwen3-VL-8B-Instruct",
     **{model_id: model_id for model_id in _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS},
 }
@@ -122,11 +122,11 @@ ADAPTER_SPECS: dict[str, AdapterSpec] = {
             "Torch, Transformers, and approved OmDet-Turbo weights."
         ),
     ),
-    "mimo-v2-omni": AdapterSpec(
-        producer_id="mimo-v2-omni",
+    "mimo-v2.5": AdapterSpec(
+        producer_id="mimo-v2.5",
         role="refiner_or_direct_producer",
         status="requires_hosted_config",
-        model_id="mimo-v2-omni",
+        model_id="mimo-v2.5",
         optional_extra="",
         setup_hint=(
             "Configure MIMO_TP_KEY or VISUAL_GROUNDING_MIMO_API_KEY for the "
@@ -144,11 +144,11 @@ ADAPTER_SPECS: dict[str, AdapterSpec] = {
             "Qwen3-VL OpenAI-compatible sidecar probe."
         ),
     ),
-    "xiaomi/mimo-v2-omni": AdapterSpec(
-        producer_id="xiaomi/mimo-v2-omni",
+    "xiaomi/mimo-v2.5": AdapterSpec(
+        producer_id="xiaomi/mimo-v2.5",
         role="direct_producer",
         status="requires_hosted_config",
-        model_id="xiaomi/mimo-v2-omni",
+        model_id="xiaomi/mimo-v2.5",
         optional_extra="",
         setup_hint=(
             "Configure VISUAL_GROUNDING_VLM_* or XM_LLM_* for the internal "
@@ -1502,7 +1502,7 @@ def _hosted_vlm_base_url(producer_id: str) -> str:
         return configured
     if producer_id in _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS:
         return os.environ.get("XM_LLM_BASE_URL", "").strip()
-    if producer_id == "mimo-v2-omni":
+    if producer_id == "mimo-v2.5":
         return _MIMO_OPENAI_BASE_URL
     return ""
 
@@ -1519,7 +1519,7 @@ def _hosted_vlm_api_key(producer_id: str) -> str:
         return configured
     if producer_id in _PROVIDER_PREFIXED_HOSTED_VLM_MODEL_IDS:
         return os.environ.get("XM_LLM_API_KEY", "").strip()
-    if producer_id == "mimo-v2-omni":
+    if producer_id == "mimo-v2.5":
         return os.environ.get("MIMO_TP_KEY", "").strip()
     return ""
 
@@ -1535,7 +1535,7 @@ def _hosted_vlm_model_env(producer_id: str) -> str:
 
 
 def _hosted_vlm_env_prefixes(producer_id: str) -> tuple[str, ...]:
-    if producer_id == "mimo-v2-omni" or producer_id.startswith("xiaomi/"):
+    if producer_id == "mimo-v2.5" or producer_id.startswith("xiaomi/"):
         return ("MIMO",)
     if producer_id == "qwen3-vl" or producer_id.startswith("tongyi/"):
         return ("QWEN",)

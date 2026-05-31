@@ -14,8 +14,13 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 ## Loop
 
 1. Call `roboclaws__metric_map()` and `roboclaws__fixture_hints()` first.
-2. Treat `inspection_waypoints` as static map/fixture coverage candidates, not
-   mess hints. Build an exact checklist from
+2. Treat `inspection_waypoints` as public coverage candidates, not mess hints.
+   In the default minimal map mode, authored room and fixture labels are hidden:
+   `fixture_hints.rooms` may be empty, and the useful destination anchors come
+   from `cleanup_worklist.candidate_fixture_id`,
+   `runtime_metric_map.public_semantic_anchors`, and successful tool responses.
+   In explicit rich legacy/debug runs, non-empty fixture hints may still provide
+   static public landmarks. Build an exact checklist from
    `metric_map.inspection_waypoints`, then for each useful waypoint or
    current-room area, call
    `roboclaws__navigate_to_waypoint(waypoint_id)`, then
@@ -30,8 +35,10 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    In `camera-raw` runs, `observe()` returns raw FPV image evidence instead of
    structured labels. Inspect the image, then call
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
-   target_fixture_id, evidence_note, image_region, ...)` only when you intend to
-   act on a visual candidate. Do not pre-register raw-FPV candidates with
+   evidence_note, image_region, ...)` only when you intend to act on a visual
+   candidate. Omit `target_fixture_id` in minimal map mode until grounding
+   returns a public `candidate_fixture_id`; do not invent fixture ids from empty
+   fixture hints. Do not pre-register raw-FPV candidates with
    `roboclaws__declare_visual_candidates`; that producer-registration path is
    for `camera-labels`. Prefer broad cleanup categories when uncertain (`food`,
    `dish`, `book`, `linen`, `toy`, `electronics`, `pillow`) instead of

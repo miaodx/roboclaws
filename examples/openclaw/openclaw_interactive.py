@@ -80,10 +80,10 @@ class Args:
     """Gateway provider."""
 
     model: str | None = None
-    """Gateway model ID (e.g. mimo_openai/mimo-v2-omni). Uses provider default if omitted."""
+    """Gateway model ID (e.g. mimo_openai/mimo-v2.5). Uses provider default if omitted."""
 
     image_model: str | None = None
-    """Bridge model for text-only main models (e.g. mimo_openai/mimo-v2-omni)."""
+    """Bridge model for text-only main models (e.g. mimo_openai/mimo-v2.5-pro)."""
 
     observe_mode: str | None = None
     """Observe delivery mode. Use 'text-bridge' for split-model setups."""

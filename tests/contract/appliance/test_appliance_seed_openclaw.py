@@ -75,7 +75,7 @@ def test_seed_writes_mimo_openclaw_config_and_snapshot_symlink(tmp_path: Path) -
         "present')"
     )
     assert config["plugins"]["entries"]["acpx"]["config"]["probeAgent"] == "agent-0"
-    assert config["agents"]["defaults"]["model"]["primary"] == "mimo_openai/mimo-v2-omni"
+    assert config["agents"]["defaults"]["model"]["primary"] == "mimo_openai/mimo-v2.5"
     assert config["models"]["mode"] == "replace"
     assert "mimo_openai" in config["models"]["providers"]
 

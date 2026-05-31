@@ -443,6 +443,27 @@ def test_worker_select_targets_honors_requested_generated_count() -> None:
     assert generated_mess_success_threshold(10) == 7
 
 
+def test_worker_select_targets_can_pin_object_ids() -> None:
+    receptacles = [
+        {"receptacle_id": "counter_01", "category": "CounterTop"},
+        {"receptacle_id": "fridge_01", "category": "Fridge"},
+    ]
+    objects = [
+        {"object_id": "bread_01", "category": "Bread"},
+        {"object_id": "apple_01", "category": "Apple"},
+    ]
+
+    selected = select_generated_mess_targets(
+        objects,
+        receptacles,
+        target_count=1,
+        object_ids=("apple_01",),
+    )
+
+    assert [item["object_id"] for item in selected] == ["apple_01"]
+    assert selected[0]["target_receptacle_id"] == "fridge_01"
+
+
 def test_worker_select_targets_uses_seed_for_source_pool_diversity() -> None:
     receptacles = [
         {"receptacle_id": "sink_01", "category": "Sink"},

@@ -76,7 +76,7 @@ Required env vars:
 Defaults:
 
 - `PROVIDER=mimo`
-- `MODEL=mimo_openai/mimo-v2-omni`
+- `MODEL=mimo_openai/mimo-v2.5`
 - `ROBOCLAWS_TOOL_PROFILE=minimal`
 - `ROBOCLAWS_MCP_URL=http://127.0.0.1:18788/mcp`
 - `ROBOCLAWS_HOME=/data`

@@ -15,7 +15,7 @@ Use this checklist when bumping `OPENCLAW_IMAGE` (for example to `2026.4.26`).
 - [ ] Confirm Docker is clean on gateway ports:
   - `docker ps -a --format '{{.Names}}\t{{.Status}}' | grep -E 'openclaw-gateway' || true`
 - [ ] Run bootstrap smoke command with the candidate image:
-  - `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.4.26 IMAGE_MODEL=mimo_openai/mimo-v2-omni scripts/openclaw/openclaw-bootstrap.sh`
+  - `OPENCLAW_IMAGE=ghcr.io/openclaw/openclaw:2026.4.26 IMAGE_MODEL=mimo_openai/mimo-v2.5 scripts/openclaw/openclaw-bootstrap.sh`
 - [ ] Confirm startup succeeds and returns token.
 - [ ] Confirm built-in probe returns `PONG` and prints a normal bootstrap summary.
 - [ ] Confirm container cleanup state per local policy (`docker rm -f openclaw-gateway` after run).

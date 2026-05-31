@@ -54,6 +54,7 @@ class MolmoSpacesSubprocessBackend:
         include_robot: bool = False,
         robot_name: str = "rby1m",
         generated_mess_count: int = 5,
+        generated_mess_object_ids: tuple[str, ...] = (),
     ) -> None:
         self.run_dir = run_dir
         self.state_path = run_dir / "molmospaces_backend_state.json"
@@ -74,6 +75,8 @@ class MolmoSpacesSubprocessBackend:
             "--generated-mess-count",
             str(generated_mess_count),
         ]
+        for object_id in generated_mess_object_ids:
+            init_args.extend(["--generated-mess-object-id", str(object_id)])
         if include_robot:
             init_args.extend(["--include-robot", "--robot-name", robot_name])
         result = self._run_worker("init", *init_args)

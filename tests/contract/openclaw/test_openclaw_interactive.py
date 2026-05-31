@@ -91,14 +91,14 @@ def test_parse_args_provider_and_model_flags() -> None:
             "--model",
             "mimo_openai/mimo-v2.5-pro",
             "--image-model",
-            "mimo_openai/mimo-v2-omni",
+            "mimo_openai/mimo-v2.5",
             "--observe-mode",
             "text-bridge",
         ]
     )
     assert args.provider == "kimi"
     assert args.model == "mimo_openai/mimo-v2.5-pro"
-    assert args.image_model == "mimo_openai/mimo-v2-omni"
+    assert args.image_model == "mimo_openai/mimo-v2.5"
     assert args.observe_mode == "text-bridge"
 
 
@@ -276,7 +276,7 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
             "os.environ",
             {
                 "MODEL": "mimo_openai/mimo-v2.5-pro",
-                "IMAGE_MODEL": "mimo_openai/mimo-v2-omni",
+                "IMAGE_MODEL": "mimo_openai/mimo-v2.5",
                 "ROBOCLAWS_OBSERVE_MODE": "text-bridge",
             },
             clear=False,
@@ -306,7 +306,7 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
     assert "tok-fresh" in out
     assert "agent-0" in out
     assert "mimo-v2.5-pro" in out
-    assert "mimo-v2-omni" in out
+    assert "mimo-v2.5" in out
     assert "text-bridge" in out
     assert "just chat::tail" in out
     assert "just chat::view" in out

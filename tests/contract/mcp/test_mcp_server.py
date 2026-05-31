@@ -252,7 +252,7 @@ def test_observe_includes_visible_object_name_type_summaries(
 
 @pytest.mark.parametrize(
     "model_name",
-    ["anthropic_kimi/k2p5", "mimo_openai/mimo-v2-omni"],
+    ["anthropic_kimi/k2p5", "mimo_openai/mimo-v2.5"],
 )
 def test_observe_auto_keeps_images_for_image_capable_models(
     engine: FakeEngine,
@@ -296,7 +296,7 @@ def test_observe_text_bridge_returns_two_text_blocks(
         VisionBridgeResult(
             delivery="text-bridge",
             description="Immediate view: table ahead. Navigation cues: rotate right.",
-            bridge_model="mimo_openai/mimo-v2-omni",
+            bridge_model="mimo_openai/mimo-v2.5",
             latency_s=0.42,
         )
     )
@@ -306,7 +306,7 @@ def test_observe_text_bridge_returns_two_text_blocks(
         run_dir=tmp_path,
         port=0,
         model_name="mimo_openai/mimo-v2.5-pro",
-        image_model="mimo_openai/mimo-v2-omni",
+        image_model="mimo_openai/mimo-v2.5",
         observe_mode="auto",
         vision_bridge=bridge,
     )
@@ -321,7 +321,7 @@ def test_observe_text_bridge_returns_two_text_blocks(
     ]
     state = json.loads(result[0])
     assert state["observe_delivery"] == "text-bridge"
-    assert state["bridge_model"] == "mimo_openai/mimo-v2-omni"
+    assert state["bridge_model"] == "mimo_openai/mimo-v2.5"
     assert state["image_labels"] == ["vision_bridge"]
     assert len(bridge.calls) == 1
     assert bridge.calls[0]["image_labels"] == ["fpv", "map_v2", "chase"]
@@ -332,7 +332,7 @@ def test_observe_text_bridge_returns_two_text_blocks(
         if line.get("tool") == "observe" and line.get("event") == "response"
     ][0]["response"]
     assert response["observe_delivery"] == "text-bridge"
-    assert response["bridge_model"] == "mimo_openai/mimo-v2-omni"
+    assert response["bridge_model"] == "mimo_openai/mimo-v2.5"
     assert response["bridge_latency_s"] == 0.42
     assert response["bridge_error"] is None
 
@@ -345,7 +345,7 @@ def test_observe_text_bridge_failure_returns_safe_text_shape(
         VisionBridgeResult(
             delivery="text-bridge",
             description="Vision bridge unavailable; use structured state only.",
-            bridge_model="mimo_openai/mimo-v2-omni",
+            bridge_model="mimo_openai/mimo-v2.5",
             latency_s=0.1,
             error="upstream unavailable",
         )
@@ -356,7 +356,7 @@ def test_observe_text_bridge_failure_returns_safe_text_shape(
         run_dir=tmp_path,
         port=0,
         model_name="mimo_openai/mimo-v2.5-pro",
-        image_model="mimo_openai/mimo-v2-omni",
+        image_model="mimo_openai/mimo-v2.5",
         observe_mode="auto",
         vision_bridge=bridge,
     )

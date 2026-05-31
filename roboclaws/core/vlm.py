@@ -22,10 +22,8 @@ _COST_PER_M: dict[str, dict[str, float]] = {
     "meta/llama-4-maverick-17b-128e-instruct": {"input": 0.0, "output": 0.0},
     "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": {"input": 0.0, "output": 0.0},
     # MiMo token-plan pricing TBD — set to 0 until confirmed.
-    # mimo-v2-omni: vision + tool-calls (probed 2026-04-23)
     # mimo-v2.5: vision + tool-calls (probed 2026-05-28)
     # mimo-v2.5-pro: text + tool-calls only until separately probed
-    "mimo-v2-omni": {"input": 0.0, "output": 0.0},
     "mimo-v2.5-pro": {"input": 0.0, "output": 0.0},
     "mimo-v2.5": {"input": 0.0, "output": 0.0},
 }

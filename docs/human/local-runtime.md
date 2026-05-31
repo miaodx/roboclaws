@@ -26,7 +26,7 @@ CODEX_API_KEY=       # Optional non-mify Codex endpoint key
 
 The launch recipes infer the repo-local runtime route from those keys. Codex
 prefers the internal multi-model aggregator when `XM_LLM_API_KEY` is present
-(`mify`, `xiaomi/mimo-v2-omni`, Responses API, web search disabled). Explicit
+(`mify`, `xiaomi/mimo-v2.5`, Responses API, web search disabled). Explicit
 `CODEX_BASE_URL` / `CODEX_API_KEY` remains available for non-mify debugging.
 Claude Code prefers a MiMo key when available, then Kimi, then the mify
 Anthropic route from `XM_LLM_API_KEY` (`mify-anthropic`,

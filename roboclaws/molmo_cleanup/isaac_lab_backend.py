@@ -55,6 +55,7 @@ class IsaacLabSubprocessBackend:
         include_robot: bool = False,
         robot_name: str = "simple_camera_rig",
         generated_mess_count: int = 1,
+        generated_mess_object_ids: tuple[str, ...] = (),
         map_bundle_dir: Path | None = None,
         scene_usd_path: Path | None = None,
         enable_segmentation: bool | None = None,
@@ -85,6 +86,8 @@ class IsaacLabSubprocessBackend:
             "--runtime-mode",
             self.runtime_mode,
         ]
+        for object_id in generated_mess_object_ids:
+            init_args.extend(["--generated-mess-object-id", str(object_id)])
         if include_robot:
             init_args.extend(["--include-robot", "--robot-name", robot_name])
         if map_bundle_dir is not None:
@@ -162,7 +165,8 @@ class IsaacLabSubprocessBackend:
 
     @property
     def mess_placement_diagnostics(self) -> list[dict[str, Any]]:
-        return []
+        raw = self._read_state().get("mess_placement_diagnostics") or []
+        return [dict(item) for item in raw if isinstance(item, dict)]
 
     @property
     def placement_diagnostics(self) -> list[dict[str, Any]]:
@@ -405,8 +409,18 @@ class IsaacLabSubprocessBackend:
 
 def _isaac_worker_env(runtime_mode: str) -> dict[str, str]:
     env = os.environ.copy()
+    for key in (
+        "PYTHONPATH",
+        "AMENT_PREFIX_PATH",
+        "COLCON_PREFIX_PATH",
+        "ROS_DISTRO",
+        "ROS_VERSION",
+        "ROS_PYTHON_VERSION",
+    ):
+        env.pop(key, None)
     env.setdefault("PYTHONUNBUFFERED", "1")
     env.setdefault("ROBOCLAWS_ISAACLAB_RUNTIME_MODE", runtime_mode)
+    env.setdefault("OMNI_KIT_ACCEPT_EULA", "YES")
     return env
 
 
