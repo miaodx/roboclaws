@@ -67,6 +67,8 @@ def test_fast_dev_tests_clear_provider_env_for_deterministic_mock_gate() -> None
     dev_text = (JUST_DIR / "dev.just").read_text(encoding="utf-8")
 
     assert "ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV" in script_text
+    assert "PYTEST_BIN_DIR" in script_text
+    assert 'ROBOCLAWS_PYTHON="${ROBOCLAWS_PYTHON-}"' in script_text
     assert 'KIMI_API_KEY=""' in script_text
     assert 'MIMO_TP_KEY=""' in script_text
     assert "ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1" in dev_text
