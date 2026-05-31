@@ -527,6 +527,53 @@ def test_household_cleanup_routes_agibot_backend_to_blocked_cleanup_pilot_cli() 
     ]
 
 
+def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "backend=agibot_molmospaces_sim",
+        "context_json=tests/fixtures/agibot_robot_map_9_context.completed.json",
+        "agibot_map_artifact_dir=vendors/agibot_sdk/artifacts/maps/robot_map_9",
+        "run_dir=output/agibot/molmospaces-sim/test-run",
+        "rehearsal_mode=cleanup-actions",
+        "generated_mess_count=5",
+        "cleanup_object_count=1",
+    )
+
+    assert route[:3] == [
+        "cmd",
+        ".venv/bin/python",
+        "scripts/molmo_cleanup/run_molmospaces_agibot_contract_rehearsal.py",
+    ]
+    assert "--run-dir" in route
+    assert "output/agibot/molmospaces-sim/test-run" in route
+    assert "--runtime" in route
+    assert "fixture" in route
+    assert "--rehearsal-mode" in route
+    assert "cleanup-actions" in route
+    assert "--context-json" in route
+    assert "tests/fixtures/agibot_robot_map_9_context.completed.json" in route
+    assert "--agibot-map-artifact-dir" in route
+    assert "vendors/agibot_sdk/artifacts/maps/robot_map_9" in route
+    assert "--seed" in route
+    assert "7" in route
+    assert "--cleanup-object-count" in route
+    assert "1" in route
+
+
+def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
+    stderr = assert_task_run_fails(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "backend=agibot_molmospaces_sim",
+        "seeds=1 2",
+    )
+
+    assert "backend=agibot_molmospaces_sim accepts exactly one seed per run" in stderr
+
+
 def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> None:
     result = subprocess.run(
         [

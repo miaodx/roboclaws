@@ -425,6 +425,12 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
     assert run_result["cleanup_profile_metadata"]["world_backend"] == "isaac_sim"
     assert run_result["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
     assert run_result["robot_view_steps"]
+    assert run_result["robot_view_camera_control"]["schema"] == (
+        "robot_view_camera_control_summary_v1"
+    )
+    assert run_result["robot_view_camera_control"]["step_count"] == len(
+        run_result["robot_view_steps"]
+    )
     assert "Isaac Runtime Diagnostics" in report_text
     assert "Mapping gaps" in report_text
     assert "Selected USD bindings" in report_text

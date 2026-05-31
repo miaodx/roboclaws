@@ -25,9 +25,11 @@ from roboclaws.molmo_cleanup.camera_control import (
     ANCHOR_ORBIT_CAMERA_MODEL,
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
+    MOLMOSPACES_SCENE_FRAME,
     load_camera_control_request,
     normalize_camera_control_request,
 )
+from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -40,6 +42,10 @@ from roboclaws.molmo_cleanup.robot_view_camera_control import (
     backend_local_robot_view_camera_control_contract,
     canonical_cleanup_robot_view_camera_request,
     canonical_robot_view_camera_control_contract,
+)
+from roboclaws.molmo_cleanup.robot_view_pose import (
+    CLEANUP_ROBOT_POSE_SOURCE,
+    resolve_cleanup_robot_pose,
 )
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.scoring import score_cleanup
@@ -195,9 +201,7 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stderr.flush()
                 os._exit(1)
             raise
-        print(json.dumps(result, sort_keys=True), flush=True)
-        _close_deferred_simulation_app()
-        return 0
+        return _finish_command(result)
     else:
         state = read_state(args.state_path)
         if args.command == "locations":
@@ -228,8 +232,18 @@ def main(argv: list[str] | None = None) -> int:
             result = done(args, state)
         else:  # pragma: no cover - argparse prevents this.
             raise ValueError(f"unsupported command: {args.command}")
+    return _finish_command(result)
+
+
+def _finish_command(result: dict[str, Any]) -> int:
     print(json.dumps(result, sort_keys=True), flush=True)
-    _close_deferred_simulation_app()
+    if _DEFERRED_SIMULATION_APP is not None:
+        # Isaac/Omniverse shutdown can hang after the render artifacts and JSON
+        # result are already written. The worker is one-shot, so prefer a hard
+        # successful exit over turning completed captures into parent timeouts.
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
     return 0
 
 
@@ -278,6 +292,15 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         scene_index_diagnostics = _dict(real_smoke.get("scene_index_diagnostics"))
         object_index = _index_or_default(real_smoke.get("object_index"), object_index)
         receptacle_index = _index_or_default(real_smoke.get("receptacle_index"), receptacle_index)
+    room_outlines = _room_outlines_from_scene_index_diagnostics(scene_index_diagnostics)
+    if not room_outlines:
+        room_outlines = _fallback_room_outlines_from_indices(
+            scenario=scenario,
+            object_index=object_index,
+            receptacle_index=receptacle_index,
+        )
+        scene_index_diagnostics["room_outline_count"] = len(room_outlines)
+        scene_index_diagnostics["room_outlines"] = room_outlines
     scene_binding_diagnostics = _scene_binding_diagnostics(
         runtime_mode=args.runtime_mode,
         scenario=scenario,
@@ -352,6 +375,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "mapping_gaps": mapping_gaps,
         "object_index": object_index,
         "receptacle_index": receptacle_index,
+        "room_outlines": room_outlines,
         "scene_index_diagnostics": scene_index_diagnostics,
         "scene_binding_diagnostics": scene_binding_diagnostics,
         "robot_view_images": _real_smoke_robot_view_images(real_smoke),
@@ -512,6 +536,8 @@ def capture_semantic_pose_robot_views(
     view_paths: dict[str, Path],
     width: int,
     height: int,
+    focus_object_id: str | None = None,
+    focus_receptacle_id: str | None = None,
 ) -> dict[str, Any]:
     _require_isaac_import()
     from isaaclab.app import AppLauncher
@@ -521,14 +547,32 @@ def capture_semantic_pose_robot_views(
     simulation_app = app_launcher.app
     global _DEFERRED_SIMULATION_APP
     _DEFERRED_SIMULATION_APP = simulation_app
-    return _capture_isaac_lab_camera_views(
+    canonical_bundle = _canonical_robot_view_request_bundle(
+        state,
+        scene_usd=scene_usd,
+        target_images=view_paths,
+        width=width,
+        height=height,
+        focus_object_id=focus_object_id,
+        focus_receptacle_id=focus_receptacle_id,
+    )
+    capture = _capture_isaac_lab_camera_views(
         scene_usd=scene_usd,
         view_paths=view_paths,
         width=width,
         height=height,
         simulation_app=simulation_app,
         semantic_pose_state=_dict(state.get("semantic_pose_state")),
+        canonical_camera_request=_dict(canonical_bundle.get("request")),
+        canonical_output_dir=canonical_bundle.get("output_dir"),
     )
+    if canonical_bundle.get("request") and isinstance(
+        capture.get("canonical_camera_control"),
+        dict,
+    ):
+        capture["canonical_camera_control"]["request"] = canonical_bundle["request"]
+    capture["simulation_app_reuse_token"] = simulation_app
+    return capture
 
 
 def _isaac_app_launcher_args(app_launcher_type: Any) -> argparse.Namespace:
@@ -730,6 +774,7 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
 
     object_index: dict[str, dict[str, Any]] = {}
     receptacle_index: dict[str, dict[str, Any]] = {}
+    room_outlines: list[dict[str, Any]] = []
     prim_paths_by_name: dict[str, list[str]] = {}
     stage_prim_count = 0
     for prim in stage.Traverse():
@@ -737,6 +782,13 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
         prim_path = str(prim.GetPath())
         prim_paths_by_name.setdefault(prim.GetName(), []).append(prim_path)
         handle = _usd_handle_from_prim(prim_path, object_index, receptacle_index)
+        room_outline = _room_outline_from_usd_prim(
+            prim_path,
+            prim,
+            usd_geom=UsdGeom,
+        )
+        if room_outline is not None:
+            room_outlines.append(room_outline)
         if _is_object_prim_path(prim_path):
             object_index[handle] = _usd_index_entry(prim_path, prim.GetName(), "object")
         elif _is_receptacle_prim_path(prim_path):
@@ -772,6 +824,8 @@ def _inspect_usd_scene_index(usd_path: Path) -> dict[str, Any]:
         "stage_prim_count": stage_prim_count,
         "object_candidate_count": len(object_index),
         "receptacle_candidate_count": len(receptacle_index),
+        "room_outline_count": len(room_outlines),
+        "room_outlines": sorted(room_outlines, key=lambda item: str(item.get("room_id") or "")),
         "object_index": object_index,
         "receptacle_index": receptacle_index,
         "blockers": blockers,
@@ -917,6 +971,97 @@ def _support_pose_from_usd_bounds(
     return pose
 
 
+def _room_outline_from_usd_prim(
+    prim_path: str,
+    prim: Any,
+    *,
+    usd_geom: Any,
+) -> dict[str, Any] | None:
+    match = re.search(r"/(room_\d+)_visual(?:_\d+)?$", prim_path)
+    if match is None:
+        return None
+    bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
+    if bounds is None:
+        return None
+    center = _vec3(bounds.get("center"))
+    size = _vec3(bounds.get("size"))
+    if center is None or size is None:
+        return None
+    half_extents = [abs(size[0]) / 2.0, abs(size[1]) / 2.0]
+    if min(half_extents) < 0.25:
+        return None
+    room_id = match.group(1)
+    return {
+        "room_id": room_id,
+        "label": room_id.replace("_", " ").title(),
+        "center": [round(center[0], 6), round(center[1], 6)],
+        "half_extents": [round(half_extents[0], 6), round(half_extents[1], 6)],
+        "provenance": "isaac_usd_room_mesh_world_bounds",
+        "usd_prim_path": prim_path,
+    }
+
+
+def _room_outlines_from_scene_index_diagnostics(
+    diagnostics: dict[str, Any],
+) -> list[dict[str, Any]]:
+    return [dict(item) for item in diagnostics.get("room_outlines") or [] if isinstance(item, dict)]
+
+
+def _fallback_room_outlines_from_indices(
+    *,
+    scenario: CleanupScenario,
+    object_index: dict[str, dict[str, Any]],
+    receptacle_index: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[list[float]]] = {}
+    room_by_receptacle = {
+        item.receptacle_id: str(item.room_area or "isaac_scene") for item in scenario.receptacles
+    }
+    for receptacle in scenario.receptacles:
+        position = _support_pose_position(
+            _dict(_dict(receptacle_index.get(receptacle.receptacle_id)).get("support_pose"))
+        )
+        if position is None:
+            position = _vec3(
+                _dict(
+                    _dict(receptacle_index.get(receptacle.receptacle_id)).get("usd_world_bounds")
+                ).get("center")
+            )
+        if position is None:
+            continue
+        grouped.setdefault(room_by_receptacle[receptacle.receptacle_id], []).append(position)
+    for obj in scenario.objects:
+        position = _vec3(
+            _dict(_dict(object_index.get(obj.object_id)).get("usd_world_bounds")).get("center")
+        )
+        if position is None:
+            continue
+        grouped.setdefault(room_by_receptacle.get(obj.location_id, "isaac_scene"), []).append(
+            position
+        )
+    outlines = []
+    for room_id, points in grouped.items():
+        if not points:
+            continue
+        xs = [float(point[0]) for point in points]
+        ys = [float(point[1]) for point in points]
+        center = [round((min(xs) + max(xs)) / 2.0, 6), round((min(ys) + max(ys)) / 2.0, 6)]
+        half_extents = [
+            round(max((max(xs) - min(xs)) / 2.0, 0.8), 6),
+            round(max((max(ys) - min(ys)) / 2.0, 0.8), 6),
+        ]
+        outlines.append(
+            {
+                "room_id": room_id,
+                "label": room_id.replace("_", " ").title(),
+                "center": center,
+                "half_extents": half_extents,
+                "provenance": "scenario_fixture_room_bounds",
+            }
+        )
+    return sorted(outlines, key=lambda item: str(item.get("room_id") or ""))
+
+
 def _round_vec3(values: list[float] | tuple[float, ...]) -> list[float]:
     return [round(float(value), 6) for value in values[:3]]
 
@@ -1047,9 +1192,18 @@ def _usd_metadata_index_entry(
         "metadata_handle": handle,
         "metadata_object_id": metadata_object_id,
         "asset_id": asset_id,
+        "metadata_room_id": _metadata_room_id(metadata),
         "parent": str(metadata.get("parent") or ""),
         "is_static": bool(metadata.get("is_static")),
     }
+
+
+def _metadata_room_id(metadata: dict[str, Any]) -> str:
+    raw_room_id = metadata.get("room_id")
+    if raw_room_id in {None, ""}:
+        return ""
+    room_id = str(raw_room_id)
+    return room_id if room_id.startswith("room_") else f"room_{room_id}"
 
 
 def _is_molmospaces_object_metadata(metadata: dict[str, Any]) -> bool:
@@ -1485,6 +1639,8 @@ def _capture_isaac_lab_camera_views(
     semantic_filter: tuple[str, ...] = ("class",),
     scene_index_diagnostics: dict[str, Any] | None = None,
     semantic_pose_state: dict[str, Any] | None = None,
+    canonical_camera_request: dict[str, Any] | None = None,
+    canonical_output_dir: Path | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1571,6 +1727,24 @@ def _capture_isaac_lab_camera_views(
                     np=np,
                 )
             )
+    canonical_capture = (
+        _capture_scene_camera_request_with_existing_sim(
+            camera_request=canonical_camera_request,
+            output_dir=canonical_output_dir,
+            width=width,
+            height=height,
+            sim=sim,
+            sim_utils=sim_utils,
+            stage_utils=stage_utils,
+            camera_type=Camera,
+            camera_cfg_type=CameraCfg,
+            torch=torch,
+            np=np,
+            scene_bounds=scene_bounds,
+        )
+        if canonical_camera_request is not None and canonical_output_dir is not None
+        else None
+    )
     return {
         "render_steps": total_render_steps,
         "robot_view_images": saved,
@@ -1584,6 +1758,125 @@ def _capture_isaac_lab_camera_views(
         )
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),
+        "canonical_camera_control": canonical_capture,
+    }
+
+
+def _capture_scene_camera_request_with_existing_sim(
+    *,
+    camera_request: dict[str, Any],
+    output_dir: Path,
+    width: int,
+    height: int,
+    sim: Any,
+    sim_utils: Any,
+    stage_utils: Any,
+    camera_type: Any,
+    camera_cfg_type: Any,
+    torch: Any,
+    np: Any,
+    scene_bounds: dict[str, Any],
+) -> dict[str, Any]:
+    camera_request = normalize_camera_control_request(camera_request, width=width, height=height)
+    resolution = camera_request["render_resolution"]
+    width = int(resolution["width"])
+    height = int(resolution["height"])
+    lighting_diagnostics = _ensure_capture_lighting(
+        stage_utils,
+        profile=camera_request.get("lighting_profile"),
+    )
+    lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    color_profile = camera_request.get("color_profile") or {}
+    focal_length = float(lens.get("focal_length_mm", 24.0))
+    horizontal_aperture = _horizontal_aperture_from_lens(
+        lens,
+        width=width,
+        height=height,
+        focal_length=focal_length,
+    )
+    sim_utils.create_prim("/World/RoboclawsCanonicalRobotViewCameraRig", "Xform")
+    camera = camera_type(
+        cfg=camera_cfg_type(
+            prim_path="/World/RoboclawsCanonicalRobotViewCameraRig/Camera",
+            update_period=0.0,
+            height=height,
+            width=width,
+            data_types=["rgb"],
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=focal_length,
+                focus_distance=4.0,
+                horizontal_aperture=horizontal_aperture,
+            ),
+        )
+    )
+    sim.reset()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    saved: dict[str, str] = {}
+    shapes: dict[str, list[int]] = {}
+    color_diagnostics: dict[str, dict[str, Any]] = {}
+    views: list[dict[str, Any]] = []
+    total_render_steps = 0
+    for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
+        spec = _isaac_scene_camera_view_spec(
+            raw_spec,
+            index=index,
+            stage_utils=stage_utils,
+        )
+        position = torch.tensor([spec["eye"]], dtype=torch.float32, device=sim.device)
+        target = torch.tensor([spec["target"]], dtype=torch.float32, device=sim.device)
+        camera.set_world_poses_from_view(position, target)
+        rgb_image = None
+        for _ in range(24):
+            sim.step()
+            total_render_steps += 1
+            camera.update(dt=sim.get_physics_dt())
+            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
+                break
+        if rgb_image is None:
+            raise RuntimeError(
+                f"Isaac Lab camera did not produce an RGB tensor for {spec['view_id']}"
+            )
+        if not _image_has_variance(rgb_image, np=np):
+            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
+        rgb_image, color_diagnostic = apply_camera_color_profile(
+            rgb_image,
+            np=np,
+            profile=color_profile,
+            backend="isaaclab-prepared-usd",
+            view_id=str(spec["view_id"]),
+        )
+        output_path = output_dir / f"{spec['view_id']}.png"
+        Image.fromarray(rgb_image, mode="RGB").save(output_path)
+        saved[str(spec["view_id"])] = str(output_path)
+        shapes[str(spec["view_id"])] = list(rgb_image.shape)
+        color_diagnostics[str(spec["view_id"])] = color_diagnostic
+        views.append(
+            {
+                **spec,
+                "image_path": str(output_path),
+                "shape": list(rgb_image.shape),
+            }
+        )
+    return {
+        "schema": "isaac_scene_camera_views_v1",
+        "camera_control_api": camera_request.get("api_name") or CAMERA_CONTROL_API_NAME,
+        "camera_request_schema": camera_request.get("schema"),
+        "calibration_status": camera_request.get("calibration_status"),
+        "lighting_profile": camera_request.get("lighting_profile") or {},
+        "color_profile": color_profile,
+        "color_management": color_diagnostics,
+        "lighting_diagnostics": lighting_diagnostics,
+        "lens": camera_request.get("lens") or {},
+        "derived_lens": {
+            "focal_length_mm": focal_length,
+            "horizontal_aperture_mm": horizontal_aperture,
+        },
+        "render_steps": total_render_steps,
+        "scene_bounds": scene_bounds,
+        "views": views,
+        "images": saved,
+        "shapes": shapes,
     }
 
 
@@ -1644,6 +1937,7 @@ def _capture_isaac_lab_scene_camera_views(
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
     lens = camera_request.get("lens") if isinstance(camera_request.get("lens"), dict) else {}
+    color_profile = camera_request.get("color_profile") or {}
     focal_length = float(lens.get("focal_length_mm", 24.0))
     horizontal_aperture = _horizontal_aperture_from_lens(
         lens,
@@ -1670,6 +1964,7 @@ def _capture_isaac_lab_scene_camera_views(
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: dict[str, str] = {}
     shapes: dict[str, list[int]] = {}
+    color_diagnostics: dict[str, dict[str, Any]] = {}
     views: list[dict[str, Any]] = []
     total_render_steps = 0
     for index, raw_spec in enumerate(camera_request.get("views") or [], start=1):
@@ -1695,10 +1990,18 @@ def _capture_isaac_lab_scene_camera_views(
             )
         if not _image_has_variance(rgb_image, np=np):
             raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {spec['view_id']}")
+        rgb_image, color_diagnostic = apply_camera_color_profile(
+            rgb_image,
+            np=np,
+            profile=color_profile,
+            backend="isaaclab-prepared-usd",
+            view_id=str(spec["view_id"]),
+        )
         output_path = output_dir / f"{spec['view_id']}.png"
         Image.fromarray(rgb_image, mode="RGB").save(output_path)
         saved[str(spec["view_id"])] = str(output_path)
         shapes[str(spec["view_id"])] = list(rgb_image.shape)
+        color_diagnostics[str(spec["view_id"])] = color_diagnostic
         views.append(
             {
                 **spec,
@@ -1712,6 +2015,8 @@ def _capture_isaac_lab_scene_camera_views(
         "camera_request_schema": camera_request.get("schema"),
         "calibration_status": camera_request.get("calibration_status"),
         "lighting_profile": camera_request.get("lighting_profile") or {},
+        "color_profile": color_profile,
+        "color_management": color_diagnostics,
         "lighting_diagnostics": lighting_diagnostics,
         "lens": camera_request.get("lens") or {},
         "derived_lens": {
@@ -3825,7 +4130,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         ),
         robot_pose=robot_pose,
         robot_trajectory=[robot_pose],
-        room_outline_count=len(state.get("receptacle_index") or {}),
+        room_outline_count=len(state.get("room_outlines") or []),
         focus=focus,
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
@@ -3871,6 +4176,8 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         calibration_status=capture.get("calibration_status"),
         lighting_profile=capture.get("lighting_profile") or {},
         lighting_diagnostics=capture.get("lighting_diagnostics") or {},
+        color_profile=capture.get("color_profile") or {},
+        color_management=capture.get("color_management") or {},
         lens=capture.get("lens") or {},
         derived_lens=capture.get("derived_lens") or {},
         view_variant=view_variant,
@@ -3897,7 +4204,9 @@ def _robot_view_camera_control_contract(
     if request:
         contract = canonical_robot_view_camera_control_contract(
             backend=ISAACLAB_SUBPROCESS_BACKEND,
-            pose_source=str(_dict(robot_pose).get("pose_source") or "isaac_usd_world_bounds"),
+            pose_source=str(
+                _dict(robot_pose).get("pose_source") or "roboclaws_shared_scene_frame_support_pose"
+            ),
             request=request,
         )
         contract.update(
@@ -3907,8 +4216,9 @@ def _robot_view_camera_control_contract(
                 "focus": dict(focus or {}),
                 "evidence_note": (
                     "Isaac cleanup FPV and verify views were rendered from the same "
-                    "Roboclaws canonical eye/target camera-control request used by "
-                    "MuJoCo. Chase/map views remain auxiliary report evidence."
+                    "Roboclaws canonical eye/target camera-control request and shared "
+                    "scene-frame robot-pose resolver used by MuJoCo when room outlines "
+                    "are available. Chase/map views remain auxiliary report evidence."
                 ),
             }
         )
@@ -3937,6 +4247,41 @@ def _robot_view_camera_control_contract(
     return contract
 
 
+def _target_room_id_from_pose_inputs(
+    state: dict[str, Any],
+    receptacle_id: str,
+    support: dict[str, Any],
+) -> str | None:
+    scenario_receptacle = (
+        _dict(_receptacles_by_id(state).get(receptacle_id))
+        if isinstance(state.get("scenario"), dict)
+        else {}
+    )
+    room_area = str(scenario_receptacle.get("room_area") or "")
+    if room_area.startswith("room_"):
+        return room_area
+    metadata_room_id = str(support.get("metadata_room_id") or "")
+    if metadata_room_id:
+        return (
+            metadata_room_id if metadata_room_id.startswith("room_") else f"room_{metadata_room_id}"
+        )
+    target = _support_pose_position(support)
+    if target is None:
+        return None
+    for outline in state.get("room_outlines") or []:
+        center = outline.get("center")
+        half_extents = outline.get("half_extents")
+        if not isinstance(center, list | tuple) or not isinstance(half_extents, list | tuple):
+            continue
+        if float(center[0]) - float(half_extents[0]) <= target[0] <= float(center[0]) + float(
+            half_extents[0]
+        ) and float(center[1]) - float(half_extents[1]) <= target[1] <= float(center[1]) + float(
+            half_extents[1]
+        ):
+            return str(outline.get("room_id") or "") or None
+    return None
+
+
 def _robot_pose_for_receptacle(
     state: dict[str, Any],
     receptacle_id: str,
@@ -3949,25 +4294,17 @@ def _robot_pose_for_receptacle(
     x = float(support["x"])
     y = float(support["y"])
     z = float(support.get("z", 0.0))
-    stand_off = 1.15
-    center = _scene_index_center_xy(state)
-    preferred_angle = math.atan2(center[1] - y, center[0] - x)
-    robot_x = x + math.cos(preferred_angle) * stand_off
-    robot_y = y + math.sin(preferred_angle) * stand_off
-    theta = math.atan2(y - robot_y, x - robot_x)
-    return {
-        "frame": "usd_world",
-        "x": round(robot_x, 6),
-        "y": round(robot_y, 6),
-        "z": 0.0,
-        "theta": round(theta, 6),
-        "yaw_deg": round(math.degrees(theta), 6),
-        "head_pitch": 0.45,
-        "target_receptacle_id": receptacle_id,
-        "target_position": [round(x, 6), round(y, 6), round(z, 6)],
-        "pose_source": "usd_world_bounds_support_pose",
-        "support_pose_source": str(support.get("source") or ""),
-    }
+    pose = resolve_cleanup_robot_pose(
+        target_position=[x, y, z],
+        target_room_id=_target_room_id_from_pose_inputs(state, receptacle_id, support),
+        target_receptacle_id=receptacle_id,
+        room_outlines=state.get("room_outlines") or [],
+        scene_center=_scene_index_center_xy(state),
+        stand_off_m=1.15,
+        frame=MOLMOSPACES_SCENE_FRAME,
+    )
+    pose["support_pose_source"] = str(support.get("source") or "")
+    return pose
 
 
 def _receptacle_support_pose(state: dict[str, Any], receptacle_id: str) -> dict[str, Any]:
@@ -3980,6 +4317,11 @@ def _receptacle_support_pose(state: dict[str, Any], receptacle_id: str) -> dict[
         support = _dict(_dict(state.get("receptacle_index")).get(str(handle))).get("support_pose")
         support_pose = _dict(support)
         if _has_xy(support_pose) and support_pose.get("source") == "usd_world_bounds_top_center":
+            metadata_room_id = _dict(_dict(state.get("receptacle_index")).get(str(handle))).get(
+                "metadata_room_id"
+            )
+            if metadata_room_id is not None:
+                support_pose["metadata_room_id"] = metadata_room_id
             return support_pose
     return {}
 
@@ -4030,6 +4372,92 @@ def _camera_capture_provenance(capture: dict[str, Any]) -> str:
     return "isaac_lab_camera_rgb_anchor_orbit_scene_probe"
 
 
+def _copy_canonical_robot_view_capture(
+    capture: Any,
+    *,
+    target_images: dict[str, Path],
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    capture = _dict(capture)
+    if not capture:
+        return {}
+    request_views = {
+        str(item.get("robot_view_role") or item.get("view_id") or ""): _dict(item)
+        for item in _dict(capture.get("request")).get("views") or []
+        if isinstance(item, dict)
+    }
+    copied: dict[str, str] = {}
+    merged_views: list[dict[str, Any]] = []
+    for view in capture.get("views") or []:
+        item = _dict(view)
+        role = str(item.get("robot_view_role") or "")
+        if role not in {"fpv", "verify"}:
+            continue
+        source = Path(str(item.get("image_path") or ""))
+        target = target_images[role]
+        _copy_nonblank_rgb_image(
+            source,
+            target,
+            width=width,
+            height=height,
+            description=f"canonical Isaac {role} robot view",
+        )
+        copied[role] = str(target)
+        request_view = request_views.get(role) or request_views.get(str(item.get("view_id") or ""))
+        merged_views.append({**request_view, **item})
+    if not {"fpv", "verify"} <= set(copied):
+        return {}
+    return {
+        "request": _dict(capture.get("request")),
+        "images": copied,
+        "views": merged_views,
+        "render_steps": int(capture.get("render_steps") or 0),
+        "color_profile": _dict(capture.get("color_profile")),
+        "color_management": _dict(capture.get("color_management")),
+    }
+
+
+def _canonical_robot_view_request_bundle(
+    state: dict[str, Any],
+    *,
+    scene_usd: Path,
+    target_images: dict[str, Path],
+    width: int,
+    height: int,
+    focus_object_id: str | None,
+    focus_receptacle_id: str | None,
+) -> dict[str, Any]:
+    del scene_usd
+    robot_pose = _robot_pose_for_receptacle(
+        state,
+        str(state.get("current_receptacle_id") or ""),
+    )
+    if robot_pose.get("pose_source") != CLEANUP_ROBOT_POSE_SOURCE:
+        return {}
+    request = canonical_cleanup_robot_view_camera_request(
+        label="isaac_robot_view",
+        robot_pose=robot_pose,
+        focus=_canonical_robot_view_focus(
+            state,
+            robot_pose,
+            focus_object_id=focus_object_id,
+            focus_receptacle_id=focus_receptacle_id,
+        ),
+        width=width,
+        height=height,
+    )
+    if request is None:
+        return {}
+    output_dir = (
+        target_images["fpv"].parent / f"{target_images['fpv'].stem}.canonical_camera_control"
+    )
+    return {
+        "request": request,
+        "output_dir": output_dir,
+    }
+
+
 def _real_semantic_pose_robot_view_images(
     state: dict[str, Any],
     target_images: dict[str, Path],
@@ -4050,6 +4478,8 @@ def _real_semantic_pose_robot_view_images(
             view_paths=target_images,
             width=width,
             height=height,
+            focus_object_id=focus_object_id,
+            focus_receptacle_id=focus_receptacle_id,
         )
     except Exception as exc:
         state.setdefault("mapping_gaps", []).append(
@@ -4069,14 +4499,11 @@ def _real_semantic_pose_robot_view_images(
     }
     if not _has_required_robot_view_images(images):
         return {}
-    canonical_capture = _capture_canonical_robot_fpv_verify(
-        state,
-        scene_usd=Path(scene_usd),
+    canonical_capture = _copy_canonical_robot_view_capture(
+        capture.get("canonical_camera_control"),
         target_images=target_images,
         width=width,
         height=height,
-        focus_object_id=focus_object_id,
-        focus_receptacle_id=focus_receptacle_id,
     )
     if canonical_capture:
         for key, value in canonical_capture["images"].items():
@@ -4095,6 +4522,18 @@ def _real_semantic_pose_robot_view_images(
     }
     if canonical_capture:
         state["canonical_robot_view_camera_control_request"] = canonical_capture["request"]
+        state["canonical_robot_view_camera_control_capture"] = {
+            "schema": "isaac_canonical_robot_view_camera_capture_v1",
+            "camera_control_api": _dict(canonical_capture.get("request")).get("api_name")
+            or CAMERA_CONTROL_API_NAME,
+            "camera_model": CANONICAL_CAMERA_MODEL,
+            "coordinate_frame": _dict(canonical_capture.get("request")).get("coordinate_frame")
+            or MOLMOSPACES_SCENE_FRAME,
+            "render_steps": int(canonical_capture.get("render_steps") or 0),
+            "color_profile": _dict(canonical_capture.get("color_profile")),
+            "color_management": _dict(canonical_capture.get("color_management")),
+            "views": canonical_capture.get("views") or [],
+        }
         state["semantic_pose_view_capture"]["canonical_camera_control_render_steps"] = int(
             canonical_capture.get("render_steps") or 0
         )
@@ -4144,12 +4583,13 @@ def _capture_canonical_robot_fpv_verify(
     height: int,
     focus_object_id: str | None,
     focus_receptacle_id: str | None,
+    simulation_app: Any | None = None,
 ) -> dict[str, Any]:
     robot_pose = _robot_pose_for_receptacle(
         state,
         str(state.get("current_receptacle_id") or ""),
     )
-    if robot_pose.get("pose_source") != "usd_world_bounds_support_pose":
+    if robot_pose.get("pose_source") != CLEANUP_ROBOT_POSE_SOURCE:
         return {}
     request = canonical_cleanup_robot_view_camera_request(
         label="isaac_robot_view",
@@ -4169,13 +4609,23 @@ def _capture_canonical_robot_fpv_verify(
         target_images["fpv"].parent / f"{target_images['fpv'].stem}.canonical_camera_control"
     )
     try:
-        capture = capture_scene_camera_views(
-            scene_usd=scene_usd,
-            camera_request=request,
-            output_dir=output_dir,
-            width=width,
-            height=height,
-        )
+        if simulation_app is not None:
+            capture = _capture_isaac_lab_scene_camera_views(
+                scene_usd=scene_usd,
+                camera_request=request,
+                output_dir=output_dir,
+                width=width,
+                height=height,
+                simulation_app=simulation_app,
+            )
+        else:
+            capture = capture_scene_camera_views(
+                scene_usd=scene_usd,
+                camera_request=request,
+                output_dir=output_dir,
+                width=width,
+                height=height,
+            )
     except Exception as exc:
         state.setdefault("mapping_gaps", []).append(
             {

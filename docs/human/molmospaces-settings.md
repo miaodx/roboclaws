@@ -569,8 +569,8 @@ box annotation. The main lane now uses explicit canonical
 `eye`/`target`/`up` poses in the MolmoSpaces scene frame for both backends.
 Room-level views use MolmoSpaces room mesh world bounds, not MuJoCo mesh
 `geom_size`, so the room camera starts from a real room scale. The report also
-records camera-pose, camera-intrinsics, room-scale, lighting, and USD-bounds
-residuals separately. MuJoCo canonical views convert the explicit
+records camera-pose, camera-intrinsics, room-scale, lighting, color profile,
+and USD-bounds residuals separately. MuJoCo canonical views convert the explicit
 `eye`/`target` request into MuJoCo's free-camera azimuth/elevation convention
 before rendering; the manifest records the backend pose used for the parity
 check. Isaac uses the prepared USD's scene lights by default and reports the
@@ -579,8 +579,8 @@ diagnostics are bounds-aware: large receptacles may aim the camera above a
 surface, so the report treats a target inside the USD XY footprint and within
 the configured surface-aim height allowance separately from a true target/scene
 frame mismatch. A passing camera-pose contract means the two backends accepted
-the same render-camera API pose; material differences or renderer lighting
-differences can still prevent full visual identity.
+the same render-camera API pose; material differences, renderer lighting, or
+display color-management differences can still prevent full visual identity.
 
 Real visual MCP smoke:
 

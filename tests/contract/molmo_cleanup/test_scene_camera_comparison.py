@@ -9,20 +9,31 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from roboclaws.molmo_cleanup.camera_control import CAMERA_CONTROL_API_NAME
+from roboclaws.molmo_cleanup.camera_control import (
+    CAMERA_CONTROL_API_NAME,
+    DEFAULT_SCENE_PROBE_COLOR_PROFILE,
+)
 from roboclaws.molmo_cleanup.scene_camera_comparison import (
     ISAAC_LANE_ID,
     MOLMOSPACES_LANE_ID,
     SCENE_CAMERA_COMPARISON_SCHEMA,
+    _backend_swap_geometry_contract,
     _camera_intrinsics_contract_from_capture,
     _camera_pose_contract_from_capture,
+    _candidate_color_calibrations,
     _canonical_camera_control_views,
     _contact_sheet_entries,
     _image_pair_visual_delta,
     _image_visual_metrics,
     _isaac_view_specs,
     _molmospaces_view_specs,
+    _normalize_color_profile_for_replay,
+    _offline_color_profile_replay,
     _projection_diagnostics,
+    _render_domain_calibration,
+    _render_domain_contract_probe,
+    _render_domain_source_diagnostics,
+    _render_domain_view_triage,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
@@ -48,6 +59,107 @@ def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     Image.new("RGB", (64, 48), color=color).save(path)
 
 
+def _visual_metric_pair(
+    view_id: str,
+    *,
+    molmo_luminance: float,
+    isaac_luminance: float,
+) -> dict[str, object]:
+    return {
+        "view_id": view_id,
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {"mean_luminance": molmo_luminance},
+            ISAAC_LANE_ID: {"mean_luminance": isaac_luminance},
+        },
+    }
+
+
+def _write_render_contract_probe_fixtures(
+    tmp_path: Path,
+    manifest: dict[str, object],
+) -> None:
+    xml_path = tmp_path / "scene.xml"
+    xml_path.write_text(
+        """
+<mujoco>
+  <asset>
+    <texture type="2d" name="CarpetTex" file="textures/Carpet.png" />
+    <material name="material_Carpet" texture="CarpetTex" rgba="1 0.8 0.6 1" />
+  </asset>
+  <worldbody>
+    <light pos="1 -1 1.5" directional="true" diffuse="0.5 0.5 0.5" />
+    <body name="bed_01">
+      <geom name="bed_01_visual_0" class="__VISUAL_MJT__" type="mesh"
+            material="material_Carpet" mesh="BedMesh" />
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    usd_path = tmp_path / "scene.usda"
+    usd_path.write_text(
+        """
+#usda 1.0
+def Xform "val_1"
+{
+  def Scope "Geometry"
+  {
+    def Xform "bed_01"
+    {
+      def Scope "Geometry"
+      {
+        def Mesh "BedMesh"
+        {
+          rel material:binding = </val_1/Geometry/bed_01/Materials/material_Carpet>
+        }
+      }
+      def Scope "Materials"
+      {
+        def Material "material_Carpet"
+        {
+          token outputs:surface.connect =
+              </val_1/Geometry/bed_01/Materials/material_Carpet/PreviewSurface.outputs:surface>
+          def Shader "PreviewSurface"
+          {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect =
+                </val_1/Geometry/bed_01/Materials/material_Carpet/DiffuseTexture.outputs:rgb>
+          }
+          def Shader "DiffuseTexture"
+          {
+            asset inputs:file = @textures/Carpet.png@
+          }
+        }
+      }
+    }
+    def Mesh "wall_01"
+    {
+      bool primvars:doNotCastShadows = 1
+    }
+  }
+  def DomeLight "scene_skybox_light"
+  {
+    float inputs:intensity = 2000
+  }
+  def DistantLight "scene_dir_light"
+  {
+    float inputs:intensity = 500
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest["lanes"][MOLMOSPACES_LANE_ID]["scene_xml"] = str(xml_path)  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["scene_usd"] = str(usd_path)  # type: ignore[index]
+    manifest["canonical_camera_views"][1]["anchor_id"] = "bed_01"  # type: ignore[index]
+    manifest["canonical_camera_views"][1]["usd_prim_path"] = "/val_1/Geometry/bed_01"  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["views"][1]["anchor_id"] = "bed_01"  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["views"][1]["usd_prim_path"] = (  # type: ignore[index]
+        "/val_1/Geometry/bed_01"
+    )
+
+
 def _manifest() -> dict[str, object]:
     return {
         "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
@@ -59,7 +171,7 @@ def _manifest() -> dict[str, object]:
             "MuJoCo and prepared Isaac USD expose different world frames for this scene. "
             "Views are matched by MolmoSpaces metadata handles and category anchors, then "
             "rendered through one Roboclaws camera-control request using the same anchor "
-            "lens, lighting profile, and view ids."
+            "lens, lighting profile, color profile, and view ids."
         ),
         "camera_control": {
             "api_name": CAMERA_CONTROL_API_NAME,
@@ -74,6 +186,11 @@ def _manifest() -> dict[str, object]:
                 "isaac_dome_intensity": 0.0,
                 "isaac_key_intensity": 0.0,
                 "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
+            },
+            "color_profile": {
+                "profile_id": "display_srgb_soft_highlight_v1",
+                "highlight_knee": 225.0,
+                "highlight_compression": 0.55,
             },
             "calibration_status": "canonical_scene_frame_similarity_fit_v1",
             "calibration_note": (
@@ -215,8 +332,9 @@ def _manifest() -> dict[str, object]:
         },
         "room_scale_contract": {
             "schema": "room_scale_contract_v1",
-            "status": "room_outline_mesh_bounds",
+            "status": "same_room_outlines_within_threshold",
             "room_count": 1,
+            "matched_room_outline_count": 1,
             "room_outline_source": "molmospaces_room_outlines",
             "isaac_scene_bounds": {
                 "size": [9.976, 10.097, 3.154],
@@ -224,6 +342,10 @@ def _manifest() -> dict[str, object]:
             },
             "max_room_to_scene_width_ratio": 0.599,
             "max_room_to_scene_depth_ratio": 0.987,
+            "max_room_outline_center_delta_m": 0.0,
+            "max_room_outline_size_delta_m": 0.0,
+            "max_room_outline_half_extent_delta_m": 0.0,
+            "room_outline_threshold_m": 0.005,
             "interpretation": "Room-level camera poses are derived from room mesh world bounds.",
             "rooms": [
                 {
@@ -320,6 +442,7 @@ def _manifest() -> dict[str, object]:
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
                 "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "images": {
                     "room_01_room_2": {
                         "path": "molmospaces/camera_views/room_01_room_2.png",
@@ -369,6 +492,7 @@ def _manifest() -> dict[str, object]:
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
                 "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "lighting_diagnostics": {
                     "status": "using_existing_stage_lights",
                     "existing_light_count": 2,
@@ -423,9 +547,23 @@ def _manifest() -> dict[str, object]:
 
 def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path: Path) -> None:
     manifest = _manifest()
+    _write_render_contract_probe_fixtures(tmp_path, manifest)
     for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
         for image in lane["images"].values():  # type: ignore[index,union-attr]
-            _write_image(tmp_path / image["path"], color=(20, 80, 120))  # type: ignore[index]
+            path = str(image["path"])  # type: ignore[index]
+            if "molmospaces" in path and "room_01" in path:
+                color = (80, 80, 80)
+            elif "isaaclab" in path and "room_01" in path:
+                color = (180, 180, 180)
+            elif "molmospaces" in path and "view_01" in path:
+                color = (180, 180, 180)
+            elif "isaaclab" in path and "view_01" in path:
+                color = (80, 80, 80)
+            elif "molmospaces" in path:
+                color = (120, 70, 50)
+            else:
+                color = (200, 160, 120)
+            _write_image(tmp_path / path, color=color)
 
     report_path = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
     html = report_path.read_text(encoding="utf-8")
@@ -443,9 +581,23 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Camera Pose Contract" in html
     assert "Camera Intrinsics Contract" in html
     assert "Room Scale Contract" in html
+    assert "Backend Swap Geometry Contract" in html
     assert "Target Vs USD Bounds Diagnostics" in html
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
+    assert "Render Domain Source Diagnostics" in html
+    assert "Render Domain View Triage" in html
+    assert "Render Domain Contract Probe" in html
+    assert "geometry_swap_ready_render_domain_pending" in html
+    assert "render_domain_residual_high" in html
+    assert "same_explicit_eye_target_pose" in html
+    assert "object_material_texture_binding_contract" in html
+    assert "room_light_wall_shadow_contract" in html
+    assert "light_or_shadow_contract_delta" in html
+    assert "mujoco_housegen_materials" in html
+    assert "isaac_preview_surface_material_conversion" in html
+    assert "USD PreviewSurface" in html
+    assert "doNotCastShadows" in html
     assert "same_backend_pose_within_threshold" in html
     assert "same_projected_geometry_within_threshold" in html
     assert "intrinsics_consistent" in html
@@ -454,10 +606,13 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "https://github.com/allenai/molmospaces.git" in html
     assert CAMERA_CONTROL_API_NAME in html
     assert "canonical_scene_frame_similarity_fit_v1" in html
+    assert "display_srgb_soft_highlight_v1" in html
     assert "canonical_eye_target_camera_v1" in html
     assert "backend eye=" in html
     assert "scene_probe_existing_usd_lights_v1" in html
     assert "using_existing_stage_lights" in html
+    assert "Candidate color calibrations" in html
+    assert "best=" in html
     assert MOLMOSPACES_LANE_ID in html
     assert ISAAC_LANE_ID in html
     assert "molmospaces/camera_views/view_01_bed.png" in html
@@ -482,6 +637,201 @@ def test_scene_camera_visual_metrics_quantify_brightness_delta(tmp_path: Path) -
     assert delta["mean_absolute_pixel_delta"] == pytest.approx(100.0)
 
 
+def test_scene_camera_color_profile_replay_applies_backend_gain(tmp_path: Path) -> None:
+    molmo = tmp_path / "molmo.png"
+    isaac = tmp_path / "isaac.png"
+    _write_image(molmo, color=(100, 100, 100))
+    _write_image(isaac, color=(200, 200, 200))
+
+    replay = _offline_color_profile_replay(
+        view_id="view_1",
+        label="View 1",
+        molmo_path=molmo,
+        isaac_path=isaac,
+        color_profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "highlight_knee": 225.0,
+            "highlight_compression": 0.55,
+            "gamma": 1.0,
+            "backend_luminance_gain": {
+                MOLMOSPACES_LANE_ID: 1.0,
+                ISAAC_LANE_ID: 0.5,
+            },
+        },
+    )
+
+    assert replay["lanes"][MOLMOSPACES_LANE_ID]["mean_luminance"] == pytest.approx(100.0)
+    assert replay["lanes"][ISAAC_LANE_ID]["mean_luminance"] == pytest.approx(100.0)
+    assert replay["delta"]["mean_luminance_delta"] == pytest.approx(0.0)
+    assert (tmp_path / "isaac.color_profile_replay.png").is_file()
+
+
+def test_scene_camera_color_profile_replay_prefers_view_gain(tmp_path: Path) -> None:
+    molmo = tmp_path / "molmo.png"
+    isaac = tmp_path / "isaac.png"
+    _write_image(molmo, color=(100, 100, 100))
+    _write_image(isaac, color=(200, 200, 200))
+
+    replay = _offline_color_profile_replay(
+        view_id="room_02_room_3",
+        label="Room 3",
+        molmo_path=molmo,
+        isaac_path=isaac,
+        color_profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_luminance_gain": {
+                MOLMOSPACES_LANE_ID: 1.0,
+                ISAAC_LANE_ID: 0.5,
+            },
+            "backend_view_luminance_gain": {ISAAC_LANE_ID: {"room_02_room_3": 0.25}},
+        },
+    )
+
+    assert replay["lanes"][ISAAC_LANE_ID]["mean_luminance"] == pytest.approx(50.0)
+    assert replay["delta"]["mean_luminance_delta"] == pytest.approx(-50.0)
+
+
+def test_scene_camera_color_profile_replay_prefers_view_rgb_gain(tmp_path: Path) -> None:
+    molmo = tmp_path / "molmo.png"
+    isaac = tmp_path / "isaac.png"
+    _write_image(molmo, color=(100, 100, 100))
+    _write_image(isaac, color=(200, 200, 200))
+
+    replay = _offline_color_profile_replay(
+        view_id="room_02_room_3",
+        label="Room 3",
+        molmo_path=molmo,
+        isaac_path=isaac,
+        color_profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_rgb_gain": {ISAAC_LANE_ID: [1.0, 1.0, 1.0]},
+            "backend_view_rgb_gain": {ISAAC_LANE_ID: {"room_02_room_3": [0.5, 0.25, 0.1]}},
+        },
+    )
+
+    assert replay["lanes"][ISAAC_LANE_ID]["mean_rgb"] == pytest.approx([100.0, 50.0, 20.0])
+    assert replay["delta"]["mean_absolute_pixel_delta"] == pytest.approx(43.333333333333336)
+
+
+def test_scene_camera_color_profile_replay_normalizes_legacy_profile() -> None:
+    profile = _normalize_color_profile_for_replay({"profile_id": "display_srgb_soft_highlight_v1"})
+
+    assert profile["backend_luminance_gain"][MOLMOSPACES_LANE_ID] == pytest.approx(1.0)
+    assert profile["backend_luminance_gain"][ISAAC_LANE_ID] == pytest.approx(0.7161647108631373)
+
+
+def test_scene_camera_color_profile_replay_normalizes_view_gain() -> None:
+    profile = _normalize_color_profile_for_replay(
+        {
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_view_luminance_gain": {
+                ISAAC_LANE_ID: {"room_02_room_3": "0.25", "bad": "not-a-float"}
+            },
+            "backend_view_luminance_gain_source": "unit",
+        }
+    )
+
+    assert profile["backend_view_luminance_gain"][ISAAC_LANE_ID]["room_02_room_3"] == (
+        pytest.approx(0.25)
+    )
+    assert "bad" not in profile["backend_view_luminance_gain"][ISAAC_LANE_ID]
+    assert profile["backend_view_luminance_gain_source"] == "unit"
+
+
+def test_scene_camera_color_profile_replay_normalizes_rgb_gain() -> None:
+    profile = _normalize_color_profile_for_replay(
+        {
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_rgb_gain": {ISAAC_LANE_ID: ["0.5", "0.25", "0.1"]},
+            "backend_view_rgb_gain": {
+                ISAAC_LANE_ID: {
+                    "room_02_room_3": ["0.4", "0.3", "0.2"],
+                    "bad": ["not-a-float", "0.3", "0.2"],
+                }
+            },
+            "backend_view_rgb_gain_source": "unit-rgb",
+        }
+    )
+
+    assert profile["backend_rgb_gain"][ISAAC_LANE_ID] == pytest.approx([0.5, 0.25, 0.1])
+    assert profile["backend_view_rgb_gain"][ISAAC_LANE_ID]["room_02_room_3"] == pytest.approx(
+        [0.4, 0.3, 0.2]
+    )
+    assert "bad" not in profile["backend_view_rgb_gain"][ISAAC_LANE_ID]
+    assert profile["backend_view_rgb_gain_source"] == "unit-rgb"
+
+
+def test_scene_camera_candidate_color_calibrations_compare_gain_strategies(
+    tmp_path: Path,
+) -> None:
+    molmo = tmp_path / "molmo.png"
+    isaac = tmp_path / "isaac.png"
+    _write_image(molmo, color=(100, 100, 100))
+    _write_image(isaac, color=(200, 160, 120))
+    view_results = [
+        {
+            "view_id": "view_1",
+            "label": "View 1",
+            "lanes": {
+                MOLMOSPACES_LANE_ID: _image_visual_metrics(molmo),
+                ISAAC_LANE_ID: _image_visual_metrics(isaac),
+            },
+            "delta": _image_pair_visual_delta(molmo, isaac),
+        }
+    ]
+    summary = _candidate_color_calibrations(
+        view_results,
+        entries=[
+            {
+                "view_id": "view_1",
+                "label": "View 1",
+                "images": {MOLMOSPACES_LANE_ID: molmo, ISAAC_LANE_ID: isaac},
+            }
+        ],
+        base_color_profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_luminance_gain": {MOLMOSPACES_LANE_ID: 1.0, ISAAC_LANE_ID: 1.0},
+        },
+    )
+
+    candidates = {item["candidate_id"]: item for item in summary["candidates"]}
+    assert summary["best_candidate"] in candidates
+    assert candidates["current_profile"]["mean_absolute_pixel_delta"] > 0.0
+    assert candidates["ideal_per_view_luminance_gain"]["mean_absolute_pixel_delta"] > 0.0
+    assert candidates["ideal_per_view_rgb_gain"]["gain_delta"]["backend_view_rgb_gain"][
+        ISAAC_LANE_ID
+    ]["view_1"] == pytest.approx([0.5, 0.625, 0.8333333333333334])
+    assert candidates["ideal_per_view_rgb_gain"]["gain_delta"]["backend_view_luminance_gain"][
+        ISAAC_LANE_ID
+    ]["view_1"] == pytest.approx(1.0)
+
+
+def test_scene_camera_render_domain_calibration_detects_global_gain() -> None:
+    calibration = _render_domain_calibration(
+        [
+            _visual_metric_pair("view_1", molmo_luminance=50.0, isaac_luminance=100.0),
+            _visual_metric_pair("view_2", molmo_luminance=100.0, isaac_luminance=200.0),
+        ]
+    )
+
+    assert calibration["status"] == "global_luminance_gain_sufficient"
+    assert calibration["global_isaac_luminance_gain"] == pytest.approx(0.5)
+    assert calibration["mean_abs_calibrated_luminance_residual"] == pytest.approx(0.0)
+
+
+def test_scene_camera_render_domain_calibration_flags_view_dependent_delta() -> None:
+    calibration = _render_domain_calibration(
+        [
+            _visual_metric_pair("view_1", molmo_luminance=50.0, isaac_luminance=100.0),
+            _visual_metric_pair("view_2", molmo_luminance=180.0, isaac_luminance=200.0),
+        ]
+    )
+
+    assert calibration["status"] == "view_dependent_render_domain_delta"
+    assert calibration["mean_abs_calibrated_luminance_residual"] > 12.0
+    assert "material" in calibration["recommended_next_action"]
+
+
 def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() -> None:
     manifest = _manifest()
     diagnostics = _projection_diagnostics(manifest)
@@ -494,6 +844,169 @@ def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() ->
     target = next(point for point in bed["points"] if point["label"] == "camera_target")
     assert target["molmospaces_pixel"] == pytest.approx(target["isaac_pixel"])
     assert target["inside_frame"] is True
+
+
+def test_backend_swap_geometry_contract_separates_camera_from_render_domain() -> None:
+    manifest = _manifest()
+    manifest["visual_diagnostics"] = {
+        "schema": "scene_camera_visual_diagnostics_v1",
+        "status": "computed",
+        "view_count": 2,
+        "mean_abs_mean_luminance_delta": 18.0,
+        "mean_absolute_pixel_delta": 42.0,
+        "render_domain_calibration": {
+            "schema": "scene_camera_render_domain_calibration_v1",
+            "status": "view_dependent_render_domain_delta",
+            "recommended_next_action": (
+                "A single global gain leaves large residuals; inspect per-room lights, "
+                "material albedo, indirect lighting, and tone response before changing "
+                "camera geometry."
+            ),
+        },
+    }
+
+    contract = _backend_swap_geometry_contract(manifest)
+
+    checks = {item["check"]: item for item in contract["required_checks"]}
+    assert contract["status"] == "geometry_swap_ready_render_domain_pending"
+    assert contract["geometry_contract_status"] == "pass"
+    assert contract["visual_residual_status"] == "render_domain_residual_high"
+    assert contract["same_api_agent_swap_claim"] is True
+    assert checks["same_camera_api"]["status"] == "pass"
+    assert checks["same_explicit_eye_target_pose"]["max_delta_m"] == pytest.approx(0.0)
+    assert checks["same_intrinsics"]["vertical_fov_deg"] == pytest.approx(45.0)
+    assert checks["same_room_scale"]["status"] == "pass"
+    assert checks["same_projected_geometry"]["max_pixel_delta"] == pytest.approx(0.0)
+    assert "material albedo" in contract["recommended_next_action"]
+
+
+def test_backend_swap_geometry_contract_blocks_room_scale_mismatch() -> None:
+    manifest = _manifest()
+    manifest["room_scale_contract"] = {
+        **manifest["room_scale_contract"],  # type: ignore[index]
+        "status": "room_outline_mismatch",
+        "max_room_outline_center_delta_m": 0.26,
+    }
+
+    contract = _backend_swap_geometry_contract(manifest)
+
+    checks = {item["check"]: item for item in contract["required_checks"]}
+    assert contract["status"] == "geometry_swap_not_ready"
+    assert contract["geometry_contract_status"] == "fail"
+    assert contract["same_api_agent_swap_claim"] is False
+    assert checks["same_room_scale"]["status"] == "fail"
+
+
+def test_render_domain_source_diagnostics_cite_official_renderer_paths() -> None:
+    manifest = _manifest()
+    manifest["visual_diagnostics"] = {
+        "render_domain_calibration": {"status": "view_dependent_render_domain_delta"},
+    }
+
+    diagnostics = _render_domain_source_diagnostics(manifest)
+
+    refs = {item["evidence_id"]: item for item in diagnostics["source_references"]}
+    assert diagnostics["status"] == "official_sources_available"
+    assert diagnostics["root_cause_status"] == "render_contract_mismatch_evidence"
+    assert diagnostics["available_source_reference_count"] == diagnostics["source_reference_count"]
+    assert refs["mujoco_housegen_materials"]["status"] == "available"
+    assert refs["mujoco_housegen_materials"]["path"] == (
+        "vendors/molmospaces/molmo_spaces/housegen/builder.py"
+    )
+    assert "texture" in refs["mujoco_asset_texture_material_collection"]["snippet_summary"].lower()
+    assert refs["isaac_preview_surface_material_conversion"]["status"] == "available"
+    assert "opacity" in refs["isaac_preview_surface_material_conversion"]["snippet_summary"].lower()
+    assert "shadow" in refs["isaac_default_lights_and_shadow_flags"]["claim"].lower()
+    assert "material/light/texture" in diagnostics["recommended_next_action"]
+
+
+def test_render_domain_view_triage_separates_geometry_from_renderer_contracts() -> None:
+    manifest = _manifest()
+    manifest["projection_diagnostics"] = {
+        "pairs": [
+            {"view_id": "room_01_room_2", "max_pixel_delta": 0.0},
+            {"view_id": "view_01_bed", "max_pixel_delta": 0.0},
+        ]
+    }
+    manifest["visual_diagnostics"] = {
+        "views": [
+            {
+                "view_id": "room_01_room_2",
+                "label": "Room 2",
+                "delta": {
+                    "mean_absolute_pixel_delta": 58.0,
+                    "mean_luminance_delta": 36.0,
+                },
+            },
+            {
+                "view_id": "view_01_bed",
+                "label": "Bed",
+                "delta": {
+                    "mean_absolute_pixel_delta": 72.0,
+                    "mean_luminance_delta": -64.0,
+                },
+            },
+        ]
+    }
+    manifest["canonical_camera_views"][1].pop("usd_prim_path", None)  # type: ignore[index,union-attr]
+
+    triage = _render_domain_view_triage(manifest)
+
+    rows = {item["view_id"]: item for item in triage["views"]}
+    assert triage["status"] == "computed"
+    assert triage["top_residual_view_id"] == "view_01_bed"
+    assert triage["high_residual_view_count"] == 2
+    assert rows["view_01_bed"]["geometry_status"] == "projection_pass"
+    assert rows["view_01_bed"]["suspected_contract"] == ("object_material_texture_binding_contract")
+    assert rows["view_01_bed"]["usd_prim_path"] == "/val_1/Geometry/bed_01"
+    assert rows["room_01_room_2"]["geometry_status"] == "projection_pass"
+    assert rows["room_01_room_2"]["suspected_contract"] == "room_light_wall_shadow_contract"
+    assert "camera geometry separate" in triage["interpretation"]
+
+
+def test_render_domain_contract_probe_reads_mjcf_and_usda_contracts(tmp_path: Path) -> None:
+    manifest = _manifest()
+    _write_render_contract_probe_fixtures(tmp_path, manifest)
+    manifest["render_domain_view_triage"] = {
+        "views": [
+            {
+                "view_id": "view_01_bed",
+                "anchor_kind": "receptacle",
+                "suspected_contract": "object_material_texture_binding_contract",
+                "render_residual_class": "high_pixel_and_luminance",
+                "mean_absolute_pixel_delta": 72.0,
+                "abs_mean_luminance_delta": 64.0,
+                "usd_prim_path": "/val_1/Geometry/bed_01",
+            },
+            {
+                "view_id": "room_01_room_2",
+                "anchor_kind": "room",
+                "suspected_contract": "room_light_wall_shadow_contract",
+                "render_residual_class": "high_pixel_and_luminance",
+                "mean_absolute_pixel_delta": 58.0,
+                "abs_mean_luminance_delta": 36.0,
+                "usd_prim_path": "",
+            },
+        ]
+    }
+
+    probe = _render_domain_contract_probe(manifest)
+
+    rows = {item["view_id"]: item for item in probe["views"]}
+    bed = rows["view_01_bed"]
+    room = rows["room_01_room_2"]
+    assert probe["status"] == "computed"
+    assert probe["mujoco_parse_status"] == "parsed"
+    assert probe["isaac_parse_status"] == "parsed"
+    assert bed["mujoco"]["materials"] == ["material_Carpet"]
+    assert bed["isaac"]["materials"] == ["material_Carpet"]
+    assert Path(bed["mujoco"]["texture_files"][0]).name == "Carpet.png"
+    assert Path(bed["isaac"]["texture_files"][0]).name == "Carpet.png"
+    assert bed["contract_delta"]["status"] == "material_texture_names_match"
+    assert room["contract_delta"]["status"] == "light_or_shadow_contract_delta"
+    assert room["contract_delta"]["mujoco_light_count"] == 1
+    assert room["contract_delta"]["isaac_light_count"] == 2
+    assert probe["isaac_shadow_disabled_prim_count"] == 1
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:
@@ -519,6 +1032,19 @@ def test_scene_camera_comparison_manifest_is_json_serializable() -> None:
     assert SCENE_CAMERA_COMPARISON_SCHEMA in encoded
     assert "private_manifest" not in encoded
     assert "_state" not in encoded
+
+
+def test_scene_camera_comparison_default_color_profile_contract() -> None:
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["highlight_knee"] == 225.0
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["highlight_compression"] == 0.55
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain"][
+        "molmospaces-mujoco"
+    ] == pytest.approx(1.0)
+    assert DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain"][
+        "isaaclab-prepared-usd"
+    ] == pytest.approx(0.7161647108631373)
+    assert "0530_0009" in DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain_source"]
 
 
 def test_isaac_view_specs_record_support_pose_for_transform_but_not_camera_target(
@@ -867,14 +1393,66 @@ def test_room_scale_contract_compares_room_outline_to_isaac_scene_bounds() -> No
                 },
             }
         ],
-        isaac_lane={"scene_bounds": {"size": [9.976, 10.097, 3.154]}},
+        isaac_lane={
+            "scene_bounds": {"size": [9.976, 10.097, 3.154]},
+            "scene_index_diagnostics": {
+                "room_outlines": [
+                    {
+                        "room_id": "room_2",
+                        "center": [2.99, 4.983],
+                        "half_extents": [2.99, 4.983],
+                        "provenance": "isaac_usd_room_mesh_world_bounds",
+                        "usd_prim_path": "/val_1/Geometry/room_2_visual_0",
+                    }
+                ],
+            },
+        },
     )
 
-    assert contract["status"] == "room_outline_mesh_bounds"
+    assert contract["status"] == "same_room_outlines_within_threshold"
     assert contract["room_count"] == 1
+    assert contract["matched_room_outline_count"] == 1
     assert contract["rooms"][0]["size"] == pytest.approx([5.98, 9.966])
+    assert contract["room_outline_pairs"][0]["center_delta_m"] == pytest.approx(0.0)
+    assert contract["room_outline_pairs"][0]["size_delta_m"] == pytest.approx(0.0)
+    assert contract["room_outline_pairs"][0]["isaac_usd_prim_path"] == (
+        "/val_1/Geometry/room_2_visual_0"
+    )
     assert contract["max_room_to_scene_width_ratio"] == pytest.approx(0.5994, rel=1e-3)
     assert contract["max_room_to_scene_depth_ratio"] == pytest.approx(0.987, rel=1e-3)
+
+
+def test_room_scale_contract_flags_room_outline_mismatch() -> None:
+    contract = _room_scale_contract_from_capture(
+        room_views=[
+            {
+                "view_id": "room_01_room_2",
+                "room_id": "room_2",
+                "room_outline": {
+                    "center": [2.99, 4.983],
+                    "half_extents": [2.99, 4.983],
+                    "provenance": "mujoco_room_mesh_world_bounds",
+                },
+            }
+        ],
+        isaac_lane={
+            "scene_bounds": {"size": [9.976, 10.097, 3.154]},
+            "scene_index_diagnostics": {
+                "room_outlines": [
+                    {
+                        "room_id": "room_2",
+                        "center": [3.25, 4.983],
+                        "half_extents": [2.5, 4.0],
+                        "provenance": "isaac_usd_room_mesh_world_bounds",
+                    }
+                ],
+            },
+        },
+    )
+
+    assert contract["status"] == "room_outline_mismatch"
+    assert contract["max_room_outline_center_delta_m"] == pytest.approx(0.26)
+    assert contract["max_room_outline_size_delta_m"] > 1.0
 
 
 def test_molmospaces_view_specs_use_anchor_orbit_not_focus_camera_heuristic() -> None:

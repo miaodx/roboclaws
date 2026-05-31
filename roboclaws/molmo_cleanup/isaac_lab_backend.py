@@ -139,6 +139,11 @@ class IsaacLabSubprocessBackend:
         self.scene_index_diagnostics = result.get("scene_index_diagnostics", {})
         self.scene_binding_diagnostics = result.get("scene_binding_diagnostics", {})
         self.mapping_gaps = result.get("mapping_gaps", [])
+        self.room_outlines = [
+            dict(item)
+            for item in (self.scene_index_diagnostics.get("room_outlines") or [])
+            if isinstance(item, dict)
+        ]
         self.requested_generated_mess_count = int(
             result.get("requested_generated_mess_count", generated_mess_count)
         )
