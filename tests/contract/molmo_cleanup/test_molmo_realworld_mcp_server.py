@@ -409,6 +409,16 @@ class _FakeVisualBackend(ApiSemanticCleanupBackend):
             "robot_trajectory": [{"x": 1.0, "y": 2.0}],
             "view_variant": "molmospaces-rby1m-fpv-map-chase-verify",
             "view_provenance": "test_fake_visual_backend",
+            "camera_control_contract": {
+                "schema": "robot_view_camera_control_contract_v1",
+                "status": "backend_local_robot_camera",
+                "camera_model": "backend_local_robot_view",
+                "same_pose_api": False,
+                "agent_facing_fpv": {
+                    "source": "test_fake_fpv",
+                    "canonical_camera_control": False,
+                },
+            },
             "focus": {
                 "has_focus": has_focus,
                 "object_id": focus_object_id,
@@ -455,11 +465,16 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
 
     assert done["cleanup_status"] in {"success", "partial_success"}
     assert run_result["view_variant"] == "molmospaces-rby1m-fpv-map-chase-verify"
+    assert run_result["robot_view_camera_control"]["schema"] == (
+        "robot_view_camera_control_summary_v1"
+    )
+    assert run_result["robot_view_camera_control"]["same_pose_api"] is False
     assert run_result["robot_view_steps"][0]["action"] == "before"
     assert any(
         step["semantic_phase"] == "navigate_to_object" for step in run_result["robot_view_steps"]
     )
     assert "Robot View Timeline" in report_text
+    assert "Robot-view camera" in report_text
 
 
 def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) -> None:
@@ -495,6 +510,8 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert "navigate_to_visual_candidate" in observation["instruction"]
     assert "declare_visual_candidates" not in observation["instruction"]
     assert raw["image_artifacts"]["fpv"].endswith(".png")
+    assert raw["camera_control_contract"]["schema"] == "robot_view_camera_control_contract_v1"
+    assert raw["camera_control_contract"]["same_pose_api"] is False
     assert (tmp_path / raw["image_artifacts"]["fpv"]).is_file()
     image_block = observation_blocks[1]
     assert hasattr(image_block, "data")

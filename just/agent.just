@@ -72,13 +72,15 @@ run task driver mode="" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        agent_souls|agents|backend|baseline|candidate|cap|generated_mess_count|\
+        agent_souls|agents|agibot_map_artifact_dir|backend|baseline|candidate|cap|context_json|\
+        generated_mess_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|map_mode|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
-        photo_output_dir|photo_scene|photo_wall_budget|port|prompt|provider|\
-        profile|runtime_map_prior|scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
-        visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget)
+        photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
+        profile|real_movement_enabled|run_dir|runner_python|runner_script|runtime_map_prior|\
+        scene|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
+        visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
           ;;
         *)
           echo "error: unsupported override key '$key'" >&2
@@ -144,7 +146,7 @@ run task driver mode="" *overrides:
         smoke|world-labels|camera-raw|camera-labels)
           ;;
         *)
-          echo "error: unsupported household profile '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          echo "error: unsupported household cleanup lane '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
           exit 1
           ;;
       esac
@@ -254,7 +256,7 @@ run task driver mode="" *overrides:
         esac
         ;;
 
-      semantic-map-build:direct|household-cleanup:direct|household-cleanup:mcp-smoke|\
+      semantic-map-build:direct|semantic-map-build:codex|household-cleanup:direct|household-cleanup:mcp-smoke|\
       household-cleanup:codex|household-cleanup:claude|household-cleanup:openclaw)
         case "$driver" in
           direct|mcp-smoke)
@@ -270,8 +272,8 @@ run task driver mode="" *overrides:
             impl_driver="openclaw-live"
             ;;
         esac
-        if [[ "$task" == "semantic-map-build" && "$driver" != "direct" ]]; then
-          echo "error: semantic-map-build currently supports direct driver only" >&2
+        if [[ "$task" == "semantic-map-build" && "$driver" != "direct" && "$driver" != "codex" ]]; then
+          echo "error: semantic-map-build currently supports direct or codex driver only" >&2
           exit 1
         fi
 
@@ -321,6 +323,236 @@ run task driver mode="" *overrides:
         map_mode="$(get map_mode rich)"
         runtime_map_prior="$(get runtime_map_prior "")"
         backend="$(get backend auto)"
+        if [[ "$task" == "semantic-map-build" && "$driver" == "codex" && "$backend" != "agibot_gdk" ]]; then
+          echo "error: semantic-map-build codex currently requires backend=agibot_gdk" >&2
+          exit 1
+        fi
+        if [[ "$backend" == "agibot_gdk" ]]; then
+          context_json="$(get context_json "")"
+          if [[ -z "$context_json" ]]; then
+            echo "error: backend=agibot_gdk requires context_json=<agibot map context JSON>" >&2
+            exit 1
+          fi
+          if [[ "$task" == "semantic-map-build" && "$driver" == "codex" ]]; then
+            seed_count="$(wc -w <<<"$seeds" | tr -d ' ')"
+            if [[ "$seed_count" != "1" ]]; then
+              echo "error: Agibot semantic-map-build Codex accepts exactly one seed per live run" >&2
+              exit 1
+            fi
+            seed="$seeds"
+            stamp="$(TZ=Asia/Shanghai date +%m%d_%H%M)"
+            run_dir="$(get run_dir "")"
+            if [[ -z "$run_dir" ]]; then
+              run_dir="${output_dir}/${stamp}/seed-${seed}"
+            fi
+            policy="$(get policy codex_agent)"
+            server_startup_timeout_s="${ROBOCLAWS_AGIBOT_MAP_BUILD_LIVE_SERVER_STARTUP_TIMEOUT_S:-600}"
+            client_url="http://${host}:${port}/mcp"
+
+            server_host="$host"
+            server_args=(
+              --host "$server_host"
+              --port "$port"
+              --output-dir "$run_dir"
+              --context-json "$context_json"
+              --policy "$policy"
+              --task "$prompt"
+              --evidence-lane "$profile"
+              --visual-grounding "$visual_grounding"
+            )
+            if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
+              server_args+=(--visual-grounding-timeout-s "$visual_grounding_timeout_s")
+            fi
+            runner_python="$(get runner_python "")"
+            if [[ -n "$runner_python" ]]; then
+              server_args+=(--runner-python "$runner_python")
+            fi
+            runner_script="$(get runner_script "")"
+            if [[ -n "$runner_script" ]]; then
+              server_args+=(--runner-script "$runner_script")
+            fi
+            agibot_map_artifact_dir="$(get agibot_map_artifact_dir "")"
+            if [[ -n "$agibot_map_artifact_dir" ]]; then
+              server_args+=(--agibot-map-artifact-dir "$agibot_map_artifact_dir")
+            fi
+            real_movement_enabled="$(get real_movement_enabled false)"
+            case "$real_movement_enabled" in
+              true|1|yes|on)
+                server_args+=(--real-movement-enabled)
+                ;;
+              false|0|no|off|"")
+                ;;
+              *)
+                echo "error: unsupported real_movement_enabled '$real_movement_enabled' (expected true|false)" >&2
+                exit 1
+                ;;
+            esac
+
+            if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
+              runner_args=(
+                .venv/bin/python
+                scripts/molmo_cleanup/run_live_codex_agibot_map_build.py
+                --repo-root "$PWD"
+                --run-dir "$run_dir"
+                --status-path "${run_dir}/live_status.json"
+                --client-url "$client_url"
+                --host "$host"
+                --port "$port"
+                --codex-bin ".tmp/coding-agent-bin/codex"
+                --codex-model ""
+                --codex-provider-summary "system defaults"
+                --server-startup-timeout-s "$server_startup_timeout_s"
+                --kickoff-prompt "$prompt"
+                --backend "$backend"
+                --policy "$policy"
+                --task "$task"
+              )
+              for arg in "${server_args[@]}"; do
+                runner_args+=("--server-arg=$arg")
+              done
+              run_cmd "${runner_args[@]}"
+            fi
+
+            mkdir -p "$run_dir"
+            source scripts/dev/coding_agent_env.sh
+            roboclaws_load_dotenv .env
+            roboclaws_assert_codex_network_allowed "Codex Agibot semantic-map-build live report"
+
+            codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"
+            codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
+            codex_model_args=()
+            roboclaws_codex_provider_args codex_model_args
+
+            scripts/dev/coding_agent_docker.sh ensure
+            docker_shim_dir=".tmp/coding-agent-bin"
+            scripts/dev/coding_agent_docker.sh install-wrappers "$docker_shim_dir" >/dev/null
+            codex_bin="$PWD/${docker_shim_dir}/codex"
+            export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
+            export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-semantic-map-build}"
+            export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
+            export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
+
+            probe_host="$host"
+            if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
+              probe_host="127.0.0.1"
+            fi
+            if (echo > /dev/tcp/"$probe_host"/"$port") >/dev/null 2>&1; then
+              echo "error: requested MCP port ${host}:${port} is already accepting connections" >&2
+              exit 1
+            fi
+
+            runner="${run_dir}/run_live_codex_agibot_map_build.sh"
+            status_path="${run_dir}/live_status.json"
+            runner_args=(
+              .venv/bin/python
+              scripts/molmo_cleanup/run_live_codex_agibot_map_build.py
+              --repo-root "$PWD"
+              --run-dir "$run_dir"
+              --status-path "$status_path"
+              --client-url "$client_url"
+              --host "$host"
+              --port "$port"
+              --codex-bin "$codex_bin"
+              --codex-model "$codex_model"
+              --codex-provider-summary "$codex_profile_summary"
+              --server-startup-timeout-s "$server_startup_timeout_s"
+              --kickoff-prompt "$prompt"
+              --backend "$backend"
+              --policy "$policy"
+              --task "$task"
+            )
+            for arg in "${server_args[@]}"; do
+              runner_args+=("--server-arg=$arg")
+            done
+            for arg in "${codex_model_args[@]}"; do
+              runner_args+=("--codex-model-arg=$arg")
+            done
+
+            {
+              printf '#!/usr/bin/env bash\n'
+              printf 'set -Eeuo pipefail\n'
+              printf 'cd %q\n' "$PWD"
+              printf 'if [[ -f .env ]]; then set -a; source .env; set +a; fi\n'
+              printf 'exec > >(tee -a %q) 2>&1\n' "${run_dir}/driver.log"
+              printf 'exec'
+              for arg in "${runner_args[@]}"; do
+                printf ' %q' "$arg"
+              done
+              printf '\n'
+            } > "$runner"
+            chmod +x "$runner"
+            printf '{"phase":"queued","started_at_epoch":%s}\n' "$(date +%s)" > "$status_path"
+
+            if command -v tmux >/dev/null 2>&1; then
+              session_name="roboclaws-agibot-map-codex-${stamp}-seed-${seed}"
+              session_name="${session_name//[^A-Za-z0-9_.-]/-}"
+              if tmux has-session -t "$session_name" >/dev/null 2>&1; then
+                echo "error: tmux session already exists: ${session_name}" >&2
+                exit 1
+              fi
+              printf '%s\n' "$session_name" > "${run_dir}/tmux_session.txt"
+              tmux_env_args=()
+              for env_name in \
+                OPENAI_API_KEY CODEX_API_KEY CODEX_BASE_URL KIMI_API_KEY MIMO_TP_KEY \
+                XM_LLM_API_KEY XM_LLM_BASE_URL \
+                HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
+                http_proxy https_proxy all_proxy no_proxy \
+                ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
+                ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
+                ROBOCLAWS_REPORT_RERUN_COMMAND
+              do
+                if [[ -n "${!env_name:-}" ]]; then
+                  tmux_env_args+=(-e "${env_name}=${!env_name}")
+                fi
+              done
+              tmux new-session -d -s "$session_name" "${tmux_env_args[@]}" "bash $(printf '%q' "$runner")"
+              echo "==> launched detached Codex Agibot semantic-map-build"
+              echo "    tmux session : ${session_name}"
+              echo "    run dir      : ${run_dir}"
+              echo "    attach       : tmux attach -t ${session_name}"
+              echo "    tail         : tail -f ${run_dir}/driver.log"
+              exit 0
+            fi
+
+            exec "${runner_args[@]}"
+          fi
+          agibot_args=(.venv/bin/python scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py
+            --context-json "$context_json"
+            --output-dir "$output_dir")
+          waypoint_id="$(get waypoint_id "")"
+          if [[ -n "$waypoint_id" ]]; then
+            agibot_args+=(--waypoint-id "$waypoint_id")
+          fi
+          run_dir="$(get run_dir "")"
+          if [[ -n "$run_dir" ]]; then
+            agibot_args+=(--run-dir "$run_dir")
+          fi
+          runner_python="$(get runner_python "")"
+          if [[ -n "$runner_python" ]]; then
+            agibot_args+=(--runner-python "$runner_python")
+          fi
+          runner_script="$(get runner_script "")"
+          if [[ -n "$runner_script" ]]; then
+            agibot_args+=(--runner-script "$runner_script")
+          fi
+          agibot_map_artifact_dir="$(get agibot_map_artifact_dir "")"
+          if [[ -n "$agibot_map_artifact_dir" ]]; then
+            agibot_args+=(--agibot-map-artifact-dir "$agibot_map_artifact_dir")
+          fi
+          real_movement_enabled="$(get real_movement_enabled false)"
+          case "$real_movement_enabled" in
+            true|1|yes|on)
+              agibot_args+=(--real-movement-enabled)
+              ;;
+            false|0|no|off|"")
+              ;;
+            *)
+              echo "error: unsupported real_movement_enabled '$real_movement_enabled' (expected true|false)" >&2
+              exit 1
+              ;;
+          esac
+          run_cmd "${agibot_args[@]}"
+        fi
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
           "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \

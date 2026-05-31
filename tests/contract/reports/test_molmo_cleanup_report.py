@@ -1181,6 +1181,16 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
     robot_dir.mkdir()
     for name in ("raw.fpv.png", "nav.fpv.png", "after.fpv.png"):
         (robot_dir / name).write_bytes(b"placeholder")
+    camera_contract = {
+        "schema": "robot_view_camera_control_contract_v1",
+        "status": "backend_local_robot_camera",
+        "camera_model": "backend_local_robot_view",
+        "same_pose_api": False,
+        "agent_facing_fpv": {
+            "source": "robot_0/head_camera",
+            "canonical_camera_control": False,
+        },
+    }
     run_result = {
         "contract": "realworld_cleanup_v1",
         "cleanup_status": "success",
@@ -1213,6 +1223,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
                     "structured_detections_available": False,
                     "artifact_status": "recorded",
                     "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                    "camera_control_contract": camera_contract,
                 }
             ],
         },
@@ -1225,6 +1236,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
                 "structured_detections_available": False,
                 "artifact_status": "recorded",
                 "image_artifacts": {"fpv": "robot_views/raw.fpv.png"},
+                "camera_control_contract": camera_contract,
             }
         ],
     }
@@ -1248,6 +1260,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
                 "action": "observe raw_fpv_001",
                 "robot_pose": {},
                 "views": {"fpv": "robot_views/raw.fpv.png"},
+                "camera_control_contract": camera_contract,
                 "focus": {},
             },
             {
@@ -1275,6 +1288,9 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
     assert "robot_views/raw.fpv.png" not in timeline_html
     assert "raw_fpv_001" in raw_fpv_html
     assert "robot_views/raw.fpv.png" in raw_fpv_html
+    assert "Camera contract" in raw_fpv_html
+    assert "backend_local_robot_camera" in raw_fpv_html
+    assert "Same-pose API" in raw_fpv_html
 
 
 def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:

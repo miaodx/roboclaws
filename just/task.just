@@ -14,7 +14,7 @@
 #   visual  - default for non-Molmo tasks, reviewable artifacts for humans
 #   minimal - cheaper semantic evidence for non-Molmo agent iteration
 #
-# Household task profiles:
+# Household cleanup input/evidence lanes:
 #   smoke | world-labels | camera-raw | camera-labels
 
 set working-directory := '..'

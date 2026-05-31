@@ -179,13 +179,7 @@ def verify_waypoint(
 
     final_task, timed_out = wait_for_task(pnc, timeout_s=timeout_s, poll_s=poll_s)
     if timed_out:
-        cancel_error = ""
-        try:
-            task_id = int(getattr(final_task, "id", 0) or 0)
-            if task_id:
-                pnc.cancel_task(task_id)
-        except Exception as exc:  # noqa: BLE001
-            cancel_error = str(exc)
+        cancel_evidence = cancel_task_on_timeout(pnc, final_task)
         final_after_cancel = _safe_task_state(pnc)
         result = _verification_result(
             waypoint,
@@ -197,8 +191,9 @@ def verify_waypoint(
             message="PNC verification timed out.",
             timeout_s=timeout_s,
         )
-        if cancel_error:
-            result["cancel_error"] = cancel_error
+        result.update(cancel_evidence)
+        result["final_task_before_cancel"] = task_state_payload(final_task)
+        result["final_task_after_cancel"] = task_state_payload(final_after_cancel or final_task)
         return result
 
     final_state = int(getattr(final_task, "state", -1))
@@ -239,6 +234,26 @@ def wait_for_task(pnc: Any, *, timeout_s: float, poll_s: float) -> tuple[Any, bo
             return task, False
         time.sleep(poll_s)
     return last_task or pnc.get_task_state(), True
+
+
+def cancel_task_on_timeout(pnc: Any, final_task: Any) -> dict[str, Any]:
+    task_id = int(getattr(final_task, "id", 0) or 0)
+    evidence: dict[str, Any] = {
+        "cancel_attempted": bool(task_id),
+        "cancel_task_id": task_id,
+        "cancel_requested": False,
+        "cancel_error": "",
+    }
+    if not task_id:
+        evidence["cancel_error"] = "PNC task id unavailable; cancel_task was not called."
+        return evidence
+    try:
+        pnc.cancel_task(task_id)
+    except Exception as exc:  # noqa: BLE001
+        evidence["cancel_error"] = str(exc)
+        return evidence
+    evidence["cancel_requested"] = True
+    return evidence
 
 
 def record_waypoint_verification(waypoint: dict[str, Any], result: dict[str, Any]) -> None:

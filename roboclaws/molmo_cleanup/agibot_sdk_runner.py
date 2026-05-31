@@ -20,6 +20,12 @@ AGIBOT_GDK_BACKEND_VARIANT = "agibot_gdk"
 AGIBOT_GDK_NORMAL_NAVI_PROVENANCE = "agibot_gdk_normal_navi"
 AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE = "agibot_gdk_relative_move"
 AGIBOT_HEAD_COLOR_CAMERA_PROVENANCE = "agibot_gdk_head_color_camera"
+AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS = {
+    "max_distance_m": 0.25,
+    "max_yaw_rad": 0.35,
+    "timeout_s": 3.0,
+    "operator_config_required": True,
+}
 PHYSICAL_AGIBOT_PILOT_SCHEMA = "physical_agibot_cleanup_pilot_v1"
 PHYSICAL_AGIBOT_PILOT_POLICY = "physical_agibot_navigation_perception_pilot"
 BLOCKED_MANIPULATION_TOOLS = (
@@ -29,6 +35,21 @@ BLOCKED_MANIPULATION_TOOLS = (
     "open_receptacle",
     "close_receptacle",
 )
+HUMAN_TAKEOVER_FAILURE_TYPES = {
+    "operator_localization_gate_not_confirmed",
+    "operator_run_enablement_gate_not_confirmed",
+    "map_mismatch",
+    "current_map_mismatch",
+    "timeout",
+    "pnc_busy",
+    "pnc_failed",
+    "normal_navi_exception",
+    "local_motion_failed",
+    "relative_move_failed",
+    "bounded_local_nudge_failed",
+    "robot_obstacle_stop",
+    "human_emergency_stop",
+}
 
 
 class AgibotSDKRunnerError(RuntimeError):
@@ -141,7 +162,9 @@ class AgibotSDKRunnerAdapter:
             waypoint_id,
         ]
         if self.real_movement_enabled:
-            args.extend(["--execute", "--arrival-observe"])
+            args.extend(
+                ["--execute", "--arrival-observe", "--context-json", str(self.context_json)]
+            )
         result = self._run_stage("03-navigate-waypoint", args)
         response = dict(result.get("tool_response") or {})
         response.setdefault("agibot_sdk_report", _relpath(result["report_path"], self.run_dir))
@@ -249,7 +272,10 @@ class AgibotSDKRunnerAdapter:
         response["candidate_id"] = candidate_id
         response["fixture_id"] = resolved_fixture_id
         response["target_fixture_id"] = target_fixture_id
-        response["bounded_local_nudge"] = _bounded_local_nudge_status(enabled=False)
+        response["bounded_local_nudge"] = _bounded_local_nudge_status(
+            enabled=False,
+            context=self.context_payload,
+        )
         response["manipulation_ready"] = False
         return response
 
@@ -397,12 +423,48 @@ def run_physical_agibot_cleanup_pilot(
     _record(trace_events, started_at, "fixture_hints", {}, fixture_hints)
 
     observation = adapter.observe(label="pre_navigation")
-    policy_events.append(_policy_event(len(policy_events), observation, "pre_navigation_observe"))
+    policy_events.append(
+        _policy_event(
+            len(policy_events),
+            observation,
+            "pre_navigation_observe",
+            decision="observe_head_color",
+            progress=_observation_policy_progress(observation),
+            reason=(
+                "The pilot observes the robot-local head_color policy camera before "
+                "navigation so the operator can review perception evidence separately "
+                "from movement."
+            ),
+        )
+    )
     _record(trace_events, started_at, "observe", {"label": "pre_navigation"}, observation)
 
     waypoint_id = waypoint_id or _first_waypoint_id(metric_map)
     navigation = adapter.navigate_to_waypoint(waypoint_id=waypoint_id)
-    policy_events.append(_policy_event(len(policy_events), navigation, "inspection_waypoint"))
+    policy_events.append(
+        _policy_event(
+            len(policy_events),
+            navigation,
+            "inspection_waypoint",
+            decision="visit_public_waypoint",
+            progress=_navigation_policy_progress(
+                navigation,
+                waypoint_id=waypoint_id,
+                real_movement_enabled=real_movement_enabled,
+            ),
+            reason=(
+                "The pilot selected one verified generated/public waypoint from the "
+                "agent-facing metric map and routed it through navigate_to_waypoint."
+            ),
+        )
+    )
+    policy_events.extend(
+        _skipped_waypoint_policy_events(
+            policy_events=policy_events,
+            metric_map=metric_map,
+            selected_waypoint_id=waypoint_id,
+        )
+    )
     _record(
         trace_events,
         started_at,
@@ -415,7 +477,23 @@ def run_physical_agibot_cleanup_pilot(
     for tool in BLOCKED_MANIPULATION_TOOLS:
         result = adapter.blocked_manipulation(tool=tool)
         manipulation_results.append(result)
-        policy_events.append(_policy_event(len(policy_events), result, "blocked_manipulation"))
+        policy_events.append(
+            _policy_event(
+                len(policy_events),
+                result,
+                "blocked_manipulation",
+                decision="block_manipulation",
+                progress=(
+                    "Physical manipulation is intentionally blocked: "
+                    f"{tool} returned blocked_capability."
+                ),
+                reason=(
+                    "Navigation + perception pilot evidence is allowed, but physical "
+                    "cleanup is not ready until hardware pick/place proof and operator "
+                    "safety approval exist."
+                ),
+            )
+        )
         _record(trace_events, started_at, tool, {}, result)
 
     trace_path = run_dir / "trace.jsonl"
@@ -490,9 +568,15 @@ def run_physical_agibot_cleanup_pilot(
         },
         "cleanup_policy_trace": {
             "schema": "cleanup_policy_trace_v1",
+            "agent_review_kind": "agibot_navigation_perception_pilot_review",
+            "agent_reasoning_visible": True,
             "waypoint_source": "agibot_sdk_agent_view_export",
             "loop_style": "physical_agibot_navigation_perception_pilot",
             "total_waypoints": len(metric_map.get("inspection_waypoints") or []),
+            "selected_waypoint_id": waypoint_id,
+            "skipped_waypoint_count": sum(
+                1 for item in policy_events if item.get("decision") == "skip_public_waypoint"
+            ),
             "observed_waypoint_count": 1 if observation.get("ok") else 0,
             "scan_observe_count": 1,
             "cleanup_action_count": 0,
@@ -504,6 +588,10 @@ def run_physical_agibot_cleanup_pilot(
             "public_contract_note": (
                 "Roboclaws owns the cleanup-shaped session and calls the AgiBot SDK "
                 "runner at semantic tool granularity."
+            ),
+            "operator_review_note": (
+                "Agibot pilot progress records the visible tool choice, decision, "
+                "progress, and reason for each visited or skipped public waypoint."
             ),
         },
         "semantic_substeps": [],
@@ -684,16 +772,102 @@ def _record(
     )
 
 
-def _policy_event(index: int, response: dict[str, Any], role: str) -> dict[str, Any]:
-    return {
+def _observation_policy_progress(response: dict[str, Any]) -> str:
+    camera = str(
+        response.get("policy_observation_camera")
+        or response.get("would_capture_camera")
+        or "head_color"
+    )
+    if response.get("ok"):
+        return f"Captured robot-local {camera} policy observation."
+    if response.get("failure_type") == "live_camera_capture_not_enabled":
+        return f"Dry-run observed {camera} policy boundary without calling live Agibot camera APIs."
+    summary = str(response.get("backend_error_summary") or response.get("failure_type") or "")
+    return f"Observation did not complete: {summary or 'no backend evidence'}."
+
+
+def _navigation_policy_progress(
+    response: dict[str, Any],
+    *,
+    waypoint_id: str,
+    real_movement_enabled: bool,
+) -> str:
+    status = str(response.get("navigation_status") or response.get("status") or "")
+    if response.get("ok"):
+        return f"Visited public waypoint {waypoint_id} with Agibot GDK navigation evidence."
+    if status == "dry_run_not_executed" or not real_movement_enabled:
+        return (
+            "Dry-run blocked by movement gate: "
+            f"public waypoint {waypoint_id} was selected but no Pnc.normal_navi call was made."
+        )
+    summary = str(response.get("backend_error_summary") or response.get("failure_type") or status)
+    return f"Public waypoint {waypoint_id} was not reached: {summary}."
+
+
+def _skipped_waypoint_policy_events(
+    *,
+    policy_events: list[dict[str, Any]],
+    metric_map: dict[str, Any],
+    selected_waypoint_id: str,
+) -> list[dict[str, Any]]:
+    skipped_events: list[dict[str, Any]] = []
+    for waypoint in metric_map.get("inspection_waypoints") or []:
+        if not isinstance(waypoint, dict):
+            continue
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if not waypoint_id or waypoint_id == selected_waypoint_id:
+            continue
+        skipped_events.append(
+            _policy_event(
+                len(policy_events) + len(skipped_events),
+                {
+                    "tool": "navigate_to_waypoint",
+                    "waypoint_id": waypoint_id,
+                    "fixture_id": waypoint.get("fixture_id", ""),
+                    "status": "skipped",
+                    "navigation_backend": waypoint.get("navigation_backend", ""),
+                },
+                "inspection_waypoint",
+                decision="skip_public_waypoint",
+                progress=(
+                    f"Skipped public waypoint {waypoint_id}: "
+                    "the pilot slice visits one generated/public waypoint before review."
+                ),
+                reason=(
+                    "The first Agibot pilot keeps movement evidence bounded so the operator "
+                    "can review each generated waypoint before broadening the route."
+                ),
+            )
+        )
+    return skipped_events
+
+
+def _policy_event(
+    index: int,
+    response: dict[str, Any],
+    role: str,
+    *,
+    decision: str = "",
+    progress: str = "",
+    reason: str = "",
+) -> dict[str, Any]:
+    event = {
         "index": index + 1,
         "tool": response.get("tool", ""),
         "role": role,
         "waypoint_id": response.get("waypoint_id", ""),
+        "object_id": response.get("object_id", ""),
         "fixture_id": response.get("fixture_id", ""),
         "navigation_backend": response.get("navigation_backend", ""),
         "status": response.get("status") or response.get("navigation_status", ""),
     }
+    if decision:
+        event["decision"] = decision
+    if progress:
+        event["progress"] = progress
+    if reason:
+        event["reason"] = reason
+    return event
 
 
 def _subphase_reports(results: list[dict[str, Any]], run_dir: Path) -> list[dict[str, Any]]:
@@ -758,7 +932,24 @@ def _operator_localization_gate(context: dict[str, Any]) -> dict[str, Any]:
         or gate.get("relocalized")
     )
     localization_ready = bool(gate.get("localization_ready") or gate.get("ready"))
-    ok = selected_map_confirmed and g02_pad_relocalized and localization_ready
+    min_confidence_configured = gate.get("min_localization_confidence") not in (None, "")
+    min_confidence = _optional_float(gate.get("min_localization_confidence"))
+    confidence = _optional_float(gate.get("localization_confidence"))
+    confidence_ok = (
+        not min_confidence_configured
+        if min_confidence is None
+        else confidence is not None and confidence >= min_confidence
+    )
+    accepted_states = _accepted_localization_states(gate.get("accepted_localization_states"))
+    localization_state = str(gate.get("localization_state") or "")
+    state_ok = not accepted_states or localization_state in accepted_states
+    ok = (
+        selected_map_confirmed
+        and g02_pad_relocalized
+        and localization_ready
+        and confidence_ok
+        and state_ok
+    )
     return {
         "schema": "operator_localization_gate_v1",
         "ok": ok,
@@ -766,11 +957,20 @@ def _operator_localization_gate(context: dict[str, Any]) -> dict[str, Any]:
         "selected_map_confirmed": selected_map_confirmed,
         "g02_pad_relocalized": g02_pad_relocalized,
         "localization_ready": localization_ready,
+        "localization_confidence": confidence,
+        "min_localization_confidence": min_confidence,
+        "localization_confidence_ok": confidence_ok,
+        "localization_state": localization_state,
+        "accepted_localization_states": sorted(accepted_states),
+        "localization_state_ok": state_ok,
         "operator": str(gate.get("operator") or ""),
         "confirmed_at": str(gate.get("confirmed_at") or ""),
         "reason": ""
         if ok
-        else "selected map, G02 Pad relocalization, and localization ready are required.",
+        else (
+            "selected map, G02 Pad relocalization, localization ready, and any "
+            "operator-configured confidence/state thresholds are required."
+        ),
     }
 
 
@@ -816,14 +1016,94 @@ def _operator_run_enablement_gate(
     }
 
 
-def _bounded_local_nudge_status(*, enabled: bool) -> dict[str, Any]:
+def _optional_float(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _accepted_localization_states(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {item.strip() for item in value.split(",") if item.strip()}
+    if isinstance(value, list | tuple | set):
+        return {str(item).strip() for item in value if str(item).strip()}
+    return set()
+
+
+def _bounded_local_nudge_status(
+    *,
+    enabled: bool,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    config = _operator_bounded_local_nudge_config(context or {})
     return {
         "schema": "agibot_bounded_local_nudge_v1",
         "status": "not_requested",
         "enabled": enabled,
         "primitive_provenance": AGIBOT_GDK_RELATIVE_MOVE_PROVENANCE if enabled else "",
+        "max_distance_m": config["max_distance_m"],
+        "max_yaw_rad": config["max_yaw_rad"],
+        "timeout_s": config["timeout_s"],
+        "operator_config_required": config["operator_config_required"],
+        "operator_config_present": config["operator_config_present"],
+        "operator_config_valid": config["operator_config_valid"],
+        "operator_config_source": config["operator_config_source"],
+        "config_reason": config["reason"],
         "safety_model": "Pnc.relative_move simple obstacle stop; no obstacle avoidance",
         "agent_facing_tool": False,
+    }
+
+
+def _operator_bounded_local_nudge_config(context: dict[str, Any]) -> dict[str, Any]:
+    raw = context.get("operator_bounded_local_nudge")
+    if raw is None:
+        raw = context.get("bounded_local_nudge")
+    if not isinstance(raw, dict):
+        return {
+            **AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS,
+            "operator_config_present": False,
+            "operator_config_valid": False,
+            "operator_config_source": "",
+            "reason": (
+                "operator bounded local nudge config is missing; conservative defaults apply."
+            ),
+        }
+
+    max_distance = _optional_float(raw.get("max_distance_m"))
+    max_yaw = _optional_float(raw.get("max_yaw_rad"))
+    timeout = _optional_float(raw.get("timeout_s"))
+    valid = (
+        bool(raw.get("operator_configured") or raw.get("confirmed"))
+        and max_distance is not None
+        and 0.0 < max_distance <= AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_distance_m"]
+        and max_yaw is not None
+        and 0.0 < max_yaw <= AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["max_yaw_rad"]
+        and timeout is not None
+        and 0.0 < timeout <= AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS["timeout_s"]
+    )
+    if not valid:
+        return {
+            **AGIBOT_BOUNDED_LOCAL_NUDGE_DEFAULTS,
+            "operator_config_present": True,
+            "operator_config_valid": False,
+            "operator_config_source": str(raw.get("source") or "operator_bounded_local_nudge"),
+            "reason": (
+                "operator bounded local nudge config must be confirmed and no larger "
+                "than conservative defaults."
+            ),
+        }
+    return {
+        "max_distance_m": max_distance,
+        "max_yaw_rad": max_yaw,
+        "timeout_s": timeout,
+        "operator_config_required": True,
+        "operator_config_present": True,
+        "operator_config_valid": True,
+        "operator_config_source": str(raw.get("source") or "operator_bounded_local_nudge"),
+        "reason": "",
     }
 
 
@@ -835,10 +1115,7 @@ def _human_takeover_stop_required(
         str(observation.get("failure_type") or ""),
         str(navigation.get("failure_type") or ""),
     }
-    return bool(
-        {"operator_localization_gate_not_confirmed", "operator_run_enablement_gate_not_confirmed"}
-        & failure_types
-    )
+    return bool(HUMAN_TAKEOVER_FAILURE_TYPES & failure_types)
 
 
 def _map_fields_present(metric_map: dict[str, Any]) -> bool:
