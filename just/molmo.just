@@ -898,7 +898,17 @@ apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed=
         exit 1
         ;;
     esac
-    .venv/bin/python scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py "${args[@]}"
+    python_bin="${ROBOCLAWS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x ".venv/bin/python" ]]; then
+        python_bin=".venv/bin/python"
+      elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+      else
+        python_bin="python"
+      fi
+    fi
+    "$python_bin" scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py "${args[@]}"
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" port="18788":
