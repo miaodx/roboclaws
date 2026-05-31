@@ -10,11 +10,15 @@ and pointers only, not a changelog or execution ledger.
 Roboclaws is focused on the MolmoSpaces cleanup path: making household cleanup
 artifacts visible, honest, and aligned with future real-robot backends.
 
-The active follow-up is the online-first Runtime Metric Map for MolmoSpaces
-cleanup. The current implementation keeps one map surface, adds
-`runtime_metric_map_v1` to `metric_map()`, Agent View, run artifacts, reports,
-and checkers, and supports semantic sweep snapshots plus non-actionable prior
-seeding for later cleanup runs.
+The active follow-up is the visual-grounding GPU sidecar benchmark for
+MolmoSpaces cleanup. The current implementation keeps the existing HTTP
+visual-grounding service boundary, adds first-wave benchmark-matrix support,
+records sidecar runtime diagnostics, and keeps CUDA/model dependencies in a
+dedicated `.venv-visual-grounding/` sidecar environment instead of the core
+cleanup `.venv/`. The local GPU pass on 2026-05-26 promoted a stored
+RAW_FPV corpus, benchmarked the implemented first-wave rows against a real CUDA
+sidecar, and validated the selected Grounding DINO row against a direct cleanup
+control run.
 
 The Agibot SDK runner backend boundary for `real_robot_cleanup_v1` remains a
 separate confidence layer. Roboclaws keeps the cleanup-shaped public contract and
@@ -28,18 +32,18 @@ Agibot contract rehearsal separate.
 
 ## Next Action
 
-Review the runtime-map, semantic-sweep, and prior-seeded cleanup reports from
-`docs/plans/auto-semantic-map-build.md`, then keep real visual-grounding model
-promotion and real Agibot G2 validation as separate confidence layers. The
-current proof level remains synthetic/fake-HTTP plus simulated rehearsal unless
-a local real-service run is explicitly performed.
+Run Codex-runtime cleanup validation for the selected Grounding DINO pipeline
+through an allowed repo-local `.env` Codex route. Current proof level is real
+local CUDA sidecar benchmark plus direct MolmoSpaces cleanup validation;
+OpenClaw validation remains guarded by the work-network policy.
 
 ## Current Blocker
 
 No hosted-CI Codex blocker remains. Hosted CI must not launch Codex, run Codex
 provider smoke, or block on Codex acceptance artifacts. Local work-network runs
-support Codex and Claude Code only through repo-local `.env` configuration;
-local non-work-network runs also support OpenClaw.
+support Codex through repo-local `.env` mify or codex-env routes and support
+Claude Code through repo-local `.env` MiMo/Kimi routes; local non-work-network
+runs also support OpenClaw.
 
 ## Human Review Surface
 
@@ -57,6 +61,8 @@ local non-work-network runs also support OpenClaw.
   `docs/plans/molmospaces-agibot-contract-rehearsal.md`
 - Auto semantic map build:
   `docs/plans/auto-semantic-map-build.md`
+- Visual grounding GPU sidecar benchmark:
+  `docs/plans/visual-grounding-gpu-sidecar-benchmark.md`
 - Current status: `STATUS.md`
 - Human docs: `docs/human/`
 

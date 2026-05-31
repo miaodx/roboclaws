@@ -518,6 +518,42 @@ def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
     _assert_no_forbidden_keys(done)
 
 
+def test_realworld_done_rejects_one_missing_public_waypoint() -> None:
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(
+            CleanupScenario(
+                scenario_id="missing-waypoint-gate-test",
+                task="check full public sweep",
+                seed=7,
+                objects=(),
+                receptacles=(
+                    CleanupReceptacle("sink_01", "Sink", "kitchen", category="Sink"),
+                    CleanupReceptacle("desk_01", "Desk", "office", category="Desk"),
+                ),
+                private_manifest=PrivateScoringManifest(
+                    scenario_id="missing-waypoint-gate-test",
+                    targets=(),
+                    success_threshold=0,
+                ),
+            )
+        ),
+    )
+
+    waypoints = contract.metric_map()["inspection_waypoints"]
+    for waypoint in waypoints[:-1]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    early_done = contract.done("finished after almost all waypoints")
+
+    assert early_done["ok"] is False
+    assert early_done["error_reason"] == "insufficient_sweep_coverage"
+    assert early_done["required_tool"] == "navigate_to_waypoint"
+    assert early_done["next_waypoint_id"] == waypoints[-1]["waypoint_id"]
+    assert early_done["observed_waypoint_count"] == len(waypoints) - 1
+    assert early_done["total_waypoints"] == len(waypoints)
+
+
 def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),

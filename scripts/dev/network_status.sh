@@ -56,18 +56,20 @@ print_status() {
     0)
       echo "network: work"
       echo "probe: reachable $probe_url"
-      echo "guard: OpenClaw, system-provider Claude Code, and system-provider Codex just recipes are blocked here"
+      echo "guard: OpenClaw and system-provider Claude Code just recipes are blocked here"
       echo "guard: Claude Code may run with repo-local kimi-anthropic or mimo-anthropic profiles"
+      echo "guard: Codex may run with repo-local mify or codex-env profiles from .env"
+      echo "guard: Codex recipes do not fall back to a missing repo-local provider route"
       ;;
     1)
       echo "network: non-work"
       echo "probe: unreachable $probe_url"
-      echo "guard: Claude Code and OpenClaw just recipes may run"
+      echo "guard: OpenClaw and coding-agent just recipes may run, subject to normal provider keys"
       ;;
     *)
       echo "network: unknown"
       echo "probe: could not run curl against $probe_url"
-      echo "guard: Claude Code and OpenClaw just recipes fail closed"
+      echo "guard: OpenClaw and coding-agent just recipes fail closed when they require a network decision"
       ;;
   esac
 }

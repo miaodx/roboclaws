@@ -486,17 +486,20 @@ molmo-visual-grounding-benchmark *overrides:
     pipeline="${VISUAL_GROUNDING_PIPELINE_ID:-fake-http}"
     output_dir="output/visual-grounding-benchmark"
     corpus="harness/visual_grounding/smoke_corpus.json"
+    matrix=""
     base_url="${VISUAL_GROUNDING_BASE_URL:-}"
     timeout_s="${VISUAL_GROUNDING_TIMEOUT_S:-20}"
     include_private_label_details="false"
     require_success="true"
     require_candidates="false"
     positional_pipeline_set="false"
+    pipeline_override_set="false"
     for arg in "${args[@]}"; do
       if [[ "$arg" != *=* ]]; then
         if [[ "$positional_pipeline_set" == "false" ]]; then
           pipeline="$arg"
           positional_pipeline_set="true"
+          pipeline_override_set="true"
           continue
         fi
         echo "error: override '$arg' is not key=value" >&2
@@ -507,7 +510,7 @@ molmo-visual-grounding-benchmark *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        pipeline|pipelines|output_dir|corpus|base_url|timeout_s|\
+        pipeline|pipelines|output_dir|corpus|matrix|base_url|timeout_s|\
         include_private_label_details|require_success|require_candidates)
           ;;
         *)
@@ -516,9 +519,10 @@ molmo-visual-grounding-benchmark *overrides:
           ;;
       esac
       case "$key" in
-        pipeline|pipelines) pipeline="$value" ;;
+        pipeline|pipelines) pipeline="$value"; pipeline_override_set="true" ;;
         output_dir) output_dir="$value" ;;
         corpus) corpus="$value" ;;
+        matrix) matrix="$value" ;;
         base_url) base_url="$value" ;;
         timeout_s) timeout_s="$value" ;;
         include_private_label_details) include_private_label_details="$value" ;;
@@ -533,8 +537,13 @@ molmo-visual-grounding-benchmark *overrides:
     cmd=(.venv/bin/python scripts/visual_grounding/run_visual_grounding_benchmark.py \
       --corpus "$corpus" \
       --output-dir "$run_dir" \
-      --pipeline "$pipeline" \
       --timeout-s "$timeout_s")
+    if [[ -z "$matrix" || "$pipeline_override_set" == "true" ]]; then
+      cmd+=(--pipeline "$pipeline")
+    fi
+    if [[ -n "$matrix" ]]; then
+      cmd+=(--matrix "$matrix")
+    fi
     if [[ -n "$base_url" ]]; then
       cmd+=(--base-url "$base_url")
     fi
@@ -544,7 +553,7 @@ molmo-visual-grounding-benchmark *overrides:
     "${cmd[@]}"
     check_cmd=(.venv/bin/python scripts/visual_grounding/check_visual_grounding_benchmark_result.py \
       "$run_dir")
-    if [[ "$pipeline" != *","* ]]; then
+    if [[ "$pipeline" != *","* && ( -z "$matrix" || "$pipeline_override_set" == "true" ) ]]; then
       check_cmd+=(--expect-pipeline "$pipeline")
     fi
     if [[ "$require_success" == "true" ]]; then

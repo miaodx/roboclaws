@@ -10,6 +10,7 @@ dist/
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 
 # Test / coverage artifacts
@@ -40,3 +41,4 @@ vis
 mobileclip_blt.ts
 mobileclip2_b.ts
 yoloe-*.pt
+yolov8*-world.pt

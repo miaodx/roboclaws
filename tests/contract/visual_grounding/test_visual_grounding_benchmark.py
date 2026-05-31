@@ -13,11 +13,16 @@ from scripts.visual_grounding.adapters import (
     CONTRACT_FAKE_PIPELINE_ID,
     FAKE_HTTP_PIPELINE_ID,
     REAL_ROUTER_PIPELINE_ID,
+    _set_yolo_classes_if_needed,
     _yolo_prompt_labels,
     effective_pipeline_id,
     pipeline_request_is_allowed,
     should_use_contract_fake,
     visual_grounding_adapter_catalog,
+)
+from scripts.visual_grounding.run_visual_grounding_benchmark import (
+    _family_sweep_summary,
+    _score_predictions,
 )
 from scripts.visual_grounding.serve_fake_visual_grounding import make_handler
 from scripts.visual_grounding.serve_visual_grounding_service import (
@@ -26,6 +31,9 @@ from scripts.visual_grounding.serve_visual_grounding_service import (
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CORPUS = REPO_ROOT / "harness" / "visual_grounding" / "smoke_corpus.json"
+FIRST_WAVE_MATRIX = (
+    REPO_ROOT / "harness" / "visual_grounding" / "first_wave_gpu_sidecar_matrix.json"
+)
 RUNNER = REPO_ROOT / "scripts" / "visual_grounding" / "run_visual_grounding_benchmark.py"
 CHECKER = REPO_ROOT / "scripts" / "visual_grounding" / "check_visual_grounding_benchmark_result.py"
 
@@ -38,6 +46,31 @@ def test_visual_grounding_yolo_expands_cleanup_family_hints_for_open_vocab() -> 
     assert "remote control" in labels
     assert "cushion" in labels
     assert len(labels) == len(set(labels))
+
+
+def test_visual_grounding_yolo_world_reuses_class_prompts_without_rebuilding() -> None:
+    class WorldModel:
+        def __init__(self) -> None:
+            self.clip_model = object()
+
+    class FakeYoloWorld:
+        def __init__(self) -> None:
+            self.model = WorldModel()
+            self.calls: list[list[str]] = []
+
+        def set_classes(self, labels: list[str]) -> None:
+            self.calls.append(list(labels))
+            self.model.clip_model = object()
+
+    model = FakeYoloWorld()
+
+    _set_yolo_classes_if_needed(model, ["food", "dish"], producer_id="yolo-world")
+    first_clip_model = model.model.clip_model
+    _set_yolo_classes_if_needed(model, ["food", "dish"], producer_id="yolo-world")
+    _set_yolo_classes_if_needed(model, ["food", "toy"], producer_id="yolo-world")
+
+    assert model.calls == [["food", "dish"], ["food", "toy"]]
+    assert model.model.clip_model is not first_clip_model
 
 
 def test_visual_grounding_real_router_allows_requested_real_pipeline() -> None:
@@ -433,6 +466,295 @@ def test_visual_grounding_benchmark_runs_against_configurable_contract_fake_serv
         "yoloe",
     }
     assert all(item["failure_count"] == 0 for item in result["pipelines"])
+
+
+def test_visual_grounding_benchmark_matrix_versions_model_rows(tmp_path: Path) -> None:
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(
+        json.dumps(
+            {
+                "schema": "visual_grounding_benchmark_matrix_v1",
+                "rows": [
+                    {
+                        "row_id": "dino-tiny-default",
+                        "pipeline_id": "grounding-dino",
+                        "model_family": "grounding-dino",
+                        "producer_id": "grounding-dino",
+                        "model_id": "IDEA-Research/grounding-dino-tiny",
+                        "size_tier": "tiny",
+                        "runtime_parameters": {
+                            "box_threshold": 0.35,
+                            "text_threshold": 0.25,
+                        },
+                    },
+                    {
+                        "row_id": "dino-base-recall",
+                        "pipeline_id": "grounding-dino",
+                        "model_family": "grounding-dino",
+                        "producer_id": "grounding-dino",
+                        "model_id": "IDEA-Research/grounding-dino-base",
+                        "size_tier": "base",
+                        "runtime_parameters": {
+                            "box_threshold": 0.25,
+                            "text_threshold": 0.2,
+                        },
+                    },
+                    {
+                        "row_id": "yolo-world-small",
+                        "pipeline_id": "yolo-world",
+                        "model_family": "yolo-world",
+                        "producer_id": "yolo-world",
+                        "model_id": "yolov8s-world.pt",
+                        "size_tier": "small",
+                        "runtime_parameters": {
+                            "confidence_threshold": 0.2,
+                            "image_size": 960,
+                            "prompt_expansion": True,
+                        },
+                        "under_sampled_reason": "unit test matrix intentionally has one row",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    server = _start_configurable_service(pipeline_id="contract-fake", adapter_mode="auto")
+    try:
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        subprocess.run(
+            [
+                sys.executable,
+                str(RUNNER),
+                "--corpus",
+                str(CORPUS),
+                "--output-dir",
+                str(tmp_path / "benchmark"),
+                "--matrix",
+                str(matrix),
+                "--base-url",
+                base_url,
+                "--timeout-s",
+                "2",
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+
+    subprocess.run(
+        [
+            sys.executable,
+            str(CHECKER),
+            str(tmp_path / "benchmark"),
+            "--require-success",
+            "--require-candidates",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            str(CHECKER),
+            str(tmp_path / "benchmark"),
+            "--expect-pipeline",
+            "dino-tiny-default",
+            "--require-success",
+            "--require-candidates",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+
+    result = json.loads(
+        (tmp_path / "benchmark" / "visual_grounding_benchmark_result.json").read_text()
+    )
+    assert [item["benchmark_row_id"] for item in result["pipelines"]] == [
+        "dino-tiny-default",
+        "dino-base-recall",
+        "yolo-world-small",
+    ]
+    by_row = {item["benchmark_row_id"]: item for item in result["pipelines"]}
+    assert by_row["dino-base-recall"]["model_id"] == "IDEA-Research/grounding-dino-base"
+    assert by_row["dino-base-recall"]["runtime_parameters"]["box_threshold"] == 0.25
+    family = {item["model_family"]: item for item in result["family_sweep"]}
+    assert family["grounding-dino"]["under_sampled"] is False
+    assert family["grounding-dino"]["size_tiers"] == ["base", "tiny"]
+    assert family["yolo-world"]["under_sampled"] is True
+    assert family["yolo-world"]["under_sampled_reason"] == (
+        "unit test matrix intentionally has one row"
+    )
+    promotion = result["promotion_recommendation"]
+    assert promotion["selected"][1]["benchmark_row_id"] == result["ranking"][0]["benchmark_row_id"]
+    predictions = [
+        json.loads(line)
+        for line in (tmp_path / "benchmark" / "visual_grounding_predictions.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert {item["benchmark_row_id"] for item in predictions} == {
+        "dino-tiny-default",
+        "dino-base-recall",
+        "yolo-world-small",
+    }
+
+
+def test_visual_grounding_family_sweep_marks_failed_family_under_sampled() -> None:
+    summary = _family_sweep_summary(
+        [
+            {
+                "benchmark_row_id": "omdet-tiny",
+                "pipeline_id": "omdet-turbo",
+                "model_family": "omdet-turbo",
+                "model_id": "omdet-tiny",
+                "size_tier": "tiny",
+                "failure_count": 3,
+                "parse_failure_count": 0,
+                "timeout_count": 0,
+                "stage_summary": [{"status_counts": {"missing_dependency": 3}}],
+            },
+            {
+                "benchmark_row_id": "omdet-base",
+                "pipeline_id": "omdet-turbo",
+                "model_family": "omdet-turbo",
+                "model_id": "omdet-base",
+                "size_tier": "base",
+                "failure_count": 3,
+                "parse_failure_count": 0,
+                "timeout_count": 0,
+                "stage_summary": [{"status_counts": {"missing_dependency": 3}}],
+            },
+        ]
+    )
+
+    assert summary == [
+        {
+            "model_family": "omdet-turbo",
+            "tested_config_count": 2,
+            "successful_config_count": 0,
+            "row_ids": ["omdet-tiny", "omdet-base"],
+            "successful_row_ids": [],
+            "size_tiers": ["base", "tiny"],
+            "model_ids": ["omdet-base", "omdet-tiny"],
+            "under_sampled": True,
+            "under_sampled_reason": (
+                "fewer than two successful configs (0); failure statuses: missing_dependency"
+            ),
+        }
+    ]
+
+
+def test_visual_grounding_bbox_metrics_require_iou_not_category_only() -> None:
+    observations = {
+        "bbox-dish": {
+            "observation_id": "bbox-dish",
+            "fixture_hints": [],
+            "private_labels": [
+                {
+                    "category": "dish",
+                    "category_family": "dish",
+                    "bbox": [0.1, 0.1, 0.2, 0.2],
+                    "visible": True,
+                }
+            ],
+        },
+        "bbox-book": {
+            "observation_id": "bbox-book",
+            "fixture_hints": [],
+            "private_labels": [
+                {
+                    "category": "book",
+                    "category_family": "book",
+                    "bbox": [0.6, 0.6, 0.2, 0.2],
+                    "visible": True,
+                }
+            ],
+        },
+    }
+    predictions = [
+        {
+            "observation_id": "bbox-dish",
+            "pipeline": {"parse_failed": False},
+            "diagnostic_evidence": {},
+            "candidates": [
+                {
+                    "category": "dish",
+                    "bbox": [0.1, 0.1, 0.2, 0.2],
+                    "image_region": {"type": "bbox", "value": [0.1, 0.1, 0.2, 0.2]},
+                }
+            ],
+        },
+        {
+            "observation_id": "bbox-book",
+            "pipeline": {"parse_failed": False},
+            "diagnostic_evidence": {},
+            "candidates": [
+                {
+                    "category": "book",
+                    "bbox": [0.1, 0.1, 0.2, 0.2],
+                    "image_region": {"type": "bbox", "value": [0.1, 0.1, 0.2, 0.2]},
+                }
+            ],
+        },
+    ]
+
+    score = _score_predictions(
+        predictions,
+        observations,
+        {"dish": "dish", "book": "book"},
+    )
+    metrics = score["metrics"]
+
+    assert metrics["recall"] == 1.0
+    assert metrics["precision"] == 1.0
+    assert metrics["bbox_metrics_available"] is True
+    assert metrics["bbox_iou_threshold"] == 0.3
+    assert metrics["bbox_label_count"] == 2
+    assert metrics["bbox_matched_label_count"] == 1
+    assert metrics["bbox_recall_at_iou"] == 0.5
+    assert metrics["bbox_precision_at_iou"] == 0.5
+    assert metrics["bbox_category_family_accuracy_at_iou"] == 1.0
+    assert metrics["bbox_false_positive_rate"] == 0.5
+
+
+def test_visual_grounding_first_wave_matrix_covers_required_sweeps() -> None:
+    matrix = json.loads(FIRST_WAVE_MATRIX.read_text(encoding="utf-8"))
+    rows = matrix["rows"]
+    by_row = {row["row_id"]: row for row in rows}
+
+    assert len(rows) == 15
+    for size in ("tiny", "base"):
+        for mode, box_threshold, text_threshold in (
+            ("default", 0.35, 0.25),
+            ("recall", 0.25, 0.2),
+            ("conservative", 0.4, 0.3),
+        ):
+            row = by_row[f"grounding-dino-{size}-{mode}"]
+            assert row["model_family"] == "grounding-dino"
+            assert row["runtime_parameters"]["box_threshold"] == box_threshold
+            assert row["runtime_parameters"]["text_threshold"] == text_threshold
+
+    for row_id in (
+        "yoloe-11s-precision",
+        "yoloe-11m-recall",
+        "yolo-world-small-precision",
+        "yolo-world-medium-recall",
+    ):
+        assert by_row[row_id]["runtime_parameters"]["prompt_expansion"] is True
+
+    assert "yolo-custom-fast-placeholder" not in by_row
+    assert "yolo-custom-large-placeholder" not in by_row
+    for row_id in (
+        "omdet-turbo-tiny-default",
+        "omdet-turbo-tiny-recall",
+        "omdet-turbo-tiny-precision",
+    ):
+        row = by_row[row_id]
+        assert row["model_id"] == "omlab/omdet-turbo-swin-tiny-hf"
+        assert row["runtime_parameters"]["device"] == "auto"
+        assert row["runtime_parameters"]["torch_dtype"] == "auto"
 
 
 def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_service(

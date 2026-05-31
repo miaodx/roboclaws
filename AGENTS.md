@@ -76,9 +76,8 @@ need normal GitHub access or a local network proxy.
 
 ### 1.1.1 Work-network guard
 
-OpenClaw Gateway runs, system-provider Claude Code runs, and system-provider
-Codex runs are not allowed on the work network. The work network is detected by
-reachability of
+OpenClaw Gateway runs and system-provider Claude Code runs are not allowed on
+the work network. The work network is detected by reachability of
 `https://api-router.evad.mioffice.cn/`.
 Check the current network before those workflows with:
 
@@ -88,14 +87,14 @@ just dev::network-status
 
 If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, `just appliance::run`, or OpenClaw integration/local
-verification gates. Do not run system-provider Claude Code or Codex workflows
-on the work network. Claude Code recipes may run there only when the repo-local
-`.env` contains a supported MiMo or Kimi key. Codex recipes may run there only
-when `XM_LLM_API_KEY` configures the default repo-local mify route, or when
+verification gates. Do not run system-provider Claude Code workflows on the
+work network. Claude Code recipes may run there only when the repo-local `.env`
+contains a supported MiMo or Kimi key. Codex recipes may run there when
+`XM_LLM_API_KEY` configures the default repo-local mify route, or when
 `CODEX_BASE_URL` and `CODEX_API_KEY` configure an explicit non-mify Codex route.
-Model-only overrides do not bypass the guard. Guarded recipes should fail before
-launching when the work-network probe is reachable and no allowed repo-local key
-route is available.
+Model-only overrides do not bypass the guard. Guarded coding-agent recipes
+should fail before launching when the work-network probe is reachable and no
+allowed repo-local key route is available.
 
 ### 1.1.2 Coding-agent permissions
 

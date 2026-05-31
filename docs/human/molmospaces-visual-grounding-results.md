@@ -1,6 +1,6 @@
 # MolmoSpaces Visual Grounding Results
 
-Last updated: 2026-05-26
+Last updated: 2026-05-27
 
 This page records the current relative results for MolmoSpaces
 `camera-labels` visual-grounding pipelines. It is the human-facing overview for
@@ -9,7 +9,21 @@ choosing a default pipeline and for appending future benchmark or cleanup runs.
 ## Current Recommendation
 
 Use `visual_grounding=grounding-dino` as the default real visual-grounding
-pipeline for `camera-labels` runs.
+pipeline for `camera-labels` runs. For real sidecar runs, the current
+recommended Grounding DINO config is the bbox-aware benchmark winner:
+
+```bash
+VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base
+VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25
+VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20
+```
+
+This supersedes the earlier tiny-recall recommendation. The old 96-image
+representative RAW_FPV benchmark used room/category-presence labels and could
+make tiny-recall look better than base. The 2026-05-27 bbox-labeled benchmark
+uses fresh MolmoSpaces target-focused FPV frames from 10 scene indices and
+private MuJoCo segmentation boxes; on that benchmark, base-recall has slightly
+higher visible-object bbox recall than tiny-recall.
 
 Keep `visual_grounding=sim` as the deterministic control baseline. Keep
 `yoloe` as the ultra-fast speed lane, now with cleanup-family prompt expansion
@@ -55,9 +69,10 @@ accepted, but took 20m47s and still trailed RAW_FPV.
 | Pipeline | Current role | Why |
 | --- | --- | --- |
 | `sim` | Control baseline | Best controlled cleanup score, no real perception claim. |
-| `grounding-dino` | Default real pipeline | Best proposer-only recall and best DINO-vs-YOLOE score on the current corpus. |
+| `grounding-dino` | Default real pipeline | Best bbox-aware proposer score on the current representative MolmoSpaces corpus; recommended config is base-recall. |
 | `yoloe` | Ultra-fast speed lane | Prompt expansion improved recall materially, but it still trails Grounding DINO. |
 | `grounding-dino+vertex_ai/gemini-3-flash-preview` | Quality refiner candidate | Best same-matrix Gemini/Qwen cleanup result, but high latency and token use. |
+| `omdet-turbo` | Fast comparison lane | OmDet tiny-recall is much faster than DINO and beats default OmDet, but trails DINO base/tiny recall on bbox recall and precision. |
 | `grounding-dino+vertex_ai/gemini-3.1-flash-lite-preview` | Cheaper Gemini refiner comparison | Partial cleanup success; much better E2E behavior than Qwen 8B, but below Gemini 3-flash. |
 | `grounding-dino+siliconflow/Qwen/Qwen3-VL-8B-Instruct` | Conservative refiner comparison | Best perception-benchmark precision, but over-rejected in cleanup E2E and failed. |
 | `grounding-dino+mimo-v2-omni` | Slow MiMo comparison baseline | Needs 240s timeout and landed below both Gemini refiners in same-matrix cleanup. |
@@ -91,7 +106,7 @@ those families into concrete cleanup-scene labels before calling
 
 Current YOLOE adapter knobs:
 
-- `VISUAL_GROUNDING_YOLOE_MODEL_ID` / `VISUAL_GROUNDING_YOLO_CUSTOM_MODEL_ID`
+- `VISUAL_GROUNDING_YOLOE_MODEL_ID`
 - `VISUAL_GROUNDING_YOLO_CONFIDENCE_THRESHOLD`
 - `VISUAL_GROUNDING_YOLO_IMAGE_SIZE`
 - `VISUAL_GROUNDING_YOLO_IOU_THRESHOLD`
@@ -100,6 +115,10 @@ Current YOLOE adapter knobs:
 - `VISUAL_GROUNDING_YOLO_AUGMENT`
 - `VISUAL_GROUNDING_YOLO_RETINA_MASKS`
 - `VISUAL_GROUNDING_YOLO_EXPAND_CLEANUP_HINTS`
+
+`yolo-custom` / `VISUAL_GROUNDING_YOLO_CUSTOM_MODEL_ID` is not an active support
+lane. Re-enable it only if a cleanup-ontology training set, weight package, and
+licensing boundary exist.
 
 Best tested YOLOE balance on the 28-observation RAW_FPV corpus:
 
@@ -119,6 +138,41 @@ All rows below use the same path-backed RAW_FPV benchmark corpus unless noted.
 The current corpus has 28 observations. Recall and precision are against private
 benchmark labels; those labels are scoring evidence and are not returned to the
 cleanup agent.
+
+### BBox-Aware MolmoSpaces Benchmark
+
+Run date: 2026-05-27. Corpus:
+`output/visual-grounding-corpora/molmospaces-bbox-representative-10scene/corpus.json`.
+The corpus has 90 target-focused FPV observations from 10 successful
+`procthor-10k-val` scene indices: 0, 2, 3, 4, 9, 10, 12, 13, 15, and 17.
+Private labels are MuJoCo segmentation bboxes and are not sent to the sidecar
+or written to prediction JSONL. Primary score basis is bbox IoU at 0.30.
+
+| Row | Model | Bbox recall | Bbox precision | Bbox category acc | Candidates | Avg latency | Score | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `grounding-dino-base-recall` | `IDEA-Research/grounding-dino-base` | 0.877778 | 0.148218 | 0.746835 | 533 | 348.422ms | 0.730994 | Current winner and recommended config. |
+| `grounding-dino-tiny-recall` | `IDEA-Research/grounding-dino-tiny` | 0.866667 | 0.125201 | 0.679487 | 623 | 243.456ms | 0.712989 | Close, faster fallback if base latency matters. |
+| `omdet-turbo-tiny-recall` | `omlab/omdet-turbo-swin-tiny-hf` | 0.766667 | 0.101025 | 0.840580 | 683 | 53.578ms | 0.664263 | Fast comparison lane, but lower bbox recall and many false positives. |
+| `grounding-dino-base-default` | `IDEA-Research/grounding-dino-base` | 0.633333 | 0.271429 | 0.842105 | 210 | 401.178ms | 0.618496 | Higher precision, lower recall. |
+| `grounding-dino-tiny-default` | `IDEA-Research/grounding-dino-tiny` | 0.633333 | 0.266355 | 0.842105 | 214 | 333.589ms | 0.617481 | Similar to base-default. |
+| `omdet-turbo-tiny-default` | `omlab/omdet-turbo-swin-tiny-hf` | 0.655556 | 0.154047 | 0.813559 | 383 | 100.133ms | 0.605499 | Middle ground for OmDet. |
+| `grounding-dino-tiny-conservative` | `IDEA-Research/grounding-dino-tiny` | 0.511111 | 0.338235 | 0.847826 | 136 | 243.656ms | 0.559096 | Precision lane. |
+| `grounding-dino-base-conservative` | `IDEA-Research/grounding-dino-base` | 0.511111 | 0.326241 | 0.869565 | 141 | 349.589ms | 0.558871 | Precision lane. |
+| `omdet-turbo-tiny-precision` | `omlab/omdet-turbo-swin-tiny-hf` | 0.433333 | 0.226744 | 0.743590 | 172 | 54.011ms | 0.479708 | Too much recall loss. |
+
+Interpretation: the earlier tiny-recall win was an artifact of category-only
+matching on a narrow historical corpus. With segmentation bbox truth, DINO base
+recall is the best default. OmDet is viable and very fast, but today only the
+public `omlab/omdet-turbo-swin-tiny-hf` checkpoint is supported in the matrix;
+the previously discussed OmDet base id is not a valid public checkpoint for the
+current Transformers adapter.
+
+Artifacts:
+
+- `output/visual-grounding-benchmark/molmospaces-bbox-dino-omdet-0527-v2/`
+- `output/visual-grounding-corpora/molmospaces-bbox-representative-10scene/`
+
+### Historical RAW_FPV Benchmark
 
 | Pipeline | Candidates | Recall | Precision | Avg latency | Failure rate | Notes |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
@@ -258,6 +312,34 @@ semantic accepted, but it took 20m47s and still missed the direct
 DINO + Gemini and Codex RAW_FPV exact-match result. The refiner also encouraged
 more post-placement observations and declarations, so it is not the live-agent
 default despite being the direct-control quality route.
+
+## Multi-Scene Cleanup Check
+
+Run date: 2026-05-27. Both rows used direct deterministic `camera-labels`,
+`generated_mess_count=10`, real MolmoSpaces/RBY1M robot views, and the
+recommended DINO base-recall sidecar config. Scene 0 used the prebuilt
+`assets/maps/molmospaces-procthor-val-0-7` bundle; scene 2 intentionally did
+not claim Nav2 bundle coverage because this repo currently only has the scene 0
+MolmoSpaces map bundle.
+
+| Scene | Pipeline config | Model-declared candidates | Cleanup chains | Exact private matches | Advisory summary | Sweep coverage | Status |
+| --- | --- | ---: | ---: | ---: | --- | ---: | --- |
+| `procthor-10k-val:0` | DINO base recall | 86 | 10 | 8/10 | 8 exact + 2 benign semantic disagreements | 1.0 | Success |
+| `procthor-10k-val:2` | DINO base recall | 104 | 7 | 4/10 | 4 exact + 3 benign + 3 wrong placements | 1.0 | Partial success |
+
+Interpretation: the selected detector improves isolated localization enough to
+recommend it as the default, but cleanup quality is still scene-sensitive.
+Scene 2 shows the next bottleneck: the cleanup selection/destination heuristic
+can act on high-recall noisy labels and choose semantically wrong placements
+for pillows/remotes. The scene 2 strict robot-view checker also flagged one
+held-object FPV focus frame during fridge opening as weak visibility; the run
+itself is valid partial cleanup evidence, but that report has a review-view
+gap for one open-receptacle step.
+
+Artifacts:
+
+- `output/molmo/direct-camera-labels-dino-base-recall-scene0-0527/seed-7/report.html`
+- `output/molmo/direct-camera-labels-dino-base-recall-scene2-0527/seed-7/report.html`
 
 ## End-To-End Cleanup Results
 
