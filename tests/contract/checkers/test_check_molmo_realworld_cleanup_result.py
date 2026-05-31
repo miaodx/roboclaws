@@ -12,7 +12,7 @@ from roboclaws.molmo_cleanup.manipulation_provenance import (
     PLANNER_BACKED_PROVENANCE,
     planner_backed_probe_evidence,
 )
-from roboclaws.molmo_cleanup.realworld_contract import CAMERA_MODEL_POLICY_MODE
+from roboclaws.molmo_cleanup.realworld_contract import CAMERA_MODEL_POLICY_MODE, RICH_MAP_MODE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
@@ -378,7 +378,7 @@ def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=RICH_MAP_MODE)
     result["runtime_metric_map"]["observed_objects"][0]["target_receptacle_id"] = "sink_01"
     result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
 
@@ -1447,7 +1447,7 @@ def test_checker_rejects_waypoint_honesty_when_loop_is_survey_first(
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=RICH_MAP_MODE)
     result["cleanup_policy_trace"]["loop_style"] = "survey_first_cleanup_loop"
     result["cleanup_policy_trace"]["first_cleanup_before_full_survey"] = False
 
@@ -2075,6 +2075,7 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
         seed=7,
         planner_proof_run_result=proof_path,
         use_planner_proof_for_cleanup_primitives=True,
+        map_mode=RICH_MAP_MODE,
     )
 
     assert result["cleanup_status"] == "success"
@@ -2174,6 +2175,7 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
         seed=7,
         planner_proof_run_results=proof_paths,
         use_planner_proof_for_cleanup_primitives=True,
+        map_mode=RICH_MAP_MODE,
     )
 
     assert result["cleanup_status"] == "success"

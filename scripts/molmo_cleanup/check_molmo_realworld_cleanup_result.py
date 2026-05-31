@@ -1035,6 +1035,7 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
                 assert support.get("source") in {
                     CAMERA_MODEL_POLICY_MODE,
                     MODEL_DECLARED_OBSERVATION_SOURCE,
+                    "public_semantic_anchor",
                 }, item
             else:
                 assert item.get("producer_type") in {

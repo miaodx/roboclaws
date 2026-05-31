@@ -6,6 +6,7 @@ from roboclaws.molmo_cleanup.planner_observed_binding import (
     backend_planner_task_binding_from_state,
 )
 from roboclaws.molmo_cleanup.realworld_contract import (
+    RICH_MAP_MODE,
     RealWorldCleanupContract,
     infer_target_fixture_for_detection,
 )
@@ -13,7 +14,10 @@ from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 
 
 def test_realworld_observed_handle_planner_binding_stays_private() -> None:
-    contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=RICH_MAP_MODE,
+    )
     fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
     target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
