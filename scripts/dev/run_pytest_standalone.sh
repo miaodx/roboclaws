@@ -19,6 +19,11 @@ if [[ ! -x "$PYTEST_BIN" ]]; then
     fi
     PYTEST_BIN="$(command -v pytest)"
 fi
+PYTEST_BIN_DIR="$(cd "$(dirname "$PYTEST_BIN")" && pwd)"
+ROBOCLAWS_PYTHON="${ROBOCLAWS_PYTHON:-}"
+if [[ -z "$ROBOCLAWS_PYTHON" && -x "$PYTEST_BIN_DIR/python" ]]; then
+    ROBOCLAWS_PYTHON="$PYTEST_BIN_DIR/python"
+fi
 
 if [[ "${ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV:-}" == "1" ]]; then
     KIMI_API_KEY=""
@@ -30,8 +35,9 @@ if [[ "${ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV:-}" == "1" ]]; then
 fi
 
 env -i \
-  PATH="$REPO_ROOT/.venv/bin:/usr/bin:/bin" \
+  PATH="$PYTEST_BIN_DIR:$REPO_ROOT/.venv/bin:/usr/bin:/bin" \
   HOME="${HOME:-$REPO_ROOT}" \
+  ROBOCLAWS_PYTHON="${ROBOCLAWS_PYTHON-}" \
   KIMI_API_KEY="${KIMI_API_KEY-}" \
   OPENAI_API_KEY="${OPENAI_API_KEY-}" \
   ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY-}" \
