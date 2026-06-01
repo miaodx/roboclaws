@@ -130,11 +130,11 @@ def write_index(
         # Enumerate the 4 cases: none / demo-only / territory-only / coverage-only /
         # any combination — missing artifact dir → omit tile (matches CI best-effort pattern).
         openclaw_dir = site_dir / "openclaw"
-        if (openclaw_dir / "demo").is_dir():
+        if (openclaw_dir / "demo" / "report.html").is_file():
             openclaw_items.append(_OPENCLAW_ITEM_DEMO)
-        if (openclaw_dir / "territory").is_dir():
+        if (openclaw_dir / "territory" / "report.html").is_file():
             openclaw_items.append(_OPENCLAW_ITEM_TERRITORY)
-        if (openclaw_dir / "coverage").is_dir():
+        if (openclaw_dir / "coverage" / "report.html").is_file():
             openclaw_items.append(_OPENCLAW_ITEM_COVERAGE)
 
     openclaw_section = (
