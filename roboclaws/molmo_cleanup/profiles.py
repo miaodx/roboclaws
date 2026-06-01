@@ -19,6 +19,7 @@ SMOKE_PROFILE = "smoke"
 WORLD_LABELS_PROFILE = "world-labels"
 CAMERA_RAW_PROFILE = "camera-raw"
 CAMERA_LABELS_PROFILE = "camera-labels"
+ISAAC_COMPATIBLE_PROFILES = frozenset({WORLD_LABELS_PROFILE, CAMERA_RAW_PROFILE})
 
 WORLD_LABELS_INPUT = "world_labels"
 RAW_CAMERA_INPUT = "raw_camera"
@@ -232,18 +233,29 @@ def cleanup_profile_metadata_for_run(
         record_robot_views=record_robot_views,
     )
     metadata = profile.metadata()
-    if profile.profile == WORLD_LABELS_PROFILE and backend == ISAACLAB_SUBPROCESS_BACKEND:
+    if profile.profile in ISAAC_COMPATIBLE_PROFILES and backend == ISAACLAB_SUBPROCESS_BACKEND:
         metadata["backend"] = backend
         metadata["world_backend"] = ISAAC_SIM_BACKEND
-        metadata["summary"] = (
-            "Structured-label cleanup input lane with Isaac Lab semantic-pose backend artifacts."
-        )
-        metadata["model_input_note"] = (
-            "The agent receives observed object handles and structured labels. "
-            "Isaac FPV, chase, and verification images are report evidence, not "
-            "model input for this lane. This lane does not select online/offline "
-            "map behavior; use map_mode and runtime_map_prior for that."
-        )
+        if profile.profile == WORLD_LABELS_PROFILE:
+            metadata["summary"] = (
+                "Structured-label cleanup input lane with Isaac Lab semantic-pose backend artifacts."
+            )
+            metadata["model_input_note"] = (
+                "The agent receives observed object handles and structured labels. "
+                "Isaac FPV, chase, and verification images are report evidence, not "
+                "model input for this lane. This lane does not select online/offline "
+                "map behavior; use map_mode and runtime_map_prior for that."
+            )
+        elif profile.profile == CAMERA_RAW_PROFILE:
+            metadata["summary"] = (
+                "Raw camera-input cleanup via Isaac Lab mounted head-camera artifacts "
+                "with structured object labels withheld before declaration."
+            )
+            metadata["model_input_note"] = (
+                "The agent receives raw Isaac FPV image blocks from the robot-mounted "
+                "head camera first, then creates model-declared observed handles from "
+                "public image evidence. Structured labels remain withheld before declaration."
+            )
     metadata["record_robot_views"] = bool(record_robot_views)
     if profile.profile == WORLD_LABELS_PROFILE and not record_robot_views:
         metadata["report"] = SEMANTIC_REPORT
@@ -273,7 +285,7 @@ def validate_cleanup_profile_metadata(
         "requires_clean_success",
     ):
         assert metadata.get(key) == expected[key], (key, metadata, expected)
-    if profile.profile == WORLD_LABELS_PROFILE:
+    if profile.profile in ISAAC_COMPATIBLE_PROFILES:
         assert metadata.get("backend") in {
             MOLMOSPACES_SUBPROCESS_BACKEND,
             ISAACLAB_SUBPROCESS_BACKEND,
@@ -306,7 +318,7 @@ def _assert_profile_matches_run(
     perception_mode: str,
     record_robot_views: bool,
 ) -> None:
-    if profile.profile == WORLD_LABELS_PROFILE and backend == ISAACLAB_SUBPROCESS_BACKEND:
+    if profile.profile in ISAAC_COMPATIBLE_PROFILES and backend == ISAACLAB_SUBPROCESS_BACKEND:
         pass
     elif profile.backend != backend:
         raise ValueError(
