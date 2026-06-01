@@ -732,7 +732,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: report-openclaw
-          path: openclaw-src/demo
+          path: openclaw-src
 
       - name: Download OpenClaw territory artifact (best-effort)
         id: download_openclaw_territory
