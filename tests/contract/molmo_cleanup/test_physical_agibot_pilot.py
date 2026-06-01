@@ -552,6 +552,7 @@ def test_physical_agibot_human_takeover_stop_covers_runtime_navigation_failures(
     assert _human_takeover_stop_required({}, {"failure_type": "timeout"})
     assert _human_takeover_stop_required({}, {"failure_type": "pnc_failed"})
     assert _human_takeover_stop_required({}, {"failure_type": "normal_navi_exception"})
+    assert _human_takeover_stop_required({}, {"failure_type": "gdk_localization_not_ready"})
     assert _human_takeover_stop_required({}, {"failure_type": "map_mismatch"})
     assert _human_takeover_stop_required({}, {"failure_type": "bounded_local_nudge_failed"})
     assert not _human_takeover_stop_required(

@@ -44,6 +44,7 @@ HUMAN_TAKEOVER_FAILURE_TYPES = {
     "timeout",
     "pnc_busy",
     "pnc_failed",
+    "gdk_localization_not_ready",
     "normal_navi_exception",
     "local_motion_failed",
     "relative_move_failed",
