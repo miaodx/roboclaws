@@ -502,11 +502,11 @@ def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> Non
         "cmd",
         ".venv/bin/python",
         "scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py",
-        "--context-json",
-        "tests/fixtures/agibot_map_context.completed.json",
         "--output-dir",
+        "output/agibot/map-build",
+        "--context-json",
     ]
-    assert route[6] == "output/agibot/map-build"
+    assert route[6] == "tests/fixtures/agibot_map_context.completed.json"
     assert "--waypoint-id" in route
     assert "wp_sofa_front" in route
     assert "agibot-g2-cleanup" not in " ".join(route)
@@ -556,21 +556,47 @@ def test_semantic_map_build_codex_requires_agibot_backend() -> None:
     assert "semantic-map-build codex currently requires backend=agibot_gdk" in stderr
 
 
-def test_household_cleanup_routes_agibot_backend_to_blocked_cleanup_pilot_cli() -> None:
+def test_household_cleanup_routes_agibot_backend_to_default_cleanup_pilot_cli() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "world-labels",
+        "backend=agibot_gdk",
+    )
+
+    assert route == [
+        "cmd",
+        ".venv/bin/python",
+        "scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py",
+        "--output-dir",
+        "output/household/household-cleanup/direct-report",
+    ]
+
+
+def test_household_cleanup_routes_agibot_backend_override_to_cleanup_pilot_cli() -> None:
     route = trace_task_run(
         "household-cleanup",
         "direct",
         "world-labels",
         "backend=agibot_gdk",
         "context_json=tests/fixtures/agibot_map_context.completed.json",
+        "agibot_map_artifact_dir=vendors/agibot_sdk/artifacts/maps/robot_map_9",
+        "waypoint_id=wp_sofa_front",
+        "output_dir=output/agibot/cleanup",
     )
 
-    assert route[:5] == [
+    assert route == [
         "cmd",
         ".venv/bin/python",
         "scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py",
+        "--output-dir",
+        "output/agibot/cleanup",
         "--context-json",
         "tests/fixtures/agibot_map_context.completed.json",
+        "--waypoint-id",
+        "wp_sofa_front",
+        "--agibot-map-artifact-dir",
+        "vendors/agibot_sdk/artifacts/maps/robot_map_9",
     ]
 
 
@@ -676,15 +702,15 @@ def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> N
     assert "--real-movement-enabled" in result.stdout
 
 
-def test_agibot_backend_route_requires_context_json() -> None:
+def test_agibot_codex_map_build_route_requires_context_json() -> None:
     stderr = assert_task_run_fails(
         "semantic-map-build",
-        "direct",
+        "codex",
         "camera-labels",
         "backend=agibot_gdk",
     )
 
-    assert "backend=agibot_gdk requires context_json" in stderr
+    assert "backend=agibot_gdk semantic-map-build Codex requires context_json" in stderr
 
 
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:

@@ -431,11 +431,11 @@ run task driver mode="" *overrides:
         fi
         if [[ "$backend" == "agibot_gdk" ]]; then
           context_json="$(get context_json "")"
-          if [[ -z "$context_json" ]]; then
-            echo "error: backend=agibot_gdk requires context_json=<agibot map context JSON>" >&2
-            exit 1
-          fi
           if [[ "$task" == "semantic-map-build" && "$driver" == "codex" ]]; then
+            if [[ -z "$context_json" ]]; then
+              echo "error: backend=agibot_gdk semantic-map-build Codex requires context_json=<agibot map context JSON>" >&2
+              exit 1
+            fi
             seed_count="$(wc -w <<<"$seeds" | tr -d ' ')"
             if [[ "$seed_count" != "1" ]]; then
               echo "error: Agibot semantic-map-build Codex accepts exactly one seed per live run" >&2
@@ -619,8 +619,10 @@ run task driver mode="" *overrides:
             exec "${runner_args[@]}"
           fi
           agibot_args=(.venv/bin/python scripts/molmo_cleanup/run_physical_agibot_cleanup_pilot.py
-            --context-json "$context_json"
             --output-dir "$output_dir")
+          if [[ -n "$context_json" ]]; then
+            agibot_args+=(--context-json "$context_json")
+          fi
           waypoint_id="$(get waypoint_id "")"
           if [[ -n "$waypoint_id" ]]; then
             agibot_args+=(--waypoint-id "$waypoint_id")

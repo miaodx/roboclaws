@@ -19,21 +19,23 @@ from examples.molmo_cleanup.molmospaces_realworld_cleanup import (  # noqa: E402
 )
 from roboclaws.molmo_cleanup.agibot_map_bundle import (  # noqa: E402
     AGIBOT_MAP_BUNDLE_PROVENANCE,
-    AGIBOT_ROBOT_MAP_9_ENVIRONMENT_ID,
     write_agibot_nav2_map_bundle,
+)
+from roboclaws.molmo_cleanup.agibot_map_defaults import (  # noqa: E402
+    DEFAULT_AGIBOT_CONFIDENCE_LAYER,
+    DEFAULT_AGIBOT_CONTEXT_JSON,
+    DEFAULT_AGIBOT_ENVIRONMENT_ID,
+    DEFAULT_AGIBOT_MAP_ALIAS,
+    DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
 )
 from roboclaws.molmo_cleanup.artifact_report import (  # noqa: E402
     rerender_cleanup_report_from_artifact_path,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_CONTEXT_JSON = (
-    REPO_ROOT / "tests" / "fixtures" / ("agibot_robot_map_9_context.completed.json")
-)
-DEFAULT_MAP_ARTIFACT_DIR = (
-    REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / ("robot_map_9")
-)
-CONFIDENCE_LAYER = "Agibot Robot Map 9 Semantic Actions Rehearsal"
+DEFAULT_CONTEXT_JSON = DEFAULT_AGIBOT_CONTEXT_JSON
+DEFAULT_MAP_ARTIFACT_DIR = DEFAULT_AGIBOT_MAP_ARTIFACT_DIR
+CONFIDENCE_LAYER = DEFAULT_AGIBOT_CONFIDENCE_LAYER
 NEXT_CONFIDENCE_LAYER = "MolmoSpaces Agibot Contract Rehearsal"
 
 
@@ -66,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Run semantic cleanup actions over the real AgiBot robot_map_9 map artifact "
+            "Run semantic cleanup actions over a fetched real AgiBot map artifact "
             "without SDK --execute or physical robot movement."
         )
     )
@@ -80,12 +82,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--agibot-map-artifact-dir",
         type=Path,
         default=DEFAULT_MAP_ARTIFACT_DIR,
-        help="Fetched AgiBot map artifact root, defaulting to robot_map_9.",
+        help=f"Fetched AgiBot map artifact root, defaulting to {DEFAULT_AGIBOT_MAP_ALIAS}.",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output/agibot/robot-map-9-semantic-actions"),
+        default=Path("output/agibot")
+        / f"{DEFAULT_AGIBOT_MAP_ALIAS.replace('_', '-')}-semantic-actions",
         help="Root output directory for timestamped semantic action artifacts.",
     )
     parser.add_argument("--run-dir", type=Path, help="Exact output run directory.")
@@ -102,11 +105,11 @@ def run_agibot_robot_map_9_semantic_actions(
     seed: int = 7,
     generated_mess_count: int = 5,
 ) -> dict[str, Any]:
-    """Run Roboclaws semantic cleanup over the robot_map_9 public map bundle."""
+    """Run Roboclaws semantic cleanup over a fetched AgiBot public map bundle."""
 
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
-    source_bundle_dir = run_dir / "robot_map_9_semantic_map_source"
+    source_bundle_dir = run_dir / f"{Path(agibot_map_artifact_dir).name}_semantic_map_source"
     source_bundle = write_agibot_nav2_map_bundle(
         source_map_dir=agibot_map_artifact_dir,
         context_json=context_json,
@@ -146,7 +149,7 @@ def _annotate_confidence_layer(
     result["report_title"] = CONFIDENCE_LAYER
     result["confidence_layer"] = CONFIDENCE_LAYER
     result["confidence_layer_summary"] = (
-        "Uses the real AgiBot robot_map_9 map artifact as a public navigation map "
+        "Uses the fetched real AgiBot map artifact as a public navigation map "
         "source while Roboclaws executes semantic cleanup actions with "
         "api_semantic provenance."
     )
@@ -155,7 +158,9 @@ def _annotate_confidence_layer(
         "schema": "agibot_robot_map_9_semantic_actions_rehearsal_v1",
         "confidence_layer": CONFIDENCE_LAYER,
         "next_confidence_layer": NEXT_CONFIDENCE_LAYER,
-        "map_environment_id": AGIBOT_ROBOT_MAP_9_ENVIRONMENT_ID,
+        "map_environment_id": str(
+            source_bundle.get("environment_id") or DEFAULT_AGIBOT_ENVIRONMENT_ID
+        ),
         "map_source_provenance": AGIBOT_MAP_BUNDLE_PROVENANCE,
         "agibot_map_artifact_dir": str(Path(agibot_map_artifact_dir)),
         "context_json": str(Path(context_json)),

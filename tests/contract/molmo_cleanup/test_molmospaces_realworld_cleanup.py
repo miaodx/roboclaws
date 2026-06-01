@@ -8,6 +8,11 @@ from pathlib import Path
 import pytest
 
 from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
+from roboclaws.molmo_cleanup.agibot_map_defaults import (
+    DEFAULT_AGIBOT_CONFIDENCE_LAYER,
+    DEFAULT_AGIBOT_CONTEXT_JSON,
+    DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
+)
 from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
@@ -35,11 +40,24 @@ AGIBOT_SEMANTIC_ACTIONS_PATH = (
 PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
 ROBOT_MAP_9_CONTEXT = REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
+ROBOT_MAP_12_ARTIFACT = DEFAULT_AGIBOT_MAP_ARTIFACT_DIR
+ROBOT_MAP_12_CONTEXT = DEFAULT_AGIBOT_CONTEXT_JSON
 
 
 def _require_robot_map_9_artifact() -> None:
-    if not (ROBOT_MAP_9_ARTIFACT / "source.json").is_file():
+    if not (
+        (ROBOT_MAP_9_ARTIFACT / "source.json").is_file()
+        or (ROBOT_MAP_9_ARTIFACT / "agibot" / "source.json").is_file()
+    ):
         pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
+
+
+def _require_robot_map_12_artifact() -> None:
+    if not (
+        (ROBOT_MAP_12_ARTIFACT / "source.json").is_file()
+        or (ROBOT_MAP_12_ARTIFACT / "agibot" / "source.json").is_file()
+    ):
+        pytest.skip("Agibot robot_map_12 artifact is unavailable in this checkout")
 
 
 def _load_demo_module():
@@ -185,7 +203,45 @@ def test_realworld_cleanup_demo_navigates_on_agibot_robot_map_9_mock(
     assert any('"route_validation"' in line and '"ok": true' in line for line in trace_lines)
 
 
-def test_agibot_robot_map_9_semantic_actions_rehearsal(tmp_path: Path) -> None:
+def test_agibot_semantic_actions_rehearsal_defaults_to_robot_map_12(tmp_path: Path) -> None:
+    _require_robot_map_12_artifact()
+    rehearsal = _load_agibot_semantic_actions_module()
+
+    result = rehearsal.run_agibot_robot_map_9_semantic_actions(
+        run_dir=tmp_path / "run",
+    )
+
+    run_dir = tmp_path / "run"
+    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    layer = run_result["agibot_robot_map_9_semantic_actions"]
+
+    assert result["confidence_layer"] == DEFAULT_AGIBOT_CONFIDENCE_LAYER
+    assert run_result["report_title"] == DEFAULT_AGIBOT_CONFIDENCE_LAYER
+    assert run_result["backend"] == "api_semantic_synthetic"
+    assert run_result["primitive_provenance"] == "api_semantic"
+    assert run_result["semantic_substeps"]
+    assert layer["semantic_substep_count"] == len(run_result["semantic_substeps"])
+    assert layer["agibot_map_artifact_dir"] == str(ROBOT_MAP_12_ARTIFACT)
+    assert layer["context_json"] == str(ROBOT_MAP_12_CONTEXT)
+    assert layer["map_environment_id"] == "agibot-robot-map-12"
+    assert layer["map_source_provenance"] == "agibot_gdk_map_artifact"
+    assert layer["physical_robot"] is False
+    assert layer["sdk_runner_execution"] is False
+    assert layer["gdk_navigation_executed"] is False
+    assert layer["molmospaces_contract_rehearsal"] is False
+    assert run_result["next_confidence_layer"] == "MolmoSpaces Agibot Contract Rehearsal"
+    assert "agibot_gdk_normal_navi" not in json.dumps(run_result)
+    assert DEFAULT_AGIBOT_CONFIDENCE_LAYER in report_text
+    assert "Next confidence layer: MolmoSpaces Agibot Contract Rehearsal" in report_text
+    assert "Semantic Substeps" in report_text
+    assert "No semantic cleanup actions recorded" not in report_text
+    assert run_result["nav2_map_bundle"]["source_provenance"] == "agibot_gdk_map_artifact"
+
+
+def test_agibot_semantic_actions_rehearsal_accepts_robot_map_9_override(
+    tmp_path: Path,
+) -> None:
     _require_robot_map_9_artifact()
     rehearsal = _load_agibot_semantic_actions_module()
 
@@ -195,30 +251,12 @@ def test_agibot_robot_map_9_semantic_actions_rehearsal(tmp_path: Path) -> None:
         agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
     )
 
-    run_dir = tmp_path / "run"
-    run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))
-    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+    run_result = json.loads((tmp_path / "run" / "run_result.json").read_text(encoding="utf-8"))
     layer = run_result["agibot_robot_map_9_semantic_actions"]
 
-    assert result["confidence_layer"] == "Agibot Robot Map 9 Semantic Actions Rehearsal"
-    assert run_result["report_title"] == "Agibot Robot Map 9 Semantic Actions Rehearsal"
-    assert run_result["backend"] == "api_semantic_synthetic"
-    assert run_result["primitive_provenance"] == "api_semantic"
-    assert run_result["semantic_substeps"]
-    assert layer["semantic_substep_count"] == len(run_result["semantic_substeps"])
+    assert result["cleanup_status"] == "success"
     assert layer["agibot_map_artifact_dir"] == str(ROBOT_MAP_9_ARTIFACT)
-    assert layer["map_source_provenance"] == "agibot_gdk_map_artifact"
-    assert layer["physical_robot"] is False
-    assert layer["sdk_runner_execution"] is False
-    assert layer["gdk_navigation_executed"] is False
-    assert layer["molmospaces_contract_rehearsal"] is False
-    assert run_result["next_confidence_layer"] == "MolmoSpaces Agibot Contract Rehearsal"
-    assert "agibot_gdk_normal_navi" not in json.dumps(run_result)
-    assert "Agibot Robot Map 9 Semantic Actions Rehearsal" in report_text
-    assert "Next confidence layer: MolmoSpaces Agibot Contract Rehearsal" in report_text
-    assert "Semantic Substeps" in report_text
-    assert "No semantic cleanup actions recorded" not in report_text
-    assert run_result["nav2_map_bundle"]["source_provenance"] == "agibot_gdk_map_artifact"
+    assert layer["map_environment_id"] == "agibot-robot-map-9"
 
 
 def test_realworld_cleanup_live_bundle_gate_requires_selected_bundle(tmp_path: Path) -> None:

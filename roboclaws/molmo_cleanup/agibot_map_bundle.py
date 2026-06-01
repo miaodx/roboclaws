@@ -20,10 +20,16 @@ from roboclaws.maps.bundle import (
     parse_map_yaml,
     validate_nav2_map_bundle,
 )
+from roboclaws.molmo_cleanup.agibot_map_defaults import (
+    DEFAULT_AGIBOT_ENVIRONMENT_ID,
+    DEFAULT_AGIBOT_MAP_VERSION,
+)
 
 AGIBOT_MAP_BUNDLE_PROVENANCE = "agibot_gdk_map_artifact"
 AGIBOT_ROBOT_MAP_9_ENVIRONMENT_ID = "agibot-robot-map-9"
 AGIBOT_ROBOT_MAP_9_MAP_VERSION = "agibot-sdk-fetch-2026-05-20"
+DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK = DEFAULT_AGIBOT_ENVIRONMENT_ID
+DEFAULT_AGIBOT_MAP_VERSION_FALLBACK = DEFAULT_AGIBOT_MAP_VERSION
 
 
 def write_agibot_nav2_map_bundle(
@@ -93,14 +99,14 @@ def _semantics_from_context(
     source_json: dict[str, Any],
     raw_map: dict[str, Any],
 ) -> dict[str, Any]:
-    environment_id = str(context.get("environment_id") or AGIBOT_ROBOT_MAP_9_ENVIRONMENT_ID)
+    environment_id = str(context.get("environment_id") or DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK)
     map_id = f"{environment_id}_semantic_map"
     map_source = source_json.get("source_agibot_map") or context.get("map_source") or {}
     return {
         "schema": "nav2_cleanup_semantics_v1",
         "environment_id": environment_id,
         "map_id": map_id,
-        "map_version": str(context.get("map_version") or AGIBOT_ROBOT_MAP_9_MAP_VERSION),
+        "map_version": str(context.get("map_version") or DEFAULT_AGIBOT_MAP_VERSION_FALLBACK),
         "frame_ids": {
             "map": str(context.get("frame_id") or "map"),
             "base": "base_link",
@@ -273,9 +279,13 @@ def _snapshot_payload(
         "preview_png": bundle_dir / "preview.png",
     }
     metadata = metric_map_bundle_metadata(
-        environment_id=str(semantics.get("environment_id") or AGIBOT_ROBOT_MAP_9_ENVIRONMENT_ID),
-        map_id=str(semantics.get("map_id") or "agibot_robot_map_9_semantic_map"),
-        map_version=str(semantics.get("map_version") or AGIBOT_ROBOT_MAP_9_MAP_VERSION),
+        environment_id=str(
+            semantics.get("environment_id") or DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK
+        ),
+        map_id=str(
+            semantics.get("map_id") or f"{DEFAULT_AGIBOT_ENVIRONMENT_ID_FALLBACK}_semantic_map"
+        ),
+        map_version=str(semantics.get("map_version") or DEFAULT_AGIBOT_MAP_VERSION_FALLBACK),
     )
     return {
         "schema": NAV2_MAP_BUNDLE_SCHEMA,

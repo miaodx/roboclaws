@@ -11,6 +11,11 @@ from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import (
     _camera_model_policy_evidence,
     make_agibot_semantic_map_build_mcp,
 )
+from roboclaws.molmo_cleanup.agibot_map_defaults import (
+    DEFAULT_AGIBOT_CONFIDENCE_LAYER,
+    DEFAULT_AGIBOT_CONTEXT_JSON,
+    DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
+)
 from roboclaws.molmo_cleanup.agibot_sdk_runner import (
     AGIBOT_SDK_RUNNER_BACKEND,
     BLOCKED_MANIPULATION_TOOLS,
@@ -31,6 +36,8 @@ ROBOT_MAP_9_CONTEXT_FIXTURE = (
     REPO_ROOT / "tests" / "fixtures" / "agibot_robot_map_9_context.completed.json"
 )
 ROBOT_MAP_9_ARTIFACT = REPO_ROOT / "vendors" / "agibot_sdk" / "artifacts" / "maps" / "robot_map_9"
+ROBOT_MAP_12_CONTEXT_FIXTURE = DEFAULT_AGIBOT_CONTEXT_JSON
+ROBOT_MAP_12_ARTIFACT = DEFAULT_AGIBOT_MAP_ARTIFACT_DIR
 AGIBOT_SDK_RUNNER_PATH = (
     REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
 )
@@ -42,8 +49,19 @@ def _require_agibot_sdk_runner() -> None:
 
 
 def _require_robot_map_9_artifact() -> None:
-    if not (ROBOT_MAP_9_ARTIFACT / "source.json").is_file():
+    if not (
+        (ROBOT_MAP_9_ARTIFACT / "source.json").is_file()
+        or (ROBOT_MAP_9_ARTIFACT / "agibot" / "source.json").is_file()
+    ):
         pytest.skip("Agibot robot_map_9 artifact is unavailable in this checkout")
+
+
+def _require_robot_map_12_artifact() -> None:
+    if not (
+        (ROBOT_MAP_12_ARTIFACT / "source.json").is_file()
+        or (ROBOT_MAP_12_ARTIFACT / "agibot" / "source.json").is_file()
+    ):
+        pytest.skip("Agibot robot_map_12 artifact is unavailable in this checkout")
 
 
 def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
@@ -106,7 +124,7 @@ def test_physical_agibot_pilot_uses_sdk_runner_reports_without_movement(
     assert persisted["cleanup_policy_trace"]["events"][-1]["decision"] == "block_manipulation"
     assert persisted["agibot_sdk_runner"]["gdk_imported_by_roboclaws"] is False
     assert persisted["agibot_sdk_runner"]["next_confidence_layer"] == (
-        "Agibot Robot Map 9 Semantic Actions Rehearsal"
+        DEFAULT_AGIBOT_CONFIDENCE_LAYER
     )
     assert is_cleanup_run_result_artifact(run_dir)
     assert rerender_cleanup_report_from_artifact_path(run_dir) == run_dir / "report.html"
@@ -162,10 +180,39 @@ def test_physical_agibot_pilot_report_uses_robot_map_9_artifact(tmp_path: Path) 
     assert "navigate_to_waypoint" in report_text
     assert "Dry-run blocked" in report_text
     assert "Next confidence layer" in report_text
-    assert "Agibot Robot Map 9 Semantic Actions Rehearsal" in report_text
+    assert DEFAULT_AGIBOT_CONFIDENCE_LAYER in report_text
     assert "semantic cleanup actions, MolmoSpaces simulation, and real GDK execution" in report_text
     assert "Fetched AgiBot occupancy map artifact" in subphase_report
     assert "map_artifacts/map_preview.png" in subphase_report
+
+
+def test_physical_agibot_pilot_report_uses_default_robot_map_12_artifact(
+    tmp_path: Path,
+) -> None:
+    _require_agibot_sdk_runner()
+    _require_robot_map_12_artifact()
+
+    run_result = run_physical_agibot_cleanup_pilot(
+        run_dir=tmp_path / "run",
+        context_json=ROBOT_MAP_12_CONTEXT_FIXTURE,
+        agibot_map_artifact_dir=ROBOT_MAP_12_ARTIFACT,
+        waypoint_id="central_floor_scan",
+    )
+
+    run_dir = tmp_path / "run"
+    metric_map = run_result["agent_view"]["metric_map"]
+    bundle = run_result["nav2_map_bundle"]
+    report_text = (run_dir / "report.html").read_text(encoding="utf-8")
+
+    assert metric_map["map_id"] == "agibot-robot-map-12"
+    assert metric_map["occupancy_grid_artifact"] == "map_artifacts/occupancy.pgm"
+    assert metric_map["map_preview_artifact"] == "map_artifacts/map_preview.png"
+    assert bundle["environment_id"] == "agibot-robot-map-12"
+    assert bundle["source_bundle_root"] == str(ROBOT_MAP_12_ARTIFACT)
+    assert bundle["source_provenance"] == "agibot_gdk_map_artifact"
+    assert (run_dir / "map_bundle" / "map.pgm").stat().st_size > 600_000
+    assert (run_dir / "map_bundle" / "report_static_navigation_map.png").is_file()
+    assert "agibot-robot-map-12" in report_text
 
 
 def test_agibot_adapter_resolves_public_navigation_tool_family(tmp_path: Path) -> None:
