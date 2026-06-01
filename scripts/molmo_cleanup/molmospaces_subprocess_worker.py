@@ -33,9 +33,7 @@ from roboclaws.molmo_cleanup.generated_mess import (
     select_generated_mess_targets,
 )
 from roboclaws.molmo_cleanup.robot_view_camera_control import (
-    backend_local_robot_view_camera_control_contract,
-    canonical_cleanup_robot_view_camera_request,
-    canonical_robot_view_camera_control_contract,
+    robot_mounted_head_camera_control_contract,
 )
 from roboclaws.molmo_cleanup.robot_view_pose import (
     angle_delta,
@@ -669,71 +667,19 @@ def write_robot_views(
     verify_path = output_dir / f"{safe_label}.verify.png"
 
     focus = _focus_payload(state, focus_object_id, focus_receptacle_id)
-    camera_request = canonical_cleanup_robot_view_camera_request(
-        label=safe_label,
-        robot_pose=state.get("robot_pose"),
+    fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
+    verify_camera = _focus_camera(state, focus)
+    verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
+    fpv_camera = "robot_0/head_camera"
+    camera_control_contract = robot_mounted_head_camera_control_contract(
+        backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        verify_source="mujoco_focus_camera",
+        pose_source="rby1m_robot_qpos",
+        lens_source="mujoco_model_camera_defaults",
+        robot_pose=dict(state.get("robot_pose") or {}),
         focus=focus,
-        width=width,
-        height=height,
-        scene_focus_position=_scene_focus_position(state),
     )
-    camera_control_contract: dict[str, Any]
-    fpv_camera: mujoco.MjvCamera | str
-    verify_camera: mujoco.MjvCamera | str
-    if camera_request is not None:
-        canonical_views = _render_camera_views_with_model_data(
-            model,
-            data,
-            state=state,
-            output_dir=output_dir / f"{safe_label}.canonical_camera_control",
-            camera_request=camera_request,
-            width=width,
-            height=height,
-        )
-        if canonical_views.get("ok") is not True:
-            return _error(
-                "robot_views",
-                "canonical_camera_control_failed",
-                reason=str(canonical_views),
-            )
-        fpv = _load_rendered_robot_view_image(
-            canonical_views,
-            role="fpv",
-        )
-        verify = _load_rendered_robot_view_image(
-            canonical_views,
-            role="verify",
-        )
-        fpv_camera = _camera_from_view_spec(
-            state,
-            _camera_view_spec(camera_request["views"][0], index=1),
-        )
-        verify_camera = _camera_from_view_spec(
-            state,
-            _camera_view_spec(camera_request["views"][1], index=2),
-        )
-        camera_control_contract = canonical_robot_view_camera_control_contract(
-            backend="molmospaces-mujoco",
-            pose_source=str(
-                (state.get("robot_pose") or {}).get("pose_source")
-                or "roboclaws_shared_scene_frame_support_pose"
-            ),
-            request=camera_request,
-        )
-        camera_control_contract["robot_pose"] = dict(state.get("robot_pose") or {})
-    else:
-        fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
-        verify_camera = _focus_camera(state, focus)
-        verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
-        fpv_camera = "robot_0/head_camera"
-        camera_control_contract = backend_local_robot_view_camera_control_contract(
-            backend="molmospaces-mujoco",
-            status="backend_local_robot_camera",
-            fpv_source="robot_0/head_camera",
-            verify_source="mujoco_focus_camera",
-            pose_source="rby1m_robot_qpos",
-            lens_source="mujoco_model_camera_defaults",
-        )
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower", width=width, height=height)
     focus["fpv_visibility"] = _focus_visibility(
         model,

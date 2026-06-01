@@ -14,6 +14,10 @@ from roboclaws.molmo_cleanup.camera_control import (
 ROBOT_VIEW_CAMERA_CONTROL_CONTRACT_SCHEMA = "robot_view_camera_control_contract_v1"
 CANONICAL_ROBOT_VIEW_CAMERA_STATUS = "canonical_camera_control_robot_view"
 BACKEND_LOCAL_ROBOT_VIEW_CAMERA_MODEL = "backend_local_robot_view"
+ROBOT_MOUNTED_HEAD_CAMERA_MODEL = "robot_mounted_head_camera_v1"
+ROBOT_HEAD_CAMERA_EQUIVALENT_MODEL = "robot_head_camera_equivalent_v1"
+ROBOT_MOUNTED_HEAD_CAMERA_STATUS = "robot_mounted_head_camera_robot_view"
+ROBOT_HEAD_CAMERA_EQUIVALENT_STATUS = "robot_head_camera_equivalent_robot_view"
 
 ROBOT_FPV_EYE_HEIGHT_M = 1.55
 ROBOT_FPV_FORWARD_DISTANCE_M = 2.0
@@ -162,6 +166,64 @@ def backend_local_robot_view_camera_control_contract(
             "not by itself prove raw-FPV cleanup parity."
         ),
     }
+
+
+def robot_mounted_head_camera_control_contract(
+    *,
+    backend: str,
+    fpv_source: str,
+    verify_source: str,
+    pose_source: str,
+    lens_source: str,
+    camera_model: str = ROBOT_MOUNTED_HEAD_CAMERA_MODEL,
+    status: str = ROBOT_MOUNTED_HEAD_CAMERA_STATUS,
+    camera_prim_path: str | None = None,
+    robot_asset: dict[str, Any] | None = None,
+    same_pose_api: bool = False,
+    robot_pose: dict[str, Any] | None = None,
+    focus: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Describe FPV rendered from a real/equivalent robot head camera.
+
+    ``same_pose_api`` is intentionally false for backend-native robot cameras:
+    parity comes from the mounted camera contract, not the free-camera render API.
+    """
+
+    contract = {
+        "schema": ROBOT_VIEW_CAMERA_CONTROL_CONTRACT_SCHEMA,
+        "backend": backend,
+        "status": status,
+        "camera_control_api": None,
+        "camera_model": camera_model,
+        "same_pose_api": same_pose_api,
+        "agent_facing_fpv": {
+            "source": fpv_source,
+            "canonical_camera_control": False,
+            "robot_mounted": camera_model == ROBOT_MOUNTED_HEAD_CAMERA_MODEL,
+            "head_camera_equivalent": camera_model == ROBOT_HEAD_CAMERA_EQUIVALENT_MODEL,
+        },
+        "report_verify_view": {
+            "source": verify_source,
+            "canonical_camera_control": False,
+        },
+        "pose_source": pose_source,
+        "lens_source": lens_source,
+        "evidence_note": (
+            "Agent-facing FPV is rendered from a robot head camera or an explicitly "
+            "declared head-camera equivalent. Chase/map views remain report-only "
+            "auxiliary evidence."
+        ),
+    }
+    if camera_prim_path:
+        contract["camera_prim_path"] = camera_prim_path
+        contract["agent_facing_fpv"]["camera_prim_path"] = camera_prim_path
+    if robot_asset:
+        contract["robot_asset"] = dict(robot_asset)
+    if robot_pose:
+        contract["robot_pose"] = dict(robot_pose)
+    if focus:
+        contract["focus"] = dict(focus)
+    return contract
 
 
 def _fpv_target(

@@ -44,13 +44,9 @@ from roboclaws.molmo_cleanup.isaac_lab_backend import (
 )
 from roboclaws.molmo_cleanup.robot_view_camera_control import (
     backend_local_robot_view_camera_control_contract,
-    canonical_cleanup_robot_view_camera_request,
-    canonical_robot_view_camera_control_contract,
+    robot_mounted_head_camera_control_contract,
 )
-from roboclaws.molmo_cleanup.robot_view_pose import (
-    CLEANUP_ROBOT_POSE_SOURCE,
-    resolve_cleanup_robot_pose,
-)
+from roboclaws.molmo_cleanup.robot_view_pose import resolve_cleanup_robot_pose
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
 from roboclaws.molmo_cleanup.scoring import score_cleanup
 from roboclaws.molmo_cleanup.semantic_acceptability import (
@@ -105,6 +101,12 @@ ISAAC_PLACEMENT_RESOLVER_SOURCE = "isaac_support_placement_resolver"
 ISAAC_DESCENDANT_SUPPORT_SURFACE_SOURCE = "isaac_usd_descendant_support_surface"
 ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = "isaac_usd_descendant_support_surface_union"
 ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = "isaac_usd_world_bounds"
+ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = "isaac_rby1m_robot_import_plan_v1"
+ISAAC_RBY1M_HEAD_CAMERA_PRIM = "/World/robot_0/head_camera"
+ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
+ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
+    "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
+)
 _DEFERRED_SIMULATION_APP: Any | None = None
 
 
@@ -135,7 +137,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     init.add_argument("--runtime-mode", choices=("real", "fake"), default="real")
     init.add_argument("--include-robot", action="store_true")
-    init.add_argument("--robot-name", default="simple_camera_rig")
+    init.add_argument("--robot-name", default="rby1m")
     init.add_argument("--map-bundle-dir", type=Path)
     init.add_argument(
         "--enable-segmentation",
@@ -402,6 +404,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "robot_view_provenance": _robot_view_provenance(args.runtime_mode, real_smoke),
         "segmentation": segmentation,
         "robot": _robot_payload(args.robot_name) if args.include_robot else None,
+        "robot_import": _rby1m_robot_import_plan(args.robot_name) if args.include_robot else None,
     }
     _seed_generated_mess_placements(state)
     state["current_receptacle_id"] = _first_target_object_location(state) or initial_receptacle_id
@@ -438,6 +441,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "requested_generated_mess_count": args.generated_mess_count,
         "generated_mess_count": len(state["private_manifest"]["targets"]),
         "robot": state["robot"],
+        "robot_import": state["robot_import"],
         "artifacts": {
             "runtime_smoke_image": str(before_path),
             "robot_view_images": state["robot_view_images"],
@@ -478,6 +482,7 @@ def real_runtime_smoke(
     else:
         scene_usd = args.run_dir / _generated_scene_filename(args.generated_scene_kind)
         loaded_asset_kind = "generated_runtime_smoke_usd"
+    robot_import = _rby1m_robot_import_plan(args.robot_name) if args.include_robot else {}
 
     simulation_app = None
     render_steps = 0
@@ -509,6 +514,7 @@ def real_runtime_smoke(
         width=DEFAULT_WIDTH,
         height=DEFAULT_HEIGHT,
         simulation_app=simulation_app,
+        robot_import=robot_import,
         include_segmentation=args.enable_segmentation,
         segmentation_data_types=tuple(args.segmentation_data_type or ISAAC_SEGMENTATION_DATA_TYPES),
         semantic_filter=tuple(args.segmentation_semantic_filter or ("class",)),
@@ -541,6 +547,10 @@ def real_runtime_smoke(
         "capture_method": REAL_SMOKE_CAPTURE_METHOD,
         "robot_view_capture_method": REAL_ROBOT_VIEW_CAPTURE_METHOD,
         "robot_view_images": robot_view_images,
+        "robot_import": robot_import,
+        "robot_view_uses_mounted_head_camera": bool(
+            capture.get("robot_view_uses_mounted_head_camera")
+        ),
         "camera_resolution": [DEFAULT_WIDTH, DEFAULT_HEIGHT],
         "scene_bounds": capture.get("scene_bounds"),
         "stage_prim_count": stage_prim_count,
@@ -570,30 +580,15 @@ def capture_semantic_pose_robot_views(
     simulation_app = app_launcher.app
     global _DEFERRED_SIMULATION_APP
     _DEFERRED_SIMULATION_APP = simulation_app
-    canonical_bundle = _canonical_robot_view_request_bundle(
-        state,
-        scene_usd=scene_usd,
-        target_images=view_paths,
-        width=width,
-        height=height,
-        focus_object_id=focus_object_id,
-        focus_receptacle_id=focus_receptacle_id,
-    )
     capture = _capture_isaac_lab_camera_views(
         scene_usd=scene_usd,
         view_paths=view_paths,
         width=width,
         height=height,
         simulation_app=simulation_app,
+        robot_import=_dict(state.get("robot_import")),
         semantic_pose_state=_dict(state.get("semantic_pose_state")),
-        canonical_camera_request=_dict(canonical_bundle.get("request")),
-        canonical_output_dir=canonical_bundle.get("output_dir"),
     )
-    if canonical_bundle.get("request") and isinstance(
-        capture.get("canonical_camera_control"),
-        dict,
-    ):
-        capture["canonical_camera_control"]["request"] = canonical_bundle["request"]
     capture["simulation_app_reuse_token"] = simulation_app
     return capture
 
@@ -1879,13 +1874,12 @@ def _capture_isaac_lab_camera_views(
     width: int,
     height: int,
     simulation_app: Any,
+    robot_import: dict[str, Any] | None = None,
     include_segmentation: bool = False,
     segmentation_data_types: tuple[str, ...] = ISAAC_SEGMENTATION_DATA_TYPES,
     semantic_filter: tuple[str, ...] = ("class",),
     scene_index_diagnostics: dict[str, Any] | None = None,
     semantic_pose_state: dict[str, Any] | None = None,
-    canonical_camera_request: dict[str, Any] | None = None,
-    canonical_output_dir: Path | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1902,6 +1896,16 @@ def _capture_isaac_lab_camera_views(
         stage_utils=stage_utils,
         semantic_pose_state=semantic_pose_state,
     )
+    robot_stage = _ensure_rby1m_robot_on_stage(
+        stage_utils=stage_utils,
+        robot_import=_dict(robot_import),
+    )
+    if robot_stage.get("head_camera_prim_exists") is True and hasattr(
+        sim_utils, "standardize_xform_ops"
+    ):
+        current_stage = stage_utils.get_current_stage()
+        if current_stage is not None:
+            sim_utils.standardize_xform_ops(current_stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM))
     scene_bounds = _current_stage_bounds(stage_utils)
     _ensure_capture_lighting(stage_utils)
     semantic_label_application = (
@@ -1917,26 +1921,47 @@ def _capture_isaac_lab_camera_views(
     camera_semantic_filter = list(semantic_filter) if include_segmentation else "*:*"
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
+    mounted_head_camera = robot_stage.get("head_camera_prim_exists") is True
+    data_types = [
+        "rgb",
+        *(segmentation_data_types if include_segmentation else ()),
+    ]
+    camera_spawn = sim_utils.PinholeCameraCfg(
+        focal_length=24.0,
+        focus_distance=4.0,
+        horizontal_aperture=20.955,
+    )
+    head_camera = (
+        Camera(
+            cfg=CameraCfg(
+                prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+                update_period=0.0,
+                height=height,
+                width=width,
+                data_types=data_types,
+                semantic_filter=camera_semantic_filter,
+                colorize_semantic_segmentation=False,
+                colorize_instance_segmentation=False,
+                colorize_instance_id_segmentation=False,
+                spawn=None,
+            )
+        )
+        if mounted_head_camera
+        else None
+    )
     sim_utils.create_prim("/World/RoboclawsSmokeCameraRig", "Xform")
-    camera = Camera(
+    scene_camera = Camera(
         cfg=CameraCfg(
             prim_path="/World/RoboclawsSmokeCameraRig/Camera",
             update_period=0.0,
             height=height,
             width=width,
-            data_types=[
-                "rgb",
-                *(segmentation_data_types if include_segmentation else ()),
-            ],
+            data_types=data_types,
             semantic_filter=camera_semantic_filter,
             colorize_semantic_segmentation=False,
             colorize_instance_segmentation=False,
             colorize_instance_id_segmentation=False,
-            spawn=sim_utils.PinholeCameraCfg(
-                focal_length=24.0,
-                focus_distance=4.0,
-                horizontal_aperture=20.955,
-            ),
+            spawn=camera_spawn,
         )
     )
     view_poses = _isaac_camera_view_poses(torch=torch, device=sim.device, scene_bounds=scene_bounds)
@@ -1945,8 +1970,19 @@ def _capture_isaac_lab_camera_views(
     segmentation_views: list[dict[str, Any]] = []
     total_render_steps = 0
     for view_name in ROBOT_VIEW_KEYS:
-        positions, targets = view_poses[view_name]
-        camera.set_world_poses_from_view(positions, targets)
+        if view_name == "fpv" and mounted_head_camera:
+            camera = head_camera
+            if camera is None:
+                raise RuntimeError("mounted head camera was requested but Camera sensor is absent")
+            _position_robot_for_head_camera_view(
+                stage_utils=stage_utils,
+                scene_bounds=scene_bounds,
+                semantic_pose_state=semantic_pose_state,
+            )
+        else:
+            camera = scene_camera
+            positions, targets = view_poses[view_name]
+            camera.set_world_poses_from_view(positions, targets)
         rgb_image = None
         for _ in range(24):
             sim.step()
@@ -1972,28 +2008,12 @@ def _capture_isaac_lab_camera_views(
                     np=np,
                 )
             )
-    canonical_capture = (
-        _capture_scene_camera_request_with_existing_sim(
-            camera_request=canonical_camera_request,
-            output_dir=canonical_output_dir,
-            width=width,
-            height=height,
-            sim=sim,
-            sim_utils=sim_utils,
-            stage_utils=stage_utils,
-            camera_type=Camera,
-            camera_cfg_type=CameraCfg,
-            torch=torch,
-            np=np,
-            scene_bounds=scene_bounds,
-        )
-        if canonical_camera_request is not None and canonical_output_dir is not None
-        else None
-    )
     return {
         "render_steps": total_render_steps,
         "robot_view_images": saved,
         "scene_bounds": scene_bounds,
+        "robot_stage": robot_stage,
+        "robot_view_uses_mounted_head_camera": mounted_head_camera,
         "semantic_pose_stage_application": pose_apply,
         "segmentation": _camera_segmentation_capture_diagnostics(
             segmentation_views,
@@ -2003,7 +2023,6 @@ def _capture_isaac_lab_camera_views(
         )
         if include_segmentation
         else _camera_segmentation_not_requested_diagnostics(),
-        "canonical_camera_control": canonical_capture,
     }
 
 
@@ -2039,10 +2058,10 @@ def _capture_scene_camera_request_with_existing_sim(
         height=height,
         focal_length=focal_length,
     )
-    sim_utils.create_prim("/World/RoboclawsCanonicalRobotViewCameraRig", "Xform")
+    sim_utils.create_prim("/World/RoboclawsSceneRequestCameraRig", "Xform")
     camera = camera_type(
         cfg=camera_cfg_type(
-            prim_path="/World/RoboclawsCanonicalRobotViewCameraRig/Camera",
+            prim_path="/World/RoboclawsSceneRequestCameraRig/Camera",
             update_period=0.0,
             height=height,
             width=width,
@@ -2978,6 +2997,91 @@ def _isaac_camera_view_poses(
         "map": (tensor([[0.05, -0.05, 4.2]]), tensor([[0.0, 0.0, 0.0]])),
         "verify": (tensor([[0.9, -1.0, 0.85]]), tensor([[0.2, -0.15, 0.55]])),
     }
+
+
+def _ensure_rby1m_robot_on_stage(
+    *,
+    stage_utils: Any,
+    robot_import: dict[str, Any],
+) -> dict[str, Any]:
+    if robot_import.get("status") != "imported":
+        return {
+            "schema": "isaac_rby1m_robot_stage_reference_v1",
+            "status": "not_available",
+            "head_camera_prim_exists": False,
+            "reason": robot_import.get("status") or "robot_not_requested",
+        }
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        raise RuntimeError("Isaac stage utils do not expose get_current_stage")
+    stage = get_current_stage()
+    if stage is None:
+        raise RuntimeError("Isaac robot import has no current USD stage")
+    from pxr import UsdGeom
+
+    robot_prim_path = str(robot_import.get("stage_prim_path") or "/World/robot_0")
+    head_camera_prim_path = str(
+        robot_import.get("head_camera_prim_path") or ISAAC_RBY1M_HEAD_CAMERA_PRIM
+    )
+    robot_usd_path = Path(str(robot_import.get("usd_path") or ""))
+    if not robot_usd_path.is_file():
+        return {
+            "schema": "isaac_rby1m_robot_stage_reference_v1",
+            "status": "blocked",
+            "head_camera_prim_exists": False,
+            "robot_prim_path": robot_prim_path,
+            "head_camera_prim_path": head_camera_prim_path,
+            "reason": f"missing imported robot USD: {robot_usd_path}",
+        }
+    robot_prim = stage.GetPrimAtPath(robot_prim_path)
+    if not robot_prim or not robot_prim.IsValid():
+        robot_prim = UsdGeom.Xform.Define(stage, robot_prim_path).GetPrim()
+        robot_prim.GetReferences().AddReference(str(robot_usd_path))
+    head_camera_prim = stage.GetPrimAtPath(head_camera_prim_path)
+    return {
+        "schema": "isaac_rby1m_robot_stage_reference_v1",
+        "status": "referenced",
+        "robot_prim_path": robot_prim_path,
+        "head_camera_prim_path": head_camera_prim_path,
+        "robot_usd_path": str(robot_usd_path),
+        "head_camera_prim_exists": bool(head_camera_prim and head_camera_prim.IsValid()),
+    }
+
+
+def _position_robot_for_head_camera_view(
+    *,
+    stage_utils: Any,
+    scene_bounds: dict[str, list[float]] | None,
+    semantic_pose_state: dict[str, Any] | None = None,
+) -> None:
+    get_current_stage = getattr(stage_utils, "get_current_stage", None)
+    if not callable(get_current_stage):
+        return
+    stage = get_current_stage()
+    if stage is None:
+        return
+    robot_prim = stage.GetPrimAtPath("/World/robot_0")
+    if not robot_prim or not robot_prim.IsValid():
+        return
+    from pxr import Gf, UsdGeom
+
+    pose = _dict(_dict(semantic_pose_state).get("robot_pose"))
+    if _has_xy(pose):
+        position = (
+            float(pose["x"]),
+            float(pose["y"]),
+            float(pose.get("z", 0.0)),
+        )
+    elif scene_bounds:
+        center = scene_bounds["center"]
+        size = scene_bounds["size"]
+        span_x = max(float(size[0]), 1.5)
+        span_y = max(float(size[1]), 1.5)
+        floor_z = float(scene_bounds["min"][2])
+        position = (float(center[0]) - span_x * 0.35, float(center[1]) - span_y * 0.55, floor_z)
+    else:
+        position = (1.35, -1.35, 0.0)
+    UsdGeom.XformCommonAPI(robot_prim).SetTranslate(Gf.Vec3d(*position))
 
 
 def _wait_for_stage_load(stage_utils: Any, simulation_app: Any) -> None:
@@ -5181,8 +5285,9 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         state,
         str(state.get("current_receptacle_id") or "floor_01"),
     )
-    focus = _focus_payload(
-        state=state,
+    focus = _robot_view_focus(
+        state,
+        robot_pose,
         focus_object_id=args.focus_object_id,
         focus_receptacle_id=args.focus_receptacle_id,
     )
@@ -5282,25 +5387,58 @@ def _robot_view_camera_control_contract(
 ) -> dict[str, Any]:
     provenance = _dict(state.get("robot_view_provenance"))
     semantic_pose_state_refreshed = provenance.get("semantic_pose_state_refreshed")
-    request = _dict(state.get("canonical_robot_view_camera_control_request"))
-    if request:
-        contract = canonical_robot_view_camera_control_contract(
+    robot_import = _dict(state.get("robot_import"))
+    mounted_head_camera = bool(
+        provenance.get("robot_mounted_head_camera")
+        or robot_import.get("status") == "imported"
+        or _dict(state.get("semantic_pose_view_capture")).get("robot_mounted_head_camera")
+    )
+    head_camera_equivalent = bool(provenance.get("head_camera_equivalent")) and not mounted_head_camera
+    if mounted_head_camera or head_camera_equivalent or robot_import:
+        status = (
+            "robot_mounted_head_camera_robot_view"
+            if mounted_head_camera
+            else "robot_head_camera_equivalent_robot_view"
+        )
+        camera_model = (
+            "robot_mounted_head_camera_v1"
+            if mounted_head_camera
+            else "robot_head_camera_equivalent_v1"
+        )
+        contract = robot_mounted_head_camera_control_contract(
             backend=ISAACLAB_SUBPROCESS_BACKEND,
+            status=status,
+            camera_model=camera_model,
+            fpv_source=str(
+                provenance.get("fpv")
+                or (
+                    "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
+                    if mounted_head_camera
+                    else "isaac_lab_head_camera_equivalent:fpv"
+                )
+            ),
+            verify_source=str(provenance.get("verify") or "isaac_lab_semantic_pose_verify_camera"),
             pose_source=str(
                 _dict(robot_pose).get("pose_source") or "roboclaws_shared_scene_frame_support_pose"
             ),
-            request=request,
+            lens_source=(
+                "rby1m_mujoco_robot_0/head_camera_extrinsics_and_fov"
+                if mounted_head_camera
+                else "rby1m_head_camera_contract_pending_isaac_robot_import"
+            ),
+            camera_prim_path=str(robot_import.get("head_camera_prim_path") or ""),
+            robot_asset=robot_import,
+            robot_pose=dict(robot_pose or {}),
+            focus=dict(focus or {}),
         )
         contract.update(
             {
                 "semantic_pose_state_refreshed": semantic_pose_state_refreshed,
-                "robot_pose": dict(robot_pose or {}),
-                "focus": dict(focus or {}),
                 "evidence_note": (
-                    "Isaac cleanup FPV and verify views were rendered from the same "
-                    "Roboclaws canonical eye/target camera-control request and shared "
-                    "scene-frame robot-pose resolver used by MuJoCo when room outlines "
-                    "are available. Chase/map views remain auxiliary report evidence."
+                    "Isaac cleanup FPV uses the imported RBY1M mounted head camera "
+                    "when the robot USD import artifact is present. Without that "
+                    "artifact it remains explicitly marked as head-camera-equivalent. "
+                    "Chase/map views remain auxiliary report evidence."
                 ),
             }
         )
@@ -5459,92 +5597,6 @@ def _camera_capture_provenance(capture: dict[str, Any]) -> str:
     return "isaac_lab_camera_rgb_anchor_orbit_scene_probe"
 
 
-def _copy_canonical_robot_view_capture(
-    capture: Any,
-    *,
-    target_images: dict[str, Path],
-    width: int,
-    height: int,
-) -> dict[str, Any]:
-    capture = _dict(capture)
-    if not capture:
-        return {}
-    request_views = {
-        str(item.get("robot_view_role") or item.get("view_id") or ""): _dict(item)
-        for item in _dict(capture.get("request")).get("views") or []
-        if isinstance(item, dict)
-    }
-    copied: dict[str, str] = {}
-    merged_views: list[dict[str, Any]] = []
-    for view in capture.get("views") or []:
-        item = _dict(view)
-        role = str(item.get("robot_view_role") or "")
-        if role not in {"fpv", "verify"}:
-            continue
-        source = Path(str(item.get("image_path") or ""))
-        target = target_images[role]
-        _copy_nonblank_rgb_image(
-            source,
-            target,
-            width=width,
-            height=height,
-            description=f"canonical Isaac {role} robot view",
-        )
-        copied[role] = str(target)
-        request_view = request_views.get(role) or request_views.get(str(item.get("view_id") or ""))
-        merged_views.append({**request_view, **item})
-    if not {"fpv", "verify"} <= set(copied):
-        return {}
-    return {
-        "request": _dict(capture.get("request")),
-        "images": copied,
-        "views": merged_views,
-        "render_steps": int(capture.get("render_steps") or 0),
-        "color_profile": _dict(capture.get("color_profile")),
-        "color_management": _dict(capture.get("color_management")),
-    }
-
-
-def _canonical_robot_view_request_bundle(
-    state: dict[str, Any],
-    *,
-    scene_usd: Path,
-    target_images: dict[str, Path],
-    width: int,
-    height: int,
-    focus_object_id: str | None,
-    focus_receptacle_id: str | None,
-) -> dict[str, Any]:
-    del scene_usd
-    robot_pose = _robot_pose_for_receptacle(
-        state,
-        str(state.get("current_receptacle_id") or ""),
-    )
-    if robot_pose.get("pose_source") != CLEANUP_ROBOT_POSE_SOURCE:
-        return {}
-    request = canonical_cleanup_robot_view_camera_request(
-        label="isaac_robot_view",
-        robot_pose=robot_pose,
-        focus=_canonical_robot_view_focus(
-            state,
-            robot_pose,
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=focus_receptacle_id,
-        ),
-        width=width,
-        height=height,
-    )
-    if request is None:
-        return {}
-    output_dir = (
-        target_images["fpv"].parent / f"{target_images['fpv'].stem}.canonical_camera_control"
-    )
-    return {
-        "request": request,
-        "output_dir": output_dir,
-    }
-
-
 def _real_semantic_pose_robot_view_images(
     state: dict[str, Any],
     target_images: dict[str, Path],
@@ -5586,18 +5638,11 @@ def _real_semantic_pose_robot_view_images(
     }
     if not _has_required_robot_view_images(images):
         return {}
-    canonical_capture = _copy_canonical_robot_view_capture(
-        capture.get("canonical_camera_control"),
-        target_images=target_images,
-        width=width,
-        height=height,
-    )
-    if canonical_capture:
-        for key, value in canonical_capture["images"].items():
-            images[key] = str(value)
+    mounted_head_camera = bool(capture.get("robot_view_uses_mounted_head_camera"))
     state["robot_view_images"] = images
     state["robot_view_provenance"] = _semantic_pose_robot_view_provenance(
-        canonical_camera_control=bool(canonical_capture),
+        mounted_head_camera=mounted_head_camera,
+        head_camera_equivalent=not mounted_head_camera,
     )
     state["semantic_pose_view_capture"] = {
         "schema": "isaac_semantic_pose_robot_view_capture_v1",
@@ -5605,28 +5650,14 @@ def _real_semantic_pose_robot_view_images(
         "scene_usd": scene_usd,
         "rendered_to_usd": True,
         "render_steps": int(capture.get("render_steps") or 0),
-        "canonical_camera_control": bool(canonical_capture),
+        "canonical_camera_control": False,
+        "robot_mounted_head_camera": mounted_head_camera,
+        "head_camera_equivalent": not mounted_head_camera,
+        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
+        "robot_stage": _dict(capture.get("robot_stage")),
     }
-    if canonical_capture:
-        state["canonical_robot_view_camera_control_request"] = canonical_capture["request"]
-        state["canonical_robot_view_camera_control_capture"] = {
-            "schema": "isaac_canonical_robot_view_camera_capture_v1",
-            "camera_control_api": _dict(canonical_capture.get("request")).get("api_name")
-            or CAMERA_CONTROL_API_NAME,
-            "camera_model": CANONICAL_CAMERA_MODEL,
-            "coordinate_frame": _dict(canonical_capture.get("request")).get("coordinate_frame")
-            or MOLMOSPACES_SCENE_FRAME,
-            "render_steps": int(canonical_capture.get("render_steps") or 0),
-            "color_profile": _dict(canonical_capture.get("color_profile")),
-            "color_management": _dict(canonical_capture.get("color_management")),
-            "views": canonical_capture.get("views") or [],
-        }
-        state["semantic_pose_view_capture"]["canonical_camera_control_render_steps"] = int(
-            canonical_capture.get("render_steps") or 0
-        )
-        state["semantic_pose_view_capture"]["canonical_camera_control_view_count"] = len(
-            canonical_capture.get("views") or []
-        )
+    state.pop("canonical_robot_view_camera_control_request", None)
+    state.pop("canonical_robot_view_camera_control_capture", None)
     mapping_gaps = [
         item
         for item in state.get("mapping_gaps", [])
@@ -5639,10 +5670,12 @@ def _real_semantic_pose_robot_view_images(
             "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
             "detail": (
                 "Robot-view images were recaptured from the loaded USD scene after "
-                "applying backend semantic pose state. FPV/verify use canonical "
-                "camera-control when available; chase/map remain auxiliary report "
-                "views. This is semantic pose report evidence, not planner-backed "
-                "or physics-backed manipulation proof."
+                "applying backend semantic pose state. FPV uses the imported RBY1M "
+                "mounted head camera when the robot USD import artifact is present; "
+                "otherwise it is explicitly marked as a head-camera equivalent. "
+                "Chase/map remain auxiliary report views. This is semantic pose "
+                "report evidence, not planner-backed or physics-backed "
+                "manipulation proof."
             ),
         }
     )
@@ -5661,97 +5694,7 @@ def _real_semantic_pose_robot_view_images(
     return images
 
 
-def _capture_canonical_robot_fpv_verify(
-    state: dict[str, Any],
-    *,
-    scene_usd: Path,
-    target_images: dict[str, Path],
-    width: int,
-    height: int,
-    focus_object_id: str | None,
-    focus_receptacle_id: str | None,
-    simulation_app: Any | None = None,
-) -> dict[str, Any]:
-    robot_pose = _robot_pose_for_receptacle(
-        state,
-        str(state.get("current_receptacle_id") or ""),
-    )
-    if robot_pose.get("pose_source") != CLEANUP_ROBOT_POSE_SOURCE:
-        return {}
-    request = canonical_cleanup_robot_view_camera_request(
-        label="isaac_robot_view",
-        robot_pose=robot_pose,
-        focus=_canonical_robot_view_focus(
-            state,
-            robot_pose,
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=focus_receptacle_id,
-        ),
-        width=width,
-        height=height,
-    )
-    if request is None:
-        return {}
-    output_dir = (
-        target_images["fpv"].parent / f"{target_images['fpv'].stem}.canonical_camera_control"
-    )
-    try:
-        if simulation_app is not None:
-            capture = _capture_isaac_lab_scene_camera_views(
-                scene_usd=scene_usd,
-                camera_request=request,
-                output_dir=output_dir,
-                width=width,
-                height=height,
-                simulation_app=simulation_app,
-                semantic_pose_state=_dict(state.get("semantic_pose_state")),
-            )
-        else:
-            capture = capture_scene_camera_views(
-                scene_usd=scene_usd,
-                camera_request=request,
-                output_dir=output_dir,
-                width=width,
-                height=height,
-                semantic_pose_state=_dict(state.get("semantic_pose_state")),
-            )
-    except Exception as exc:
-        state.setdefault("mapping_gaps", []).append(
-            {
-                "area": "canonical_robot_view_camera_control",
-                "status": "blocked_capability",
-                "source": str(scene_usd),
-                "detail": str(exc),
-            }
-        )
-        return {}
-    copied: dict[str, str] = {}
-    for view in capture.get("views") or []:
-        item = _dict(view)
-        role = str(item.get("robot_view_role") or "")
-        if role not in {"fpv", "verify"}:
-            continue
-        source = Path(str(item.get("image_path") or ""))
-        target = target_images[role]
-        _copy_nonblank_rgb_image(
-            source,
-            target,
-            width=width,
-            height=height,
-            description=f"canonical Isaac {role} robot view",
-        )
-        copied[role] = str(target)
-    if not {"fpv", "verify"} <= set(copied):
-        return {}
-    return {
-        "request": request,
-        "images": copied,
-        "views": capture.get("views") or [],
-        "render_steps": int(capture.get("render_steps") or 0),
-    }
-
-
-def _canonical_robot_view_focus(
+def _robot_view_focus(
     state: dict[str, Any],
     robot_pose: dict[str, Any],
     *,
@@ -5967,10 +5910,20 @@ def _robot_view_provenance(
     if _has_required_robot_view_images(_real_smoke_robot_view_images(real_smoke)):
         method = str(real_smoke.get("robot_view_capture_method") or REAL_ROBOT_VIEW_CAPTURE_METHOD)
         provenance = {key: f"{method}:{key}" for key in ROBOT_VIEW_KEYS}
+        mounted_head_camera = bool(real_smoke.get("robot_view_uses_mounted_head_camera"))
+        if mounted_head_camera:
+            provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
+        else:
+            provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
         provenance["semantic_pose_state_refreshed"] = False
+        provenance["canonical_camera_control"] = False
+        provenance["robot_mounted_head_camera"] = mounted_head_camera
+        provenance["head_camera_equivalent"] = not mounted_head_camera
         provenance["evidence_note"] = (
-            "Robot-view images are static captures from the loaded USD scene during init; "
-            "semantic pose edits are tracked in backend JSON state and are not rendered "
+            "Robot-view images are static captures from the loaded USD scene during init. "
+            "FPV uses the imported RBY1M mounted head camera when the robot USD import "
+            "artifact is present; otherwise it is marked as a head-camera equivalent. "
+            "Semantic pose edits are tracked in backend JSON state and are not rendered "
             "back into Isaac yet."
         )
         return provenance
@@ -5999,29 +5952,40 @@ def _robot_view_command_provenance(
     semantic_pose_state_refreshed: bool,
 ) -> dict[str, Any]:
     if semantic_pose_state_refreshed:
+        provenance = _dict(state.get("robot_view_provenance"))
         return _semantic_pose_robot_view_provenance(
-            canonical_camera_control=bool(
-                _dict(state.get("semantic_pose_view_capture")).get("canonical_camera_control")
-            )
+            mounted_head_camera=bool(
+                provenance.get("robot_mounted_head_camera")
+                or _dict(state.get("semantic_pose_view_capture")).get("robot_mounted_head_camera")
+            ),
+            head_camera_equivalent=bool(
+                provenance.get("head_camera_equivalent")
+                or _dict(state.get("semantic_pose_view_capture")).get("head_camera_equivalent")
+            ),
         )
     return _dict(state.get("robot_view_provenance"))
 
 
 def _semantic_pose_robot_view_provenance(
     *,
-    canonical_camera_control: bool = False,
+    mounted_head_camera: bool = False,
+    head_camera_equivalent: bool = False,
 ) -> dict[str, Any]:
     provenance = {key: f"{REAL_ROBOT_VIEW_RERENDER_METHOD}:{key}" for key in ROBOT_VIEW_KEYS}
-    if canonical_camera_control:
-        provenance["fpv"] = "isaac_lab_camera_rgb_canonical_robot_view:fpv"
-        provenance["verify"] = "isaac_lab_camera_rgb_canonical_robot_view:verify"
+    if mounted_head_camera:
+        provenance["fpv"] = "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv"
+    elif head_camera_equivalent:
+        provenance["fpv"] = "isaac_lab_camera_rgb_head_camera_equivalent:fpv"
     provenance["semantic_pose_state_refreshed"] = True
-    provenance["canonical_camera_control"] = canonical_camera_control
+    provenance["canonical_camera_control"] = False
+    provenance["robot_mounted_head_camera"] = mounted_head_camera
+    provenance["head_camera_equivalent"] = head_camera_equivalent
     provenance["evidence_note"] = (
         "Robot-view images were recaptured from the loaded USD scene after applying "
-        "backend semantic pose state. FPV/verify use canonical camera-control when "
-        "available; chase/map remain auxiliary report views. This is still semantic "
-        "pose rendering, not planner-backed or physics-backed manipulation."
+        "backend semantic pose state. FPV is either the imported RBY1M mounted head "
+        "camera or an explicit head-camera-equivalent view; chase/map remain auxiliary report "
+        "views. This is still semantic pose rendering, not planner-backed or "
+        "physics-backed manipulation."
     )
     return provenance
 
@@ -6719,12 +6683,110 @@ def _pose_near(anchor_id: str) -> dict[str, float | str]:
 
 
 def _robot_payload(robot_name: str) -> dict[str, Any]:
+    robot_import = _rby1m_robot_import_plan(robot_name)
+    imported = robot_import.get("status") == "imported"
     return {
         "robot_name": robot_name,
-        "embodiment": "isaac_simple_camera_rig",
+        "embodiment": "rby1m" if imported else "rby1m_head_camera_equivalent",
         "physical_robot": False,
         "planner_backed": False,
+        "robot_import_status": robot_import.get("status") if robot_import else "not_requested",
+        "robot_usd_path": robot_import.get("usd_path") if robot_import else "",
+        "head_camera_prim_path": robot_import.get("head_camera_prim_path") if robot_import else "",
+        "robot_mounted_head_camera": imported,
     }
+
+
+def _rby1m_robot_import_plan(robot_name: str) -> dict[str, Any]:
+    if robot_name not in {"rby1m", "rby1"}:
+        return {
+            "schema": ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
+            "robot_name": robot_name,
+            "status": "unsupported_robot",
+            "head_camera_prim_path": "",
+            "blockers": [f"unsupported Isaac robot import target: {robot_name}"],
+        }
+    urdf = _find_rby1m_isaac_urdf()
+    usd_path = _repo_path(ISAAC_RBY1M_ROBOT_USD_PATH)
+    summary_path = _repo_path(ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH)
+    summary = _load_json_if_file(summary_path)
+    summary_ready = summary.get("schema") == "isaac_rby1m_robot_usd_import_v1" and (
+        summary.get("status") == "ready"
+    )
+    imported = usd_path.is_file() and summary_ready
+    blockers: list[str] = []
+    if not urdf:
+        blockers.append("RBY1M Isaac URDF not found in MolmoSpaces asset cache.")
+    if not imported:
+        if not usd_path.is_file():
+            blockers.append(f"RBY1M Isaac robot USD import artifact is missing: {usd_path}")
+        if not summary_ready:
+            blockers.append(f"RBY1M Isaac robot import summary is not ready: {summary_path}")
+    return {
+        "schema": ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
+        "robot_name": robot_name,
+        "status": "imported" if imported else ("pending_usd_conversion" if urdf else "missing_urdf"),
+        "physical_robot": False,
+        "importer": "isaacsim.asset.importer.urdf",
+        "source_urdf": str(urdf) if urdf else "",
+        "expected_usd_path": str(usd_path),
+        "usd_path": str(usd_path) if imported else "",
+        "import_summary_path": str(summary_path),
+        "stage_prim_path": "/World/robot_0",
+        "head_link_name": "link_head_2",
+        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+        "head_camera_source": "rby1m_mujoco_robot_0/head_camera_extrinsics_and_fov",
+        "head_camera_mounted": imported,
+        "head_camera_equivalent": not imported,
+        "required_joints": ["base_x", "base_y", "base_theta", "head_0", "head_1"],
+        "blockers": blockers,
+        "import_summary": summary if summary_ready else {},
+        "evidence_note": (
+            "Isaac imports the RBY1M holobase URDF to USD, references it at "
+            "/World/robot_0, and uses a head_camera prim authored from the MuJoCo "
+            "robot_0/head_camera extrinsics/FOV. If the import artifact is absent, "
+            "Isaac FPV is reported as a head-camera-equivalent view instead of a "
+            "robot-mounted camera."
+        ),
+    }
+
+
+def _repo_path(path: Path) -> Path:
+    return Path(__file__).resolve().parents[2] / path
+
+
+def _load_json_if_file(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _find_rby1m_isaac_urdf() -> Path | None:
+    candidates: list[Path] = []
+    env_root = os.environ.get("MLSPACES_ASSETS_DIR")
+    if env_root:
+        candidates.append(
+            Path(env_root).expanduser()
+            / "robots"
+            / "rby1m"
+            / "curobo_config"
+            / "urdf"
+            / "model_holobase_isaac"
+            / "model_holobase_isaac.urdf"
+        )
+    candidates.extend(
+        Path("/home/mi/.cache/molmospaces/assets").glob(
+            "*/robots/rby1m/curobo_config/urdf/model_holobase_isaac/model_holobase_isaac.urdf"
+        )
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def _scene_usd_path(scene_source: str, scene_index: int) -> str:

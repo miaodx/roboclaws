@@ -537,6 +537,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
             ROBOCLAWS_CODEX_MAX_CONTINUATIONS \
+            ROBOCLAWS_ISAACLAB_PYTHON ROBOCLAWS_ISAACLAB_RUNTIME_MODE \
             ROBOCLAWS_REPORT_RERUN_COMMAND
           do
             if [[ -n "${!env_name:-}" ]]; then

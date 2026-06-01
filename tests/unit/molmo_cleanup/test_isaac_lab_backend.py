@@ -150,6 +150,65 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         "navigate_to_receptacle",
         "place",
     ]
+    if backend.robot_import["status"] == "imported":
+        assert backend.robot["embodiment"] == "rby1m"
+        assert backend.robot["robot_mounted_head_camera"] is True
+    else:
+        assert backend.robot["embodiment"] == "rby1m_head_camera_equivalent"
+        assert backend.robot["robot_mounted_head_camera"] is False
+    assert backend.robot["head_camera_prim_path"] == "/World/robot_0/head_camera"
+    assert backend.robot_import["schema"] == "isaac_rby1m_robot_import_plan_v1"
+    assert backend.robot_import["source_urdf"].endswith("model_holobase_isaac.urdf")
+    assert backend.robot_import["head_link_name"] == "link_head_2"
+    assert backend.robot_import["head_camera_prim_path"] == "/World/robot_0/head_camera"
+    assert backend.robot_import["head_camera_equivalent"] is (
+        backend.robot_import["status"] != "imported"
+    )
+
+
+def test_isaac_lab_worker_detects_imported_rby1m_robot_usd(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    robot_usd = tmp_path / "rby1m_holobase_isaac.usda"
+    summary_path = tmp_path / "rby1m_holobase_isaac.import_summary.json"
+    robot_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    summary_path.write_text(
+        json.dumps(
+            {
+                "schema": "isaac_rby1m_robot_usd_import_v1",
+                "status": "ready",
+                "output_usd_path": str(robot_usd),
+                "stage_head_camera_prim_path": "/World/robot_0/head_camera",
+                "head_link_name": "link_head_2",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "ISAAC_RBY1M_ROBOT_USD_PATH",
+        robot_usd,
+    )
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH",
+        summary_path,
+    )
+    monkeypatch.setattr(isaac_lab_backend_worker, "_repo_path", lambda path: path)
+
+    plan = isaac_lab_backend_worker._rby1m_robot_import_plan("rby1m")
+    robot = isaac_lab_backend_worker._robot_payload("rby1m")
+
+    assert plan["status"] == "imported"
+    assert plan["usd_path"] == str(robot_usd)
+    assert plan["head_camera_mounted"] is True
+    assert plan["head_camera_equivalent"] is False
+    assert plan["blockers"] == []
+    assert robot["embodiment"] == "rby1m"
+    assert robot["robot_mounted_head_camera"] is True
+    assert robot["robot_usd_path"] == str(robot_usd)
 
 
 def test_isaac_lab_backend_can_request_segmentation(
@@ -1080,7 +1139,7 @@ def test_isaac_usd_scene_index_extracts_room_outlines(monkeypatch: pytest.Monkey
     assert diagnostics["room_outlines"][0]["provenance"] == "isaac_usd_room_mesh_world_bounds"
 
 
-def test_isaac_canonical_robot_view_focus_prefers_object_pose() -> None:
+def test_isaac_robot_view_focus_prefers_object_pose() -> None:
     state = {
         "scene_binding_diagnostics": {
             "selected_object_bindings": {
@@ -1108,7 +1167,7 @@ def test_isaac_canonical_robot_view_focus_prefers_object_pose() -> None:
         )
     }
 
-    focus = isaac_lab_backend_worker._canonical_robot_view_focus(
+    focus = isaac_lab_backend_worker._robot_view_focus(
         state,
         {"target_position": [2.5, 5.5, 1.2]},
         focus_object_id="mug_01",
@@ -2311,6 +2370,16 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     scene_usd.parent.mkdir(parents=True, exist_ok=True)
     scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
     _write_nonblank_image(image_path)
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "ISAAC_RBY1M_ROBOT_USD_PATH",
+        tmp_path / "missing_rby1m_holobase_isaac.usda",
+    )
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH",
+        tmp_path / "missing_rby1m_holobase_isaac.import_summary.json",
+    )
 
     def fake_real_runtime_smoke(
         args: object,
@@ -2365,52 +2434,10 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
         assert semantic_pose["rendered_to_usd"] is False
         for path in view_paths.values():
             _write_nonblank_image(path)
-        canonical_dir = (
-            view_paths["fpv"].parent / f"{view_paths['fpv'].stem}.canonical_camera_control"
-        )
-        canonical_dir.mkdir(parents=True, exist_ok=True)
-        canonical_fpv = canonical_dir / "isaac_robot_view_fpv.png"
-        canonical_verify = canonical_dir / "isaac_robot_view_verify.png"
-        _write_nonblank_image(canonical_fpv)
-        _write_nonblank_image(canonical_verify)
         return {
             "robot_view_images": {key: str(path) for key, path in view_paths.items()},
             "render_steps": 9,
-            "canonical_camera_control": {
-                "request": {
-                    "api_name": "roboclaws.camera_control.render_views",
-                    "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
-                    "views": [
-                        {
-                            "robot_view_role": "fpv",
-                            "eye": [0.0, 0.0, 1.0],
-                            "target": [1.0, 0.0, 1.0],
-                        },
-                        {
-                            "robot_view_role": "verify",
-                            "eye": [0.0, -1.0, 2.0],
-                            "target": [0.0, 0.0, 1.0],
-                        },
-                    ],
-                },
-                "views": [
-                    {
-                        "robot_view_role": "fpv",
-                        "image_path": str(canonical_fpv),
-                    },
-                    {
-                        "robot_view_role": "verify",
-                        "image_path": str(canonical_verify),
-                    },
-                ],
-                "render_steps": 6,
-                "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
-                "color_management": {
-                    "isaac_robot_view_fpv": {
-                        "after": {"overexposed_fraction": 0.0},
-                    }
-                },
-            },
+            "robot_view_uses_mounted_head_camera": False,
         }
 
     def fake_capture_scene_camera_views(
@@ -2516,46 +2543,30 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
 
     assert result["ok"] is True
     assert result["view_provenance"]["semantic_pose_state_refreshed"] is True
-    assert result["view_provenance"]["canonical_camera_control"] is True
-    assert result["camera_control_contract"]["same_pose_api"] is True
-    assert result["camera_control_contract"]["camera_control_api"] == (
-        "roboclaws.camera_control.render_views"
+    assert result["view_provenance"]["canonical_camera_control"] is False
+    assert result["view_provenance"]["head_camera_equivalent"] is True
+    assert result["camera_control_contract"]["status"] == (
+        "robot_head_camera_equivalent_robot_view"
     )
+    assert result["camera_control_contract"]["camera_model"] == "robot_head_camera_equivalent_v1"
+    assert result["camera_control_contract"]["same_pose_api"] is False
+    assert result["camera_control_contract"]["camera_control_api"] is None
     assert result["camera_control_contract"]["robot_pose"]["pose_source"] == (
         "roboclaws_shared_scene_frame_support_pose"
     )
     assert result["camera_control_contract"]["robot_pose"]["pose_request"]["resolver"] == (
         "roboclaws.cleanup_robot_pose.near_target_v1"
     )
-    assert "isaac_lab_camera_rgb_canonical_robot_view" in json.dumps(result["view_provenance"])
+    assert "isaac_lab_camera_rgb_head_camera_equivalent" in json.dumps(result["view_provenance"])
     state = isaac_lab_backend_worker.read_state(state_path)
     assert state["semantic_pose_state"]["rendered_to_usd"] is True
     assert state["robot_view_provenance"]["semantic_pose_state_refreshed"] is True
-    assert state["robot_view_provenance"]["canonical_camera_control"] is True
+    assert state["robot_view_provenance"]["canonical_camera_control"] is False
+    assert state["robot_view_provenance"]["head_camera_equivalent"] is True
     assert state["semantic_pose_view_capture"]["render_steps"] == 9
-    assert state["semantic_pose_view_capture"]["canonical_camera_control"] is True
-    assert state["semantic_pose_view_capture"]["canonical_camera_control_render_steps"] == 6
-    assert state["canonical_robot_view_camera_control_capture"]["schema"] == (
-        "isaac_canonical_robot_view_camera_capture_v1"
-    )
-    assert state["canonical_robot_view_camera_control_capture"]["camera_control_api"] == (
-        "roboclaws.camera_control.render_views"
-    )
-    assert state["canonical_robot_view_camera_control_capture"]["color_profile"]["profile_id"] == (
-        "display_srgb_soft_highlight_v1"
-    )
-    assert (
-        state["canonical_robot_view_camera_control_capture"]["color_management"][
-            "isaac_robot_view_fpv"
-        ]["after"]["overexposed_fraction"]
-        == 0.0
-    )
-    assert len(state["canonical_robot_view_camera_control_capture"]["views"]) == 2
-    fpv_capture = state["canonical_robot_view_camera_control_capture"]["views"][0]
-    assert fpv_capture["robot_view_role"] == "fpv"
-    assert fpv_capture["image_path"].endswith("isaac_robot_view_fpv.png")
-    assert fpv_capture["eye"] == [0.0, 0.0, 1.0]
-    assert fpv_capture["target"] == [1.0, 0.0, 1.0]
+    assert state["semantic_pose_view_capture"]["canonical_camera_control"] is False
+    assert state["semantic_pose_view_capture"]["head_camera_equivalent"] is True
+    assert "canonical_robot_view_camera_control_capture" not in state
     assert state["semantic_pose_state"]["semantic_pose_view_capture"]["render_steps"] == 9
     robot_view_gap = next(
         item for item in state["mapping_gaps"] if item["area"] == "robot_view_variants"
@@ -2563,6 +2574,147 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     assert robot_view_gap["source"] == "isaac_lab_camera_rgb_semantic_pose_robot_views"
     assert "recaptured from the loaded USD scene" in robot_view_gap["detail"]
     assert "static Phase B" not in robot_view_gap["detail"]
+
+
+def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    state_path = tmp_path / "state.json"
+    image_path = run_dir / "isaac_runtime_smoke.png"
+    robot_view_images = _write_robot_view_images(run_dir)
+    scene_usd = run_dir / "scene.usda"
+    robot_usd = tmp_path / "rby1m_holobase_isaac.usda"
+    summary_path = tmp_path / "rby1m_holobase_isaac.import_summary.json"
+    scene_usd.parent.mkdir(parents=True, exist_ok=True)
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    robot_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    summary_path.write_text(
+        json.dumps({"schema": "isaac_rby1m_robot_usd_import_v1", "status": "ready"}) + "\n",
+        encoding="utf-8",
+    )
+    _write_nonblank_image(image_path)
+
+    monkeypatch.setattr(isaac_lab_backend_worker, "ISAAC_RBY1M_ROBOT_USD_PATH", robot_usd)
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH",
+        summary_path,
+    )
+    monkeypatch.setattr(isaac_lab_backend_worker, "_repo_path", lambda path: path)
+
+    def fake_real_runtime_smoke(args: object, scenario: object) -> dict[str, object]:
+        del args, scenario
+        return {
+            "image_path": str(image_path),
+            "scene_usd": str(scene_usd),
+            "loaded_asset_kind": "local_scene_usd",
+            "requested_scene_source": "procthor-10k-val",
+            "requested_scene_index": 0,
+            "requested_molmospaces_scene_usd": "molmospaces://procthor-10k-val/scene-0.usd",
+            "isaac_lab_version": "unit-isaaclab",
+            "isaac_sim_version": "unit-isaacsim",
+            "renderer_mode": "isaac_lab_headless_rtx",
+            "capture_method": "isaac_lab_camera_rgb",
+            "robot_view_capture_method": "isaac_lab_camera_rgb_static_robot_views",
+            "robot_view_images": robot_view_images,
+            "robot_view_uses_mounted_head_camera": True,
+            "camera_resolution": [540, 360],
+            "stage_prim_count": 6,
+            "render_steps": 4,
+            "scene_index_diagnostics": {
+                "schema": "isaac_usd_scene_index_v1",
+                "status": "indexed",
+                "source": str(scene_usd),
+                "stage_prim_count": 6,
+                "object_candidate_count": 1,
+                "receptacle_candidate_count": 1,
+                "blockers": [],
+            },
+            "object_index": _unit_isaac_object_index(),
+            "receptacle_index": _unit_isaac_receptacle_index(),
+        }
+
+    def fake_capture_semantic_pose_robot_views(
+        *,
+        state: dict[str, object],
+        scene_usd: Path,
+        view_paths: dict[str, Path],
+        width: int,
+        height: int,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+    ) -> dict[str, object]:
+        del state, scene_usd, width, height, focus_object_id, focus_receptacle_id
+        for path in view_paths.values():
+            _write_nonblank_image(path)
+        return {
+            "robot_view_images": {key: str(path) for key, path in view_paths.items()},
+            "render_steps": 11,
+            "robot_view_uses_mounted_head_camera": True,
+            "robot_stage": {
+                "status": "referenced",
+                "head_camera_prim_exists": True,
+                "head_camera_prim_path": "/World/robot_0/head_camera",
+            },
+        }
+
+    monkeypatch.setattr(isaac_lab_backend_worker, "real_runtime_smoke", fake_real_runtime_smoke)
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "capture_semantic_pose_robot_views",
+        fake_capture_semantic_pose_robot_views,
+    )
+    init_args = isaac_lab_backend_worker.parse_args(
+        [
+            "--state-path",
+            str(state_path),
+            "init",
+            "--run-dir",
+            str(run_dir),
+            "--runtime-mode",
+            "real",
+            "--include-robot",
+            "--scene-usd-path",
+            str(scene_usd),
+        ]
+    )
+    init = isaac_lab_backend_worker.init_state(init_args)
+    assert init["robot"]["embodiment"] == "rby1m"
+    assert init["robot_import"]["status"] == "imported"
+
+    result = isaac_lab_backend_worker.write_robot_views(
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                str(state_path),
+                "robot_views",
+                "--output-dir",
+                str(run_dir / "robot_views"),
+                "--label",
+                "0001_semantic_pose",
+                "--render-width",
+                "64",
+                "--render-height",
+                "48",
+            ]
+        ),
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+
+    assert result["ok"] is True
+    assert result["view_provenance"]["robot_mounted_head_camera"] is True
+    assert result["view_provenance"]["head_camera_equivalent"] is False
+    assert result["camera_control_contract"]["status"] == "robot_mounted_head_camera_robot_view"
+    assert result["camera_control_contract"]["camera_model"] == "robot_mounted_head_camera_v1"
+    assert result["camera_control_contract"]["agent_facing_fpv"]["robot_mounted"] is True
+    assert result["camera_control_contract"]["agent_facing_fpv"]["camera_prim_path"] == (
+        "/World/robot_0/head_camera"
+    )
+    state = isaac_lab_backend_worker.read_state(state_path)
+    assert state["semantic_pose_view_capture"]["robot_mounted_head_camera"] is True
+    assert state["semantic_pose_view_capture"]["head_camera_equivalent"] is False
 
 
 def test_isaac_lab_real_worker_views_fallback_when_semantic_pose_rerender_fails(
