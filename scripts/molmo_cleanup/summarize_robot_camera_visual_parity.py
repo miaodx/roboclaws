@@ -819,6 +819,22 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
         candidates.append(_calibration_manifest_summary(path))
     default_source_exists = bool(default_source and Path(default_source).is_file())
     usable = [item for item in candidates if item.get("render_domain_calibration_status")]
+    default_ready = any(
+        item.get("render_domain_calibration_status") == "global_luminance_gain_sufficient"
+        for item in usable
+    )
+    default_blockers = [
+        {
+            "reason": "render_domain_calibration_not_default_ready",
+            "path": item.get("path"),
+            "render_domain_calibration_status": item.get("render_domain_calibration_status"),
+            "mean_abs_calibrated_luminance_residual": item.get(
+                "mean_abs_calibrated_luminance_residual"
+            ),
+        }
+        for item in usable
+        if item.get("render_domain_calibration_status") != "global_luminance_gain_sufficient"
+    ]
     if usable:
         status = "calibration_scene_evidence_loaded"
     elif default_source and not default_source_exists:
@@ -831,6 +847,8 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
         "default_luminance_gain_source_exists": default_source_exists,
         "provided_manifest_count": len(calibration_manifest_paths),
         "usable_manifest_count": len(usable),
+        "default_rendering_ready": default_ready,
+        "default_rendering_blockers": default_blockers,
         "manifests": candidates,
         "interpretation": (
             "A real calibration scene/report is needed before turning comparison-only "
@@ -1094,6 +1112,16 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
     ]
     prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
     blockers.extend(_list_dicts(prepared_gate.get("blockers")))
+    calibration = _dict(checks.get("calibration_scene"))
+    if calibration.get("default_rendering_ready") is not True:
+        blockers.append(
+            {
+                "reason": "calibration_not_default_rendering_ready",
+                "check_id": "calibration_scene",
+                "status": calibration.get("status"),
+            }
+        )
+    blockers.extend(_list_dicts(calibration.get("default_rendering_blockers")))
     rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
     if rgb_tone.get("comparison_only") is True:
         blockers.append(

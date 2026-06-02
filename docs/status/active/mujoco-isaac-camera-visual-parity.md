@@ -320,10 +320,11 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   Refreshing the visual-parity summary with that manifest changes
   `calibration_scene.status` to `calibration_scene_evidence_loaded`. Its
   calibration result is `view_dependent_render_domain_delta` with global Isaac
-  luminance gain about `1.06`, mean calibrated luminance residual about `14.84`,
-  and only about `5.7%` luminance-delta improvement. This is stronger evidence
-  that the remaining visual gap is per-room light/material/tone response rather
-  than camera geometry or one global brightness scale.
+  luminance gain `1.4877`, mean calibrated luminance residual `14.8777`, and
+  about `64.8%` mean luminance-delta improvement from the original per-view
+  gap. The residual stays view-dependent, so this is stronger evidence that the
+  remaining visual gap is per-room light/material/tone response rather than
+  camera geometry or one global brightness scale.
 - A held-out seed slice now covers `val_1`, seed `8`, 2 mess objects, and 4
   bound targets:
   `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_baseline/report.html`.
@@ -670,9 +671,14 @@ Default-rendering parity now has its own machine layer:
 `val1_seed6_prepared_scale_square_gate` auxiliary chase/tone-luminance
 regression, active baseline render residuals
 (`lighting_shadow_contract_delta`, `target_material_texture_or_binding_gap`),
-and `rgb_tone_comparison_only`. The refreshed recommendation now points at
-resolving or explicitly gating those default-rendering residuals instead of
-re-reviewing the already formalized report-side gate.
+`calibration_not_default_rendering_ready`,
+`render_domain_calibration_not_default_ready`, and `rgb_tone_comparison_only`.
+The calibration blocker points at
+`output/molmo/scene-camera-comparison/0602_val0_scene_refs_calibration/comparison_manifest.json`
+with `render_domain_calibration_status=view_dependent_render_domain_delta` and
+mean calibrated luminance residual `14.8777`. The refreshed recommendation now
+points at resolving or explicitly gating those default-rendering residuals
+instead of re-reviewing the already formalized report-side gate.
 
 ## Touched Areas
 

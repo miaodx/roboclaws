@@ -407,6 +407,7 @@ def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_ch
                 "summary": {
                     "render_domain_calibration": {
                         "status": "view_dependent_render_domain_delta",
+                        "mean_abs_calibrated_luminance_residual": 14.0,
                     }
                 },
             }
@@ -589,10 +590,15 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
     assert default_rendering["status"] == "not_ready"
     assert default_rendering["ready"] is False
     assert {blocker.get("check_id") for blocker in default_rendering["blockers"]} >= {
+        "calibration_scene",
         "render_domain_probe_matrix",
         "prepared_scale_square_default_gate",
         "rgb_tone_cross_validation",
     }
+    assert any(
+        blocker.get("reason") == "render_domain_calibration_not_default_ready"
+        for blocker in default_rendering["blockers"]
+    )
     assert "default" in manifest["recommended_next_action"]
 
 
@@ -709,7 +715,10 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
         "head_camera_contract": {"status": "head_camera_geometry_aligned"},
         "raw_fpv_input_lane": {"status": "raw_fpv_agent_input_uses_head_camera"},
         "corpus_coverage": {"status": "broad_corpus_ready"},
-        "calibration_scene": {"status": "calibration_scene_evidence_loaded"},
+        "calibration_scene": {
+            "status": "calibration_scene_evidence_loaded",
+            "default_rendering_ready": True,
+        },
         "render_domain_probe_matrix": {"status": "render_domain_delta_resolved"},
         "prepared_scale_square_default_gate": {"status": "prepared_scale_square_default_ready"},
         "view_specific_prepared_scale_square_tone_gate": {
