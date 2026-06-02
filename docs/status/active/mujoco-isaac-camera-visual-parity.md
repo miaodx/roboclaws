@@ -21,6 +21,8 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `output/molmo/robot-camera-apple2apple/0602_val0_seed6_4loc_fovfix_baseline/report.html`
   and
   `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_4loc_fovfix_baseline/report.html`
+- 8-location post-FOV baseline:
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_fovfix_baseline/report.html`
 
 ## Current Evidence
 
@@ -46,11 +48,21 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 - FOV fix validation:
   - `val_0`, seed-6, first 4 locations:
     old first-4 FPV avg was about `51.24`; FOV-fix FPV avg is `39.1959`.
+  - `val_0`, seed-6, 8 locations:
+    FPV avg improved from `46.7762` to `38.0980`, with
+    `fpv_lens_delta_summary.status=fpv_lens_aligned`,
+    `fpv_world_pose_delta_summary.status=fpv_world_pose_aligned`,
+    and `fpv_lens_gap_count=0`.
   - `val_1`, seed-6, 2 mess / 4 locations:
     FPV avg improved from `49.9412` to `37.2460`.
   - `val_1` FOV fix plus the old `val_0` RGB gain profile improved FPV further
     to `35.4960`, but this is now a smaller tone-calibration layer, not the
     primary camera-angle fix.
+- Post-FOV `val_0` residual split is now specific: 2 low-residual FPV views,
+  2 view-dependent color residuals, and 4 geometry/texture edge residuals.
+  The worst remaining points still have exact public USD binding, zero missing
+  referenced assets, and `material_texture_names_match`, so the next root-cause
+  class is renderer/material/texture response rather than camera geometry.
 - Remaining blocker is visual render-domain parity:
   `render_contract_diagnostics.status=lighting_shadow_contract_delta`,
   MuJoCo lights `1`, Isaac lights `2`, Isaac shadow-disabled prims `44` on
