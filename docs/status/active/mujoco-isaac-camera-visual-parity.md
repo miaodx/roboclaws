@@ -167,6 +167,15 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `backend_rgb_gain.isaaclab_subprocess=[0.944061,0.844818,0.822146]`. This makes
   RGB/tone calibration the strongest current comparison-only render-domain
   direction, but still not a default renderer or policy-input change.
+- The same tone/color report path now also covers the existing `val_1` post-FOV
+  2-mess / 4-location corpus. Refreshing
+  `0602_val1_seed6_2mess_4loc_fovfix_baseline` with its same-scene
+  `val0_rgb_gain_probe` records `status=prior_probe_improved`,
+  `comparable_probe_count=1`, `improved_probe_count=1`, and FPV delta `-1.75`
+  while preserving `fpv_lens_aligned` and `fpv_world_pose_aligned`. This is a
+  second-scene positive signal for the `val_0` RGB gain profile, but still small
+  enough that the next decision is broader corpus validation rather than default
+  promotion.
 - Remaining blocker is visual render-domain parity:
   `render_contract_diagnostics.status=lighting_shadow_contract_delta`,
   MuJoCo lights `1`, Isaac lights `2`, Isaac shadow-disabled prims `44` on
