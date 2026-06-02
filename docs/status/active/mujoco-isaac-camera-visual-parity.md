@@ -164,9 +164,9 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   The tone/color history reports `schema=robot_camera_tone_color_probe_history_v1`,
   `status=prior_probe_improved`, `comparable_probe_count=1`,
   `improved_probe_count=1`, and FPV delta `-3.0368` with
-  `backend_rgb_gain.isaaclab_subprocess=[0.944061,0.844818,0.822146]`. This makes
-  RGB/tone calibration the strongest current comparison-only render-domain
-  direction, but still not a default renderer or policy-input change.
+  `backend_rgb_gain.isaaclab_subprocess=[0.944061,0.844818,0.822146]`. This made
+  RGB/tone calibration the strongest `val_0` comparison-only render-domain
+  direction, but not a default renderer or policy-input change.
 - The same tone/color report path now also covers the existing `val_1` post-FOV
   2-mess / 4-location corpus. Refreshing
   `0602_val1_seed6_2mess_4loc_fovfix_baseline` with its same-scene
@@ -176,6 +176,19 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   second-scene positive signal for the `val_0` RGB gain profile, but still small
   enough that the next decision is broader corpus validation rather than default
   promotion.
+- Broader `val_1` coverage weakens the RGB-gain promotion case. A new
+  `0602_val1_seed6_2mess_8loc_fovfix_baseline` run preserved
+  `fpv_lens_aligned` and `fpv_world_pose_aligned`, reached FPV avg `31.9127`
+  with 6/8 low-residual FPV views, and marked tone/color lower priority with
+  only `0.031843` RGB-oracle improvement fraction. The same-scene
+  `0602_val1_seed6_2mess_8loc_fovfix_val0_rgb_gain_probe` improved FPV only to
+  `31.1419` (`-0.7708`), below the `>1.0` probe-history improvement threshold,
+  while chase improved from `71.2776` to `65.4902`. The refreshed 8-location
+  baseline records this as `status=prior_probes_no_fpv_gain` with
+  `neutral_probe_count=1`. Treat RGB gain as weakly positive but not the next
+  default candidate; the active blocker on this broader slice is target
+  material/binding parity (`material_texture_names_match=4`,
+  `missing_object_binding_evidence=4`).
 - Remaining blocker is visual render-domain parity:
   `render_contract_diagnostics.status=lighting_shadow_contract_delta`,
   MuJoCo lights `1`, Isaac lights `2`, Isaac shadow-disabled prims `44` on
@@ -204,15 +217,16 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 Keep FPV pose and the head-camera FOV contract unchanged. Do not promote global
 raw colorspace, combined raw+roughness, global roughness-only, or the `0008`
-target-specific roughness edit as defaults from the current evidence. Next
-material direction should move away from roughness alone and test sampler /
-texture / tone behavior, for example target-specific `LightWoodCounters3`
-texture scale/fallback/color or a comparison RGB/tone calibration on a broader
-post-FOV corpus. Keep RGB gain comparison-only until that broader corpus
-improves. For light/shadow specifically, do not retry simple dome removal,
-shadow enabling, or the old combined MuJoCo-like light/shadow USD edit; split
-light count, shadow flags, intensity/direction, and material response only in a
-comparison-only probe.
+target-specific roughness edit as defaults from the current evidence. Keep RGB
+gain comparison-only: it improves `val_0` and the smaller `val_1` 4-location
+slice, but the broader `val_1` 8-location run is below the FPV improvement
+threshold. The next highest-value render-domain slice is fixing or explaining
+`val_1` target material/binding parity on the 8-location report, especially the
+4 `missing_object_binding_evidence` locations and the high-residual exact-bound
+bed/table material responses. For light/shadow specifically, do not retry
+simple dome removal, shadow enabling, or the old combined MuJoCo-like
+light/shadow USD edit; split light count, shadow flags, intensity/direction,
+and material response only in a comparison-only probe.
 
 ## Touched Areas
 
