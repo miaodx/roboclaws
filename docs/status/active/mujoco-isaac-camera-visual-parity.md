@@ -88,6 +88,14 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 - A combined MuJoCo-like light/shadow USD probe removed the contract delta but
   made visual error worse: FPV avg `50.8161`, chase avg `114.0763`.
   Do not turn that combined probe into the default.
+- The refreshed 8-location post-FOV baseline now attaches three prior
+  light/shadow probe manifests into
+  `summary.render_domain_checks.checks[light_shadow_contract].probe_history`.
+  All three are comparable to the current camera contract and made FPV worse:
+  no-dome-only `+11.6197`, no-shadow-only `+11.6982`, and MuJoCo-like
+  light+shadow `+12.7181` mean-abs-RGB delta versus the current FOV baseline.
+  This rules out promoting simple dome removal, shadow enabling, or the old
+  combined MuJoCo-like light/shadow USD edit as a default.
 - A comparison-only global Isaac RGB gain probe improved real re-rendered FPV
   from `46.7762` to `43.4240` while preserving the head-camera contract and
   `0.005m` FPV pose delta. The profile used
@@ -103,7 +111,10 @@ Keep FPV pose and the head-camera FOV contract unchanged. Next, use the new
 order: light/shadow contract, texture colorspace/material response, USD
 PreviewSurface-vs-MJCF material model, then broader RGB-gain validation. Keep
 the RGB gain profile comparison-only until it improves a broader post-FOV
-corpus.
+corpus. For light/shadow specifically, do not retry simple dome removal,
+shadow enabling, or the old combined MuJoCo-like light/shadow USD edit; split
+light count, shadow flags, intensity/direction, and material response in the
+next comparison-only probe.
 
 ## Touched Areas
 

@@ -439,6 +439,7 @@ def Xform "World"
     assert checks["status"] == "render_domain_delta_confirmed"
     check_by_id = {item["check_id"]: item for item in checks["checks"]}
     assert check_by_id["light_shadow_contract"]["status"] == "light_shadow_contract_delta"
+    assert check_by_id["light_shadow_contract"]["probe_history"]["status"] == "not_attached"
     assert check_by_id["texture_colorspace_material_response"]["status"] == (
         "texture_basenames_match_paths_or_colorspace_unverified"
     )
@@ -453,6 +454,80 @@ def Xform "World"
     assert check_by_id["tone_color_response"]["status"] == "tone_color_metrics_missing"
     assert check_by_id["tone_color_response"]["check_id"] == "tone_color_response"
     assert location["target_contract_delta"]["status"] == "material_texture_names_match"
+
+
+def test_robot_camera_light_shadow_check_summarizes_worse_prior_probe(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_light_probe_history",
+    )
+    baseline = {
+        "scene": {
+            "scene_source": "procthor-10k-val",
+            "scene_index": 0,
+            "seed": 6,
+            "generated_mess_count": 5,
+            "render_width": 540,
+            "render_height": 360,
+        },
+        "summary": {
+            "location_count": 8,
+            "fpv_mean_abs_rgb_avg": 38.098,
+            "chase_mean_abs_rgb_avg": 83.7516,
+            "camera_contract_diagnostics": {
+                "status": "fpv_contract_shared_with_static_head_camera_pitch_correction",
+                "fpv_lens_delta_summary": {"status": "fpv_lens_aligned"},
+                "fpv_world_pose_delta_summary": {"status": "fpv_world_pose_aligned"},
+            },
+            "render_contract_diagnostics": {
+                "status": "lighting_shadow_contract_delta",
+                "mujoco_light_count": 1,
+                "isaac_light_count": 2,
+                "isaac_shadow_disabled_prim_count": 44,
+            },
+            "residual_triage": {
+                "status": "render_domain_geometry_or_texture_residual",
+                "views": {"fpv": {"residual_classes": {"geometry_or_texture_edge_residual": 4}}},
+            },
+        },
+    }
+    probe = json.loads(json.dumps(baseline))
+    probe["scene"]["scene_usd_path"] = "output/isaaclab/light_shadow_probe.usda"
+    probe["summary"]["fpv_mean_abs_rgb_avg"] = 50.8161
+    probe["summary"]["chase_mean_abs_rgb_avg"] = 114.0763
+    probe["summary"]["render_contract_diagnostics"].update(
+        {
+            "status": "checked_targets_material_texture_names_match",
+            "isaac_light_count": 1,
+            "isaac_shadow_disabled_prim_count": 0,
+        }
+    )
+    probe_path = tmp_path / "probe_manifest.json"
+    probe_path.write_text(json.dumps(probe), encoding="utf-8")
+
+    check = run_camera._light_shadow_contract_check(
+        manifest=baseline,
+        output_dir=tmp_path,
+        mujoco_contract={"light_count": 1},
+        isaac_contract={"light_count": 2, "shadow_disabled_prim_count": 44},
+        room_delta={
+            "status": "light_or_shadow_contract_delta",
+            "mujoco_light_count": 1,
+            "isaac_light_count": 2,
+            "isaac_shadow_disabled_prim_count": 44,
+        },
+        probe_manifest_paths=[probe_path],
+    )
+
+    history = check["probe_history"]
+    assert history["schema"] == "robot_camera_light_shadow_probe_history_v1"
+    assert history["status"] == "prior_probes_worse"
+    assert history["comparable_probe_count"] == 1
+    assert history["worsened_probe_count"] == 1
+    assert history["probes"][0]["comparable_to_current"] is True
+    assert history["probes"][0]["delta_vs_current"]["fpv_mean_abs_rgb_delta"] == 12.7181
+    assert history["probes"][0]["delta_vs_current"]["fpv_worse"] is True
+    assert "Do not promote" in check["recommended_next_action"]
 
 
 def test_robot_camera_render_contract_diagnostics_prioritizes_missing_target_binding(

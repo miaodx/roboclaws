@@ -71,6 +71,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--light-shadow-probe-manifest",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Optional prior comparison manifest for a light/shadow-only probe. Repeat to "
+            "attach no-dome, no-shadow, or MuJoCo-like light/shadow probe history to this "
+            "report without changing default rendering."
+        ),
+    )
+    parser.add_argument(
         "--refresh-report-only",
         action="store_true",
         help=(
@@ -81,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.refresh_report_only:
-        manifest = refresh_report_only(args.output_dir)
+        manifest = refresh_report_only(args.output_dir, args.light_shadow_probe_manifest)
     else:
         if args.scene_usd_path is None:
             parser.error("--scene-usd-path is required unless --refresh-report-only is set")
@@ -312,12 +323,19 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     )
     _refresh_location_camera_contract_diagnostics(locations)
     manifest["summary"] = _summary(locations)
-    _attach_render_contract_diagnostics(manifest, output_dir=output_dir)
+    _attach_render_contract_diagnostics(
+        manifest,
+        output_dir=output_dir,
+        light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
+    )
     _write_outputs(manifest, output_dir)
     return manifest
 
 
-def refresh_report_only(output_dir: Path) -> dict[str, Any]:
+def refresh_report_only(
+    output_dir: Path,
+    light_shadow_probe_manifest_paths: list[Path] | None = None,
+) -> dict[str, Any]:
     manifest_path = output_dir / "comparison_manifest.json"
     if not manifest_path.is_file():
         raise FileNotFoundError(manifest_path)
@@ -325,7 +343,11 @@ def refresh_report_only(output_dir: Path) -> dict[str, Any]:
     locations = list(manifest.get("locations") or [])
     _refresh_location_camera_contract_diagnostics(locations)
     manifest["summary"] = _summary(locations)
-    _attach_render_contract_diagnostics(manifest, output_dir=output_dir)
+    _attach_render_contract_diagnostics(
+        manifest,
+        output_dir=output_dir,
+        light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
+    )
     _write_outputs(manifest, output_dir)
     return manifest
 
@@ -591,7 +613,12 @@ def _attach_state_artifact_summaries(
         artifacts["isaac_state"] = _relpath(output_dir / "isaac_state.json", output_dir)
 
 
-def _attach_render_contract_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> None:
+def _attach_render_contract_diagnostics(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    light_shadow_probe_manifest_paths: list[Path] | None = None,
+) -> None:
     mujoco_state = _read_json(output_dir / "mujoco_state.json")
     isaac_state = _read_json(output_dir / "isaac_state.json")
     _attach_state_artifact_summaries(
@@ -636,12 +663,15 @@ def _attach_render_contract_diagnostics(manifest: dict[str, Any], *, output_dir:
     manifest["render_contract_diagnostics"] = summary
     manifest.setdefault("summary", {})["render_contract_diagnostics"] = summary
     domain_checks = _render_domain_checks(
+        manifest=manifest,
+        output_dir=output_dir,
         locations=successful_locations,
         mujoco_contract=mujoco_contract,
         isaac_contract=isaac_contract,
         room_delta=room_delta,
         per_location=per_location,
         isaac_state=isaac_state,
+        light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
     )
     manifest["render_domain_checks"] = domain_checks
     manifest.setdefault("summary", {})["render_domain_checks"] = domain_checks
@@ -810,18 +840,24 @@ def _render_contract_summary(
 
 def _render_domain_checks(
     *,
+    manifest: dict[str, Any],
+    output_dir: Path,
     locations: list[dict[str, Any]],
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     room_delta: dict[str, Any],
     per_location: list[dict[str, Any]],
     isaac_state: dict[str, Any],
+    light_shadow_probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
     checks = [
         _light_shadow_contract_check(
+            manifest=manifest,
+            output_dir=output_dir,
             mujoco_contract=mujoco_contract,
             isaac_contract=isaac_contract,
             room_delta=room_delta,
+            probe_manifest_paths=light_shadow_probe_manifest_paths,
         ),
         _texture_colorspace_material_response_check(per_location),
         _usd_preview_surface_material_model_check(per_location),
@@ -873,15 +909,34 @@ def _render_domain_checks(
 
 def _light_shadow_contract_check(
     *,
+    manifest: dict[str, Any],
+    output_dir: Path,
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     room_delta: dict[str, Any],
+    probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
+    probe_history = _light_shadow_probe_history(
+        manifest,
+        output_dir=output_dir,
+        probe_manifest_paths=probe_manifest_paths,
+    )
     status = (
         "light_shadow_contract_delta"
         if room_delta.get("status") == "light_or_shadow_contract_delta"
         else "light_shadow_contract_aligned"
     )
+    if probe_history.get("worsened_probe_count"):
+        next_action = (
+            "Do not promote the already-worse light/shadow probes directly; split light "
+            "count, shadow flags, intensity/direction, and material response in the next "
+            "comparison-only probe."
+        )
+    else:
+        next_action = (
+            "Compare Isaac stage lights and shadow-disabled wall/ceiling prims against the "
+            "MuJoCo light setup before treating brightness differences as camera differences."
+        )
     return {
         "check_id": "light_shadow_contract",
         "status": status,
@@ -889,10 +944,175 @@ def _light_shadow_contract_check(
         "isaac_light_count": isaac_contract.get("light_count"),
         "isaac_shadow_disabled_prim_count": isaac_contract.get("shadow_disabled_prim_count"),
         "room_light_shadow_delta": room_delta,
-        "recommended_next_action": (
-            "Compare Isaac stage lights and shadow-disabled wall/ceiling prims against the "
-            "MuJoCo light setup before treating brightness differences as camera differences."
+        "probe_history": probe_history,
+        "recommended_next_action": next_action,
+    }
+
+
+def _light_shadow_probe_history(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    probe_manifest_paths: list[Path] | None,
+) -> dict[str, Any]:
+    paths = [Path(path) for path in probe_manifest_paths or []]
+    if not paths:
+        return {
+            "schema": "robot_camera_light_shadow_probe_history_v1",
+            "status": "not_attached",
+            "probe_count": 0,
+            "probes": [],
+        }
+    baseline = _probe_manifest_summary(
+        manifest, manifest_path=output_dir / "comparison_manifest.json"
+    )
+    probes = []
+    comparable_count = 0
+    improved_count = 0
+    worsened_count = 0
+    for path in paths:
+        probe = _load_light_shadow_probe_manifest(path, output_dir=output_dir)
+        if probe.get("status") == "loaded":
+            comparable = _light_shadow_probe_comparable(baseline, probe)
+            probe["comparable_to_current"] = comparable
+            if comparable:
+                comparable_count += 1
+            delta = _light_shadow_probe_delta(baseline, probe)
+            probe["delta_vs_current"] = delta
+            if delta.get("fpv_improvement") is True:
+                improved_count += 1
+            if delta.get("fpv_worse") is True:
+                worsened_count += 1
+        probes.append(probe)
+    if improved_count:
+        status = "prior_probe_improved"
+    elif worsened_count and comparable_count:
+        status = "prior_probes_worse"
+    elif comparable_count:
+        status = "prior_probes_no_fpv_gain"
+    else:
+        status = "no_comparable_probe"
+    return {
+        "schema": "robot_camera_light_shadow_probe_history_v1",
+        "status": status,
+        "baseline": baseline,
+        "probe_count": len(probes),
+        "comparable_probe_count": comparable_count,
+        "improved_probe_count": improved_count,
+        "worsened_probe_count": worsened_count,
+        "probes": probes,
+        "interpretation": (
+            "Historical light/shadow probes are comparison evidence only. They prevent "
+            "repeating a worse light/shadow edit as a default renderer change."
         ),
+    }
+
+
+def _load_light_shadow_probe_manifest(path: Path, *, output_dir: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {
+            "status": "missing_manifest",
+            "path": _relpath(path, output_dir),
+        }
+    try:
+        payload = _read_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "status": "read_failed",
+            "path": _relpath(path, output_dir),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
+
+
+def _probe_manifest_summary(
+    payload: dict[str, Any],
+    *,
+    manifest_path: Path,
+    output_dir: Path | None = None,
+) -> dict[str, Any]:
+    summary = _dict(payload.get("summary"))
+    scene = _dict(payload.get("scene"))
+    render = _dict(summary.get("render_contract_diagnostics"))
+    camera = _dict(summary.get("camera_contract_diagnostics"))
+    residual = _dict(summary.get("residual_triage"))
+    fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
+    fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
+    rel_path = _relpath(manifest_path, output_dir or manifest_path.parent)
+    return {
+        "status": "loaded",
+        "path": rel_path,
+        "scene": {
+            "scene_source": scene.get("scene_source"),
+            "scene_index": scene.get("scene_index"),
+            "seed": scene.get("seed"),
+            "generated_mess_count": scene.get("generated_mess_count"),
+            "render_width": scene.get("render_width"),
+            "render_height": scene.get("render_height"),
+            "scene_usd_path": scene.get("scene_usd_path"),
+        },
+        "location_count": summary.get("location_count"),
+        "fpv_mean_abs_rgb_avg": summary.get("fpv_mean_abs_rgb_avg"),
+        "chase_mean_abs_rgb_avg": summary.get("chase_mean_abs_rgb_avg"),
+        "camera_contract_status": camera.get("status"),
+        "fpv_lens_status": fpv_lens.get("status"),
+        "fpv_world_pose_status": fpv_pose.get("status"),
+        "render_contract_status": render.get("status"),
+        "mujoco_light_count": render.get("mujoco_light_count"),
+        "isaac_light_count": render.get("isaac_light_count"),
+        "isaac_shadow_disabled_prim_count": render.get("isaac_shadow_disabled_prim_count"),
+        "residual_status": residual.get("status"),
+        "fpv_residual_classes": _dict_path(residual, ("views", "fpv", "residual_classes")),
+    }
+
+
+def _light_shadow_probe_comparable(
+    baseline: dict[str, Any],
+    probe: dict[str, Any],
+) -> bool:
+    baseline_scene = _dict(baseline.get("scene"))
+    probe_scene = _dict(probe.get("scene"))
+    keys = ("scene_source", "scene_index", "seed", "render_width", "render_height")
+    if any(baseline_scene.get(key) != probe_scene.get(key) for key in keys):
+        return False
+    if probe.get("camera_contract_status") != baseline.get("camera_contract_status"):
+        return False
+    pose_status = probe.get("fpv_world_pose_status")
+    baseline_pose_status = baseline.get("fpv_world_pose_status")
+    if pose_status and baseline_pose_status and pose_status != baseline_pose_status:
+        return False
+    lens_status = probe.get("fpv_lens_status")
+    baseline_lens_status = baseline.get("fpv_lens_status")
+    if lens_status and baseline_lens_status and lens_status != baseline_lens_status:
+        return False
+    return True
+
+
+def _light_shadow_probe_delta(
+    baseline: dict[str, Any],
+    probe: dict[str, Any],
+) -> dict[str, Any]:
+    baseline_fpv = _float_or_none(baseline.get("fpv_mean_abs_rgb_avg"))
+    probe_fpv = _float_or_none(probe.get("fpv_mean_abs_rgb_avg"))
+    baseline_chase = _float_or_none(baseline.get("chase_mean_abs_rgb_avg"))
+    probe_chase = _float_or_none(probe.get("chase_mean_abs_rgb_avg"))
+    fpv_delta = (
+        round(float(probe_fpv - baseline_fpv), 4)
+        if baseline_fpv is not None and probe_fpv is not None
+        else None
+    )
+    chase_delta = (
+        round(float(probe_chase - baseline_chase), 4)
+        if baseline_chase is not None and probe_chase is not None
+        else None
+    )
+    return {
+        "fpv_mean_abs_rgb_delta": fpv_delta,
+        "chase_mean_abs_rgb_delta": chase_delta,
+        "fpv_improvement": fpv_delta is not None and fpv_delta < -1.0,
+        "fpv_worse": fpv_delta is not None and fpv_delta > 1.0,
+        "chase_improvement": chase_delta is not None and chase_delta < -1.0,
+        "chase_worse": chase_delta is not None and chase_delta > 1.0,
     }
 
 
