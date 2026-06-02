@@ -8,7 +8,6 @@ from typing import Any
 
 from PIL import Image, ImageStat
 
-from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
@@ -76,6 +75,7 @@ from roboclaws.household.semantic_timeline import (
     successful_semantic_phases,
 )
 from roboclaws.household.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
@@ -1560,8 +1560,13 @@ def _assert_isaac_scene_index_map_context(data: dict[str, Any], base: Path) -> N
     _assert_map_bundle_environment(metric_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(static_map.get("map_bundle") or {}, scenario_id)
     _assert_map_bundle_environment(nav2_bundle, scenario_id)
-    _assert_isaac_scene_index_room_scale(metric_map)
-    _assert_isaac_scene_index_room_scale(static_map)
+    if _is_minimal_metric_map(metric_map, runtime_map):
+        _assert_minimal_map(data, agent_view)
+        _assert_isaac_scene_index_generated_candidate_scale(metric_map)
+        _assert_isaac_scene_index_generated_candidate_scale(static_map or runtime_map)
+    else:
+        _assert_isaac_scene_index_room_scale(metric_map)
+        _assert_isaac_scene_index_room_scale(static_map)
     assert "source_bundle_root" not in nav2_bundle, nav2_bundle
     assert nav2_bundle.get("source_provenance") == "molmospaces_public_semantic_map", nav2_bundle
 
@@ -1607,6 +1612,37 @@ def _assert_isaac_scene_index_room_scale(metric_map: dict[str, Any]) -> None:
     max_width = max(_polygon_extent(room.get("polygon") or [], "x") for room in rooms)
     max_depth = max(_polygon_extent(room.get("polygon") or [], "y") for room in rooms)
     assert max_width > 2.5 or max_depth > 2.5, rooms
+
+
+def _is_minimal_metric_map(metric_map: dict[str, Any], runtime_map: dict[str, Any]) -> bool:
+    minimal_map = metric_map.get("minimal_map") or {}
+    return (
+        metric_map.get("mode") == "minimal"
+        or runtime_map.get("minimal_map_mode") is True
+        or minimal_map.get("enabled") is True
+    )
+
+
+def _assert_isaac_scene_index_generated_candidate_scale(metric_map: dict[str, Any]) -> None:
+    candidates = [
+        item
+        for item in metric_map.get("generated_exploration_candidates")
+        or metric_map.get("inspection_waypoints")
+        or []
+        if isinstance(item, dict)
+    ]
+    assert candidates, metric_map
+    assert all(
+        (item.get("candidate_provenance") or {}).get("source") == "public_occupancy_free_space"
+        for item in candidates
+    ), candidates
+    x_extent = max(float(item.get("x", 0.0)) for item in candidates) - min(
+        float(item.get("x", 0.0)) for item in candidates
+    )
+    y_extent = max(float(item.get("y", 0.0)) for item in candidates) - min(
+        float(item.get("y", 0.0)) for item in candidates
+    )
+    assert x_extent > 2.5 or y_extent > 2.5, candidates
 
 
 def _polygon_extent(points: list[Any], axis: str) -> float:
