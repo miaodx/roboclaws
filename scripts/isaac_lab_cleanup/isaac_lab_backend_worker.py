@@ -1905,7 +1905,9 @@ def _capture_isaac_lab_camera_views(
     ):
         current_stage = stage_utils.get_current_stage()
         if current_stage is not None:
-            sim_utils.standardize_xform_ops(current_stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM))
+            sim_utils.standardize_xform_ops(
+                current_stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM)
+            )
     scene_bounds = _current_stage_bounds(stage_utils)
     _ensure_capture_lighting(stage_utils)
     semantic_label_application = (
@@ -1969,12 +1971,13 @@ def _capture_isaac_lab_camera_views(
     saved: dict[str, str] = {}
     segmentation_views: list[dict[str, Any]] = []
     total_render_steps = 0
+    robot_pose_application: dict[str, Any] = {}
     for view_name in ROBOT_VIEW_KEYS:
         if view_name == "fpv" and mounted_head_camera:
             camera = head_camera
             if camera is None:
                 raise RuntimeError("mounted head camera was requested but Camera sensor is absent")
-            _position_robot_for_head_camera_view(
+            robot_pose_application = _position_robot_for_head_camera_view(
                 stage_utils=stage_utils,
                 scene_bounds=scene_bounds,
                 semantic_pose_state=semantic_pose_state,
@@ -2014,6 +2017,7 @@ def _capture_isaac_lab_camera_views(
         "scene_bounds": scene_bounds,
         "robot_stage": robot_stage,
         "robot_view_uses_mounted_head_camera": mounted_head_camera,
+        "robot_pose_stage_application": robot_pose_application,
         "semantic_pose_stage_application": pose_apply,
         "segmentation": _camera_segmentation_capture_diagnostics(
             segmentation_views,
@@ -3053,25 +3057,34 @@ def _position_robot_for_head_camera_view(
     stage_utils: Any,
     scene_bounds: dict[str, list[float]] | None,
     semantic_pose_state: dict[str, Any] | None = None,
-) -> None:
+) -> dict[str, Any]:
     get_current_stage = getattr(stage_utils, "get_current_stage", None)
     if not callable(get_current_stage):
-        return
+        return {
+            "schema": "isaac_robot_head_camera_pose_application_v1",
+            "status": "missing_stage_api",
+        }
     stage = get_current_stage()
     if stage is None:
-        return
+        return {"schema": "isaac_robot_head_camera_pose_application_v1", "status": "missing_stage"}
     robot_prim = stage.GetPrimAtPath("/World/robot_0")
     if not robot_prim or not robot_prim.IsValid():
-        return
+        return {
+            "schema": "isaac_robot_head_camera_pose_application_v1",
+            "status": "missing_robot_prim",
+            "robot_prim_path": "/World/robot_0",
+        }
     from pxr import Gf, UsdGeom
 
     pose = _dict(_dict(semantic_pose_state).get("robot_pose"))
+    pose_source = str(pose.get("pose_source") or "")
     if _has_xy(pose):
         position = (
             float(pose["x"]),
             float(pose["y"]),
             float(pose.get("z", 0.0)),
         )
+        position_source = "semantic_pose_state.robot_pose"
     elif scene_bounds:
         center = scene_bounds["center"]
         size = scene_bounds["size"]
@@ -3079,9 +3092,55 @@ def _position_robot_for_head_camera_view(
         span_y = max(float(size[1]), 1.5)
         floor_z = float(scene_bounds["min"][2])
         position = (float(center[0]) - span_x * 0.35, float(center[1]) - span_y * 0.55, floor_z)
+        position_source = "scene_bounds_fallback"
     else:
         position = (1.35, -1.35, 0.0)
-    UsdGeom.XformCommonAPI(robot_prim).SetTranslate(Gf.Vec3d(*position))
+        position_source = "static_fallback"
+    xform = UsdGeom.XformCommonAPI(robot_prim)
+    xform.SetTranslate(Gf.Vec3d(*position))
+    yaw_deg = _robot_pose_yaw_deg(pose)
+    if yaw_deg is not None:
+        xform.SetRotate(Gf.Vec3f(0.0, 0.0, yaw_deg))
+    return {
+        "schema": "isaac_robot_head_camera_pose_application_v1",
+        "status": "applied",
+        "robot_prim_path": "/World/robot_0",
+        "position": [float(value) for value in position],
+        "position_source": position_source,
+        "pose_source": pose_source,
+        "yaw_deg": yaw_deg,
+        "yaw_source": "semantic_pose_state.robot_pose.theta_or_yaw_deg"
+        if yaw_deg is not None
+        else "not_available",
+        "head_pitch": _optional_float(pose.get("head_pitch")),
+        "head_pitch_source": str(pose.get("head_pitch_source") or ""),
+        "head_pitch_applied": False,
+        "head_pitch_note": (
+            "The current static Isaac robot USD has a mounted head_camera prim but no "
+            "articulated head joint drive in this render path; base yaw is applied to "
+            "the robot root, while head pitch remains recorded for parity diagnostics."
+        ),
+    }
+
+
+def _robot_pose_yaw_deg(pose: dict[str, Any]) -> float | None:
+    if not isinstance(pose, dict):
+        return None
+    try:
+        if "theta" in pose:
+            return round(math.degrees(float(pose["theta"])), 6)
+        if "yaw_deg" in pose:
+            return round(float(pose["yaw_deg"]), 6)
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def _optional_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _wait_for_stage_load(stage_utils: Any, simulation_app: Any) -> None:
@@ -5281,10 +5340,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
             )
             shapes[view_name] = [args.render_height, args.render_width, 3]
     write_state_from_state_arg(state)
-    robot_pose = _robot_pose_for_receptacle(
-        state,
-        str(state.get("current_receptacle_id") or "floor_01"),
-    )
+    robot_pose = _robot_view_rendered_robot_pose(state)
     focus = _robot_view_focus(
         state,
         robot_pose,
@@ -5311,6 +5367,16 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
         render_resolution={"width": args.render_width, "height": args.render_height},
+    )
+
+
+def _robot_view_rendered_robot_pose(state: dict[str, Any]) -> dict[str, Any]:
+    semantic_robot_pose = _dict(_dict(state.get("semantic_pose_state")).get("robot_pose"))
+    if _has_xy(semantic_robot_pose):
+        return semantic_robot_pose
+    return _robot_pose_for_receptacle(
+        state,
+        str(state.get("current_receptacle_id") or "floor_01"),
     )
 
 
@@ -5393,7 +5459,9 @@ def _robot_view_camera_control_contract(
         or robot_import.get("status") == "imported"
         or _dict(state.get("semantic_pose_view_capture")).get("robot_mounted_head_camera")
     )
-    head_camera_equivalent = bool(provenance.get("head_camera_equivalent")) and not mounted_head_camera
+    head_camera_equivalent = (
+        bool(provenance.get("head_camera_equivalent")) and not mounted_head_camera
+    )
     if mounted_head_camera or head_camera_equivalent or robot_import:
         status = (
             "robot_mounted_head_camera_robot_view"
@@ -5655,6 +5723,7 @@ def _real_semantic_pose_robot_view_images(
         "head_camera_equivalent": not mounted_head_camera,
         "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
         "robot_stage": _dict(capture.get("robot_stage")),
+        "robot_pose_stage_application": _dict(capture.get("robot_pose_stage_application")),
     }
     state.pop("canonical_robot_view_camera_control_request", None)
     state.pop("canonical_robot_view_camera_control_capture", None)
@@ -6725,7 +6794,9 @@ def _rby1m_robot_import_plan(robot_name: str) -> dict[str, Any]:
     return {
         "schema": ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA,
         "robot_name": robot_name,
-        "status": "imported" if imported else ("pending_usd_conversion" if urdf else "missing_urdf"),
+        "status": "imported"
+        if imported
+        else ("pending_usd_conversion" if urdf else "missing_urdf"),
         "physical_robot": False,
         "importer": "isaacsim.asset.importer.urdf",
         "source_urdf": str(urdf) if urdf else "",

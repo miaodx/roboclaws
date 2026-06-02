@@ -1178,6 +1178,74 @@ def test_isaac_robot_view_focus_prefers_object_pose() -> None:
     assert focus["focus_position"] == pytest.approx([4.0, 5.0, 0.4])
 
 
+def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+    rotations: list[object] = []
+
+    class _FakePrim:
+        def IsValid(self) -> bool:
+            return True
+
+    class _FakeStage:
+        def GetPrimAtPath(self, path: str) -> _FakePrim:
+            assert path == "/World/robot_0"
+            return _FakePrim()
+
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            translations.append(value)
+
+        def SetRotate(self, value: object) -> None:
+            rotations.append(value)
+
+    class _FakeGf:
+        @staticmethod
+        def Vec3d(*values: float) -> tuple[float, float, float]:
+            return (float(values[0]), float(values[1]), float(values[2]))
+
+        @staticmethod
+        def Vec3f(*values: float) -> tuple[float, float, float]:
+            return (float(values[0]), float(values[1]), float(values[2]))
+
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeGf,
+        UsdGeom=types.SimpleNamespace(XformCommonAPI=_FakeXformCommonAPI),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+    result = isaac_lab_backend_worker._position_robot_for_head_camera_view(
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        scene_bounds=None,
+        semantic_pose_state={
+            "robot_pose": {
+                "x": 6.37057,
+                "y": 8.8752,
+                "z": 0.0,
+                "theta": math.pi / 2.0,
+                "head_pitch": 0.653613,
+                "head_pitch_source": "target_framing_head_pitch",
+                "pose_source": "roboclaws_shared_scene_frame_support_pose",
+            }
+        },
+    )
+
+    assert translations == [pytest.approx((6.37057, 8.8752, 0.0))]
+    assert rotations == [pytest.approx((0.0, 0.0, 90.0))]
+    assert result["status"] == "applied"
+    assert result["position_source"] == "semantic_pose_state.robot_pose"
+    assert result["pose_source"] == "roboclaws_shared_scene_frame_support_pose"
+    assert result["yaw_deg"] == pytest.approx(90.0)
+    assert result["head_pitch"] == pytest.approx(0.653613)
+    assert result["head_pitch_applied"] is False
+
+
 def test_isaac_semantic_pose_stage_application_uses_exact_pose(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2683,6 +2751,18 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
     init = isaac_lab_backend_worker.init_state(init_args)
     assert init["robot"]["embodiment"] == "rby1m"
     assert init["robot_import"]["status"] == "imported"
+    state = isaac_lab_backend_worker.read_state(state_path)
+    state["semantic_pose_state"]["robot_pose"] = {
+        "frame": "molmospaces_scene_frame_v1",
+        "x": 6.37057,
+        "y": 8.8752,
+        "z": 0.0,
+        "theta": math.pi / 2.0,
+        "yaw_deg": 90.0,
+        "head_pitch": 0.653613,
+        "pose_source": "apple2apple_shared_robot_pose",
+    }
+    isaac_lab_backend_worker.write_state(state_path, state)
 
     result = isaac_lab_backend_worker.write_robot_views(
         isaac_lab_backend_worker.parse_args(
@@ -2712,6 +2792,11 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
     assert result["camera_control_contract"]["agent_facing_fpv"]["camera_prim_path"] == (
         "/World/robot_0/head_camera"
     )
+    assert result["camera_control_contract"]["robot_pose"]["pose_source"] == (
+        "apple2apple_shared_robot_pose"
+    )
+    assert result["camera_control_contract"]["robot_pose"]["x"] == pytest.approx(6.37057)
+    assert result["camera_control_contract"]["robot_pose"]["yaw_deg"] == pytest.approx(90.0)
     state = isaac_lab_backend_worker.read_state(state_path)
     assert state["semantic_pose_view_capture"]["robot_mounted_head_camera"] is True
     assert state["semantic_pose_view_capture"]["head_camera_equivalent"] is False
