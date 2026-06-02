@@ -305,10 +305,18 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   The current summary status is `active`, not complete: head-camera geometry is
   aligned, RAW_FPV agent input uses the head camera, RGB/tone is positive but
   still comparison-only, light/material probes are neutral/do-not-promote, corpus
-  coverage is only 2 scene signatures / 1 seed, and the referenced default
-  calibration artifact
-  `output/molmo/scene-camera-comparison/0530_0009/comparison_manifest.json` is
-  not present in this root checkout.
+  coverage is only 2 scene signatures / 1 seed, and a root-visible calibration
+  artifact is required before any RGB/luminance gain can become default cleanup
+  rendering behavior.
+- The root-visible calibration-scene report now exists at
+  `output/molmo/scene-camera-comparison/0602_val0_scene_refs_calibration/report.html`.
+  Refreshing the visual-parity summary with that manifest changes
+  `calibration_scene.status` to `calibration_scene_evidence_loaded`. Its
+  calibration result is `view_dependent_render_domain_delta` with global Isaac
+  luminance gain about `1.06`, mean calibrated luminance residual about `14.84`,
+  and only about `5.7%` luminance-delta improvement. This is stronger evidence
+  that the remaining visual gap is per-room light/material/tone response rather
+  than camera geometry or one global brightness scale.
 
 ## Next Action
 
@@ -332,8 +340,9 @@ world-labels uses images as report evidence only, while camera-raw uses the
 head-camera FPV images as agent input.
 The next proof-backed step is to run additional bound-target post-FOV
 apple-to-apple baselines across held-out scene indices and seeds, then evaluate
-the existing RGB/tone profiles there. Rebuild a root-visible calibration-scene
-report before promoting any RGB/luminance gain to default rendering behavior.
+the existing RGB/tone profiles there. Keep the calibration report attached to
+the summary gate; do not promote any RGB/luminance gain to default rendering
+while the calibration result remains view-dependent.
 
 ## Touched Areas
 
