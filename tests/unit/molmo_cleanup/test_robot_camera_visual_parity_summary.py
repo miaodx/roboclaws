@@ -534,9 +534,12 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
     )
 
     gate = manifest["checks"]["view_specific_prepared_scale_square_tone_gate"]
-    assert gate["status"] == "view_specific_tone_ready_for_review"
+    assert gate["status"] == "view_specific_report_comparison_gate_ready"
+    assert gate["formal_comparison_gate_ready"] is True
     assert gate["ready_for_review"] is True
     assert gate["comparison_only"] is True
+    assert gate["policy_scope"] == "report_side_comparison_only"
+    assert gate["default_rendering_candidate"] is False
     assert gate["probe_count"] == 3
     assert gate["fpv_improved_count"] == 3
     assert gate["chase_regression_count"] == 0
@@ -549,7 +552,13 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
         "review_ready_comparison_only"
     )
     assert four_check_rows["light_brightness_tone"]["status"] == ("review_ready_comparison_only")
-    assert "view-specific" in manifest["recommended_next_action"]
+    assert four_check_rows["light_brightness_tone"]["policy_scope"] == (
+        "report_side_comparison_only"
+    )
+    assert (
+        "formal report-side comparison gate" in four_check_rows["light_brightness_tone"]["decision"]
+    )
+    assert "formal comparison gate" in manifest["recommended_next_action"]
 
 
 def test_visual_parity_summary_requires_actual_view_specific_rgb_profile(
@@ -642,7 +651,10 @@ def test_visual_parity_summary_requires_actual_view_specific_rgb_profile(
 
     gate = manifest["checks"]["view_specific_prepared_scale_square_tone_gate"]
     assert gate["status"] == "comparison_only_needs_broader_gate"
+    assert gate["formal_comparison_gate_ready"] is False
     assert gate["ready_for_review"] is False
+    assert gate["policy_scope"] == "comparison_only_probe"
+    assert gate["default_rendering_candidate"] is False
     assert gate["view_rgb_gain_profile_count"] == 0
     assert {blocker["reason"] for blocker in gate["blockers"]} == {"missing_backend_view_rgb_gain"}
     assert all(not row["has_required_view_rgb_gain"] for row in gate["probes"])
@@ -660,7 +672,8 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
         "render_domain_probe_matrix": {"status": "render_domain_delta_resolved"},
         "prepared_scale_square_default_gate": {"status": "prepared_scale_square_default_ready"},
         "view_specific_prepared_scale_square_tone_gate": {
-            "status": "view_specific_tone_ready_for_review"
+            "status": "view_specific_report_comparison_gate_ready",
+            "formal_comparison_gate_ready": True,
         },
         "rgb_tone_cross_validation": {
             "status": "default_rgb_tone_ready",

@@ -632,16 +632,25 @@ not fixed by single global tone compensation:
   refreshed summary records `view_rgb_gain_profile_count=3`,
   `required_view_rgb_gain_views=["fpv","chase"]`, no blockers, and
   `has_required_view_rgb_gain=true` for all three current probes.
+- That same gate is now formalized as report-side comparison evidence:
+  `view_specific_prepared_scale_square_tone_gate.status=view_specific_report_comparison_gate_ready`,
+  `formal_comparison_gate_ready=true`,
+  `policy_scope=report_side_comparison_only`, and
+  `default_rendering_candidate=false`. The four-check audit now points the
+  light/brightness/tone row at this formal report-side gate while keeping the
+  row unresolved for default rendering. This lets reports use the view-specific
+  compensation as evidence without changing the policy/input RAW_FPV lane or
+  promoting Isaac/MuJoCo default renderer changes.
 
 Decision delta: a single global color/tone profile cannot satisfy both FPV and
 chase under prepared scale-square. A view-specific tone profile can satisfy the
 current FPV and auxiliary chase tolerance across the current three-slice corpus,
 and the summary now encodes that as
-`view_specific_prepared_scale_square_tone_gate.status=view_specific_tone_ready_for_review`.
-It remains comparison-only by design. The next useful slice is an explicit gate
-decision: either promote view-specific report-side tone compensation into the
-formal comparison/default-rendering review path, or keep chase as auxiliary
-warning evidence while RAW_FPV FPV remains the policy/input metric.
+`view_specific_prepared_scale_square_tone_gate.status=view_specific_report_comparison_gate_ready`.
+It remains report-side comparison-only by design. The next useful slice is a
+default-rendering decision: resolve the remaining material/texture render
+residuals and calibration gates before changing Isaac/MuJoCo default cleanup
+rendering.
 
 ## Touched Areas
 

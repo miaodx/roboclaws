@@ -686,11 +686,12 @@ def _view_specific_prepared_scale_square_tone_gate_check(
                 "labels": [row.get("label") for row in chase_regressions],
             }
         )
+    formal_comparison_gate_ready = bool(view_rows and not blockers)
     if not view_rows:
         status = "not_evaluated"
     elif comparable and len(fpv_improved) == len(comparable) and not chase_regressions:
         if not blockers:
-            status = "view_specific_tone_ready_for_review"
+            status = "view_specific_report_comparison_gate_ready"
         else:
             status = "comparison_only_needs_broader_gate"
     elif fpv_worse:
@@ -700,7 +701,14 @@ def _view_specific_prepared_scale_square_tone_gate_check(
     return {
         "status": status,
         "comparison_only": True,
-        "ready_for_review": status == "view_specific_tone_ready_for_review",
+        "formal_comparison_gate_ready": formal_comparison_gate_ready,
+        "ready_for_review": formal_comparison_gate_ready,
+        "policy_scope": (
+            "report_side_comparison_only"
+            if formal_comparison_gate_ready
+            else "comparison_only_probe"
+        ),
+        "default_rendering_candidate": False,
         "probe_count": len(view_rows),
         "comparable_probe_count": len(comparable),
         "fpv_improved_count": len(fpv_improved),
@@ -735,9 +743,9 @@ def _view_specific_prepared_scale_square_tone_gate_check(
         ],
         "recommended_next_action": (
             "Review whether view-specific report-side tone compensation should become a "
-            "formal comparison gate, or keep chase as auxiliary warning evidence while "
-            "RAW_FPV FPV remains the policy/input metric."
-            if status == "view_specific_tone_ready_for_review"
+            "formal comparison gate. Do not promote it to default rendering; keep "
+            "RAW_FPV FPV as the policy/input metric and chase as auxiliary report evidence."
+            if formal_comparison_gate_ready
             else (
                 "Keep view-specific tone comparison-only until all comparable probes improve "
                 "FPV, stay within chase tolerance, and cover the required corpus."
@@ -745,8 +753,8 @@ def _view_specific_prepared_scale_square_tone_gate_check(
         ),
         "interpretation": (
             "This gate evaluates prepared scale-square plus view-specific tone compensation. "
-            "It can clear the auxiliary chase side effect for review, but remains "
-            "comparison-only until the team explicitly promotes a default-rendering policy."
+            "It can clear the auxiliary chase side effect as report-side comparison evidence, "
+            "but it is not a default-rendering policy."
         ),
     }
 
@@ -857,9 +865,7 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     camera_proven = head_camera.get("status") == HEAD_CAMERA_PASS_STATUS
     raw_fpv_proven = raw_fpv.get("status") == RAW_FPV_PASS_STATUS
     material_default_ready = prepared_gate.get("status") == "prepared_scale_square_default_ready"
-    view_specific_tone_ready = view_tone_gate.get("status") == (
-        "view_specific_tone_ready_for_review"
-    )
+    view_specific_tone_ready = bool(view_tone_gate.get("formal_comparison_gate_ready"))
     lighting_default_ready = (
         render_matrix.get("status") == "render_domain_delta_resolved"
         and rgb_tone.get("comparison_only") is False
@@ -910,8 +916,13 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "Prepared scale-square is ready for default-rendering review."
                 if material_default_ready
                 else (
-                    "Keep material/texture probes comparison-only; texture scale/sampler/"
-                    "material response remains active."
+                    "Use the view-specific report-side comparison gate for visual evidence, "
+                    "but keep material/texture defaults blocked by active render residuals."
+                    if view_specific_tone_ready
+                    else (
+                        "Keep material/texture probes comparison-only; texture scale/sampler/"
+                        "material response remains active."
+                    )
                 )
             ),
         },
@@ -937,6 +948,9 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 if not view_specific_tone_ready
                 else view_tone_gate.get("status")
             ),
+            "policy_scope": view_tone_gate.get("policy_scope")
+            if view_specific_tone_ready
+            else None,
             "probe_status": light_shadow_status,
             "rgb_tone_status": rgb_tone.get("status"),
             "calibration_status": calibration.get("status"),
@@ -944,8 +958,14 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 "Lighting/tone evidence is ready for default-rendering review."
                 if lighting_default_ready
                 else (
-                    "Keep light, shadow, RGB, and luminance changes comparison-only "
-                    "until calibration and residual gates pass."
+                    "Use view-specific tone only as a formal report-side comparison gate; "
+                    "keep light, shadow, RGB, and luminance defaults blocked until "
+                    "calibration and residual gates pass."
+                    if view_specific_tone_ready
+                    else (
+                        "Keep light, shadow, RGB, and luminance changes comparison-only "
+                        "until calibration and residual gates pass."
+                    )
                 )
             ),
         },
@@ -1017,7 +1037,7 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
         )
     prepared_gate = checks.get("prepared_scale_square_default_gate", {})
     view_tone_gate = checks.get("view_specific_prepared_scale_square_tone_gate", {})
-    if view_tone_gate.get("status") == "view_specific_tone_ready_for_review":
+    if view_tone_gate.get("formal_comparison_gate_ready"):
         return str(view_tone_gate.get("recommended_next_action") or "")
     if prepared_gate.get("status") == "comparison_only_not_default":
         return str(prepared_gate.get("recommended_next_action") or "")
