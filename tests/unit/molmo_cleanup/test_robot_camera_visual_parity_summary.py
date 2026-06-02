@@ -76,6 +76,18 @@ def test_visual_parity_summary_keeps_rgb_gain_comparison_only_until_broad_gate(
     assert manifest["checks"]["raw_fpv_input_lane"]["status"] == (
         "raw_fpv_agent_input_uses_head_camera"
     )
+    four_check = manifest["four_check_audit"]
+    assert four_check["status"] == "active"
+    assert four_check["root_cause_classification"] == "render_domain_not_camera"
+    assert four_check["unresolved_check_ids"] == [
+        "material_texture_response",
+        "light_brightness_tone",
+    ]
+    four_check_rows = {row["check_id"]: row for row in four_check["rows"]}
+    assert four_check_rows["camera_geometry"]["resolved"] is True
+    assert four_check_rows["raw_fpv_input_lane"]["resolved"] is True
+    assert four_check_rows["material_texture_response"]["resolved"] is False
+    assert four_check_rows["light_brightness_tone"]["resolved"] is False
     assert manifest["checks"]["corpus_coverage"]["status"] == "needs_broader_corpus"
     assert manifest["checks"]["calibration_scene"]["status"] in {
         "default_calibration_artifact_missing",
@@ -429,6 +441,9 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
     }
 
     assert summary._overall_status(checks) == "passed"
+    audit = summary._four_check_audit(checks)
+    assert audit["status"] == "passed"
+    assert audit["unresolved_check_ids"] == []
 
 
 def _write_robot_camera_manifest(

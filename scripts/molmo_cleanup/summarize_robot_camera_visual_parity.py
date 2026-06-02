@@ -132,6 +132,7 @@ def build_summary(
         "calibration_scene": calibration,
     }
     status = _overall_status(checks)
+    four_check_audit = _four_check_audit(checks)
     manifest: dict[str, Any] = {
         "schema": SCHEMA,
         "status": status,
@@ -147,6 +148,7 @@ def build_summary(
             "chase": "auxiliary report evidence only",
             "render_probes": "comparison_only_until_broader_corpus_and_calibration_pass",
         },
+        "four_check_audit": four_check_audit,
         "checks": checks,
         "baselines": baselines,
         "probes": probes,
@@ -667,6 +669,106 @@ def _calibration_manifest_summary(path: Path) -> dict[str, Any]:
     }
 
 
+def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    head_camera = _dict(checks.get("head_camera_contract"))
+    raw_fpv = _dict(checks.get("raw_fpv_input_lane"))
+    render_matrix = _dict(checks.get("render_domain_probe_matrix"))
+    prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
+    rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
+    calibration = _dict(checks.get("calibration_scene"))
+    probe_status_by_kind = _dict(render_matrix.get("probe_status_by_kind"))
+    material_status = str(probe_status_by_kind.get("material_response") or "not_evaluated")
+    light_shadow_status = str(probe_status_by_kind.get("light_shadow") or "not_evaluated")
+    camera_proven = head_camera.get("status") == HEAD_CAMERA_PASS_STATUS
+    raw_fpv_proven = raw_fpv.get("status") == RAW_FPV_PASS_STATUS
+    material_default_ready = prepared_gate.get("status") == "prepared_scale_square_default_ready"
+    lighting_default_ready = (
+        render_matrix.get("status") == "render_domain_delta_resolved"
+        and rgb_tone.get("comparison_only") is False
+        and calibration.get("status") == "calibration_scene_evidence_loaded"
+    )
+    rows = [
+        {
+            "check_id": "camera_geometry",
+            "resolved": camera_proven,
+            "status": "proven_aligned" if camera_proven else "not_proven",
+            "source_check": "head_camera_contract",
+            "source_status": head_camera.get("status"),
+            "decision": (
+                "Keep MuJoCo robot_0/head_camera and Isaac /World/robot_0/head_camera frozen."
+                if camera_proven
+                else "Fix FPV pose/lens before render-domain tuning."
+            ),
+        },
+        {
+            "check_id": "raw_fpv_input_lane",
+            "resolved": raw_fpv_proven,
+            "status": "proven_head_camera_input" if raw_fpv_proven else "not_proven",
+            "source_check": "raw_fpv_input_lane",
+            "source_status": raw_fpv.get("status"),
+            "decision": (
+                "Treat camera-raw RAW_FPV as the agent-input lane; world-label "
+                "images remain report evidence."
+                if raw_fpv_proven
+                else "Run a camera-raw cleanup probe before claiming agent-input parity."
+            ),
+        },
+        {
+            "check_id": "material_texture_response",
+            "resolved": material_default_ready,
+            "status": "default_ready" if material_default_ready else "active_comparison_only",
+            "source_check": "prepared_scale_square_default_gate",
+            "source_status": prepared_gate.get("status"),
+            "probe_status": material_status,
+            "decision": (
+                "Prepared scale-square is ready for default-rendering review."
+                if material_default_ready
+                else (
+                    "Keep material/texture probes comparison-only; texture scale/sampler/"
+                    "material response remains active."
+                )
+            ),
+        },
+        {
+            "check_id": "light_brightness_tone",
+            "resolved": lighting_default_ready,
+            "status": "default_ready" if lighting_default_ready else "active_comparison_only",
+            "source_check": "render_domain_probe_matrix",
+            "source_status": render_matrix.get("status"),
+            "probe_status": light_shadow_status,
+            "rgb_tone_status": rgb_tone.get("status"),
+            "calibration_status": calibration.get("status"),
+            "decision": (
+                "Lighting/tone evidence is ready for default-rendering review."
+                if lighting_default_ready
+                else (
+                    "Keep light, shadow, RGB, and luminance changes comparison-only "
+                    "until calibration and residual gates pass."
+                )
+            ),
+        },
+    ]
+    unresolved = [row["check_id"] for row in rows if not row["resolved"]]
+    if camera_proven and raw_fpv_proven and not material_default_ready:
+        root_cause = "render_domain_not_camera"
+    elif not camera_proven:
+        root_cause = "camera_geometry_not_proven"
+    else:
+        root_cause = "input_or_render_domain_not_proven"
+    return {
+        "schema": "robot_camera_four_check_audit_v1",
+        "status": "active" if unresolved else "passed",
+        "root_cause_classification": root_cause,
+        "rows": rows,
+        "unresolved_check_ids": unresolved,
+        "interpretation": (
+            "This audit maps the user-requested four checks onto the machine gates. "
+            "Camera and RAW_FPV can pass independently while material, texture, lighting, "
+            "and tone remain comparison-only render-domain work."
+        ),
+    }
+
+
 def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
     required_pass = {
         "head_camera_contract": HEAD_CAMERA_PASS_STATUS,
@@ -1171,6 +1273,17 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _render_report(manifest: dict[str, Any]) -> str:
     checks = _dict(manifest.get("checks"))
+    four_check = _dict(manifest.get("four_check_audit"))
+    four_check_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('source_status') or item.get('probe_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('decision') or ''))}</td>"
+        "</tr>"
+        for item in four_check.get("rows") or []
+        if isinstance(item, dict)
+    )
     rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(check_id)}</td>"
@@ -1216,6 +1329,14 @@ def _render_report(manifest: dict[str, Any]) -> str:
   <h1>Robot Camera Visual Parity</h1>
   <p>Status: <code>{html.escape(str(manifest.get("status")))}</code></p>
   <p>{html.escape(str(manifest.get("recommended_next_action") or ""))}</p>
+  <h2>Four-Check Audit</h2>
+  <p>{html.escape(str(four_check.get("interpretation") or ""))}</p>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Status</th><th>Source Status</th><th>Decision</th></tr>
+    </thead>
+    <tbody>{four_check_rows}</tbody>
+  </table>
   <h2>Checks</h2>
   <table><thead><tr><th>Check</th><th>Status</th><th>Interpretation</th></tr></thead><tbody>{rows}</tbody></table>
   <h2>Baselines</h2>

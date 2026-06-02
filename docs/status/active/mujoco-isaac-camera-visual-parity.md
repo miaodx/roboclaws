@@ -12,7 +12,14 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Source Of Truth
 
-- Current root commit before this note: `5f682eb9 feat: probe targeted diffuse texture material response`
+- Current root commit before latest four-check audit:
+  `8388410d feat: probe intermediate texture scale response`
+- Four-check summary:
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/visual_parity_summary.json`
+- Four-check report:
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
+- Earlier root commit before this note:
+  `5f682eb9 feat: probe targeted diffuse texture material response`
 - Camera FOV fix commit: `b5e2be3d fix: align isaac head camera fov`
 - Report: `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_headpitch_lightingfix_scene_refs_fix/report.html`
 - Color/tone probe:
@@ -526,6 +533,54 @@ scale-square FPV gains while reducing the auxiliary chase luminance side effect.
 The summary gate already encodes the current blockers, so future runs should
 drive `prepared_scale_square_default_gate` instead of relying on manual report
 notes.
+
+## Four-Check Audit 2026-06-02
+
+The current machine-readable summary says the four requested checks are split
+cleanly:
+
+- Camera geometry: `head_camera_contract.status=head_camera_geometry_aligned`.
+  The active FPV contract is frozen on the robot-mounted head camera, not a
+  chase or report-only camera. MuJoCo remains `robot_0/head_camera`; Isaac
+  remains `/World/robot_0/head_camera`.
+- RAW_FPV input lane:
+  `raw_fpv_input_lane.status=raw_fpv_agent_input_uses_head_camera`. The
+  `camera-raw` cleanup probe records `perception_mode=raw_fpv_only`,
+  `camera_status=all_robot_views_use_head_camera_fpv`, 16 head-camera contract
+  steps, and 6 RAW_FPV observations. World-label images remain report evidence,
+  not the policy/input lane.
+- Material/texture response:
+  `render_domain_probe_matrix.status=render_domain_delta_active`. The strongest
+  current direction is prepared/global texture scale/fallback squaring. The
+  maintained prepared gate improves FPV on all three comparable slices:
+  `val_0` seed-6 `-5.5750`, `val_1` seed-6 `-7.1603`, and `val_1` seed-8
+  `-7.7401`. It is still `comparison_only_not_default`, blocked by active
+  render residuals and one auxiliary chase regression.
+- Light/brightness/tone:
+  simple light/shadow probes are `neutral_do_not_promote`: no-dome changes FPV
+  only `-0.7571` and hurts chase `+8.2014`; no-shadow changes FPV `-0.4444`
+  and is chase-neutral. RGB/tone probes are FPV-positive across held-out slices
+  but remain comparison-only because calibration is view-dependent and material
+  residuals remain active.
+
+The latest intermediate texture-scale probes confirm the main direction but do
+not solve the default-promotion blocker. The target-specific
+`val1_diningtable_lightwood_power15` probe improves the dining-table FPV from
+`46.1260` to `40.9925` with chase unchanged, but gives up too much overall FPV
+gain versus full scale-square. The broader
+`val1_scale_square_soften_diningtable_lightwood_power075` probe improves FPV by
+`-6.2698`, lowers the high-residual count, but leaves the same chase luminance
+side effect as full scale-square (`+2.9125`). This means the remaining
+Isaac-vs-MuJoCo visual mismatch is not caused by FPV camera pose; it is in the
+render domain: USD texture scale/sampler/material response plus lighting/tone
+differences.
+
+Current blocker fingerprint:
+`render_domain_visual_parity`; root-cause classification:
+`texture_scale_sampler_material_response_with_tone_luminance_side_effect`; last
+decision delta: camera and RAW_FPV are treated as proven aligned, while
+prepared scale-square stays comparison-only until the auxiliary chase luminance
+side effect is resolved or explicitly re-gated.
 
 ## Touched Areas
 
