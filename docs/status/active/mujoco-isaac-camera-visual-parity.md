@@ -158,6 +158,15 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   applied and an FPV RGB-oracle improvement fraction of `0.143278`. RGB gain is
   still comparison-only because light/shadow, texture/colorspace, and
   PreviewSurface-vs-MJCF material-model checks remain active.
+- The refreshed 8-location post-FOV baseline report now attaches that same
+  `val_0` RGB-gain probe into
+  `summary.render_domain_checks.checks[tone_color_response].probe_history`.
+  The tone/color history reports `schema=robot_camera_tone_color_probe_history_v1`,
+  `status=prior_probe_improved`, `comparable_probe_count=1`,
+  `improved_probe_count=1`, and FPV delta `-3.0368` with
+  `backend_rgb_gain.isaaclab_subprocess=[0.944061,0.844818,0.822146]`. This makes
+  RGB/tone calibration the strongest current comparison-only render-domain
+  direction, but still not a default renderer or policy-input change.
 - Remaining blocker is visual render-domain parity:
   `render_contract_diagnostics.status=lighting_shadow_contract_delta`,
   MuJoCo lights `1`, Isaac lights `2`, Isaac shadow-disabled prims `44` on

@@ -683,6 +683,100 @@ def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
     assert "below the improvement threshold" in check["recommended_next_action"]
 
 
+def test_robot_camera_tone_color_check_summarizes_improved_rgb_gain_probe(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_tone_color_probe_history",
+    )
+    baseline = {
+        "scene": {
+            "scene_source": "procthor-10k-val",
+            "scene_index": 0,
+            "seed": 6,
+            "generated_mess_count": 5,
+            "render_width": 540,
+            "render_height": 360,
+        },
+        "summary": {
+            "location_count": 8,
+            "fpv_mean_abs_rgb_avg": 38.098,
+            "chase_mean_abs_rgb_avg": 83.7516,
+            "camera_contract_diagnostics": {
+                "status": "fpv_contract_shared_with_static_head_camera_pitch_correction",
+                "fpv_lens_delta_summary": {"status": "fpv_lens_aligned"},
+                "fpv_world_pose_delta_summary": {"status": "fpv_world_pose_aligned"},
+            },
+            "render_contract_diagnostics": {
+                "status": "lighting_shadow_contract_delta",
+            },
+            "residual_triage": {
+                "status": "render_domain_geometry_or_texture_residual",
+                "views": {"fpv": {"residual_classes": {"geometry_or_texture_edge_residual": 4}}},
+            },
+        },
+    }
+    probe = json.loads(json.dumps(baseline))
+    probe["summary"]["fpv_mean_abs_rgb_avg"] = 35.0612
+    probe["summary"]["chase_mean_abs_rgb_avg"] = 85.0
+    probe["summary"]["render_domain_checks"] = {
+        "checks": [
+            {
+                "check_id": "tone_color_response",
+                "status": "tone_color_delta_remaining_after_comparison_gain",
+                "comparison_rgb_gain_applied": True,
+                "comparison_rgb_gain": {"isaaclab_subprocess": [0.944061, 0.844818, 0.822146]},
+            }
+        ]
+    }
+    probe_path = tmp_path / "rgb_gain_probe_manifest.json"
+    probe_path.write_text(json.dumps(probe), encoding="utf-8")
+
+    check = run_camera._tone_color_response_check(
+        manifest=baseline,
+        output_dir=tmp_path,
+        locations=[
+            {
+                "status": "success",
+                "image_diffs": {
+                    "fpv": {
+                        "mean_abs_rgb": 38.098,
+                        "residual": {
+                            "residual_class": "view_dependent_color_residual",
+                            "rgb_gain_oracle": {"mean_abs_rgb_after_gain": 31.0},
+                        },
+                    },
+                    "chase": {
+                        "mean_abs_rgb": 83.7516,
+                        "residual": {"residual_class": "geometry_or_texture_edge_residual"},
+                    },
+                },
+            }
+        ],
+        isaac_state={},
+        probe_manifest_paths=[probe_path],
+    )
+
+    history = check["probe_history"]
+    assert history["schema"] == "robot_camera_tone_color_probe_history_v1"
+    assert history["status"] == "prior_probe_improved"
+    assert history["comparable_probe_count"] == 1
+    assert history["improved_probe_count"] == 1
+    assert history["worsened_probe_count"] == 0
+    assert history["neutral_probe_count"] == 0
+    assert history["probes"][0]["comparable_to_current"] is True
+    assert history["probes"][0]["comparison_rgb_gain_applied"] is True
+    assert history["probes"][0]["comparison_rgb_gain"]["isaaclab_subprocess"] == [
+        0.944061,
+        0.844818,
+        0.822146,
+    ]
+    assert history["probes"][0]["delta_vs_current"]["fpv_mean_abs_rgb_delta"] == -3.0368
+    assert history["probes"][0]["delta_vs_current"]["fpv_improvement"] is True
+    assert "strongest current comparison-only direction" in check["recommended_next_action"]
+
+
 def test_robot_camera_render_contract_diagnostics_prioritizes_missing_target_binding(
     tmp_path: Path,
 ) -> None:

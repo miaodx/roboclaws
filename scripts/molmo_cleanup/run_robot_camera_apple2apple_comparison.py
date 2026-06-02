@@ -93,6 +93,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--tone-color-probe-manifest",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Optional prior comparison manifest for a tone/color probe. Repeat to attach "
+            "RGB gain or tone calibration probe history to this report without changing "
+            "default rendering."
+        ),
+    )
+    parser.add_argument(
         "--refresh-report-only",
         action="store_true",
         help=(
@@ -107,6 +118,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
             material_response_probe_manifest_paths=args.material_response_probe_manifest,
+            tone_color_probe_manifest_paths=args.tone_color_probe_manifest,
         )
     else:
         if args.scene_usd_path is None:
@@ -343,6 +355,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         output_dir=output_dir,
         light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
         material_response_probe_manifest_paths=args.material_response_probe_manifest,
+        tone_color_probe_manifest_paths=args.tone_color_probe_manifest,
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -352,6 +365,7 @@ def refresh_report_only(
     output_dir: Path,
     light_shadow_probe_manifest_paths: list[Path] | None = None,
     material_response_probe_manifest_paths: list[Path] | None = None,
+    tone_color_probe_manifest_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
     manifest_path = output_dir / "comparison_manifest.json"
     if not manifest_path.is_file():
@@ -365,6 +379,7 @@ def refresh_report_only(
         output_dir=output_dir,
         light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
         material_response_probe_manifest_paths=material_response_probe_manifest_paths,
+        tone_color_probe_manifest_paths=tone_color_probe_manifest_paths,
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -637,6 +652,7 @@ def _attach_render_contract_diagnostics(
     output_dir: Path,
     light_shadow_probe_manifest_paths: list[Path] | None = None,
     material_response_probe_manifest_paths: list[Path] | None = None,
+    tone_color_probe_manifest_paths: list[Path] | None = None,
 ) -> None:
     mujoco_state = _read_json(output_dir / "mujoco_state.json")
     isaac_state = _read_json(output_dir / "isaac_state.json")
@@ -692,6 +708,7 @@ def _attach_render_contract_diagnostics(
         isaac_state=isaac_state,
         light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
         material_response_probe_manifest_paths=material_response_probe_manifest_paths,
+        tone_color_probe_manifest_paths=tone_color_probe_manifest_paths,
     )
     manifest["render_domain_checks"] = domain_checks
     manifest.setdefault("summary", {})["render_domain_checks"] = domain_checks
@@ -882,6 +899,7 @@ def _render_domain_checks(
     isaac_state: dict[str, Any],
     light_shadow_probe_manifest_paths: list[Path] | None,
     material_response_probe_manifest_paths: list[Path] | None,
+    tone_color_probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
     checks = [
         _light_shadow_contract_check(
@@ -899,7 +917,13 @@ def _render_domain_checks(
             per_location=per_location,
             probe_manifest_paths=material_response_probe_manifest_paths,
         ),
-        _tone_color_response_check(locations, isaac_state=isaac_state),
+        _tone_color_response_check(
+            manifest=manifest,
+            output_dir=output_dir,
+            locations=locations,
+            isaac_state=isaac_state,
+            probe_manifest_paths=tone_color_probe_manifest_paths,
+        ),
     ]
     status_counts = {
         name: sum(1 for item in checks if item.get("status") == name)
@@ -1074,6 +1098,13 @@ def _probe_manifest_summary(
     render = _dict(summary.get("render_contract_diagnostics"))
     camera = _dict(summary.get("camera_contract_diagnostics"))
     residual = _dict(summary.get("residual_triage"))
+    domain_checks = _dict(summary.get("render_domain_checks"))
+    check_by_id = {
+        str(item.get("check_id")): item
+        for item in domain_checks.get("checks") or []
+        if isinstance(item, dict) and item.get("check_id")
+    }
+    tone_color = _dict(check_by_id.get("tone_color_response"))
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
     rel_path = _relpath(manifest_path, output_dir or manifest_path.parent)
@@ -1101,6 +1132,9 @@ def _probe_manifest_summary(
         "isaac_shadow_disabled_prim_count": render.get("isaac_shadow_disabled_prim_count"),
         "residual_status": residual.get("status"),
         "fpv_residual_classes": _dict_path(residual, ("views", "fpv", "residual_classes")),
+        "tone_color_status": tone_color.get("status"),
+        "comparison_rgb_gain_applied": tone_color.get("comparison_rgb_gain_applied"),
+        "comparison_rgb_gain": tone_color.get("comparison_rgb_gain"),
     }
 
 
@@ -1223,6 +1257,91 @@ def _material_response_probe_history(
 
 
 def _load_material_response_probe_manifest(path: Path, *, output_dir: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {
+            "status": "missing_manifest",
+            "path": _relpath(path, output_dir),
+        }
+    try:
+        payload = _read_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "status": "read_failed",
+            "path": _relpath(path, output_dir),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
+
+
+def _tone_color_probe_history(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    probe_manifest_paths: list[Path] | None,
+) -> dict[str, Any]:
+    paths = [Path(path) for path in probe_manifest_paths or []]
+    if not paths:
+        return {
+            "schema": "robot_camera_tone_color_probe_history_v1",
+            "status": "not_attached",
+            "probe_count": 0,
+            "probes": [],
+        }
+    baseline = _probe_manifest_summary(
+        manifest, manifest_path=output_dir / "comparison_manifest.json"
+    )
+    probes = []
+    comparable_count = 0
+    improved_count = 0
+    worsened_count = 0
+    neutral_count = 0
+    for path in paths:
+        probe = _load_tone_color_probe_manifest(path, output_dir=output_dir)
+        if probe.get("status") == "loaded":
+            comparable = _comparison_probe_comparable(baseline, probe)
+            probe["comparable_to_current"] = comparable
+            if comparable:
+                comparable_count += 1
+            delta = _comparison_probe_delta(baseline, probe)
+            probe["delta_vs_current"] = delta
+            if comparable and delta.get("fpv_improvement") is True:
+                improved_count += 1
+            if comparable and delta.get("fpv_worse") is True:
+                worsened_count += 1
+            if (
+                comparable
+                and delta.get("fpv_improvement") is not True
+                and delta.get("fpv_worse") is not True
+            ):
+                neutral_count += 1
+        probes.append(probe)
+    if improved_count:
+        status = "prior_probe_improved"
+    elif worsened_count and comparable_count:
+        status = "prior_probes_worse"
+    elif comparable_count:
+        status = "prior_probes_no_fpv_gain"
+    else:
+        status = "no_comparable_probe"
+    return {
+        "schema": "robot_camera_tone_color_probe_history_v1",
+        "status": status,
+        "baseline": baseline,
+        "probe_count": len(probes),
+        "comparable_probe_count": comparable_count,
+        "improved_probe_count": improved_count,
+        "worsened_probe_count": worsened_count,
+        "neutral_probe_count": neutral_count,
+        "probes": probes,
+        "interpretation": (
+            "Historical tone/color probes are comparison evidence only. They show whether "
+            "RGB gain or tone calibration reduces FPV residuals under the same head-camera "
+            "contract before any default renderer or policy-input change."
+        ),
+    }
+
+
+def _load_tone_color_probe_manifest(path: Path, *, output_dir: Path) -> dict[str, Any]:
     if not path.is_file():
         return {
             "status": "missing_manifest",
@@ -1561,9 +1680,12 @@ def _preview_surface_target_summary(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _tone_color_response_check(
-    locations: list[dict[str, Any]],
     *,
+    manifest: dict[str, Any],
+    output_dir: Path,
+    locations: list[dict[str, Any]],
     isaac_state: dict[str, Any],
+    probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
     triage = _residual_triage(locations)
     fpv = _dict_path(triage, ("views", "fpv"))
@@ -1578,6 +1700,11 @@ def _tone_color_response_check(
         color_profile.get("backend_rgb_gain")
     )
     comparison_gain_applied = bool(rgb_gain)
+    probe_history = _tone_color_probe_history(
+        manifest,
+        output_dir=output_dir,
+        probe_manifest_paths=probe_manifest_paths,
+    )
     if mean_abs is None:
         status = "tone_color_metrics_missing"
     elif improvement_fraction is not None and improvement_fraction >= 0.1:
@@ -1590,6 +1717,23 @@ def _tone_color_response_check(
         status = "tone_color_lower_priority"
     else:
         status = "tone_color_response_unverified"
+    if probe_history.get("improved_probe_count"):
+        next_action = (
+            "Treat RGB/tone calibration as the strongest current comparison-only direction; "
+            "broaden the same post-FOV head-camera corpus before promoting any default "
+            "renderer or preprocessing change."
+        )
+    elif probe_history.get("worsened_probe_count"):
+        next_action = (
+            "Do not promote the attached tone/color probes directly; keep per-view oracle "
+            "gain as diagnostics while testing narrower color-management hypotheses."
+        )
+    else:
+        next_action = (
+            "Keep RGB gain as comparison-only until it improves a broader post-FOV corpus; "
+            "use per-view oracle gain to separate color response from geometry/material "
+            "residuals."
+        )
     return {
         "check_id": "tone_color_response",
         "status": status,
@@ -1601,11 +1745,9 @@ def _tone_color_response_check(
         "comparison_rgb_gain_applied": comparison_gain_applied,
         "comparison_rgb_gain": rgb_gain,
         "comparison_only": True,
+        "probe_history": probe_history,
         "residual_triage_status": triage.get("status"),
-        "recommended_next_action": (
-            "Keep RGB gain as comparison-only until it improves a broader post-FOV corpus; "
-            "use per-view oracle gain to separate color response from geometry/material residuals."
-        ),
+        "recommended_next_action": next_action,
     }
 
 
