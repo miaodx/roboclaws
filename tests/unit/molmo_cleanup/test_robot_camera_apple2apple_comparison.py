@@ -428,12 +428,30 @@ def Xform "World"
     run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
 
     summary = manifest["summary"]["render_contract_diagnostics"]
+    checks = manifest["summary"]["render_domain_checks"]
     location = manifest["locations"][0]["render_contract_diagnostics"]
     assert summary["status"] == "lighting_shadow_contract_delta"
     assert summary["mujoco_light_count"] == 1
     assert summary["isaac_light_count"] == 2
     assert summary["isaac_shadow_disabled_prim_count"] == 1
     assert summary["target_contract_delta_counts"] == {"material_texture_names_match": 1}
+    assert checks["schema"] == "robot_camera_render_domain_checks_v1"
+    assert checks["status"] == "render_domain_delta_confirmed"
+    check_by_id = {item["check_id"]: item for item in checks["checks"]}
+    assert check_by_id["light_shadow_contract"]["status"] == "light_shadow_contract_delta"
+    assert check_by_id["texture_colorspace_material_response"]["status"] == (
+        "texture_basenames_match_paths_or_colorspace_unverified"
+    )
+    assert check_by_id["texture_colorspace_material_response"]["texture_name_match_count"] == 1
+    assert check_by_id["usd_preview_surface_material_model"]["status"] == (
+        "usd_preview_surface_vs_mujoco_material_model_delta"
+    )
+    assert (
+        check_by_id["usd_preview_surface_material_model"]["isaac_preview_surface_binding_count"]
+        == 1
+    )
+    assert check_by_id["tone_color_response"]["status"] == "tone_color_metrics_missing"
+    assert check_by_id["tone_color_response"]["check_id"] == "tone_color_response"
     assert location["target_contract_delta"]["status"] == "material_texture_names_match"
 
 

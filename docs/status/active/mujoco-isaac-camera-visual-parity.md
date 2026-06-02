@@ -12,8 +12,8 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Source Of Truth
 
-- Current root commit: the current `fix: align isaac head camera fov` commit
-- Camera fix commit: `0329e930 fix: align isaac head camera capture`
+- Current root commit: `5d0c64a9 docs: update post fov parity evidence`
+- Camera FOV fix commit: `b5e2be3d fix: align isaac head camera fov`
 - Report: `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_headpitch_lightingfix_scene_refs_fix/report.html`
 - Color/tone probe:
   `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_global_rgb_gain_probe/report.html`
@@ -23,6 +23,8 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_4loc_fovfix_baseline/report.html`
 - 8-location post-FOV baseline:
   `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_fovfix_baseline/report.html`
+- 8-location post-FOV RGB-gain probe:
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_fovfix_val0_rgb_gain_probe/report.html`
 
 ## Current Evidence
 
@@ -63,6 +65,21 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   The worst remaining points still have exact public USD binding, zero missing
   referenced assets, and `material_texture_names_match`, so the next root-cause
   class is renderer/material/texture response rather than camera geometry.
+- The refreshed 8-location post-FOV baseline now emits
+  `summary.render_domain_checks` with four explicit checks:
+  `light_shadow_contract_delta=1`,
+  `texture_basenames_match_paths_or_colorspace_unverified=1`,
+  `usd_preview_surface_vs_mujoco_material_model_delta=1`, and
+  `tone_color_delta_rgb_oracle=1`. This keeps camera parity separate from
+  render-domain parity in the report itself.
+- The refreshed 8-location post-FOV RGB-gain probe improved FPV avg from
+  `38.0980` to `35.0612` and changed the residual split to 4 low-residual FPV
+  views, 3 geometry/texture edge residuals, and 1 render-domain residual. Its
+  `tone_color_response` check reports
+  `tone_color_delta_remaining_after_comparison_gain` with comparison RGB gain
+  applied and an FPV RGB-oracle improvement fraction of `0.143278`. RGB gain is
+  still comparison-only because light/shadow, texture/colorspace, and
+  PreviewSurface-vs-MJCF material-model checks remain active.
 - Remaining blocker is visual render-domain parity:
   `render_contract_diagnostics.status=lighting_shadow_contract_delta`,
   MuJoCo lights `1`, Isaac lights `2`, Isaac shadow-disabled prims `44` on
@@ -81,11 +98,12 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Next Action
 
-Keep FPV pose and the head-camera FOV contract unchanged. Next, broaden the FOV
-fix to an 8-location `val_0` rerun and more scenes/seeds, then investigate the
-remaining render-domain gap: light/shadow, USD PreviewSurface/material response,
-texture colorspace, and high-residual geometry/material edges. Keep the RGB gain
-profile comparison-only until it improves a broader post-FOV corpus.
+Keep FPV pose and the head-camera FOV contract unchanged. Next, use the new
+`render_domain_checks` output to drive renderer parity experiments in this
+order: light/shadow contract, texture colorspace/material response, USD
+PreviewSurface-vs-MJCF material model, then broader RGB-gain validation. Keep
+the RGB gain profile comparison-only until it improves a broader post-FOV
+corpus.
 
 ## Touched Areas
 

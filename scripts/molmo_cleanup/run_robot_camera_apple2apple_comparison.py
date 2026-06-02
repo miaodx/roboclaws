@@ -612,10 +612,13 @@ def _attach_render_contract_diagnostics(manifest: dict[str, Any], *, output_dir:
         mujoco=_mujoco_view_render_contract(mujoco_contract, anchor_id=""),
         isaac=_isaac_view_render_contract(isaac_contract, usd_prim_path=""),
     )
+    successful_locations = [
+        item
+        for item in manifest.get("locations") or []
+        if isinstance(item, dict) and item.get("status") == "success"
+    ]
     per_location = []
-    for item in manifest.get("locations") or []:
-        if not isinstance(item, dict) or item.get("status") != "success":
-            continue
+    for item in successful_locations:
         diagnostics = _location_render_contract_diagnostics(
             item,
             mujoco_contract=mujoco_contract,
@@ -632,6 +635,16 @@ def _attach_render_contract_diagnostics(manifest: dict[str, Any], *, output_dir:
     )
     manifest["render_contract_diagnostics"] = summary
     manifest.setdefault("summary", {})["render_contract_diagnostics"] = summary
+    domain_checks = _render_domain_checks(
+        locations=successful_locations,
+        mujoco_contract=mujoco_contract,
+        isaac_contract=isaac_contract,
+        room_delta=room_delta,
+        per_location=per_location,
+        isaac_state=isaac_state,
+    )
+    manifest["render_domain_checks"] = domain_checks
+    manifest.setdefault("summary", {})["render_domain_checks"] = domain_checks
 
 
 def _scene_binding_summary(scene_binding_diagnostics: dict[str, Any]) -> dict[str, Any]:
@@ -791,6 +804,248 @@ def _render_contract_summary(
             "be the correct head camera while Isaac still differs through static head "
             "articulation, USD PreviewSurface conversion, renderer lighting, shadow flags, "
             "and tone response."
+        ),
+    }
+
+
+def _render_domain_checks(
+    *,
+    locations: list[dict[str, Any]],
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+    room_delta: dict[str, Any],
+    per_location: list[dict[str, Any]],
+    isaac_state: dict[str, Any],
+) -> dict[str, Any]:
+    checks = [
+        _light_shadow_contract_check(
+            mujoco_contract=mujoco_contract,
+            isaac_contract=isaac_contract,
+            room_delta=room_delta,
+        ),
+        _texture_colorspace_material_response_check(per_location),
+        _usd_preview_surface_material_model_check(per_location),
+        _tone_color_response_check(locations, isaac_state=isaac_state),
+    ]
+    status_counts = {
+        name: sum(1 for item in checks if item.get("status") == name)
+        for name in sorted({str(item.get("status") or "") for item in checks if item.get("status")})
+    }
+    action_checks = [
+        item
+        for item in checks
+        if item.get("status")
+        not in {
+            "material_texture_names_match_no_render_gap",
+            "tone_color_lower_priority",
+        }
+    ]
+    if mujoco_contract.get("status") != "parsed" or isaac_contract.get("status") != "parsed":
+        status = "partial_artifact_parse"
+        next_action = "Resolve missing scene XML/USD artifacts before render-domain triage."
+    elif any(item.get("status") == "target_material_texture_or_binding_gap" for item in checks):
+        status = "target_material_texture_or_binding_gap"
+        next_action = (
+            "Fix target USD binding, referenced assets, or material/texture-name mismatches "
+            "before changing lights, color, or camera geometry."
+        )
+    elif action_checks:
+        status = "render_domain_delta_confirmed"
+        next_action = str(action_checks[0].get("recommended_next_action") or "")
+    else:
+        status = "render_domain_checks_low_priority"
+        next_action = "Broaden scene/seed coverage before changing renderer settings."
+    return {
+        "schema": "robot_camera_render_domain_checks_v1",
+        "status": status,
+        "check_count": len(checks),
+        "check_status_counts": status_counts,
+        "checks": checks,
+        "recommended_next_action": next_action,
+        "interpretation": (
+            "These four checks keep camera parity separate from render-domain parity. They "
+            "summarize light/shadow contracts, material/texture response, USD PreviewSurface "
+            "conversion, and tone/color calibration evidence from the same apple-to-apple "
+            "robot-view report."
+        ),
+    }
+
+
+def _light_shadow_contract_check(
+    *,
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+    room_delta: dict[str, Any],
+) -> dict[str, Any]:
+    status = (
+        "light_shadow_contract_delta"
+        if room_delta.get("status") == "light_or_shadow_contract_delta"
+        else "light_shadow_contract_aligned"
+    )
+    return {
+        "check_id": "light_shadow_contract",
+        "status": status,
+        "mujoco_light_count": mujoco_contract.get("light_count"),
+        "isaac_light_count": isaac_contract.get("light_count"),
+        "isaac_shadow_disabled_prim_count": isaac_contract.get("shadow_disabled_prim_count"),
+        "room_light_shadow_delta": room_delta,
+        "recommended_next_action": (
+            "Compare Isaac stage lights and shadow-disabled wall/ceiling prims against the "
+            "MuJoCo light setup before treating brightness differences as camera differences."
+        ),
+    }
+
+
+def _texture_colorspace_material_response_check(
+    per_location: list[dict[str, Any]],
+) -> dict[str, Any]:
+    deltas = [_dict(item.get("target_contract_delta")) for item in per_location]
+    delta_statuses = [str(item.get("status") or "") for item in deltas]
+    delta_counts = {
+        name: delta_statuses.count(name) for name in sorted(set(delta_statuses)) if name
+    }
+    bindings = [_dict(item.get("target_usd_binding")) for item in per_location]
+    missing_ref_count = sum(
+        int(binding.get("missing_referenced_asset_count") or 0) for binding in bindings
+    )
+    exact_public_id_count = sum(
+        1 for binding in bindings if binding.get("match_strategy") == "exact_public_id"
+    )
+    texture_name_match_count = 0
+    texture_path_basename_match_count = 0
+    texture_path_full_delta_count = 0
+    for item in per_location:
+        mujoco = _dict(item.get("mujoco_target_contract"))
+        isaac = _dict(item.get("isaac_target_contract"))
+        mujoco_names = {Path(str(value)).name for value in mujoco.get("texture_files") or []}
+        isaac_names = {Path(str(value)).name for value in isaac.get("texture_files") or []}
+        if mujoco_names or isaac_names:
+            texture_name_match_count += int(mujoco_names == isaac_names)
+        mujoco_paths = {str(value) for value in mujoco.get("texture_files") or []}
+        isaac_paths = {str(value) for value in isaac.get("texture_files") or []}
+        if mujoco_names and mujoco_names == isaac_names:
+            texture_path_basename_match_count += 1
+            if mujoco_paths != isaac_paths:
+                texture_path_full_delta_count += 1
+    high_priority_count = sum(
+        count
+        for name, count in delta_counts.items()
+        if name in {"material_or_texture_name_delta", "missing_object_binding_evidence"}
+    )
+    if high_priority_count or missing_ref_count:
+        status = "target_material_texture_or_binding_gap"
+    elif texture_path_full_delta_count:
+        status = "texture_basenames_match_paths_or_colorspace_unverified"
+    elif delta_counts.get("material_texture_names_match") == len(per_location):
+        status = "material_texture_names_match_no_render_gap"
+    else:
+        status = "material_texture_response_unverified"
+    return {
+        "check_id": "texture_colorspace_material_response",
+        "status": status,
+        "target_location_count": len(per_location),
+        "target_contract_delta_counts": delta_counts,
+        "exact_public_id_binding_count": exact_public_id_count,
+        "missing_referenced_asset_count": missing_ref_count,
+        "texture_name_match_count": texture_name_match_count,
+        "texture_path_basename_match_count": texture_path_basename_match_count,
+        "texture_path_full_delta_count": texture_path_full_delta_count,
+        "recommended_next_action": (
+            "For high-residual FPV views, compare texture color space, sampler behavior, "
+            "material albedo, and roughness/specular response even when texture basenames match."
+        ),
+    }
+
+
+def _usd_preview_surface_material_model_check(
+    per_location: list[dict[str, Any]],
+) -> dict[str, Any]:
+    isaac_binding_count = 0
+    preview_surface_binding_count = 0
+    diffuse_texture_binding_count = 0
+    mujoco_visual_count = 0
+    mujoco_rgba_visual_count = 0
+    for item in per_location:
+        isaac = _dict(item.get("isaac_target_contract"))
+        for binding in isaac.get("bindings") or []:
+            if not isinstance(binding, dict):
+                continue
+            isaac_binding_count += 1
+            preview_surface_binding_count += int(bool(binding.get("has_preview_surface")))
+            diffuse_texture_binding_count += int(bool(binding.get("has_diffuse_texture")))
+        mujoco = _dict(item.get("mujoco_target_contract"))
+        for visual in mujoco.get("visuals") or []:
+            if not isinstance(visual, dict):
+                continue
+            mujoco_visual_count += 1
+            mujoco_rgba_visual_count += int(bool(visual.get("rgba")))
+    if isaac_binding_count == 0 or mujoco_visual_count == 0:
+        status = "preview_surface_material_evidence_missing"
+    elif preview_surface_binding_count < isaac_binding_count:
+        status = "usd_preview_surface_binding_gap"
+    else:
+        status = "usd_preview_surface_vs_mujoco_material_model_delta"
+    return {
+        "check_id": "usd_preview_surface_material_model",
+        "status": status,
+        "isaac_material_binding_count": isaac_binding_count,
+        "isaac_preview_surface_binding_count": preview_surface_binding_count,
+        "isaac_diffuse_texture_binding_count": diffuse_texture_binding_count,
+        "mujoco_visual_count": mujoco_visual_count,
+        "mujoco_rgba_visual_count": mujoco_rgba_visual_count,
+        "recommended_next_action": (
+            "Inspect USD PreviewSurface diffuse texture/color, roughness, opacity, and "
+            "specular conversion against the MJCF material RGBA/texture inputs before "
+            "changing the camera contract."
+        ),
+    }
+
+
+def _tone_color_response_check(
+    locations: list[dict[str, Any]],
+    *,
+    isaac_state: dict[str, Any],
+) -> dict[str, Any]:
+    triage = _residual_triage(locations)
+    fpv = _dict_path(triage, ("views", "fpv"))
+    mean_abs = _float_or_none(fpv.get("mean_abs_rgb_avg"))
+    oracle_abs = _float_or_none(fpv.get("rgb_gain_oracle_mean_abs_rgb_avg"))
+    improvement_fraction = None
+    if mean_abs is not None and oracle_abs is not None and mean_abs > 0.0:
+        improvement_fraction = max(0.0, (mean_abs - oracle_abs) / mean_abs)
+    color_profile = _dict(isaac_state.get("robot_view_color_profile"))
+    color_override = _dict(isaac_state.get("robot_view_color_profile_override"))
+    rgb_gain = _dict(color_override.get("backend_rgb_gain")) or _dict(
+        color_profile.get("backend_rgb_gain")
+    )
+    comparison_gain_applied = bool(rgb_gain)
+    if mean_abs is None:
+        status = "tone_color_metrics_missing"
+    elif improvement_fraction is not None and improvement_fraction >= 0.1:
+        status = (
+            "tone_color_delta_remaining_after_comparison_gain"
+            if comparison_gain_applied
+            else "tone_color_delta_rgb_oracle"
+        )
+    elif mean_abs <= 35.0:
+        status = "tone_color_lower_priority"
+    else:
+        status = "tone_color_response_unverified"
+    return {
+        "check_id": "tone_color_response",
+        "status": status,
+        "fpv_mean_abs_rgb_avg": mean_abs,
+        "fpv_rgb_gain_oracle_mean_abs_rgb_avg": oracle_abs,
+        "rgb_gain_oracle_improvement_fraction": round(float(improvement_fraction), 6)
+        if improvement_fraction is not None
+        else None,
+        "comparison_rgb_gain_applied": comparison_gain_applied,
+        "comparison_rgb_gain": rgb_gain,
+        "comparison_only": True,
+        "residual_triage_status": triage.get("status"),
+        "recommended_next_action": (
+            "Keep RGB gain as comparison-only until it improves a broader post-FOV corpus; "
+            "use per-view oracle gain to separate color response from geometry/material residuals."
         ),
     }
 
