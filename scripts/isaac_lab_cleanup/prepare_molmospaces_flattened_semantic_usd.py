@@ -94,10 +94,6 @@ def prepare_flattened_semantic_usd(
     output_layer = Sdf.Layer.CreateNew(str(output_usd_path))
     output_layer.ImportFromString(flattened_layer.ExportToString())
     output_layer.Save()
-    material_conversion_summary = _apply_material_texture_scale_candidate(
-        output_usd_path=output_usd_path,
-        mode=material_texture_scale_mode,
-    )
     metadata_copied = _copy_metadata_next_to_output(
         scene_usd_path=scene_usd_path,
         output_usd_path=output_usd_path,
@@ -117,6 +113,10 @@ def prepare_flattened_semantic_usd(
         label_containers=label_containers,
     )
     flat_stage.GetRootLayer().Save()
+    material_conversion_summary = _apply_material_texture_scale_candidate(
+        output_usd_path=output_usd_path,
+        mode=material_texture_scale_mode,
+    )
 
     blockers = []
     if not entries:
