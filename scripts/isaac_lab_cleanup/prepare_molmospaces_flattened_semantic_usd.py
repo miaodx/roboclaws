@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "roboclaws_molmospaces_flattened_semantic_usd_v1"
+DEFAULT_RENDERING_PARITY_PRESET = "combined-material-light"
+COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG = 25.0
 LABEL_INSTANCES = ("class", "kind", "usd_prim_path")
 RENDERABLE_TYPE_NAMES = {"Mesh", "Cube", "Sphere", "Capsule", "Cone", "Cylinder"}
 MOLMOSPACES_RECEPTACLE_CATEGORY_NORMS = {
@@ -47,13 +49,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Also label the metadata root prims, not only renderable descendants.",
     )
     parser.add_argument(
+        "--rendering-parity-preset",
+        choices=("combined-material-light", "source-preserving"),
+        default=DEFAULT_RENDERING_PARITY_PRESET,
+        help=(
+            "Prepared-USD rendering preset. The default applies the validated "
+            "scale-square material conversion plus DistantLight rotateX=+25; "
+            "'source-preserving' keeps source USD material and light settings."
+        ),
+    )
+    parser.add_argument(
         "--material-texture-scale-mode",
         choices=("none", "identity", "square"),
-        default="none",
+        default=None,
         help=(
-            "Opt-in default-candidate material conversion for UsdUVTexture "
-            "scale/fallback inputs. The default 'none' preserves source USD material "
-            "response."
+            "Optional override for UsdUVTexture scale/fallback inputs. Omit this to use "
+            "the selected rendering parity preset."
         ),
     )
     return parser.parse_args(argv)
@@ -66,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         output_usd_path=args.output_usd_path,
         summary_output=args.summary_output,
         label_containers=args.label_containers,
+        rendering_parity_preset=args.rendering_parity_preset,
         material_texture_scale_mode=args.material_texture_scale_mode,
     )
     print(json.dumps(summary, sort_keys=True))
@@ -78,7 +90,8 @@ def prepare_flattened_semantic_usd(
     output_usd_path: Path,
     summary_output: Path | None = None,
     label_containers: bool = True,
-    material_texture_scale_mode: str = "none",
+    rendering_parity_preset: str = DEFAULT_RENDERING_PARITY_PRESET,
+    material_texture_scale_mode: str | None = None,
 ) -> dict[str, Any]:
     from pxr import Sdf, Usd, UsdGeom
 
@@ -113,9 +126,24 @@ def prepare_flattened_semantic_usd(
         label_containers=label_containers,
     )
     flat_stage.GetRootLayer().Save()
+    preset = _rendering_parity_preset(rendering_parity_preset)
+    effective_material_texture_scale_mode = (
+        material_texture_scale_mode
+        if material_texture_scale_mode is not None
+        else str(preset["material_texture_scale_mode"])
+    )
     material_conversion_summary = _apply_material_texture_scale_candidate(
         output_usd_path=output_usd_path,
-        mode=material_texture_scale_mode,
+        mode=effective_material_texture_scale_mode,
+    )
+    light_conversion_summary = _apply_distant_light_orientation_candidate(
+        output_usd_path=output_usd_path,
+        rotate_x=preset["distant_light_rotate_x"],
+    )
+    default_rendering_path_status = _default_rendering_path_status(
+        rendering_parity_preset=rendering_parity_preset,
+        material_conversion_summary=material_conversion_summary,
+        light_conversion_summary=light_conversion_summary,
     )
 
     blockers = []
@@ -141,13 +169,22 @@ def prepare_flattened_semantic_usd(
         "matched_entry_count": len(entries),
         "label_instances": list(LABEL_INSTANCES),
         "label_containers": bool(label_containers),
-        "material_texture_scale_mode": material_texture_scale_mode,
+        "rendering_parity_preset": rendering_parity_preset,
+        "material_texture_scale_mode": effective_material_texture_scale_mode,
         "material_texture_scale_rewrite_count": material_conversion_summary[
             "texture_scale_rewrite_count"
         ],
         "material_texture_scale_default_candidate": material_conversion_summary[
             "default_candidate"
         ],
+        "distant_light_rotate_x": light_conversion_summary["rotate_x"],
+        "distant_light_rotate_x_rewrite_count": light_conversion_summary["rewrite_count"],
+        "distant_light_rotate_x_insert_count": light_conversion_summary["insert_count"],
+        "distant_light_rotate_x_default_candidate": light_conversion_summary["default_candidate"],
+        "default_rendering_path_status": default_rendering_path_status,
+        "default_rendering_path_uses_combined_material_light": (
+            default_rendering_path_status == "default_rendering_path_uses_combined_material_light"
+        ),
         "scene_metadata_copied": metadata_copied,
         "blockers": blockers,
         **label_summary,
@@ -158,6 +195,20 @@ def prepare_flattened_semantic_usd(
             json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     return summary
+
+
+def _rendering_parity_preset(name: str) -> dict[str, str | float | None]:
+    if name == "combined-material-light":
+        return {
+            "material_texture_scale_mode": "square",
+            "distant_light_rotate_x": COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG,
+        }
+    if name == "source-preserving":
+        return {
+            "material_texture_scale_mode": "none",
+            "distant_light_rotate_x": None,
+        }
+    raise ValueError(f"unsupported rendering parity preset: {name}")
 
 
 def _apply_material_texture_scale_candidate(
@@ -182,6 +233,56 @@ def _apply_material_texture_scale_candidate(
     }
 
 
+def _apply_distant_light_orientation_candidate(
+    *,
+    output_usd_path: Path,
+    rotate_x: float | None,
+) -> dict[str, Any]:
+    if rotate_x is None:
+        return {
+            "rotate_x": None,
+            "rewrite_count": 0,
+            "insert_count": 0,
+            "default_candidate": False,
+        }
+    text = output_usd_path.read_text(encoding="utf-8", errors="ignore")
+    updated, rewrite_count, insert_count = _rewrite_distant_light_rotate_x(
+        text,
+        rotate_x=rotate_x,
+    )
+    if rewrite_count or insert_count:
+        output_usd_path.write_text(updated, encoding="utf-8")
+    return {
+        "rotate_x": rotate_x,
+        "rewrite_count": rewrite_count,
+        "insert_count": insert_count,
+        "default_candidate": True,
+    }
+
+
+def _default_rendering_path_status(
+    *,
+    rendering_parity_preset: str,
+    material_conversion_summary: dict[str, Any],
+    light_conversion_summary: dict[str, Any],
+) -> str:
+    if rendering_parity_preset == "source-preserving":
+        return "source_preserving_rendering_path"
+    material_ready = (
+        material_conversion_summary.get("mode") == "square"
+        and int(material_conversion_summary.get("texture_scale_rewrite_count") or 0) > 0
+    )
+    light_ready = light_conversion_summary.get(
+        "rotate_x"
+    ) == COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG and (
+        int(light_conversion_summary.get("rewrite_count") or 0) > 0
+        or int(light_conversion_summary.get("insert_count") or 0) > 0
+    )
+    if material_ready and light_ready:
+        return "default_rendering_path_uses_combined_material_light"
+    return "default_rendering_path_candidate_incomplete"
+
+
 def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
     def replacement(match: re.Match[str]) -> str:
         values = _parse_float_values(match.group(2))
@@ -202,6 +303,63 @@ def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
         replacement,
         text,
     )
+
+
+def _rewrite_distant_light_rotate_x(text: str, *, rotate_x: float) -> tuple[str, int, int]:
+    parts: list[str] = []
+    cursor = 0
+    rewrites = 0
+    inserts = 0
+    for match in re.finditer(r'(?m)^(\s*)def DistantLight "[^"]+"\s*\{\s*$', text):
+        block_start = match.start()
+        block_end = _balanced_block_end(text, match.end() - 1)
+        if block_end is None:
+            continue
+        block = text[block_start:block_end]
+        rewritten, count = re.subn(
+            r"float xformOp:rotateX = [^\s]+",
+            f"float xformOp:rotateX = {_format_float(rotate_x)}",
+            block,
+        )
+        rewrites += count
+        if count == 0:
+            rewritten = _insert_distant_light_rotate_x(rewritten, rotate_x=rotate_x)
+            inserts += int(rewritten != block)
+        parts.append(text[cursor:block_start])
+        parts.append(rewritten)
+        cursor = block_end
+    if not parts:
+        return text, 0, 0
+    parts.append(text[cursor:])
+    return "".join(parts), rewrites, inserts
+
+
+def _insert_distant_light_rotate_x(block: str, *, rotate_x: float) -> str:
+    close_index = block.rfind("}")
+    if close_index < 0:
+        return block
+    match = re.search(r'(?m)^(\s*)def DistantLight "', block)
+    indent = match.group(1) + "    " if match else "    "
+    insertion = (
+        f"{indent}float xformOp:rotateX = {_format_float(rotate_x)}\n"
+        f'{indent}uniform token[] xformOpOrder = ["xformOp:rotateX"]\n'
+    )
+    return block[:close_index] + insertion + block[close_index:]
+
+
+def _balanced_block_end(text: str, open_brace_index: int) -> int | None:
+    depth = 0
+    for index in range(open_brace_index, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                if index + 1 < len(text) and text[index + 1] == "\n":
+                    return index + 2
+                return index + 1
+    return None
 
 
 def _parse_float_values(raw: str) -> list[float]:

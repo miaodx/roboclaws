@@ -70,6 +70,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional scene-camera calibration manifest with render-domain calibration evidence.",
     )
     parser.add_argument(
+        "--prepared-usd-summary",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Optional prepared semantic USD summary.json proving which default rendering "
+            "preset the prepared-USD path uses. Repeat for a corpus."
+        ),
+    )
+    parser.add_argument(
         "--required-scene-count",
         type=int,
         default=3,
@@ -89,6 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         probe_specs=args.probe_manifest,
         raw_fpv_run_result_paths=args.raw_fpv_run_result,
         calibration_manifest_paths=args.calibration_manifest,
+        prepared_usd_summary_paths=args.prepared_usd_summary,
         required_scene_count=args.required_scene_count,
         required_seed_count=args.required_seed_count,
     )
@@ -105,6 +116,7 @@ def build_summary(
     probe_specs: list[str],
     raw_fpv_run_result_paths: list[Path] | None = None,
     calibration_manifest_paths: list[Path] | None = None,
+    prepared_usd_summary_paths: list[Path] | None = None,
     required_scene_count: int = 3,
     required_seed_count: int = 2,
 ) -> dict[str, Any]:
@@ -113,6 +125,9 @@ def build_summary(
     probes = [_probe_summary(spec) for spec in probe_specs]
     raw_fpv_runs = [_raw_fpv_summary(path) for path in raw_fpv_run_result_paths or []]
     calibration = _calibration_summary(calibration_manifest_paths or [])
+    prepared_usd_summaries = [
+        _prepared_usd_summary(path) for path in prepared_usd_summary_paths or []
+    ]
     render_domain_probe_matrix = _render_domain_probe_matrix_check(baselines, probes)
     checks = {
         "head_camera_contract": _head_camera_contract_check(baselines),
@@ -142,6 +157,7 @@ def build_summary(
         ),
         "raw_fpv_input_lane": _raw_fpv_input_lane_check(raw_fpv_runs),
         "calibration_scene": calibration,
+        "default_rendering_path": _default_rendering_path_check(prepared_usd_summaries),
     }
     status = _overall_status(checks)
     four_check_audit = _four_check_audit(checks)
@@ -945,6 +961,75 @@ def _raw_fpv_input_lane_check(raw_fpv_runs: list[dict[str, Any]]) -> dict[str, A
     }
 
 
+def _prepared_usd_summary(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {"status": "missing", "path": str(path)}
+    payload = _read_json(path)
+    return {
+        "status": payload.get("status"),
+        "path": str(path),
+        "source_scene_usd_path": payload.get("source_scene_usd_path"),
+        "output_usd_path": payload.get("output_usd_path"),
+        "rendering_parity_preset": payload.get("rendering_parity_preset"),
+        "material_texture_scale_mode": payload.get("material_texture_scale_mode"),
+        "material_texture_scale_rewrite_count": payload.get("material_texture_scale_rewrite_count"),
+        "distant_light_rotate_x": payload.get("distant_light_rotate_x"),
+        "distant_light_rotate_x_rewrite_count": payload.get("distant_light_rotate_x_rewrite_count"),
+        "distant_light_rotate_x_insert_count": payload.get("distant_light_rotate_x_insert_count"),
+        "default_rendering_path_status": payload.get("default_rendering_path_status"),
+        "default_rendering_path_uses_combined_material_light": payload.get(
+            "default_rendering_path_uses_combined_material_light"
+        ),
+    }
+
+
+def _default_rendering_path_check(prepared_usd_summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    loaded = [item for item in prepared_usd_summaries if item.get("status") in {"ready", "partial"}]
+    ready = [
+        item
+        for item in loaded
+        if item.get("default_rendering_path_status")
+        == "default_rendering_path_uses_combined_material_light"
+        and item.get("default_rendering_path_uses_combined_material_light") is True
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not prepared_usd_summaries:
+        blockers.append({"reason": "prepared_usd_summary_not_provided"})
+    missing = [item for item in prepared_usd_summaries if item.get("status") == "missing"]
+    if missing:
+        blockers.append(
+            {
+                "reason": "prepared_usd_summary_missing",
+                "paths": [item.get("path") for item in missing],
+            }
+        )
+    if len(ready) != len(loaded):
+        blockers.append(
+            {
+                "reason": "not_all_prepared_usd_paths_use_combined_material_light",
+                "loaded_count": len(loaded),
+                "ready_count": len(ready),
+            }
+        )
+    status = (
+        "default_rendering_path_uses_combined_material_light"
+        if loaded and len(ready) == len(loaded) and not blockers
+        else "default_rendering_path_not_proven"
+    )
+    return {
+        "status": status,
+        "summary_count": len(prepared_usd_summaries),
+        "loaded_count": len(loaded),
+        "ready_count": len(ready),
+        "blockers": blockers,
+        "summaries": prepared_usd_summaries,
+        "interpretation": (
+            "This check proves whether the prepared semantic USD path uses the validated "
+            "combined material scale-square plus DistantLight rotateX=+25 rendering preset."
+        ),
+    }
+
+
 def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, Any]:
     default_source = str(
         DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_luminance_gain_source") or ""
@@ -1421,6 +1506,13 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
         )
     prepared_gate = checks.get("prepared_scale_square_default_gate", {})
     combined_gate = checks.get("combined_material_light_default_gate", {})
+    default_rendering = _default_rendering_visual_parity(checks)
+    if default_rendering.get("status") == "default_rendering_visual_parity_ready":
+        return (
+            "Default-rendering visual parity is ready through the combined scale-square "
+            "material conversion plus DistantLight rotateX=+25 prepared-USD path. Keep "
+            "the head-camera contract frozen and broaden monitoring on future scenes."
+        )
     view_tone_gate = checks.get("view_specific_prepared_scale_square_tone_gate", {})
     if combined_gate.get("status") == "combined_material_light_default_ready":
         return (

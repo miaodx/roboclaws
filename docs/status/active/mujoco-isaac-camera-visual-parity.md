@@ -688,36 +688,33 @@ chase under prepared scale-square. A view-specific tone profile can satisfy the
 current FPV and auxiliary chase tolerance across the current three-slice corpus,
 and the summary now encodes that as
 `view_specific_prepared_scale_square_tone_gate.status=view_specific_report_comparison_gate_ready`.
-It remains report-side comparison-only by design. The next useful slice is a
-default-rendering decision: resolve the remaining material/texture render
-residuals and calibration gates before changing Isaac/MuJoCo default cleanup
-rendering.
+It remains report-side comparison-only by design and is no longer needed for
+the default-rendering claim now that the combined material+light path is wired.
 
 The summary now exposes that boundary directly as
 `report_side_visual_parity.status=report_side_visual_parity_ready` with
 `ready=true`, `policy_scope=report_side_comparison_only`,
-`default_rendering_candidate=false`, and no blockers. The top-level summary
-remains `active` until the default prepared-USD rendering path is actually
-promoted or reviewed. In short: the report-side comparison can be read as
-aligned under the formal view-specific tone gate, and the combined material plus
-directional-light candidate now clears the four-check evidence gate, but cleanup
-defaults have not yet been rewired to that candidate.
+`default_rendering_candidate=false`, and no blockers. The top-level summary is
+now `passed`: report-side evidence is aligned, and default-rendering parity is
+ready through the combined material plus directional-light prepared-USD path.
 
 Default-rendering parity now has its own machine layer:
-`default_rendering_visual_parity.status=default_rendering_promotion_candidate_ready`,
-with `promotion_candidate_ready=true`, `ready=false`, and
-`promotion_path=combined_material_light_default_gate`. The current blocker is
-`default_rendering_path_not_promoted`: the evidence candidate is ready, but the
-default prepared-USD rendering path has not yet been wired or proven to use
-`scale_square + DistantLight rotateX=+25`. The calibration gate is no longer
-the active default blocker: it has one default-rendering candidate at
+`default_rendering_visual_parity.status=default_rendering_visual_parity_ready`,
+with `promotion_candidate_ready=true`, `ready=true`, and
+`promotion_path=combined_material_light_default_gate`. The
+`default_rendering_path` check now passes from a real prepared-USD summary:
+`output/isaaclab/flattened-semantic-usd/val_1_combined_material_light_default_path/summary.json`
+reports `rendering_parity_preset=combined-material-light`,
+`material_texture_scale_mode=square`,
+`material_texture_scale_rewrite_count=106`, `distant_light_rotate_x=25.0`, and
+`default_rendering_path_status=default_rendering_path_uses_combined_material_light`.
+The calibration gate is no longer the active default blocker: it has one
+default-rendering candidate at
 `output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p25_calibration/0603_0022/comparison_manifest.json`
 with residual `7.4522` and
 `render_domain_calibration_status=global_luminance_gain_sufficient`. The older
 baseline, scale-square-only, no-dome, no-shadow, `rotateX=-35`, `rotateX=+15`,
-and `rotateX=+5` calibration probes remain non-default history. The refreshed
-recommendation now points at wiring or reviewing the default prepared-USD
-rendering path before claiming cleanup defaults changed.
+and `rotateX=+5` calibration probes remain non-default history.
 
 The combined material+light robot-camera evidence is now tracked explicitly
 instead of only living in report notes. The first probe was
@@ -734,9 +731,12 @@ prepared scale-square `29.4783` / `71.2846` to `26.5081` / `71.5982`. The
 summary now records
 `combined_material_light_default_gate.status=combined_material_light_default_ready`
 with 3 comparable probes, 3 scene signatures, 2 seeds, all FPV-improved, and no
-chase regression above the 1.0 tolerance. This clears the evidence gate for the
-combined candidate, but it is still not a claim that cleanup defaults changed
-until `default_rendering_path` proves the prepared-USD path uses it.
+chase regression above the 1.0 tolerance. A final real robot-camera comparison
+using the default prepared path at
+`output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_default_combined_material_light_path/report.html`
+matches the probe behavior: FPV/chase are `26.5103` / `71.5521`, with
+`fpv_lens_aligned` and `fpv_world_pose_aligned`, versus the earlier rotx25
+probe `26.5081` / `71.5982`.
 
 ## Touched Areas
 
