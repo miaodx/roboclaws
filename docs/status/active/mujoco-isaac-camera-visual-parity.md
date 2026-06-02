@@ -213,6 +213,52 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   RGB-only probe (`34.5577`). Treat this as evidence that the global RGB/tone
   layer is the useful part of that combination; the pillow texture injection
   still should not become a default.
+- A comparison-only light/shadow USD variant generator now exists at
+  `scripts/isaac_lab_cleanup/make_molmospaces_light_shadow_probe_usd.py`, matching
+  the material-probe pattern: it copies the prepared USD, writes a summary, and
+  leaves default cleanup rendering unchanged. The `val_1` fair bound-target slice
+  now has direct light/shadow probes instead of relying only on `val_0` history:
+  `output/isaaclab/flattened-semantic-usd/val_1_no_dome_only/summary.json`
+  removes 1 DomeLight, and
+  `output/isaaclab/flattened-semantic-usd/val_1_no_shadow_only/summary.json`
+  rewrites 18 `primvars:doNotCastShadows` flags.
+- The corresponding `val_1` fair bound-target reports preserve
+  `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera contract:
+  no-dome-only
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_no_dome_only_probe/report.html`
+  changes FPV from `36.5655` to `35.8084` (`-0.7571`) but worsens chase from
+  `72.2838` to `80.4852`; no-shadow-only
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_no_shadow_only_probe/report.html`
+  changes FPV to `36.1211` (`-0.4444`) with chase effectively neutral
+  (`72.3379`). The refreshed fair bound baseline records both under
+  `light_shadow_contract.probe_history.status=prior_probes_no_fpv_gain` with
+  `comparable_probe_count=2`, `improved_probe_count=0`, and
+  `worsened_probe_count=0`. Do not promote simple DomeLight removal or shadow
+  enabling as defaults from this evidence.
+- A light/tone interaction probe also ran at
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_no_dome_rgb_gain_probe/report.html`.
+  It uses the same `val_0` RGB gain profile on the no-dome USD and produces FPV
+  `36.0175`, far worse than RGB-only `34.5577`, while chase worsens to
+  `82.9606`. This keeps the useful signal attributed to RGB/tone calibration,
+  not to light-count matching or no-dome-plus-RGB interaction.
+- A reproducible comparison-only RGB-gain profile builder now exists at
+  `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`. It reads an
+  apple-to-apple manifest, fits a global least-squares RGB gain from FPV image
+  pairs, and writes a color-profile override for probe runs only. On the fair
+  `val_1` bound-target baseline it writes
+  `output/molmo/robot-camera-apple2apple/profiles/0602_val1_seed6_2mess_bound_global_fpv_rgb_gain.json`
+  with `backend_rgb_gain.isaaclab_subprocess=[0.972399,0.876524,0.869175]`
+  from 6 FPV pairs.
+- The corresponding `val_1` self-fit RGB probe ran at
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_val1_self_rgb_gain_probe/report.html`.
+  It preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the
+  head-camera contract, and lowers FPV from `36.5655` to `34.5828`
+  (`-1.9827`). That is effectively tied with, but slightly worse than, the
+  cross-scene `val_0` RGB profile result `34.5577` (`-2.0078`); chase is less
+  degraded with the `val_1` self-fit profile (`72.8632` vs `73.3777`). This
+  strengthens RGB/tone as a robust comparison-only direction, but it does not
+  prove a default renderer calibration because the profile was fit and evaluated
+  on the same 6-view slice.
 - A real Isaac `camera-raw` / RAW_FPV direct cleanup probe now covers the
   agent-input lane that the render-only apple2apple report does not exercise:
   `output/isaaclab/cleanup-smoke/0602_val1_seed6_2mess_camera_raw_direct_probe_visibilityfix/report.html`.
@@ -251,6 +297,132 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `val_0`/seed-6 FPV least-squares fit. This is evidence that tone/color
   response is a real direction, but it is not yet broad enough for a default
   cleanup rendering calibration.
+- A read-only visual-parity summary gate now exists at
+  `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`. It folds the
+  current post-FOV baselines, RGB/tone probes, light/material probes, and the
+  RAW_FPV cleanup run into
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`.
+  The current summary status is `active`, not complete: head-camera geometry is
+  aligned, RAW_FPV agent input uses the head camera, RGB/tone is positive but
+  still comparison-only, light/material probes are neutral/do-not-promote, corpus
+  coverage is only 2 scene signatures / 1 seed, and a root-visible calibration
+  artifact is required before any RGB/luminance gain can become default cleanup
+  rendering behavior.
+- The root-visible calibration-scene report now exists at
+  `output/molmo/scene-camera-comparison/0602_val0_scene_refs_calibration/report.html`.
+  Refreshing the visual-parity summary with that manifest changes
+  `calibration_scene.status` to `calibration_scene_evidence_loaded`. Its
+  calibration result is `view_dependent_render_domain_delta` with global Isaac
+  luminance gain about `1.06`, mean calibrated luminance residual about `14.84`,
+  and only about `5.7%` luminance-delta improvement. This is stronger evidence
+  that the remaining visual gap is per-room light/material/tone response rather
+  than camera geometry or one global brightness scale.
+- A held-out seed slice now covers `val_1`, seed `8`, 2 mess objects, and 4
+  bound targets:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_baseline/report.html`.
+  It preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the
+  head-camera contract, with FPV `37.2184`. Applying the existing `val_0`
+  RGB-gain profile in
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_val0_rgb_gain_probe/report.html`
+  lowers FPV to `35.5147` (`-1.7037`) while chase improves slightly from
+  `71.7464` to `71.0975`. Refreshing the visual-parity summary with this seed
+  slice makes the corpus foundation pass (`3` scene signatures, `2` seeds, `18`
+  successful locations), but the overall summary stays `active` because
+  render-domain residuals remain and RGB/tone is still comparison-only.
+- A comparison-only `sourceColorSpace=sRGB` material probe now covers the same
+  held-out seed-8 slice. The prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_1_material_srgb_only/scene_semantic.usda`
+  rewrites 53 texture sourceColorSpace tokens and leaves default rendering
+  unchanged. The corresponding report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_material_srgb_probe/report.html`
+  preserves the head-camera contract but does not improve FPV: baseline
+  `37.2184`, sRGB probe `37.3884` (`+0.1700`). The refreshed summary now records
+  this under material probes as neutral/do-not-promote, alongside pillow texture,
+  roughness-only, and target-specific LightWood roughness probes.
+- A target-specific texture scale/fallback probe now explains the user-flagged
+  `0008` dining-table residual much better than camera or roughness changes.
+  The generator supports comparison-only `--texture-scale-mode square`, and the
+  prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_0_scene_refs_fix_0008_lightwood_scale_square/scene_semantic.usda`
+  rewrites only the two `UsdUVTexture` scale/fallback inputs for
+  `/val_0/Geometry/diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2/Materials/material_LightWoodCounters3`.
+  The corresponding report
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_0008_lightwood_scale_square_probe/report.html`
+  preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera
+  contract while lowering overall FPV from `38.0980` to `35.8577` (`-2.2403`).
+  The `0008` target itself drops from `45.4961` to `27.6042`, changes from
+  `view_dependent_color_residual` to `low_residual`, and lowers Isaac FPV
+  luminance from `131.0136` to `112.1958` against MuJoCo `88.0260`. This is the
+  strongest target-specific material evidence so far that Isaac/MuJoCo visual
+  mismatch includes USD texture scale/fallback versus MJCF RGBA/texture
+  modulation response, not a camera-angle problem.
+- A global comparison-only texture scale/fallback probe now strengthens that
+  root-cause direction. The `val_0` prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_0_scene_refs_fix_material_scale_square/scene_semantic.usda`
+  rewrites 358 `UsdUVTexture` scale/fallback inputs, and the corresponding
+  report
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_material_scale_square_probe/report.html`
+  preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera
+  contract while lowering overall FPV from `38.0980` to `32.5266` (`-5.5714`).
+  Per-target FPV improves on 7/8 locations, including `0008` from `45.4961` to
+  `22.6553`, `0002` bed from `48.5167` to `36.2543`, and `0006` desk from
+  `36.0030` to `30.6165`; countertop `0004` is the only small regression
+  (`17.3423` to `18.4671`). Chase is effectively unchanged overall
+  (`83.7516` to `83.7645`), which keeps chase auxiliary and prevents using it
+  as the policy metric.
+- A held-out `val_1`, seed-6, 2-mess, fair bound-target scale-square probe now
+  covers the same conversion direction outside the original `val_0` slice. The
+  prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_1_material_scale_square/scene_semantic.usda`
+  rewrites 106 texture scale/fallback inputs. The report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_material_scale_square_probe/report.html`
+  preserves the head-camera contract and lowers FPV from `36.5655` to
+  `29.4056` (`-7.1599`), with all 6 bound targets non-worse or better. The
+  largest FPV drops are bed `0001` from `47.4883` to `31.2545`, pillow `0006`
+  from `42.0106` to `34.3779`, and dining table `0003` from `46.1260` to
+  `37.5900`. Chase worsens from `72.2838` to `75.1952`, so this remains an
+  FPV-only comparison probe, not a default visual policy.
+- The same `val_1` scale-square USD now also covers the held-out seed-8
+  4-location bound-target slice. The report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_material_scale_square_probe/report.html`
+  preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera
+  contract while lowering FPV from `37.2184` to `29.5022` (`-7.7162`) and chase
+  from `71.7464` to `71.2868` (`-0.4596`). Per-target FPV is non-worse or
+  better across all 4 bound targets: bed `0001` drops from `47.5110` to
+  `31.2138`, bed `0002` from `28.7929` to `22.7825`, dining table `0003` from
+  `46.1325` to `37.5748`, and sink `0004` is effectively flat (`26.4371` to
+  `26.4375`). This makes scale/fallback squaring the first material-response
+  probe with positive FPV evidence across `val_0`, `val_1` seed-6, and
+  `val_1` seed-8.
+- The refreshed visual-parity summary at
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
+  now records `val0_global_scale_square` (`fpv_delta=-5.5714`),
+  `val1_scale_square` (`fpv_delta=-7.1599`), and
+  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) under
+  `material_response=has_fpv_gain_comparison_only`. The overall gate remains
+  `active`: head-camera geometry, RAW_FPV input, corpus coverage, and
+  calibration evidence are loaded, but render-domain residuals remain and RGB /
+  material-response edits are still comparison-only.
+- The prepared flattened semantic USD pipeline now has an explicit default-off
+  material conversion gate:
+  `scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py`
+  accepts `--material-texture-scale-mode none|identity|square`, with `none` as
+  the default. The summary records `material_texture_scale_mode`,
+  `material_texture_scale_rewrite_count`, and
+  `material_texture_scale_default_candidate`. Focused tests prove the default
+  leaves `UsdUVTexture` scale/fallback inputs unchanged, while explicit
+  `square` rewrites those inputs and labels the output as a default-candidate
+  artifact. This makes future validation reproducible through the prepared-USD
+  path without changing default cleanup rendering.
+- A real `val_1` prepared-USD smoke of that new gate passed under the Isaac/USD
+  Python environment:
+  `output/isaaclab/flattened-semantic-usd/val_1_material_scale_square_prepared_gate/summary.json`
+  reports `status=ready`, `material_texture_scale_mode=square`,
+  `material_texture_scale_rewrite_count=106`,
+  `material_texture_scale_default_candidate=true`, `matched_entry_count=40`,
+  and `renderable_labeled_prim_count=817`. The rewrite count matches the prior
+  ad hoc `val_1_material_scale_square` probe, so the maintained prepared-USD
+  gate is ready for the next apple-to-apple validation run.
 
 ## Next Action
 
@@ -264,12 +436,24 @@ RGB-gain probe does not beat RGB-only, so texture-binding cleanup is lower
 priority than tone/light/material-response work. The next highest-value
 render-domain slice is the high-residual exact-bound bed/table/pillow material
 response on the fair `val_1` bound-target report, plus RGB/tone interaction on
-that same fair target set. For light/shadow specifically, do not retry simple
-dome removal, shadow enabling, or the old combined MuJoCo-like light/shadow USD
-edit; split light count, shadow flags, intensity/direction, and material
-response only in a comparison-only probe. Keep RAW_FPV and world-labels as
-separate evidence lanes: world-labels uses images as report evidence only, while
-camera-raw uses the head-camera FPV images as agent input.
+that same fair target set. For light/shadow specifically, `val_1` now also says
+simple dome removal and shadow enabling are neutral/small and no-dome-plus-RGB is
+worse than RGB-only; do not retry simple dome removal, shadow enabling, or the
+old combined MuJoCo-like light/shadow USD edit. If light/shadow remains the next
+slice, make it a comparison-only intensity/direction probe with a clear FPV
+threshold. Keep RAW_FPV and world-labels as separate evidence lanes:
+world-labels uses images as report evidence only, while camera-raw uses the
+head-camera FPV images as agent input.
+The next proof-backed step is not more camera work. Keep the calibration report
+attached to the summary gate; do not promote any RGB/luminance gain to default
+rendering while the calibration result remains view-dependent. Texture
+scale/fallback squaring is now the strongest material-response direction, with
+positive FPV evidence on `val_0`, held-out `val_1` seed-6, and held-out
+`val_1` seed-8 bound targets, but it is still comparison-only because chase can
+worsen on seed-6 and render-domain residuals remain. The next useful slice is
+to run the new prepared-USD `--material-texture-scale-mode square` artifact
+through one apple-to-apple scene or target corpus, then compare it against the
+ad hoc probe artifacts before promoting it to default cleanup rendering.
 
 ## Touched Areas
 
@@ -277,10 +461,18 @@ camera-raw uses the head-camera FPV images as agent input.
 - `tests/unit/molmo_cleanup/test_molmospaces_usd_reference_installer.py`
 - `scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py`
 - `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`
+- `scripts/isaac_lab_cleanup/make_molmospaces_light_shadow_probe_usd.py`
+- `scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+- `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+- `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
 - `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `tests/unit/molmo_cleanup/test_molmospaces_light_shadow_probe_usd.py`
+- `tests/unit/molmo_cleanup/test_prepare_molmospaces_flattened_semantic_usd.py`
+- `tests/unit/molmo_cleanup/test_robot_camera_rgb_gain_profile.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+- `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py`
 - Generated evidence under `output/isaaclab/` and
   `output/molmo/robot-camera-apple2apple/`

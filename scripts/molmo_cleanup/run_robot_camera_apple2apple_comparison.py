@@ -1669,7 +1669,14 @@ def _usd_preview_surface_material_model_check(
         status = "usd_preview_surface_binding_gap"
     else:
         status = "usd_preview_surface_vs_mujoco_material_model_delta"
-    if probe_history.get("worsened_probe_count") and probe_history.get("neutral_probe_count"):
+    if probe_history.get("improved_probe_count"):
+        next_action = (
+            "A material-response probe improved FPV under the frozen head-camera "
+            "contract, but keep it comparison-only until the same material conversion "
+            "direction is validated across more targets, scenes, and seeds. Do not "
+            "promote broad raw/colorspace or roughness edits from mixed probe history."
+        )
+    elif probe_history.get("worsened_probe_count") and probe_history.get("neutral_probe_count"):
         next_action = (
             "Do not promote global material-response edits yet: prior raw/colorspace or "
             "combined probes worsened FPV, while roughness-only evidence is below the "

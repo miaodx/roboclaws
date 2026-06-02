@@ -45,6 +45,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "UsdUVTexture shader using this texture file. Requires --material-path-contains."
         ),
     )
+    parser.add_argument(
+        "--texture-scale-mode",
+        choices=("identity", "square"),
+        help=(
+            "Comparison-only probe for UsdUVTexture scale/fallback response. "
+            "'identity' rewrites texture scale/fallback to ones; 'square' applies the "
+            "existing RGB scale a second time while preserving alpha."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -58,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         source_color_space=args.source_color_space,
         roughness=args.roughness,
         diffuse_texture_file=args.diffuse_texture_file,
+        texture_scale_mode=args.texture_scale_mode,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0 if summary["status"] in {"ready", "no_changes"} else 2
@@ -72,6 +82,7 @@ def make_material_response_probe_usd(
     source_color_space: str | None = None,
     roughness: float | None = None,
     diffuse_texture_file: Path | None = None,
+    texture_scale_mode: str | None = None,
 ) -> dict[str, Any]:
     if not scene_usd_path.is_file():
         raise FileNotFoundError(scene_usd_path)
@@ -88,6 +99,7 @@ def make_material_response_probe_usd(
             source_color_space_rewrite_count,
             roughness_rewrite_count,
             diffuse_texture_injection_count,
+            texture_scale_rewrite_count,
             matched_material_block_count,
         ) = _rewrite_matching_material_blocks(
             text,
@@ -95,6 +107,7 @@ def make_material_response_probe_usd(
             source_color_space=source_color_space,
             roughness=roughness,
             diffuse_texture_file=diffuse_texture_file,
+            texture_scale_mode=texture_scale_mode,
         )
     else:
         matched_material_block_count = None
@@ -102,6 +115,7 @@ def make_material_response_probe_usd(
         source_color_space_rewrite_count = 0
         roughness_rewrite_count = 0
         diffuse_texture_injection_count = 0
+        texture_scale_rewrite_count = 0
         if source_color_space is not None:
             updated, source_color_space_rewrite_count = re.subn(
                 r'token inputs:sourceColorSpace = "[^"]+"',
@@ -114,6 +128,11 @@ def make_material_response_probe_usd(
                 f"float inputs:roughness = {_format_float(roughness)}",
                 updated,
             )
+        if texture_scale_mode is not None:
+            updated, texture_scale_rewrite_count = _rewrite_texture_scale_inputs(
+                updated,
+                mode=texture_scale_mode,
+            )
     output_usd_path.parent.mkdir(parents=True, exist_ok=True)
     output_usd_path.write_text(updated, encoding="utf-8")
     metadata_copied = _copy_metadata_next_to_output(
@@ -121,7 +140,10 @@ def make_material_response_probe_usd(
         output_usd_path=output_usd_path,
     )
     total_rewrite_count = (
-        source_color_space_rewrite_count + roughness_rewrite_count + diffuse_texture_injection_count
+        source_color_space_rewrite_count
+        + roughness_rewrite_count
+        + diffuse_texture_injection_count
+        + texture_scale_rewrite_count
     )
     status = "ready" if total_rewrite_count else "no_changes"
     summary = {
@@ -135,11 +157,13 @@ def make_material_response_probe_usd(
             "source_color_space": source_color_space,
             "roughness": roughness,
             "diffuse_texture_file": str(diffuse_texture_file) if diffuse_texture_file else None,
+            "texture_scale_mode": texture_scale_mode,
         },
         "matched_material_block_count": matched_material_block_count,
         "source_color_space_rewrite_count": source_color_space_rewrite_count,
         "roughness_rewrite_count": roughness_rewrite_count,
         "diffuse_texture_injection_count": diffuse_texture_injection_count,
+        "texture_scale_rewrite_count": texture_scale_rewrite_count,
         "total_rewrite_count": total_rewrite_count,
         "scene_metadata_copied": metadata_copied,
     }
@@ -159,12 +183,14 @@ def _rewrite_matching_material_blocks(
     source_color_space: str | None,
     roughness: float | None,
     diffuse_texture_file: Path | None,
-) -> tuple[str, int, int, int, int]:
+    texture_scale_mode: str | None,
+) -> tuple[str, int, int, int, int, int]:
     parts: list[str] = []
     cursor = 0
     source_color_space_rewrite_count = 0
     roughness_rewrite_count = 0
     diffuse_texture_injection_count = 0
+    texture_scale_rewrite_count = 0
     matched_material_block_count = 0
     for match in re.finditer(r'(?m)^(\s*)def Material "[^"]+"\s*\{\s*$', text):
         block_start = match.start()
@@ -196,18 +222,47 @@ def _rewrite_matching_material_blocks(
                 texture_file=diffuse_texture_file,
             )
             diffuse_texture_injection_count += count
+        if texture_scale_mode is not None:
+            rewritten, count = _rewrite_texture_scale_inputs(
+                rewritten,
+                mode=texture_scale_mode,
+            )
+            texture_scale_rewrite_count += count
         parts.append(text[cursor:block_start])
         parts.append(rewritten)
         cursor = block_end
     if not parts:
-        return text, 0, 0, 0, 0
+        return text, 0, 0, 0, 0, 0
     parts.append(text[cursor:])
     return (
         "".join(parts),
         source_color_space_rewrite_count,
         roughness_rewrite_count,
         diffuse_texture_injection_count,
+        texture_scale_rewrite_count,
         matched_material_block_count,
+    )
+
+
+def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
+    def replacement(match: re.Match[str]) -> str:
+        values = _parse_float_values(match.group(2))
+        if not values:
+            return match.group(0)
+        if mode == "identity":
+            rewritten = [1.0 for _ in values]
+        elif mode == "square":
+            rewritten = [value * value for value in values]
+            if len(rewritten) >= 4:
+                rewritten[3] = values[3]
+        else:
+            raise ValueError(f"unsupported texture scale mode: {mode}")
+        return f"{match.group(1)}({_format_float_list(rewritten)})"
+
+    return re.subn(
+        r"(float[234]? inputs:(?:scale|fallback) = )\(([^)]+)\)",
+        replacement,
+        text,
     )
 
 
@@ -304,6 +359,22 @@ def _copy_metadata_next_to_output(*, scene_usd_path: Path, output_usd_path: Path
 
 def _format_float(value: float) -> str:
     return f"{value:.6g}"
+
+
+def _format_float_list(values: list[float]) -> str:
+    return ", ".join(_format_float(value) for value in values)
+
+
+def _parse_float_values(text: str) -> list[float]:
+    values: list[float] = []
+    for raw in re.split(r"[\s,]+", text.strip()):
+        if not raw:
+            continue
+        try:
+            values.append(float(raw))
+        except ValueError:
+            return []
+    return values
 
 
 if __name__ == "__main__":

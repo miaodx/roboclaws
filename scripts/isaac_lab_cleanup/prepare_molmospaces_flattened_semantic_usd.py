@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=True,
         help="Also label the metadata root prims, not only renderable descendants.",
     )
+    parser.add_argument(
+        "--material-texture-scale-mode",
+        choices=("none", "identity", "square"),
+        default="none",
+        help=(
+            "Opt-in default-candidate material conversion for UsdUVTexture "
+            "scale/fallback inputs. The default 'none' preserves source USD material "
+            "response."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -55,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
         output_usd_path=args.output_usd_path,
         summary_output=args.summary_output,
         label_containers=args.label_containers,
+        material_texture_scale_mode=args.material_texture_scale_mode,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0 if summary["status"] in {"ready", "partial"} else 2
@@ -66,6 +78,7 @@ def prepare_flattened_semantic_usd(
     output_usd_path: Path,
     summary_output: Path | None = None,
     label_containers: bool = True,
+    material_texture_scale_mode: str = "none",
 ) -> dict[str, Any]:
     from pxr import Sdf, Usd, UsdGeom
 
@@ -81,6 +94,10 @@ def prepare_flattened_semantic_usd(
     output_layer = Sdf.Layer.CreateNew(str(output_usd_path))
     output_layer.ImportFromString(flattened_layer.ExportToString())
     output_layer.Save()
+    material_conversion_summary = _apply_material_texture_scale_candidate(
+        output_usd_path=output_usd_path,
+        mode=material_texture_scale_mode,
+    )
     metadata_copied = _copy_metadata_next_to_output(
         scene_usd_path=scene_usd_path,
         output_usd_path=output_usd_path,
@@ -124,6 +141,13 @@ def prepare_flattened_semantic_usd(
         "matched_entry_count": len(entries),
         "label_instances": list(LABEL_INSTANCES),
         "label_containers": bool(label_containers),
+        "material_texture_scale_mode": material_texture_scale_mode,
+        "material_texture_scale_rewrite_count": material_conversion_summary[
+            "texture_scale_rewrite_count"
+        ],
+        "material_texture_scale_default_candidate": material_conversion_summary[
+            "default_candidate"
+        ],
         "scene_metadata_copied": metadata_copied,
         "blockers": blockers,
         **label_summary,
@@ -134,6 +158,69 @@ def prepare_flattened_semantic_usd(
             json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     return summary
+
+
+def _apply_material_texture_scale_candidate(
+    *,
+    output_usd_path: Path,
+    mode: str,
+) -> dict[str, Any]:
+    if mode == "none":
+        return {
+            "mode": mode,
+            "texture_scale_rewrite_count": 0,
+            "default_candidate": False,
+        }
+    text = output_usd_path.read_text(encoding="utf-8", errors="ignore")
+    updated, rewrite_count = _rewrite_texture_scale_inputs(text, mode=mode)
+    if rewrite_count:
+        output_usd_path.write_text(updated, encoding="utf-8")
+    return {
+        "mode": mode,
+        "texture_scale_rewrite_count": rewrite_count,
+        "default_candidate": True,
+    }
+
+
+def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
+    def replacement(match: re.Match[str]) -> str:
+        values = _parse_float_values(match.group(2))
+        if not values:
+            return match.group(0)
+        if mode == "identity":
+            rewritten = [1.0 for _ in values]
+        elif mode == "square":
+            rewritten = [value * value for value in values]
+            if len(rewritten) >= 4:
+                rewritten[3] = values[3]
+        else:
+            raise ValueError(f"unsupported material texture scale mode: {mode}")
+        return f"{match.group(1)}({_format_float_list(rewritten)})"
+
+    return re.subn(
+        r"(float[234]? inputs:(?:scale|fallback) = )\(([^)]+)\)",
+        replacement,
+        text,
+    )
+
+
+def _parse_float_values(raw: str) -> list[float]:
+    values: list[float] = []
+    for part in raw.split(","):
+        try:
+            values.append(float(part.strip()))
+        except ValueError:
+            return []
+    return values
+
+
+def _format_float_list(values: list[float]) -> str:
+    return ", ".join(_format_float(value) for value in values)
+
+
+def _format_float(value: float) -> str:
+    formatted = f"{value:.6g}"
+    return "0" if formatted == "-0" else formatted
 
 
 def _load_molmospaces_scene_metadata(scene_usd_path: Path) -> dict[str, dict[str, Any]]:

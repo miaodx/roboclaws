@@ -126,6 +126,57 @@ def test_prepare_flattened_semantic_usd_flattens_referenced_scene_asset(
     assert _labels(composed_mesh, "class") == ["Bowl"]
 
 
+def test_prepare_flattened_semantic_usd_material_scale_candidate_is_opt_in(
+    tmp_path: Path,
+) -> None:
+    scene_dir = tmp_path / "val_1"
+    scene_dir.mkdir()
+    scene_usd = scene_dir / "scene.usda"
+    output_usd = tmp_path / "flattened" / "scene_semantic.usda"
+    _write_scene_with_texture_scale(scene_usd)
+    (scene_dir / "scene_metadata.json").write_text(
+        json.dumps(
+            {
+                "objects": {
+                    "table_01": {
+                        "asset_id": "Table_1",
+                        "object_id": "Table|1",
+                        "category": "DiningTable",
+                        "is_static": True,
+                        "children": [],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    default_summary = prepare_flattened_semantic_usd(
+        scene_usd_path=scene_usd,
+        output_usd_path=output_usd,
+    )
+
+    default_text = output_usd.read_text(encoding="utf-8")
+    assert default_summary["material_texture_scale_mode"] == "none"
+    assert default_summary["material_texture_scale_rewrite_count"] == 0
+    assert default_summary["material_texture_scale_default_candidate"] is False
+    assert "float4 inputs:fallback = (0.5, 0.25, 0.1, 1)" in default_text
+    assert "float4 inputs:scale = (0.5, 0.25, 0.1, 1)" in default_text
+
+    square_summary = prepare_flattened_semantic_usd(
+        scene_usd_path=scene_usd,
+        output_usd_path=output_usd,
+        material_texture_scale_mode="square",
+    )
+
+    square_text = output_usd.read_text(encoding="utf-8")
+    assert square_summary["material_texture_scale_mode"] == "square"
+    assert square_summary["material_texture_scale_rewrite_count"] == 2
+    assert square_summary["material_texture_scale_default_candidate"] is True
+    assert "float4 inputs:fallback = (0.25, 0.0625, 0.01, 1)" in square_text
+    assert "float4 inputs:scale = (0.25, 0.0625, 0.01, 1)" in square_text
+
+
 def _write_scene(path: Path) -> None:
     stage = Usd.Stage.CreateNew(str(path))
     stage.SetDefaultPrim(UsdGeom.Xform.Define(stage, "/val_1").GetPrim())
@@ -138,6 +189,38 @@ def _write_scene(path: Path) -> None:
     assert bowl.GetPrim().IsValid()
     assert sink.GetPrim().IsValid()
     stage.GetRootLayer().Save()
+
+
+def _write_scene_with_texture_scale(path: Path) -> None:
+    path.write_text(
+        """#usda 1.0
+def Xform "val_1"
+{
+    def Xform "Geometry"
+    {
+        def Xform "table_01"
+        {
+            def Mesh "mesh"
+            {
+            }
+
+            def Scope "Materials"
+            {
+                def Material "material_LightWoodCounters3"
+                {
+                    def Shader "DiffuseTexture"
+                    {
+                        float4 inputs:fallback = (0.5, 0.25, 0.1, 1)
+                        float4 inputs:scale = (0.5, 0.25, 0.1, 1)
+                    }
+                }
+            }
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
 
 
 def _write_asset(path: Path, mesh_path: str) -> None:
