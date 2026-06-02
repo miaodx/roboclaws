@@ -140,9 +140,11 @@ def build_summary(
     }
     status = _overall_status(checks)
     four_check_audit = _four_check_audit(checks)
+    report_side_visual_parity = _report_side_visual_parity(checks)
     manifest: dict[str, Any] = {
         "schema": SCHEMA,
         "status": status,
+        "report_side_visual_parity": report_side_visual_parity,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "purpose": (
             "Read-only parity gate for MuJoCo and Isaac robot-camera visual evidence. "
@@ -153,6 +155,7 @@ def build_summary(
             "mujoco_fpv": "robot_0/head_camera",
             "isaac_fpv": "/World/robot_0/head_camera",
             "chase": "auxiliary report evidence only",
+            "report_side_visual_parity": "formal_view_specific_tone_comparison_gate",
             "render_probes": "comparison_only_until_broader_corpus_and_calibration_pass",
         },
         "four_check_audit": four_check_audit,
@@ -1022,6 +1025,50 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
     return "needs_camera_work"
 
 
+def _report_side_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    required_statuses = {
+        "head_camera_contract": HEAD_CAMERA_PASS_STATUS,
+        "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
+        "corpus_coverage": "broad_corpus_ready",
+        "calibration_scene": "calibration_scene_evidence_loaded",
+    }
+    blockers = [
+        {
+            "reason": "required_check_not_ready",
+            "check_id": check_id,
+            "expected": expected,
+            "actual": _dict(checks.get(check_id)).get("status"),
+        }
+        for check_id, expected in required_statuses.items()
+        if _dict(checks.get(check_id)).get("status") != expected
+    ]
+    view_tone_gate = _dict(checks.get("view_specific_prepared_scale_square_tone_gate"))
+    if not view_tone_gate.get("formal_comparison_gate_ready"):
+        blockers.append(
+            {
+                "reason": "formal_view_specific_tone_gate_not_ready",
+                "check_id": "view_specific_prepared_scale_square_tone_gate",
+                "actual": view_tone_gate.get("status"),
+            }
+        )
+    ready = not blockers
+    return {
+        "schema": "robot_camera_report_side_visual_parity_v1",
+        "status": "report_side_visual_parity_ready" if ready else "not_ready",
+        "ready": ready,
+        "policy_scope": "report_side_comparison_only",
+        "default_rendering_candidate": False,
+        "source_checks": sorted(required_statuses)
+        + ["view_specific_prepared_scale_square_tone_gate"],
+        "blockers": blockers,
+        "interpretation": (
+            "Report-side visual parity means MuJoCo and Isaac use aligned robot-mounted "
+            "head-camera FPV evidence and a formal view-specific tone comparison gate. "
+            "It is separate from default renderer promotion."
+        ),
+    }
+
+
 def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
     if checks["head_camera_contract"].get("status") != HEAD_CAMERA_PASS_STATUS:
         return "Fix the head-camera FPV pose/lens contract before any render tuning."
@@ -1528,6 +1575,7 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 def _render_report(manifest: dict[str, Any]) -> str:
     checks = _dict(manifest.get("checks"))
     four_check = _dict(manifest.get("four_check_audit"))
+    report_side = _dict(manifest.get("report_side_visual_parity"))
     four_check_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
@@ -1582,6 +1630,10 @@ def _render_report(manifest: dict[str, Any]) -> str:
 <body>
   <h1>Robot Camera Visual Parity</h1>
   <p>Status: <code>{html.escape(str(manifest.get("status")))}</code></p>
+  <p>Report-side visual parity:
+    <code>{html.escape(str(report_side.get("status") or ""))}</code>
+    ({html.escape(str(report_side.get("policy_scope") or ""))})
+  </p>
   <p>{html.escape(str(manifest.get("recommended_next_action") or ""))}</p>
   <h2>Four-Check Audit</h2>
   <p>{html.escape(str(four_check.get("interpretation") or ""))}</p>

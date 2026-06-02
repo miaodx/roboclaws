@@ -89,6 +89,14 @@ def test_visual_parity_summary_keeps_rgb_gain_comparison_only_until_broad_gate(
     assert four_check_rows["material_texture_response"]["resolved"] is False
     assert four_check_rows["light_brightness_tone"]["resolved"] is False
     assert manifest["checks"]["corpus_coverage"]["status"] == "needs_broader_corpus"
+    report_side = manifest["report_side_visual_parity"]
+    assert report_side["status"] == "not_ready"
+    assert report_side["ready"] is False
+    assert {blocker["check_id"] for blocker in report_side["blockers"]} >= {
+        "corpus_coverage",
+        "calibration_scene",
+        "view_specific_prepared_scale_square_tone_gate",
+    }
     assert manifest["checks"]["calibration_scene"]["status"] in {
         "default_calibration_artifact_missing",
         "calibration_scene_not_provided",
@@ -394,12 +402,13 @@ def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_ch
         ),
         encoding="utf-8",
     )
+    raw_fpv = _write_raw_fpv_run_result(tmp_path / "raw" / "run_result.json")
 
     manifest = summary.build_summary(
         output_dir=tmp_path / "summary",
         baseline_manifest_paths=baselines,
         probe_specs=[f"{path.parent.name}={path}" for path in probes],
-        raw_fpv_run_result_paths=[],
+        raw_fpv_run_result_paths=[raw_fpv],
         calibration_manifest_paths=[calibration],
         required_scene_count=3,
         required_seed_count=2,
@@ -522,12 +531,13 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
         ),
         encoding="utf-8",
     )
+    raw_fpv = _write_raw_fpv_run_result(tmp_path / "raw" / "run_result.json")
 
     manifest = summary.build_summary(
         output_dir=tmp_path / "summary",
         baseline_manifest_paths=baselines,
         probe_specs=[f"{path.parent.name}={path}" for path in probes],
-        raw_fpv_run_result_paths=[],
+        raw_fpv_run_result_paths=[raw_fpv],
         calibration_manifest_paths=[calibration],
         required_scene_count=3,
         required_seed_count=2,
@@ -558,6 +568,12 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
     assert (
         "formal report-side comparison gate" in four_check_rows["light_brightness_tone"]["decision"]
     )
+    report_side = manifest["report_side_visual_parity"]
+    assert report_side["status"] == "report_side_visual_parity_ready"
+    assert report_side["ready"] is True
+    assert report_side["policy_scope"] == "report_side_comparison_only"
+    assert report_side["default_rendering_candidate"] is False
+    assert report_side["blockers"] == []
     assert "formal comparison gate" in manifest["recommended_next_action"]
 
 
@@ -658,6 +674,12 @@ def test_visual_parity_summary_requires_actual_view_specific_rgb_profile(
     assert gate["view_rgb_gain_profile_count"] == 0
     assert {blocker["reason"] for blocker in gate["blockers"]} == {"missing_backend_view_rgb_gain"}
     assert all(not row["has_required_view_rgb_gain"] for row in gate["probes"])
+    report_side = manifest["report_side_visual_parity"]
+    assert report_side["status"] == "not_ready"
+    assert any(
+        blocker["check_id"] == "view_specific_prepared_scale_square_tone_gate"
+        for blocker in report_side["blockers"]
+    )
 
 
 def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_rgb(

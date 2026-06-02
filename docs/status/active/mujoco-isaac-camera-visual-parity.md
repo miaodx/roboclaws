@@ -652,6 +652,16 @@ default-rendering decision: resolve the remaining material/texture render
 residuals and calibration gates before changing Isaac/MuJoCo default cleanup
 rendering.
 
+The summary now exposes that boundary directly as
+`report_side_visual_parity.status=report_side_visual_parity_ready` with
+`ready=true`, `policy_scope=report_side_comparison_only`,
+`default_rendering_candidate=false`, and no blockers. The top-level summary
+remains `active` because `four_check_audit.unresolved_check_ids` still contains
+`material_texture_response` and `light_brightness_tone` for default-rendering
+parity. In short: the report-side comparison can be read as aligned under the
+formal view-specific tone gate, but default Isaac/MuJoCo rendering is still not
+promoted as visually equivalent.
+
 ## Touched Areas
 
 - `scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py`
