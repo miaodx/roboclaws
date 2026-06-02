@@ -662,6 +662,18 @@ parity. In short: the report-side comparison can be read as aligned under the
 formal view-specific tone gate, but default Isaac/MuJoCo rendering is still not
 promoted as visually equivalent.
 
+Default-rendering parity now has its own machine layer:
+`default_rendering_visual_parity.status=not_ready`. The current blockers are
+`render_domain_probe_matrix=render_domain_delta_active`,
+`prepared_scale_square_default_gate=comparison_only_not_default`,
+`rgb_tone_cross_validation=comparison_only_rgb_tone_positive`, the
+`val1_seed6_prepared_scale_square_gate` auxiliary chase/tone-luminance
+regression, active baseline render residuals
+(`lighting_shadow_contract_delta`, `target_material_texture_or_binding_gap`),
+and `rgb_tone_comparison_only`. The refreshed recommendation now points at
+resolving or explicitly gating those default-rendering residuals instead of
+re-reviewing the already formalized report-side gate.
+
 ## Touched Areas
 
 - `scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py`

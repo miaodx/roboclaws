@@ -141,10 +141,12 @@ def build_summary(
     status = _overall_status(checks)
     four_check_audit = _four_check_audit(checks)
     report_side_visual_parity = _report_side_visual_parity(checks)
+    default_rendering_visual_parity = _default_rendering_visual_parity(checks)
     manifest: dict[str, Any] = {
         "schema": SCHEMA,
         "status": status,
         "report_side_visual_parity": report_side_visual_parity,
+        "default_rendering_visual_parity": default_rendering_visual_parity,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "purpose": (
             "Read-only parity gate for MuJoCo and Isaac robot-camera visual evidence. "
@@ -156,6 +158,7 @@ def build_summary(
             "isaac_fpv": "/World/robot_0/head_camera",
             "chase": "auxiliary report evidence only",
             "report_side_visual_parity": "formal_view_specific_tone_comparison_gate",
+            "default_rendering_visual_parity": "blocked_until_renderer_gates_pass",
             "render_probes": "comparison_only_until_broader_corpus_and_calibration_pass",
         },
         "four_check_audit": four_check_audit,
@@ -1069,6 +1072,52 @@ def _report_side_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[str, A
     }
 
 
+def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    required_statuses = {
+        "head_camera_contract": HEAD_CAMERA_PASS_STATUS,
+        "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
+        "corpus_coverage": "broad_corpus_ready",
+        "calibration_scene": "calibration_scene_evidence_loaded",
+        "render_domain_probe_matrix": "render_domain_delta_resolved",
+        "prepared_scale_square_default_gate": "prepared_scale_square_default_ready",
+        "rgb_tone_cross_validation": "default_rgb_tone_ready",
+    }
+    blockers = [
+        {
+            "reason": "required_check_not_ready",
+            "check_id": check_id,
+            "expected": expected,
+            "actual": _dict(checks.get(check_id)).get("status"),
+        }
+        for check_id, expected in required_statuses.items()
+        if _dict(checks.get(check_id)).get("status") != expected
+    ]
+    prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
+    blockers.extend(_list_dicts(prepared_gate.get("blockers")))
+    rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
+    if rgb_tone.get("comparison_only") is True:
+        blockers.append(
+            {
+                "reason": "rgb_tone_comparison_only",
+                "check_id": "rgb_tone_cross_validation",
+                "status": rgb_tone.get("status"),
+            }
+        )
+    ready = not blockers
+    return {
+        "schema": "robot_camera_default_rendering_visual_parity_v1",
+        "status": "default_rendering_visual_parity_ready" if ready else "not_ready",
+        "ready": ready,
+        "policy_scope": "default_rendering",
+        "source_checks": sorted(required_statuses),
+        "blockers": blockers,
+        "interpretation": (
+            "Default-rendering visual parity requires renderer/material/tone gates to pass "
+            "without report-side compensation. It is stricter than report-side visual parity."
+        ),
+    }
+
+
 def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
     if checks["head_camera_contract"].get("status") != HEAD_CAMERA_PASS_STATUS:
         return "Fix the head-camera FPV pose/lens contract before any render tuning."
@@ -1084,14 +1133,17 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
         )
     prepared_gate = checks.get("prepared_scale_square_default_gate", {})
     view_tone_gate = checks.get("view_specific_prepared_scale_square_tone_gate", {})
-    if view_tone_gate.get("formal_comparison_gate_ready"):
-        return str(view_tone_gate.get("recommended_next_action") or "")
     if prepared_gate.get("status") == "comparison_only_not_default":
         return str(prepared_gate.get("recommended_next_action") or "")
     if checks["rgb_tone_cross_validation"].get("comparison_only") is True:
         return (
             "Keep RGB/tone as comparison-only and review remaining render-domain residuals "
             "before changing default cleanup rendering."
+        )
+    if view_tone_gate.get("formal_comparison_gate_ready"):
+        return (
+            "Report-side visual parity is ready. Keep default rendering active until "
+            "material/texture, light/brightness/tone, and RGB/tone default gates pass."
         )
     return "Review remaining render-domain residuals before changing default cleanup rendering."
 
@@ -1576,6 +1628,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
     checks = _dict(manifest.get("checks"))
     four_check = _dict(manifest.get("four_check_audit"))
     report_side = _dict(manifest.get("report_side_visual_parity"))
+    default_rendering = _dict(manifest.get("default_rendering_visual_parity"))
     four_check_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
@@ -1633,6 +1686,10 @@ def _render_report(manifest: dict[str, Any]) -> str:
   <p>Report-side visual parity:
     <code>{html.escape(str(report_side.get("status") or ""))}</code>
     ({html.escape(str(report_side.get("policy_scope") or ""))})
+  </p>
+  <p>Default-rendering visual parity:
+    <code>{html.escape(str(default_rendering.get("status") or ""))}</code>
+    ({html.escape(str(default_rendering.get("policy_scope") or ""))})
   </p>
   <p>{html.escape(str(manifest.get("recommended_next_action") or ""))}</p>
   <h2>Four-Check Audit</h2>

@@ -97,6 +97,17 @@ def test_visual_parity_summary_keeps_rgb_gain_comparison_only_until_broad_gate(
         "calibration_scene",
         "view_specific_prepared_scale_square_tone_gate",
     }
+    default_rendering = manifest["default_rendering_visual_parity"]
+    assert default_rendering["status"] == "not_ready"
+    assert default_rendering["ready"] is False
+    assert default_rendering["policy_scope"] == "default_rendering"
+    assert {blocker.get("check_id") for blocker in default_rendering["blockers"]} >= {
+        "corpus_coverage",
+        "calibration_scene",
+        "render_domain_probe_matrix",
+        "prepared_scale_square_default_gate",
+        "rgb_tone_cross_validation",
+    }
     assert manifest["checks"]["calibration_scene"]["status"] in {
         "default_calibration_artifact_missing",
         "calibration_scene_not_provided",
@@ -574,7 +585,15 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
     assert report_side["policy_scope"] == "report_side_comparison_only"
     assert report_side["default_rendering_candidate"] is False
     assert report_side["blockers"] == []
-    assert "formal comparison gate" in manifest["recommended_next_action"]
+    default_rendering = manifest["default_rendering_visual_parity"]
+    assert default_rendering["status"] == "not_ready"
+    assert default_rendering["ready"] is False
+    assert {blocker.get("check_id") for blocker in default_rendering["blockers"]} >= {
+        "render_domain_probe_matrix",
+        "prepared_scale_square_default_gate",
+        "rgb_tone_cross_validation",
+    }
+    assert "default" in manifest["recommended_next_action"]
 
 
 def test_visual_parity_summary_requires_actual_view_specific_rgb_profile(
@@ -704,6 +723,10 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
     }
 
     assert summary._overall_status(checks) == "passed"
+    default_rendering = summary._default_rendering_visual_parity(checks)
+    assert default_rendering["status"] == "default_rendering_visual_parity_ready"
+    assert default_rendering["ready"] is True
+    assert default_rendering["blockers"] == []
     audit = summary._four_check_audit(checks)
     assert audit["status"] == "passed"
     assert audit["unresolved_check_ids"] == []
