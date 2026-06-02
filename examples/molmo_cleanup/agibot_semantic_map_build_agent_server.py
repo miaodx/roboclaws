@@ -13,7 +13,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import (  # noqa: E402
+from roboclaws.household.agibot_map_build_mcp_server import (  # noqa: E402
     AGIBOT_SEMANTIC_MAP_BUILD_POLICY,
     DEFAULT_HOST,
     DEFAULT_PORT,

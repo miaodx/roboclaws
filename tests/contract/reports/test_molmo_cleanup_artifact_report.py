@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.artifact_report import (
+from roboclaws.household.artifact_report import (
     is_cleanup_run_result_artifact,
     load_cleanup_scenario_artifact,
     rerender_cleanup_report_from_artifact_path,
@@ -11,13 +11,13 @@ from roboclaws.molmo_cleanup.artifact_report import (
     rerender_cleanup_reports_from_artifact_paths,
     rerender_cleanup_reports_from_run_results,
 )
-from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario, write_scenario_bundle
-from roboclaws.molmo_cleanup.scoring import score_cleanup
-from roboclaws.molmo_cleanup.semantic_acceptability import (
+from roboclaws.household.report_visual_core import assert_cleanup_report_visual_core
+from roboclaws.household.scenario import build_cleanup_scenario, write_scenario_bundle
+from roboclaws.household.scoring import score_cleanup
+from roboclaws.household.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
-from roboclaws.molmo_cleanup.semantic_timeline import semantic_substeps
+from roboclaws.household.semantic_timeline import semantic_substeps
 
 
 def test_load_cleanup_scenario_artifact_uses_adjacent_private_manifest(tmp_path: Path) -> None:

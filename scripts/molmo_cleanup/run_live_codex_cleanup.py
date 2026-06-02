@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from roboclaws.molmo_cleanup.report import runtime_timing_from_trace
+from roboclaws.household.report import runtime_timing_from_trace
 
 FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
 SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"

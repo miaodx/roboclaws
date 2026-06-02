@@ -17,17 +17,17 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.agibot_cleanup_contract import (  # noqa: E402
+from roboclaws.household.agibot_cleanup_contract import (  # noqa: E402
     AgibotCleanupMCPContract,
 )
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
-from roboclaws.molmo_cleanup.isaac_lab_backend import (  # noqa: E402
+from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
+from roboclaws.household.isaac_lab_backend import (  # noqa: E402
     ISAACLAB_SUBPROCESS_BACKEND,
     IsaacLabSubprocessBackend,
 )
-from roboclaws.molmo_cleanup.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
-from roboclaws.molmo_cleanup.profiles import cleanup_profile_names  # noqa: E402
-from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
+from roboclaws.household.profiles import cleanup_profile_names  # noqa: E402
+from roboclaws.household.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -35,19 +35,19 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     REALWORLD_MAP_MODES,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
-from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
+from roboclaws.household.realworld_mcp_server import (  # noqa: E402
     DEFAULT_HOST,
     DEFAULT_PORT,
     MCP_SERVER_NAME,
     RealWorldMolmoCleanupMCPServer,
     make_molmo_realworld_cleanup_mcp,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E402
-from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
+from roboclaws.household.scenario import build_cleanup_scenario  # noqa: E402
+from roboclaws.household.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
-from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
+from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 

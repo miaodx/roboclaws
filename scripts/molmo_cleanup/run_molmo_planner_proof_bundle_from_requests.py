@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
+from roboclaws.household.planner_proof_requests import (  # noqa: E402
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_cleanup_rerun_command,
     build_probe_commands,
@@ -24,11 +24,11 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
-from roboclaws.molmo_cleanup.planner_task_feasibility import (  # noqa: E402
+from roboclaws.household.planner_task_feasibility import (  # noqa: E402
     grasp_feasibility_signature_counts,
 )
-from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report  # noqa: E402
-from roboclaws.molmo_cleanup.subprocess_backend import DEFAULT_MOLMOSPACES_PYTHON  # noqa: E402
+from roboclaws.household.report import render_planner_proof_bundle_runner_report  # noqa: E402
+from roboclaws.household.subprocess_backend import DEFAULT_MOLMOSPACES_PYTHON  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROBE_SCRIPT = (

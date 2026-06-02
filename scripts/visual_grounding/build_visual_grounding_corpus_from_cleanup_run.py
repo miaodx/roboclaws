@@ -16,7 +16,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+from roboclaws.household.realworld_contract import (  # noqa: E402
     VISUAL_GROUNDING_CATEGORY_HINTS,
 )
 

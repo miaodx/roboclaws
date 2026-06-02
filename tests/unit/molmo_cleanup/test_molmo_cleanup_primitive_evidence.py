@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+from roboclaws.household.cleanup_primitive_evidence import (
     CLEANUP_PRIMITIVE_GATE_SCHEMA,
     cleanup_primitive_evidence_from_substeps,
     validate_cleanup_primitive_evidence,

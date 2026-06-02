@@ -84,7 +84,7 @@ def _try_generate_molmo_cleanup_report(
     auto_open: bool,
 ) -> Path | None:
     """Route Molmo cleanup artifacts through their shared cleanup report adapter."""
-    from roboclaws.molmo_cleanup.artifact_report import (
+    from roboclaws.household.artifact_report import (
         is_cleanup_run_result_artifact,
         rerender_cleanup_report_from_artifact_path,
     )

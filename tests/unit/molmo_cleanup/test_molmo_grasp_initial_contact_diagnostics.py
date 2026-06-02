@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.grasp_initial_contact_diagnostics import (
+from roboclaws.household.grasp_initial_contact_diagnostics import (
     summarize_initial_contact_variants,
 )
-from roboclaws.molmo_cleanup.report import render_grasp_initial_contact_diagnostics_report
+from roboclaws.household.report import render_grasp_initial_contact_diagnostics_report
 
 
 def test_summarize_initial_contact_variants_selects_success_with_low_displacement() -> None:

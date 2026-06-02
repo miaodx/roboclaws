@@ -14,49 +14,49 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation  # noqa: E402
-from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE  # noqa: E402
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
-from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (  # noqa: E402
+from roboclaws.household.advisory_scoring import build_advisory_evaluation  # noqa: E402
+from roboclaws.household.backend import API_SEMANTIC_PROVENANCE  # noqa: E402
+from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
+from roboclaws.household.cleanup_primitive_evidence import (  # noqa: E402
     cleanup_primitive_evidence_from_substeps,
 )
-from roboclaws.molmo_cleanup.isaac_lab_backend import (  # noqa: E402
+from roboclaws.household.isaac_lab_backend import (  # noqa: E402
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
     IsaacLabSubprocessBackend,
 )
-from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
+from roboclaws.household.manipulation_provenance import (  # noqa: E402
     api_semantic_manipulation_evidence,
     isaac_semantic_pose_manipulation_evidence,
     planner_backed_cleanup_manipulation_evidence,
 )
-from roboclaws.molmo_cleanup.nav2_map_bundle import (  # noqa: E402
+from roboclaws.household.nav2_map_bundle import (  # noqa: E402
     attach_nav2_map_bundle_snapshot,
     selected_nav2_map_bundle_dir,
 )
-from roboclaws.molmo_cleanup.planner_cleanup_bridge import (  # noqa: E402
+from roboclaws.household.planner_cleanup_bridge import (  # noqa: E402
     planner_cleanup_bridge_evidence,
 )
-from roboclaws.molmo_cleanup.planner_primitive_executor import (  # noqa: E402
+from roboclaws.household.planner_primitive_executor import (  # noqa: E402
     PlannerBackedCleanupContractAdapter,
 )
-from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (  # noqa: E402
+from roboclaws.household.planner_probe_primitive_executor import (  # noqa: E402
     ProbeBackedCleanupPrimitiveExecutor,
 )
-from roboclaws.molmo_cleanup.planner_proof_attachment import attach_planner_proof  # noqa: E402
-from roboclaws.molmo_cleanup.planner_proof_bundle import (  # noqa: E402
+from roboclaws.household.planner_proof_attachment import attach_planner_proof  # noqa: E402
+from roboclaws.household.planner_proof_bundle import (  # noqa: E402
     attach_planner_proof_bundle,
     planner_proof_attachment_for_target,
 )
-from roboclaws.molmo_cleanup.planner_proof_requests import (  # noqa: E402
+from roboclaws.household.planner_proof_requests import (  # noqa: E402
     write_planner_proof_requests,
 )
-from roboclaws.molmo_cleanup.profiles import (  # noqa: E402
+from roboclaws.household.profiles import (  # noqa: E402
     cleanup_profile_metadata_for_run,
     cleanup_profile_names,
 )
-from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+from roboclaws.household.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
     DEFAULT_MAP_MODE,
@@ -73,16 +73,16 @@ from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
     cleanup_policy_trace_from_events,
     real_robot_readiness_from_events,
 )
-from roboclaws.molmo_cleanup.report import (  # noqa: E402
+from roboclaws.household.report import (  # noqa: E402
     render_cleanup_report,
     write_state_snapshot,
     write_trace_jsonl,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E402
-from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
+from roboclaws.household.scenario import build_cleanup_scenario  # noqa: E402
+from roboclaws.household.semantic_cleanup_loop import (  # noqa: E402
     run_semantic_cleanup_loop,
 )
-from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
+from roboclaws.household.semantic_timeline import (  # noqa: E402
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
     primitive_provenance_counts,
@@ -91,12 +91,12 @@ from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
     robot_view_capture_for_tool,
     semantic_substeps,
 )
-from roboclaws.molmo_cleanup.skill_scratchpad import empty_skill_scratchpad  # noqa: E402
-from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
+from roboclaws.household.skill_scratchpad import empty_skill_scratchpad  # noqa: E402
+from roboclaws.household.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
-from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
+from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_client_from_env,
 )

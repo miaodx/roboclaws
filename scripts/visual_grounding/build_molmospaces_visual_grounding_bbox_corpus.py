@@ -183,7 +183,7 @@ def generate_scene_observations(
     include_invisible: bool,
     molmospaces_python: Path | None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    from roboclaws.molmo_cleanup.subprocess_backend import MolmoSpacesSubprocessBackend
+    from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 
     scene_run_dir = output_dir / "_molmospaces_bbox_runs" / f"scene_{scene_index}_seed_{seed}"
     scene_run_dir.mkdir(parents=True, exist_ok=True)

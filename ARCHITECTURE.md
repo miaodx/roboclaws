@@ -69,17 +69,17 @@ and future physical robot parity.
 
 Key pieces:
 
-- `roboclaws/molmo_cleanup/realworld_contract.py` owns the public/private
+- `roboclaws/household/realworld_contract.py` owns the public/private
   household contract.
-- `roboclaws/molmo_cleanup/semantic_cleanup_loop.py` owns the direct semantic
+- `roboclaws/household/semantic_cleanup_loop.py` owns the direct semantic
   cleanup flow.
 - `roboclaws/maps/` owns reusable navigation map artifacts and projections.
-- `roboclaws/molmo_cleanup/realworld_mcp_server.py` exposes the cleanup MCP
+- `roboclaws/household/realworld_mcp_server.py` exposes the cleanup MCP
   surface for coding agents and OpenClaw-style clients.
-- `roboclaws/molmo_cleanup/report.py` renders the shared report.
-- `roboclaws/molmo_cleanup/camera_control.py` owns the external render-camera
+- `roboclaws/household/report.py` renders the shared report.
+- `roboclaws/household/camera_control.py` owns the external render-camera
   request schema used by MuJoCo/Isaac scene probes.
-- `roboclaws/molmo_cleanup/agibot_sdk_runner.py` and
+- `roboclaws/household/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.
 

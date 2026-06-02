@@ -6,12 +6,12 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.nav2_adapter import (
+from roboclaws.household.nav2_adapter import (
     DirectNav2Adapter,
     Nav2ActionResult,
     Nav2Goal,
 )
-from roboclaws.molmo_cleanup.physical_nav2_pilot import run_physical_nav2_cleanup_pilot
+from roboclaws.household.physical_nav2_pilot import run_physical_nav2_cleanup_pilot
 
 
 class DeterministicNav2Client:

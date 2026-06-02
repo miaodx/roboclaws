@@ -2,27 +2,27 @@ from __future__ import annotations
 
 from typing import Any
 
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
-from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
     validate_cleanup_primitive_evidence,
 )
-from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
+from roboclaws.household.planner_cleanup_bridge import (
     planner_cleanup_bridge_evidence,
     validate_planner_cleanup_bridge_evidence,
 )
-from roboclaws.molmo_cleanup.planner_primitive_executor import (
+from roboclaws.household.planner_primitive_executor import (
     CleanupPrimitiveRequest,
     PlannerBackedCleanupContractAdapter,
 )
-from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (
+from roboclaws.household.planner_probe_primitive_executor import (
     PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
     PLANNER_PROBE_PRIMITIVE_EXECUTOR_SCHEMA,
     ProbeBackedCleanupPrimitiveExecutor,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
-from roboclaws.molmo_cleanup.semantic_cleanup_loop import run_semantic_cleanup_loop
-from roboclaws.molmo_cleanup.semantic_timeline import semantic_substeps
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.semantic_cleanup_loop import run_semantic_cleanup_loop
+from roboclaws.household.semantic_timeline import semantic_substeps
 
 
 def test_probe_backed_executor_blocks_generic_standalone_proof() -> None:

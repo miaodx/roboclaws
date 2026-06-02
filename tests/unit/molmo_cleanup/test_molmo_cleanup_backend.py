@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE, ApiSemanticCleanupBackend
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.household.backend import API_SEMANTIC_PROVENANCE, ApiSemanticCleanupBackend
+from roboclaws.household.scenario import build_cleanup_scenario
 
 
 def test_backend_pick_and_place_mutate_semantic_location_with_provenance() -> None:

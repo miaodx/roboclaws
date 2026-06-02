@@ -5,28 +5,28 @@ from pathlib import Path
 
 from PIL import Image
 
-from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
-from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+from roboclaws.household.advisory_scoring import build_advisory_evaluation
+from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.household.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
 )
-from roboclaws.molmo_cleanup.manipulation_provenance import (
+from roboclaws.household.manipulation_provenance import (
     api_semantic_manipulation_evidence,
     blocked_planner_probe_evidence,
     planner_backed_probe_evidence,
 )
-from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
+from roboclaws.household.rby1m_curobo_gate import (
     rby1m_curobo_gate_from_planner_probe,
 )
-from roboclaws.molmo_cleanup.report import (
+from roboclaws.household.report import (
     render_cleanup_report,
     render_planner_manipulation_report,
     render_planner_proof_bundle_runner_report,
     write_state_snapshot,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
-from roboclaws.molmo_cleanup.scoring import score_cleanup
-from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_LOOP_DISPLAY_NOTE
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.scoring import score_cleanup
+from roboclaws.household.semantic_timeline import SEMANTIC_LOOP_DISPLAY_NOTE
 
 
 def test_cleanup_report_renders_score_moves_and_provenance(tmp_path: Path) -> None:

@@ -15,7 +15,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
+from roboclaws.household.visual_grounding import (  # noqa: E402
     validate_visual_grounding_request,
     visual_grounding_failure_response,
 )

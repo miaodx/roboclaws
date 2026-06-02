@@ -20,11 +20,12 @@ these execution constraints:
   The launch root should resolve task, driver, profile/report, backend, and
   target command shape, but the shell dispatcher can continue to execute the
   current routes until the driver split lands.
-- Treat the full `roboclaws/molmo_cleanup` to `roboclaws/household` package
-  move as a later checkpoint because current scripts, tests, and the bare
-  Python GitHub Pages helper still import `roboclaws.molmo_cleanup` directly.
-  The move must include a focused import strategy that does not break
-  dependency-light Pages assembly.
+- Move `roboclaws/molmo_cleanup` implementation modules to
+  `roboclaws/household` once the launch root is stable. Keep only a lightweight
+  legacy import alias for migration compatibility, and keep the bare Python
+  GitHub Pages helper loading `ci_live_reports.py` directly from the new
+  package path so dependency-light Pages assembly does not import heavy report
+  modules.
 - Do not preserve obsolete example symlinks or duplicate wrappers at closeout.
   Temporary examples are allowed only while their replacement CLI/launch path is
   being introduced.
@@ -65,12 +66,28 @@ Route-source inventory:
 
 Initial checkpoint acceptance:
 
-- [ ] Python launch composition root owns canonical task/driver/profile
+- [x] Python launch composition root owns canonical task/driver/profile
       metadata for existing public `task::run` routes.
-- [ ] Domain task facade modules exist for AI2-THOR, household, and games.
-- [ ] `roboclaws.devtools.commands.resolve_task_run()` delegates to the launch
+- [x] Domain task facade modules exist for AI2-THOR, household, and games.
+- [x] `roboclaws.devtools.commands.resolve_task_run()` delegates to the launch
       catalog and still returns the existing `just agent::run ...` command.
-- [ ] `ROBOCLAWS_JUST_TRACE=1` routes still pass focused contract tests.
+- [x] `ROBOCLAWS_JUST_TRACE=1` routes still pass focused contract tests.
+
+Implementation checkpoint evidence:
+
+- `f9278f3f` added the launch catalog, domain task facades, and launch-plan
+  route tests.
+- `2edf4b43` made `ROBOCLAWS_JUST_TRACE=1` emit structured launch-plan
+  metadata before the existing lower route trace.
+- `011ee2a5` moved task-run CLI parsing into `roboclaws.cli`.
+- `c9db9f99` moved AI2-THOR coding-agent server implementation out of the
+  example wrapper and deleted obsolete root example symlinks.
+- `6283613a` updated the MCP lower recipe to launch the AI2-THOR server through
+  `python -m roboclaws.cli.agent_server`.
+- The household package move checkpoint moved backend-neutral cleanup, map,
+  report, perception, and backend modules from `roboclaws/molmo_cleanup/` to
+  `roboclaws/household/`, leaving `roboclaws/molmo_cleanup/__init__.py` as a
+  lightweight submodule alias.
 
 ## Problem
 

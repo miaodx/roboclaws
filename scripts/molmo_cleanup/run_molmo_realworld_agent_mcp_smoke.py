@@ -12,29 +12,29 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession  # noqa: E402
-from roboclaws.molmo_cleanup.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
-from roboclaws.molmo_cleanup.profiles import (  # noqa: E402
+from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
+from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
+from roboclaws.household.profiles import (  # noqa: E402
     cleanup_profile_names,
 )
-from roboclaws.molmo_cleanup.realworld_contract import (  # noqa: E402
+from roboclaws.household.realworld_contract import (  # noqa: E402
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_REALWORLD_TASK,
     RAW_FPV_ONLY_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
-from roboclaws.molmo_cleanup.realworld_mcp_server import (  # noqa: E402
+from roboclaws.household.realworld_mcp_server import (  # noqa: E402
     make_molmo_realworld_cleanup_mcp,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario  # noqa: E402
-from roboclaws.molmo_cleanup.semantic_cleanup_loop import (  # noqa: E402
+from roboclaws.household.scenario import build_cleanup_scenario  # noqa: E402
+from roboclaws.household.semantic_cleanup_loop import (  # noqa: E402
     run_semantic_cleanup_loop,
 )
-from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
+from roboclaws.household.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
-from roboclaws.molmo_cleanup.visual_grounding import (  # noqa: E402
+from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 

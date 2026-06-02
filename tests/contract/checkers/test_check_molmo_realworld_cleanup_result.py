@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from roboclaws.molmo_cleanup.manipulation_provenance import (
+from roboclaws.household.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
     planner_backed_probe_evidence,
 )
-from roboclaws.molmo_cleanup.realworld_contract import CAMERA_MODEL_POLICY_MODE, RICH_MAP_MODE
+from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE, RICH_MAP_MODE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
@@ -278,7 +278,7 @@ def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
 ) -> None:
     _require_agibot_sdk_runner()
     agibot = _load_module(
-        REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
+        REPO_ROOT / "roboclaws" / "household" / "agibot_map_build_mcp_server.py",
         "agibot_map_build_mcp_server_no_gate",
     )
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -2851,7 +2851,7 @@ def _external_visual_grounding_checker_result(*, overlay: str) -> dict[str, obje
 def _write_agibot_map_build_fixture(tmp_path: Path) -> Path:
     _require_agibot_sdk_runner()
     agibot = _load_module(
-        REPO_ROOT / "roboclaws" / "molmo_cleanup" / "agibot_map_build_mcp_server.py",
+        REPO_ROOT / "roboclaws" / "household" / "agibot_map_build_mcp_server.py",
         f"agibot_map_build_mcp_server_{id(tmp_path)}",
     )
     run_dir = tmp_path / "agibot-map-build"

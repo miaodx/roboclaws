@@ -513,7 +513,7 @@ just molmo::quick-check driver=openclaw-smoke profile=smoke
 ## Report Shapes
 
 All Molmo cleanup demos should route through the shared cleanup report underlay
-in `roboclaws/molmo_cleanup/report.py`. Different settings only add or omit
+in `roboclaws/household/report.py`. Different settings only add or omit
 sections.
 
 | Shape | Required Settings | Expected Sections |

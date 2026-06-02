@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from roboclaws.molmo_cleanup.ci_live_reports import (
+from roboclaws.household.ci_live_reports import (
     MODEL_ENTRIES,
     base_status,
     diagnostic_path_for_entry,

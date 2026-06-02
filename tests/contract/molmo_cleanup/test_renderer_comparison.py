@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from roboclaws.molmo_cleanup.renderer_comparison import (
+from roboclaws.household.renderer_comparison import (
     COMPARISON_SCHEMA,
     FILAMENT_LANE_ID,
     STANDARD_LANE_ID,
@@ -321,7 +321,7 @@ def test_renderer_comparison_lane_capture_disables_persistent_worker(
             return None
 
     monkeypatch.setattr(
-        "roboclaws.molmo_cleanup.renderer_comparison.MolmoSpacesSubprocessBackend",
+        "roboclaws.household.renderer_comparison.MolmoSpacesSubprocessBackend",
         FakeBackend,
     )
     runtime = tmp_path / "python"

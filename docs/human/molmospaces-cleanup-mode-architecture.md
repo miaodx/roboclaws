@@ -346,7 +346,7 @@ report summary, checker, and focused tests:
    `camera-labels`.
 3. Old public profile values (`visual`, `semantic`, `raw-fpv`) are not accepted
    as cleanup profiles.
-4. Profile expansion lives in `roboclaws/molmo_cleanup/profiles.py`, while
+4. Profile expansion lives in `roboclaws/household/profiles.py`, while
    existing perception constants such as `visible_object_detections`,
    `raw_fpv_only`, and `camera_model_policy` remain internal metadata.
 5. Generated cleanup artifacts can record `cleanup_profile` and

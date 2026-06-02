@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.grasp_generation_setup import (
+from roboclaws.household.grasp_generation_setup import (
     DEFAULT_GRASP_GENERATION_PYTHON_PACKAGES,
     DEFAULT_MANIFOLD_SUBMODULE_URL,
     GRASP_GENERATION_SETUP_SCHEMA,

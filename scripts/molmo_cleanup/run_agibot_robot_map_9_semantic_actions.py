@@ -17,18 +17,18 @@ from examples.molmo_cleanup.molmospaces_realworld_cleanup import (  # noqa: E402
     SYNTHETIC_BACKEND,
     run_realworld_cleanup,
 )
-from roboclaws.molmo_cleanup.agibot_map_bundle import (  # noqa: E402
+from roboclaws.household.agibot_map_bundle import (  # noqa: E402
     AGIBOT_MAP_BUNDLE_PROVENANCE,
     write_agibot_nav2_map_bundle,
 )
-from roboclaws.molmo_cleanup.agibot_map_defaults import (  # noqa: E402
+from roboclaws.household.agibot_map_defaults import (  # noqa: E402
     DEFAULT_AGIBOT_CONFIDENCE_LAYER,
     DEFAULT_AGIBOT_CONTEXT_JSON,
     DEFAULT_AGIBOT_ENVIRONMENT_ID,
     DEFAULT_AGIBOT_MAP_ALIAS,
     DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
 )
-from roboclaws.molmo_cleanup.artifact_report import (  # noqa: E402
+from roboclaws.household.artifact_report import (  # noqa: E402
     rerender_cleanup_report_from_artifact_path,
 )
 

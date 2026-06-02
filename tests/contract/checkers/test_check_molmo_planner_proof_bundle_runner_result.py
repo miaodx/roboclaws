@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
-from roboclaws.molmo_cleanup.planner_proof_requests import (
+from roboclaws.household.manipulation_provenance import planner_backed_probe_evidence
+from roboclaws.household.planner_proof_requests import (
     PLANNER_PROOF_BUNDLE_RUN_MANIFEST_SCHEMA,
     proof_execution_horizon,
     proof_request_selection_from_summary,
     proof_result_summary_from_commands,
 )
-from roboclaws.molmo_cleanup.report import render_planner_proof_bundle_runner_report
+from roboclaws.household.report import render_planner_proof_bundle_runner_report
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CHECKER_PATH = (

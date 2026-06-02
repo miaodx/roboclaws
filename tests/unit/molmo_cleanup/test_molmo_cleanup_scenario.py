@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario, write_scenario_bundle
-from roboclaws.molmo_cleanup.types import PrivateScoringManifest
+from roboclaws.household.scenario import build_cleanup_scenario, write_scenario_bundle
+from roboclaws.household.types import PrivateScoringManifest
 
 
 def test_public_scenario_does_not_expose_private_targets() -> None:

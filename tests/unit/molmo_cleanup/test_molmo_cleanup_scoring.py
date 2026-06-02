@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
-from roboclaws.molmo_cleanup.scoring import score_cleanup
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.scoring import score_cleanup
 
 
 def test_score_cleanup_succeeds_at_three_of_five_targets() -> None:

@@ -8,12 +8,12 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
-from roboclaws.molmo_cleanup.manipulation_provenance import (
+from roboclaws.household.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     blocked_planner_probe_evidence,
     planner_backed_probe_evidence,
 )
-from roboclaws.molmo_cleanup.rby1m_curobo_gate import (
+from roboclaws.household.rby1m_curobo_gate import (
     rby1m_curobo_gate_from_planner_probe,
 )
 

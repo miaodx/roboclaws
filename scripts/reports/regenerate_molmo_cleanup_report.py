@@ -5,7 +5,7 @@ import argparse
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.artifact_report import (
+from roboclaws.household.artifact_report import (
     rerender_cleanup_reports_from_artifact_paths,
 )
 

@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import MCP_SERVER_NAME
+from roboclaws.household.agibot_map_build_mcp_server import MCP_SERVER_NAME
 from scripts.molmo_cleanup.run_live_codex_cleanup import (
     CODEX_CLEANUP_MCP_SERVER_NAME,
     CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION,

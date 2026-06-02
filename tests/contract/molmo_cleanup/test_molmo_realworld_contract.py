@@ -4,9 +4,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from roboclaws.maps.route import validate_metric_map_route
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
-from roboclaws.molmo_cleanup.realworld_contract import (
+from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
@@ -24,15 +23,16 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
-from roboclaws.molmo_cleanup.types import (
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.types import (
     CleanupObject,
     CleanupReceptacle,
     CleanupScenario,
     PrivateScoringManifest,
     TargetRule,
 )
-from roboclaws.molmo_cleanup.visual_grounding import VISUAL_GROUNDING_RESPONSE_SCHEMA
+from roboclaws.household.visual_grounding import VISUAL_GROUNDING_RESPONSE_SCHEMA
+from roboclaws.maps.route import validate_metric_map_route
 
 
 def _contract(

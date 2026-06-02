@@ -5,18 +5,18 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.molmo_cleanup.agibot_cleanup_contract import AgibotCleanupMCPContract
-from roboclaws.molmo_cleanup.agibot_map_build_mcp_server import (
+from roboclaws.household.agibot_cleanup_contract import AgibotCleanupMCPContract
+from roboclaws.household.agibot_map_build_mcp_server import (
     MCP_SERVER_NAME,
     _camera_model_policy_evidence,
     make_agibot_semantic_map_build_mcp,
 )
-from roboclaws.molmo_cleanup.agibot_map_defaults import (
+from roboclaws.household.agibot_map_defaults import (
     DEFAULT_AGIBOT_CONFIDENCE_LAYER,
     DEFAULT_AGIBOT_CONTEXT_JSON,
     DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
 )
-from roboclaws.molmo_cleanup.agibot_sdk_runner import (
+from roboclaws.household.agibot_sdk_runner import (
     AGIBOT_SDK_RUNNER_BACKEND,
     BLOCKED_MANIPULATION_TOOLS,
     AgibotSDKRunnerAdapter,
@@ -24,11 +24,11 @@ from roboclaws.molmo_cleanup.agibot_sdk_runner import (
     _operator_localization_gate,
     run_physical_agibot_cleanup_pilot,
 )
-from roboclaws.molmo_cleanup.artifact_report import (
+from roboclaws.household.artifact_report import (
     is_cleanup_run_result_artifact,
     rerender_cleanup_report_from_artifact_path,
 )
-from roboclaws.molmo_cleanup.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
+from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
-from roboclaws.molmo_cleanup.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
+from roboclaws.household.manipulation_provenance import planner_backed_probe_evidence
+from roboclaws.household.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = (
