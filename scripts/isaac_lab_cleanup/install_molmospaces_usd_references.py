@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--source", default="thor", choices=sorted(DEFAULT_USD_OBJECT_VERSIONS))
     parser.add_argument("--version", default="")
     parser.add_argument("--state-path", action="append", type=Path, default=[])
+    parser.add_argument(
+        "--scene-usd-path",
+        action="append",
+        type=Path,
+        default=[],
+        help=(
+            "Scan a MolmoSpaces scene USD directory for objects/<source> references "
+            "and install only referenced object assets that are missing locally."
+        ),
+    )
     parser.add_argument("--asset-path", action="append", default=[])
     parser.add_argument("--package", action="append", default=[])
     parser.add_argument("--all-objects", action="store_true")
@@ -73,7 +84,13 @@ def install_references(args: argparse.Namespace) -> dict[str, Any]:
         manager.find_all_packages_for_data_type("objects").get(args.source, [])
     )
     tries = manager.tries("objects", args.source)
-    asset_paths = _dedupe([*args.asset_path, *_missing_referenced_assets(args.state_path)])
+    state_assets = _missing_referenced_assets(args.state_path)
+    scene_assets = _missing_scene_referenced_assets(
+        args.scene_usd_path,
+        install_dir=args.install_dir,
+        source=args.source,
+    )
+    asset_paths = _dedupe([*args.asset_path, *state_assets, *scene_assets])
     plan = _build_install_plan(
         asset_paths=asset_paths,
         package_names=args.package,
@@ -110,6 +127,8 @@ def install_references(args: argparse.Namespace) -> dict[str, Any]:
         "dry_run": bool(args.dry_run),
         "installed": installed,
         "available_package_count": len(available_packages),
+        "scene_usd_paths": [str(path) for path in args.scene_usd_path],
+        "scene_missing_referenced_asset_count": len(scene_assets),
         "asset_paths": plan.asset_paths,
         "asset_suffixes": plan.asset_suffixes,
         "packages": plan.packages,
@@ -225,6 +244,45 @@ def _collect_missing_referenced_assets(value: Any, assets: list[str]) -> None:
     elif isinstance(value, list):
         for item in value:
             _collect_missing_referenced_assets(item, assets)
+
+
+def _missing_scene_referenced_assets(
+    paths: list[Path],
+    *,
+    install_dir: Path,
+    source: str,
+) -> list[str]:
+    assets: list[str] = []
+    for scene_path in paths:
+        for layer_path in _scene_layer_paths(scene_path):
+            try:
+                text = layer_path.read_text(encoding="utf-8")
+            except UnicodeDecodeError:
+                continue
+            except OSError as exc:
+                raise SystemExit(f"Could not read USD layer {layer_path}: {exc}") from exc
+            for suffix in _scene_object_reference_suffixes(text, source=source):
+                asset_path = install_dir / "objects" / source / suffix
+                if not asset_path.exists():
+                    assets.append(str(asset_path))
+    return _dedupe(assets)
+
+
+def _scene_layer_paths(scene_path: Path) -> list[Path]:
+    if not scene_path.exists():
+        raise SystemExit(f"Scene USD path does not exist: {scene_path}")
+    root = scene_path if scene_path.is_dir() else scene_path.parent
+    candidates: list[Path] = []
+    if scene_path.is_file():
+        candidates.append(scene_path)
+    for pattern in ("*.usd", "*.usda"):
+        candidates.extend(root.rglob(pattern))
+    return sorted({path for path in candidates if path.is_file()})
+
+
+def _scene_object_reference_suffixes(text: str, *, source: str) -> list[str]:
+    pattern = re.compile(rf"objects/{re.escape(source)}/([^@\s\"')]+\.usd[ac]?)")
+    return _dedupe([match.group(1) for match in pattern.finditer(text)])
 
 
 def _asset_suffix(asset_path: str, *, install_dir: Path, source: str) -> str:
