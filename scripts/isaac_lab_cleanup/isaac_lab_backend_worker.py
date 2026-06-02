@@ -576,6 +576,7 @@ def capture_semantic_pose_robot_views(
     height: int,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
+    color_profile_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     _require_isaac_import()
     from isaaclab.app import AppLauncher
@@ -593,6 +594,7 @@ def capture_semantic_pose_robot_views(
         simulation_app=simulation_app,
         robot_import=_dict(state.get("robot_import")),
         semantic_pose_state=_dict(state.get("semantic_pose_state")),
+        color_profile_override=color_profile_override,
     )
     capture["simulation_app_reuse_token"] = simulation_app
     return capture
@@ -1885,6 +1887,7 @@ def _capture_isaac_lab_camera_views(
     semantic_filter: tuple[str, ...] = ("class",),
     scene_index_diagnostics: dict[str, Any] | None = None,
     semantic_pose_state: dict[str, Any] | None = None,
+    color_profile_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1979,7 +1982,7 @@ def _capture_isaac_lab_camera_views(
     total_render_steps = 0
     robot_pose_application: dict[str, Any] = {}
     camera_diagnostics: dict[str, dict[str, Any]] = {}
-    color_profile = robot_view_display_color_profile()
+    color_profile = _robot_view_color_profile(color_profile_override)
     color_management: dict[str, dict[str, Any]] = {}
     for view_name in ROBOT_VIEW_KEYS:
         if view_name == "fpv" and mounted_head_camera:
@@ -2952,6 +2955,13 @@ def _ensure_capture_lighting(
         "requested_dome_intensity": dome_intensity,
         "requested_key_intensity": key_intensity,
     }
+
+
+def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:
+    profile = robot_view_display_color_profile()
+    if isinstance(override, dict) and override:
+        profile.update(override)
+    return profile
 
 
 def _stage_light_paths(
@@ -5971,15 +5981,19 @@ def _real_semantic_pose_robot_view_images(
     if runtime.get("runtime_mode") != "real" or not scene_usd or not Path(scene_usd).is_file():
         return {}
     try:
-        capture = capture_semantic_pose_robot_views(
-            state=state,
-            scene_usd=Path(scene_usd),
-            view_paths=target_images,
-            width=width,
-            height=height,
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=focus_receptacle_id,
-        )
+        capture_kwargs = {
+            "state": state,
+            "scene_usd": Path(scene_usd),
+            "view_paths": target_images,
+            "width": width,
+            "height": height,
+            "focus_object_id": focus_object_id,
+            "focus_receptacle_id": focus_receptacle_id,
+        }
+        color_profile_override = _dict(state.get("robot_view_color_profile_override"))
+        if color_profile_override:
+            capture_kwargs["color_profile_override"] = color_profile_override
+        capture = capture_semantic_pose_robot_views(**capture_kwargs)
     except Exception as exc:
         state.setdefault("mapping_gaps", []).append(
             {

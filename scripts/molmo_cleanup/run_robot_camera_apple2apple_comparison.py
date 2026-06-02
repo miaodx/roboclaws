@@ -63,6 +63,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--render-height", type=int, default=360)
     parser.add_argument("--location-count", type=int, default=4)
     parser.add_argument(
+        "--isaac-robot-view-color-profile-path",
+        type=Path,
+        help=(
+            "Optional comparison-only color profile override for Isaac robot-view "
+            "captures. This does not change default cleanup rendering."
+        ),
+    )
+    parser.add_argument(
         "--refresh-report-only",
         action="store_true",
         help=(
@@ -91,6 +99,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     isaac_state_path = output_dir / "isaac_state.json"
     mujoco_run_dir = output_dir / "mujoco"
     isaac_run_dir = output_dir / "isaac"
+    isaac_robot_view_color_profile = _load_optional_json(args.isaac_robot_view_color_profile_path)
 
     manifest: dict[str, Any] = {
         "schema": SCHEMA,
@@ -233,7 +242,12 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                 )
             mujoco_state = _read_json(mujoco_state_path)
             robot_pose = dict(mujoco_state.get("robot_pose") or nav.get("robot_pose") or {})
-            _patch_isaac_robot_pose(isaac_state_path, robot_pose, target=target)
+            _patch_isaac_robot_pose(
+                isaac_state_path,
+                robot_pose,
+                target=target,
+                color_profile=isaac_robot_view_color_profile,
+            )
             mujoco_views = _run_json(
                 [
                     str(args.mujoco_python),
@@ -358,6 +372,12 @@ def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _load_optional_json(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -381,6 +401,7 @@ def _patch_isaac_robot_pose(
     robot_pose: dict[str, Any],
     *,
     target: dict[str, str],
+    color_profile: dict[str, Any] | None = None,
 ) -> None:
     state = _read_json(state_path)
     state["current_receptacle_id"] = (
@@ -402,6 +423,10 @@ def _patch_isaac_robot_pose(
         }
     )
     state["semantic_pose_state"] = semantic_pose_state
+    if isinstance(color_profile, dict) and color_profile:
+        state["robot_view_color_profile_override"] = dict(color_profile)
+    else:
+        state.pop("robot_view_color_profile_override", None)
     _write_json(state_path, state)
 
 

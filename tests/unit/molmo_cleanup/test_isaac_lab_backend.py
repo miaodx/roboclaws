@@ -551,6 +551,22 @@ def test_isaac_scene_camera_capture_applies_color_profile(
     assert Path(result["images"]["fpv"]).is_file()
 
 
+def test_isaac_robot_view_color_profile_merges_comparison_override() -> None:
+    profile = isaac_lab_backend_worker._robot_view_color_profile(
+        {
+            "backend_rgb_gain": {"isaaclab_subprocess": [0.9, 0.8, 0.7]},
+            "backend_rgb_gain_source": "unit-comparison-profile",
+        }
+    )
+
+    assert profile["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert profile["backend_luminance_gain"]["isaaclab_subprocess"] == pytest.approx(
+        0.7161647108631373
+    )
+    assert profile["backend_rgb_gain"]["isaaclab_subprocess"] == pytest.approx([0.9, 0.8, 0.7])
+    assert profile["backend_rgb_gain_source"] == "unit-comparison-profile"
+
+
 def test_isaac_write_camera_views_returns_color_contract(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

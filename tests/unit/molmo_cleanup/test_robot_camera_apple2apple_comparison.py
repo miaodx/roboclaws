@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -501,3 +502,40 @@ def Xform "World"
     assert summary["status"] == "target_material_texture_or_binding_gap"
     assert summary["high_priority_target_delta_count"] == 1
     assert location["target_contract_delta"]["status"] == "missing_object_binding_evidence"
+
+
+def test_robot_camera_patch_isaac_pose_can_set_comparison_color_profile(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_color_profile_override",
+    )
+    state_path = tmp_path / "isaac_state.json"
+    state_path.write_text(json.dumps({"semantic_pose_state": {}}), encoding="utf-8")
+
+    run_camera._patch_isaac_robot_pose(
+        state_path,
+        {"x": 1.0, "y": 2.0, "theta": 0.5},
+        target={"kind": "receptacle", "target_id": "sink_01"},
+        color_profile={
+            "backend_rgb_gain": {"isaaclab_subprocess": [0.9, 0.8, 0.7]},
+            "backend_rgb_gain_source": "unit-comparison-profile",
+        },
+    )
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["semantic_pose_state"]["comparison_pose_target"]["target_id"] == "sink_01"
+    assert state["robot_view_color_profile_override"]["backend_rgb_gain"][
+        "isaaclab_subprocess"
+    ] == [0.9, 0.8, 0.7]
+
+    run_camera._patch_isaac_robot_pose(
+        state_path,
+        {"x": 1.0, "y": 2.0, "theta": 0.5},
+        target={"kind": "receptacle", "target_id": "sink_01"},
+        color_profile={},
+    )
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert "robot_view_color_profile_override" not in state
