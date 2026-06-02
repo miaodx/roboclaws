@@ -582,6 +582,38 @@ decision delta: camera and RAW_FPV are treated as proven aligned, while
 prepared scale-square stays comparison-only until the auxiliary chase luminance
 side effect is resolved or explicitly re-gated.
 
+## Tone-Mitigation Probes 2026-06-02
+
+The `val_1` seed-6 prepared scale-square chase blocker is now narrower. It is
+not fixed by single global tone compensation:
+
+- Prepared scale-square alone:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_gate_probe/report.html`
+  moves FPV `36.5655 -> 29.4052` (`-7.1603`) but moves chase
+  `72.2838 -> 75.1960` (`+2.9122`).
+- Prepared scale-square plus the held-out `val_0` FPV RGB profile:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_val0_rgb_gain_probe/report.html`
+  still improves FPV (`30.2630`, `-6.3025`) but worsens chase further
+  (`76.9372`, `+4.6534`). Do not use the cross-scene FPV RGB profile as a
+  chase blocker mitigation.
+- Prepared scale-square plus a chase-fitted RGB profile:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_chase_rgb_gain_probe/report.html`
+  fixes chase (`71.6620`, `-0.6218`) but breaks FPV (`47.8901`, `+11.3246`).
+  Do not use one global chase-derived RGB profile for policy/input views.
+- Prepared scale-square plus a view-specific RGB profile:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_view_rgb_gain_probe/report.html`
+  keeps FPV strongly improved (`30.2755`, `-6.2900`) and fixes chase
+  (`71.6638`, `-0.6200`). This is useful diagnostic evidence that the auxiliary
+  chase side effect can be removed by view-specific report-side tone
+  compensation, but it is overfit/comparison-only and must not become a default
+  renderer profile without held-out validation.
+
+Decision delta: a single global color/tone profile cannot satisfy both FPV and
+chase under prepared scale-square. The next useful slice is either a held-out
+view-specific profile validation on `val_1` seed-8 and `val_0`, or an explicit
+gate decision that chase is auxiliary warning evidence while RAW_FPV FPV remains
+the policy/input metric.
+
 ## Touched Areas
 
 - `scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py`
