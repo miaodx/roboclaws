@@ -30,7 +30,14 @@ ASSET_HEAD_CAMERA_PRIM_PATH = "/robot_0/head_camera"
 HEAD_CAMERA_POSITION_M = (0.05, 0.0, 0.05)
 HEAD_CAMERA_QUAT_WXYZ = (0.5, 0.5, -0.5, -0.5)
 HEAD_CAMERA_FOCAL_LENGTH_MM = 24.0
-HEAD_CAMERA_HORIZONTAL_APERTURE_MM = 20.955
+HEAD_CAMERA_VERTICAL_FOV_DEG = 45.0
+HEAD_CAMERA_RENDER_ASPECT = 540.0 / 360.0
+HEAD_CAMERA_HORIZONTAL_APERTURE_MM = (
+    2.0
+    * HEAD_CAMERA_FOCAL_LENGTH_MM
+    * math.tan(math.radians(HEAD_CAMERA_VERTICAL_FOV_DEG) / 2.0)
+    * HEAD_CAMERA_RENDER_ASPECT
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -255,7 +262,7 @@ def _write_static_visual_robot_usd(
     urdf_path: Path,
     output_usd_path: Path,
 ) -> dict[str, Any]:
-    from pxr import Gf, Usd, UsdGeom
+    from pxr import Usd, UsdGeom
 
     robot = _parse_urdf_tree(urdf_path)
     stage = Usd.Stage.CreateNew(str(output_usd_path))
@@ -285,8 +292,7 @@ def _write_static_visual_robot_usd(
                 stage=stage,
                 mesh_path=mesh_path,
                 prim_path=(
-                    f"{ROBOT_PRIM_PATH}/links/{_usd_safe_name(link_name)}"
-                    f"/visual_{index:02d}/mesh"
+                    f"{ROBOT_PRIM_PATH}/links/{_usd_safe_name(link_name)}/visual_{index:02d}/mesh"
                 ),
             )
             mesh_count += 1
@@ -336,15 +342,15 @@ def _write_wrapped_robot_stage(
         position=camera_position,
         quat_wxyz=camera_quat,
     )
-    camera.GetPrim().CreateAttribute(
-        "roboclaws:mountLinkName", Sdf.ValueTypeNames.String
-    ).Set(head_link_name)
-    camera.GetPrim().CreateAttribute(
-        "roboclaws:sourceCameraName", Sdf.ValueTypeNames.String
-    ).Set("robot_0/head_camera")
-    camera.GetPrim().CreateAttribute(
-        "roboclaws:sourceSimulator", Sdf.ValueTypeNames.String
-    ).Set("mujoco")
+    camera.GetPrim().CreateAttribute("roboclaws:mountLinkName", Sdf.ValueTypeNames.String).Set(
+        head_link_name
+    )
+    camera.GetPrim().CreateAttribute("roboclaws:sourceCameraName", Sdf.ValueTypeNames.String).Set(
+        "robot_0/head_camera"
+    )
+    camera.GetPrim().CreateAttribute("roboclaws:sourceSimulator", Sdf.ValueTypeNames.String).Set(
+        "mujoco"
+    )
 
     stage.GetRootLayer().Save()
     verify_stage = Usd.Stage.Open(str(output_usd_path))
@@ -586,8 +592,7 @@ def _normalize_quat(
 
 def _matrix_multiply(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
     return [
-        [sum(a[row][k] * b[k][column] for k in range(4)) for column in range(4)]
-        for row in range(4)
+        [sum(a[row][k] * b[k][column] for k in range(4)) for column in range(4)] for row in range(4)
     ]
 
 
@@ -647,10 +652,12 @@ def _head_camera_summary() -> dict[str, Any]:
         "source_xml_camera_pos": list(HEAD_CAMERA_POSITION_M),
         "source_xml_camera_quat_wxyz": list(HEAD_CAMERA_QUAT_WXYZ),
         "focal_length_mm": HEAD_CAMERA_FOCAL_LENGTH_MM,
+        "vertical_fov_deg": HEAD_CAMERA_VERTICAL_FOV_DEG,
         "horizontal_aperture_mm": HEAD_CAMERA_HORIZONTAL_APERTURE_MM,
         "note": (
             "The USD camera is authored from the MuJoCo robot_0/head_camera local "
-            "pose so Isaac FPV uses the same robot-head camera contract."
+            "pose and vertical FOV so Isaac FPV uses the same robot-head camera "
+            "contract."
         ),
     }
 

@@ -108,6 +108,8 @@ ISAAC_RBY1M_HEAD_CAMERA_PRIM = "/World/robot_0/head_camera"
 RBY1M_HEAD_PITCH_PIVOT_M = (0.022, 0.0, 1.506)
 RBY1M_HEAD_CAMERA_ZERO_POSITION_M = (0.072, 0.0, 1.556)
 RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = (-0.5, -0.5, 0.5, 0.5)
+RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG = 45.0
+RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM = 24.0
 ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
 ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
     "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
@@ -576,6 +578,7 @@ def capture_semantic_pose_robot_views(
     height: int,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
+    color_profile_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     _require_isaac_import()
     from isaaclab.app import AppLauncher
@@ -593,6 +596,7 @@ def capture_semantic_pose_robot_views(
         simulation_app=simulation_app,
         robot_import=_dict(state.get("robot_import")),
         semantic_pose_state=_dict(state.get("semantic_pose_state")),
+        color_profile_override=color_profile_override,
     )
     capture["simulation_app_reuse_token"] = simulation_app
     return capture
@@ -1885,6 +1889,7 @@ def _capture_isaac_lab_camera_views(
     semantic_filter: tuple[str, ...] = ("class",),
     scene_index_diagnostics: dict[str, Any] | None = None,
     semantic_pose_state: dict[str, Any] | None = None,
+    color_profile_override: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -1930,6 +1935,11 @@ def _capture_isaac_lab_camera_views(
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     sim = sim_utils.SimulationContext(sim_utils.SimulationCfg(device=device))
     mounted_head_camera = robot_stage.get("head_camera_prim_exists") is True
+    head_camera_lens = (
+        _configure_rby1m_head_camera_lens(stage_utils=stage_utils, width=width, height=height)
+        if mounted_head_camera
+        else {"status": "not_requested"}
+    )
     data_types = [
         "rgb",
         *(segmentation_data_types if include_segmentation else ()),
@@ -1979,7 +1989,7 @@ def _capture_isaac_lab_camera_views(
     total_render_steps = 0
     robot_pose_application: dict[str, Any] = {}
     camera_diagnostics: dict[str, dict[str, Any]] = {}
-    color_profile = robot_view_display_color_profile()
+    color_profile = _robot_view_color_profile(color_profile_override)
     color_management: dict[str, dict[str, Any]] = {}
     for view_name in ROBOT_VIEW_KEYS:
         if view_name == "fpv" and mounted_head_camera:
@@ -1998,6 +2008,7 @@ def _capture_isaac_lab_camera_views(
                 width=width,
                 height=height,
                 robot_pose_application=robot_pose_application,
+                lens_application=head_camera_lens,
             )
         else:
             camera = scene_camera
@@ -2954,6 +2965,13 @@ def _ensure_capture_lighting(
     }
 
 
+def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:
+    profile = robot_view_display_color_profile()
+    if isinstance(override, dict) and override:
+        profile.update(override)
+    return profile
+
+
 def _stage_light_paths(
     stage: Any, *, exclude_prefix: str = "", light_api: Any | None = None
 ) -> list[str]:
@@ -3309,6 +3327,7 @@ def _usd_camera_diagnostics(
     width: int,
     height: int,
     robot_pose_application: dict[str, Any] | None = None,
+    lens_application: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         stage = stage_utils.get_current_stage()
@@ -3324,6 +3343,14 @@ def _usd_camera_diagnostics(
 
         camera = UsdGeom.Camera(prim)
         xform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(0.0)
+        focal_length = _usd_attr_float(camera.GetFocalLengthAttr())
+        horizontal_aperture = _usd_attr_float(camera.GetHorizontalApertureAttr())
+        fov = _usd_camera_fov_metadata(
+            focal_length=focal_length,
+            horizontal_aperture=horizontal_aperture,
+            width=width,
+            height=height,
+        )
         return {
             "schema": "isaac_usd_camera_diagnostics_v1",
             "status": "ready",
@@ -3331,11 +3358,13 @@ def _usd_camera_diagnostics(
             "camera_type": "usd_camera_prim",
             "prim_path": prim_path,
             "world_matrix_rowmajor": _matrix4d_rowmajor(xform),
-            "focal_length_mm": _usd_attr_float(camera.GetFocalLengthAttr()),
-            "horizontal_aperture_mm": _usd_attr_float(camera.GetHorizontalApertureAttr()),
+            "focal_length_mm": focal_length,
+            "horizontal_aperture_mm": horizontal_aperture,
+            **fov,
             "clipping_range": _usd_vec(camera.GetClippingRangeAttr()),
             "render_resolution": {"width": width, "height": height},
             "robot_pose_stage_application": _dict(robot_pose_application),
+            "lens_application": _dict(lens_application),
         }
     except Exception as exc:
         return {
@@ -3355,6 +3384,12 @@ def _isaac_eye_target_camera_diagnostics(
     width: int,
     height: int,
 ) -> dict[str, Any]:
+    fov = _usd_camera_fov_metadata(
+        focal_length=24.0,
+        horizontal_aperture=20.955,
+        width=width,
+        height=height,
+    )
     return {
         "schema": "isaac_eye_target_camera_diagnostics_v1",
         "status": "ready",
@@ -3364,7 +3399,75 @@ def _isaac_eye_target_camera_diagnostics(
         "target": _tensor_first_vec3(targets),
         "focal_length_mm": 24.0,
         "horizontal_aperture_mm": 20.955,
+        **fov,
         "render_resolution": {"width": width, "height": height},
+    }
+
+
+def _configure_rby1m_head_camera_lens(
+    *,
+    stage_utils: Any,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    try:
+        from pxr import UsdGeom
+
+        stage = stage_utils.get_current_stage()
+        prim = stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM) if stage is not None else None
+        if not prim or not prim.IsValid():
+            return {
+                "schema": "isaac_rby1m_head_camera_lens_application_v1",
+                "status": "missing_head_camera_prim",
+                "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            }
+        focal_length = RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM
+        horizontal_aperture = _horizontal_aperture_from_lens(
+            {"vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
+            width=width,
+            height=height,
+            focal_length=focal_length,
+        )
+        camera = UsdGeom.Camera(prim)
+        camera.CreateFocalLengthAttr(focal_length).Set(focal_length)
+        camera.CreateHorizontalApertureAttr(horizontal_aperture).Set(horizontal_aperture)
+        return {
+            "schema": "isaac_rby1m_head_camera_lens_application_v1",
+            "status": "applied",
+            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            "source_camera_name": "robot_0/head_camera",
+            "source_vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG,
+            "focal_length_mm": round(focal_length, 6),
+            "horizontal_aperture_mm": round(horizontal_aperture, 6),
+            "render_resolution": {"width": int(width), "height": int(height)},
+        }
+    except Exception as exc:
+        return {
+            "schema": "isaac_rby1m_head_camera_lens_application_v1",
+            "status": "unavailable",
+            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _usd_camera_fov_metadata(
+    *,
+    focal_length: float | None,
+    horizontal_aperture: float | None,
+    width: int,
+    height: int,
+) -> dict[str, float]:
+    if focal_length is None or horizontal_aperture is None or width <= 0 or height <= 0:
+        return {}
+    horizontal_fov = math.degrees(
+        2.0 * math.atan(float(horizontal_aperture) / (2.0 * focal_length))
+    )
+    vertical_aperture = float(horizontal_aperture) * float(height) / float(width)
+    vertical_fov = math.degrees(2.0 * math.atan(vertical_aperture / (2.0 * focal_length)))
+    return {
+        "vertical_aperture_mm": round(vertical_aperture, 6),
+        "vertical_fov_deg": round(vertical_fov, 6),
+        "horizontal_fov_deg": round(horizontal_fov, 6),
     }
 
 
@@ -5971,15 +6074,19 @@ def _real_semantic_pose_robot_view_images(
     if runtime.get("runtime_mode") != "real" or not scene_usd or not Path(scene_usd).is_file():
         return {}
     try:
-        capture = capture_semantic_pose_robot_views(
-            state=state,
-            scene_usd=Path(scene_usd),
-            view_paths=target_images,
-            width=width,
-            height=height,
-            focus_object_id=focus_object_id,
-            focus_receptacle_id=focus_receptacle_id,
-        )
+        capture_kwargs = {
+            "state": state,
+            "scene_usd": Path(scene_usd),
+            "view_paths": target_images,
+            "width": width,
+            "height": height,
+            "focus_object_id": focus_object_id,
+            "focus_receptacle_id": focus_receptacle_id,
+        }
+        color_profile_override = _dict(state.get("robot_view_color_profile_override"))
+        if color_profile_override:
+            capture_kwargs["color_profile_override"] = color_profile_override
+        capture = capture_semantic_pose_robot_views(**capture_kwargs)
     except Exception as exc:
         state.setdefault("mapping_gaps", []).append(
             {
