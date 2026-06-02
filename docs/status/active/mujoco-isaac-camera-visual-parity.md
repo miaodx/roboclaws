@@ -339,6 +339,26 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `37.2184`, sRGB probe `37.3884` (`+0.1700`). The refreshed summary now records
   this under material probes as neutral/do-not-promote, alongside pillow texture,
   roughness-only, and target-specific LightWood roughness probes.
+- A target-specific texture scale/fallback probe now explains the user-flagged
+  `0008` dining-table residual much better than camera or roughness changes.
+  The generator supports comparison-only `--texture-scale-mode square`, and the
+  prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_0_scene_refs_fix_0008_lightwood_scale_square/scene_semantic.usda`
+  rewrites only the two `UsdUVTexture` scale/fallback inputs for
+  `/val_0/Geometry/diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2/Materials/material_LightWoodCounters3`.
+  The corresponding report
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_0008_lightwood_scale_square_probe/report.html`
+  preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera
+  contract while lowering overall FPV from `38.0980` to `35.8577` (`-2.2403`).
+  The `0008` target itself drops from `45.4961` to `27.6042`, changes from
+  `view_dependent_color_residual` to `low_residual`, and lowers Isaac FPV
+  luminance from `131.0136` to `112.1958` against MuJoCo `88.0260`. This is the
+  strongest material-specific evidence so far that Isaac/MuJoCo visual mismatch
+  includes USD texture scale/fallback versus MJCF RGBA/texture modulation
+  response, not a camera-angle problem. The visual summary now classifies this
+  as `material_response=has_fpv_gain_comparison_only`, while the overall gate
+  stays `active` because the direction is validated on only one target and RGB
+  remains comparison-only.
 
 ## Next Action
 
@@ -363,11 +383,12 @@ head-camera FPV images as agent input.
 The next proof-backed step is not more camera work. Keep the calibration report
 attached to the summary gate; do not promote any RGB/luminance gain to default
 rendering while the calibration result remains view-dependent. The next useful
-slice is a comparison-only render-domain probe that targets remaining high
-residual exact-bound bed/table material response beyond simple roughness,
-texture injection, raw/sRGB sourceColorSpace, or preparation of a genuinely new
-scene index if broader scene coverage is required beyond the current
-3-signature foundation.
+slice is cross-target validation of the positive texture scale/fallback
+material-response direction on other high-residual exact-bound bed/table/desk
+materials, ideally on `val_1` held-out targets before any default material
+conversion is considered. Do not promote the `0008` square-scale edit globally
+from one target; treat it as root-cause evidence and a candidate conversion
+direction to validate across more targets, scenes, and seeds.
 
 ## Touched Areas
 

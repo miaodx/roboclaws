@@ -160,6 +160,43 @@ def test_visual_parity_summary_classifies_material_probe_from_path_when_label_is
     assert rows[0]["fpv_delta"] == 0.2
 
 
+def test_visual_parity_summary_does_not_classify_lightwood_material_as_light_shadow(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_lightwood")
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=38.0,
+        chase=83.7,
+        location_count=8,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "0008_lightwood_scale_square_probe" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=35.8,
+        chase=83.7,
+        location_count=8,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"val0_0008_lightwood_scale_square={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+    )
+
+    matrix = manifest["checks"]["render_domain_probe_matrix"]["probe_matrix"]
+    assert matrix["material_response"][0]["label"] == "val0_0008_lightwood_scale_square"
+    assert matrix["material_response"][0]["fpv_improved"] is True
+    assert "light_shadow" not in matrix
+
+
 def test_visual_parity_summary_stays_active_when_render_domain_is_unresolved(
     tmp_path: Path,
 ) -> None:

@@ -550,9 +550,16 @@ def _infer_probe_kind(summary: dict[str, Any]) -> str:
         or "material" in evidence
         or "texture" in evidence
         or "srgb" in evidence
+        or "scale_square" in evidence
+        or "lightwood" in evidence
     ):
         return "material_response"
-    if "no_dome" in evidence or "no_shadow" in evidence or "light" in evidence:
+    if (
+        "no_dome" in evidence
+        or "no_shadow" in evidence
+        or "light_shadow" in evidence
+        or "lighting" in evidence
+    ):
         return "light_shadow"
     return "unknown"
 
