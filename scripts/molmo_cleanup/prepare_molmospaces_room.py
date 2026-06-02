@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario, write_scenario_bundle
+from roboclaws.household.scenario import build_cleanup_scenario, write_scenario_bundle
 
 
 def parse_args() -> argparse.Namespace:

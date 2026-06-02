@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.nav2_adapter import (
+from roboclaws.household.nav2_adapter import (
     BLOCKED_CAPABILITY_PROVENANCE,
     NAV2_ACTION_PROVENANCE,
     DirectNav2Adapter,

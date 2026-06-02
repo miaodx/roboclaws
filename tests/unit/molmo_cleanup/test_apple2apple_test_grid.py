@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.apple2apple_test_grid import (
+from roboclaws.household.apple2apple_test_grid import (
     GRID_SCHEMA,
     RUNTIME_MAP_PRIOR_PLACEHOLDER,
     build_apple2apple_test_grid,

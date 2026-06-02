@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (
+from roboclaws.household.agibot_contract_rehearsal import (
     BLOCKED_MANIPULATION_TOOLS,
     CLEANUP_ACTION_CONFIDENCE_LAYER,
     CONFIDENCE_LAYER,

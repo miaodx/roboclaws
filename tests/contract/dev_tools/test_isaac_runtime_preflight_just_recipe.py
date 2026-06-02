@@ -142,7 +142,7 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
 
     assert "molmo-isaac-cleanup-smoke" in agent_text
     assert re.search(r"^molmo-isaac-cleanup-smoke \*overrides:", harness_text, re.MULTILINE)
-    assert "molmospaces_realworld_cleanup.py" in harness_text
+    assert "roboclaws.household.realworld_cleanup" in harness_text
     assert "check_molmo_realworld_cleanup_result.py" in harness_text
     assert "--backend isaaclab_subprocess" in harness_text
     assert "--require-isaac-real-runtime" in harness_text

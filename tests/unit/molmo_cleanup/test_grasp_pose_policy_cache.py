@@ -5,13 +5,13 @@ from pathlib import Path
 
 import numpy as np
 
-from roboclaws.molmo_cleanup import grasp_pose_policy_cache as pose_cache
-from roboclaws.molmo_cleanup.grasp_pose_policy_cache import (
+from roboclaws.household import grasp_pose_policy_cache as pose_cache
+from roboclaws.household.grasp_pose_policy_cache import (
     GRASP_POSE_POLICY_CACHE_SCHEMA,
     resolve_pose_policy,
     run_grasp_pose_policy_cache_generation,
 )
-from roboclaws.molmo_cleanup.report import render_grasp_pose_policy_cache_report
+from roboclaws.household.report import render_grasp_pose_policy_cache_report
 
 
 def test_resolve_pose_policy_uses_initial_contact_best_variant(tmp_path: Path) -> None:

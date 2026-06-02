@@ -20,23 +20,23 @@ if __package__ in {None, ""}:
 import mujoco
 from PIL import Image, ImageDraw
 
-from roboclaws.molmo_cleanup.camera_control import (
+from roboclaws.household.camera_control import (
     ANCHOR_ORBIT_CAMERA_MODEL,
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
     load_camera_control_request,
     normalize_camera_control_request,
 )
-from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
-from roboclaws.molmo_cleanup.generated_mess import (
+from roboclaws.household.color_management import apply_camera_color_profile
+from roboclaws.household.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
 )
-from roboclaws.molmo_cleanup.robot_view_camera_control import (
+from roboclaws.household.robot_view_camera_control import (
     robot_mounted_head_camera_control_contract,
     robot_view_display_color_profile,
 )
-from roboclaws.molmo_cleanup.robot_view_pose import (
+from roboclaws.household.robot_view_pose import (
     angle_delta,
     point_inside_room_outline,
     resolve_cleanup_robot_pose,

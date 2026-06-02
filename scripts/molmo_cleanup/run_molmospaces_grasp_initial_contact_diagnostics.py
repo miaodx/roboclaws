@@ -11,13 +11,13 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.grasp_cache_generation import (  # noqa: E402
+from roboclaws.household.grasp_cache_generation import (  # noqa: E402
     load_generation_preflight_from_manifest,
 )
-from roboclaws.molmo_cleanup.grasp_initial_contact_diagnostics import (  # noqa: E402
+from roboclaws.household.grasp_initial_contact_diagnostics import (  # noqa: E402
     run_grasp_initial_contact_diagnostics,
 )
-from roboclaws.molmo_cleanup.report import (  # noqa: E402
+from roboclaws.household.report import (  # noqa: E402
     render_grasp_initial_contact_diagnostics_report,
 )
 

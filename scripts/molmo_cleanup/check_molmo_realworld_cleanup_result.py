@@ -9,11 +9,11 @@ from typing import Any
 from PIL import Image, ImageStat
 
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER
-from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
+from roboclaws.household.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
-from roboclaws.molmo_cleanup.isaac_lab_backend import (
+from roboclaws.household.isaac_lab_backend import (
     ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
@@ -22,28 +22,28 @@ from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
 )
-from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
+from roboclaws.household.planner_cleanup_bridge import (
     validate_planner_cleanup_bridge_evidence,
 )
-from roboclaws.molmo_cleanup.planner_proof_attachment import (
+from roboclaws.household.planner_proof_attachment import (
     validate_planner_proof_attachment,
 )
-from roboclaws.molmo_cleanup.planner_proof_bundle import (
+from roboclaws.household.planner_proof_bundle import (
     PLANNER_PROOF_BUNDLE_SCHEMA,
     planner_proof_attachments,
     validate_planner_proof_bundle,
 )
-from roboclaws.molmo_cleanup.planner_proof_quality import (
+from roboclaws.household.planner_proof_quality import (
     planner_proof_quality_evidence,
     validate_planner_proof_quality_evidence,
 )
-from roboclaws.molmo_cleanup.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
-from roboclaws.molmo_cleanup.profiles import (
+from roboclaws.household.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
+from roboclaws.household.profiles import (
     WORLD_LABELS_PROFILE,
     cleanup_profile,
     validate_cleanup_profile_metadata,
 )
-from roboclaws.molmo_cleanup.realworld_contract import (
+from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_NAME,
     CAMERA_MODEL_POLICY_SCHEMA,
@@ -59,9 +59,9 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     forbidden_agent_view_keys,
 )
-from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
-from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
-from roboclaws.molmo_cleanup.semantic_timeline import (
+from roboclaws.household.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
+from roboclaws.household.report_visual_core import assert_cleanup_report_visual_core
+from roboclaws.household.semantic_timeline import (
     CANONICAL_INSIDE_CLEANUP_PHASES,
     CANONICAL_SURFACE_CLEANUP_PHASES,
     CLOSE_RECEPTACLE_PHASE,
@@ -75,7 +75,7 @@ from roboclaws.molmo_cleanup.semantic_timeline import (
     has_complete_semantic_sequence,
     successful_semantic_phases,
 )
-from roboclaws.molmo_cleanup.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
+from roboclaws.household.visual_grounding import EXTERNAL_VISUAL_GROUNDING_PROVENANCE
 
 ISAAC_PUBLIC_SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"

@@ -6,12 +6,12 @@ import datetime as dt
 import json
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.agibot_map_defaults import (
+from roboclaws.household.agibot_map_defaults import (
     DEFAULT_AGIBOT_CONTEXT_JSON,
     DEFAULT_AGIBOT_MAP_ALIAS,
     DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
 )
-from roboclaws.molmo_cleanup.agibot_sdk_runner import run_physical_agibot_cleanup_pilot
+from roboclaws.household.agibot_sdk_runner import run_physical_agibot_cleanup_pilot
 
 
 def main() -> int:

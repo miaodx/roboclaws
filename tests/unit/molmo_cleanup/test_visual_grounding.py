@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from roboclaws.molmo_cleanup.visual_grounding import (
+from roboclaws.household.visual_grounding import (
     VISUAL_GROUNDING_RESPONSE_SCHEMA,
     HttpVisualGroundingClient,
     VisualGroundingClientConfig,

@@ -23,24 +23,24 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.manipulation_provenance import (  # noqa: E402
+from roboclaws.household.manipulation_provenance import (  # noqa: E402
     BLOCKED_CAPABILITY_PROVENANCE,
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
     blocked_planner_probe_evidence,
     planner_backed_probe_evidence,
 )
-from roboclaws.molmo_cleanup.planner_probe_primitive_executor import (  # noqa: E402
+from roboclaws.household.planner_probe_primitive_executor import (  # noqa: E402
     PLANNER_PROBE_PRIMITIVE_BINDING_SCHEMA,
 )
-from roboclaws.molmo_cleanup.rby1m_curobo_gate import (  # noqa: E402
+from roboclaws.household.rby1m_curobo_gate import (  # noqa: E402
     rby1m_curobo_gate_from_planner_probe,
 )
-from roboclaws.molmo_cleanup.report import render_planner_manipulation_report  # noqa: E402
-from roboclaws.molmo_cleanup.semantic_timeline import (  # noqa: E402
+from roboclaws.household.report import render_planner_manipulation_report  # noqa: E402
+from roboclaws.household.semantic_timeline import (  # noqa: E402
     canonical_cleanup_tool_sequence,
 )
-from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
+from roboclaws.household.subprocess_backend import (  # noqa: E402
     DEFAULT_MOLMOSPACES_PYTHON,
     MOLMOSPACES_SUBPROCESS_BACKEND,
 )

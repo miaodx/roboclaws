@@ -267,7 +267,7 @@ def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
     assert "*self.args.codex_model_arg" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
     assert '"--cd"' in runner_text
-    assert 'kickoff_prompt="Use the bundled molmo-realworld-cleanup skill instructions.' in text
+    assert "roboclaws.agents.prompts.household_cleanup" in text
 
 
 def test_molmo_codex_live_copies_task_skill_into_docker_workspace() -> None:

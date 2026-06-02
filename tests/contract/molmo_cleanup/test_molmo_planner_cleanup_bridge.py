@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
+from roboclaws.household.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
 )
-from roboclaws.molmo_cleanup.planner_cleanup_bridge import (
+from roboclaws.household.planner_cleanup_bridge import (
     PLANNER_CLEANUP_BRIDGE_SCHEMA,
     planner_cleanup_bridge_evidence,
     validate_planner_cleanup_bridge_evidence,

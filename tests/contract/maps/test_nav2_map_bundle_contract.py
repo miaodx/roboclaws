@@ -7,9 +7,9 @@ from pathlib import Path
 from roboclaws.maps.bundle import validate_nav2_map_bundle, write_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
-from roboclaws.molmo_cleanup.realworld_contract import RICH_MAP_MODE, RealWorldCleanupContract
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.realworld_contract import RICH_MAP_MODE, RealWorldCleanupContract
+from roboclaws.household.scenario import build_cleanup_scenario
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXPORTER_PATH = REPO_ROOT / "scripts" / "maps" / "export_bundle.py"

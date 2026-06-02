@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.advisory_scoring import build_advisory_evaluation
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
-from roboclaws.molmo_cleanup.scoring import score_cleanup
-from roboclaws.molmo_cleanup.semantic_acceptability import (
+from roboclaws.household.advisory_scoring import build_advisory_evaluation
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.scoring import score_cleanup
+from roboclaws.household.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
 

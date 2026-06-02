@@ -377,7 +377,7 @@ describe what public robot capabilities the agent is allowed to rely on.
 | Profile declarations and built-ins | `roboclaws/mcp/profiles.py` |
 | Generic profile router helper | `roboclaws/mcp/entrypoint.py` |
 | AI2-THOR navigation MCP server | `roboclaws/mcp/server.py` |
-| Molmo cleanup MCP server | `roboclaws/molmo_cleanup/realworld_mcp_server.py` |
+| Household cleanup MCP server | `roboclaws/household/realworld_mcp_server.py` |
 | Skill library convention | `skills/README.md` |
 | AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
 | Photo capture skill | `skills/capture-object-photo/SKILL.md` |

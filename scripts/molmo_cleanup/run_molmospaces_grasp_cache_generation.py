@@ -11,11 +11,11 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.grasp_cache_generation import (  # noqa: E402
+from roboclaws.household.grasp_cache_generation import (  # noqa: E402
     load_generation_preflight_from_manifest,
     run_grasp_cache_generation,
 )
-from roboclaws.molmo_cleanup.report import render_grasp_cache_generation_report  # noqa: E402
+from roboclaws.household.report import render_grasp_cache_generation_report  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:

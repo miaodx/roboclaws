@@ -4,11 +4,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
-from roboclaws.molmo_cleanup.manipulation_provenance import planner_backed_probe_evidence
-from roboclaws.molmo_cleanup.planner_observed_binding import (
+from roboclaws.household.manipulation_provenance import planner_backed_probe_evidence
+from roboclaws.household.planner_observed_binding import (
     OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA,
 )
-from roboclaws.molmo_cleanup.planner_proof_requests import (
+from roboclaws.household.planner_proof_requests import (
     PLANNER_PROOF_REQUESTS_SCHEMA,
     build_probe_commands,
     build_probe_warmup_command,
@@ -18,7 +18,7 @@ from roboclaws.molmo_cleanup.planner_proof_requests import (
     proof_result_summary_from_commands,
     write_planner_proof_requests,
 )
-from roboclaws.molmo_cleanup.semantic_timeline import canonical_cleanup_tool_sequence
+from roboclaws.household.semantic_timeline import canonical_cleanup_tool_sequence
 
 
 def test_planner_proof_requests_preserve_bound_probe_args(tmp_path: Path) -> None:

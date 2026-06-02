@@ -343,7 +343,7 @@ def test_planner_proof_bundle_runner_harness_stays_dry_run() -> None:
     assert recipe is not None
     body = recipe.group(0)
     for expected in (
-        "examples/molmo_cleanup/molmospaces_realworld_cleanup.py",
+        "roboclaws.household.realworld_cleanup",
         "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py",
         "scripts/molmo_cleanup/run_molmo_planner_proof_bundle_from_requests.py",
         "scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py",
@@ -365,7 +365,7 @@ def test_planner_proof_bundle_execute_rerun_gate_is_strict_and_local() -> None:
     assert recipe is not None
     body = recipe.group(0)
     for expected in (
-        "examples/molmo_cleanup/molmospaces_realworld_cleanup.py",
+        "roboclaws.household.realworld_cleanup",
         "--backend molmospaces_subprocess",
         "--include-robot",
         "--record-robot-views",

@@ -38,4 +38,4 @@ run task driver mode="" *overrides:
         python_bin="python"
       fi
     fi
-    exec "$python_bin" -m roboclaws.devtools.commands task run "$@"
+    exec "$python_bin" -m roboclaws.cli.main task run "$@"

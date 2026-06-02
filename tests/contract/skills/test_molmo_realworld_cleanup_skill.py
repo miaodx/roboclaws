@@ -5,10 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PROFILE
-from roboclaws.molmo_cleanup.realworld_contract import RICH_MAP_MODE
-from roboclaws.molmo_cleanup.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.household.profiles import WORLD_LABELS_PROFILE
+from roboclaws.household.realworld_contract import RICH_MAP_MODE
+from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
+from roboclaws.household.scenario import build_cleanup_scenario
 
 ROOT = Path(__file__).resolve().parents[3]
 ROUTINE_PATH = (
