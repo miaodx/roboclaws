@@ -1,6 +1,6 @@
 # Refactor: Domain-First Launch Architecture
 
-**Status:** Proposed source plan
+**Status:** DONE
 **Created:** 2026-06-02
 **Source:** server-entrypoint entropy review, `$intuitive-reduce-entropy`,
 `$plan-eng-review`, and `$improve-codebase-architecture` discussion
@@ -21,9 +21,9 @@ these execution constraints:
   target command shape, but the shell dispatcher can continue to execute the
   current routes until the driver split lands.
 - Move `roboclaws/molmo_cleanup` implementation modules to
-  `roboclaws/household` once the launch root is stable. Keep only a lightweight
-  legacy import alias for migration compatibility, and keep the bare Python
-  GitHub Pages helper loading `ci_live_reports.py` directly from the new
+  `roboclaws/household` once the launch root is stable. Keep any lightweight
+  legacy import alias only during the migration checkpoint, and keep the bare
+  Python GitHub Pages helper loading `ci_live_reports.py` directly from the new
   package path so dependency-light Pages assembly does not import heavy report
   modules.
 - Do not preserve obsolete example symlinks or duplicate wrappers at closeout.
@@ -86,8 +86,7 @@ Implementation checkpoint evidence:
   `python -m roboclaws.cli.agent_server`.
 - The household package move checkpoint moved backend-neutral cleanup, map,
   report, perception, and backend modules from `roboclaws/molmo_cleanup/` to
-  `roboclaws/household/`, leaving `roboclaws/molmo_cleanup/__init__.py` as a
-  lightweight submodule alias.
+  `roboclaws/household/`.
 - The agent-driver split checkpoint added `roboclaws/agents/` for reusable
   live-agent driver helpers and kickoff prompt rendering. `just/molmo.just`
   now asks Python to render the live cleanup prompt instead of owning long task
@@ -104,10 +103,9 @@ Implementation checkpoint evidence:
   `examples/mcp/coding_agent_nav_server.py`,
   `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, and
   `examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py`.
-- `roboclaws/molmo_cleanup/__init__.py` remains as a lightweight legacy alias
-  because unrelated in-progress Isaac/head-camera work in the current dirty
-  worktree still relies on the old import surface. No new owned code imports
-  from `roboclaws.molmo_cleanup`.
+- The temporary `roboclaws/molmo_cleanup/__init__.py` legacy alias was deleted
+  after the current tracked codebase no longer imported
+  `roboclaws.molmo_cleanup`.
 
 ## Problem
 
