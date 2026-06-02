@@ -235,13 +235,20 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     manifest["lanes"][ISAAC_LANE_ID]["robot_import"] = isaac_init.get("robot_import", {})
 
     mujoco_state = _read_json(mujoco_state_path)
+    isaac_state = _read_json(isaac_state_path)
     _attach_state_artifact_summaries(
         manifest,
         output_dir=output_dir,
         mujoco_state=mujoco_state,
-        isaac_state=_read_json(isaac_state_path),
+        isaac_state=isaac_state,
     )
-    candidates = _comparison_targets(mujoco_state, limit=max(1, int(args.location_count)))
+    target_selection = _select_comparison_targets(
+        mujoco_state,
+        limit=max(1, int(args.location_count)),
+        scene_binding_diagnostics=_dict(isaac_state.get("scene_binding_diagnostics")),
+    )
+    manifest["target_selection"] = target_selection
+    candidates = [_dict(item) for item in target_selection.get("selected_targets") or []]
     if not candidates:
         manifest["status"] = "blocked"
         manifest["blocker"] = "No MuJoCo receptacle/object targets were available for robot poses."
@@ -350,6 +357,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     )
     _refresh_location_camera_contract_diagnostics(locations)
     manifest["summary"] = _summary(locations)
+    manifest["summary"]["target_selection"] = target_selection
     _attach_render_contract_diagnostics(
         manifest,
         output_dir=output_dir,
@@ -374,6 +382,8 @@ def refresh_report_only(
     locations = list(manifest.get("locations") or [])
     _refresh_location_camera_contract_diagnostics(locations)
     manifest["summary"] = _summary(locations)
+    if manifest.get("target_selection"):
+        manifest["summary"]["target_selection"] = manifest["target_selection"]
     _attach_render_contract_diagnostics(
         manifest,
         output_dir=output_dir,
@@ -449,6 +459,80 @@ def _comparison_targets(state: dict[str, Any], *, limit: int) -> list[dict[str, 
         if len(targets) >= limit:
             return targets
     return targets
+
+
+def _select_comparison_targets(
+    state: dict[str, Any],
+    *,
+    limit: int,
+    scene_binding_diagnostics: dict[str, Any] | None,
+) -> dict[str, Any]:
+    candidates = _comparison_targets(state, limit=max(1, limit * 4))
+    binding_ids = _bound_comparison_target_ids(scene_binding_diagnostics or {})
+    if any(binding_ids.values()):
+        selected = [
+            item
+            for item in candidates
+            if str(item.get("target_id") or "")
+            in binding_ids.get(str(item.get("kind") or ""), set())
+        ][:limit]
+        dropped = [
+            item
+            for item in candidates
+            if str(item.get("target_id") or "")
+            not in binding_ids.get(str(item.get("kind") or ""), set())
+        ]
+        status = "isaac_bound_targets_selected"
+    else:
+        selected = candidates[:limit]
+        dropped = []
+        status = "unfiltered_no_isaac_binding_diagnostics"
+    return {
+        "schema": "robot_camera_comparison_target_selection_v1",
+        "status": status,
+        "requested_limit": limit,
+        "candidate_count": len(candidates),
+        "isaac_bound_candidate_count": len(selected),
+        "selected_count": len(selected),
+        "selected_targets": selected,
+        "dropped_unbound_target_count": len(dropped),
+        "dropped_unbound_targets": dropped[:10],
+        "interpretation": (
+            "Robot-camera apple-to-apple visual parity compares targets that both backends "
+            "can bind to USD/MJCF render contracts. Targets without Isaac USD binding "
+            "evidence are dropped from the comparison set instead of being counted as "
+            "render-domain material gaps."
+        ),
+    }
+
+
+def _bound_comparison_target_ids(
+    scene_binding_diagnostics: dict[str, Any],
+) -> dict[str, set[str]]:
+    return {
+        "receptacle": _bound_ids_from_groups(
+            scene_binding_diagnostics,
+            ("receptacle_bindings", "selected_target_receptacle_bindings"),
+        ),
+        "object": _bound_ids_from_groups(
+            scene_binding_diagnostics,
+            ("object_bindings", "selected_object_bindings"),
+        ),
+    }
+
+
+def _bound_ids_from_groups(
+    scene_binding_diagnostics: dict[str, Any],
+    groups: tuple[str, ...],
+) -> set[str]:
+    ids: set[str] = set()
+    for group in groups:
+        bindings = _dict(scene_binding_diagnostics.get(group))
+        for target_id, raw_binding in bindings.items():
+            binding = _dict(raw_binding)
+            if binding.get("status") == "bound" and binding.get("usd_prim_path"):
+                ids.add(str(target_id))
+    return ids
 
 
 def _patch_isaac_robot_pose(

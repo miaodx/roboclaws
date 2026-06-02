@@ -777,6 +777,70 @@ def test_robot_camera_tone_color_check_summarizes_improved_rgb_gain_probe(
     assert "strongest current comparison-only direction" in check["recommended_next_action"]
 
 
+def test_robot_camera_comparison_target_selection_filters_unbound_isaac_targets() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_target_selection",
+    )
+    state = {
+        "receptacles": {
+            "bed_1": {},
+            "sink_1": {},
+        },
+        "objects": {
+            "alarmclock_1": {},
+            "bowl_1": {},
+            "pillow_1": {},
+        },
+    }
+    selection = run_camera._select_comparison_targets(
+        state,
+        limit=4,
+        scene_binding_diagnostics={
+            "receptacle_bindings": {
+                "bed_1": {"status": "bound", "usd_prim_path": "/World/bed_1"},
+                "sink_1": {"status": "bound", "usd_prim_path": "/World/sink_1"},
+            },
+            "object_bindings": {
+                "bowl_1": {"status": "bound", "usd_prim_path": "/World/bowl_1"},
+            },
+            "selected_object_bindings": {
+                "pillow_1": {"status": "bound", "usd_prim_path": "/World/pillow_1"},
+            },
+        },
+    )
+
+    assert selection["status"] == "isaac_bound_targets_selected"
+    assert selection["selected_count"] == 4
+    assert [item["target_id"] for item in selection["selected_targets"]] == [
+        "bed_1",
+        "sink_1",
+        "bowl_1",
+        "pillow_1",
+    ]
+    assert selection["dropped_unbound_target_count"] == 1
+    assert selection["dropped_unbound_targets"][0]["target_id"] == "alarmclock_1"
+
+
+def test_robot_camera_comparison_target_selection_preserves_legacy_order_without_bindings() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_target_selection_legacy",
+    )
+    selection = run_camera._select_comparison_targets(
+        {
+            "receptacles": {"bed_2": {}, "bed_1": {}},
+            "objects": {"bowl_1": {}},
+        },
+        limit=2,
+        scene_binding_diagnostics={},
+    )
+
+    assert selection["status"] == "unfiltered_no_isaac_binding_diagnostics"
+    assert [item["target_id"] for item in selection["selected_targets"]] == ["bed_1", "bed_2"]
+    assert selection["dropped_unbound_target_count"] == 0
+
+
 def test_robot_camera_render_contract_diagnostics_prioritizes_missing_target_binding(
     tmp_path: Path,
 ) -> None:
