@@ -710,13 +710,25 @@ def _location_render_contract_diagnostics(
         mujoco=mujoco_target,
         isaac=isaac_target,
     )
+    fpv_diff = _dict_path(item, ("image_diffs", "fpv"))
     fpv_residual = _dict_path(item, ("image_diffs", "fpv", "residual"))
     chase_residual = _dict_path(item, ("image_diffs", "chase", "residual"))
     return {
         "schema": "robot_camera_location_render_contract_diagnostics_v1",
         "target": target,
         "target_usd_binding": _compact_target_binding(target_binding),
+        "fpv_mean_abs_rgb": _float_or_none(fpv_diff.get("mean_abs_rgb")),
         "fpv_residual_class": fpv_residual.get("residual_class"),
+        "fpv_edge_abs_diff": _float_or_none(fpv_residual.get("edge_abs_diff")),
+        "fpv_rgb_gain_oracle_mean_abs_rgb_after_gain": _float_or_none(
+            _dict(fpv_residual.get("rgb_gain_oracle")).get("mean_abs_rgb_after_gain")
+        ),
+        "fpv_mujoco_mean_luminance": _float_or_none(
+            _dict(fpv_residual.get("left_metrics")).get("mean_luminance")
+        ),
+        "fpv_isaac_mean_luminance": _float_or_none(
+            _dict(fpv_residual.get("right_metrics")).get("mean_luminance")
+        ),
         "chase_residual_class": chase_residual.get("residual_class"),
         "mujoco_target_contract": mujoco_target,
         "isaac_target_contract": isaac_target,
@@ -1131,6 +1143,21 @@ def _texture_colorspace_material_response_check(
     exact_public_id_count = sum(
         1 for binding in bindings if binding.get("match_strategy") == "exact_public_id"
     )
+    target_summaries = [_texture_material_target_summary(item) for item in per_location]
+    target_statuses = [str(item.get("material_response_status") or "") for item in target_summaries]
+    target_status_counts = {
+        name: target_statuses.count(name) for name in sorted(set(target_statuses)) if name
+    }
+    high_residual_targets = [
+        item
+        for item in target_summaries
+        if item.get("fpv_residual_class") != "low_residual"
+        or float(item.get("fpv_mean_abs_rgb") or 0.0) > 35.0
+    ]
+    high_residual_targets.sort(
+        key=lambda item: float(item.get("fpv_mean_abs_rgb") or 0.0),
+        reverse=True,
+    )
     texture_name_match_count = 0
     texture_path_basename_match_count = 0
     texture_path_full_delta_count = 0
@@ -1170,11 +1197,107 @@ def _texture_colorspace_material_response_check(
         "texture_name_match_count": texture_name_match_count,
         "texture_path_basename_match_count": texture_path_basename_match_count,
         "texture_path_full_delta_count": texture_path_full_delta_count,
+        "material_response_status_counts": target_status_counts,
+        "texture_backing_mismatch_count": sum(
+            1 for item in target_summaries if item.get("texture_backing_mismatch")
+        ),
+        "rgba_diffuse_color_mismatch_count": sum(
+            1 for item in target_summaries if item.get("rgba_diffuse_color_mismatch")
+        ),
+        "high_residual_target_count": len(high_residual_targets),
+        "high_residual_targets": high_residual_targets[:5],
         "recommended_next_action": (
             "For high-residual FPV views, compare texture color space, sampler behavior, "
             "material albedo, and roughness/specular response even when texture basenames match."
         ),
     }
+
+
+def _texture_material_target_summary(item: dict[str, Any]) -> dict[str, Any]:
+    target = _dict(item.get("target"))
+    binding = _dict(item.get("target_usd_binding"))
+    delta = _dict(item.get("target_contract_delta"))
+    mujoco = _dict(item.get("mujoco_target_contract"))
+    isaac = _dict(item.get("isaac_target_contract"))
+    mujoco_visuals = [_dict(value) for value in mujoco.get("visuals") or []]
+    isaac_bindings = [_dict(value) for value in isaac.get("bindings") or []]
+    mujoco_texture_files = [str(value) for value in mujoco.get("texture_files") or []]
+    isaac_texture_files = [str(value) for value in isaac.get("texture_files") or []]
+    mujoco_texture_basenames = _path_basenames(mujoco_texture_files)
+    isaac_texture_basenames = _path_basenames(isaac_texture_files)
+    mujoco_texture_backed_visual_count = sum(
+        1 for value in mujoco_visuals if value.get("texture") or value.get("texture_file")
+    )
+    mujoco_rgba_visual_count = sum(1 for value in mujoco_visuals if value.get("rgba"))
+    isaac_diffuse_texture_binding_count = sum(
+        1
+        for value in isaac_bindings
+        if value.get("has_diffuse_texture") or value.get("diffuse_texture_files")
+    )
+    isaac_diffuse_color_binding_count = sum(
+        1 for value in isaac_bindings if value.get("diffuse_color")
+    )
+    texture_backing_mismatch = (
+        mujoco_texture_backed_visual_count != isaac_diffuse_texture_binding_count
+    )
+    rgba_diffuse_color_mismatch = mujoco_rgba_visual_count != isaac_diffuse_color_binding_count
+    texture_full_path_delta = set(mujoco_texture_files) != set(isaac_texture_files)
+    indicators: list[str] = []
+    if delta.get("status") != "material_texture_names_match":
+        indicators.append("material_texture_binding_gap")
+    if int(binding.get("missing_referenced_asset_count") or 0) > 0:
+        indicators.append("missing_referenced_assets")
+    if mujoco_texture_basenames == isaac_texture_basenames and texture_full_path_delta:
+        indicators.append("texture_full_path_or_source_delta")
+    if texture_backing_mismatch:
+        indicators.append("texture_backing_count_delta")
+    if rgba_diffuse_color_mismatch:
+        indicators.append("rgba_vs_usd_diffuse_color_count_delta")
+    residual_class = str(item.get("fpv_residual_class") or "")
+    if not indicators and residual_class not in {"", "low_residual"}:
+        indicators.append("residual_after_material_texture_name_match")
+    if "material_texture_binding_gap" in indicators or "missing_referenced_assets" in indicators:
+        status = "material_texture_binding_gap"
+    elif "texture_full_path_or_source_delta" in indicators:
+        status = "texture_path_or_colorspace_unverified"
+    elif texture_backing_mismatch or rgba_diffuse_color_mismatch:
+        status = "material_source_mix_delta"
+    elif residual_class not in {"", "low_residual"}:
+        status = "visual_residual_with_material_names_match"
+    else:
+        status = "material_response_low_priority"
+    return {
+        "target_id": target.get("target_id"),
+        "target_kind": target.get("kind"),
+        "fpv_mean_abs_rgb": item.get("fpv_mean_abs_rgb"),
+        "fpv_residual_class": item.get("fpv_residual_class"),
+        "fpv_edge_abs_diff": item.get("fpv_edge_abs_diff"),
+        "fpv_rgb_gain_oracle_mean_abs_rgb_after_gain": item.get(
+            "fpv_rgb_gain_oracle_mean_abs_rgb_after_gain"
+        ),
+        "fpv_mujoco_mean_luminance": item.get("fpv_mujoco_mean_luminance"),
+        "fpv_isaac_mean_luminance": item.get("fpv_isaac_mean_luminance"),
+        "target_contract_status": delta.get("status"),
+        "usd_match_strategy": binding.get("match_strategy"),
+        "missing_referenced_asset_count": binding.get("missing_referenced_asset_count"),
+        "mujoco_visual_count": mujoco.get("visual_geom_count"),
+        "mujoco_texture_backed_visual_count": mujoco_texture_backed_visual_count,
+        "mujoco_rgba_visual_count": mujoco_rgba_visual_count,
+        "isaac_material_binding_count": isaac.get("material_binding_count"),
+        "isaac_diffuse_texture_binding_count": isaac_diffuse_texture_binding_count,
+        "isaac_diffuse_color_binding_count": isaac_diffuse_color_binding_count,
+        "mujoco_texture_basenames": mujoco_texture_basenames,
+        "isaac_texture_basenames": isaac_texture_basenames,
+        "texture_full_path_delta": texture_full_path_delta,
+        "texture_backing_mismatch": texture_backing_mismatch,
+        "rgba_diffuse_color_mismatch": rgba_diffuse_color_mismatch,
+        "material_response_status": status,
+        "material_response_indicators": indicators,
+    }
+
+
+def _path_basenames(values: list[str]) -> list[str]:
+    return sorted({Path(str(value)).name for value in values if value})
 
 
 def _usd_preview_surface_material_model_check(

@@ -387,7 +387,16 @@ def Xform "World"
                 "status": "success",
                 "target": {"kind": "receptacle", "target_id": "bed_1"},
                 "image_diffs": {
-                    "fpv": {"residual": {"residual_class": "geometry_or_texture_edge_residual"}},
+                    "fpv": {
+                        "mean_abs_rgb": 48.0,
+                        "residual": {
+                            "residual_class": "geometry_or_texture_edge_residual",
+                            "edge_abs_diff": 12.0,
+                            "rgb_gain_oracle": {"mean_abs_rgb_after_gain": 32.0},
+                            "left_metrics": {"mean_luminance": 82.0},
+                            "right_metrics": {"mean_luminance": 126.0},
+                        },
+                    },
                     "chase": {"residual": {"residual_class": "geometry_or_texture_edge_residual"}},
                 },
             }
@@ -444,6 +453,19 @@ def Xform "World"
         "texture_basenames_match_paths_or_colorspace_unverified"
     )
     assert check_by_id["texture_colorspace_material_response"]["texture_name_match_count"] == 1
+    assert check_by_id["texture_colorspace_material_response"][
+        "material_response_status_counts"
+    ] == {"texture_path_or_colorspace_unverified": 1}
+    assert check_by_id["texture_colorspace_material_response"]["high_residual_target_count"] == 1
+    high_residual_target = check_by_id["texture_colorspace_material_response"][
+        "high_residual_targets"
+    ][0]
+    assert high_residual_target["target_id"] == "bed_1"
+    assert high_residual_target["fpv_mean_abs_rgb"] == 48.0
+    assert high_residual_target["texture_full_path_delta"] is True
+    assert high_residual_target["mujoco_texture_basenames"] == ["bed.png"]
+    assert high_residual_target["isaac_texture_basenames"] == ["bed.png"]
+    assert high_residual_target["fpv_isaac_mean_luminance"] == 126.0
     assert check_by_id["usd_preview_surface_material_model"]["status"] == (
         "usd_preview_surface_vs_mujoco_material_model_delta"
     )
@@ -451,9 +473,11 @@ def Xform "World"
         check_by_id["usd_preview_surface_material_model"]["isaac_preview_surface_binding_count"]
         == 1
     )
-    assert check_by_id["tone_color_response"]["status"] == "tone_color_metrics_missing"
+    assert check_by_id["tone_color_response"]["status"] == "tone_color_delta_rgb_oracle"
+    assert check_by_id["tone_color_response"]["fpv_mean_abs_rgb_avg"] == 48.0
     assert check_by_id["tone_color_response"]["check_id"] == "tone_color_response"
     assert location["target_contract_delta"]["status"] == "material_texture_names_match"
+    assert location["fpv_mean_abs_rgb"] == 48.0
 
 
 def test_robot_camera_light_shadow_check_summarizes_worse_prior_probe(tmp_path: Path) -> None:
