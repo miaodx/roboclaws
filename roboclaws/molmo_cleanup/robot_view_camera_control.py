@@ -6,6 +6,7 @@ from typing import Any
 from roboclaws.molmo_cleanup.camera_control import (
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
+    DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LENS,
     MOLMOSPACES_SCENE_FRAME,
     canonical_scene_camera_control_request,
@@ -182,6 +183,8 @@ def robot_mounted_head_camera_control_contract(
     same_pose_api: bool = False,
     robot_pose: dict[str, Any] | None = None,
     focus: dict[str, Any] | None = None,
+    color_profile: dict[str, Any] | None = None,
+    color_management: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Describe FPV rendered from a real/equivalent robot head camera.
 
@@ -223,7 +226,17 @@ def robot_mounted_head_camera_control_contract(
         contract["robot_pose"] = dict(robot_pose)
     if focus:
         contract["focus"] = dict(focus)
+    if color_profile:
+        contract["color_profile"] = dict(color_profile)
+    if color_management:
+        contract["color_management"] = dict(color_management)
     return contract
+
+
+def robot_view_display_color_profile() -> dict[str, Any]:
+    """Return the shared display profile for backend-local robot-view images."""
+
+    return dict(DEFAULT_SCENE_PROBE_COLOR_PROFILE)
 
 
 def _fpv_target(

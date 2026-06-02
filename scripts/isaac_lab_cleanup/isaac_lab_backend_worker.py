@@ -45,6 +45,7 @@ from roboclaws.molmo_cleanup.isaac_lab_backend import (
 from roboclaws.molmo_cleanup.robot_view_camera_control import (
     backend_local_robot_view_camera_control_contract,
     robot_mounted_head_camera_control_contract,
+    robot_view_display_color_profile,
 )
 from roboclaws.molmo_cleanup.robot_view_pose import resolve_cleanup_robot_pose
 from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
@@ -1972,6 +1973,8 @@ def _capture_isaac_lab_camera_views(
     segmentation_views: list[dict[str, Any]] = []
     total_render_steps = 0
     robot_pose_application: dict[str, Any] = {}
+    color_profile = robot_view_display_color_profile()
+    color_management: dict[str, dict[str, Any]] = {}
     for view_name in ROBOT_VIEW_KEYS:
         if view_name == "fpv" and mounted_head_camera:
             camera = head_camera
@@ -1998,6 +2001,14 @@ def _capture_isaac_lab_camera_views(
             raise RuntimeError(f"Isaac Lab camera did not produce an RGB tensor for {view_name}")
         if not _image_has_variance(rgb_image, np=np):
             raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_name}")
+        if view_name != "map":
+            rgb_image, color_management[view_name] = apply_camera_color_profile(
+                rgb_image,
+                np=np,
+                profile=color_profile,
+                backend=ISAACLAB_SUBPROCESS_BACKEND,
+                view_id=view_name,
+            )
         output_path = view_paths[view_name]
         output_path.parent.mkdir(parents=True, exist_ok=True)
         Image.fromarray(rgb_image, mode="RGB").save(output_path)
@@ -2018,6 +2029,8 @@ def _capture_isaac_lab_camera_views(
         "robot_stage": robot_stage,
         "robot_view_uses_mounted_head_camera": mounted_head_camera,
         "robot_pose_stage_application": robot_pose_application,
+        "color_profile": color_profile,
+        "color_management": color_management,
         "semantic_pose_stage_application": pose_apply,
         "segmentation": _camera_segmentation_capture_diagnostics(
             segmentation_views,
@@ -5363,6 +5376,8 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         robot_pose=robot_pose,
         robot_trajectory=[robot_pose],
         room_outline_count=len(state.get("room_outlines") or []),
+        color_profile=_dict(state.get("robot_view_color_profile")),
+        color_management=_dict(state.get("robot_view_color_management")),
         focus=focus,
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
@@ -5498,6 +5513,8 @@ def _robot_view_camera_control_contract(
             robot_asset=robot_import,
             robot_pose=dict(robot_pose or {}),
             focus=dict(focus or {}),
+            color_profile=_dict(state.get("robot_view_color_profile")),
+            color_management=_dict(state.get("robot_view_color_management")),
         )
         contract.update(
             {
@@ -5724,7 +5741,11 @@ def _real_semantic_pose_robot_view_images(
         "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
         "robot_stage": _dict(capture.get("robot_stage")),
         "robot_pose_stage_application": _dict(capture.get("robot_pose_stage_application")),
+        "color_profile": _dict(capture.get("color_profile")),
+        "color_management": _dict(capture.get("color_management")),
     }
+    state["robot_view_color_profile"] = _dict(capture.get("color_profile"))
+    state["robot_view_color_management"] = _dict(capture.get("color_management"))
     state.pop("canonical_robot_view_camera_control_request", None)
     state.pop("canonical_robot_view_camera_control_capture", None)
     mapping_gaps = [

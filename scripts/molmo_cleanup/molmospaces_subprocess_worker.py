@@ -34,6 +34,7 @@ from roboclaws.molmo_cleanup.generated_mess import (
 )
 from roboclaws.molmo_cleanup.robot_view_camera_control import (
     robot_mounted_head_camera_control_contract,
+    robot_view_display_color_profile,
 )
 from roboclaws.molmo_cleanup.robot_view_pose import (
     angle_delta,
@@ -670,17 +671,8 @@ def write_robot_views(
     fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
     verify_camera = _focus_camera(state, focus)
     verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
-    fpv_camera = "robot_0/head_camera"
-    camera_control_contract = robot_mounted_head_camera_control_contract(
-        backend="molmospaces-mujoco",
-        fpv_source="robot_0/head_camera",
-        verify_source="mujoco_focus_camera",
-        pose_source="rby1m_robot_qpos",
-        lens_source="mujoco_model_camera_defaults",
-        robot_pose=dict(state.get("robot_pose") or {}),
-        focus=focus,
-    )
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower", width=width, height=height)
+    fpv_camera = "robot_0/head_camera"
     focus["fpv_visibility"] = _focus_visibility(
         model,
         data,
@@ -705,6 +697,42 @@ def write_robot_views(
             "Verify frame reused FPV because the closeup camera missed the focused object.",
         )
         focus["visibility"] = fallback_visibility
+    color_profile = robot_view_display_color_profile()
+    import numpy as np
+
+    color_management: dict[str, dict[str, Any]] = {}
+    fpv, color_management["fpv"] = apply_camera_color_profile(
+        fpv,
+        np=np,
+        profile=color_profile,
+        backend=BACKEND,
+        view_id="fpv",
+    )
+    chase, color_management["chase"] = apply_camera_color_profile(
+        chase,
+        np=np,
+        profile=color_profile,
+        backend=BACKEND,
+        view_id="chase",
+    )
+    verify, color_management["verify"] = apply_camera_color_profile(
+        verify,
+        np=np,
+        profile=color_profile,
+        backend=BACKEND,
+        view_id="verify",
+    )
+    camera_control_contract = robot_mounted_head_camera_control_contract(
+        backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        verify_source="mujoco_focus_camera",
+        pose_source="rby1m_robot_qpos",
+        lens_source="mujoco_model_camera_defaults",
+        robot_pose=dict(state.get("robot_pose") or {}),
+        focus=focus,
+        color_profile=color_profile,
+        color_management=color_management,
+    )
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
     verify_image = Image.fromarray(verify)
@@ -721,6 +749,8 @@ def write_robot_views(
         view_variant="molmospaces-rby1m-fpv-map-chase-verify",
         view_provenance=state.get("robot_view_provenance", {}),
         camera_control_contract=camera_control_contract,
+        color_profile=color_profile,
+        color_management=color_management,
         focus=focus,
         room_outline_count=len(state.get("room_outlines", [])),
         views={
