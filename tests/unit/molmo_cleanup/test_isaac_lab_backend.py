@@ -441,6 +441,24 @@ def test_isaac_camera_lens_derives_horizontal_aperture_from_vertical_fov() -> No
     assert aperture == pytest.approx(29.82337649)
 
 
+def test_isaac_rby1m_head_camera_lens_matches_mujoco_vertical_fov() -> None:
+    aperture = isaac_lab_backend_worker._horizontal_aperture_from_lens(
+        {"vertical_fov_deg": isaac_lab_backend_worker.RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
+        width=540,
+        height=360,
+        focal_length=isaac_lab_backend_worker.RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+    )
+    metadata = isaac_lab_backend_worker._usd_camera_fov_metadata(
+        focal_length=isaac_lab_backend_worker.RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+        horizontal_aperture=aperture,
+        width=540,
+        height=360,
+    )
+
+    assert aperture == pytest.approx(29.82337649)
+    assert metadata["vertical_fov_deg"] == pytest.approx(45.0)
+
+
 def test_isaac_scene_camera_capture_applies_color_profile(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -549,6 +567,22 @@ def test_isaac_scene_camera_capture_applies_color_profile(
         0.7161647108631373
     )
     assert Path(result["images"]["fpv"]).is_file()
+
+
+def test_isaac_robot_view_color_profile_merges_comparison_override() -> None:
+    profile = isaac_lab_backend_worker._robot_view_color_profile(
+        {
+            "backend_rgb_gain": {"isaaclab_subprocess": [0.9, 0.8, 0.7]},
+            "backend_rgb_gain_source": "unit-comparison-profile",
+        }
+    )
+
+    assert profile["profile_id"] == "display_srgb_soft_highlight_v1"
+    assert profile["backend_luminance_gain"]["isaaclab_subprocess"] == pytest.approx(
+        0.7161647108631373
+    )
+    assert profile["backend_rgb_gain"]["isaaclab_subprocess"] == pytest.approx([0.9, 0.8, 0.7])
+    assert profile["backend_rgb_gain_source"] == "unit-comparison-profile"
 
 
 def test_isaac_write_camera_views_returns_color_contract(

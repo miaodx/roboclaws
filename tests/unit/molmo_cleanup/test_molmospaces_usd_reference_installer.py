@@ -71,6 +71,40 @@ def test_install_plan_maps_missing_usd_references_to_object_packages() -> None:
     assert plan.unresolved_assets == []
 
 
+def test_missing_scene_referenced_assets_collects_only_missing_usd_refs(tmp_path: Path) -> None:
+    install_dir = tmp_path / "install"
+    existing = install_dir / "objects" / "thor" / "Bowl_12_mesh"
+    existing.mkdir(parents=True)
+    (existing / "Bowl_12_mesh.usda").write_text("#usda 1.0\n", encoding="utf-8")
+
+    scene_dir = tmp_path / "scene"
+    payload_dir = scene_dir / "Payload"
+    payload_dir.mkdir(parents=True)
+    (scene_dir / "scene.usda").write_text(
+        "prepend references = @../../../../objects/thor/Bowl_12_mesh/Bowl_12_mesh.usda@\n",
+        encoding="utf-8",
+    )
+    (payload_dir / "Geometry.usda").write_text(
+        "\n".join(
+            [
+                "prepend references = @../../../../objects/thor/Ladle_1_mesh/Ladle_1_mesh.usda@",
+                "prepend references = @../../../../objects/thor/Plate_17_prim/Plate_17_prim.usda@",
+                "prepend references = @../../../../objects/objaverse/ignored/ignored.usda@",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert installer._missing_scene_referenced_assets(
+        [scene_dir / "scene.usda"],
+        install_dir=install_dir,
+        source="thor",
+    ) == [
+        str(install_dir / "objects" / "thor" / "Ladle_1_mesh" / "Ladle_1_mesh.usda"),
+        str(install_dir / "objects" / "thor" / "Plate_17_prim" / "Plate_17_prim.usda"),
+    ]
+
+
 def test_install_plan_reports_unresolved_references() -> None:
     plan = installer._build_install_plan(
         asset_paths=["/repo/output/isaaclab/molmospaces-usd/objects/thor/Missing.usda"],
