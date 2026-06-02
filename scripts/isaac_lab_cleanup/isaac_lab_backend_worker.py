@@ -6193,6 +6193,7 @@ def _robot_view_focus(
         target = [0.0, 0.0, 0.0]
         source = "isaac_semantic_pose_default_origin"
     return {
+        **focus,
         "has_focus": True,
         "focus_position": target,
         "object_id": focus_object_id,
