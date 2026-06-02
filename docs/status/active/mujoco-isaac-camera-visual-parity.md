@@ -473,6 +473,21 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   default-promotion blocker until render residuals are resolved or the chase
   role is explicitly re-gated, but do not treat it as evidence of camera pose,
   lens, or USD geometry regression.
+- A follow-up comparison-only material probe now tests whether the LightWood
+  texture-scale response should sit between source values and full squaring.
+  `scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py`
+  accepts opt-in `--texture-scale-power`; the `val_1` target-specific artifact
+  at
+  `output/isaaclab/flattened-semantic-usd/val_1_diningtable_lightwood_scale_power15/summary.json`
+  rewrites only the dining-table `material_LightWoodCounters3` texture
+  scale/fallback inputs with `power=1.5`. Its apple-to-apple report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_diningtable_lightwood_scale_power15_probe/report.html`
+  preserves the head-camera contract and leaves chase effectively unchanged
+  (`72.2838` to `72.2828`). It improves the dining table FPV from `46.1260` to
+  `40.9925`, but this is weaker than full scale-square (`37.5939`) and overall
+  FPV only reaches `35.1698`, far behind global/prepared scale-square
+  (`29.4052`). Treat `power=1.5` as useful calibration evidence, not a default
+  candidate or replacement for the stronger scale-square corpus.
 
 ## Next Action
 
@@ -501,12 +516,16 @@ scale/fallback squaring is now the strongest material-response direction, with
 positive FPV evidence on `val_0`, held-out `val_1` seed-6, held-out `val_1`
 seed-8 bound targets, and maintained prepared-USD reproductions for all three
 of those slices. It is still comparison-only because chase worsens on `val_1`
-seed-6 and render-domain residuals remain. The next useful slice is a broader
-prepared-USD `--material-texture-scale-mode square` default-promotion gate
-across additional scenes/targets, with explicit acceptance criteria for FPV
-gain, chase non-regression tolerance, and remaining material-binding residuals.
-The summary gate already encodes those blockers, so future runs should drive
-`prepared_scale_square_default_gate` instead of relying on manual report notes.
+seed-6 and render-domain residuals remain. The `power=1.5` LightWood probe shows
+that intermediate scale power can avoid the chase side effect for a targeted
+material, but it gives up too much FPV gain to replace full scale-square. The
+next useful slice is either a broader prepared-USD
+`--material-texture-scale-mode square` default-promotion gate across additional
+scenes/targets, or a targeted material-modulation probe that preserves global
+scale-square FPV gains while reducing the auxiliary chase luminance side effect.
+The summary gate already encodes the current blockers, so future runs should
+drive `prepared_scale_square_default_gate` instead of relying on manual report
+notes.
 
 ## Touched Areas
 
