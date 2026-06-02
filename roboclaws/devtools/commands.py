@@ -1,18 +1,16 @@
-"""Command routing helpers for the public Just facade.
+"""Compatibility adapter for the public Just facade.
 
-The root Justfile should stay small and discoverable. This module owns the
-structured route normalization that is awkward to maintain as shell control
-flow, while lower implementation recipes remain in Just for now.
+The root Justfile historically called this module. Public CLI parsing now lives
+in :mod:`roboclaws.cli`, while this module keeps import-compatible helpers for
+tests and older local scripts.
 """
 
 from __future__ import annotations
 
-import os
-import shlex
-import sys
 from dataclasses import dataclass
-from typing import NoReturn
 
+from roboclaws.cli.main import main
+from roboclaws.cli.task_run import task_run_main
 from roboclaws.launch.catalog import (
     CANONICAL_DRIVERS,
     CANONICAL_TASKS,
@@ -21,7 +19,6 @@ from roboclaws.launch.catalog import (
     LaunchError,
     resolve_task_launch,
 )
-from roboclaws.launch.plans import LaunchPlan
 
 __all__ = [
     "CANONICAL_DRIVERS",
@@ -65,50 +62,6 @@ def resolve_task_run(args: list[str] | tuple[str, ...]) -> ResolvedCommand:
         mode=plan.mode,
         overrides=plan.overrides,
     )
-
-
-def _print_launch_trace(plan: LaunchPlan) -> None:
-    fields = (
-        "launch-plan",
-        f"task={plan.task}",
-        f"driver={plan.driver}",
-        f"mode={plan.mode}",
-        f"profile={plan.profile or ''}",
-        f"report={plan.report or ''}",
-        f"backend={plan.backend}",
-        f"prompt={plan.prompt_id}",
-        f"checker={plan.checker_id}",
-        f"target={shlex.join(plan.argv)}",
-    )
-    print("\t".join(fields), file=sys.stderr)
-
-
-def _die(message: str) -> NoReturn:
-    print(f"error: {message}", file=sys.stderr)
-    raise SystemExit(1)
-
-
-def task_run_main(args: list[str]) -> int:
-    try:
-        plan = resolve_task_launch(args)
-    except LaunchError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        if exc.hint:
-            print(f"       {exc.hint}", file=sys.stderr)
-        return 1
-
-    if os.environ.get("ROBOCLAWS_JUST_TRACE") == "1":
-        _print_launch_trace(plan)
-
-    os.execvp(plan.argv[0], list(plan.argv))
-    return 1
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = list(sys.argv[1:] if argv is None else argv)
-    if len(args) >= 2 and args[0] == "task" and args[1] == "run":
-        return task_run_main(args[2:])
-    _die("expected subcommand: task run")
 
 
 if __name__ == "__main__":

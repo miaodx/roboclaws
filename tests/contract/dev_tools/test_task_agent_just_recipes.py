@@ -273,7 +273,7 @@ def test_task_module_exposes_only_run_publicly() -> None:
     text = TASK_JUST.read_text(encoding="utf-8")
 
     assert re.search(r"^run task driver mode=\"\" \*overrides:", text, re.MULTILINE)
-    assert "-m roboclaws.devtools.commands task run" in text
+    assert "-m roboclaws.cli.main task run" in text
     assert "normalize_task()" not in text
     assert "normalize_driver()" not in text
 
