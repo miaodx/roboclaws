@@ -135,6 +135,21 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `view_dependent_color_residual`. The refreshed 8-location baseline now
   attaches all four material probes with `comparable_probe_count=4`,
   `worsened_probe_count=2`, and `neutral_probe_count=2`.
+- A target-specific `0008` dining-table roughness probe is now reproducible via
+  `scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py`
+  with `--material-path-contains`. The prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_0_scene_refs_fix_0008_lightwood_roughness1/scene_semantic.usda`
+  rewrites only one material block:
+  `/val_0/Geometry/diningtable_f113cf7f8367e89f709b53cbee1a1c05_1_0_2/Materials/material_LightWoodCounters3`,
+  with `matched_material_block_count=1` and `roughness_rewrite_count=1`.
+  The corresponding 8-location report at
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_0008_lightwood_roughness1_probe/report.html`
+  is effectively neutral: overall FPV changes from `38.0980` to `38.0044`
+  (`-0.0936`), chase is unchanged (`83.7516` to `83.7508`), and `0008` improves
+  only from `45.4961` to `44.8164` (`-0.6797`) while remaining a high residual
+  `view_dependent_color_residual`. The refreshed baseline report now attaches
+  all five material probes with `comparable_probe_count=5`,
+  `worsened_probe_count=2`, and `neutral_probe_count=3`.
 - The refreshed 8-location post-FOV RGB-gain probe improved FPV avg from
   `38.0980` to `35.0612` and changed the residual split to 4 low-residual FPV
   views, 3 geometry/texture edge residuals, and 1 render-domain residual. Its
@@ -170,15 +185,16 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 ## Next Action
 
 Keep FPV pose and the head-camera FOV contract unchanged. Do not promote global
-raw colorspace, combined raw+roughness, or global roughness-only as defaults
-from the current evidence. Next material direction should be target-specific:
-start with the `0008` dining table / `LightWoodCounters3` path and compare a
-small sampler/material override against baseline, or broaden roughness-only to a
-multi-scene corpus before treating its weak FPV gain as real. Keep RGB gain
-comparison-only until it improves a broader post-FOV corpus. For light/shadow
-specifically, do not retry simple dome removal, shadow enabling, or the old
-combined MuJoCo-like light/shadow USD edit; split light count, shadow flags,
-intensity/direction, and material response only in a comparison-only probe.
+raw colorspace, combined raw+roughness, global roughness-only, or the `0008`
+target-specific roughness edit as defaults from the current evidence. Next
+material direction should move away from roughness alone and test sampler /
+texture / tone behavior, for example target-specific `LightWoodCounters3`
+texture scale/fallback/color or a comparison RGB/tone calibration on a broader
+post-FOV corpus. Keep RGB gain comparison-only until that broader corpus
+improves. For light/shadow specifically, do not retry simple dome removal,
+shadow enabling, or the old combined MuJoCo-like light/shadow USD edit; split
+light count, shadow flags, intensity/direction, and material response only in a
+comparison-only probe.
 
 ## Touched Areas
 

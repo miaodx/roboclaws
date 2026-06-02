@@ -67,3 +67,69 @@ def Material "mat"
     assert 'token inputs:sourceColorSpace = "auto"' in source_usd.read_text(encoding="utf-8")
     assert (output_usd.parent / "scene_metadata.json").is_file()
     assert json.loads(summary_path.read_text(encoding="utf-8"))["status"] == "ready"
+
+
+def test_material_response_probe_can_target_one_material_block(tmp_path: Path) -> None:
+    probe = _load_module(SCRIPT_PATH, "make_molmospaces_material_response_probe_usd_targeted")
+    source_usd = tmp_path / "scene_semantic.usda"
+    source_usd.write_text(
+        """#usda 1.0
+def Xform "a"
+{
+    def Scope "Materials"
+    {
+        def Material "material_LightWoodCounters3"
+        {
+            token outputs:surface.connect = </a/M/material_LightWoodCounters3/PS.outputs:surface>
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:roughness = 0.5
+            }
+            def Shader "DiffuseTexture"
+            {
+                token inputs:sourceColorSpace = "auto"
+            }
+        }
+    }
+}
+def Xform "b"
+{
+    def Scope "Materials"
+    {
+        def Material "material_LightWoodCounters3"
+        {
+            token outputs:surface.connect = </b/M/material_LightWoodCounters3/PS.outputs:surface>
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                float inputs:roughness = 0.5
+            }
+            def Shader "DiffuseTexture"
+            {
+                token inputs:sourceColorSpace = "auto"
+            }
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+    output_usd = tmp_path / "targeted" / "scene_semantic.usda"
+
+    summary = probe.make_material_response_probe_usd(
+        scene_usd_path=source_usd,
+        output_usd_path=output_usd,
+        material_path_contains="/a/M/material_LightWoodCounters3",
+        source_color_space="raw",
+        roughness=1.0,
+    )
+
+    text = output_usd.read_text(encoding="utf-8")
+    assert summary["matched_material_block_count"] == 1
+    assert summary["source_color_space_rewrite_count"] == 1
+    assert summary["roughness_rewrite_count"] == 1
+    assert "float inputs:roughness = 1" in text
+    assert 'token inputs:sourceColorSpace = "raw"' in text
+    assert text.count("float inputs:roughness = 0.5") == 1
+    assert text.count('token inputs:sourceColorSpace = "auto"') == 1

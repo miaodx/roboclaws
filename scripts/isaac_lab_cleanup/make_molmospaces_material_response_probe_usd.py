@@ -21,6 +21,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-usd-path", type=Path, required=True)
     parser.add_argument("--summary-output", type=Path)
     parser.add_argument(
+        "--material-path-contains",
+        help=(
+            "Restrict rewrites to Material blocks whose text contains this path fragment. "
+            "Use this for target-specific comparison probes."
+        ),
+    )
+    parser.add_argument(
         "--source-color-space",
         choices=("auto", "raw", "sRGB"),
         help="Rewrite USD texture token inputs:sourceColorSpace values for a probe.",
@@ -39,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
         scene_usd_path=args.scene_usd_path,
         output_usd_path=args.output_usd_path,
         summary_output=args.summary_output,
+        material_path_contains=args.material_path_contains,
         source_color_space=args.source_color_space,
         roughness=args.roughness,
     )
@@ -51,6 +59,7 @@ def make_material_response_probe_usd(
     scene_usd_path: Path,
     output_usd_path: Path,
     summary_output: Path | None = None,
+    material_path_contains: str | None = None,
     source_color_space: str | None = None,
     roughness: float | None = None,
 ) -> dict[str, Any]:
@@ -59,21 +68,35 @@ def make_material_response_probe_usd(
     if scene_usd_path.resolve() == output_usd_path.resolve():
         raise ValueError("output_usd_path must not overwrite scene_usd_path")
     text = scene_usd_path.read_text(encoding="utf-8", errors="ignore")
-    updated = text
-    source_color_space_rewrite_count = 0
-    roughness_rewrite_count = 0
-    if source_color_space is not None:
-        updated, source_color_space_rewrite_count = re.subn(
-            r'token inputs:sourceColorSpace = "[^"]+"',
-            f'token inputs:sourceColorSpace = "{source_color_space}"',
+    if material_path_contains:
+        (
             updated,
+            source_color_space_rewrite_count,
+            roughness_rewrite_count,
+            matched_material_block_count,
+        ) = _rewrite_matching_material_blocks(
+            text,
+            material_path_contains=material_path_contains,
+            source_color_space=source_color_space,
+            roughness=roughness,
         )
-    if roughness is not None:
-        updated, roughness_rewrite_count = re.subn(
-            r"float inputs:roughness = [^\s]+",
-            f"float inputs:roughness = {_format_float(roughness)}",
-            updated,
-        )
+    else:
+        matched_material_block_count = None
+        updated = text
+        source_color_space_rewrite_count = 0
+        roughness_rewrite_count = 0
+        if source_color_space is not None:
+            updated, source_color_space_rewrite_count = re.subn(
+                r'token inputs:sourceColorSpace = "[^"]+"',
+                f'token inputs:sourceColorSpace = "{source_color_space}"',
+                updated,
+            )
+        if roughness is not None:
+            updated, roughness_rewrite_count = re.subn(
+                r"float inputs:roughness = [^\s]+",
+                f"float inputs:roughness = {_format_float(roughness)}",
+                updated,
+            )
     output_usd_path.parent.mkdir(parents=True, exist_ok=True)
     output_usd_path.write_text(updated, encoding="utf-8")
     metadata_copied = _copy_metadata_next_to_output(
@@ -89,9 +112,11 @@ def make_material_response_probe_usd(
         "output_usd_path": str(output_usd_path),
         "comparison_only": True,
         "requested_overrides": {
+            "material_path_contains": material_path_contains,
             "source_color_space": source_color_space,
             "roughness": roughness,
         },
+        "matched_material_block_count": matched_material_block_count,
         "source_color_space_rewrite_count": source_color_space_rewrite_count,
         "roughness_rewrite_count": roughness_rewrite_count,
         "total_rewrite_count": total_rewrite_count,
@@ -104,6 +129,71 @@ def make_material_response_probe_usd(
             encoding="utf-8",
         )
     return summary
+
+
+def _rewrite_matching_material_blocks(
+    text: str,
+    *,
+    material_path_contains: str,
+    source_color_space: str | None,
+    roughness: float | None,
+) -> tuple[str, int, int, int]:
+    parts: list[str] = []
+    cursor = 0
+    source_color_space_rewrite_count = 0
+    roughness_rewrite_count = 0
+    matched_material_block_count = 0
+    for match in re.finditer(r'(?m)^(\s*)def Material "[^"]+"\s*\{\s*$', text):
+        block_start = match.start()
+        block_end = _balanced_block_end(text, match.end() - 1)
+        if block_end is None:
+            continue
+        block = text[block_start:block_end]
+        if material_path_contains not in block:
+            continue
+        matched_material_block_count += 1
+        rewritten = block
+        if source_color_space is not None:
+            rewritten, count = re.subn(
+                r'token inputs:sourceColorSpace = "[^"]+"',
+                f'token inputs:sourceColorSpace = "{source_color_space}"',
+                rewritten,
+            )
+            source_color_space_rewrite_count += count
+        if roughness is not None:
+            rewritten, count = re.subn(
+                r"float inputs:roughness = [^\s]+",
+                f"float inputs:roughness = {_format_float(roughness)}",
+                rewritten,
+            )
+            roughness_rewrite_count += count
+        parts.append(text[cursor:block_start])
+        parts.append(rewritten)
+        cursor = block_end
+    if not parts:
+        return text, 0, 0, 0
+    parts.append(text[cursor:])
+    return (
+        "".join(parts),
+        source_color_space_rewrite_count,
+        roughness_rewrite_count,
+        matched_material_block_count,
+    )
+
+
+def _balanced_block_end(text: str, open_brace_index: int) -> int | None:
+    depth = 0
+    for index in range(open_brace_index, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                if index + 1 < len(text) and text[index + 1] == "\n":
+                    return index + 2
+                return index + 1
+    return None
 
 
 def _copy_metadata_next_to_output(*, scene_usd_path: Path, output_usd_path: Path) -> bool:
