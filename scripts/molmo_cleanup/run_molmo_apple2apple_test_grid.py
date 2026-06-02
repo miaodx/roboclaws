@@ -14,7 +14,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.apple2apple_test_grid import (  # noqa: E402
+from roboclaws.household.apple2apple_test_grid import (  # noqa: E402
     DEFAULT_MAP_BUNDLE,
     RUNTIME_MAP_PRIOR_PLACEHOLDER,
     build_apple2apple_test_grid,
@@ -23,7 +23,7 @@ from roboclaws.molmo_cleanup.apple2apple_test_grid import (  # noqa: E402
     write_grid_manifest,
     write_grid_report,
 )
-from roboclaws.molmo_cleanup.realworld_contract import DEFAULT_REALWORLD_TASK  # noqa: E402
+from roboclaws.household.realworld_contract import DEFAULT_REALWORLD_TASK  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

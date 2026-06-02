@@ -16,7 +16,7 @@ if __package__ in {None, ""}:
 
 def _load_ci_live_reports() -> ModuleType:
     module_path = (
-        Path(__file__).resolve().parents[2] / "roboclaws" / "molmo_cleanup" / ("ci_live_reports.py")
+        Path(__file__).resolve().parents[2] / "roboclaws" / "household" / ("ci_live_reports.py")
     )
     spec = importlib.util.spec_from_file_location("_roboclaws_ci_live_reports", module_path)
     if spec is None or spec.loader is None:

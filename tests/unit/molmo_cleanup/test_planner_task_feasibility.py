@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from roboclaws.molmo_cleanup.planner_task_feasibility import (
+from roboclaws.household.planner_task_feasibility import (
     grasp_cache_availability_preflight,
     grasp_cache_generation_preflight,
     grasp_feasibility_mitigation_decision,

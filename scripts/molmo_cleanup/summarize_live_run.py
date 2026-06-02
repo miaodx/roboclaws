@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from roboclaws.molmo_cleanup.report import runtime_timing_from_trace
+from roboclaws.household.report import runtime_timing_from_trace
 
 DEFAULT_SEARCH_ROOT = Path("output/molmo/codex-report")
 

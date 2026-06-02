@@ -15,7 +15,7 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.core.rerun import shell_join  # noqa: E402
-from roboclaws.molmo_cleanup.ci_live_reports import (  # noqa: E402
+from roboclaws.household.ci_live_reports import (  # noqa: E402
     MODEL_ENTRIES,
     MolmoLiveModelEntry,
     base_status,
@@ -32,7 +32,7 @@ from roboclaws.molmo_cleanup.ci_live_reports import (  # noqa: E402
     write_manifest,
     write_status,
 )
-from roboclaws.molmo_cleanup.realworld_contract import DEFAULT_REALWORLD_TASK  # noqa: E402
+from roboclaws.household.realworld_contract import DEFAULT_REALWORLD_TASK  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

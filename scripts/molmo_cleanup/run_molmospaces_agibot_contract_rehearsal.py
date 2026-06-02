@@ -12,7 +12,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.agibot_contract_rehearsal import (  # noqa: E402
+from roboclaws.household.agibot_contract_rehearsal import (  # noqa: E402
     REHEARSAL_MODE_CLEANUP_ACTIONS,
     REHEARSAL_MODE_CONTRACT,
     REHEARSAL_TASK_HOUSEHOLD_CLEANUP,

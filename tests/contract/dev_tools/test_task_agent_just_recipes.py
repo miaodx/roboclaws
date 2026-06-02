@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
 from roboclaws.devtools.commands import CommandError, resolve_task_run
+from roboclaws.launch import resolve_task_launch
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 JUSTFILE = REPO_ROOT / "justfile"
@@ -24,6 +26,7 @@ LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cl
 AGIBOT_MAP_BUILD_CODEX_RUNNER = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_agibot_map_build.py"
 )
+HOUSEHOLD_AGENT_SERVER_MODULE = "roboclaws.cli.agent_server"
 CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_PROVIDER",
     "ROBOCLAWS_CODEX_PROVIDER",
@@ -77,6 +80,22 @@ def trace_task_run(*args: str) -> list[str]:
         text=True,
     )
     return result.stdout.strip().split("\t")
+
+
+def trace_task_run_with_plan(*args: str) -> tuple[list[str], list[str]]:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "task::run", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip().split("\t"), result.stderr.strip().split("\t")
 
 
 def trace_agent_harness(*args: str) -> list[str]:
@@ -256,7 +275,7 @@ def test_task_module_exposes_only_run_publicly() -> None:
     text = TASK_JUST.read_text(encoding="utf-8")
 
     assert re.search(r"^run task driver mode=\"\" \*overrides:", text, re.MULTILINE)
-    assert "-m roboclaws.devtools.commands task run" in text
+    assert "-m roboclaws.cli.main task run" in text
     assert "normalize_task()" not in text
     assert "normalize_driver()" not in text
 
@@ -356,6 +375,62 @@ def test_task_router_is_importable_source_of_truth() -> None:
 
     with pytest.raises(CommandError, match="unsupported task 'molmospace-cleanup'"):
         resolve_task_run(("molmospace-cleanup", "codex"))
+
+
+def test_task_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
+    plan = resolve_task_launch(
+        ("household-cleanup", "codex", "profile=smoke", "backend=agibot_gdk")
+    )
+
+    assert plan.argv == (
+        "just",
+        "agent::run",
+        "household-cleanup",
+        "codex",
+        "smoke",
+        "backend=agibot_gdk",
+    )
+    assert plan.task == "household-cleanup"
+    assert plan.driver == "codex"
+    assert plan.profile == "smoke"
+    assert plan.report is None
+    assert plan.backend == "agibot_gdk"
+    assert plan.prompt_id == "household_cleanup"
+    assert plan.checker_id == "cleanup_report"
+    assert plan.required_capabilities == (
+        "household_world",
+        "household_manipulation",
+        "household_episode",
+    )
+
+
+def test_task_launch_plan_keeps_non_household_report_axis() -> None:
+    plan = resolve_task_launch(("ai2thor-nav", "openclaw", "minimal"))
+
+    assert plan.argv == ("just", "agent::run", "ai2thor-nav", "openclaw", "minimal")
+    assert plan.profile is None
+    assert plan.report == "minimal"
+    assert plan.backend == "ai2thor"
+    assert plan.prompt_id == "ai2thor_nav"
+
+
+def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
+    route, plan_trace = trace_task_run_with_plan(
+        "household-cleanup",
+        "codex",
+        "camera-labels",
+    )
+
+    assert route[:5] == ["just", "molmo::cleanup", "codex-live", "camera-labels", "7"]
+    assert plan_trace[:2] == ["launch-plan", "task=household-cleanup"]
+    assert "driver=codex" in plan_trace
+    assert "mode=camera-labels" in plan_trace
+    assert "profile=camera-labels" in plan_trace
+    assert "report=" in plan_trace
+    assert "backend=molmospaces_subprocess" in plan_trace
+    assert "prompt=household_cleanup" in plan_trace
+    assert "checker=cleanup_report" in plan_trace
+    assert "target=just agent::run household-cleanup codex camera-labels" in plan_trace
 
 
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
@@ -688,7 +763,9 @@ def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> N
     result = subprocess.run(
         [
             os.environ.get("ROBOCLAWS_DEVTOOLS_PYTHON") or sys.executable,
-            "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py",
+            "-m",
+            HOUSEHOLD_AGENT_SERVER_MODULE,
+            "household-cleanup",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -854,13 +931,7 @@ def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
 
 
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
-    text = MOLMO_JUST.read_text(encoding="utf-8")
-    matches = [
-        match.group("body")
-        for match in re.finditer(r"camera-raw\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
-    ]
-    prompt = next((body for body in matches if "kickoff_prompt" in body), "")
-    assert prompt
+    prompt = render_kickoff_prompt("camera-raw")
 
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
@@ -876,8 +947,8 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "Prefer image_region={type:verbal_region,value:front of desk}" in prompt
     assert "image_region={type:bbox,value:[x,y,width,height]} only when" in prompt
     assert "Never send bbox_normalized" in prompt
-    assert 'target_fixture_id=\\"\\"' in prompt
-    assert 'target_fixture_id=\\"None\\"' in prompt
+    assert 'target_fixture_id=""' in prompt
+    assert 'target_fixture_id="None"' in prompt
     assert "target_fixture_id=null" in prompt
     assert "bare x/y/width/height fields" in prompt
     assert "at least seven grounded cleanup chains have succeeded" in prompt
@@ -886,10 +957,7 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
-    text = MOLMO_JUST.read_text(encoding="utf-8")
-    match = re.search(r'\*\)\n\s+kickoff_prompt="([^"]+)"', text)
-    assert match is not None
-    prompt = match.group(1)
+    prompt = render_kickoff_prompt("world-labels")
 
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
@@ -905,6 +973,21 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
+
+
+def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    codex_runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
+    agibot_runner_text = AGIBOT_MAP_BUILD_CODEX_RUNNER.read_text(encoding="utf-8")
+
+    assert "roboclaws.cli.agent_server household-cleanup" in molmo_text
+    assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in molmo_text
+    assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in codex_runner_text
+    assert "examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py" not in (
+        agibot_runner_text
+    )
+    assert "household_cleanup_server_argv" in codex_runner_text
+    assert "semantic_map_build_server_argv" in agibot_runner_text
 
 
 def test_ci_does_not_define_codex_live_proof() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.semantic_acceptability import (
+from roboclaws.household.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
 

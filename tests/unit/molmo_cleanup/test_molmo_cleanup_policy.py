@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from roboclaws.molmo_cleanup.policy import build_public_cleanup_plan
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.household.policy import build_public_cleanup_plan
+from roboclaws.household.scenario import build_cleanup_scenario
 
 
 def test_public_cleanup_policy_restores_default_targets_without_private_manifest() -> None:

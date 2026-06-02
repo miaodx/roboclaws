@@ -12,8 +12,8 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.ci_live_reports import utc_timestamp  # noqa: E402
-from roboclaws.molmo_cleanup.subprocess_backend import (  # noqa: E402
+from roboclaws.household.ci_live_reports import utc_timestamp  # noqa: E402
+from roboclaws.household.subprocess_backend import (  # noqa: E402
     MolmoSpacesSubprocessBackend,
 )
 

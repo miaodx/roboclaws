@@ -15,7 +15,7 @@ from typing import Any
 
 from PIL import Image
 
-from roboclaws.molmo_cleanup.visual_grounding import (
+from roboclaws.household.visual_grounding import (
     VISUAL_GROUNDING_RESPONSE_SCHEMA,
     validate_visual_grounding_response,
 )

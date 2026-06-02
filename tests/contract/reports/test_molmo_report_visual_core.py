@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
-from roboclaws.molmo_cleanup.semantic_timeline import robot_view_capture_for_tool
+from roboclaws.household.report_visual_core import assert_cleanup_report_visual_core
+from roboclaws.household.semantic_timeline import robot_view_capture_for_tool
 
 
 def test_visual_core_contract_accepts_canonical_cleanup_order() -> None:

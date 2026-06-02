@@ -1,31 +1,15 @@
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-SERVER_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmo_realworld_cleanup_agent_server.py"
-
-
-def _load_server_module():
-    spec = importlib.util.spec_from_file_location(
-        "molmo_realworld_cleanup_agent_server",
-        SERVER_PATH,
-    )
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
+from roboclaws.cli import household_agent_server as server_module
 
 
 def test_realworld_agent_server_prints_codex_claude_and_openclaw_setup(
     tmp_path: Path,
     capsys,
 ) -> None:
-    module = _load_server_module()
-
-    module.print_setup(
+    server_module.print_setup(
         tmp_path,
         "http://127.0.0.1:18788/mcp",
         "codex_agent",
@@ -54,9 +38,7 @@ def test_realworld_agent_server_prints_codex_claude_and_openclaw_setup(
 
 
 def test_realworld_agent_server_prints_visual_setup(tmp_path: Path, capsys) -> None:
-    module = _load_server_module()
-
-    module.print_setup(
+    server_module.print_setup(
         tmp_path,
         "http://127.0.0.1:18788/mcp",
         "codex_agent",
@@ -70,9 +52,7 @@ def test_realworld_agent_server_prints_visual_setup(tmp_path: Path, capsys) -> N
 
 
 def test_realworld_agent_server_client_setup_commands() -> None:
-    module = _load_server_module()
-
-    commands = module.client_setup_commands("http://127.0.0.1:18788/mcp")
+    commands = server_module.client_setup_commands("http://127.0.0.1:18788/mcp")
 
     assert commands["Codex"] == (
         "scripts/dev/coding_agent_docker.sh run codex mcp add roboclaws "

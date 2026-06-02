@@ -194,7 +194,7 @@ molmo-realworld-cleanup seeds="1 2 3" output_dir="output/molmo-realworld-cleanup
     echo "==> run root: ${run_root}"
     for seed in {{seeds}}; do
       run_dir="${run_root}/seed-${seed}"
-      .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
+      .venv/bin/python -m roboclaws.household.realworld_cleanup \
         --seed "${seed}" \
         --backend molmospaces_subprocess \
         --task "{{task}}" \
@@ -345,7 +345,7 @@ molmo-realworld-raw-fpv seed="7" output_dir="output/molmo-realworld-raw-fpv-harn
     run_dir="{{output_dir}}/${stamp}"
     mkdir -p "$run_dir"
     echo "==> run dir: ${run_dir}"
-    .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
+    .venv/bin/python -m roboclaws.household.realworld_cleanup \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --task "{{task}}" \
@@ -377,7 +377,7 @@ molmo-planner-proof-bundle-runner output_dir="output/molmo-planner-proof-bundle-
     bundle_dir="${run_root}/proof_bundle"
     mkdir -p "$run_root"
     echo "==> run root: ${run_root}"
-    .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
+    .venv/bin/python -m roboclaws.household.realworld_cleanup \
       --seed "{{seed}}" \
       --backend api_semantic_synthetic \
       --task "{{task}}" \
@@ -415,7 +415,7 @@ molmo-planner-proof-bundle-execute-rerun output_dir="output/molmo-planner-proof-
     torch_extensions_dir="${run_root}/torch_extensions"
     mkdir -p "$run_root"
     echo "==> run root: ${run_root}"
-    .venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
+    .venv/bin/python -m roboclaws.household.realworld_cleanup \
       --seed "{{seed}}" \
       --backend molmospaces_subprocess \
       --task "{{task}}" \
@@ -933,7 +933,7 @@ molmo-isaac-cleanup-smoke *overrides:
     if [[ "$accept_nvidia_eula" == "true" ]]; then
       export OMNI_KIT_ACCEPT_EULA="YES"
     fi
-    run_cmd=(.venv/bin/python examples/molmo_cleanup/molmospaces_realworld_cleanup.py \
+    run_cmd=(.venv/bin/python -m roboclaws.household.realworld_cleanup \
       --output-dir "$run_dir" \
       --seed "$seed" \
       --task "$task" \

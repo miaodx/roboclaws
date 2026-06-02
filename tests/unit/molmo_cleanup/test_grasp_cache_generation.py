@@ -5,13 +5,13 @@ from pathlib import Path
 
 import numpy as np
 
-from roboclaws.molmo_cleanup import grasp_cache_generation as generation
-from roboclaws.molmo_cleanup.grasp_cache_generation import (
+from roboclaws.household import grasp_cache_generation as generation
+from roboclaws.household.grasp_cache_generation import (
     GRASP_CACHE_GENERATION_SCHEMA,
     load_generation_preflight_from_manifest,
     run_grasp_cache_generation,
 )
-from roboclaws.molmo_cleanup.report import render_grasp_cache_generation_report
+from roboclaws.household.report import render_grasp_cache_generation_report
 
 
 def test_generation_dry_run_writes_objects_list(tmp_path: Path) -> None:

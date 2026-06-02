@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from roboclaws.molmo_cleanup.profiles import (
+from roboclaws.household.profiles import (
     CAMERA_LABELS_PROFILE,
     CAMERA_RAW_PROFILE,
     ISAACLAB_SUBPROCESS_BACKEND,
@@ -16,12 +16,12 @@ from roboclaws.molmo_cleanup.profiles import (
     cleanup_profile_names,
     validate_cleanup_profile_metadata,
 )
-from roboclaws.molmo_cleanup.realworld_contract import (
+from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     RAW_FPV_ONLY_MODE,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
-from roboclaws.molmo_cleanup.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
+from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 
 
 def test_cleanup_profile_registry_contains_public_profiles_only() -> None:

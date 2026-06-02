@@ -148,6 +148,20 @@ Current task mappings:
 - `semantic-map-build` direct: `molmo-realworld-cleanup` with cleanup actions disabled
 - `household-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
 
+Python owns route metadata and reusable launch pieces:
+
+- Public task specs live in domain packages such as `roboclaws.ai2thor.tasks`
+  and `roboclaws.household.tasks`, then register through
+  `roboclaws.launch.catalog`.
+- Coding-agent driver helpers and kickoff prompts live under
+  `roboclaws.agents`.
+- MCP server startup goes through `python -m roboclaws.cli.agent_server`, with
+  `household-cleanup` and `semantic-map-build` selecting the household server
+  variants.
+- Direct deterministic household cleanup runs through
+  `python -m roboclaws.household.realworld_cleanup`; the example script is a
+  thin wrapper for manual use.
+
 For Codex, isolated runs also mount an empty read-only `CODEX_HOME/skills`, so
 bundled/system Codex skills are not available. Recipe-owned prompts should state
 that the bundled task skill instructions are already available in the generated

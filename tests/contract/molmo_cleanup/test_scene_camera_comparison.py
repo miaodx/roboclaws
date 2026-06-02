@@ -9,11 +9,11 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from roboclaws.molmo_cleanup.camera_control import (
+from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
 )
-from roboclaws.molmo_cleanup.scene_camera_comparison import (
+from roboclaws.household.scene_camera_comparison import (
     ISAAC_LANE_ID,
     MOLMOSPACES_LANE_ID,
     SCENE_CAMERA_COMPARISON_SCHEMA,

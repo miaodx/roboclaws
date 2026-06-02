@@ -128,6 +128,14 @@ rename plus `semantic-map-build`:
 - Collapsed public agent recipes into compact dispatchers.
 - Marked implementation modules private in the root `justfile`.
 - Added `just/README.md`.
+- Route metadata now lives in `roboclaws.launch`; task specs live in domain
+  packages.
+- Live household kickoff prompts and server module selectors moved under
+  `roboclaws.agents`.
+- Household direct cleanup runs use `python -m roboclaws.household.realworld_cleanup`.
+- Household live MCP servers start through
+  `python -m roboclaws.cli.agent_server household-cleanup` or
+  `python -m roboclaws.cli.agent_server semantic-map-build`.
 - Updated README and human docs to point normal users at `task::run`.
 - Updated `tests/contract/dev_tools/test_task_agent_just_recipes.py`.
 

@@ -5,23 +5,23 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.molmo_cleanup.manipulation_provenance import (
+from roboclaws.household.manipulation_provenance import (
     MANIPULATION_PROBE_CONTRACT,
     PLANNER_BACKED_PROVENANCE,
     planner_backed_probe_evidence,
 )
-from roboclaws.molmo_cleanup.planner_proof_attachment import (
+from roboclaws.household.planner_proof_attachment import (
     PLANNER_PROOF_ATTACHMENT_SCHEMA,
     attach_planner_proof,
     validate_planner_proof_attachment,
 )
-from roboclaws.molmo_cleanup.planner_proof_bundle import (
+from roboclaws.household.planner_proof_bundle import (
     PLANNER_PROOF_BUNDLE_SCHEMA,
     attach_planner_proof_bundle,
     planner_proof_attachment_for_target,
     validate_planner_proof_bundle,
 )
-from roboclaws.molmo_cleanup.planner_proof_quality import planner_proof_quality_evidence
+from roboclaws.household.planner_proof_quality import planner_proof_quality_evidence
 
 
 def test_attach_planner_proof_validates_and_copies_strict_images(tmp_path: Path) -> None:

@@ -4,7 +4,7 @@ import importlib.util
 from pathlib import Path
 from typing import Any
 
-from roboclaws.molmo_cleanup.semantic_timeline import SEMANTIC_LOOP_VARIANT
+from roboclaws.household.semantic_timeline import SEMANTIC_LOOP_VARIANT
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 REALWORLD_SMOKE_PATH = (

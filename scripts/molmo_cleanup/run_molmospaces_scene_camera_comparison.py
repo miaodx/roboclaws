@@ -9,7 +9,7 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from roboclaws.molmo_cleanup.scene_camera_comparison import main
+from roboclaws.household.scene_camera_comparison import main
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -8,15 +8,15 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from roboclaws.molmo_cleanup import subprocess_backend
-from roboclaws.molmo_cleanup.generated_mess import (
+from roboclaws.household import subprocess_backend
+from roboclaws.household.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
 )
-from roboclaws.molmo_cleanup.robot_view_camera_control import (
+from roboclaws.household.robot_view_camera_control import (
     canonical_cleanup_robot_view_camera_request,
 )
-from roboclaws.molmo_cleanup.subprocess_backend import (
+from roboclaws.household.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
     _parse_last_json_object,
@@ -987,7 +987,7 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
 
 
 def test_camera_color_profile_compresses_highlights() -> None:
-    from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+    from roboclaws.household.color_management import apply_camera_color_profile
 
     frame = np.array(
         [
@@ -1018,7 +1018,7 @@ def test_camera_color_profile_compresses_highlights() -> None:
 
 
 def test_camera_color_profile_applies_backend_luminance_gain() -> None:
-    from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+    from roboclaws.household.color_management import apply_camera_color_profile
 
     frame = np.full((2, 2, 3), 100, dtype=np.uint8)
 
@@ -1046,7 +1046,7 @@ def test_camera_color_profile_applies_backend_luminance_gain() -> None:
 
 
 def test_camera_color_profile_prefers_backend_view_luminance_gain() -> None:
-    from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+    from roboclaws.household.color_management import apply_camera_color_profile
 
     frame = np.full((2, 2, 3), 100, dtype=np.uint8)
 
@@ -1073,7 +1073,7 @@ def test_camera_color_profile_prefers_backend_view_luminance_gain() -> None:
 
 
 def test_camera_color_profile_prefers_backend_view_rgb_gain() -> None:
-    from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
+    from roboclaws.household.color_management import apply_camera_color_profile
 
     frame = np.full((2, 2, 3), 100, dtype=np.uint8)
 

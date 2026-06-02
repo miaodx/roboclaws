@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
-from roboclaws.molmo_cleanup.planner_observed_binding import (
+from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.planner_observed_binding import (
     OBSERVED_HANDLE_PLANNER_BINDING_SCHEMA,
     backend_planner_task_binding_from_state,
 )
-from roboclaws.molmo_cleanup.realworld_contract import (
+from roboclaws.household.realworld_contract import (
     RICH_MAP_MODE,
     RealWorldCleanupContract,
     infer_target_fixture_for_detection,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.household.scenario import build_cleanup_scenario
 
 
 def test_realworld_observed_handle_planner_binding_stays_private() -> None:

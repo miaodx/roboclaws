@@ -60,7 +60,7 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788" allow_privileged_tools="0"
     fi
 
     echo "==> starting roboclaws MCP server (scene={{scene}}, host={{host}}, port={{port}})" >&2
-    server_args=(.venv/bin/python examples/mcp/coding_agent_nav_server.py --scene "{{scene}}" --host "{{host}}" --port "{{port}}")
+    server_args=(.venv/bin/python -m roboclaws.cli.agent_server --scene "{{scene}}" --host "{{host}}" --port "{{port}}")
     if [[ "$allow_privileged_tools" == "1" || "$allow_privileged_tools" == "true" ]]; then
       server_args+=(--allow-privileged-tools)
     fi
@@ -119,10 +119,10 @@ down:
     # Backstop: reap any orphan roboclaws MCP server processes that lost their
     # PID file (crash, disk wipe, manual rm, recipe family switch). Project
     # policy is one roboclaws MCP per machine, so we cover every known driver:
-    #   - coding_agent_nav_server.py  (code::cc / code::codex)
+    #   - roboclaws.cli.agent_server  (code::cc / code::codex)
     #   - openclaw_interactive.py     (chat::run)
     if command -v pgrep >/dev/null 2>&1; then
-      orphan_pattern='python[^ ]*[ ].*(coding_agent_nav_server|openclaw_interactive)\.py'
+      orphan_pattern='python[^ ]*[ ].*((-m[ ]+)?roboclaws[.]cli[.]agent_server|openclaw_interactive[.]py)'
       orphan_pids="$(pgrep -f "$orphan_pattern" || true)"
       if [[ -n "$orphan_pids" ]]; then
         while IFS= read -r orphan_pid; do

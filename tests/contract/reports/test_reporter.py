@@ -15,7 +15,7 @@ from roboclaws.core.reporter import (
     compare,
     generate,
 )
-from roboclaws.molmo_cleanup.report_visual_core import assert_cleanup_report_visual_core
+from roboclaws.household.report_visual_core import assert_cleanup_report_visual_core
 
 # ---------------------------------------------------------------------------
 # Helpers

@@ -5,12 +5,12 @@ from pathlib import Path
 
 import numpy as np
 
-from roboclaws.molmo_cleanup import grasp_filter_diagnostics as diagnostics
-from roboclaws.molmo_cleanup.grasp_filter_diagnostics import (
+from roboclaws.household import grasp_filter_diagnostics as diagnostics
+from roboclaws.household.grasp_filter_diagnostics import (
     GRASP_FILTER_DIAGNOSTICS_SCHEMA,
     run_grasp_filter_diagnostics,
 )
-from roboclaws.molmo_cleanup.report import render_grasp_filter_diagnostics_report
+from roboclaws.household.report import render_grasp_filter_diagnostics_report
 
 
 def test_filter_diagnostics_dry_run_builds_pipeline_and_report(tmp_path: Path) -> None:

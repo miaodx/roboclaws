@@ -20,21 +20,22 @@ if __package__ in {None, ""}:
 
 from PIL import Image, ImageDraw
 
-from roboclaws.molmo_cleanup.backend import HELD_LOCATION_ID
-from roboclaws.molmo_cleanup.camera_control import (
+from roboclaws.household.backend import HELD_LOCATION_ID
+from roboclaws.household.camera_control import (
     ANCHOR_ORBIT_CAMERA_MODEL,
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
+    DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     MOLMOSPACES_SCENE_FRAME,
     load_camera_control_request,
     normalize_camera_control_request,
 )
-from roboclaws.molmo_cleanup.color_management import apply_camera_color_profile
-from roboclaws.molmo_cleanup.generated_mess import (
+from roboclaws.household.color_management import apply_camera_color_profile
+from roboclaws.household.generated_mess import (
     generated_mess_success_threshold,
     select_generated_mess_targets,
 )
-from roboclaws.molmo_cleanup.isaac_lab_backend import (
+from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
@@ -42,18 +43,18 @@ from roboclaws.molmo_cleanup.isaac_lab_backend import (
     ISAACLAB_ROBOT_VIEW_VARIANT,
     ISAACLAB_SUBPROCESS_BACKEND,
 )
-from roboclaws.molmo_cleanup.robot_view_camera_control import (
+from roboclaws.household.robot_view_camera_control import (
     backend_local_robot_view_camera_control_contract,
     robot_mounted_head_camera_control_contract,
     robot_view_display_color_profile,
 )
-from roboclaws.molmo_cleanup.robot_view_pose import resolve_cleanup_robot_pose
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
-from roboclaws.molmo_cleanup.scoring import score_cleanup
-from roboclaws.molmo_cleanup.semantic_acceptability import (
+from roboclaws.household.robot_view_pose import resolve_cleanup_robot_pose
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.scoring import score_cleanup
+from roboclaws.household.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
 )
-from roboclaws.molmo_cleanup.types import (
+from roboclaws.household.types import (
     CleanupObject,
     CleanupReceptacle,
     CleanupScenario,
@@ -104,6 +105,9 @@ ISAAC_DESCENDANT_SUPPORT_SURFACE_UNION_SOURCE = "isaac_usd_descendant_support_su
 ISAAC_WORLD_BOUNDS_SUPPORT_SURFACE_SOURCE = "isaac_usd_world_bounds"
 ISAAC_RBY1M_ROBOT_IMPORT_SCHEMA = "isaac_rby1m_robot_import_plan_v1"
 ISAAC_RBY1M_HEAD_CAMERA_PRIM = "/World/robot_0/head_camera"
+RBY1M_HEAD_PITCH_PIVOT_M = (0.022, 0.0, 1.506)
+RBY1M_HEAD_CAMERA_ZERO_POSITION_M = (0.072, 0.0, 1.556)
+RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = (-0.5, -0.5, 0.5, 0.5)
 ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
 ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
     "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
@@ -1910,7 +1914,8 @@ def _capture_isaac_lab_camera_views(
                 current_stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM)
             )
     scene_bounds = _current_stage_bounds(stage_utils)
-    _ensure_capture_lighting(stage_utils)
+    lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
+    lighting_diagnostics = _ensure_capture_lighting(stage_utils, profile=lighting_profile)
     semantic_label_application = (
         _apply_scene_index_semantic_labels(
             stage_utils=stage_utils,
@@ -2049,8 +2054,12 @@ def _capture_isaac_lab_camera_views(
             "schema": "isaac_robot_view_camera_diagnostics_v1",
             "backend": ISAACLAB_SUBPROCESS_BACKEND,
             "render_resolution": {"width": width, "height": height},
+            "lighting_profile": lighting_profile,
+            "lighting_diagnostics": lighting_diagnostics,
             "views": camera_diagnostics,
         },
+        "lighting_profile": lighting_profile,
+        "lighting_diagnostics": lighting_diagnostics,
         "color_profile": color_profile,
         "color_management": color_management,
         "semantic_pose_stage_application": pose_apply,
@@ -3136,6 +3145,11 @@ def _position_robot_for_head_camera_view(
     yaw_deg = _robot_pose_yaw_deg(pose)
     if yaw_deg is not None:
         xform.SetRotate(Gf.Vec3f(0.0, 0.0, yaw_deg))
+    head_pitch = _optional_float(pose.get("head_pitch"))
+    head_pitch_application = _apply_static_head_camera_pitch(
+        stage=stage,
+        head_pitch=head_pitch,
+    )
     return {
         "schema": "isaac_robot_head_camera_pose_application_v1",
         "status": "applied",
@@ -3147,15 +3161,144 @@ def _position_robot_for_head_camera_view(
         "yaw_source": "semantic_pose_state.robot_pose.theta_or_yaw_deg"
         if yaw_deg is not None
         else "not_available",
-        "head_pitch": _optional_float(pose.get("head_pitch")),
+        "head_pitch": head_pitch,
         "head_pitch_source": str(pose.get("head_pitch_source") or ""),
-        "head_pitch_applied": False,
-        "head_pitch_note": (
-            "The current static Isaac robot USD has a mounted head_camera prim but no "
-            "articulated head joint drive in this render path; base yaw is applied to "
-            "the robot root, while head pitch remains recorded for parity diagnostics."
-        ),
+        "head_pitch_applied": head_pitch_application.get("status") == "applied",
+        "head_pitch_application": head_pitch_application,
+        "head_pitch_note": _static_head_pitch_note(head_pitch_application),
     }
+
+
+def _apply_static_head_camera_pitch(
+    *,
+    stage: Any,
+    head_pitch: float | None,
+) -> dict[str, Any]:
+    if head_pitch is None:
+        return {
+            "schema": "isaac_static_head_camera_pitch_application_v1",
+            "status": "not_requested",
+            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+        }
+    head_camera_prim = stage.GetPrimAtPath(ISAAC_RBY1M_HEAD_CAMERA_PRIM)
+    if not head_camera_prim or not head_camera_prim.IsValid():
+        return {
+            "schema": "isaac_static_head_camera_pitch_application_v1",
+            "status": "missing_head_camera_prim",
+            "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+            "head_pitch_rad": float(head_pitch),
+        }
+    from pxr import Gf, UsdGeom
+
+    position, quat = _static_head_camera_pose_for_pitch(float(head_pitch))
+    xform = UsdGeom.Xformable(head_camera_prim)
+    xform.ClearXformOpOrder()
+    xform.AddTranslateOp().Set(Gf.Vec3d(*position))
+    xform.AddOrientOp().Set(Gf.Quatf(quat[0], Gf.Vec3f(*quat[1:])))
+    xform.AddScaleOp().Set(Gf.Vec3f(1.0, 1.0, 1.0))
+    return {
+        "schema": "isaac_static_head_camera_pitch_application_v1",
+        "status": "applied",
+        "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+        "head_pitch_rad": round(float(head_pitch), 6),
+        "head_pitch_axis": [0.0, 1.0, 0.0],
+        "head_pitch_joint": "head_1",
+        "head_pitch_pivot_m": [round(float(value), 6) for value in RBY1M_HEAD_PITCH_PIVOT_M],
+        "zero_position_m": [round(float(value), 6) for value in RBY1M_HEAD_CAMERA_ZERO_POSITION_M],
+        "applied_position_m": [round(float(value), 6) for value in position],
+        "applied_quat_wxyz": [round(float(value), 6) for value in quat],
+        "pose_source": "static_usd_head_camera_local_transform_with_mujoco_head_1_pitch",
+    }
+
+
+def _static_head_camera_pose_for_pitch(
+    head_pitch: float,
+) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
+    position = _rotate_point_y_about_pivot(
+        RBY1M_HEAD_CAMERA_ZERO_POSITION_M,
+        pivot=RBY1M_HEAD_PITCH_PIVOT_M,
+        angle_rad=head_pitch,
+    )
+    pitch_quat = _quat_from_axis_angle((0.0, 1.0, 0.0), head_pitch)
+    quat = _quat_multiply(pitch_quat, RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ)
+    return position, quat
+
+
+def _rotate_point_y_about_pivot(
+    point: tuple[float, float, float],
+    *,
+    pivot: tuple[float, float, float],
+    angle_rad: float,
+) -> tuple[float, float, float]:
+    dx = point[0] - pivot[0]
+    dy = point[1] - pivot[1]
+    dz = point[2] - pivot[2]
+    cos_pitch = math.cos(angle_rad)
+    sin_pitch = math.sin(angle_rad)
+    return (
+        pivot[0] + cos_pitch * dx + sin_pitch * dz,
+        pivot[1] + dy,
+        pivot[2] - sin_pitch * dx + cos_pitch * dz,
+    )
+
+
+def _quat_from_axis_angle(
+    axis: tuple[float, float, float],
+    angle_rad: float,
+) -> tuple[float, float, float, float]:
+    norm = math.sqrt(sum(float(value) * float(value) for value in axis))
+    if norm <= 0.0:
+        return (1.0, 0.0, 0.0, 0.0)
+    half = angle_rad * 0.5
+    scale = math.sin(half) / norm
+    return _normalize_quat(
+        (
+            math.cos(half),
+            float(axis[0]) * scale,
+            float(axis[1]) * scale,
+            float(axis[2]) * scale,
+        )
+    )
+
+
+def _quat_multiply(
+    left: tuple[float, float, float, float],
+    right: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    lw, lx, ly, lz = left
+    rw, rx, ry, rz = right
+    return _normalize_quat(
+        (
+            lw * rw - lx * rx - ly * ry - lz * rz,
+            lw * rx + lx * rw + ly * rz - lz * ry,
+            lw * ry - lx * rz + ly * rw + lz * rx,
+            lw * rz + lx * ry - ly * rx + lz * rw,
+        )
+    )
+
+
+def _normalize_quat(
+    quat: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    norm = math.sqrt(sum(value * value for value in quat))
+    if norm <= 0.0:
+        return (1.0, 0.0, 0.0, 0.0)
+    return tuple(float(value / norm) for value in quat)  # type: ignore[return-value]
+
+
+def _static_head_pitch_note(head_pitch_application: dict[str, Any]) -> str:
+    if head_pitch_application.get("status") == "applied":
+        return (
+            "Isaac currently uses a static visual robot USD, so it cannot drive the "
+            "articulated head_1 joint. For robot-view parity it rewrites the mounted "
+            "head_camera prim local transform with the same Y-axis head pitch used by "
+            "MuJoCo before FPV capture."
+        )
+    return (
+        "The current static Isaac robot USD has a mounted head_camera prim but could not "
+        "apply a static head pitch correction for this capture; inspect "
+        "head_pitch_application before treating FPV as articulated parity."
+    )
 
 
 def _usd_camera_diagnostics(
@@ -5506,6 +5649,8 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         room_outline_count=len(state.get("room_outlines") or []),
         color_profile=_dict(state.get("robot_view_color_profile")),
         color_management=_dict(state.get("robot_view_color_management")),
+        lighting_profile=_dict(state.get("robot_view_lighting_profile")),
+        lighting_diagnostics=_dict(state.get("robot_view_lighting_diagnostics")),
         camera_diagnostics=_dict(state.get("robot_view_camera_diagnostics")),
         focus=focus,
         views={key: str(path) for key, path in views.items()},
@@ -5644,6 +5789,7 @@ def _robot_view_camera_control_contract(
             focus=dict(focus or {}),
             color_profile=_dict(state.get("robot_view_color_profile")),
             color_management=_dict(state.get("robot_view_color_management")),
+            lighting_profile=_dict(state.get("robot_view_lighting_profile")),
         )
         contract.update(
             {
@@ -5871,12 +6017,16 @@ def _real_semantic_pose_robot_view_images(
         "robot_stage": _dict(capture.get("robot_stage")),
         "robot_pose_stage_application": _dict(capture.get("robot_pose_stage_application")),
         "camera_diagnostics": _dict(capture.get("camera_diagnostics")),
+        "lighting_profile": _dict(capture.get("lighting_profile")),
+        "lighting_diagnostics": _dict(capture.get("lighting_diagnostics")),
         "color_profile": _dict(capture.get("color_profile")),
         "color_management": _dict(capture.get("color_management")),
     }
     state["robot_view_color_profile"] = _dict(capture.get("color_profile"))
     state["robot_view_color_management"] = _dict(capture.get("color_management"))
     state["robot_view_camera_diagnostics"] = _dict(capture.get("camera_diagnostics"))
+    state["robot_view_lighting_profile"] = _dict(capture.get("lighting_profile"))
+    state["robot_view_lighting_diagnostics"] = _dict(capture.get("lighting_diagnostics"))
     state.pop("canonical_robot_view_camera_control_request", None)
     state.pop("canonical_robot_view_camera_control_capture", None)
     mapping_gaps = [

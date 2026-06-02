@@ -7,25 +7,25 @@ from typing import Any
 
 import pytest
 
-from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
-from roboclaws.molmo_cleanup.backend import ApiSemanticCleanupBackend
-from roboclaws.molmo_cleanup.backend_contract import CleanupBackendSession
-from roboclaws.molmo_cleanup.profiles import WORLD_LABELS_PROFILE
-from roboclaws.molmo_cleanup.realworld_contract import (
+from roboclaws.household.backend import ApiSemanticCleanupBackend
+from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.profiles import WORLD_LABELS_PROFILE
+from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
-    RealWorldCleanupContract,
     RICH_MAP_MODE,
+    RealWorldCleanupContract,
 )
-from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
-from roboclaws.molmo_cleanup.realworld_mcp_semantic_tools import SEMANTIC_CLEANUP_TOOL_NAMES
-from roboclaws.molmo_cleanup.realworld_mcp_server import (
+from roboclaws.household.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
+from roboclaws.household.realworld_mcp_semantic_tools import SEMANTIC_CLEANUP_TOOL_NAMES
+from roboclaws.household.realworld_mcp_server import (
     MCP_SERVER_NAME,
     make_molmo_realworld_cleanup_mcp,
 )
-from roboclaws.molmo_cleanup.scenario import build_cleanup_scenario
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"

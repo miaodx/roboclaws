@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image, ImageDraw
 
-from roboclaws.molmo_cleanup.isaac_lab_backend import (
+from roboclaws.household.isaac_lab_backend import (
     ISAAC_SCENE_INDEX_ARTIFACT_SCHEMA,
     ISAAC_SEMANTIC_POSE_PROVENANCE,
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
@@ -1183,15 +1183,19 @@ def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
 ) -> None:
     translations: list[object] = []
     rotations: list[object] = []
+    camera_transforms: list[tuple[str, object]] = []
 
     class _FakePrim:
+        def __init__(self, path: str) -> None:
+            self.path = path
+
         def IsValid(self) -> bool:
             return True
 
     class _FakeStage:
         def GetPrimAtPath(self, path: str) -> _FakePrim:
-            assert path == "/World/robot_0"
-            return _FakePrim()
+            assert path in {"/World/robot_0", "/World/robot_0/head_camera"}
+            return _FakePrim(path)
 
     class _FakeXformCommonAPI:
         def __init__(self, prim: _FakePrim) -> None:
@@ -1203,6 +1207,29 @@ def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
         def SetRotate(self, value: object) -> None:
             rotations.append(value)
 
+    class _FakeOp:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def Set(self, value: object) -> None:
+            camera_transforms.append((self.name, value))
+
+    class _FakeXformable:
+        def __init__(self, prim: _FakePrim) -> None:
+            self.prim = prim
+
+        def ClearXformOpOrder(self) -> None:
+            camera_transforms.append(("clear", self.prim.path))
+
+        def AddTranslateOp(self) -> _FakeOp:
+            return _FakeOp("translate")
+
+        def AddOrientOp(self) -> _FakeOp:
+            return _FakeOp("orient")
+
+        def AddScaleOp(self) -> _FakeOp:
+            return _FakeOp("scale")
+
     class _FakeGf:
         @staticmethod
         def Vec3d(*values: float) -> tuple[float, float, float]:
@@ -1212,9 +1239,16 @@ def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
         def Vec3f(*values: float) -> tuple[float, float, float]:
             return (float(values[0]), float(values[1]), float(values[2]))
 
+        @staticmethod
+        def Quatf(real: float, imaginary: object) -> tuple[float, object]:
+            return (float(real), imaginary)
+
     fake_pxr = types.SimpleNamespace(
         Gf=_FakeGf,
-        UsdGeom=types.SimpleNamespace(XformCommonAPI=_FakeXformCommonAPI),
+        UsdGeom=types.SimpleNamespace(
+            XformCommonAPI=_FakeXformCommonAPI,
+            Xformable=_FakeXformable,
+        ),
     )
     monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
     monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
@@ -1243,7 +1277,16 @@ def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
     assert result["pose_source"] == "roboclaws_shared_scene_frame_support_pose"
     assert result["yaw_deg"] == pytest.approx(90.0)
     assert result["head_pitch"] == pytest.approx(0.653613)
-    assert result["head_pitch_applied"] is False
+    assert result["head_pitch_applied"] is True
+    assert result["head_pitch_application"]["status"] == "applied"
+    assert result["head_pitch_application"]["head_pitch_joint"] == "head_1"
+    assert result["head_pitch_application"]["applied_position_m"] == pytest.approx(
+        [0.092098, 0.0, 1.515292]
+    )
+    assert camera_transforms[0] == ("clear", "/World/robot_0/head_camera")
+    assert camera_transforms[1][0] == "translate"
+    assert camera_transforms[2][0] == "orient"
+    assert camera_transforms[3] == ("scale", pytest.approx((1.0, 1.0, 1.0)))
 
 
 def test_isaac_semantic_pose_stage_application_uses_exact_pose(
