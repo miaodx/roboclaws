@@ -187,6 +187,121 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
     assert summary["isaac_static_head_pitch_gap_count"] == 1
 
 
+def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_correction() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_contract_pitch_correction",
+    )
+    robot_pose = {
+        "x": 6.37057,
+        "y": 8.8752,
+        "theta": 1.57079632679,
+        "yaw_deg": 90.0,
+        "head_pitch": 0.653613,
+        "pose_source": "apple2apple_shared_robot_pose",
+    }
+    location = {
+        "status": "success",
+        "robot_pose": robot_pose,
+        "contracts": {
+            "mujoco": {
+                "agent_facing_fpv": {
+                    "source": "robot_0/head_camera",
+                    "robot_mounted": True,
+                    "head_camera_equivalent": False,
+                },
+                "report_verify_view": {"source": "mujoco_focus_camera"},
+                "robot_pose": dict(robot_pose),
+            },
+            "isaac": {
+                "agent_facing_fpv": {
+                    "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
+                    "camera_prim_path": "/World/robot_0/head_camera",
+                    "robot_mounted": True,
+                    "head_camera_equivalent": False,
+                },
+                "report_verify_view": {
+                    "source": "isaac_lab_camera_rgb_semantic_pose_robot_views:verify"
+                },
+                "camera_prim_path": "/World/robot_0/head_camera",
+                "robot_pose": dict(robot_pose),
+                "robot_asset": {
+                    "status": "imported",
+                    "head_camera_mounted": True,
+                    "head_camera_equivalent": False,
+                    "head_camera_prim_path": "/World/robot_0/head_camera",
+                    "head_link_name": "link_head_2",
+                    "import_summary": {
+                        "import_method": "urdf_visual_static_usd_fallback",
+                        "static_only": True,
+                    },
+                },
+            },
+        },
+        "camera_diagnostics": {
+            "mujoco": {
+                "views": {
+                    "fpv": {
+                        "schema": "mujoco_fixed_camera_diagnostics_v1",
+                        "status": "ready",
+                        "camera_type": "fixed",
+                        "camera_name": "robot_0/head_camera",
+                        "world_position": [6.37057, 8.8752, 1.55],
+                        "fovy_deg": 45.0,
+                    }
+                }
+            },
+            "isaac": {
+                "views": {
+                    "fpv": {
+                        "schema": "isaac_usd_camera_diagnostics_v1",
+                        "status": "ready",
+                        "camera_type": "usd_camera_prim",
+                        "prim_path": "/World/robot_0/head_camera",
+                        "world_matrix_rowmajor": [
+                            1.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0,
+                            0.0,
+                            6.37057,
+                            8.8752,
+                            1.545,
+                            1.0,
+                        ],
+                        "robot_pose_stage_application": {
+                            "schema": "isaac_robot_head_camera_pose_application_v1",
+                            "status": "applied",
+                            "head_pitch": 0.653613,
+                            "head_pitch_applied": True,
+                        },
+                    }
+                }
+            },
+        },
+    }
+
+    per_location = run_camera._location_camera_contract_diagnostics(location)
+    summary = run_camera._camera_contract_diagnostics([location])
+
+    assert per_location["head_articulation"]["status"] == (
+        "isaac_static_head_pitch_applied_to_head_camera"
+    )
+    assert per_location["head_articulation"]["isaac_head_pitch_applied"] is True
+    assert per_location["fpv_world_pose_delta"]["position_delta_m"] == 0.005
+    assert summary["status"] == "fpv_contract_shared_with_static_head_camera_pitch_correction"
+    assert summary["isaac_static_head_pitch_gap_count"] == 0
+    assert summary["fpv_world_pose_delta_summary"]["status"] == "fpv_world_pose_aligned"
+    assert summary["fpv_world_pose_delta_summary"]["position_delta_m_max"] == 0.005
+
+
 def test_robot_camera_render_contract_diagnostics_reports_light_shadow_delta(
     tmp_path: Path,
 ) -> None:

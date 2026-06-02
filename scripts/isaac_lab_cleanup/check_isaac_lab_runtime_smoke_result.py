@@ -9,7 +9,7 @@ from typing import Any
 
 from PIL import Image, ImageStat
 
-from roboclaws.molmo_cleanup.subprocess_backend import _parse_last_json_object
+from roboclaws.household.subprocess_backend import _parse_last_json_object
 
 SCHEMA = "roboclaws_isaac_lab_runtime_smoke_check_v1"
 SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
