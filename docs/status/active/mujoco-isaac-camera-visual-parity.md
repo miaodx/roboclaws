@@ -382,10 +382,23 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   from `42.0106` to `34.3779`, and dining table `0003` from `46.1260` to
   `37.5900`. Chase worsens from `72.2838` to `75.1952`, so this remains an
   FPV-only comparison probe, not a default visual policy.
+- The same `val_1` scale-square USD now also covers the held-out seed-8
+  4-location bound-target slice. The report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_material_scale_square_probe/report.html`
+  preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera
+  contract while lowering FPV from `37.2184` to `29.5022` (`-7.7162`) and chase
+  from `71.7464` to `71.2868` (`-0.4596`). Per-target FPV is non-worse or
+  better across all 4 bound targets: bed `0001` drops from `47.5110` to
+  `31.2138`, bed `0002` from `28.7929` to `22.7825`, dining table `0003` from
+  `46.1325` to `37.5748`, and sink `0004` is effectively flat (`26.4371` to
+  `26.4375`). This makes scale/fallback squaring the first material-response
+  probe with positive FPV evidence across `val_0`, `val_1` seed-6, and
+  `val_1` seed-8.
 - The refreshed visual-parity summary at
   `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
-  now records `val0_global_scale_square` (`fpv_delta=-5.5714`) and
-  `val1_scale_square` (`fpv_delta=-7.1599`) under
+  now records `val0_global_scale_square` (`fpv_delta=-5.5714`),
+  `val1_scale_square` (`fpv_delta=-7.1599`), and
+  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) under
   `material_response=has_fpv_gain_comparison_only`. The overall gate remains
   `active`: head-camera geometry, RAW_FPV input, corpus coverage, and
   calibration evidence are loaded, but render-domain residuals remain and RGB /
@@ -415,10 +428,13 @@ The next proof-backed step is not more camera work. Keep the calibration report
 attached to the summary gate; do not promote any RGB/luminance gain to default
 rendering while the calibration result remains view-dependent. Texture
 scale/fallback squaring is now the strongest material-response direction, with
-positive FPV evidence on `val_0` and held-out `val_1` seed-6 bound targets, but
-it is still comparison-only because chase can worsen and seed-8 has not tested
-this same conversion. The next useful slice is a seed-8 or additional-scene
-scale-square validation before any default material conversion is considered.
+positive FPV evidence on `val_0`, held-out `val_1` seed-6, and held-out
+`val_1` seed-8 bound targets, but it is still comparison-only because chase can
+worsen on seed-6 and render-domain residuals remain. The next useful slice is a
+small default-conversion design gate: encode the scale/fallback conversion
+behind an explicit opt-in/default-candidate path, prove it preserves the
+head-camera and RAW_FPV contracts, and run one additional scene or target corpus
+before promoting it to default cleanup rendering.
 
 ## Touched Areas
 
