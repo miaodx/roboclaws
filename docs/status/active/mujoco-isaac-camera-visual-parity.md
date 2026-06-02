@@ -241,6 +241,24 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `36.0175`, far worse than RGB-only `34.5577`, while chase worsens to
   `82.9606`. This keeps the useful signal attributed to RGB/tone calibration,
   not to light-count matching or no-dome-plus-RGB interaction.
+- A reproducible comparison-only RGB-gain profile builder now exists at
+  `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`. It reads an
+  apple-to-apple manifest, fits a global least-squares RGB gain from FPV image
+  pairs, and writes a color-profile override for probe runs only. On the fair
+  `val_1` bound-target baseline it writes
+  `output/molmo/robot-camera-apple2apple/profiles/0602_val1_seed6_2mess_bound_global_fpv_rgb_gain.json`
+  with `backend_rgb_gain.isaaclab_subprocess=[0.972399,0.876524,0.869175]`
+  from 6 FPV pairs.
+- The corresponding `val_1` self-fit RGB probe ran at
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_val1_self_rgb_gain_probe/report.html`.
+  It preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the
+  head-camera contract, and lowers FPV from `36.5655` to `34.5828`
+  (`-1.9827`). That is effectively tied with, but slightly worse than, the
+  cross-scene `val_0` RGB profile result `34.5577` (`-2.0078`); chase is less
+  degraded with the `val_1` self-fit profile (`72.8632` vs `73.3777`). This
+  strengthens RGB/tone as a robust comparison-only direction, but it does not
+  prove a default renderer calibration because the profile was fit and evaluated
+  on the same 6-view slice.
 - A real Isaac `camera-raw` / RAW_FPV direct cleanup probe now covers the
   agent-input lane that the render-only apple2apple report does not exercise:
   `output/isaaclab/cleanup-smoke/0602_val1_seed6_2mess_camera_raw_direct_probe_visibilityfix/report.html`.
@@ -309,10 +327,12 @@ head-camera FPV images as agent input.
 - `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`
 - `scripts/isaac_lab_cleanup/make_molmospaces_light_shadow_probe_usd.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
+- `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
 - `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_light_shadow_probe_usd.py`
+- `tests/unit/molmo_cleanup/test_robot_camera_rgb_gain_profile.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
 - Generated evidence under `output/isaaclab/` and
   `output/molmo/robot-camera-apple2apple/`
