@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
@@ -37,7 +37,9 @@ def main(argv: list[str] | None = None) -> int:
             "across MuJoCo and Isaac."
         )
     )
-    parser.add_argument("--output-dir", type=Path, default=Path("output/molmo/robot-camera-apple2apple"))
+    parser.add_argument(
+        "--output-dir", type=Path, default=Path("output/molmo/robot-camera-apple2apple")
+    )
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--generated-mess-count", type=int, default=1)
     parser.add_argument("--scene-source", default="procthor-10k-val")
@@ -262,7 +264,11 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
             )
 
     manifest["locations"] = locations
-    manifest["status"] = "success" if locations and all(item["status"] == "success" for item in locations) else "blocked"
+    manifest["status"] = (
+        "success"
+        if locations and all(item["status"] == "success" for item in locations)
+        else "blocked"
+    )
     manifest["summary"] = _summary(locations)
     _write_outputs(manifest, output_dir)
     return manifest
@@ -335,7 +341,11 @@ def _patch_isaac_robot_pose(
     target: dict[str, str],
 ) -> None:
     state = _read_json(state_path)
-    state["current_receptacle_id"] = target["target_id"] if target["kind"] == "receptacle" else state.get("current_receptacle_id")
+    state["current_receptacle_id"] = (
+        target["target_id"]
+        if target["kind"] == "receptacle"
+        else state.get("current_receptacle_id")
+    )
     semantic_pose_state = dict(state.get("semantic_pose_state") or {})
     semantic_pose_state.update(
         {
@@ -418,10 +428,19 @@ def _image_diff(left_path: Path, right_path: Path) -> dict[str, Any]:
         mean_abs = sum(stat.mean) / len(stat.mean)
         rms = sum(value * value for value in stat.rms) ** 0.5 / len(stat.rms)
         extrema = diff.getextrema()
+        pixel_count = max(left.size[0] * left.size[1], 1)
         nonzero = 0
+        diff_gt_40 = 0
+        diff_gt_80 = 0
         for pixel in diff.getdata():
             if pixel != (0, 0, 0):
                 nonzero += 1
+            mean_pixel_delta = sum(pixel) / 3.0
+            if mean_pixel_delta > 40.0:
+                diff_gt_40 += 1
+            if mean_pixel_delta > 80.0:
+                diff_gt_80 += 1
+        residual = _render_residual_diagnostics(left, right)
         return {
             "left": str(left_path),
             "right": str(right_path),
@@ -429,7 +448,10 @@ def _image_diff(left_path: Path, right_path: Path) -> dict[str, Any]:
             "mean_abs_rgb": round(float(mean_abs), 4),
             "rms_rgb": round(float(rms), 4),
             "max_channel_diff": max(max(channel) for channel in extrema),
-            "nonzero_fraction": round(nonzero / max(left.size[0] * left.size[1], 1), 6),
+            "nonzero_fraction": round(nonzero / pixel_count, 6),
+            "diff_gt_40_fraction": round(diff_gt_40 / pixel_count, 6),
+            "diff_gt_80_fraction": round(diff_gt_80 / pixel_count, 6),
+            "residual": residual,
         }
 
 
@@ -444,7 +466,255 @@ def _summary(locations: list[dict[str, Any]]) -> dict[str, Any]:
         "chase_mean_abs_rgb_avg": _avg(
             _get_float(item, ("image_diffs", "chase", "mean_abs_rgb")) for item in successful
         ),
+        "residual_triage": _residual_triage(successful),
     }
+
+
+def _render_residual_diagnostics(left: Image.Image, right: Image.Image) -> dict[str, Any]:
+    left = left.convert("RGB")
+    right = right.convert("RGB")
+    if right.size != left.size:
+        right = right.resize(left.size)
+    left_metrics = _image_visual_metrics(left)
+    right_metrics = _image_visual_metrics(right)
+    luma_gain, luma_gain_diff = _luminance_gain_oracle(left, right)
+    rgb_gain, rgb_gain_diff = _rgb_gain_oracle(left, right)
+    left_edge = _edge_image(left)
+    right_edge = _edge_image(right)
+    edge_abs_diff = _mean_abs_grayscale_diff(left_edge, right_edge)
+    residual_class = _residual_class(
+        mean_abs_rgb=_mean_abs_rgb(left, right),
+        left_metrics=left_metrics,
+        right_metrics=right_metrics,
+        edge_abs_diff=edge_abs_diff,
+        rgb_gain_diff=rgb_gain_diff,
+    )
+    return {
+        "schema": "robot_camera_render_residual_diagnostics_v1",
+        "left_metrics": left_metrics,
+        "right_metrics": right_metrics,
+        "luminance_gain_oracle": {
+            "gain": round(luma_gain, 6),
+            "mean_abs_rgb_after_gain": round(luma_gain_diff, 4),
+            "interpretation": (
+                "Per-view oracle only; this is diagnostic evidence, not a runtime "
+                "color-calibration contract."
+            ),
+        },
+        "rgb_gain_oracle": {
+            "gain": [round(value, 6) for value in rgb_gain],
+            "mean_abs_rgb_after_gain": round(rgb_gain_diff, 4),
+            "interpretation": (
+                "Per-view RGB oracle only; use it to classify residuals, not as "
+                "backend output post-processing."
+            ),
+        },
+        "edge_abs_diff": round(edge_abs_diff, 4),
+        "residual_class": residual_class,
+        "recommended_next_action": _residual_next_action(residual_class),
+    }
+
+
+def _image_visual_metrics(image: Image.Image) -> dict[str, float]:
+    rgb = image.convert("RGB")
+    pixels = list(rgb.getdata())
+    if not pixels:
+        return {
+            "mean_luminance": 0.0,
+            "overexposed_fraction": 0.0,
+            "underexposed_fraction": 0.0,
+            "edge_mean": 0.0,
+        }
+    luminance = [_luminance(pixel) for pixel in pixels]
+    edge = _edge_image(rgb)
+    return {
+        "mean_luminance": round(sum(luminance) / len(luminance), 4),
+        "overexposed_fraction": round(
+            sum(1 for value in luminance if value >= 245.0) / len(luminance),
+            6,
+        ),
+        "underexposed_fraction": round(
+            sum(1 for value in luminance if value <= 10.0) / len(luminance),
+            6,
+        ),
+        "edge_mean": round(float(ImageStat.Stat(edge).mean[0]), 4),
+    }
+
+
+def _edge_image(image: Image.Image) -> Image.Image:
+    edge = image.convert("L").filter(ImageFilter.FIND_EDGES)
+    width, height = edge.size
+    if width > 2 and height > 2:
+        return edge.crop((1, 1, width - 1, height - 1))
+    return edge
+
+
+def _luminance(pixel: tuple[int, int, int]) -> float:
+    return float(pixel[0]) * 0.2126 + float(pixel[1]) * 0.7152 + float(pixel[2]) * 0.0722
+
+
+def _luminance_gain_oracle(left: Image.Image, right: Image.Image) -> tuple[float, float]:
+    left_pixels = list(left.convert("RGB").getdata())
+    right_pixels = list(right.convert("RGB").getdata())
+    numerator = 0.0
+    denominator = 0.0
+    for left_pixel, right_pixel in zip(left_pixels, right_pixels, strict=True):
+        left_luma = _luminance(left_pixel)
+        right_luma = _luminance(right_pixel)
+        numerator += left_luma * right_luma
+        denominator += right_luma * right_luma
+    gain = numerator / denominator if denominator > 0.0 else 1.0
+    return gain, _mean_abs_rgb_after_gain(left_pixels, right_pixels, (gain, gain, gain))
+
+
+def _rgb_gain_oracle(
+    left: Image.Image, right: Image.Image
+) -> tuple[tuple[float, float, float], float]:
+    left_pixels = list(left.convert("RGB").getdata())
+    right_pixels = list(right.convert("RGB").getdata())
+    gains = []
+    for channel in range(3):
+        numerator = 0.0
+        denominator = 0.0
+        for left_pixel, right_pixel in zip(left_pixels, right_pixels, strict=True):
+            numerator += float(left_pixel[channel]) * float(right_pixel[channel])
+            denominator += float(right_pixel[channel]) * float(right_pixel[channel])
+        gains.append(numerator / denominator if denominator > 0.0 else 1.0)
+    gain_tuple = (float(gains[0]), float(gains[1]), float(gains[2]))
+    return gain_tuple, _mean_abs_rgb_after_gain(left_pixels, right_pixels, gain_tuple)
+
+
+def _mean_abs_rgb_after_gain(
+    left_pixels: list[tuple[int, int, int]],
+    right_pixels: list[tuple[int, int, int]],
+    gain: tuple[float, float, float],
+) -> float:
+    if not left_pixels:
+        return 0.0
+    total = 0.0
+    for left_pixel, right_pixel in zip(left_pixels, right_pixels, strict=True):
+        for channel in range(3):
+            adjusted = max(0.0, min(255.0, float(right_pixel[channel]) * gain[channel]))
+            total += abs(float(left_pixel[channel]) - adjusted)
+    return total / (len(left_pixels) * 3.0)
+
+
+def _mean_abs_rgb(left: Image.Image, right: Image.Image) -> float:
+    diff = ImageChops.difference(left.convert("RGB"), right.convert("RGB"))
+    stat = ImageStat.Stat(diff)
+    return float(sum(stat.mean) / len(stat.mean))
+
+
+def _mean_abs_grayscale_diff(left: Image.Image, right: Image.Image) -> float:
+    if right.size != left.size:
+        right = right.resize(left.size)
+    stat = ImageStat.Stat(ImageChops.difference(left.convert("L"), right.convert("L")))
+    return float(stat.mean[0])
+
+
+def _residual_class(
+    *,
+    mean_abs_rgb: float,
+    left_metrics: dict[str, float],
+    right_metrics: dict[str, float],
+    edge_abs_diff: float,
+    rgb_gain_diff: float,
+) -> str:
+    if mean_abs_rgb <= 35.0:
+        return "low_residual"
+    left_edge = float(left_metrics.get("edge_mean") or 0.0)
+    right_edge = float(right_metrics.get("edge_mean") or 0.0)
+    if left_edge > 4.0 and right_edge < left_edge * 0.45:
+        return "geometry_or_texture_edge_residual"
+    if edge_abs_diff > 8.0:
+        return "geometry_or_texture_edge_residual"
+    if rgb_gain_diff <= mean_abs_rgb * 0.7:
+        return "view_dependent_color_residual"
+    if (
+        abs(
+            float(right_metrics.get("mean_luminance") or 0.0)
+            - float(left_metrics.get("mean_luminance") or 0.0)
+        )
+        > 35.0
+    ):
+        return "luminance_residual"
+    return "render_domain_residual"
+
+
+def _residual_next_action(residual_class: str) -> str:
+    if residual_class == "low_residual":
+        return "Residual is low enough for this probe; inspect other views before changing code."
+    if residual_class == "view_dependent_color_residual":
+        return (
+            "Per-view color gain helps, but a global post-process would overfit; inspect "
+            "room/object lighting, material albedo, and tone response."
+        )
+    if residual_class == "geometry_or_texture_edge_residual":
+        return (
+            "Edge/detail residual is high; compare visible USD/MuJoCo geometry, material "
+            "bindings, texture availability, and static robot/head articulation."
+        )
+    if residual_class == "luminance_residual":
+        return "Try a renderer/light/color-profile calibration probe before changing camera pose."
+    return "Inspect render-domain differences before changing camera geometry."
+
+
+def _residual_triage(locations: list[dict[str, Any]]) -> dict[str, Any]:
+    per_view: dict[str, dict[str, Any]] = {}
+    for view_key in ROBOT_VIEW_KEYS:
+        diffs = [
+            _dict_path(item, ("image_diffs", view_key, "residual"))
+            for item in locations
+            if item.get("status") == "success"
+        ]
+        diffs = [item for item in diffs if item]
+        classes = [str(item.get("residual_class") or "") for item in diffs]
+        per_view[view_key] = {
+            "view_count": len(diffs),
+            "residual_classes": {name: classes.count(name) for name in sorted(set(classes))},
+            "mean_abs_rgb_avg": _avg(
+                _get_float(item, ("image_diffs", view_key, "mean_abs_rgb")) for item in locations
+            ),
+            "rgb_gain_oracle_mean_abs_rgb_avg": _avg(
+                _get_float(item, ("rgb_gain_oracle", "mean_abs_rgb_after_gain")) for item in diffs
+            ),
+            "edge_abs_diff_avg": _avg(_get_float(item, ("edge_abs_diff",)) for item in diffs),
+        }
+    fpv = per_view.get("fpv") or {}
+    fpv_classes = dict(fpv.get("residual_classes") or {})
+    if fpv_classes.get("geometry_or_texture_edge_residual"):
+        status = "render_domain_geometry_or_texture_residual"
+        next_action = (
+            "Camera pose/color are improved; next compare visible geometry/material/texture "
+            "contracts and static head articulation for high-residual FPV views."
+        )
+    elif fpv_classes.get("view_dependent_color_residual"):
+        status = "view_dependent_color_residual"
+        next_action = (
+            "A single global color profile is insufficient; inspect per-room lighting and "
+            "material albedo before tuning camera geometry."
+        )
+    elif float(fpv.get("mean_abs_rgb_avg") or 0.0) <= 40.0:
+        status = "fpv_residual_low"
+        next_action = "FPV residual is low for this probe; broaden scene/seed coverage."
+    else:
+        status = "render_domain_residual_pending_triage"
+        next_action = "Inspect high-residual views before changing camera pose."
+    return {
+        "schema": "robot_camera_render_residual_triage_v1",
+        "status": status,
+        "views": per_view,
+        "recommended_next_action": next_action,
+    }
+
+
+def _dict_path(item: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any]:
+    value: Any = item
+    for key in path:
+        if not isinstance(value, dict):
+            return {}
+        value = value.get(key)
+    return value if isinstance(value, dict) else {}
 
 
 def _get_float(item: dict[str, Any], path: tuple[str, ...]) -> float | None:
@@ -472,6 +742,25 @@ def _write_outputs(manifest: dict[str, Any], output_dir: Path) -> None:
 
 
 def _render_report(manifest: dict[str, Any]) -> str:
+    style = "\n".join(
+        [
+            "body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:24px;"
+            "background:#f7f7f4;color:#202124}",
+            "header,.location{max-width:1180px;margin:0 auto 18px;background:white;"
+            "border:1px solid #d9d7ce;padding:16px}",
+            "h1{margin:0 0 8px;font-size:24px}",
+            "h2{font-size:18px;margin:0 0 10px}",
+            "h2 span{font-weight:400;color:#5f6368}",
+            ".pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}",
+            ".pair{border-top:1px solid #ece8dd;padding-top:10px}",
+            "figure{margin:0 0 8px}",
+            "img{display:block;width:100%;height:auto;border:1px solid #ddd;background:#111}",
+            "figcaption,p{font-size:13px;color:#5f6368;margin:6px 0}",
+            "pre{font-size:12px;background:#f4f1e8;padding:10px;overflow:auto}",
+            ".bad{color:#9b1c1c}",
+            "@media(max-width:800px){.pairs{grid-template-columns:1fr}}",
+        ]
+    )
     rows = []
     for item in manifest.get("locations") or []:
         if item.get("status") != "success":
@@ -486,6 +775,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
         pairs = []
         for view_key in ROBOT_VIEW_KEYS:
             diff = item["image_diffs"][view_key]
+            residual = diff.get("residual") if isinstance(diff.get("residual"), dict) else {}
             pairs.append(
                 "<div class='pair'>"
                 f"<h3>{html.escape(view_key.upper())}</h3>"
@@ -499,6 +789,8 @@ def _render_report(manifest: dict[str, Any]) -> str:
                 + html.escape(str(diff["mean_abs_rgb"]))
                 + ", nonzero "
                 + html.escape(str(diff["nonzero_fraction"]))
+                + ", residual "
+                + html.escape(str(residual.get("residual_class") or ""))
                 + "</p></div>"
             )
         rows.append(
@@ -516,15 +808,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<title>RBY1M Robot Camera Apple2Apple</title>"
-        "<style>"
-        "body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:24px;background:#f7f7f4;color:#202124}"
-        "header,.location{max-width:1180px;margin:0 auto 18px;background:white;border:1px solid #d9d7ce;padding:16px}"
-        "h1{margin:0 0 8px;font-size:24px}h2{font-size:18px;margin:0 0 10px}h2 span{font-weight:400;color:#5f6368}"
-        ".pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.pair{border-top:1px solid #ece8dd;padding-top:10px}"
-        "figure{margin:0 0 8px}img{display:block;width:100%;height:auto;border:1px solid #ddd;background:#111}"
-        "figcaption,p{font-size:13px;color:#5f6368;margin:6px 0}pre{font-size:12px;background:#f4f1e8;padding:10px;overflow:auto}"
-        ".bad{color:#9b1c1c}@media(max-width:800px){.pairs{grid-template-columns:1fr}}"
-        "</style></head><body><header><h1>RBY1M Robot Camera Apple2Apple</h1>"
+        "<style>" + style + "</style></head><body><header><h1>RBY1M Robot Camera Apple2Apple</h1>"
         "<p>"
         + html.escape(str(manifest.get("purpose")))
         + "</p><pre>"
