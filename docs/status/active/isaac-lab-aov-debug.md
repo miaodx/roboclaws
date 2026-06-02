@@ -26,18 +26,16 @@ usable Isaac semantic segmentation when the camera semantic filter is
 
 ## Last Proven Evidence
 
-- Canonical cleanup robot-view checker gate:
+- Head-camera FPV cleanup robot-view checker gate:
   `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
   - new strict flag:
-    `--require-canonical-robot-view-camera-control`
+    `--require-robot-head-camera-fpv`
   - requires every robot-view step to report
-    `robot_view_camera_control.status=all_robot_views_use_canonical_camera_control`
-  - requires FPV and verify contracts to use
-    `camera_control_api=roboclaws.camera_control.render_views`,
-    `camera_model=canonical_eye_target_camera_v1`, `same_pose_api=true`,
-    and nonblank FPV/verify images
-  - contract tests pass for accepting canonical views and rejecting backend-local
-    robot views when this flag is required
+    `robot_view_camera_control.status=all_robot_views_use_head_camera_fpv`
+  - requires FPV to be a real robot head camera or an explicit
+    head-camera-equivalent view, with nonblank FPV/verify images
+  - the legacy `--require-canonical-robot-view-camera-control` flag remains an
+    alias for this stricter head-camera gate, not a free-camera FPV claim
 - Flattened `usd_prim_path` cleanup smoke on `val_0`:
   `output/isaaclab/cleanup-smoke/0529_val0_flattened_usdprimpath_cleanup/run_result.json`
   - strict checker passed with real Isaac runtime, local prepared scene USD,
@@ -165,9 +163,8 @@ opt-ins for cleanup smoke on `val_0` and `val_1`. Next local artifact should
 either broaden the prepared-artifact corpus further or add an explicit
 maintainer convenience wrapper that still keeps defaults unchanged. Do not
 expose this through the default public `household-cleanup` path until broader
-coverage passes. Any local cleanup artifact intended to prove backend-swappable
-agent-facing FPV/verify should also pass
-`--require-canonical-robot-view-camera-control`.
+coverage passes. Any local cleanup artifact intended to prove agent-facing
+robot FPV should also pass `--require-robot-head-camera-fpv`.
 
 ## Stop Condition
 

@@ -776,11 +776,14 @@ def run_realworld_cleanup(
                 "snapshot_artifacts": backend_instance.snapshot_artifacts,
                 "semantic_pose_state": backend_instance.semantic_pose_state,
                 "semantic_pose_view_capture": backend_instance.semantic_pose_view_capture,
+                "robot": backend_instance.robot,
+                "robot_import": getattr(backend_instance, "robot_import", {}),
                 "requested_generated_mess_count": backend_instance.requested_generated_mess_count,
                 "generated_mess_count": backend_instance.generated_mess_count,
             }
         if getattr(backend_instance, "robot", None) is not None:
             run_result["robot"] = backend_instance.robot
+            run_result["robot_import"] = getattr(backend_instance, "robot_import", {})
             run_result["robot_name"] = backend_instance.robot.get("robot_name")
     if robot_view_steps:
         run_result["view_variant"] = (

@@ -732,7 +732,7 @@ molmo-isaac-runtime-smoke *overrides:
     generated_mess_count="1"
     map_bundle="assets/maps/molmospaces-procthor-val-0-7"
     include_robot="true"
-    robot_name="simple_camera_rig"
+    robot_name="rby1m"
     require_real_rendering="true"
     require_usd_stage_loaded="true"
     require_local_scene_usd="false"
@@ -879,13 +879,13 @@ molmo-isaac-cleanup-smoke *overrides:
     scene_usd_path=""
     generated_mess_count="1"
     map_bundle="scene-index"
-    robot_name="simple_camera_rig"
+    robot_name="rby1m"
     require_real_runtime="true"
     require_scene_loaded="true"
     require_local_scene_usd="true"
     require_selected_usd_bindings="true"
     require_robot_view_provenance="true"
-    require_canonical_robot_view_camera_control="true"
+    require_robot_head_camera_fpv="true"
     require_segmentation_evidence="false"
     segmentation_data_types=""
     segmentation_semantic_filter=""
@@ -905,7 +905,7 @@ molmo-isaac-cleanup-smoke *overrides:
         scene_usd_path|generated_mess_count|map_bundle|robot_name|\
         require_real_runtime|require_scene_loaded|require_local_scene_usd|\
         require_selected_usd_bindings|require_robot_view_provenance|\
-        require_canonical_robot_view_camera_control|\
+        require_robot_head_camera_fpv|require_canonical_robot_view_camera_control|\
         require_segmentation_evidence|segmentation_data_types|segmentation_semantic_filter|\
         require_snapshot_provenance|accept_nvidia_eula)
           ;;
@@ -1006,8 +1006,8 @@ molmo-isaac-cleanup-smoke *overrides:
     if [[ "$require_robot_view_provenance" == "true" ]]; then
       check_cmd+=(--require-isaac-robot-view-provenance)
     fi
-    if [[ "$require_canonical_robot_view_camera_control" == "true" ]]; then
-      check_cmd+=(--require-canonical-robot-view-camera-control)
+    if [[ "$require_robot_head_camera_fpv" == "true" || "$require_canonical_robot_view_camera_control" == "true" ]]; then
+      check_cmd+=(--require-robot-head-camera-fpv)
     fi
     if [[ "$require_segmentation_evidence" == "true" ]]; then
       check_cmd+=(--require-isaac-segmentation-evidence)
@@ -1037,7 +1037,7 @@ molmo-isaac-prepared-cleanup-smoke *overrides:
     scene_index="0"
     generated_mess_count="1"
     map_bundle="scene-index"
-    robot_name="simple_camera_rig"
+    robot_name="rby1m"
     label_containers="true"
     require_prepare_ready="true"
     require_segmentation_evidence="true"
@@ -1119,7 +1119,7 @@ molmo-isaac-prepared-cleanup-smoke *overrides:
       require_local_scene_usd=true \
       require_selected_usd_bindings=true \
       require_robot_view_provenance=true \
-      require_canonical_robot_view_camera_control=true \
+      require_robot_head_camera_fpv=true \
       require_segmentation_evidence="$require_segmentation_evidence" \
       segmentation_data_types="$segmentation_data_types" \
       segmentation_semantic_filter="$segmentation_semantic_filter" \

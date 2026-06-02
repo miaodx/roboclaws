@@ -1335,7 +1335,7 @@ def _robot_view_camera_badges(run_result: dict[str, Any]) -> str:
     if not isinstance(summary, dict):
         return ""
     return _badge("Robot-view camera", summary.get("status", "unknown")) + _badge(
-        "Same-pose robot FPV", summary.get("same_pose_api", False)
+        "Head-camera FPV", summary.get("head_camera_fpv", False)
     )
 
 
@@ -6630,7 +6630,14 @@ def _robot_view_camera_contract_summary(contract: Any) -> str:
         [
             _badge("Camera contract", contract.get("status", "unknown")),
             _badge("Camera model", contract.get("camera_model", "unknown")),
-            _badge("Same-pose API", contract.get("same_pose_api", False)),
+            _badge(
+                "Head-camera FPV",
+                contract.get("camera_model", "")
+                in {
+                    "robot_mounted_head_camera_v1",
+                    "robot_head_camera_equivalent_v1",
+                },
+            ),
         ]
     )
     fpv = (

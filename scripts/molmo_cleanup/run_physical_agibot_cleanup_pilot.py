@@ -6,6 +6,11 @@ import datetime as dt
 import json
 from pathlib import Path
 
+from roboclaws.molmo_cleanup.agibot_map_defaults import (
+    DEFAULT_AGIBOT_CONTEXT_JSON,
+    DEFAULT_AGIBOT_MAP_ALIAS,
+    DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
+)
 from roboclaws.molmo_cleanup.agibot_sdk_runner import run_physical_agibot_cleanup_pilot
 
 
@@ -19,7 +24,7 @@ def main() -> int:
     parser.add_argument(
         "--context-json",
         type=Path,
-        required=True,
+        default=DEFAULT_AGIBOT_CONTEXT_JSON,
         help="Completed agibot_gdk_map_context_authoring_v1 JSON.",
     )
     parser.add_argument(
@@ -39,9 +44,10 @@ def main() -> int:
     parser.add_argument(
         "--agibot-map-artifact-dir",
         type=Path,
+        default=DEFAULT_AGIBOT_MAP_ARTIFACT_DIR,
         help=(
-            "Optional fetched AgiBot map artifact root, for example "
-            "vendors/agibot_sdk/artifacts/maps/robot_map_9."
+            "Fetched AgiBot map artifact root. Defaults to "
+            f"vendors/agibot_sdk/artifacts/maps/{DEFAULT_AGIBOT_MAP_ALIAS}."
         ),
     )
     parser.add_argument(

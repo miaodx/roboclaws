@@ -5,6 +5,7 @@ import pytest
 from roboclaws.molmo_cleanup.profiles import (
     CAMERA_LABELS_PROFILE,
     CAMERA_RAW_PROFILE,
+    ISAACLAB_SUBPROCESS_BACKEND,
     ROBOT_VIEW_REPORT,
     SEMANTIC_REPORT,
     SMOKE_PROFILE,
@@ -96,3 +97,23 @@ def test_camera_raw_profile_withholds_structured_labels() -> None:
     assert metadata["perception_mode"] == RAW_FPV_ONLY_MODE
     assert "withheld" in metadata["summary"]
     assert "structured object labels" in metadata["summary"]
+
+
+def test_camera_raw_run_metadata_allows_isaac_head_camera_backend() -> None:
+    metadata = cleanup_profile_metadata_for_run(
+        profile_name=CAMERA_RAW_PROFILE,
+        backend=ISAACLAB_SUBPROCESS_BACKEND,
+        perception_mode=RAW_FPV_ONLY_MODE,
+        record_robot_views=True,
+    )
+
+    validate_cleanup_profile_metadata(
+        metadata,
+        expected_profile=CAMERA_RAW_PROFILE,
+        expected_backend=ISAACLAB_SUBPROCESS_BACKEND,
+        expected_perception_mode=RAW_FPV_ONLY_MODE,
+    )
+    assert metadata["world_backend"] == "isaac_sim"
+    assert metadata["agent_input"] == "raw_camera"
+    assert "Isaac" in metadata["summary"]
+    assert "robot-mounted head camera" in metadata["model_input_note"]

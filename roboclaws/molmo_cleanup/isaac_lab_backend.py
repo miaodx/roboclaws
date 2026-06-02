@@ -53,7 +53,7 @@ class IsaacLabSubprocessBackend:
         scene_source: str = "procthor-10k-val",
         scene_index: int = 0,
         include_robot: bool = False,
-        robot_name: str = "simple_camera_rig",
+        robot_name: str = "rby1m",
         generated_mess_count: int = 1,
         generated_mess_object_ids: tuple[str, ...] = (),
         map_bundle_dir: Path | None = None,
@@ -142,6 +142,7 @@ class IsaacLabSubprocessBackend:
         self.scene_index_diagnostics = result.get("scene_index_diagnostics", {})
         self.scene_binding_diagnostics = result.get("scene_binding_diagnostics", {})
         self.mapping_gaps = result.get("mapping_gaps", [])
+        self.robot_import = result.get("robot_import", {})
         self.room_outlines = [
             dict(item)
             for item in (self.scene_index_diagnostics.get("room_outlines") or [])
@@ -207,6 +208,8 @@ class IsaacLabSubprocessBackend:
             "scene_binding_diagnostics": self.scene_binding_diagnostics,
             "segmentation": self.segmentation,
             "mapping_gaps": self.current_mapping_gaps,
+            "robot": self.robot,
+            "robot_import": self.robot_import,
             "requested_generated_mess_count": self.requested_generated_mess_count,
             "generated_mess_count": self.generated_mess_count,
             "agent_facing": False,

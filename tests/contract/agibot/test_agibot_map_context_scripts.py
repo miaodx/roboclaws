@@ -484,6 +484,44 @@ def test_sdk_runner_execute_blocks_current_map_mismatch_before_normal_navi(
     assert fake_gdk.gdk_release_calls == 1
 
 
+def test_sdk_runner_execute_blocks_missing_localization_before_normal_navi(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _require_agibot_sdk_runner()
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_localization_block")
+    waypoint = runner._metric_map_from_context(_completed_context(), map_artifacts={})[
+        "inspection_waypoints"
+    ][0]
+    fake_gdk = _FakeAgibotGDK(slam=_FakeSlam(odom=SimpleNamespace()))
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    response = runner._execute_waypoint_navigation(
+        waypoint=waypoint,
+        context_json=None,
+        output_dir=tmp_path,
+        robot_host="127.0.0.1",
+        init_wait_s=0.0,
+        timeout_s=1.0,
+        poll_s=0.0,
+        arrival_observe=False,
+        image_timeout_ms=1.0,
+    )
+
+    assert response["ok"] is False
+    assert response["status"] == "blocked_capability"
+    assert response["failure_type"] == "gdk_localization_not_ready"
+    assert response["navigation_status"] == "blocked"
+    assert response["localization_check"]["report_present"] is False
+    assert response["localization_check"]["pad_relocalization_required_when_not_ok"] is True
+    assert "Relocalize on the G02 Pad" in response["backend_error_summary"]
+    assert fake_gdk.pnc.normal_navi_calls == 0
+    assert fake_gdk.gdk_release_calls == 1
+
+
 def _completed_context() -> dict:
     return json.loads(COMPLETED_CONTEXT_FIXTURE.read_text(encoding="utf-8"))
 
@@ -616,6 +654,14 @@ class _TimeoutPnc:
         self._canceled = True
 
 
+class _FakeSlam:
+    def __init__(self, odom: object | None = None) -> None:
+        self.odom = odom or SimpleNamespace(loc_state=1, loc_confidence=100)
+
+    def get_odom_info(self) -> object:
+        return self.odom
+
+
 class _FakeAgibotGDK:
     class GDKRes:
         kSuccess = 0
@@ -628,9 +674,15 @@ class _FakeAgibotGDK:
             )
             self.timestamp_ns = 0
 
-    def __init__(self, pnc: object | None = None, map_item: object | None = None) -> None:
+    def __init__(
+        self,
+        pnc: object | None = None,
+        map_item: object | None = None,
+        slam: object | None = None,
+    ) -> None:
         self.pnc = pnc or _FakePnc()
         self.map_item = map_item
+        self.slam = slam or _FakeSlam()
         self.map_calls = 0
         self.gdk_release_calls = 0
 
@@ -646,6 +698,9 @@ class _FakeAgibotGDK:
     def Map(self) -> object:
         self.map_calls += 1
         return _FakeMap(self.map_item)
+
+    def Slam(self) -> object:
+        return self.slam
 
 
 class _FakeMap:

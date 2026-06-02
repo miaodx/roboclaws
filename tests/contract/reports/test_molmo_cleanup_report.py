@@ -1292,7 +1292,7 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
     assert "robot_views/raw.fpv.png" in raw_fpv_html
     assert "Camera contract" in raw_fpv_html
     assert "backend_local_robot_camera" in raw_fpv_html
-    assert "Same-pose API" in raw_fpv_html
+    assert "Head-camera FPV" in raw_fpv_html
     assert "scene_probe_existing_usd_lights_v1" in raw_fpv_html
     assert "display_srgb_soft_highlight_v1" in raw_fpv_html
 

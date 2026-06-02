@@ -2334,7 +2334,9 @@ class RealWorldCleanupContract:
             if robot_view_label:
                 item["robot_view_label"] = robot_view_label
             if camera_control_contract:
-                item["camera_control_contract"] = dict(camera_control_contract)
+                item["camera_control_contract"] = _strip_forbidden_agent_view_keys(
+                    camera_control_contract
+                )
             _assert_no_forbidden_agent_view_keys(item)
             return dict(item)
         return None
@@ -5018,3 +5020,15 @@ def _assert_no_forbidden_agent_view_keys(payload: Any) -> None:
     elif isinstance(payload, list):
         for value in payload:
             _assert_no_forbidden_agent_view_keys(value)
+
+
+def _strip_forbidden_agent_view_keys(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        return {
+            key: _strip_forbidden_agent_view_keys(value)
+            for key, value in payload.items()
+            if key not in _FORBIDDEN_AGENT_VIEW_KEYS
+        }
+    if isinstance(payload, list):
+        return [_strip_forbidden_agent_view_keys(value) for value in payload]
+    return payload

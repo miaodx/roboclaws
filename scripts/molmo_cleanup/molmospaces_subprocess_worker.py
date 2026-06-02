@@ -33,9 +33,8 @@ from roboclaws.molmo_cleanup.generated_mess import (
     select_generated_mess_targets,
 )
 from roboclaws.molmo_cleanup.robot_view_camera_control import (
-    backend_local_robot_view_camera_control_contract,
-    canonical_cleanup_robot_view_camera_request,
-    canonical_robot_view_camera_control_contract,
+    robot_mounted_head_camera_control_contract,
+    robot_view_display_color_profile,
 )
 from roboclaws.molmo_cleanup.robot_view_pose import (
     angle_delta,
@@ -669,72 +668,21 @@ def write_robot_views(
     verify_path = output_dir / f"{safe_label}.verify.png"
 
     focus = _focus_payload(state, focus_object_id, focus_receptacle_id)
-    camera_request = canonical_cleanup_robot_view_camera_request(
-        label=safe_label,
-        robot_pose=state.get("robot_pose"),
-        focus=focus,
-        width=width,
-        height=height,
-        scene_focus_position=_scene_focus_position(state),
-    )
-    camera_control_contract: dict[str, Any]
-    fpv_camera: mujoco.MjvCamera | str
-    verify_camera: mujoco.MjvCamera | str
-    if camera_request is not None:
-        canonical_views = _render_camera_views_with_model_data(
-            model,
-            data,
-            state=state,
-            output_dir=output_dir / f"{safe_label}.canonical_camera_control",
-            camera_request=camera_request,
-            width=width,
-            height=height,
-        )
-        if canonical_views.get("ok") is not True:
-            return _error(
-                "robot_views",
-                "canonical_camera_control_failed",
-                reason=str(canonical_views),
-            )
-        fpv = _load_rendered_robot_view_image(
-            canonical_views,
-            role="fpv",
-        )
-        verify = _load_rendered_robot_view_image(
-            canonical_views,
-            role="verify",
-        )
-        fpv_camera = _camera_from_view_spec(
-            state,
-            _camera_view_spec(camera_request["views"][0], index=1),
-        )
-        verify_camera = _camera_from_view_spec(
-            state,
-            _camera_view_spec(camera_request["views"][1], index=2),
-        )
-        camera_control_contract = canonical_robot_view_camera_control_contract(
-            backend="molmospaces-mujoco",
-            pose_source=str(
-                (state.get("robot_pose") or {}).get("pose_source")
-                or "roboclaws_shared_scene_frame_support_pose"
-            ),
-            request=camera_request,
-        )
-        camera_control_contract["robot_pose"] = dict(state.get("robot_pose") or {})
-    else:
-        fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
-        verify_camera = _focus_camera(state, focus)
-        verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
-        fpv_camera = "robot_0/head_camera"
-        camera_control_contract = backend_local_robot_view_camera_control_contract(
-            backend="molmospaces-mujoco",
-            status="backend_local_robot_camera",
-            fpv_source="robot_0/head_camera",
-            verify_source="mujoco_focus_camera",
-            pose_source="rby1m_robot_qpos",
-            lens_source="mujoco_model_camera_defaults",
-        )
+    fpv = _render_fixed_camera(model, data, "robot_0/head_camera", width=width, height=height)
+    verify_camera = _focus_camera(state, focus)
+    verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower", width=width, height=height)
+    camera_diagnostics = {
+        "schema": "mujoco_robot_view_camera_diagnostics_v1",
+        "backend": BACKEND,
+        "render_resolution": {"width": width, "height": height},
+        "views": {
+            "fpv": _fixed_camera_diagnostics(model, data, "robot_0/head_camera"),
+            "chase": _fixed_camera_diagnostics(model, data, "robot_0/camera_follower"),
+            "verify": _free_camera_diagnostics(verify_camera),
+        },
+    }
+    fpv_camera = "robot_0/head_camera"
     focus["fpv_visibility"] = _focus_visibility(
         model,
         data,
@@ -759,6 +707,42 @@ def write_robot_views(
             "Verify frame reused FPV because the closeup camera missed the focused object.",
         )
         focus["visibility"] = fallback_visibility
+    color_profile = robot_view_display_color_profile()
+    import numpy as np
+
+    color_management: dict[str, dict[str, Any]] = {}
+    fpv, color_management["fpv"] = apply_camera_color_profile(
+        fpv,
+        np=np,
+        profile=color_profile,
+        backend=BACKEND,
+        view_id="fpv",
+    )
+    chase, color_management["chase"] = apply_camera_color_profile(
+        chase,
+        np=np,
+        profile=color_profile,
+        backend=BACKEND,
+        view_id="chase",
+    )
+    verify, color_management["verify"] = apply_camera_color_profile(
+        verify,
+        np=np,
+        profile=color_profile,
+        backend=BACKEND,
+        view_id="verify",
+    )
+    camera_control_contract = robot_mounted_head_camera_control_contract(
+        backend="molmospaces-mujoco",
+        fpv_source="robot_0/head_camera",
+        verify_source="mujoco_focus_camera",
+        pose_source="rby1m_robot_qpos",
+        lens_source="mujoco_model_camera_defaults",
+        robot_pose=dict(state.get("robot_pose") or {}),
+        focus=focus,
+        color_profile=color_profile,
+        color_management=color_management,
+    )
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
     verify_image = Image.fromarray(verify)
@@ -775,6 +759,9 @@ def write_robot_views(
         view_variant="molmospaces-rby1m-fpv-map-chase-verify",
         view_provenance=state.get("robot_view_provenance", {}),
         camera_control_contract=camera_control_contract,
+        camera_diagnostics=camera_diagnostics,
+        color_profile=color_profile,
+        color_management=color_management,
         focus=focus,
         room_outline_count=len(state.get("room_outlines", [])),
         views={
@@ -2475,6 +2462,82 @@ def _render_fixed_camera(
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
+
+
+def _fixed_camera_diagnostics(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera_name: str,
+) -> dict[str, Any]:
+    try:
+        camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
+        if camera_id < 0:
+            return {
+                "schema": "mujoco_fixed_camera_diagnostics_v1",
+                "status": "missing_camera",
+                "camera_name": camera_name,
+            }
+        world_position = _array_row(getattr(data, "cam_xpos"), camera_id, 3)
+        world_xmat = _array_row(getattr(data, "cam_xmat"), camera_id, 9)
+        return {
+            "schema": "mujoco_fixed_camera_diagnostics_v1",
+            "status": "ready",
+            "camera_name": camera_name,
+            "camera_id": int(camera_id),
+            "camera_type": "fixed",
+            "world_position": world_position,
+            "world_xmat_rowmajor": world_xmat,
+            "fovy_deg": _array_scalar(getattr(model, "cam_fovy", None), camera_id),
+            "model_pos": _array_row(getattr(model, "cam_pos"), camera_id, 3),
+            "model_quat_wxyz": _array_row(getattr(model, "cam_quat"), camera_id, 4),
+            "znear": _optional_float(getattr(getattr(model, "vis", None), "map", None), "znear"),
+            "zfar": _optional_float(getattr(getattr(model, "vis", None), "map", None), "zfar"),
+        }
+    except Exception as exc:
+        return {
+            "schema": "mujoco_fixed_camera_diagnostics_v1",
+            "status": "unavailable",
+            "camera_name": camera_name,
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _free_camera_diagnostics(camera: mujoco.MjvCamera) -> dict[str, Any]:
+    try:
+        return {
+            "schema": "mujoco_free_camera_diagnostics_v1",
+            "status": "ready",
+            "camera_type": "free",
+            "lookat": [round(float(value), 6) for value in camera.lookat],
+            "distance": round(float(camera.distance), 6),
+            "azimuth": round(float(camera.azimuth), 6),
+            "elevation": round(float(camera.elevation), 6),
+        }
+    except Exception as exc:
+        return {
+            "schema": "mujoco_free_camera_diagnostics_v1",
+            "status": "unavailable",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _array_row(array: Any, index: int, length: int) -> list[float]:
+    return [round(float(value), 6) for value in array[index][:length]]
+
+
+def _array_scalar(array: Any, index: int) -> float | None:
+    if array is None:
+        return None
+    return round(float(array[index]), 6)
+
+
+def _optional_float(parent: Any, attribute: str) -> float | None:
+    if parent is None or not hasattr(parent, attribute):
+        return None
+    try:
+        return round(float(getattr(parent, attribute)), 6)
+    except (TypeError, ValueError):
+        return None
 
 
 def _focus_camera(state: dict[str, Any], focus: dict[str, Any]) -> mujoco.MjvCamera:

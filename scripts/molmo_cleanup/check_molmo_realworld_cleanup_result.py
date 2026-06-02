@@ -10,7 +10,6 @@ from PIL import Image, ImageStat
 
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER
 from roboclaws.molmo_cleanup.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.molmo_cleanup.camera_control import CAMERA_CONTROL_API_NAME
 from roboclaws.molmo_cleanup.cleanup_primitive_evidence import (
     validate_cleanup_primitive_evidence,
 )
@@ -174,8 +173,16 @@ def parse_args() -> argparse.Namespace:
         "--require-canonical-robot-view-camera-control",
         action="store_true",
         help=(
-            "Require every cleanup robot FPV/verify view to use the canonical "
-            "Roboclaws same-pose camera-control API."
+            "Legacy alias for --require-robot-head-camera-fpv. Canonical free-camera "
+            "control is no longer accepted as agent-facing FPV proof."
+        ),
+    )
+    parser.add_argument(
+        "--require-robot-head-camera-fpv",
+        action="store_true",
+        help=(
+            "Require every cleanup agent-facing FPV view to come from a robot-mounted "
+            "head camera or an explicit backend head-camera-equivalent contract."
         ),
     )
     return parser.parse_args()
@@ -259,6 +266,7 @@ def main() -> None:
             require_isaac_scene_index_map_context=(args.require_isaac_scene_index_map_context),
             require_canonical_robot_view_camera_control=(
                 args.require_canonical_robot_view_camera_control
+                or args.require_robot_head_camera_fpv
             ),
         )
     print(f"molmo-realworld-cleanup ok: {args.path} ({len(run_results)} run(s))")
@@ -476,7 +484,7 @@ def _assert_result(
     if require_robot_views:
         _assert_robot_views(data, base, require_complete_actions=enforce_success)
     if require_canonical_robot_view_camera_control:
-        _assert_canonical_robot_view_camera_control(data, base)
+        _assert_robot_head_camera_fpv(data, base)
     if require_advisory_scoring:
         _assert_advisory_scoring(data, base, report_text)
     if require_raw_fpv_observations:
@@ -1284,50 +1292,56 @@ def _assert_robot_views(
             assert CLOSE_RECEPTACLE_PHASE in focused_actions, data
 
 
-def _assert_canonical_robot_view_camera_control(data: dict[str, Any], base: Path) -> None:
+def _assert_robot_head_camera_fpv(data: dict[str, Any], base: Path) -> None:
     _assert_robot_views(data, base, require_complete_actions=False)
     summary = data.get("robot_view_camera_control") or {}
     assert summary.get("schema") == "robot_view_camera_control_summary_v1", data
-    assert summary.get("status") == "all_robot_views_use_canonical_camera_control", summary
-    assert summary.get("same_pose_api") is True, summary
+    assert summary.get("status") == "all_robot_views_use_head_camera_fpv", summary
+    assert summary.get("head_camera_fpv") is True, summary
     steps = data.get("robot_view_steps") or []
     assert steps, data
     assert int(summary.get("contract_count") or 0) == len(steps), summary
-    assert int(summary.get("canonical_contract_count") or 0) == len(steps), summary
+    assert int(summary.get("head_camera_contract_count") or 0) == len(steps), summary
     report_path = _resolve_path(base, (data.get("artifacts") or {}).get("report", ""))
     for step in steps:
         contract = step.get("camera_control_contract") or {}
         assert contract.get("schema") == "robot_view_camera_control_contract_v1", step
-        assert contract.get("status") == "canonical_camera_control_robot_view", step
-        assert contract.get("camera_control_api") == CAMERA_CONTROL_API_NAME, step
-        assert contract.get("camera_model") == "canonical_eye_target_camera_v1", step
-        assert contract.get("same_pose_api") is True, step
-        lighting = contract.get("lighting_profile") or {}
-        assert isinstance(lighting, dict), step
-        assert lighting.get("profile_id") == "scene_probe_existing_usd_lights_v1", step
-        color = contract.get("color_profile") or {}
-        assert isinstance(color, dict), step
-        assert color.get("profile_id") == "display_srgb_soft_highlight_v1", step
+        assert contract.get("status") in {
+            "robot_mounted_head_camera_robot_view",
+            "robot_head_camera_equivalent_robot_view",
+        }, step
+        assert contract.get("camera_control_api") is None, step
+        assert contract.get("camera_model") in {
+            "robot_mounted_head_camera_v1",
+            "robot_head_camera_equivalent_v1",
+        }, step
         fpv = contract.get("agent_facing_fpv") or {}
         verify = contract.get("report_verify_view") or {}
-        assert fpv.get("canonical_camera_control") is True, step
-        assert verify.get("canonical_camera_control") is True, step
-        assert fpv.get("eye") and fpv.get("target"), step
-        assert verify.get("eye") and verify.get("target"), step
+        assert fpv.get("canonical_camera_control") is False, step
+        assert verify.get("canonical_camera_control") is False, step
+        assert fpv.get("source"), step
+        assert "head_camera" in str(fpv.get("source")) or fpv.get("head_camera_equivalent"), step
         robot_pose = contract.get("robot_pose") or step.get("robot_pose") or {}
-        assert robot_pose.get("schema") == "cleanup_robot_pose_result_v1", step
-        pose_request = robot_pose.get("pose_request") or {}
-        assert pose_request.get("schema") == "cleanup_robot_pose_request_v1", step
-        assert pose_request.get("resolver") == "roboclaws.cleanup_robot_pose.near_target_v1", step
+        if robot_pose:
+            assert robot_pose.get("schema") == "cleanup_robot_pose_result_v1", step
+            pose_request = robot_pose.get("pose_request") or {}
+            assert pose_request.get("schema") == "cleanup_robot_pose_request_v1", step
+            assert pose_request.get("resolver") == "roboclaws.cleanup_robot_pose.near_target_v1", (
+                step
+            )
         views = step.get("views") or {}
         _assert_nonblank_image(
             _resolve_path(report_path.parent, str(views.get("fpv") or "")),
-            "canonical robot FPV",
+            "robot head-camera FPV",
         )
         _assert_nonblank_image(
             _resolve_path(report_path.parent, str(views.get("verify") or "")),
-            "canonical robot verify",
+            "robot verify",
         )
+
+
+def _assert_canonical_robot_view_camera_control(data: dict[str, Any], base: Path) -> None:
+    _assert_robot_head_camera_fpv(data, base)
 
 
 def _assert_isaac_runtime(
@@ -1442,14 +1456,29 @@ def _assert_isaac_runtime(
                 assert provenance.get("semantic_pose_state_refreshed") is True, step
                 assert "isaac_lab_camera_rgb_semantic_pose_robot_views" in provenance_text, step
                 capture = semantic_pose_state.get("semantic_pose_view_capture") or {}
-                if capture.get("canonical_camera_control") is True:
-                    assert camera_contract.get("same_pose_api") is True, step
-                    assert camera_contract.get("camera_control_api") == CAMERA_CONTROL_API_NAME, (
-                        step
-                    )
-                    assert camera_contract.get("status") == "canonical_camera_control_robot_view", (
-                        step
-                    )
+                if capture.get("robot_mounted_head_camera") is True:
+                    assert camera_contract.get("same_pose_api") is False, step
+                    assert camera_contract.get("camera_control_api") is None, step
+                    assert camera_contract.get("status") == (
+                        "robot_mounted_head_camera_robot_view"
+                    ), step
+                    assert camera_contract.get("camera_model") == (
+                        "robot_mounted_head_camera_v1"
+                    ), step
+                    fpv = camera_contract.get("agent_facing_fpv") or {}
+                    assert fpv.get("robot_mounted") is True, step
+                    assert camera_contract.get("camera_prim_path") == (
+                        "/World/robot_0/head_camera"
+                    ), step
+                elif capture.get("head_camera_equivalent") is True:
+                    assert camera_contract.get("same_pose_api") is False, step
+                    assert camera_contract.get("camera_control_api") is None, step
+                    assert camera_contract.get("status") == (
+                        "robot_head_camera_equivalent_robot_view"
+                    ), step
+                    assert camera_contract.get("camera_model") == (
+                        "robot_head_camera_equivalent_v1"
+                    ), step
                 else:
                     assert camera_contract.get("same_pose_api") is False, step
                     assert camera_contract.get("camera_control_api") is None, step
