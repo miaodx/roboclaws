@@ -128,6 +128,13 @@ def build_summary(
             required_scene_count=required_scene_count,
             required_seed_count=required_seed_count,
         ),
+        "view_specific_prepared_scale_square_tone_gate": (
+            _view_specific_prepared_scale_square_tone_gate_check(
+                render_domain_probe_matrix,
+                required_scene_count=required_scene_count,
+                required_seed_count=required_seed_count,
+            )
+        ),
         "raw_fpv_input_lane": _raw_fpv_input_lane_check(raw_fpv_runs),
         "calibration_scene": calibration,
     }
@@ -577,6 +584,148 @@ def _prepared_scale_square_default_gate_check(
     }
 
 
+def _view_specific_prepared_scale_square_tone_gate_check(
+    render_domain_probe_matrix: dict[str, Any],
+    *,
+    required_scene_count: int,
+    required_seed_count: int,
+    chase_regression_tolerance: float = 1.0,
+) -> dict[str, Any]:
+    matrix = _dict(render_domain_probe_matrix.get("probe_matrix"))
+    tone_rows = _list_dicts(matrix.get("tone_color"))
+    view_rows = [
+        row
+        for row in tone_rows
+        if "prepared_scale_square_view_rgb" in str(row.get("label") or "").lower()
+    ]
+    comparable = [row for row in view_rows if row.get("comparable")]
+    scene_signatures = sorted({str(row.get("scene_signature") or "") for row in comparable})
+    seeds = sorted(
+        {
+            seed
+            for seed in (
+                _seed_from_scene_signature(str(row.get("scene_signature") or ""))
+                for row in comparable
+            )
+            if seed is not None
+        }
+    )
+    fpv_improved = [row for row in comparable if row.get("fpv_improved")]
+    fpv_worse = [row for row in comparable if row.get("fpv_worse")]
+    chase_regressions = [
+        row
+        for row in comparable
+        if _float_or_none(row.get("chase_delta")) is not None
+        and _float_or_none(row.get("chase_delta")) > chase_regression_tolerance
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not view_rows:
+        blockers.append({"reason": "no_view_specific_prepared_scale_square_tone_probe"})
+    if len(comparable) != len(view_rows):
+        blockers.append(
+            {
+                "reason": "not_all_view_specific_probes_comparable",
+                "probe_count": len(view_rows),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if len(scene_signatures) < required_scene_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_scene_corpus",
+                "scene_signature_count": len(scene_signatures),
+                "required_scene_count": required_scene_count,
+            }
+        )
+    if len(seeds) < required_seed_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_seed_corpus",
+                "seed_count": len(seeds),
+                "required_seed_count": required_seed_count,
+            }
+        )
+    if len(fpv_improved) != len(comparable):
+        blockers.append(
+            {
+                "reason": "not_all_comparable_probes_improve_fpv",
+                "fpv_improved_count": len(fpv_improved),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if fpv_worse:
+        blockers.append(
+            {
+                "reason": "fpv_regression",
+                "labels": [row.get("label") for row in fpv_worse],
+            }
+        )
+    if chase_regressions:
+        blockers.append(
+            {
+                "reason": "chase_regression",
+                "tolerance": chase_regression_tolerance,
+                "labels": [row.get("label") for row in chase_regressions],
+            }
+        )
+    if not view_rows:
+        status = "not_evaluated"
+    elif comparable and len(fpv_improved) == len(comparable) and not chase_regressions:
+        if not blockers:
+            status = "view_specific_tone_ready_for_review"
+        else:
+            status = "comparison_only_needs_broader_gate"
+    elif fpv_worse:
+        status = "do_not_promote"
+    else:
+        status = "comparison_only_not_default"
+    return {
+        "status": status,
+        "comparison_only": True,
+        "ready_for_review": status == "view_specific_tone_ready_for_review",
+        "probe_count": len(view_rows),
+        "comparable_probe_count": len(comparable),
+        "fpv_improved_count": len(fpv_improved),
+        "fpv_worse_count": len(fpv_worse),
+        "chase_regression_count": len(chase_regressions),
+        "scene_signature_count": len(scene_signatures),
+        "scene_signatures": scene_signatures,
+        "seed_count": len(seeds),
+        "seeds": seeds,
+        "required_scene_count": required_scene_count,
+        "required_seed_count": required_seed_count,
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "blockers": blockers,
+        "probes": [
+            {
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "scene_signature": row.get("scene_signature"),
+                "fpv_delta": row.get("fpv_delta"),
+                "chase_delta": row.get("chase_delta"),
+                "fpv_improved": row.get("fpv_improved"),
+                "comparable": row.get("comparable"),
+            }
+            for row in view_rows
+        ],
+        "recommended_next_action": (
+            "Review whether view-specific report-side tone compensation should become a "
+            "formal comparison gate, or keep chase as auxiliary warning evidence while "
+            "RAW_FPV FPV remains the policy/input metric."
+            if status == "view_specific_tone_ready_for_review"
+            else (
+                "Keep view-specific tone comparison-only until all comparable probes improve "
+                "FPV, stay within chase tolerance, and cover the required corpus."
+            )
+        ),
+        "interpretation": (
+            "This gate evaluates prepared scale-square plus view-specific tone compensation. "
+            "It can clear the auxiliary chase side effect for review, but remains "
+            "comparison-only until the team explicitly promotes a default-rendering policy."
+        ),
+    }
+
+
 def _raw_fpv_summary(path: Path) -> dict[str, Any]:
     payload = _read_json(path)
     camera = _dict(payload.get("robot_view_camera_control"))
@@ -674,6 +823,7 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     raw_fpv = _dict(checks.get("raw_fpv_input_lane"))
     render_matrix = _dict(checks.get("render_domain_probe_matrix"))
     prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
+    view_tone_gate = _dict(checks.get("view_specific_prepared_scale_square_tone_gate"))
     rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
     calibration = _dict(checks.get("calibration_scene"))
     probe_status_by_kind = _dict(render_matrix.get("probe_status_by_kind"))
@@ -682,6 +832,9 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     camera_proven = head_camera.get("status") == HEAD_CAMERA_PASS_STATUS
     raw_fpv_proven = raw_fpv.get("status") == RAW_FPV_PASS_STATUS
     material_default_ready = prepared_gate.get("status") == "prepared_scale_square_default_ready"
+    view_specific_tone_ready = view_tone_gate.get("status") == (
+        "view_specific_tone_ready_for_review"
+    )
     lighting_default_ready = (
         render_matrix.get("status") == "render_domain_delta_resolved"
         and rgb_tone.get("comparison_only") is False
@@ -716,7 +869,15 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
         {
             "check_id": "material_texture_response",
             "resolved": material_default_ready,
-            "status": "default_ready" if material_default_ready else "active_comparison_only",
+            "status": (
+                "default_ready"
+                if material_default_ready
+                else (
+                    "review_ready_comparison_only"
+                    if view_specific_tone_ready
+                    else "active_comparison_only"
+                )
+            ),
             "source_check": "prepared_scale_square_default_gate",
             "source_status": prepared_gate.get("status"),
             "probe_status": material_status,
@@ -732,9 +893,25 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
         {
             "check_id": "light_brightness_tone",
             "resolved": lighting_default_ready,
-            "status": "default_ready" if lighting_default_ready else "active_comparison_only",
-            "source_check": "render_domain_probe_matrix",
-            "source_status": render_matrix.get("status"),
+            "status": (
+                "default_ready"
+                if lighting_default_ready
+                else (
+                    "review_ready_comparison_only"
+                    if view_specific_tone_ready
+                    else "active_comparison_only"
+                )
+            ),
+            "source_check": (
+                "render_domain_probe_matrix"
+                if not view_specific_tone_ready
+                else "view_specific_prepared_scale_square_tone_gate"
+            ),
+            "source_status": (
+                render_matrix.get("status")
+                if not view_specific_tone_ready
+                else view_tone_gate.get("status")
+            ),
             "probe_status": light_shadow_status,
             "rgb_tone_status": rgb_tone.get("status"),
             "calibration_status": calibration.get("status"),
@@ -814,6 +991,9 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
             "RGB/luminance gain to default rendering."
         )
     prepared_gate = checks.get("prepared_scale_square_default_gate", {})
+    view_tone_gate = checks.get("view_specific_prepared_scale_square_tone_gate", {})
+    if view_tone_gate.get("status") == "view_specific_tone_ready_for_review":
+        return str(view_tone_gate.get("recommended_next_action") or "")
     if prepared_gate.get("status") == "comparison_only_not_default":
         return str(prepared_gate.get("recommended_next_action") or "")
     if checks["rgb_tone_cross_validation"].get("comparison_only") is True:

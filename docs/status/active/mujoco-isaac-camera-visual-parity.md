@@ -619,10 +619,12 @@ not fixed by single global tone compensation:
 Decision delta: a single global color/tone profile cannot satisfy both FPV and
 chase under prepared scale-square. A view-specific tone profile can satisfy the
 current FPV and auxiliary chase tolerance across the current three-slice corpus,
-but the summary gate still treats it as comparison-only. The next useful slice
-is to encode a formal view-specific prepared-scale-square gate, or make an
-explicit gate decision that chase is auxiliary warning evidence while RAW_FPV
-FPV remains the policy/input metric.
+and the summary now encodes that as
+`view_specific_prepared_scale_square_tone_gate.status=view_specific_tone_ready_for_review`.
+It remains comparison-only by design. The next useful slice is an explicit gate
+decision: either promote view-specific report-side tone compensation into the
+formal comparison/default-rendering review path, or keep chase as auxiliary
+warning evidence while RAW_FPV FPV remains the policy/input metric.
 
 ## Touched Areas
 

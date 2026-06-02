@@ -423,6 +423,129 @@ def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_ch
     assert "comparison-only" in manifest["recommended_next_action"]
 
 
+def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_view_tone")
+    baselines = [
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_0_seed_6" / "comparison_manifest.json",
+            scene_index=0,
+            seed=6,
+            generated_mess_count=2,
+            fpv=38.0,
+            chase=83.0,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_1_seed_6" / "comparison_manifest.json",
+            scene_index=1,
+            seed=6,
+            generated_mess_count=2,
+            fpv=36.0,
+            chase=72.0,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_1_seed_8" / "comparison_manifest.json",
+            scene_index=1,
+            seed=8,
+            generated_mess_count=2,
+            fpv=37.0,
+            chase=71.0,
+            location_count=4,
+        ),
+    ]
+    probes = [
+        _write_robot_camera_manifest(
+            tmp_path / "val0_prepared_scale_square_view_rgb" / "comparison_manifest.json",
+            scene_index=0,
+            seed=6,
+            generated_mess_count=2,
+            fpv=32.0,
+            chase=83.7,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "val1_prepared_scale_square_view_rgb" / "comparison_manifest.json",
+            scene_index=1,
+            seed=6,
+            generated_mess_count=2,
+            fpv=30.0,
+            chase=71.5,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "val1_seed8_prepared_scale_square_view_rgb" / "comparison_manifest.json",
+            scene_index=1,
+            seed=8,
+            generated_mess_count=2,
+            fpv=30.5,
+            chase=71.4,
+            location_count=4,
+        ),
+    ]
+    for path in probes:
+        (path.parent / "isaac_state.json").write_text(
+            json.dumps(
+                {
+                    "robot_view_color_profile_override": {
+                        "backend_rgb_gain": {"isaaclab_subprocess": [0.94, 0.84, 0.82]},
+                        "backend_rgb_gain_source": (
+                            "output/molmo/robot-camera-apple2apple/seed6_prepared "
+                            "global least-squares FPV RGB gain"
+                        ),
+                        "backend_view_rgb_gain": {
+                            "isaaclab_subprocess": {"chase": [1.5, 1.4, 1.3]}
+                        },
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+    calibration = tmp_path / "calibration" / "comparison_manifest.json"
+    calibration.parent.mkdir(parents=True)
+    calibration.write_text(
+        json.dumps(
+            {
+                "schema": "scene_camera_comparison_v1",
+                "status": "success",
+                "summary": {
+                    "render_domain_calibration": {
+                        "status": "view_dependent_render_domain_delta",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=baselines,
+        probe_specs=[f"{path.parent.name}={path}" for path in probes],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[calibration],
+        required_scene_count=3,
+        required_seed_count=2,
+    )
+
+    gate = manifest["checks"]["view_specific_prepared_scale_square_tone_gate"]
+    assert gate["status"] == "view_specific_tone_ready_for_review"
+    assert gate["ready_for_review"] is True
+    assert gate["comparison_only"] is True
+    assert gate["probe_count"] == 3
+    assert gate["fpv_improved_count"] == 3
+    assert gate["chase_regression_count"] == 0
+    assert gate["blockers"] == []
+    four_check_rows = {row["check_id"]: row for row in manifest["four_check_audit"]["rows"]}
+    assert four_check_rows["material_texture_response"]["status"] == (
+        "review_ready_comparison_only"
+    )
+    assert four_check_rows["light_brightness_tone"]["status"] == ("review_ready_comparison_only")
+    assert "view-specific" in manifest["recommended_next_action"]
+
+
 def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_rgb(
     tmp_path: Path,
 ) -> None:
@@ -434,6 +557,9 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
         "calibration_scene": {"status": "calibration_scene_evidence_loaded"},
         "render_domain_probe_matrix": {"status": "render_domain_delta_resolved"},
         "prepared_scale_square_default_gate": {"status": "prepared_scale_square_default_ready"},
+        "view_specific_prepared_scale_square_tone_gate": {
+            "status": "view_specific_tone_ready_for_review"
+        },
         "rgb_tone_cross_validation": {
             "status": "default_rgb_tone_ready",
             "comparison_only": False,
