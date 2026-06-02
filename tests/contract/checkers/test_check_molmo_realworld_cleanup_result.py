@@ -709,6 +709,30 @@ def test_checker_accepts_isaac_scene_index_map_context(
     )
 
 
+def test_checker_accepts_isaac_scene_index_minimal_map_context(
+    tmp_path: Path,
+) -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    scene_bindings = _isaac_selected_scene_bindings()
+    data = _isaac_runtime_result(tmp_path, scene_bindings)
+    _write_isaac_scene_index(tmp_path, scene_bindings)
+    _add_isaac_scene_index_minimal_map_context(data, tmp_path)
+
+    checker._assert_isaac_runtime(
+        data,
+        tmp_path,
+        _isaac_report_text(scene_bindings),
+        require_real_runtime=False,
+        require_scene_loaded=False,
+        require_selected_usd_bindings=False,
+        require_semantic_pose=False,
+        require_robot_view_provenance=False,
+        require_segmentation_evidence=False,
+        require_snapshot_provenance=False,
+        require_scene_index_map_context=True,
+    )
+
+
 def test_checker_rejects_stale_prebuilt_map_bundle_for_isaac_scene_index(
     tmp_path: Path,
 ) -> None:
@@ -3214,6 +3238,122 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
         "environment_id": scenario_id,
         "map_id": map_id,
         "map_version": "static-fixture-map-v1",
+        "source_provenance": "molmospaces_public_semantic_map",
+        "snapshot_complete": True,
+        "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
+        "artifact_hashes": {"semantics_json": "0" * 64},
+    }
+
+
+def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Path) -> None:
+    scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
+    map_id = f"{scenario_id}_minimal_map"
+    map_bundle = {
+        "schema": "nav2_map_bundle_v1",
+        "environment_id": scenario_id,
+        "map_id": map_id,
+        "map_version": "minimal-navigation-map-v1",
+        "source_provenance": "molmospaces_public_semantic_map",
+        "robot_profile_id": "rby1m",
+        "parameter_hash": "unit-scene-index-minimal-map-context",
+    }
+    candidates = [
+        {
+            "waypoint_id": "generated_exploration_001",
+            "waypoint_source": "generated_exploration_candidate",
+            "purpose": "minimal_map_exploration",
+            "x": 2.99,
+            "y": 4.983,
+            "candidate_provenance": {
+                "source": "public_occupancy_free_space",
+                "source_room_hidden": True,
+                "source_fixtures_hidden": True,
+                "source_waypoint_hidden": True,
+            },
+        },
+        {
+            "waypoint_id": "generated_exploration_002",
+            "waypoint_source": "generated_exploration_candidate",
+            "purpose": "minimal_map_exploration",
+            "x": 7.973,
+            "y": 2.512,
+            "candidate_provenance": {
+                "source": "public_occupancy_free_space",
+                "source_room_hidden": True,
+                "source_fixtures_hidden": True,
+                "source_waypoint_hidden": True,
+            },
+        },
+    ]
+    metric_map = {
+        "schema": "real_robot_map_bundle_v1",
+        "mode": "minimal",
+        "map_bundle": dict(map_bundle),
+        "rooms": [],
+        "driveable_ways": [],
+        "minimal_map": {"enabled": True},
+        "inspection_waypoints": list(candidates),
+        "generated_exploration_candidates": list(candidates),
+    }
+    runtime_map = {
+        "schema": "runtime_metric_map_v1",
+        "map_mode": "minimal",
+        "minimal_map_mode": True,
+        "static_map": {
+            "map_bundle": dict(map_bundle),
+            "rooms": [],
+            "fixtures": [],
+            "driveable_ways": [],
+            "generated_exploration_candidates": list(candidates),
+            "inspection_waypoints": list(candidates),
+        },
+        "generated_exploration_candidates": list(candidates),
+        "public_semantic_anchors": [
+            {
+                "anchor_id": "anchor_waypoint_generated_exploration_001",
+                "anchor_type": "observation_waypoint",
+                "waypoint_id": "generated_exploration_001",
+            }
+        ],
+    }
+    fixture_hints = {
+        "schema": "static_fixture_semantic_map_v1",
+        "mode": "minimal",
+        "rooms": [],
+    }
+    data["scenario_id"] = scenario_id
+    isaac_runtime = data["isaac_runtime"]
+    assert isinstance(isaac_runtime, dict)
+    isaac_runtime["scenario_source"] = "isaac_scene_index"
+    data["map_mode"] = "minimal"
+    data["agent_view"] = {
+        "metric_map": metric_map,
+        "fixture_hints": fixture_hints,
+        "runtime_metric_map": runtime_map,
+    }
+    data["runtime_metric_map"] = runtime_map
+    semantics_path = base / "map_bundle" / "semantics.json"
+    semantics_path.parent.mkdir(parents=True, exist_ok=True)
+    semantics_path.write_text(
+        json.dumps(
+            {
+                "schema": "nav2_cleanup_semantics_v1",
+                "environment_id": scenario_id,
+                "map_id": map_id,
+                "map_version": "minimal-navigation-map-v1",
+                "rooms": [],
+                "fixtures": [],
+                "inspection_waypoints": [],
+                "driveable_ways": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    data["nav2_map_bundle"] = {
+        "schema": "nav2_map_bundle_snapshot_v1",
+        "environment_id": scenario_id,
+        "map_id": map_id,
+        "map_version": "minimal-navigation-map-v1",
         "source_provenance": "molmospaces_public_semantic_map",
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},

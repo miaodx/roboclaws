@@ -1210,6 +1210,8 @@ def test_isaac_robot_view_focus_prefers_object_pose() -> None:
 
     assert focus["source"] == "isaac_semantic_pose_object_pose"
     assert focus["focus_position"] == pytest.approx([4.0, 5.0, 0.4])
+    assert focus["fpv_visibility"]["status"] == "segmentation_unavailable"
+    assert focus["visibility"]["status"] == "segmentation_unavailable"
 
 
 def test_isaac_head_camera_robot_pose_application_uses_shared_pose(
