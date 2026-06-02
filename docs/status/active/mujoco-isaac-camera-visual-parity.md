@@ -398,9 +398,10 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
   now records `val0_global_scale_square` (`fpv_delta=-5.5714`),
   `val1_scale_square` (`fpv_delta=-7.1599`), and
-  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) plus the maintained
-  prepared-USD gate `val1_seed8_prepared_scale_square_gate`
-  (`fpv_delta=-7.7401`) under
+  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) plus maintained
+  prepared-USD gates `val0_prepared_scale_square_gate` (`fpv_delta=-5.5750`),
+  `val1_seed6_prepared_scale_square_gate` (`fpv_delta=-7.1603`), and
+  `val1_seed8_prepared_scale_square_gate` (`fpv_delta=-7.7401`) under
   `material_response=has_fpv_gain_comparison_only`. The overall gate remains
   `active`: head-camera geometry, RAW_FPV input, corpus coverage, and
   calibration evidence are loaded, but render-domain residuals remain and RGB /
@@ -425,7 +426,7 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   and `renderable_labeled_prim_count=817`. The rewrite count matches the prior
   ad hoc `val_1_material_scale_square` probe.
 - The maintained prepared-USD gate now also has an apple-to-apple validation
-  run:
+  run for the `val_1` seed-8 bound-target slice:
   `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_prepared_scale_square_gate_probe/report.html`.
   It preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the
   robot-mounted head-camera contract while lowering FPV from the comparable
@@ -436,6 +437,24 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   applies the opt-in rewrite after `flat_stage.GetRootLayer().Save()`, so the
   final `scene_semantic.usda` contains the squared `UsdUVTexture`
   scale/fallback values used by the report.
+- The maintained prepared-USD path now also reproduces the ad hoc scale-square
+  result on the `val_1` seed-6 6-target bound slice:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_gate_probe/report.html`.
+  FPV moves from `36.5655` to `29.4052` (`-7.1603`), essentially matching the
+  ad hoc `29.4056` result, while chase moves from `72.2838` to `75.1960`
+  (`+2.9122`). This keeps the edit comparison-only, but confirms the prepared
+  gate itself is not seed-8-specific.
+- The maintained prepared-USD path now also covers `val_0` seed-6 8 locations.
+  The prepared artifact
+  `output/isaaclab/flattened-semantic-usd/val_0_material_scale_square_prepared_gate/summary.json`
+  reports `status=ready`, `material_texture_scale_mode=square`,
+  `material_texture_scale_rewrite_count=358`,
+  `material_texture_scale_default_candidate=true`, `matched_entry_count=139`,
+  and `renderable_labeled_prim_count=3357`. Its apple-to-apple report
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_prepared_scale_square_gate_probe/report.html`
+  preserves the head-camera contract and lowers FPV from `38.0980` to
+  `32.5230` (`-5.5750`), matching the ad hoc global scale-square result
+  `32.5266`. Chase is effectively flat (`83.7516` to `83.7739`, `+0.0223`).
 
 ## Next Action
 
@@ -462,11 +481,12 @@ attached to the summary gate; do not promote any RGB/luminance gain to default
 rendering while the calibration result remains view-dependent. Texture
 scale/fallback squaring is now the strongest material-response direction, with
 positive FPV evidence on `val_0`, held-out `val_1` seed-6, held-out `val_1`
-seed-8 bound targets, and the maintained prepared-USD seed-8 gate, but it is
-still comparison-only because chase can worsen on seed-6 and render-domain
-residuals remain. The next useful slice is to broaden the prepared-USD
-`--material-texture-scale-mode square` corpus across additional scenes/targets,
-then decide whether it can become default cleanup rendering.
+seed-8 bound targets, and maintained prepared-USD reproductions for all three
+of those slices. It is still comparison-only because chase worsens on `val_1`
+seed-6 and render-domain residuals remain. The next useful slice is a broader
+prepared-USD `--material-texture-scale-mode square` default-promotion gate
+across additional scenes/targets, with explicit acceptance criteria for FPV
+gain, chase non-regression tolerance, and remaining material-binding residuals.
 
 ## Touched Areas
 
