@@ -823,7 +823,7 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
         item.get("render_domain_calibration_status") == "global_luminance_gain_sufficient"
         for item in usable
     )
-    default_blockers = [
+    non_default_candidates = [
         {
             "reason": "render_domain_calibration_not_default_ready",
             "path": item.get("path"),
@@ -835,6 +835,12 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
         for item in usable
         if item.get("render_domain_calibration_status") != "global_luminance_gain_sufficient"
     ]
+    default_candidates = [
+        item
+        for item in usable
+        if item.get("render_domain_calibration_status") == "global_luminance_gain_sufficient"
+    ]
+    default_blockers = [] if default_ready else non_default_candidates
     if usable:
         status = "calibration_scene_evidence_loaded"
     elif default_source and not default_source_exists:
@@ -848,6 +854,8 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
         "provided_manifest_count": len(calibration_manifest_paths),
         "usable_manifest_count": len(usable),
         "default_rendering_ready": default_ready,
+        "default_rendering_candidates": default_candidates,
+        "non_default_rendering_candidates": non_default_candidates,
         "default_rendering_blockers": default_blockers,
         "manifests": candidates,
         "interpretation": (

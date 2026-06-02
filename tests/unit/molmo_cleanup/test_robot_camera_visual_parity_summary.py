@@ -334,6 +334,58 @@ def test_visual_parity_summary_prefers_scene_level_calibration_over_candidate_pr
     assert manifest["checks"]["calibration_scene"]["default_rendering_ready"] is False
 
 
+def test_visual_parity_summary_uses_ready_calibration_candidate_despite_failed_history(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_ready_candidate")
+    failed = tmp_path / "failed" / "comparison_manifest.json"
+    ready = tmp_path / "ready" / "comparison_manifest.json"
+    failed.parent.mkdir(parents=True)
+    ready.parent.mkdir(parents=True)
+    failed.write_text(
+        json.dumps(
+            {
+                "schema": "scene_camera_comparison_v1",
+                "visual_diagnostics": {
+                    "render_domain_calibration": {
+                        "status": "view_dependent_render_domain_delta",
+                        "mean_abs_calibrated_luminance_residual": 12.0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    ready.write_text(
+        json.dumps(
+            {
+                "schema": "scene_camera_comparison_v1",
+                "visual_diagnostics": {
+                    "render_domain_calibration": {
+                        "status": "global_luminance_gain_sufficient",
+                        "mean_abs_calibrated_luminance_residual": 7.0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[],
+        probe_specs=[],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[failed, ready],
+    )
+
+    calibration = manifest["checks"]["calibration_scene"]
+    assert calibration["default_rendering_ready"] is True
+    assert calibration["default_rendering_blockers"] == []
+    assert len(calibration["default_rendering_candidates"]) == 1
+    assert len(calibration["non_default_rendering_candidates"]) == 1
+
+
 def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
     tmp_path: Path,
 ) -> None:

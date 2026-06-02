@@ -656,6 +656,15 @@ not fixed by single global tone compensation:
   improves residual further to `9.2077`. Both are still
   `view_dependent_render_domain_delta`, so this is promising calibration
   evidence, not default-rendering readiness.
+- Bracketing that axis with `rotateX=+5` and `rotateX=+25` changed the
+  calibration decision. `+5`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p5_calibration/0603_0021/report.html`)
+  regresses to residual `11.3574`, but `+25`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p25_calibration/0603_0022/report.html`)
+  reaches residual `7.4522` and
+  `render_domain_calibration_status=global_luminance_gain_sufficient`. The
+  summary gate now treats this as the first default-rendering calibration
+  candidate while keeping the failed calibration probes as non-default history.
 - The summary gate now requires actual view-specific profile evidence instead
   of only trusting probe labels. Each
   `prepared_scale_square_view_rgb` probe must expose `backend_view_rgb_gain`
@@ -702,21 +711,16 @@ Default-rendering parity now has its own machine layer:
 `val1_seed6_prepared_scale_square_gate` auxiliary chase/tone-luminance
 regression, active baseline render residuals
 (`lighting_shadow_contract_delta`, `target_material_texture_or_binding_gap`),
-`calibration_not_default_rendering_ready`,
-`render_domain_calibration_not_default_ready`, and `rgb_tone_comparison_only`.
-The calibration blocker points at
-`output/molmo/scene-camera-comparison/0602_val0_scene_refs_calibration/comparison_manifest.json`
-with mean calibrated luminance residual `14.8384`, and the prepared
-scale-square calibration probe at
-`output/molmo/scene-camera-comparison/0602_val0_scene_refs_scale_square_calibration/0603_0003/comparison_manifest.json`
-with residual `11.6923`. The stacked light/shadow calibration probes are also
-blocked: scale-square plus no-dome is `25.5330`, and scale-square plus
-enable-shadows is `13.9678`. The directional-light probes improve the residual
-to `9.8196` at `rotateX=-35` and `9.2077` at `rotateX=+15`, but all six report
-`render_domain_calibration_status=view_dependent_render_domain_delta`. The
-refreshed recommendation now points at resolving or explicitly gating those
+and `rgb_tone_comparison_only`. The calibration gate is no longer the active
+default blocker: it has one default-rendering candidate at
+`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p25_calibration/0603_0022/comparison_manifest.json`
+with residual `7.4522` and
+`render_domain_calibration_status=global_luminance_gain_sufficient`. The older
+baseline, scale-square-only, no-dome, no-shadow, `rotateX=-35`, `rotateX=+15`,
+and `rotateX=+5` calibration probes remain non-default history. The refreshed
+recommendation now points at resolving or explicitly gating the remaining
 default-rendering residuals instead of re-reviewing the already formalized
-report-side gate.
+report-side gate or calibration gate.
 
 ## Touched Areas
 
