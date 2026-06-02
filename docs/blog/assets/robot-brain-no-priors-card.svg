@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">No Priors and Karpathy citation card</title>
+  <desc id="desc">An X-style citation card referencing the No Priors episode with Andrej Karpathy and the skill issue framing.</desc>
+  <defs>
+    <style>
+      .bg { fill: #0f1419; }
+      .card { fill: #ffffff; }
+      .ink { fill: #0f1419; }
+      .muted { fill: #536471; }
+      .blue { fill: #1d9bf0; }
+      .line { stroke: #cfd9de; stroke-width: 2; fill: none; }
+      .title { font: 800 42px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .body { font: 500 27px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 500 19px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 650 22px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="630"/>
+  <rect class="card" x="185" y="70" width="830" height="490" rx="28"/>
+  <circle class="blue" cx="245" cy="139" r="26"/>
+  <text class="small ink" x="286" y="133">X / No Priors episode card</text>
+  <text class="small muted" x="286" y="160">@saranormous · Mar 20, 2026</text>
+  <path class="line" d="M225 196h750"/>
+  <text class="title ink" x="225" y="260">Andrej Karpathy on</text>
+  <text class="title ink" x="225" y="313">Code Agents, AutoResearch,</text>
+  <text class="title ink" x="225" y="366">and the Loopy Era of AI</text>
+  <text class="body ink" x="225" y="434">Useful framing for Roboclaws:</text>
+  <text class="mono blue" x="225" y="486">"everything is skill issue"</text>
+  <text class="small muted" x="225" y="524">X post: saranormous/status/2035080458304987603</text>
+</svg>

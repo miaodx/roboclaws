@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">Opaque task tool versus bounded MCP capabilities</title>
+  <desc id="desc">A comparison of a single cleanup_room black box with a set of bounded MCP tools.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f8f5ee; }
+      .ink { fill: #17212b; }
+      .muted { fill: #65717d; }
+      .bad { fill: #2c3440; stroke: #17212b; stroke-width: 3; }
+      .badText { fill: #ffffff; }
+      .tool { fill: #ffffff; stroke: #263443; stroke-width: 2.3; }
+      .good { fill: #dff4ec; stroke: #263443; stroke-width: 2.7; }
+      .line { stroke: #263443; stroke-width: 2.5; fill: none; }
+      .title { font: 700 36px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .h { font: 700 27px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .body { font: 500 20px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 650 19px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+      .small { font: 500 16px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    </style>
+  </defs>
+  <rect class="bg" width="1200" height="620"/>
+  <text class="title ink" x="70" y="72">MCP should be smaller than the task.</text>
+  <text class="body muted" x="70" y="108">Keep strategy in skills. Keep robot capabilities bounded and traceable.</text>
+
+  <text class="h ink" x="150" y="180">Opaque task tool</text>
+  <rect class="bad" x="110" y="235" width="380" height="170" rx="18"/>
+  <text class="mono badText" x="206" y="327">cleanup_room()</text>
+  <text class="body ink" x="129" y="463">Fast demo. Hard to audit.</text>
+  <text class="body ink" x="129" y="495">Failure has no obvious repair point.</text>
+
+  <text class="h ink" x="704" y="180">Bounded capability tools</text>
+  <rect class="good" x="650" y="225" width="420" height="250" rx="20"/>
+  <g>
+    <rect class="tool" x="692" y="266" width="128" height="48" rx="10"/>
+    <text class="mono ink" x="719" y="296">observe</text>
+    <rect class="tool" x="850" y="266" width="128" height="48" rx="10"/>
+    <text class="mono ink" x="887" y="296">move</text>
+    <rect class="tool" x="692" y="334" width="128" height="48" rx="10"/>
+    <text class="mono ink" x="706" y="364">navigate</text>
+    <rect class="tool" x="850" y="334" width="128" height="48" rx="10"/>
+    <text class="mono ink" x="891" y="364">pick</text>
+    <rect class="tool" x="692" y="402" width="128" height="48" rx="10"/>
+    <text class="mono ink" x="709" y="432">place</text>
+    <rect class="tool" x="850" y="402" width="128" height="48" rx="10"/>
+    <text class="mono ink" x="892" y="432">done</text>
+  </g>
+  <text class="body ink" x="669" y="532">Each call leaves evidence.</text>
+  <text class="body ink" x="669" y="564">Skills decide how to compose them.</text>
+
+  <path class="line" d="M528 320h82"/>
+  <path class="line" d="M604 308l18 12-18 12"/>
+</svg>
