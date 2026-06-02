@@ -7,6 +7,71 @@
 **Workflow:** Pre-GSD architecture plan. Ingest into a GSD phase or route
 through `$intuitive-refactor` before implementation.
 
+## Review And Intake Decisions
+
+`$intuitive-flow` implementation intake on 2026-06-02 accepted the plan with
+these execution constraints:
+
+- Start with a Python launch composition root and declarative task facades
+  before moving implementation modules. This gives the existing public
+  `just task::run` surface a stable source of truth without creating a broad
+  package-rename diff first.
+- Keep `just agent::run` as the lower dispatcher during the first checkpoint.
+  The launch root should resolve task, driver, profile/report, backend, and
+  target command shape, but the shell dispatcher can continue to execute the
+  current routes until the driver split lands.
+- Treat the full `roboclaws/molmo_cleanup` to `roboclaws/household` package
+  move as a later checkpoint because current scripts, tests, and the bare
+  Python GitHub Pages helper still import `roboclaws.molmo_cleanup` directly.
+  The move must include a focused import strategy that does not break
+  dependency-light Pages assembly.
+- Do not preserve obsolete example symlinks or duplicate wrappers at closeout.
+  Temporary examples are allowed only while their replacement CLI/launch path is
+  being introduced.
+- The verification gates remain the focused `task::run` trace routes, contract
+  tests, and ruff gates listed below; hardware/provider/OpenClaw/Isaac/Agibot
+  live gates must be recorded explicitly if not run in the current runtime.
+
+## Phase 0 Inventory
+
+Current public command grammar stays frozen as:
+
+```bash
+just task::run <task> <driver> [report|profile] [key=value ...]
+```
+
+Server and agent entrypoint inventory:
+
+| Path | Current role | Decision |
+| --- | --- | --- |
+| `examples/mcp/coding_agent_nav_server.py` | AI2-THOR coding-agent MCP server wrapper, 192 lines. | Replace with `roboclaws.cli.agent_server` / domain launch path; delete example wrapper once route exists. |
+| `examples/coding_agent_nav_server.py` | Symlink to `examples/mcp/coding_agent_nav_server.py`. | Delete as obsolete root compatibility path. |
+| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py` | Household cleanup live-agent MCP/server wrapper, 453 lines. | Move server assembly into launch/CLI; delete or reduce to thin wrapper during MCP consolidation. |
+| `examples/molmo_realworld_cleanup_agent_server.py` | Symlink to `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`. | Delete as obsolete root compatibility path. |
+| `examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py` | Agibot semantic-map live-agent server wrapper, 111 lines. | Move to household semantic-map MCP launch path; delete wrapper after CLI route exists. |
+| `roboclaws/mcp/server.py` | AI2-THOR navigation MCP capability server, 1393 lines. | Move/rename to domain-local `roboclaws/ai2thor/navigation_mcp.py`; keep shared runtime helpers in `roboclaws/mcp/`. |
+| `roboclaws/molmo_cleanup/realworld_mcp_server.py` | Household cleanup MCP capability server, 1025 lines. | Move/rename under `roboclaws/household/` during package move. |
+| `roboclaws/molmo_cleanup/agibot_map_build_mcp_server.py` | Agibot map-build MCP capability server, 1237 lines. | Move backend-specific Agibot code under household backend/capability modules and keep server startup through launch. |
+| `roboclaws/openclaw/reset_server.py` | OpenClaw reset helper, 162 lines. | Not a duplicate MCP task entrypoint; leave unless launch cleanup shows a direct route need. |
+
+Route-source inventory:
+
+| Surface | Current owner | Decision |
+| --- | --- | --- |
+| `just/task.just` | Thin public facade that calls `roboclaws.devtools.commands task run`. | Keep as public shell facade. |
+| `roboclaws/devtools/commands.py` | Current shallow task/driver normalization and `agent::run` dispatch. | Move route metadata to `roboclaws.launch` and keep this module as CLI-compatible adapter. |
+| `just/agent.just` | Large lower dispatcher with override validation, prompts, backend routing, and task-specific command assembly. | Split gradually: launch root first, then prompts/driver adapters, then backend/task-specific command builders. |
+| `just/molmo.just` | Long Molmo/household live-agent prompts and checker routes. | Move prompt construction into agent/task prompt templates during driver split. |
+
+Initial checkpoint acceptance:
+
+- [ ] Python launch composition root owns canonical task/driver/profile
+      metadata for existing public `task::run` routes.
+- [ ] Domain task facade modules exist for AI2-THOR, household, and games.
+- [ ] `roboclaws.devtools.commands.resolve_task_run()` delegates to the launch
+      catalog and still returns the existing `just agent::run ...` command.
+- [ ] `ROBOCLAWS_JUST_TRACE=1` routes still pass focused contract tests.
+
 ## Problem
 
 The repo has accumulated several alike server and agent entrypoints:

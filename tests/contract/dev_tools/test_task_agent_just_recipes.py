@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from roboclaws.devtools.commands import CommandError, resolve_task_run
+from roboclaws.launch import resolve_task_launch
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 JUSTFILE = REPO_ROOT / "justfile"
@@ -356,6 +357,43 @@ def test_task_router_is_importable_source_of_truth() -> None:
 
     with pytest.raises(CommandError, match="unsupported task 'molmospace-cleanup'"):
         resolve_task_run(("molmospace-cleanup", "codex"))
+
+
+def test_task_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
+    plan = resolve_task_launch(
+        ("household-cleanup", "codex", "profile=smoke", "backend=agibot_gdk")
+    )
+
+    assert plan.argv == (
+        "just",
+        "agent::run",
+        "household-cleanup",
+        "codex",
+        "smoke",
+        "backend=agibot_gdk",
+    )
+    assert plan.task == "household-cleanup"
+    assert plan.driver == "codex"
+    assert plan.profile == "smoke"
+    assert plan.report is None
+    assert plan.backend == "agibot_gdk"
+    assert plan.prompt_id == "household_cleanup"
+    assert plan.checker_id == "cleanup_report"
+    assert plan.required_capabilities == (
+        "household_world",
+        "household_manipulation",
+        "household_episode",
+    )
+
+
+def test_task_launch_plan_keeps_non_household_report_axis() -> None:
+    plan = resolve_task_launch(("ai2thor-nav", "openclaw", "minimal"))
+
+    assert plan.argv == ("just", "agent::run", "ai2thor-nav", "openclaw", "minimal")
+    assert plan.profile is None
+    assert plan.report == "minimal"
+    assert plan.backend == "ai2thor"
+    assert plan.prompt_id == "ai2thor_nav"
 
 
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
