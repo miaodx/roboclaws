@@ -213,6 +213,34 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   RGB-only probe (`34.5577`). Treat this as evidence that the global RGB/tone
   layer is the useful part of that combination; the pillow texture injection
   still should not become a default.
+- A comparison-only light/shadow USD variant generator now exists at
+  `scripts/isaac_lab_cleanup/make_molmospaces_light_shadow_probe_usd.py`, matching
+  the material-probe pattern: it copies the prepared USD, writes a summary, and
+  leaves default cleanup rendering unchanged. The `val_1` fair bound-target slice
+  now has direct light/shadow probes instead of relying only on `val_0` history:
+  `output/isaaclab/flattened-semantic-usd/val_1_no_dome_only/summary.json`
+  removes 1 DomeLight, and
+  `output/isaaclab/flattened-semantic-usd/val_1_no_shadow_only/summary.json`
+  rewrites 18 `primvars:doNotCastShadows` flags.
+- The corresponding `val_1` fair bound-target reports preserve
+  `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera contract:
+  no-dome-only
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_no_dome_only_probe/report.html`
+  changes FPV from `36.5655` to `35.8084` (`-0.7571`) but worsens chase from
+  `72.2838` to `80.4852`; no-shadow-only
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_no_shadow_only_probe/report.html`
+  changes FPV to `36.1211` (`-0.4444`) with chase effectively neutral
+  (`72.3379`). The refreshed fair bound baseline records both under
+  `light_shadow_contract.probe_history.status=prior_probes_no_fpv_gain` with
+  `comparable_probe_count=2`, `improved_probe_count=0`, and
+  `worsened_probe_count=0`. Do not promote simple DomeLight removal or shadow
+  enabling as defaults from this evidence.
+- A light/tone interaction probe also ran at
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_no_dome_rgb_gain_probe/report.html`.
+  It uses the same `val_0` RGB gain profile on the no-dome USD and produces FPV
+  `36.0175`, far worse than RGB-only `34.5577`, while chase worsens to
+  `82.9606`. This keeps the useful signal attributed to RGB/tone calibration,
+  not to light-count matching or no-dome-plus-RGB interaction.
 - A real Isaac `camera-raw` / RAW_FPV direct cleanup probe now covers the
   agent-input lane that the render-only apple2apple report does not exercise:
   `output/isaaclab/cleanup-smoke/0602_val1_seed6_2mess_camera_raw_direct_probe_visibilityfix/report.html`.
@@ -264,12 +292,14 @@ RGB-gain probe does not beat RGB-only, so texture-binding cleanup is lower
 priority than tone/light/material-response work. The next highest-value
 render-domain slice is the high-residual exact-bound bed/table/pillow material
 response on the fair `val_1` bound-target report, plus RGB/tone interaction on
-that same fair target set. For light/shadow specifically, do not retry simple
-dome removal, shadow enabling, or the old combined MuJoCo-like light/shadow USD
-edit; split light count, shadow flags, intensity/direction, and material
-response only in a comparison-only probe. Keep RAW_FPV and world-labels as
-separate evidence lanes: world-labels uses images as report evidence only, while
-camera-raw uses the head-camera FPV images as agent input.
+that same fair target set. For light/shadow specifically, `val_1` now also says
+simple dome removal and shadow enabling are neutral/small and no-dome-plus-RGB is
+worse than RGB-only; do not retry simple dome removal, shadow enabling, or the
+old combined MuJoCo-like light/shadow USD edit. If light/shadow remains the next
+slice, make it a comparison-only intensity/direction probe with a clear FPV
+threshold. Keep RAW_FPV and world-labels as separate evidence lanes:
+world-labels uses images as report evidence only, while camera-raw uses the
+head-camera FPV images as agent input.
 
 ## Touched Areas
 
@@ -277,10 +307,12 @@ camera-raw uses the head-camera FPV images as agent input.
 - `tests/unit/molmo_cleanup/test_molmospaces_usd_reference_installer.py`
 - `scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py`
 - `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`
+- `scripts/isaac_lab_cleanup/make_molmospaces_light_shadow_probe_usd.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
 - `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+- `tests/unit/molmo_cleanup/test_molmospaces_light_shadow_probe_usd.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
 - Generated evidence under `output/isaaclab/` and
   `output/molmo/robot-camera-apple2apple/`
