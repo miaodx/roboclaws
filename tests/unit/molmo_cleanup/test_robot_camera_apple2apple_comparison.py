@@ -630,6 +630,14 @@ def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
     neutral_probe["summary"]["chase_mean_abs_rgb_avg"] = 90.6459
     neutral_probe_path = tmp_path / "neutral_material_probe_manifest.json"
     neutral_probe_path.write_text(json.dumps(neutral_probe), encoding="utf-8")
+    improved_probe = json.loads(json.dumps(baseline))
+    improved_probe["scene"]["scene_usd_path"] = (
+        "output/isaaclab/val_0_scene_refs_fix_0008_lightwood_scale_square/scene_semantic.usda"
+    )
+    improved_probe["summary"]["fpv_mean_abs_rgb_avg"] = 35.8577
+    improved_probe["summary"]["chase_mean_abs_rgb_avg"] = 83.7491
+    improved_probe_path = tmp_path / "improved_material_probe_manifest.json"
+    improved_probe_path.write_text(json.dumps(improved_probe), encoding="utf-8")
 
     check = run_camera._usd_preview_surface_material_model_check(
         manifest=baseline,
@@ -663,13 +671,14 @@ def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
                 },
             }
         ],
-        probe_manifest_paths=[probe_path, neutral_probe_path],
+        probe_manifest_paths=[probe_path, neutral_probe_path, improved_probe_path],
     )
 
     history = check["probe_history"]
     assert history["schema"] == "robot_camera_material_response_probe_history_v1"
-    assert history["status"] == "prior_probes_worse"
-    assert history["comparable_probe_count"] == 2
+    assert history["status"] == "prior_probe_improved"
+    assert history["comparable_probe_count"] == 3
+    assert history["improved_probe_count"] == 1
     assert history["worsened_probe_count"] == 1
     assert history["neutral_probe_count"] == 1
     assert history["probes"][0]["comparable_to_current"] is True
@@ -679,8 +688,10 @@ def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
     assert history["probes"][1]["delta_vs_current"]["fpv_mean_abs_rgb_delta"] == -0.5233
     assert history["probes"][1]["delta_vs_current"]["fpv_improvement"] is False
     assert history["probes"][1]["delta_vs_current"]["fpv_worse"] is False
-    assert "Do not promote" in check["recommended_next_action"]
-    assert "below the improvement threshold" in check["recommended_next_action"]
+    assert history["probes"][2]["delta_vs_current"]["fpv_mean_abs_rgb_delta"] == -2.2403
+    assert history["probes"][2]["delta_vs_current"]["fpv_improvement"] is True
+    assert "comparison-only" in check["recommended_next_action"]
+    assert "across more targets" in check["recommended_next_action"]
 
 
 def test_robot_camera_tone_color_check_summarizes_improved_rgb_gain_probe(
