@@ -413,6 +413,15 @@ def _location_result(
             "mujoco": mujoco_views.get("view_provenance", {}),
             "isaac": isaac_views.get("view_provenance", {}),
         },
+        "camera_contract_diagnostics": _location_camera_contract_diagnostics(
+            {
+                "robot_pose": robot_pose,
+                "contracts": {
+                    "mujoco": mujoco_views.get("camera_control_contract", {}),
+                    "isaac": isaac_views.get("camera_control_contract", {}),
+                },
+            }
+        ),
         "image_diffs": comparisons,
     }
 
@@ -466,7 +475,240 @@ def _summary(locations: list[dict[str, Any]]) -> dict[str, Any]:
         "chase_mean_abs_rgb_avg": _avg(
             _get_float(item, ("image_diffs", "chase", "mean_abs_rgb")) for item in successful
         ),
+        "camera_contract_diagnostics": _camera_contract_diagnostics(successful),
         "residual_triage": _residual_triage(successful),
+    }
+
+
+def _camera_contract_diagnostics(locations: list[dict[str, Any]]) -> dict[str, Any]:
+    diagnostics = [
+        _location_camera_contract_diagnostics(item)
+        for item in locations
+        if item.get("status") == "success"
+    ]
+    fpv_head_camera_count = sum(
+        1 for item in diagnostics if item.get("fpv_head_camera_contract") is True
+    )
+    pose_match_count = sum(1 for item in diagnostics if item.get("robot_pose_match") is True)
+    static_import_count = sum(
+        1 for item in diagnostics if _dict(item.get("isaac_robot_import")).get("static_only")
+    )
+    head_pitch_gap_count = sum(
+        1
+        for item in diagnostics
+        if _dict(item.get("head_articulation")).get("status")
+        == "isaac_static_head_pitch_not_applied"
+    )
+    chase_same_camera_count = sum(
+        1 for item in diagnostics if _dict(item.get("chase_contract")).get("same_camera_contract")
+    )
+    if diagnostics and fpv_head_camera_count < len(diagnostics):
+        status = "fpv_head_camera_contract_mismatch"
+        next_action = "Fix FPV source first; both backends must use robot-mounted head camera."
+    elif diagnostics and pose_match_count < len(diagnostics):
+        status = "robot_pose_contract_mismatch"
+        next_action = "Fix shared robot root pose/yaw before changing renderer or assets."
+    elif head_pitch_gap_count:
+        status = "fpv_contract_shared_with_static_head_articulation_gap"
+        next_action = (
+            "FPV uses head cameras and shared root pose, but Isaac static robot import does "
+            "not apply head pitch; test articulated Isaac import or a proven head-link transform."
+        )
+    elif diagnostics:
+        status = "fpv_head_camera_pose_contract_shared"
+        next_action = (
+            "Camera contract is shared enough for this probe; inspect renderer/material residuals."
+        )
+    else:
+        status = "no_successful_camera_contracts"
+        next_action = "Run at least one successful comparison location."
+    chase_note = (
+        "Chase is report evidence only. It is not expected to be the same camera contract "
+        "unless both backends explicitly use the same chase camera model."
+    )
+    return {
+        "schema": "robot_camera_contract_diagnostics_v1",
+        "status": status,
+        "location_count": len(diagnostics),
+        "fpv_head_camera_contract_count": fpv_head_camera_count,
+        "robot_pose_match_count": pose_match_count,
+        "isaac_static_import_count": static_import_count,
+        "isaac_static_head_pitch_gap_count": head_pitch_gap_count,
+        "chase_same_camera_contract_count": chase_same_camera_count,
+        "chase_note": chase_note,
+        "recommended_next_action": next_action,
+    }
+
+
+def _location_camera_contract_diagnostics(item: dict[str, Any]) -> dict[str, Any]:
+    contracts = _dict(item.get("contracts"))
+    mujoco_contract = _dict(contracts.get("mujoco"))
+    isaac_contract = _dict(contracts.get("isaac"))
+    requested_pose = _dict(item.get("robot_pose"))
+    mujoco_pose_delta = _robot_pose_delta(requested_pose, _dict(mujoco_contract.get("robot_pose")))
+    isaac_pose_delta = _robot_pose_delta(requested_pose, _dict(isaac_contract.get("robot_pose")))
+    mujoco_fpv = _dict(mujoco_contract.get("agent_facing_fpv"))
+    isaac_fpv = _dict(isaac_contract.get("agent_facing_fpv"))
+    fpv_head_camera_contract = _is_head_camera_fpv(mujoco_fpv) and _is_head_camera_fpv(isaac_fpv)
+    robot_pose_match = (
+        mujoco_pose_delta.get("status") == "match" and isaac_pose_delta.get("status") == "match"
+    )
+    isaac_import = _isaac_robot_import_diagnostics(isaac_contract)
+    head_articulation = _head_articulation_diagnostics(
+        requested_pose=requested_pose,
+        mujoco_contract=mujoco_contract,
+        isaac_contract=isaac_contract,
+        isaac_import=isaac_import,
+    )
+    return {
+        "schema": "robot_camera_location_contract_diagnostics_v1",
+        "fpv_head_camera_contract": fpv_head_camera_contract,
+        "robot_pose_match": robot_pose_match,
+        "mujoco_pose_delta": mujoco_pose_delta,
+        "isaac_pose_delta": isaac_pose_delta,
+        "mujoco_fpv": {
+            "source": mujoco_fpv.get("source"),
+            "robot_mounted": mujoco_fpv.get("robot_mounted"),
+            "head_camera_equivalent": mujoco_fpv.get("head_camera_equivalent"),
+        },
+        "isaac_fpv": {
+            "source": isaac_fpv.get("source"),
+            "camera_prim_path": isaac_fpv.get("camera_prim_path"),
+            "robot_mounted": isaac_fpv.get("robot_mounted"),
+            "head_camera_equivalent": isaac_fpv.get("head_camera_equivalent"),
+        },
+        "isaac_robot_import": isaac_import,
+        "head_articulation": head_articulation,
+        "chase_contract": _chase_contract_diagnostics(mujoco_contract, isaac_contract),
+    }
+
+
+def _is_head_camera_fpv(fpv: dict[str, Any]) -> bool:
+    source = str(fpv.get("source") or "")
+    prim_path = str(fpv.get("camera_prim_path") or "")
+    return bool(fpv.get("robot_mounted")) and (
+        "head_camera" in source or "head_camera" in prim_path
+    )
+
+
+def _robot_pose_delta(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
+    expected_x = _float_or_none(expected.get("x"))
+    expected_y = _float_or_none(expected.get("y"))
+    actual_x = _float_or_none(actual.get("x"))
+    actual_y = _float_or_none(actual.get("y"))
+    if None in {expected_x, expected_y, actual_x, actual_y}:
+        return {"status": "missing_pose"}
+    xy_error = ((expected_x - actual_x) ** 2 + (expected_y - actual_y) ** 2) ** 0.5
+    expected_yaw = _pose_yaw_deg(expected)
+    actual_yaw = _pose_yaw_deg(actual)
+    yaw_error = _angle_delta_deg(expected_yaw, actual_yaw)
+    expected_head_pitch = _float_or_none(expected.get("head_pitch"))
+    actual_head_pitch = _float_or_none(actual.get("head_pitch"))
+    head_pitch_error = (
+        abs(expected_head_pitch - actual_head_pitch)
+        if expected_head_pitch is not None and actual_head_pitch is not None
+        else None
+    )
+    yaw_match = yaw_error is None or yaw_error <= 0.001
+    head_pitch_match = head_pitch_error is None or head_pitch_error <= 0.0001
+    status = "match" if xy_error <= 0.0001 and yaw_match and head_pitch_match else "mismatch"
+    return {
+        "status": status,
+        "xy_error_m": round(float(xy_error), 6),
+        "yaw_error_deg": round(float(yaw_error), 6) if yaw_error is not None else None,
+        "head_pitch_error_rad": round(float(head_pitch_error), 6)
+        if head_pitch_error is not None
+        else None,
+    }
+
+
+def _pose_yaw_deg(pose: dict[str, Any]) -> float | None:
+    yaw = _float_or_none(pose.get("yaw_deg"))
+    if yaw is not None:
+        return yaw
+    theta = _float_or_none(pose.get("theta"))
+    if theta is None:
+        return None
+    return theta * 180.0 / 3.141592653589793
+
+
+def _angle_delta_deg(left: float | None, right: float | None) -> float | None:
+    if left is None or right is None:
+        return None
+    return abs((left - right + 180.0) % 360.0 - 180.0)
+
+
+def _isaac_robot_import_diagnostics(isaac_contract: dict[str, Any]) -> dict[str, Any]:
+    robot_asset = _dict(isaac_contract.get("robot_asset"))
+    import_summary = _dict(robot_asset.get("import_summary"))
+    converter = _dict(import_summary.get("converter"))
+    fallback = _dict(converter.get("fallback"))
+    static_only = bool(import_summary.get("static_only")) or (
+        fallback.get("status") == "ready"
+        and str(import_summary.get("import_method") or "").endswith("static_visual_usd_fallback")
+    )
+    return {
+        "status": robot_asset.get("status"),
+        "import_method": import_summary.get("import_method") or robot_asset.get("import_method"),
+        "static_only": static_only,
+        "head_camera_mounted": robot_asset.get("head_camera_mounted"),
+        "head_camera_equivalent": robot_asset.get("head_camera_equivalent"),
+        "head_camera_prim_path": robot_asset.get("head_camera_prim_path")
+        or isaac_contract.get("camera_prim_path"),
+        "head_link_name": robot_asset.get("head_link_name"),
+        "required_joints": robot_asset.get("required_joints")
+        or _dict(import_summary.get("urdf")).get("required_joints")
+        or [],
+        "missing_mesh_count": fallback.get("missing_mesh_count"),
+        "unsupported_mesh_count": fallback.get("unsupported_mesh_count"),
+    }
+
+
+def _head_articulation_diagnostics(
+    *,
+    requested_pose: dict[str, Any],
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+    isaac_import: dict[str, Any],
+) -> dict[str, Any]:
+    requested_head_pitch = _float_or_none(requested_pose.get("head_pitch"))
+    mujoco_head_pitch = _float_or_none(_dict(mujoco_contract.get("robot_pose")).get("head_pitch"))
+    isaac_head_pitch = _float_or_none(_dict(isaac_contract.get("robot_pose")).get("head_pitch"))
+    if requested_head_pitch is None:
+        status = "head_pitch_not_requested"
+    elif isaac_import.get("static_only"):
+        status = "isaac_static_head_pitch_not_applied"
+    else:
+        status = "head_pitch_application_not_reported"
+    return {
+        "status": status,
+        "requested_head_pitch_rad": requested_head_pitch,
+        "mujoco_contract_head_pitch_rad": mujoco_head_pitch,
+        "isaac_contract_head_pitch_rad": isaac_head_pitch,
+        "isaac_static_only": bool(isaac_import.get("static_only")),
+        "evidence_note": (
+            "MuJoCo robot views use qpos-backed robot joints. The current Isaac comparison "
+            "contract records the same requested head pitch, but static-only USD import does "
+            "not prove that the head joint is articulated during FPV capture."
+        ),
+    }
+
+
+def _chase_contract_diagnostics(
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+) -> dict[str, Any]:
+    mujoco_source = str(_dict(mujoco_contract.get("report_verify_view")).get("source") or "")
+    isaac_source = str(_dict(isaac_contract.get("report_verify_view")).get("source") or "")
+    return {
+        "same_camera_contract": False,
+        "mujoco_source": "robot_0/camera_follower",
+        "isaac_source": "external rear/high report camera",
+        "mujoco_verify_source": mujoco_source,
+        "isaac_verify_source": isaac_source,
+        "evidence_note": (
+            "Chase is auxiliary report evidence; FPV is the policy/input camera contract."
+        ),
     }
 
 
@@ -717,12 +959,23 @@ def _dict_path(item: dict[str, Any], path: tuple[str, ...]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _get_float(item: dict[str, Any], path: tuple[str, ...]) -> float | None:
     value: Any = item
     for key in path:
         if not isinstance(value, dict):
             return None
         value = value.get(key)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or_none(value: Any) -> float | None:
     try:
         return float(value)
     except (TypeError, ValueError):
@@ -801,6 +1054,14 @@ def _render_report(manifest: dict[str, Any]) -> str:
             + "</span></h2>"
             + "<pre>"
             + html.escape(json.dumps(item["robot_pose"], indent=2, sort_keys=True))
+            + "</pre><pre>"
+            + html.escape(
+                json.dumps(
+                    item.get("camera_contract_diagnostics", {}),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
             + "</pre><div class='pairs'>"
             + "".join(pairs)
             + "</div></section>"

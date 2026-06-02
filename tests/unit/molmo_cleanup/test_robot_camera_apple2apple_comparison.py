@@ -80,3 +80,78 @@ def test_robot_camera_residual_triage_prioritizes_geometry_edges() -> None:
     assert triage["status"] == "render_domain_geometry_or_texture_residual"
     assert triage["views"]["fpv"]["residual_classes"] == {"geometry_or_texture_edge_residual": 1}
     assert "geometry/material/texture" in triage["recommended_next_action"]
+
+
+def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_contract_diagnostics",
+    )
+    robot_pose = {
+        "x": 6.37057,
+        "y": 8.8752,
+        "theta": 1.57079632679,
+        "yaw_deg": 90.0,
+        "head_pitch": 0.653613,
+        "pose_source": "apple2apple_shared_robot_pose",
+    }
+    location = {
+        "status": "success",
+        "robot_pose": robot_pose,
+        "contracts": {
+            "mujoco": {
+                "agent_facing_fpv": {
+                    "source": "robot_0/head_camera",
+                    "robot_mounted": True,
+                    "head_camera_equivalent": False,
+                },
+                "report_verify_view": {"source": "mujoco_focus_camera"},
+                "robot_pose": dict(robot_pose),
+            },
+            "isaac": {
+                "agent_facing_fpv": {
+                    "source": "isaac_lab_camera_rgb_robot_mounted_head_camera:fpv",
+                    "camera_prim_path": "/World/robot_0/head_camera",
+                    "robot_mounted": True,
+                    "head_camera_equivalent": False,
+                },
+                "report_verify_view": {
+                    "source": "isaac_lab_camera_rgb_semantic_pose_robot_views:verify"
+                },
+                "camera_prim_path": "/World/robot_0/head_camera",
+                "robot_pose": dict(robot_pose),
+                "robot_asset": {
+                    "status": "imported",
+                    "head_camera_mounted": True,
+                    "head_camera_equivalent": False,
+                    "head_camera_prim_path": "/World/robot_0/head_camera",
+                    "head_link_name": "link_head_2",
+                    "import_summary": {
+                        "import_method": "urdf_visual_static_usd_fallback",
+                        "static_only": True,
+                        "urdf": {"required_joints": ["base_x", "base_y", "head_1"]},
+                        "converter": {
+                            "fallback": {
+                                "status": "ready",
+                                "missing_mesh_count": 0,
+                                "unsupported_mesh_count": 4,
+                            }
+                        },
+                    },
+                },
+            },
+        },
+    }
+
+    per_location = run_camera._location_camera_contract_diagnostics(location)
+    summary = run_camera._camera_contract_diagnostics([location])
+
+    assert per_location["fpv_head_camera_contract"] is True
+    assert per_location["robot_pose_match"] is True
+    assert per_location["isaac_robot_import"]["static_only"] is True
+    assert per_location["head_articulation"]["status"] == ("isaac_static_head_pitch_not_applied")
+    assert per_location["chase_contract"]["same_camera_contract"] is False
+    assert summary["status"] == "fpv_contract_shared_with_static_head_articulation_gap"
+    assert summary["fpv_head_camera_contract_count"] == 1
+    assert summary["robot_pose_match_count"] == 1
+    assert summary["isaac_static_head_pitch_gap_count"] == 1
