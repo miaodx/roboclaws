@@ -80,6 +80,22 @@ def trace_task_run(*args: str) -> list[str]:
     return result.stdout.strip().split("\t")
 
 
+def trace_task_run_with_plan(*args: str) -> tuple[list[str], list[str]]:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "task::run", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip().split("\t"), result.stderr.strip().split("\t")
+
+
 def trace_agent_harness(*args: str) -> list[str]:
     binary = just_bin()
     env = os.environ.copy()
@@ -394,6 +410,25 @@ def test_task_launch_plan_keeps_non_household_report_axis() -> None:
     assert plan.report == "minimal"
     assert plan.backend == "ai2thor"
     assert plan.prompt_id == "ai2thor_nav"
+
+
+def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
+    route, plan_trace = trace_task_run_with_plan(
+        "household-cleanup",
+        "codex",
+        "camera-labels",
+    )
+
+    assert route[:5] == ["just", "molmo::cleanup", "codex-live", "camera-labels", "7"]
+    assert plan_trace[:2] == ["launch-plan", "task=household-cleanup"]
+    assert "driver=codex" in plan_trace
+    assert "mode=camera-labels" in plan_trace
+    assert "profile=camera-labels" in plan_trace
+    assert "report=" in plan_trace
+    assert "backend=molmospaces_subprocess" in plan_trace
+    assert "prompt=household_cleanup" in plan_trace
+    assert "checker=cleanup_report" in plan_trace
+    assert "target=just agent::run household-cleanup codex camera-labels" in plan_trace
 
 
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:

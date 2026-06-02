@@ -8,6 +8,7 @@ flow, while lower implementation recipes remain in Just for now.
 from __future__ import annotations
 
 import os
+import shlex
 import sys
 from dataclasses import dataclass
 from typing import NoReturn
@@ -20,6 +21,7 @@ from roboclaws.launch.catalog import (
     LaunchError,
     resolve_task_launch,
 )
+from roboclaws.launch.plans import LaunchPlan
 
 __all__ = [
     "CANONICAL_DRIVERS",
@@ -65,6 +67,22 @@ def resolve_task_run(args: list[str] | tuple[str, ...]) -> ResolvedCommand:
     )
 
 
+def _print_launch_trace(plan: LaunchPlan) -> None:
+    fields = (
+        "launch-plan",
+        f"task={plan.task}",
+        f"driver={plan.driver}",
+        f"mode={plan.mode}",
+        f"profile={plan.profile or ''}",
+        f"report={plan.report or ''}",
+        f"backend={plan.backend}",
+        f"prompt={plan.prompt_id}",
+        f"checker={plan.checker_id}",
+        f"target={shlex.join(plan.argv)}",
+    )
+    print("\t".join(fields), file=sys.stderr)
+
+
 def _die(message: str) -> NoReturn:
     print(f"error: {message}", file=sys.stderr)
     raise SystemExit(1)
@@ -72,14 +90,17 @@ def _die(message: str) -> NoReturn:
 
 def task_run_main(args: list[str]) -> int:
     try:
-        resolved = resolve_task_run(args)
-    except CommandError as exc:
+        plan = resolve_task_launch(args)
+    except LaunchError as exc:
         print(f"error: {exc}", file=sys.stderr)
         if exc.hint:
             print(f"       {exc.hint}", file=sys.stderr)
         return 1
 
-    os.execvp(resolved.argv[0], list(resolved.argv))
+    if os.environ.get("ROBOCLAWS_JUST_TRACE") == "1":
+        _print_launch_trace(plan)
+
+    os.execvp(plan.argv[0], list(plan.argv))
     return 1
 
 
