@@ -639,6 +639,14 @@ not fixed by single global tone compensation:
   status remains `view_dependent_render_domain_delta`. This is positive
   material-response evidence, not enough to promote prepared scale-square or
   luminance gain as default cleanup rendering.
+- Two real calibration probes then stacked simple light/shadow toggles on top of
+  prepared scale-square. Removing the Isaac DomeLight
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_no_dome_calibration/0603_0009/report.html`)
+  worsens residual to `25.5330`. Enabling wall/ceiling shadows
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_no_shadow_calibration/0603_0011/report.html`)
+  also worsens residual to `13.9678`. Both remain
+  `view_dependent_render_domain_delta`, so do not promote simple DomeLight
+  removal or shadow enabling, even in combination with scale-square.
 - The summary gate now requires actual view-specific profile evidence instead
   of only trusting probe labels. Each
   `prepared_scale_square_view_rgb` probe must expose `backend_view_rgb_gain`
@@ -692,7 +700,9 @@ The calibration blocker points at
 with mean calibrated luminance residual `14.8384`, and the prepared
 scale-square calibration probe at
 `output/molmo/scene-camera-comparison/0602_val0_scene_refs_scale_square_calibration/0603_0003/comparison_manifest.json`
-with residual `11.6923`. Both report
+with residual `11.6923`. The stacked light/shadow calibration probes are also
+blocked: scale-square plus no-dome is `25.5330`, and scale-square plus
+enable-shadows is `13.9678`. All four report
 `render_domain_calibration_status=view_dependent_render_domain_delta`. The
 refreshed recommendation now points at resolving or explicitly gating those
 default-rendering residuals instead of re-reviewing the already formalized
