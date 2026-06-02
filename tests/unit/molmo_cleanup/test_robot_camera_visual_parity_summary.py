@@ -124,6 +124,42 @@ def test_visual_parity_summary_flags_camera_contract_gap(tmp_path: Path) -> None
     }
 
 
+def test_visual_parity_summary_classifies_material_probe_from_path_when_label_is_generic(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_material_path")
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline" / "comparison_manifest.json",
+        scene_index=1,
+        seed=8,
+        generated_mess_count=2,
+        fpv=37.2,
+        chase=71.7,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "material_srgb_probe" / "comparison_manifest.json",
+        scene_index=1,
+        seed=8,
+        generated_mess_count=2,
+        fpv=37.4,
+        chase=71.7,
+        location_count=4,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"val1_seed8={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+    )
+
+    rows = manifest["checks"]["render_domain_probe_matrix"]["probe_matrix"]["material_response"]
+    assert rows[0]["label"] == "val1_seed8"
+    assert rows[0]["fpv_delta"] == 0.2
+
+
 def test_visual_parity_summary_stays_active_when_render_domain_is_unresolved(
     tmp_path: Path,
 ) -> None:

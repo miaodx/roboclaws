@@ -537,14 +537,22 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
 
 
 def _infer_probe_kind(summary: dict[str, Any]) -> str:
-    label = str(summary.get("label") or summary.get("path") or "").lower()
+    label = str(summary.get("label") or "").lower()
+    path_text = str(summary.get("path") or "").lower()
+    evidence = f"{label} {path_text}"
     if _rgb_gain_source(Path(str(summary.get("path") or ""))).get("backend_rgb_gain"):
         return "tone_color"
-    if "rgb_gain" in label or "val0_rgb" in label or "self_rgb" in label:
+    if "rgb_gain" in evidence or "val0_rgb" in evidence or "self_rgb" in evidence:
         return "tone_color"
-    if "pillow" in label or "roughness" in label or "material" in label or "texture" in label:
+    if (
+        "pillow" in evidence
+        or "roughness" in evidence
+        or "material" in evidence
+        or "texture" in evidence
+        or "srgb" in evidence
+    ):
         return "material_response"
-    if "no_dome" in label or "no_shadow" in label or "light" in label:
+    if "no_dome" in evidence or "no_shadow" in evidence or "light" in evidence:
         return "light_shadow"
     return "unknown"
 

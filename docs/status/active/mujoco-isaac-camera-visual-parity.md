@@ -329,6 +329,16 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   slice makes the corpus foundation pass (`3` scene signatures, `2` seeds, `18`
   successful locations), but the overall summary stays `active` because
   render-domain residuals remain and RGB/tone is still comparison-only.
+- A comparison-only `sourceColorSpace=sRGB` material probe now covers the same
+  held-out seed-8 slice. The prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_1_material_srgb_only/scene_semantic.usda`
+  rewrites 53 texture sourceColorSpace tokens and leaves default rendering
+  unchanged. The corresponding report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_material_srgb_probe/report.html`
+  preserves the head-camera contract but does not improve FPV: baseline
+  `37.2184`, sRGB probe `37.3884` (`+0.1700`). The refreshed summary now records
+  this under material probes as neutral/do-not-promote, alongside pillow texture,
+  roughness-only, and target-specific LightWood roughness probes.
 
 ## Next Action
 
@@ -354,9 +364,10 @@ The next proof-backed step is not more camera work. Keep the calibration report
 attached to the summary gate; do not promote any RGB/luminance gain to default
 rendering while the calibration result remains view-dependent. The next useful
 slice is a comparison-only render-domain probe that targets remaining high
-residual exact-bound bed/table material response under the frozen head-camera
-contract, or preparation of a genuinely new scene index if broader scene
-coverage is required beyond the current 3-signature foundation.
+residual exact-bound bed/table material response beyond simple roughness,
+texture injection, raw/sRGB sourceColorSpace, or preparation of a genuinely new
+scene index if broader scene coverage is required beyond the current
+3-signature foundation.
 
 ## Touched Areas
 
