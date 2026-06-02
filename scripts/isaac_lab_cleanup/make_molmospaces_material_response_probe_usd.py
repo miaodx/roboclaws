@@ -37,6 +37,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         help="Rewrite PreviewSurface float inputs:roughness values for a probe.",
     )
+    parser.add_argument(
+        "--diffuse-texture-file",
+        type=Path,
+        help=(
+            "Comparison-only targeted probe: connect PreviewSurface diffuseColor to a "
+            "UsdUVTexture shader using this texture file. Requires --material-path-contains."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -49,6 +57,7 @@ def main(argv: list[str] | None = None) -> int:
         material_path_contains=args.material_path_contains,
         source_color_space=args.source_color_space,
         roughness=args.roughness,
+        diffuse_texture_file=args.diffuse_texture_file,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0 if summary["status"] in {"ready", "no_changes"} else 2
@@ -62,29 +71,37 @@ def make_material_response_probe_usd(
     material_path_contains: str | None = None,
     source_color_space: str | None = None,
     roughness: float | None = None,
+    diffuse_texture_file: Path | None = None,
 ) -> dict[str, Any]:
     if not scene_usd_path.is_file():
         raise FileNotFoundError(scene_usd_path)
     if scene_usd_path.resolve() == output_usd_path.resolve():
         raise ValueError("output_usd_path must not overwrite scene_usd_path")
     text = scene_usd_path.read_text(encoding="utf-8", errors="ignore")
+    if diffuse_texture_file is not None and material_path_contains is None:
+        raise ValueError("--diffuse-texture-file requires --material-path-contains")
+    if diffuse_texture_file is not None and not diffuse_texture_file.is_file():
+        raise FileNotFoundError(diffuse_texture_file)
     if material_path_contains:
         (
             updated,
             source_color_space_rewrite_count,
             roughness_rewrite_count,
+            diffuse_texture_injection_count,
             matched_material_block_count,
         ) = _rewrite_matching_material_blocks(
             text,
             material_path_contains=material_path_contains,
             source_color_space=source_color_space,
             roughness=roughness,
+            diffuse_texture_file=diffuse_texture_file,
         )
     else:
         matched_material_block_count = None
         updated = text
         source_color_space_rewrite_count = 0
         roughness_rewrite_count = 0
+        diffuse_texture_injection_count = 0
         if source_color_space is not None:
             updated, source_color_space_rewrite_count = re.subn(
                 r'token inputs:sourceColorSpace = "[^"]+"',
@@ -103,7 +120,9 @@ def make_material_response_probe_usd(
         scene_usd_path=scene_usd_path,
         output_usd_path=output_usd_path,
     )
-    total_rewrite_count = source_color_space_rewrite_count + roughness_rewrite_count
+    total_rewrite_count = (
+        source_color_space_rewrite_count + roughness_rewrite_count + diffuse_texture_injection_count
+    )
     status = "ready" if total_rewrite_count else "no_changes"
     summary = {
         "schema": SCHEMA,
@@ -115,10 +134,12 @@ def make_material_response_probe_usd(
             "material_path_contains": material_path_contains,
             "source_color_space": source_color_space,
             "roughness": roughness,
+            "diffuse_texture_file": str(diffuse_texture_file) if diffuse_texture_file else None,
         },
         "matched_material_block_count": matched_material_block_count,
         "source_color_space_rewrite_count": source_color_space_rewrite_count,
         "roughness_rewrite_count": roughness_rewrite_count,
+        "diffuse_texture_injection_count": diffuse_texture_injection_count,
         "total_rewrite_count": total_rewrite_count,
         "scene_metadata_copied": metadata_copied,
     }
@@ -137,11 +158,13 @@ def _rewrite_matching_material_blocks(
     material_path_contains: str,
     source_color_space: str | None,
     roughness: float | None,
-) -> tuple[str, int, int, int]:
+    diffuse_texture_file: Path | None,
+) -> tuple[str, int, int, int, int]:
     parts: list[str] = []
     cursor = 0
     source_color_space_rewrite_count = 0
     roughness_rewrite_count = 0
+    diffuse_texture_injection_count = 0
     matched_material_block_count = 0
     for match in re.finditer(r'(?m)^(\s*)def Material "[^"]+"\s*\{\s*$', text):
         block_start = match.start()
@@ -167,18 +190,92 @@ def _rewrite_matching_material_blocks(
                 rewritten,
             )
             roughness_rewrite_count += count
+        if diffuse_texture_file is not None:
+            rewritten, count = _inject_diffuse_texture_shader(
+                rewritten,
+                texture_file=diffuse_texture_file,
+            )
+            diffuse_texture_injection_count += count
         parts.append(text[cursor:block_start])
         parts.append(rewritten)
         cursor = block_end
     if not parts:
-        return text, 0, 0, 0
+        return text, 0, 0, 0, 0
     parts.append(text[cursor:])
     return (
         "".join(parts),
         source_color_space_rewrite_count,
         roughness_rewrite_count,
+        diffuse_texture_injection_count,
         matched_material_block_count,
     )
+
+
+def _inject_diffuse_texture_shader(block: str, *, texture_file: Path) -> tuple[str, int]:
+    material_path = _material_path_from_connect(block)
+    if not material_path or 'def Shader "PreviewSurface"' not in block:
+        return block, 0
+    texture_shader_path = f"{material_path}/DiffuseTexture"
+    if 'def Shader "DiffuseTexture"' in block:
+        updated = re.sub(
+            r"asset inputs:file = @[^@]+@",
+            f"asset inputs:file = @{texture_file}@",
+            block,
+            count=1,
+        )
+        updated = _ensure_diffuse_color_connect(updated, texture_shader_path)
+        return updated, int(updated != block)
+    updated = _ensure_diffuse_color_connect(block, texture_shader_path)
+    preview_end = _preview_surface_block_end(updated)
+    if preview_end is None:
+        return block, 0
+    indent = _preview_surface_indent(updated)
+    shader = (
+        f'\n{indent}def Shader "DiffuseTexture"\n'
+        f"{indent}{{\n"
+        f'{indent}    uniform token info:id = "UsdUVTexture"\n'
+        f"{indent}    float4 inputs:fallback = (1, 1, 1, 1)\n"
+        f"{indent}    asset inputs:file = @{texture_file}@\n"
+        f'{indent}    token inputs:sourceColorSpace = "auto"\n'
+        f'{indent}    token inputs:wrapS = "repeat"\n'
+        f'{indent}    token inputs:wrapT = "repeat"\n'
+        f"{indent}    float3 outputs:rgb\n"
+        f"{indent}}}\n"
+    )
+    return updated[:preview_end] + shader + updated[preview_end:], 1
+
+
+def _material_path_from_connect(block: str) -> str | None:
+    match = re.search(
+        r"outputs:surface\.connect = <([^>]+)/PreviewSurface\.outputs:surface>", block
+    )
+    if not match:
+        return None
+    return match.group(1)
+
+
+def _ensure_diffuse_color_connect(block: str, texture_shader_path: str) -> str:
+    connect = f"color3f inputs:diffuseColor.connect = <{texture_shader_path}.outputs:rgb>"
+    if "inputs:diffuseColor.connect" in block:
+        return re.sub(r"color3f inputs:diffuseColor\.connect = <[^>]+>", connect, block, count=1)
+    return re.sub(
+        r"color3f inputs:diffuseColor = \([^\n]+\)",
+        connect,
+        block,
+        count=1,
+    )
+
+
+def _preview_surface_block_end(block: str) -> int | None:
+    match = re.search(r'(?m)^(\s*)def Shader "PreviewSurface"\s*\{\s*$', block)
+    if not match:
+        return None
+    return _balanced_block_end(block, match.end() - 1)
+
+
+def _preview_surface_indent(block: str) -> str:
+    match = re.search(r'(?m)^(\s*)def Shader "PreviewSurface"', block)
+    return str(match.group(1)) if match else "    "
 
 
 def _balanced_block_end(text: str, open_brace_index: int) -> int | None:

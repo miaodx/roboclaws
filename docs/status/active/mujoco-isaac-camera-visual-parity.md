@@ -194,6 +194,18 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   slightly (`+1.0939`), so RGB gain remains comparison-only and FPV-focused, but
   the earlier unfiltered `-0.7708` weak-signal result should not drive the next
   decision.
+- A targeted comparison-only pillow texture probe now tests the remaining
+  selected-object material delta. The prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_1_pillow_texture_probe/scene_semantic.usda`
+  injects one `UsdUVTexture` connection for
+  `/val_1/Geometry/pillow_874c097332ffacf84f31fb77733db15c_1_0_2/Materials/material_Pillow14_Mat`
+  using `PillowD_AO.png`. It changes the fair bound-target report from
+  `material_or_texture_name_delta=1` to `material_texture_names_match=6`, but
+  does not improve FPV: baseline `36.5655`, probe `36.6877` (`+0.1222`). The
+  refreshed baseline records this material probe as `prior_probes_no_fpv_gain`
+  with `neutral_probe_count=1`. Do not promote the pillow texture injection as a
+  default; it narrows the cause from missing texture binding to renderer
+  material/tone/light response.
 - Remaining blocker is visual render-domain parity:
   `render_contract_diagnostics.status=lighting_shadow_contract_delta`,
   MuJoCo lights `1`, Isaac lights `2`, Isaac shadow-disabled prims `44` on
@@ -226,9 +238,9 @@ target-specific roughness edit as defaults from the current evidence. Keep RGB
 gain comparison-only: it improves FPV on `val_0`, `val_1` 4-location, and the
 fair bound-target `val_1` 6-location slice, but chase can move the other way and
 render-domain material checks remain active. The next highest-value
-render-domain slice is the selected pillow material/texture-name delta and the
-high-residual exact-bound bed/table material responses on the fair
-`val_1` bound-target report. For light/shadow specifically, do not retry simple
+render-domain slice is the high-residual exact-bound bed/table/pillow material
+response on the fair `val_1` bound-target report, plus RGB/tone interaction on
+that same fair target set. For light/shadow specifically, do not retry simple
 dome removal, shadow enabling, or the old combined MuJoCo-like light/shadow USD
 edit; split light count, shadow flags, intensity/direction, and material
 response only in a comparison-only probe.
