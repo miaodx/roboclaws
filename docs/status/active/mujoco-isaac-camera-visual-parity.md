@@ -102,8 +102,21 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `roughness_rewrite_count=340`, `total_rewrite_count=519`, and
   `scene_metadata_copied=true`. The source stage remains unchanged. This probe
   rewrites USD texture `sourceColorSpace` to `raw` and PreviewSurface
-  `roughness` to `1.0` so the next apple2apple run can test whether the
-  material-response direction actually improves FPV residuals.
+  `roughness` to `1.0` to test whether that combined material-response
+  direction improves FPV residuals.
+- The material-response probe has now run at
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_4loc_material_raw_roughness1_probe/report.html`.
+  It preserved the shared head-camera contract (`fpv_lens_aligned`,
+  `fpv_world_pose_aligned`) but worsened FPV mean-abs-RGB from the comparable
+  post-FOV baseline `38.0980` to `45.4954` (`+7.3974`). Chase improved from
+  `83.7516` to `72.5027`, but chase is auxiliary report evidence rather than
+  the policy/input camera. The refreshed 8-location baseline report now attaches
+  this probe under
+  `summary.render_domain_checks.checks[usd_preview_surface_material_model].probe_history`
+  with `schema=robot_camera_material_response_probe_history_v1`,
+  `status=prior_probes_worse`, `comparable_probe_count=1`, and
+  `worsened_probe_count=1`. Do not promote the combined
+  `sourceColorSpace=raw` plus `roughness=1.0` edit as a default.
 - The refreshed 8-location post-FOV RGB-gain probe improved FPV avg from
   `38.0980` to `35.0612` and changed the residual split to 4 low-residual FPV
   views, 3 geometry/texture edge residuals, and 1 render-domain residual. Its
@@ -138,17 +151,15 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Next Action
 
-Keep FPV pose and the head-camera FOV contract unchanged. Next, run the
-apple2apple comparison against the prepared material-response USD variant and
-compare FPV average/residual classes against the current `38.0980` baseline.
-If the `raw`/`roughness=1.0` variant improves, split it into separate
-`sourceColorSpace` and roughness probes; if it worsens, keep the result as
-negative evidence and continue with a narrower texture-sampler/colorspace
-diagnostic. Keep RGB gain comparison-only until it improves a broader post-FOV
-corpus. For light/shadow specifically, do not retry simple dome removal,
-shadow enabling, or the old combined MuJoCo-like light/shadow USD edit; split
-light count, shadow flags, intensity/direction, and material response only in a
-comparison-only probe.
+Keep FPV pose and the head-camera FOV contract unchanged. Next, split the
+negative combined material-response result into narrower comparison-only probes:
+`sourceColorSpace` only, PreviewSurface `roughness` only, and then target-specific
+sampler/material probes for high-residual objects such as the `0008` dining
+table if either isolated probe is informative. Keep RGB gain comparison-only
+until it improves a broader post-FOV corpus. For light/shadow specifically, do
+not retry simple dome removal, shadow enabling, or the old combined
+MuJoCo-like light/shadow USD edit; split light count, shadow flags,
+intensity/direction, and material response only in a comparison-only probe.
 
 ## Touched Areas
 

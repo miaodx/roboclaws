@@ -82,6 +82,17 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--material-response-probe-manifest",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Optional prior comparison manifest for a material-response probe. Repeat to "
+            "attach texture colorspace, roughness, or PreviewSurface probe history to this "
+            "report without changing default rendering."
+        ),
+    )
+    parser.add_argument(
         "--refresh-report-only",
         action="store_true",
         help=(
@@ -92,7 +103,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.refresh_report_only:
-        manifest = refresh_report_only(args.output_dir, args.light_shadow_probe_manifest)
+        manifest = refresh_report_only(
+            args.output_dir,
+            light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
+            material_response_probe_manifest_paths=args.material_response_probe_manifest,
+        )
     else:
         if args.scene_usd_path is None:
             parser.error("--scene-usd-path is required unless --refresh-report-only is set")
@@ -327,6 +342,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         manifest,
         output_dir=output_dir,
         light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
+        material_response_probe_manifest_paths=args.material_response_probe_manifest,
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -335,6 +351,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
 def refresh_report_only(
     output_dir: Path,
     light_shadow_probe_manifest_paths: list[Path] | None = None,
+    material_response_probe_manifest_paths: list[Path] | None = None,
 ) -> dict[str, Any]:
     manifest_path = output_dir / "comparison_manifest.json"
     if not manifest_path.is_file():
@@ -347,6 +364,7 @@ def refresh_report_only(
         manifest,
         output_dir=output_dir,
         light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
+        material_response_probe_manifest_paths=material_response_probe_manifest_paths,
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -618,6 +636,7 @@ def _attach_render_contract_diagnostics(
     *,
     output_dir: Path,
     light_shadow_probe_manifest_paths: list[Path] | None = None,
+    material_response_probe_manifest_paths: list[Path] | None = None,
 ) -> None:
     mujoco_state = _read_json(output_dir / "mujoco_state.json")
     isaac_state = _read_json(output_dir / "isaac_state.json")
@@ -672,6 +691,7 @@ def _attach_render_contract_diagnostics(
         per_location=per_location,
         isaac_state=isaac_state,
         light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
+        material_response_probe_manifest_paths=material_response_probe_manifest_paths,
     )
     manifest["render_domain_checks"] = domain_checks
     manifest.setdefault("summary", {})["render_domain_checks"] = domain_checks
@@ -861,6 +881,7 @@ def _render_domain_checks(
     per_location: list[dict[str, Any]],
     isaac_state: dict[str, Any],
     light_shadow_probe_manifest_paths: list[Path] | None,
+    material_response_probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
     checks = [
         _light_shadow_contract_check(
@@ -872,7 +893,12 @@ def _render_domain_checks(
             probe_manifest_paths=light_shadow_probe_manifest_paths,
         ),
         _texture_colorspace_material_response_check(per_location),
-        _usd_preview_surface_material_model_check(per_location),
+        _usd_preview_surface_material_model_check(
+            manifest=manifest,
+            output_dir=output_dir,
+            per_location=per_location,
+            probe_manifest_paths=material_response_probe_manifest_paths,
+        ),
         _tone_color_response_check(locations, isaac_state=isaac_state),
     ]
     status_counts = {
@@ -985,11 +1011,11 @@ def _light_shadow_probe_history(
     for path in paths:
         probe = _load_light_shadow_probe_manifest(path, output_dir=output_dir)
         if probe.get("status") == "loaded":
-            comparable = _light_shadow_probe_comparable(baseline, probe)
+            comparable = _comparison_probe_comparable(baseline, probe)
             probe["comparable_to_current"] = comparable
             if comparable:
                 comparable_count += 1
-            delta = _light_shadow_probe_delta(baseline, probe)
+            delta = _comparison_probe_delta(baseline, probe)
             probe["delta_vs_current"] = delta
             if delta.get("fpv_improvement") is True:
                 improved_count += 1
@@ -1078,7 +1104,7 @@ def _probe_manifest_summary(
     }
 
 
-def _light_shadow_probe_comparable(
+def _comparison_probe_comparable(
     baseline: dict[str, Any],
     probe: dict[str, Any],
 ) -> bool:
@@ -1100,7 +1126,7 @@ def _light_shadow_probe_comparable(
     return True
 
 
-def _light_shadow_probe_delta(
+def _comparison_probe_delta(
     baseline: dict[str, Any],
     probe: dict[str, Any],
 ) -> dict[str, Any]:
@@ -1126,6 +1152,83 @@ def _light_shadow_probe_delta(
         "chase_improvement": chase_delta is not None and chase_delta < -1.0,
         "chase_worse": chase_delta is not None and chase_delta > 1.0,
     }
+
+
+def _material_response_probe_history(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    probe_manifest_paths: list[Path] | None,
+) -> dict[str, Any]:
+    paths = [Path(path) for path in probe_manifest_paths or []]
+    if not paths:
+        return {
+            "schema": "robot_camera_material_response_probe_history_v1",
+            "status": "not_attached",
+            "probe_count": 0,
+            "probes": [],
+        }
+    baseline = _probe_manifest_summary(
+        manifest, manifest_path=output_dir / "comparison_manifest.json"
+    )
+    probes = []
+    comparable_count = 0
+    improved_count = 0
+    worsened_count = 0
+    for path in paths:
+        probe = _load_material_response_probe_manifest(path, output_dir=output_dir)
+        if probe.get("status") == "loaded":
+            comparable = _comparison_probe_comparable(baseline, probe)
+            probe["comparable_to_current"] = comparable
+            if comparable:
+                comparable_count += 1
+            delta = _comparison_probe_delta(baseline, probe)
+            probe["delta_vs_current"] = delta
+            if delta.get("fpv_improvement") is True:
+                improved_count += 1
+            if delta.get("fpv_worse") is True:
+                worsened_count += 1
+        probes.append(probe)
+    if improved_count:
+        status = "prior_probe_improved"
+    elif worsened_count and comparable_count:
+        status = "prior_probes_worse"
+    elif comparable_count:
+        status = "prior_probes_no_fpv_gain"
+    else:
+        status = "no_comparable_probe"
+    return {
+        "schema": "robot_camera_material_response_probe_history_v1",
+        "status": status,
+        "baseline": baseline,
+        "probe_count": len(probes),
+        "comparable_probe_count": comparable_count,
+        "improved_probe_count": improved_count,
+        "worsened_probe_count": worsened_count,
+        "probes": probes,
+        "interpretation": (
+            "Historical material-response probes are comparison evidence only. They "
+            "separate texture colorspace, PreviewSurface roughness/specular response, "
+            "and tone/material effects from the head-camera contract."
+        ),
+    }
+
+
+def _load_material_response_probe_manifest(path: Path, *, output_dir: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {
+            "status": "missing_manifest",
+            "path": _relpath(path, output_dir),
+        }
+    try:
+        payload = _read_json(path)
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "status": "read_failed",
+            "path": _relpath(path, output_dir),
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+    return _probe_manifest_summary(payload, manifest_path=path, output_dir=output_dir)
 
 
 def _texture_colorspace_material_response_check(
@@ -1301,8 +1404,17 @@ def _path_basenames(values: list[str]) -> list[str]:
 
 
 def _usd_preview_surface_material_model_check(
+    *,
+    manifest: dict[str, Any],
+    output_dir: Path,
     per_location: list[dict[str, Any]],
+    probe_manifest_paths: list[Path] | None,
 ) -> dict[str, Any]:
+    probe_history = _material_response_probe_history(
+        manifest,
+        output_dir=output_dir,
+        probe_manifest_paths=probe_manifest_paths,
+    )
     isaac_binding_count = 0
     preview_surface_binding_count = 0
     diffuse_texture_binding_count = 0
@@ -1346,6 +1458,18 @@ def _usd_preview_surface_material_model_check(
         status = "usd_preview_surface_binding_gap"
     else:
         status = "usd_preview_surface_vs_mujoco_material_model_delta"
+    if probe_history.get("worsened_probe_count"):
+        next_action = (
+            "Do not promote the already-worse material-response probe directly; split "
+            "texture sourceColorSpace, PreviewSurface roughness, and target-specific "
+            "sampler/material changes in comparison-only probes."
+        )
+    else:
+        next_action = (
+            "Inspect USD PreviewSurface diffuse texture/color, roughness, opacity, and "
+            "specular conversion against the MJCF material RGBA/texture inputs before "
+            "changing the camera contract."
+        )
     return {
         "check_id": "usd_preview_surface_material_model",
         "status": status,
@@ -1359,11 +1483,8 @@ def _usd_preview_surface_material_model_check(
         },
         "high_residual_target_count": len(high_residual_targets),
         "high_residual_targets": high_residual_targets[:5],
-        "recommended_next_action": (
-            "Inspect USD PreviewSurface diffuse texture/color, roughness, opacity, and "
-            "specular conversion against the MJCF material RGBA/texture inputs before "
-            "changing the camera contract."
-        ),
+        "probe_history": probe_history,
+        "recommended_next_action": next_action,
     }
 
 

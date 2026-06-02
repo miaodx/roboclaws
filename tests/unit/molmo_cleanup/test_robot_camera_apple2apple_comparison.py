@@ -575,6 +575,101 @@ def test_robot_camera_light_shadow_check_summarizes_worse_prior_probe(tmp_path: 
     assert "Do not promote" in check["recommended_next_action"]
 
 
+def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_material_probe_history",
+    )
+    baseline = {
+        "scene": {
+            "scene_source": "procthor-10k-val",
+            "scene_index": 0,
+            "seed": 6,
+            "generated_mess_count": 5,
+            "render_width": 540,
+            "render_height": 360,
+        },
+        "summary": {
+            "location_count": 8,
+            "fpv_mean_abs_rgb_avg": 38.098,
+            "chase_mean_abs_rgb_avg": 83.7516,
+            "camera_contract_diagnostics": {
+                "status": "fpv_contract_shared_with_static_head_camera_pitch_correction",
+                "fpv_lens_delta_summary": {"status": "fpv_lens_aligned"},
+                "fpv_world_pose_delta_summary": {"status": "fpv_world_pose_aligned"},
+            },
+            "render_contract_diagnostics": {
+                "status": "lighting_shadow_contract_delta",
+            },
+            "residual_triage": {
+                "status": "render_domain_geometry_or_texture_residual",
+                "views": {"fpv": {"residual_classes": {"geometry_or_texture_edge_residual": 4}}},
+            },
+        },
+    }
+    probe = json.loads(json.dumps(baseline))
+    probe["scene"]["scene_usd_path"] = (
+        "output/isaaclab/val_0_scene_refs_fix_material_raw_roughness1/scene_semantic.usda"
+    )
+    probe["summary"]["location_count"] = 4
+    probe["summary"]["fpv_mean_abs_rgb_avg"] = 45.4954
+    probe["summary"]["chase_mean_abs_rgb_avg"] = 72.5027
+    probe["summary"]["residual_triage"]["views"]["fpv"]["residual_classes"] = {
+        "geometry_or_texture_edge_residual": 3,
+        "view_dependent_color_residual": 1,
+    }
+    probe_path = tmp_path / "material_probe_manifest.json"
+    probe_path.write_text(json.dumps(probe), encoding="utf-8")
+
+    check = run_camera._usd_preview_surface_material_model_check(
+        manifest=baseline,
+        output_dir=tmp_path,
+        per_location=[
+            {
+                "target": {"target_id": "table_1", "kind": "receptacle"},
+                "fpv_mean_abs_rgb": 48.0,
+                "fpv_residual_class": "geometry_or_texture_edge_residual",
+                "mujoco_target_contract": {
+                    "visuals": [
+                        {
+                            "material": "material_LightWoodCounters3",
+                            "rgba": [0.698113, 0.339363, 0.135012, 1.0],
+                        }
+                    ]
+                },
+                "isaac_target_contract": {
+                    "bindings": [
+                        {
+                            "has_preview_surface": True,
+                            "has_diffuse_texture": True,
+                            "preview_surface_inputs": {
+                                "roughness": 0.5,
+                                "opacity": 1.0,
+                                "metallic": 0.0,
+                            },
+                            "texture_source_color_space": "auto",
+                        }
+                    ]
+                },
+            }
+        ],
+        probe_manifest_paths=[probe_path],
+    )
+
+    history = check["probe_history"]
+    assert history["schema"] == "robot_camera_material_response_probe_history_v1"
+    assert history["status"] == "prior_probes_worse"
+    assert history["comparable_probe_count"] == 1
+    assert history["worsened_probe_count"] == 1
+    assert history["probes"][0]["comparable_to_current"] is True
+    assert history["probes"][0]["delta_vs_current"]["fpv_mean_abs_rgb_delta"] == 7.3974
+    assert history["probes"][0]["delta_vs_current"]["fpv_worse"] is True
+    assert history["probes"][0]["delta_vs_current"]["chase_improvement"] is True
+    assert "Do not promote" in check["recommended_next_action"]
+
+
 def test_robot_camera_render_contract_diagnostics_prioritizes_missing_target_binding(
     tmp_path: Path,
 ) -> None:
