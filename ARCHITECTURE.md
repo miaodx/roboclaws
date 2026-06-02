@@ -55,8 +55,11 @@ Key pieces:
 - `roboclaws/core/engine.py` owns the `MultiAgentEngine` wrapper around
   AI2-THOR.
 - `roboclaws/core/vlm.py` and `roboclaws/core/providers/` own provider routing.
-- `roboclaws/mcp/server.py` exposes the AI2-THOR navigation MCP surface.
-- `examples/games/` and `examples/mcp/` contain runnable entrypoints.
+- `roboclaws/ai2thor/navigation_mcp.py` exposes the AI2-THOR navigation MCP
+  surface.
+- `roboclaws/cli/agent_server.py` starts coding-agent MCP servers for
+  `ai2thor-nav`, `household-cleanup`, and `semantic-map-build`.
+- `examples/games/` contains runnable game examples.
 
 The canonical navigation tools are `observe`, `observe_archived`, `move`, and
 `done`. Simulator helpers such as `scene_objects` and `goto` are privileged
@@ -71,11 +74,16 @@ Key pieces:
 
 - `roboclaws/household/realworld_contract.py` owns the public/private
   household contract.
+- `roboclaws/household/realworld_cleanup.py` owns the direct deterministic
+  cleanup and semantic-map sweep CLI used by `just` and harness recipes.
 - `roboclaws/household/semantic_cleanup_loop.py` owns the direct semantic
   cleanup flow.
 - `roboclaws/maps/` owns reusable navigation map artifacts and projections.
 - `roboclaws/household/realworld_mcp_server.py` exposes the cleanup MCP
   surface for coding agents and OpenClaw-style clients.
+- `roboclaws/cli/household_agent_server.py` and
+  `roboclaws/cli/agibot_map_build_agent_server.py` assemble live household MCP
+  server processes behind `python -m roboclaws.cli.agent_server ...`.
 - `roboclaws/household/report.py` renders the shared report.
 - `roboclaws/household/camera_control.py` owns the external render-camera
   request schema used by MuJoCo/Isaac scene probes.
@@ -136,6 +144,14 @@ Older backend/domain ids such as `molmospaces_cleanup_v1` and
 
 Going forward:
 
+- Add a new runnable task by adding a domain `tasks.py` spec and registering it
+  in `roboclaws/launch/catalog.py`; keep behavior in the domain package.
+- Add a new backend as a reusable adapter under the owning domain package, then
+  expose it through task metadata or launch validation.
+- Add a new coding-agent driver under `roboclaws/agents/drivers/` and keep
+  task-specific kickoff text in `roboclaws/agents/prompts/`.
+- Add or revise MCP tools in the domain-local MCP module when the capability
+  surface is stable enough to reuse across skills.
 - Profiles describe reusable capability environments, not whole tasks.
 - Skills compose profiles by requirement; profiles should not copy other
   profiles' tool lists.

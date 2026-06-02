@@ -180,7 +180,23 @@ def ai2thor_nav_server_main(argv: list[str] | None = None) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    return ai2thor_nav_server_main(argv)
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] in {"ai2thor-nav", "household-cleanup", "semantic-map-build"}:
+        server = args.pop(0)
+    else:
+        server = "ai2thor-nav"
+
+    if server == "ai2thor-nav":
+        return ai2thor_nav_server_main(args)
+    if server == "household-cleanup":
+        from roboclaws.cli.household_agent_server import main as household_main
+
+        return household_main(args)
+    if server == "semantic-map-build":
+        from roboclaws.cli.agibot_map_build_agent_server import main as semantic_map_main
+
+        return semantic_map_main(args)
+    raise AssertionError(f"unhandled agent server: {server}")
 
 
 if __name__ == "__main__":

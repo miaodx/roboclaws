@@ -13,10 +13,6 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
-from examples.molmo_cleanup.molmospaces_realworld_cleanup import (  # noqa: E402
-    SYNTHETIC_BACKEND,
-    run_realworld_cleanup,
-)
 from roboclaws.household.agibot_map_bundle import (  # noqa: E402
     AGIBOT_MAP_BUNDLE_PROVENANCE,
     write_agibot_nav2_map_bundle,
@@ -30,6 +26,10 @@ from roboclaws.household.agibot_map_defaults import (  # noqa: E402
 )
 from roboclaws.household.artifact_report import (  # noqa: E402
     rerender_cleanup_report_from_artifact_path,
+)
+from roboclaws.household.realworld_cleanup import (  # noqa: E402
+    SYNTHETIC_BACKEND,
+    run_realworld_cleanup,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

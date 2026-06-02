@@ -12,22 +12,17 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-if __package__ in {None, ""}:
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
-from roboclaws.household.agibot_cleanup_contract import (  # noqa: E402
+from roboclaws.household.agibot_cleanup_contract import (
     AgibotCleanupMCPContract,
 )
-from roboclaws.household.backend_contract import CleanupBackendSession  # noqa: E402
-from roboclaws.household.isaac_lab_backend import (  # noqa: E402
+from roboclaws.household.backend_contract import CleanupBackendSession
+from roboclaws.household.isaac_lab_backend import (
     ISAACLAB_SUBPROCESS_BACKEND,
     IsaacLabSubprocessBackend,
 )
-from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir  # noqa: E402
-from roboclaws.household.profiles import cleanup_profile_names  # noqa: E402
-from roboclaws.household.realworld_contract import (  # noqa: E402
+from roboclaws.household.nav2_map_bundle import selected_nav2_map_bundle_dir
+from roboclaws.household.profiles import cleanup_profile_names
+from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
     DEFAULT_REALWORLD_TASK,
@@ -35,19 +30,19 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
     REALWORLD_MAP_MODES,
     VISIBLE_OBJECT_DETECTIONS_MODE,
 )
-from roboclaws.household.realworld_mcp_server import (  # noqa: E402
+from roboclaws.household.realworld_mcp_server import (
     DEFAULT_HOST,
     DEFAULT_PORT,
     MCP_SERVER_NAME,
     RealWorldMolmoCleanupMCPServer,
     make_molmo_realworld_cleanup_mcp,
 )
-from roboclaws.household.scenario import build_cleanup_scenario  # noqa: E402
-from roboclaws.household.subprocess_backend import (  # noqa: E402
+from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
-from roboclaws.household.visual_grounding import (  # noqa: E402
+from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
 

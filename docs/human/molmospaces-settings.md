@@ -399,9 +399,9 @@ the current source of truth before claiming a run supports a setting.
 
 | Entrypoint | Visible Detections | Raw FPV Only | Camera Labels | Notes |
 |------------|--------------------|--------------|---------------------|-------|
-| `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` | yes | yes | yes | Deterministic cleanup demo and checker path. |
+| `python -m roboclaws.household.realworld_cleanup` | yes | yes | yes | Deterministic cleanup demo and checker path. The example path is only a thin wrapper. |
 | `scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py` | yes | yes | yes | Dogfood/smoke wrapper used by several just recipes; uses model-declared simulated producers where camera-label declarations are exercised. |
-| `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py` | yes | yes | yes | Direct Codex/Claude/OpenClaw server CLI exposes raw-FPV declaration tools and supports the `camera_model_policy` declaration path. |
+| `python -m roboclaws.cli.agent_server household-cleanup` | yes | yes | yes | Direct Codex/Claude/OpenClaw server CLI exposes raw-FPV declaration tools and supports the `camera_model_policy` declaration path. |
 | `RealWorldCleanupContract` / `realworld_mcp_server` internals | yes | yes | yes | Internals use `declare_visual_candidates` and `navigate_to_visual_candidate` for camera evidence to handle registration. |
 
 ## Command Taxonomy

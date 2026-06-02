@@ -17,8 +17,9 @@ import time
 from pathlib import Path
 from typing import BinaryIO
 
+from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+
 FULL_PERMISSION_ARGS = ("--dangerously-skip-permissions", "--permission-mode", "bypassPermissions")
-SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 
@@ -132,8 +133,7 @@ class LiveClaudeCleanupRunner:
             )
 
         command = [
-            str(self.args.repo_root / ".venv/bin/python"),
-            SERVER_SCRIPT,
+            *household_cleanup_server_argv(str(self.args.repo_root / ".venv/bin/python")),
             *self.args.server_arg,
         ]
         env = os.environ.copy()

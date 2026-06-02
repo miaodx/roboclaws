@@ -88,6 +88,26 @@ Implementation checkpoint evidence:
   report, perception, and backend modules from `roboclaws/molmo_cleanup/` to
   `roboclaws/household/`, leaving `roboclaws/molmo_cleanup/__init__.py` as a
   lightweight submodule alias.
+- The agent-driver split checkpoint added `roboclaws/agents/` for reusable
+  live-agent driver helpers and kickoff prompt rendering. `just/molmo.just`
+  now asks Python to render the live cleanup prompt instead of owning long task
+  prompts inline.
+- The MCP/server consolidation checkpoint moved household live server assembly
+  to `roboclaws/cli/household_agent_server.py` and
+  `roboclaws/cli/agibot_map_build_agent_server.py`, both selected through
+  `python -m roboclaws.cli.agent_server ...`.
+- The direct deterministic household cleanup implementation moved to
+  `roboclaws/household/realworld_cleanup.py`; the remaining
+  `examples/molmo_cleanup/molmospaces_realworld_cleanup.py` path is a thin
+  human-runnable wrapper.
+- Duplicate server example entrypoints were deleted:
+  `examples/mcp/coding_agent_nav_server.py`,
+  `examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py`, and
+  `examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py`.
+- `roboclaws/molmo_cleanup/__init__.py` remains as a lightweight legacy alias
+  because unrelated in-progress Isaac/head-camera work in the current dirty
+  worktree still relies on the old import surface. No new owned code imports
+  from `roboclaws.molmo_cleanup`.
 
 ## Problem
 
@@ -209,10 +229,8 @@ roboclaws/
     territory.py
 
 examples/
-  agent_servers/
-    ai2thor_nav_mcp.py
-    household_cleanup_mcp.py
-    semantic_map_build_mcp.py
+  agent_servers/        # optional thin wrappers only, not canonical routes
+    ...
 ```
 
 This is the target shape for the full refactor, not only a first implementation
@@ -527,20 +545,35 @@ Mitigations:
 
 ## Done Checklist
 
-- [ ] Public route inventory completed.
-- [ ] Launch composition root added.
-- [ ] Task specs moved to domain facades.
-- [ ] Agent drivers separated from task logic.
-- [ ] `molmo_cleanup` backend-neutral domain code renamed or moved to
+- [x] Public route inventory completed.
+- [x] Launch composition root added.
+- [x] Task specs moved to domain facades.
+- [x] Agent drivers separated from task logic.
+- [x] `molmo_cleanup` backend-neutral domain code renamed or moved to
       `household`.
-- [ ] Backends live in one reusable adapter location per backend.
-- [ ] MCP capability server naming is consistent.
-- [ ] Duplicate example server files removed.
-- [ ] Obsolete examples removed unless they remain thin human-runnable wrappers.
-- [ ] Long prompts removed from `just` recipes.
-- [ ] Docs explain extension paths for tasks, backends, drivers, MCP tools, and
+- [x] Backends live in one reusable adapter location per backend.
+- [x] MCP capability server naming is consistent.
+- [x] Duplicate example server files removed.
+- [x] Obsolete examples removed unless they remain thin human-runnable wrappers.
+- [x] Long prompts removed from `just` recipes.
+- [x] Docs explain extension paths for tasks, backends, drivers, MCP tools, and
       examples.
-- [ ] Focused route, MCP, domain contract, lint, and format gates pass.
+- [x] Focused route, MCP, domain contract, lint, and format gates pass.
+
+Closeout verification notes:
+
+- Focused route/server tests passed:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_verify_just_recipes.py tests/contract/dev_tools/test_isaac_runtime_preflight_just_recipe.py tests/contract/mcp/test_coding_agent_nav_server.py tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py tests/unit/molmo_cleanup/test_ci_live_reports.py`.
+- Python lint passed on the owned refactor paths:
+  `.venv/bin/ruff check roboclaws/agents roboclaws/cli roboclaws/household/realworld_cleanup.py scripts/molmo_cleanup/run_live_codex_cleanup.py scripts/molmo_cleanup/run_live_claude_cleanup.py scripts/molmo_cleanup/run_live_codex_agibot_map_build.py scripts/molmo_cleanup/run_agibot_robot_map_9_semantic_actions.py examples/molmo_cleanup/molmospaces_realworld_cleanup.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_verify_just_recipes.py tests/contract/dev_tools/test_isaac_runtime_preflight_just_recipe.py tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py`.
+- `python -m py_compile` passed for the new agent, CLI, and household direct
+  cleanup modules.
+- `just --fmt --check` was not used as a pass/fail gate because it reports
+  pre-existing root `justfile` formatting changes unrelated to this refactor.
+- A larger checker suite was run and all owned route/server paths passed, but
+  `tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend`
+  currently fails in the unrelated dirty Isaac/head-camera runtime checker
+  state described in the handoff.
 
 ## Parked Items
 

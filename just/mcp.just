@@ -119,10 +119,10 @@ down:
     # Backstop: reap any orphan roboclaws MCP server processes that lost their
     # PID file (crash, disk wipe, manual rm, recipe family switch). Project
     # policy is one roboclaws MCP per machine, so we cover every known driver:
-    #   - coding_agent_nav_server.py  (code::cc / code::codex)
+    #   - roboclaws.cli.agent_server  (code::cc / code::codex)
     #   - openclaw_interactive.py     (chat::run)
     if command -v pgrep >/dev/null 2>&1; then
-      orphan_pattern='python[^ ]*[ ].*(coding_agent_nav_server|openclaw_interactive)\.py'
+      orphan_pattern='python[^ ]*[ ].*((-m[ ]+)?roboclaws[.]cli[.]agent_server|openclaw_interactive[.]py)'
       orphan_pids="$(pgrep -f "$orphan_pattern" || true)"
       if [[ -n "$orphan_pids" ]]; then
         while IFS= read -r orphan_pid; do

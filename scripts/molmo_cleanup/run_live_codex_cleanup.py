@@ -17,10 +17,10 @@ import time
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
 from roboclaws.household.report import runtime_timing_from_trace
 
 FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
-SERVER_SCRIPT = "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py"
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 CODEX_CLEANUP_MCP_SERVER_NAME = "cleanup"
@@ -175,8 +175,7 @@ class LiveCodexCleanupRunner:
             )
 
         command = [
-            str(self.args.repo_root / ".venv/bin/python"),
-            SERVER_SCRIPT,
+            *household_cleanup_server_argv(str(self.args.repo_root / ".venv/bin/python")),
             *self.args.server_arg,
         ]
         env = os.environ.copy()

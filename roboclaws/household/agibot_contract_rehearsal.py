@@ -9,7 +9,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from examples.molmo_cleanup.molmospaces_realworld_cleanup import (
+from roboclaws.household.realworld_cleanup import (
     SYNTHETIC_BACKEND,
     run_realworld_cleanup,
 )
