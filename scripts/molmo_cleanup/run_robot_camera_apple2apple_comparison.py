@@ -1308,6 +1308,18 @@ def _usd_preview_surface_material_model_check(
     diffuse_texture_binding_count = 0
     mujoco_visual_count = 0
     mujoco_rgba_visual_count = 0
+    preview_input_statuses: list[str] = []
+    target_summaries = [_preview_surface_target_summary(item) for item in per_location]
+    high_residual_targets = [
+        item
+        for item in target_summaries
+        if item.get("fpv_residual_class") != "low_residual"
+        or float(item.get("fpv_mean_abs_rgb") or 0.0) > 35.0
+    ]
+    high_residual_targets.sort(
+        key=lambda item: float(item.get("fpv_mean_abs_rgb") or 0.0),
+        reverse=True,
+    )
     for item in per_location:
         isaac = _dict(item.get("isaac_target_contract"))
         for binding in isaac.get("bindings") or []:
@@ -1316,6 +1328,12 @@ def _usd_preview_surface_material_model_check(
             isaac_binding_count += 1
             preview_surface_binding_count += int(bool(binding.get("has_preview_surface")))
             diffuse_texture_binding_count += int(bool(binding.get("has_diffuse_texture")))
+            preview_inputs = _dict(binding.get("preview_surface_inputs"))
+            preview_input_statuses.extend(
+                key
+                for key in ("roughness", "opacity", "metallic", "specular")
+                if preview_inputs.get(key) is not None
+            )
         mujoco = _dict(item.get("mujoco_target_contract"))
         for visual in mujoco.get("visuals") or []:
             if not isinstance(visual, dict):
@@ -1336,10 +1354,72 @@ def _usd_preview_surface_material_model_check(
         "isaac_diffuse_texture_binding_count": diffuse_texture_binding_count,
         "mujoco_visual_count": mujoco_visual_count,
         "mujoco_rgba_visual_count": mujoco_rgba_visual_count,
+        "preview_surface_input_counts": {
+            name: preview_input_statuses.count(name) for name in sorted(set(preview_input_statuses))
+        },
+        "high_residual_target_count": len(high_residual_targets),
+        "high_residual_targets": high_residual_targets[:5],
         "recommended_next_action": (
             "Inspect USD PreviewSurface diffuse texture/color, roughness, opacity, and "
             "specular conversion against the MJCF material RGBA/texture inputs before "
             "changing the camera contract."
+        ),
+    }
+
+
+def _preview_surface_target_summary(item: dict[str, Any]) -> dict[str, Any]:
+    target = _dict(item.get("target"))
+    mujoco = _dict(item.get("mujoco_target_contract"))
+    isaac = _dict(item.get("isaac_target_contract"))
+    visuals = [_dict(value) for value in mujoco.get("visuals") or []]
+    bindings = [_dict(value) for value in isaac.get("bindings") or []]
+    isaac_preview_inputs = [
+        _dict(binding.get("preview_surface_inputs"))
+        for binding in bindings
+        if binding.get("has_preview_surface")
+    ]
+    texture_source_color_spaces = sorted(
+        {
+            str(binding.get("texture_source_color_space"))
+            for binding in bindings
+            if binding.get("texture_source_color_space")
+        }
+    )
+    texture_scales = [
+        binding.get("texture_scale") for binding in bindings if binding.get("texture_scale")
+    ]
+    texture_fallbacks = [
+        binding.get("texture_fallback") for binding in bindings if binding.get("texture_fallback")
+    ]
+    mujoco_rgba_values = [visual.get("rgba") for visual in visuals if visual.get("rgba")]
+    isaac_diffuse_colors = [
+        binding.get("diffuse_color") for binding in bindings if binding.get("diffuse_color")
+    ]
+    return {
+        "target_id": target.get("target_id"),
+        "target_kind": target.get("kind"),
+        "fpv_mean_abs_rgb": item.get("fpv_mean_abs_rgb"),
+        "fpv_residual_class": item.get("fpv_residual_class"),
+        "fpv_mujoco_mean_luminance": item.get("fpv_mujoco_mean_luminance"),
+        "fpv_isaac_mean_luminance": item.get("fpv_isaac_mean_luminance"),
+        "mujoco_materials": mujoco.get("materials"),
+        "mujoco_textures": mujoco.get("textures"),
+        "mujoco_rgba_values": mujoco_rgba_values[:5],
+        "isaac_materials": isaac.get("materials"),
+        "isaac_diffuse_texture_basenames": _path_basenames(
+            [str(value) for value in isaac.get("texture_files") or []]
+        ),
+        "isaac_diffuse_colors": isaac_diffuse_colors[:5],
+        "isaac_preview_surface_inputs": isaac_preview_inputs[:5],
+        "isaac_texture_source_color_spaces": texture_source_color_spaces,
+        "isaac_texture_scales": texture_scales[:5],
+        "isaac_texture_fallbacks": texture_fallbacks[:5],
+        "isaac_texture_wrap_modes": sorted(
+            {
+                f"{binding.get('texture_wrap_s')}/{binding.get('texture_wrap_t')}"
+                for binding in bindings
+                if binding.get("texture_wrap_s") or binding.get("texture_wrap_t")
+            }
         ),
     }
 

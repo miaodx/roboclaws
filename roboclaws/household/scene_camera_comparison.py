@@ -2783,15 +2783,52 @@ def _usda_material_blocks(text: str) -> dict[str, dict[str, Any]]:
 def _parse_usda_material_block(name: str, block_text: str) -> dict[str, Any]:
     texture_files = re.findall(r"asset inputs:file = @([^@]+)@", block_text)
     diffuse_match = re.search(r"color3f inputs:diffuseColor = \(([^)]+)\)", block_text)
+    diffuse_connect_match = re.search(
+        r"color3f inputs:diffuseColor\.connect = <([^>]+)>",
+        block_text,
+    )
+    source_color_space_match = re.search(
+        r'token inputs:sourceColorSpace = "([^"]+)"',
+        block_text,
+    )
     return {
         "material_name": name,
         "has_preview_surface": "UsdPreviewSurface" in block_text,
         "diffuse_color": _float_list(diffuse_match.group(1).replace(",", " "))
         if diffuse_match
         else None,
+        "diffuse_color_connect": diffuse_connect_match.group(1) if diffuse_connect_match else None,
         "diffuse_texture_files": texture_files,
+        "texture_scale": _parse_usda_float_input(block_text, "scale"),
+        "texture_fallback": _parse_usda_float_input(block_text, "fallback"),
+        "texture_source_color_space": source_color_space_match.group(1)
+        if source_color_space_match
+        else None,
+        "texture_wrap_s": _parse_usda_token_input(block_text, "wrapS"),
+        "texture_wrap_t": _parse_usda_token_input(block_text, "wrapT"),
+        "preview_surface_inputs": {
+            "metallic": _parse_usda_scalar_input(block_text, "metallic"),
+            "opacity": _parse_usda_scalar_input(block_text, "opacity"),
+            "roughness": _parse_usda_scalar_input(block_text, "roughness"),
+            "specular": _parse_usda_scalar_input(block_text, "specular"),
+        },
         "has_diffuse_texture": bool(texture_files) or "inputs:diffuseColor.connect" in block_text,
     }
+
+
+def _parse_usda_scalar_input(block_text: str, name: str) -> float | None:
+    match = re.search(rf"float inputs:{re.escape(name)} = ([^\s]+)", block_text)
+    return _optional_float(match.group(1)) if match else None
+
+
+def _parse_usda_float_input(block_text: str, name: str) -> list[float] | None:
+    match = re.search(rf"float[234]? inputs:{re.escape(name)} = \(([^)]+)\)", block_text)
+    return _float_list(match.group(1).replace(",", " ")) if match else None
+
+
+def _parse_usda_token_input(block_text: str, name: str) -> str | None:
+    match = re.search(rf'token inputs:{re.escape(name)} = "([^"]+)"', block_text)
+    return match.group(1) if match else None
 
 
 def _usda_prim_blocks(text: str) -> dict[str, str]:

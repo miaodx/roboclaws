@@ -350,11 +350,19 @@ def Xform "World"
       def Shader "PreviewSurface"
       {
         uniform token info:id = "UsdPreviewSurface"
-        color3f inputs:diffuseColor = (1, 1, 1)
+        color3f inputs:diffuseColor.connect = </World/Looks/mat_bed/DiffuseTexture.outputs:rgb>
+        float inputs:metallic = 0
+        float inputs:opacity = 1
+        float inputs:roughness = 0.5
       }
       def Shader "DiffuseTexture"
       {
         asset inputs:file = @/tmp/textures/bed.png@
+        float4 inputs:fallback = (0.9, 0.8, 0.7, 1)
+        float4 inputs:scale = (0.9, 0.8, 0.7, 1)
+        token inputs:sourceColorSpace = "auto"
+        token inputs:wrapS = "repeat"
+        token inputs:wrapT = "repeat"
       }
     }
   }
@@ -473,6 +481,19 @@ def Xform "World"
         check_by_id["usd_preview_surface_material_model"]["isaac_preview_surface_binding_count"]
         == 1
     )
+    assert check_by_id["usd_preview_surface_material_model"]["preview_surface_input_counts"] == {
+        "metallic": 1,
+        "opacity": 1,
+        "roughness": 1,
+    }
+    preview_target = check_by_id["usd_preview_surface_material_model"]["high_residual_targets"][0]
+    assert preview_target["target_id"] == "bed_1"
+    assert preview_target["isaac_preview_surface_inputs"][0]["roughness"] == 0.5
+    assert preview_target["isaac_preview_surface_inputs"][0]["opacity"] == 1.0
+    assert preview_target["isaac_texture_source_color_spaces"] == ["auto"]
+    assert preview_target["isaac_texture_scales"] == [[0.9, 0.8, 0.7, 1.0]]
+    assert preview_target["isaac_texture_fallbacks"] == [[0.9, 0.8, 0.7, 1.0]]
+    assert preview_target["isaac_texture_wrap_modes"] == ["repeat/repeat"]
     assert check_by_id["tone_color_response"]["status"] == "tone_color_delta_rgb_oracle"
     assert check_by_id["tone_color_response"]["fpv_mean_abs_rgb_avg"] == 48.0
     assert check_by_id["tone_color_response"]["check_id"] == "tone_color_response"

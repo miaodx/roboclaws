@@ -86,6 +86,16 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   MuJoCo `88.026` vs Isaac `131.0136`. This supports a texture
   source/colorspace/material-response cause for the visibly pale Isaac table
   rather than another FPV camera-angle change.
+- The baseline also now expands the `usd_preview_surface_material_model` check
+  with high-residual target summaries and parsed PreviewSurface inputs. For
+  `0008`, MuJoCo and Isaac both expose `material_LightWoodCounters3` with the
+  same RGBA/texture scale numbers `[0.698113, 0.339363, 0.135012, 1]`, but
+  Isaac renders it through a USD texture shader with `sourceColorSpace=auto`,
+  `wrapS/wrapT=repeat`, `roughness=0.5`, `opacity=1`, and `metallic=0`. Across
+  the 8-location baseline, parsed PreviewSurface input counts are
+  `metallic=20`, `opacity=20`, and `roughness=20`. This narrows the next
+  material-model probe toward USD texture colorspace/sampler and
+  PreviewSurface-vs-MJCF response rather than material identity or camera pose.
 - The refreshed 8-location post-FOV RGB-gain probe improved FPV avg from
   `38.0980` to `35.0612` and changed the residual split to 4 low-residual FPV
   views, 3 geometry/texture edge residuals, and 1 render-domain residual. Its
@@ -120,17 +130,15 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Next Action
 
-Keep FPV pose and the head-camera FOV contract unchanged. Next, use the expanded
-texture/material target summaries to inspect USD PreviewSurface inputs against
-the matching MJCF material RGBA/texture entries for the high-residual targets,
-starting with `0008` and the two worst bed targets. The next report-only
-diagnostic should expose PreviewSurface diffuse texture/color, roughness,
-opacity, and specular inputs next to MuJoCo RGBA/texture so we can decide
-whether a material-conversion probe is justified. Keep RGB gain
-comparison-only until it improves a broader post-FOV corpus. For light/shadow
-specifically, do not retry simple dome removal, shadow enabling, or the old
-combined MuJoCo-like light/shadow USD edit; split light count, shadow flags,
-intensity/direction, and material response only in a comparison-only probe.
+Keep FPV pose and the head-camera FOV contract unchanged. Next, run a
+comparison-only material response probe that isolates USD texture
+`sourceColorSpace`/sampler behavior and PreviewSurface roughness response for
+the high-residual targets, starting with `0008` and the two worst bed targets.
+Keep RGB gain comparison-only until it improves a broader post-FOV corpus. For
+light/shadow specifically, do not retry simple dome removal, shadow enabling,
+or the old combined MuJoCo-like light/shadow USD edit; split light count,
+shadow flags, intensity/direction, and material response only in a
+comparison-only probe.
 
 ## Touched Areas
 
