@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="700" viewBox="0 0 1180 700" role="img" aria-labelledby="title desc">
+  <title id="title">Harness verified skill improvement loop</title>
+  <desc id="desc">A loop from running a task to trace, report, failure inspection, skill editing, and rerun.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L9,5 L0,10 Z" fill="#24313f"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f7f3; }
+      .ink { fill: #17212b; }
+      .muted { fill: #697481; }
+      .node { fill: #ffffff; stroke: #24313f; stroke-width: 2.5; }
+      .center { fill: #fff0c7; stroke: #24313f; stroke-width: 3; }
+      .line { stroke: #24313f; stroke-width: 3; fill: none; }
+      .arrow { stroke: #24313f; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .title { font: 700 36px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .body { font: 600 21px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .small { font: 500 17px ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .mono { font: 650 18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+  <rect class="bg" width="1180" height="700"/>
+  <text class="title ink" x="70" y="72">Reports are not decoration. They are the learning loop.</text>
+  <text class="small muted" x="70" y="106">A robot task becomes maintainable only when failure leaves editable evidence.</text>
+
+  <circle class="center" cx="590" cy="380" r="105"/>
+  <text class="body ink" x="545" y="367">Skill</text>
+  <text class="body ink" x="525" y="399">evolves</text>
+
+  <rect class="node" x="475" y="155" width="230" height="70" rx="14"/>
+  <text class="mono ink" x="548" y="197">run task</text>
+
+  <rect class="node" x="825" y="270" width="250" height="82" rx="14"/>
+  <text class="mono ink" x="881" y="305">trace.jsonl</text>
+  <text class="small muted" x="885" y="332">tool calls + state</text>
+
+  <rect class="node" x="755" y="510" width="260" height="82" rx="14"/>
+  <text class="mono ink" x="816" y="545">report.html</text>
+  <text class="small muted" x="808" y="572">what humans inspect</text>
+
+  <rect class="node" x="165" y="510" width="260" height="82" rx="14"/>
+  <text class="mono ink" x="207" y="545">inspect failure</text>
+  <text class="small muted" x="221" y="572">find repair point</text>
+
+  <rect class="node" x="105" y="270" width="250" height="82" rx="14"/>
+  <text class="mono ink" x="164" y="305">edit skill</text>
+  <text class="small muted" x="151" y="332">strategy persists</text>
+
+  <path class="arrow" d="M705 192c120 15 207 52 260 82"/>
+  <path class="arrow" d="M951 352c-8 68-31 112-66 154"/>
+  <path class="arrow" d="M755 552c-122 59-246 61-330 5"/>
+  <path class="arrow" d="M294 510c-45-56-66-104-64-158"/>
+  <path class="arrow" d="M355 304c33-52 72-84 120-107"/>
+</svg>
