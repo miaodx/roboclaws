@@ -607,12 +607,22 @@ not fixed by single global tone compensation:
   chase side effect can be removed by view-specific report-side tone
   compensation, but it is overfit/comparison-only and must not become a default
   renderer profile without held-out validation.
+- The same comparison-only view-specific profile has now been sanity-checked on
+  two held-out slices. On `val_1` seed-8 it keeps FPV strongly improved
+  (`37.2184 -> 30.3806`, `-6.8378`) and keeps chase within tolerance
+  (`71.7464 -> 72.1970`, `+0.4506`). On `val_0` seed-6 it keeps FPV improved
+  (`38.0980 -> 32.3450`, `-5.7530`) and keeps chase within tolerance
+  (`83.7516 -> 84.5279`, `+0.7763`). This strengthens the view-specific tone
+  direction, but it is still comparison-only because it uses a manually composed
+  FPV/chase profile and has not been promoted to a default-rendering contract.
 
 Decision delta: a single global color/tone profile cannot satisfy both FPV and
-chase under prepared scale-square. The next useful slice is either a held-out
-view-specific profile validation on `val_1` seed-8 and `val_0`, or an explicit
-gate decision that chase is auxiliary warning evidence while RAW_FPV FPV remains
-the policy/input metric.
+chase under prepared scale-square. A view-specific tone profile can satisfy the
+current FPV and auxiliary chase tolerance across the current three-slice corpus,
+but the summary gate still treats it as comparison-only. The next useful slice
+is to encode a formal view-specific prepared-scale-square gate, or make an
+explicit gate decision that chase is auxiliary warning evidence while RAW_FPV
+FPV remains the policy/input metric.
 
 ## Touched Areas
 
