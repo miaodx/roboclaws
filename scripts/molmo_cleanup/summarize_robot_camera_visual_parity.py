@@ -861,18 +861,34 @@ def _calibration_manifest_summary(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {"status": "missing", "path": str(path)}
     payload = _read_json(path)
-    calibration = _find_first_dict(payload, "render_domain_calibration") or {}
+    calibration, calibration_source = _scene_level_render_domain_calibration(payload)
     return {
         "status": "loaded",
         "path": str(path),
         "schema": payload.get("schema"),
         "comparison_status": payload.get("status"),
+        "render_domain_calibration_source": calibration_source,
         "render_domain_calibration_status": calibration.get("status"),
         "global_isaac_luminance_gain": calibration.get("global_isaac_luminance_gain"),
         "mean_abs_calibrated_luminance_residual": calibration.get(
             "mean_abs_calibrated_luminance_residual"
         ),
     }
+
+
+def _scene_level_render_domain_calibration(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    visual_diagnostics = _dict(payload.get("visual_diagnostics"))
+    calibration = _dict(visual_diagnostics.get("render_domain_calibration"))
+    if calibration:
+        return calibration, "visual_diagnostics.render_domain_calibration"
+
+    summary = _dict(payload.get("summary"))
+    calibration = _dict(summary.get("render_domain_calibration"))
+    if calibration:
+        return calibration, "summary.render_domain_calibration"
+
+    calibration = _find_first_dict(payload, "render_domain_calibration") or {}
+    return calibration, "first_render_domain_calibration" if calibration else ""
 
 
 def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:

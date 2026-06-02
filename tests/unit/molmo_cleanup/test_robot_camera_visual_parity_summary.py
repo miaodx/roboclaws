@@ -283,6 +283,57 @@ def test_visual_parity_summary_stays_active_when_render_domain_is_unresolved(
     )
 
 
+def test_visual_parity_summary_prefers_scene_level_calibration_over_candidate_profiles(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_scene_calibration")
+    calibration = tmp_path / "calibration" / "comparison_manifest.json"
+    calibration.parent.mkdir(parents=True)
+    calibration.write_text(
+        json.dumps(
+            {
+                "schema": "scene_camera_comparison_v1",
+                "status": "success",
+                "visual_diagnostics": {
+                    "candidate_color_calibrations": {
+                        "candidates": [
+                            {
+                                "render_domain_calibration": {
+                                    "status": "view_dependent_render_domain_delta",
+                                    "global_isaac_luminance_gain": 1.5,
+                                    "mean_abs_calibrated_luminance_residual": 15.0,
+                                }
+                            }
+                        ]
+                    },
+                    "render_domain_calibration": {
+                        "status": "view_dependent_render_domain_delta",
+                        "global_isaac_luminance_gain": 1.1,
+                        "mean_abs_calibrated_luminance_residual": 12.0,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[],
+        probe_specs=[],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[calibration],
+    )
+
+    loaded = manifest["checks"]["calibration_scene"]["manifests"][0]
+    assert loaded["render_domain_calibration_source"] == (
+        "visual_diagnostics.render_domain_calibration"
+    )
+    assert loaded["global_isaac_luminance_gain"] == 1.1
+    assert loaded["mean_abs_calibrated_luminance_residual"] == 12.0
+    assert manifest["checks"]["calibration_scene"]["default_rendering_ready"] is False
+
+
 def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
     tmp_path: Path,
 ) -> None:

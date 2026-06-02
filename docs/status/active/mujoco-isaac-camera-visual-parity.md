@@ -320,11 +320,11 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   Refreshing the visual-parity summary with that manifest changes
   `calibration_scene.status` to `calibration_scene_evidence_loaded`. Its
   calibration result is `view_dependent_render_domain_delta` with global Isaac
-  luminance gain `1.4877`, mean calibrated luminance residual `14.8777`, and
-  about `64.8%` mean luminance-delta improvement from the original per-view
-  gap. The residual stays view-dependent, so this is stronger evidence that the
-  remaining visual gap is per-room light/material/tone response rather than
-  camera geometry or one global brightness scale.
+  scene-level luminance gain `1.0595`, mean calibrated luminance residual
+  `14.8384`, and only about `5.7%` mean luminance-delta improvement from the
+  original per-view gap. The residual stays view-dependent, so this is stronger
+  evidence that the remaining visual gap is per-room light/material/tone
+  response rather than camera geometry or one global brightness scale.
 - A held-out seed slice now covers `val_1`, seed `8`, 2 mess objects, and 4
   bound targets:
   `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_baseline/report.html`.
@@ -625,6 +625,20 @@ not fixed by single global tone compensation:
   `[1.589143, 1.423057, 1.304406]`, matching the existing comparison-only
   profile core values. This only makes the report-side compensation auditable;
   it does not change MuJoCo/Isaac default rendering or the RAW_FPV policy input.
+- The summary calibration reader now prefers the scene-level
+  `visual_diagnostics.render_domain_calibration` field over nested candidate
+  color-profile calibrations. That prevents comparison-profile replay evidence
+  from being mistaken for default-rendering calibration readiness. With that
+  source pinned, the baseline `val_0` calibration blocker is
+  `view_dependent_render_domain_delta` with residual `14.8384`.
+- A real scene-camera calibration probe using the prepared scale-square USD now
+  exists at
+  `output/molmo/scene-camera-comparison/0602_val0_scene_refs_scale_square_calibration/0603_0003/report.html`.
+  It improves scene-level calibration residual from `14.8384` to `11.6923` and
+  raises mean luminance-delta improvement from about `5.7%` to `20.4%`, but its
+  status remains `view_dependent_render_domain_delta`. This is positive
+  material-response evidence, not enough to promote prepared scale-square or
+  luminance gain as default cleanup rendering.
 - The summary gate now requires actual view-specific profile evidence instead
   of only trusting probe labels. Each
   `prepared_scale_square_view_rgb` probe must expose `backend_view_rgb_gain`
@@ -675,10 +689,14 @@ regression, active baseline render residuals
 `render_domain_calibration_not_default_ready`, and `rgb_tone_comparison_only`.
 The calibration blocker points at
 `output/molmo/scene-camera-comparison/0602_val0_scene_refs_calibration/comparison_manifest.json`
-with `render_domain_calibration_status=view_dependent_render_domain_delta` and
-mean calibrated luminance residual `14.8777`. The refreshed recommendation now
-points at resolving or explicitly gating those default-rendering residuals
-instead of re-reviewing the already formalized report-side gate.
+with mean calibrated luminance residual `14.8384`, and the prepared
+scale-square calibration probe at
+`output/molmo/scene-camera-comparison/0602_val0_scene_refs_scale_square_calibration/0603_0003/comparison_manifest.json`
+with residual `11.6923`. Both report
+`render_domain_calibration_status=view_dependent_render_domain_delta`. The
+refreshed recommendation now points at resolving or explicitly gating those
+default-rendering residuals instead of re-reviewing the already formalized
+report-side gate.
 
 ## Touched Areas
 
