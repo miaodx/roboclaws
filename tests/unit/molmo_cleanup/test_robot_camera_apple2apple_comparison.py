@@ -185,3 +185,204 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
     assert summary["fpv_head_camera_contract_count"] == 1
     assert summary["robot_pose_match_count"] == 1
     assert summary["isaac_static_head_pitch_gap_count"] == 1
+
+
+def test_robot_camera_render_contract_diagnostics_reports_light_shadow_delta(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_contract",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset>
+    <texture name="tex_bed" type="2d" file="textures/bed.png"/>
+    <material name="mat_bed" texture="tex_bed" rgba="1 1 1 1"/>
+  </asset>
+  <worldbody>
+    <light name="mujoco_light"/>
+    <body name="bed_1">
+      <geom name="bed_1_visual_0" mesh="bed_mesh" material="mat_bed"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Scope "Looks"
+  {
+    def Material "mat_bed"
+    {
+      def Shader "PreviewSurface"
+      {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor = (1, 1, 1)
+      }
+      def Shader "DiffuseTexture"
+      {
+        asset inputs:file = @/tmp/textures/bed.png@
+      }
+    }
+  }
+  def Xform "bed_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/Looks/mat_bed>
+    }
+  }
+  def DistantLight "key"
+  {
+    float inputs:intensity = 500
+  }
+  def DomeLight "sky"
+  {
+    float inputs:intensity = 50
+  }
+  def Mesh "wall"
+  {
+    bool primvars:doNotCastShadows = true
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest = {
+        "locations": [
+            {
+                "status": "success",
+                "target": {"kind": "receptacle", "target_id": "bed_1"},
+                "image_diffs": {
+                    "fpv": {"residual": {"residual_class": "geometry_or_texture_edge_residual"}},
+                    "chase": {"residual": {"residual_class": "geometry_or_texture_edge_residual"}},
+                },
+            }
+        ],
+        "summary": {},
+    }
+    mujoco_state = {"scene_xml": str(mujoco_xml), "robot_xml": "robot.xml"}
+    isaac_state = {
+        "scene_usd": str(isaac_usd),
+        "scene_binding_diagnostics": {
+            "schema": "binding_v1",
+            "status": "selected_bound",
+            "receptacle_bindings": {
+                "bed_1": {
+                    "status": "bound",
+                    "public_id": "bed_1",
+                    "kind": "receptacle",
+                    "usd_prim_path": "/World/bed_1",
+                    "geometry_status": "renderable",
+                }
+            },
+        },
+    }
+
+    run_camera._attach_state_artifact_summaries(
+        manifest,
+        output_dir=tmp_path,
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+    )
+    (tmp_path / "mujoco_state.json").write_text(
+        __import__("json").dumps(mujoco_state), encoding="utf-8"
+    )
+    (tmp_path / "isaac_state.json").write_text(
+        __import__("json").dumps(isaac_state), encoding="utf-8"
+    )
+
+    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
+
+    summary = manifest["summary"]["render_contract_diagnostics"]
+    location = manifest["locations"][0]["render_contract_diagnostics"]
+    assert summary["status"] == "lighting_shadow_contract_delta"
+    assert summary["mujoco_light_count"] == 1
+    assert summary["isaac_light_count"] == 2
+    assert summary["isaac_shadow_disabled_prim_count"] == 1
+    assert summary["target_contract_delta_counts"] == {"material_texture_names_match": 1}
+    assert location["target_contract_delta"]["status"] == "material_texture_names_match"
+
+
+def test_robot_camera_render_contract_diagnostics_prioritizes_missing_target_binding(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_contract_missing_binding",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset><material name="mat_counter"/></asset>
+  <worldbody>
+    <body name="counter_1"><geom name="counter_1_visual_0" material="mat_counter"/></body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Xform "counter_1"
+  {
+    def Mesh "mesh"
+    {
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest = {
+        "locations": [
+            {
+                "status": "success",
+                "target": {"kind": "receptacle", "target_id": "counter_1"},
+                "image_diffs": {
+                    "fpv": {"residual": {"residual_class": "low_residual"}},
+                    "chase": {"residual": {"residual_class": "geometry_or_texture_edge_residual"}},
+                },
+            }
+        ],
+        "summary": {},
+    }
+    (tmp_path / "mujoco_state.json").write_text(
+        __import__("json").dumps({"scene_xml": str(mujoco_xml)}),
+        encoding="utf-8",
+    )
+    (tmp_path / "isaac_state.json").write_text(
+        __import__("json").dumps(
+            {
+                "scene_usd": str(isaac_usd),
+                "scene_binding_diagnostics": {
+                    "receptacle_bindings": {
+                        "counter_1": {
+                            "status": "bound",
+                            "public_id": "counter_1",
+                            "kind": "receptacle",
+                            "usd_prim_path": "/World/counter_1",
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
+
+    summary = manifest["summary"]["render_contract_diagnostics"]
+    location = manifest["locations"][0]["render_contract_diagnostics"]
+    assert summary["status"] == "target_material_texture_or_binding_gap"
+    assert summary["high_priority_target_delta_count"] == 1
+    assert location["target_contract_delta"]["status"] == "missing_object_binding_evidence"

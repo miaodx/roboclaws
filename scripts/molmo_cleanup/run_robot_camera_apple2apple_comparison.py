@@ -19,6 +19,13 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(repo_root))
 
 from roboclaws.molmo_cleanup.renderer_comparison import _relpath
+from roboclaws.molmo_cleanup.scene_camera_comparison import (
+    _isaac_render_contract_from_usda,
+    _isaac_view_render_contract,
+    _mujoco_render_contract_from_xml,
+    _mujoco_view_render_contract,
+    _view_render_contract_delta,
+)
 from scripts.isaac_lab_cleanup.isaac_lab_backend_worker import (
     ISAAC_SEMANTIC_POSE_STATE_SCHEMA,
     ISAAC_SEMANTIC_POSE_STATE_SOURCE,
@@ -44,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--generated-mess-count", type=int, default=1)
     parser.add_argument("--scene-source", default="procthor-10k-val")
     parser.add_argument("--scene-index", type=int, default=1)
-    parser.add_argument("--scene-usd-path", type=Path, required=True)
+    parser.add_argument("--scene-usd-path", type=Path)
     parser.add_argument("--mujoco-python", type=Path, default=Path(".venv/bin/python"))
     parser.add_argument(
         "--isaac-python",
@@ -54,9 +61,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--render-width", type=int, default=540)
     parser.add_argument("--render-height", type=int, default=360)
     parser.add_argument("--location-count", type=int, default=4)
+    parser.add_argument(
+        "--refresh-report-only",
+        action="store_true",
+        help=(
+            "Recompute report diagnostics from an existing output directory without "
+            "re-rendering MuJoCo or Isaac views."
+        ),
+    )
     args = parser.parse_args(argv)
 
-    manifest = run_comparison(args)
+    if args.refresh_report_only:
+        manifest = refresh_report_only(args.output_dir)
+    else:
+        if args.scene_usd_path is None:
+            parser.error("--scene-usd-path is required unless --refresh-report-only is set")
+        manifest = run_comparison(args)
     print(json.dumps(manifest, indent=2, sort_keys=True))
     print(f"robot camera apple2apple manifest: {args.output_dir / 'comparison_manifest.json'}")
     print(f"robot camera apple2apple report: {args.output_dir / 'report.html'}")
@@ -167,6 +187,12 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     manifest["lanes"][ISAAC_LANE_ID]["robot_import"] = isaac_init.get("robot_import", {})
 
     mujoco_state = _read_json(mujoco_state_path)
+    _attach_state_artifact_summaries(
+        manifest,
+        output_dir=output_dir,
+        mujoco_state=mujoco_state,
+        isaac_state=_read_json(isaac_state_path),
+    )
     candidates = _comparison_targets(mujoco_state, limit=max(1, int(args.location_count)))
     if not candidates:
         manifest["status"] = "blocked"
@@ -270,6 +296,19 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         else "blocked"
     )
     manifest["summary"] = _summary(locations)
+    _attach_render_contract_diagnostics(manifest, output_dir=output_dir)
+    _write_outputs(manifest, output_dir)
+    return manifest
+
+
+def refresh_report_only(output_dir: Path) -> dict[str, Any]:
+    manifest_path = output_dir / "comparison_manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(manifest_path)
+    manifest = _read_json(manifest_path)
+    locations = list(manifest.get("locations") or [])
+    manifest["summary"] = _summary(locations)
+    _attach_render_contract_diagnostics(manifest, output_dir=output_dir)
     _write_outputs(manifest, output_dir)
     return manifest
 
@@ -485,6 +524,239 @@ def _summary(locations: list[dict[str, Any]]) -> dict[str, Any]:
         ),
         "camera_contract_diagnostics": _camera_contract_diagnostics(successful),
         "residual_triage": _residual_triage(successful),
+    }
+
+
+def _attach_state_artifact_summaries(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    mujoco_state: dict[str, Any],
+    isaac_state: dict[str, Any],
+) -> None:
+    lanes = manifest.setdefault("lanes", {})
+    if not isinstance(lanes, dict):
+        lanes = {}
+        manifest["lanes"] = lanes
+    mujoco_lane = lanes.setdefault(MUJOCO_LANE_ID, {})
+    isaac_lane = lanes.setdefault(ISAAC_LANE_ID, {})
+    if isinstance(mujoco_lane, dict):
+        mujoco_lane["scene_xml"] = mujoco_state.get("scene_xml")
+        mujoco_lane["robot_xml"] = mujoco_state.get("robot_xml")
+    if isinstance(isaac_lane, dict):
+        isaac_lane["scene_usd"] = isaac_state.get("scene_usd") or _dict(manifest.get("scene")).get(
+            "scene_usd_path"
+        )
+        isaac_lane["scene_binding_summary"] = _scene_binding_summary(
+            _dict(isaac_state.get("scene_binding_diagnostics"))
+        )
+    artifacts = manifest.setdefault("artifacts", {})
+    if isinstance(artifacts, dict):
+        artifacts["mujoco_state"] = _relpath(output_dir / "mujoco_state.json", output_dir)
+        artifacts["isaac_state"] = _relpath(output_dir / "isaac_state.json", output_dir)
+
+
+def _attach_render_contract_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> None:
+    mujoco_state = _read_json(output_dir / "mujoco_state.json")
+    isaac_state = _read_json(output_dir / "isaac_state.json")
+    _attach_state_artifact_summaries(
+        manifest,
+        output_dir=output_dir,
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+    )
+    mujoco_scene_xml = str(mujoco_state.get("scene_xml") or "")
+    isaac_scene_usd = str(
+        isaac_state.get("scene_usd") or _dict(manifest.get("scene")).get("scene_usd_path") or ""
+    )
+    mujoco_contract = _mujoco_render_contract_from_xml(mujoco_scene_xml)
+    isaac_contract = _isaac_render_contract_from_usda(isaac_scene_usd)
+    scene_binding_diagnostics = _dict(isaac_state.get("scene_binding_diagnostics"))
+    room_delta = _view_render_contract_delta(
+        suspicion="room_light_wall_shadow_contract",
+        mujoco=_mujoco_view_render_contract(mujoco_contract, anchor_id=""),
+        isaac=_isaac_view_render_contract(isaac_contract, usd_prim_path=""),
+    )
+    per_location = []
+    for item in manifest.get("locations") or []:
+        if not isinstance(item, dict) or item.get("status") != "success":
+            continue
+        diagnostics = _location_render_contract_diagnostics(
+            item,
+            mujoco_contract=mujoco_contract,
+            isaac_contract=isaac_contract,
+            scene_binding_diagnostics=scene_binding_diagnostics,
+        )
+        item["render_contract_diagnostics"] = diagnostics
+        per_location.append(diagnostics)
+    summary = _render_contract_summary(
+        mujoco_contract=mujoco_contract,
+        isaac_contract=isaac_contract,
+        room_delta=room_delta,
+        per_location=per_location,
+    )
+    manifest["render_contract_diagnostics"] = summary
+    manifest.setdefault("summary", {})["render_contract_diagnostics"] = summary
+
+
+def _scene_binding_summary(scene_binding_diagnostics: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": scene_binding_diagnostics.get("schema"),
+        "status": scene_binding_diagnostics.get("status"),
+        "public_receptacle_bound_count": scene_binding_diagnostics.get(
+            "public_receptacle_bound_count"
+        ),
+        "public_object_bound_count": scene_binding_diagnostics.get("public_object_bound_count"),
+        "selected_object_bound_count": scene_binding_diagnostics.get("selected_object_bound_count"),
+        "selected_target_receptacle_bound_count": scene_binding_diagnostics.get(
+            "selected_target_receptacle_bound_count"
+        ),
+    }
+
+
+def _location_render_contract_diagnostics(
+    item: dict[str, Any],
+    *,
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+    scene_binding_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    target = _dict(item.get("target"))
+    target_id = str(target.get("target_id") or "")
+    target_binding = _target_usd_binding(scene_binding_diagnostics, target)
+    usd_prim_path = str(target_binding.get("usd_prim_path") or "")
+    mujoco_target = _mujoco_view_render_contract(mujoco_contract, anchor_id=target_id)
+    isaac_target = _isaac_view_render_contract(isaac_contract, usd_prim_path=usd_prim_path)
+    target_delta = _view_render_contract_delta(
+        suspicion="object_material_texture_binding_contract",
+        mujoco=mujoco_target,
+        isaac=isaac_target,
+    )
+    fpv_residual = _dict_path(item, ("image_diffs", "fpv", "residual"))
+    chase_residual = _dict_path(item, ("image_diffs", "chase", "residual"))
+    return {
+        "schema": "robot_camera_location_render_contract_diagnostics_v1",
+        "target": target,
+        "target_usd_binding": _compact_target_binding(target_binding),
+        "fpv_residual_class": fpv_residual.get("residual_class"),
+        "chase_residual_class": chase_residual.get("residual_class"),
+        "mujoco_target_contract": mujoco_target,
+        "isaac_target_contract": isaac_target,
+        "target_contract_delta": target_delta,
+        "interpretation": (
+            "Target material/texture parity is checked from the MJCF scene XML and Isaac "
+            "USD material bindings. High image residual can still remain when these names "
+            "match because the two renderers use different light, shadow, tone response, "
+            "and material models."
+        ),
+    }
+
+
+def _target_usd_binding(
+    scene_binding_diagnostics: dict[str, Any],
+    target: dict[str, Any],
+) -> dict[str, Any]:
+    target_id = str(target.get("target_id") or "")
+    if not target_id:
+        return {}
+    if target.get("kind") == "receptacle":
+        groups = ("receptacle_bindings", "selected_target_receptacle_bindings")
+    else:
+        groups = ("object_bindings", "selected_object_bindings")
+    for group in groups:
+        bindings = _dict(scene_binding_diagnostics.get(group))
+        binding = _dict(bindings.get(target_id))
+        if binding:
+            return binding
+    return {}
+
+
+def _compact_target_binding(binding: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "status",
+        "public_id",
+        "kind",
+        "category",
+        "usd_prim_path",
+        "match_strategy",
+        "geometry_status",
+        "has_renderable_geometry",
+        "mesh_descendant_count",
+        "renderable_descendant_count",
+        "missing_referenced_asset_count",
+    )
+    return {key: binding.get(key) for key in keys if key in binding}
+
+
+def _render_contract_summary(
+    *,
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+    room_delta: dict[str, Any],
+    per_location: list[dict[str, Any]],
+) -> dict[str, Any]:
+    target_delta_statuses = [
+        str(_dict(item.get("target_contract_delta")).get("status") or "") for item in per_location
+    ]
+    target_delta_counts = {
+        name: target_delta_statuses.count(name)
+        for name in sorted(set(target_delta_statuses))
+        if name
+    }
+    high_priority_target_delta_count = sum(
+        count
+        for status, count in target_delta_counts.items()
+        if status in {"material_or_texture_name_delta", "missing_object_binding_evidence"}
+    )
+    parse_ok = (
+        mujoco_contract.get("status") == "parsed" and isaac_contract.get("status") == "parsed"
+    )
+    if not parse_ok:
+        status = "partial_artifact_parse"
+        next_action = "Resolve missing scene XML/USD artifacts before drawing renderer conclusions."
+    elif high_priority_target_delta_count:
+        status = "target_material_texture_or_binding_gap"
+        next_action = (
+            "Fix the target USD material binding or texture-name mismatch before treating "
+            "the remaining residual as camera geometry."
+        )
+    elif room_delta.get("status") == "light_or_shadow_contract_delta":
+        status = "lighting_shadow_contract_delta"
+        next_action = (
+            "Material/texture names mostly match for checked targets; align Isaac/MuJoCo "
+            "light count, shadow flags, exposure, and tone response before changing FPV pose."
+        )
+    else:
+        status = "checked_targets_material_texture_names_match"
+        next_action = (
+            "Checked target material/texture names match; prioritize renderer response and "
+            "Isaac static head articulation over camera-source changes."
+        )
+    return {
+        "schema": "robot_camera_render_contract_diagnostics_v1",
+        "status": status,
+        "mujoco_parse_status": mujoco_contract.get("status"),
+        "isaac_parse_status": isaac_contract.get("status"),
+        "mujoco_scene_xml": mujoco_contract.get("path"),
+        "isaac_scene_usd": isaac_contract.get("path"),
+        "mujoco_material_count": mujoco_contract.get("material_count"),
+        "mujoco_texture_count": mujoco_contract.get("texture_count"),
+        "mujoco_light_count": mujoco_contract.get("light_count"),
+        "isaac_material_count": isaac_contract.get("material_count"),
+        "isaac_bound_prim_count": isaac_contract.get("bound_prim_count"),
+        "isaac_light_count": isaac_contract.get("light_count"),
+        "isaac_shadow_disabled_prim_count": isaac_contract.get("shadow_disabled_prim_count"),
+        "room_light_shadow_delta": room_delta,
+        "target_location_count": len(per_location),
+        "target_contract_delta_counts": target_delta_counts,
+        "high_priority_target_delta_count": high_priority_target_delta_count,
+        "recommended_next_action": next_action,
+        "interpretation": (
+            "This report separates camera-source parity from render-domain parity. FPV can "
+            "be the correct head camera while Isaac still differs through static head "
+            "articulation, USD PreviewSurface conversion, renderer lighting, shadow flags, "
+            "and tone response."
+        ),
     }
 
 
@@ -1097,6 +1369,14 @@ def _render_report(manifest: dict[str, Any]) -> str:
             + html.escape(
                 json.dumps(
                     item.get("camera_contract_diagnostics", {}),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            + "</pre><pre>"
+            + html.escape(
+                json.dumps(
+                    item.get("render_contract_diagnostics", {}),
                     indent=2,
                     sort_keys=True,
                 )
