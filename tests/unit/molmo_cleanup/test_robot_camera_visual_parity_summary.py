@@ -892,6 +892,9 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
     audit = summary._four_check_audit(checks)
     assert audit["status"] == "passed"
     assert audit["unresolved_check_ids"] == []
+    assert audit["root_cause_classification"] == (
+        "render_domain_resolved_by_default_rendering_gates"
+    )
 
 
 def test_visual_parity_summary_marks_combined_material_light_promotion_candidate(
@@ -936,6 +939,12 @@ def test_visual_parity_summary_marks_combined_material_light_promotion_candidate
     audit = summary._four_check_audit(checks)
     assert audit["status"] == "passed"
     assert audit["unresolved_check_ids"] == []
+    assert audit["root_cause_classification"] == (
+        "render_domain_ready_for_combined_material_light_default_path"
+    )
+    rows = {row["check_id"]: row for row in audit["rows"]}
+    assert "ready for default-rendering review" in rows["material_texture_response"]["decision"]
+    assert "ready for default-rendering review" in rows["light_brightness_tone"]["decision"]
 
 
 def test_visual_parity_summary_passes_after_combined_material_light_path_is_promoted(
@@ -973,6 +982,12 @@ def test_visual_parity_summary_passes_after_combined_material_light_path_is_prom
     audit = summary._four_check_audit(checks)
     assert audit["status"] == "passed"
     assert audit["unresolved_check_ids"] == []
+    assert audit["root_cause_classification"] == (
+        "render_domain_resolved_by_combined_material_light_default_path"
+    )
+    rows = {row["check_id"]: row for row in audit["rows"]}
+    assert "default prepared-USD path" in rows["material_texture_response"]["decision"]
+    assert "default prepared-USD path" in rows["light_brightness_tone"]["decision"]
 
 
 def test_visual_parity_summary_combined_gate_still_requires_default_calibration(

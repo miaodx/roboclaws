@@ -2,7 +2,7 @@
 
 Owner/session: Codex local
 Started: 2026-06-02 16:30 Asia/Shanghai
-State: active
+State: complete; monitor future-scene regressions
 
 ## Scope
 
@@ -499,41 +499,35 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Next Action
 
-Keep FPV pose and the head-camera FOV contract unchanged. Do not promote global
-raw colorspace, combined raw+roughness, global roughness-only, or the `0008`
-target-specific roughness edit as defaults from the current evidence. Keep RGB
-gain comparison-only: it improves FPV on `val_0`, `val_1` 4-location, and the
-fair bound-target `val_1` 6-location slice, but chase can move the other way and
-render-domain material checks remain active. The combined pillow texture plus
-RGB-gain probe does not beat RGB-only, so texture-binding cleanup is lower
-priority than tone/light/material-response work. The next highest-value
-render-domain slice is the high-residual exact-bound bed/table/pillow material
-response on the fair `val_1` bound-target report, plus RGB/tone interaction on
-that same fair target set. For light/shadow specifically, `val_1` now also says
-simple dome removal and shadow enabling are neutral/small and no-dome-plus-RGB is
-worse than RGB-only; do not retry simple dome removal, shadow enabling, or the
-old combined MuJoCo-like light/shadow USD edit. If light/shadow remains the next
-slice, make it a comparison-only intensity/direction probe with a clear FPV
-threshold. Keep RAW_FPV and world-labels as separate evidence lanes:
-world-labels uses images as report evidence only, while camera-raw uses the
-head-camera FPV images as agent input.
-The next proof-backed step is not more camera work. Keep the calibration report
-attached to the summary gate; do not promote any RGB/luminance gain to default
-rendering while the calibration result remains view-dependent. Texture
-scale/fallback squaring is now the strongest material-response direction, with
-positive FPV evidence on `val_0`, held-out `val_1` seed-6, held-out `val_1`
-seed-8 bound targets, and maintained prepared-USD reproductions for all three
-of those slices. It is still comparison-only because chase worsens on `val_1`
-seed-6 and render-domain residuals remain. The `power=1.5` LightWood probe shows
-that intermediate scale power can avoid the chase side effect for a targeted
-material, but it gives up too much FPV gain to replace full scale-square. The
-next useful slice is either a broader prepared-USD
-`--material-texture-scale-mode square` default-promotion gate across additional
-scenes/targets, or a targeted material-modulation probe that preserves global
-scale-square FPV gains while reducing the auxiliary chase luminance side effect.
-The summary gate already encodes the current blockers, so future runs should
-drive `prepared_scale_square_default_gate` instead of relying on manual report
-notes.
+Keep FPV pose and the head-camera FOV contract unchanged. MuJoCo remains on
+`robot_0/head_camera`; Isaac remains on `/World/robot_0/head_camera`. Keep
+RAW_FPV and world-labels as separate evidence lanes: world-labels uses images as
+report evidence only, while camera-raw uses the head-camera FPV images as agent
+input.
+
+The current visual-parity summary is now `passed`. The old single-axis
+scale-square gate remains useful history but is no longer the promotion target:
+prepared scale-square alone is still `comparison_only_not_default` because of a
+`val_1` seed-6 auxiliary chase luminance side effect. Default-rendering parity is
+ready through the combined material plus directional-light path instead:
+`combined_material_light_default_gate.status=combined_material_light_default_ready`
+and `default_rendering_visual_parity.status=default_rendering_visual_parity_ready`.
+The prepared semantic USD default path now uses
+`rendering_parity_preset=combined-material-light`, which applies texture
+scale/fallback squaring and `DistantLight rotateX=+25`.
+
+Do not promote the older negative or neutral probes as defaults: global raw
+colorspace, combined raw+roughness, global roughness-only, target-specific
+`0008` roughness, pillow texture injection, simple DomeLight removal, and simple
+shadow enabling all remain historical do-not-promote evidence. Report-side
+view-specific RGB/tone profiles are also comparison-only; they are not needed for
+the default-rendering claim now that the combined material+light prepared path is
+wired.
+
+The next useful work is monitoring, not more camera surgery: keep the default
+combined-material-light path on future MuJoCo/Isaac apple-to-apple scenes and
+watch for regressions in `head_camera_contract`, `raw_fpv_input_lane`,
+`combined_material_light_default_gate`, and `default_rendering_path`.
 
 ## Four-Check Audit 2026-06-02
 
@@ -551,37 +545,30 @@ cleanly:
   steps, and 6 RAW_FPV observations. World-label images remain report evidence,
   not the policy/input lane.
 - Material/texture response:
-  `render_domain_probe_matrix.status=render_domain_delta_active`. The strongest
-  current direction is prepared/global texture scale/fallback squaring. The
-  maintained prepared gate improves FPV on all three comparable slices:
-  `val_0` seed-6 `-5.5750`, `val_1` seed-6 `-7.1603`, and `val_1` seed-8
-  `-7.7401`. It is still `comparison_only_not_default`, blocked by active
-  render residuals and one auxiliary chase regression.
+  `combined_material_light_default_gate.status=combined_material_light_default_ready`.
+  Prepared scale-square alone remains `comparison_only_not_default`, but adding
+  `DistantLight rotateX=+25` resolves the auxiliary chase side effect while
+  keeping all FPV slices improved. The combined gate covers `val_0` seed-6,
+  `val_1` seed-6, and `val_1` seed-8 with FPV deltas `-7.4409`, `-9.2923`, and
+  `-10.7103`.
 - Light/brightness/tone:
-  simple light/shadow probes are `neutral_do_not_promote`: no-dome changes FPV
-  only `-0.7571` and hurts chase `+8.2014`; no-shadow changes FPV `-0.4444`
-  and is chase-neutral. RGB/tone probes are FPV-positive across held-out slices
-  but remain comparison-only because calibration is view-dependent and material
-  residuals remain active.
+  `default_rendering_visual_parity.status=default_rendering_visual_parity_ready`.
+  Simple light/shadow probes remain historical `neutral_do_not_promote`
+  evidence, and report-side RGB/tone probes remain comparison-only. The default
+  path no longer depends on those RGB/tone profiles because the combined
+  material+directional-light evidence passes without report-side compensation.
 
-The latest intermediate texture-scale probes confirm the main direction but do
-not solve the default-promotion blocker. The target-specific
-`val1_diningtable_lightwood_power15` probe improves the dining-table FPV from
-`46.1260` to `40.9925` with chase unchanged, but gives up too much overall FPV
-gain versus full scale-square. The broader
-`val1_scale_square_soften_diningtable_lightwood_power075` probe improves FPV by
-`-6.2698`, lowers the high-residual count, but leaves the same chase luminance
-side effect as full scale-square (`+2.9125`). This means the remaining
-Isaac-vs-MuJoCo visual mismatch is not caused by FPV camera pose; it is in the
-render domain: USD texture scale/sampler/material response plus lighting/tone
-differences.
+The latest intermediate texture-scale probes remain useful historical narrowing:
+target-specific `power=1.5` and softened LightWood probes confirm that the gap
+was render-domain material response plus lighting/tone, not FPV camera pose. The
+default promotion path is now the broader combined material+light gate, not those
+intermediate probes.
 
 Current blocker fingerprint:
-`render_domain_visual_parity`; root-cause classification:
-`texture_scale_sampler_material_response_with_tone_luminance_side_effect`; last
-decision delta: camera and RAW_FPV are treated as proven aligned, while
-prepared scale-square stays comparison-only until the auxiliary chase luminance
-side effect is resolved or explicitly re-gated.
+`render_domain_visual_parity_monitoring`; root-cause classification:
+`render_domain_resolved_by_combined_material_light_default_path`; last decision
+delta: camera and RAW_FPV are proven aligned, and default-rendering parity is
+ready through the combined material+light prepared-USD path.
 
 ## Tone-Mitigation Probes 2026-06-02
 

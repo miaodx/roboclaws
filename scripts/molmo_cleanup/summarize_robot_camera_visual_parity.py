@@ -179,8 +179,15 @@ def build_summary(
             "isaac_fpv": "/World/robot_0/head_camera",
             "chase": "auxiliary report evidence only",
             "report_side_visual_parity": "formal_view_specific_tone_comparison_gate",
-            "default_rendering_visual_parity": "blocked_until_renderer_gates_pass",
-            "render_probes": "comparison_only_until_broader_corpus_and_calibration_pass",
+            "default_rendering_visual_parity": (
+                "combined_material_light_prepared_usd_default_path"
+                if default_rendering_visual_parity.get("ready")
+                else "blocked_until_renderer_gates_pass"
+            ),
+            "render_probes": (
+                "default_combined_material_light_when_gate_and_path_ready; "
+                "other probes remain historical comparison evidence"
+            ),
         },
         "four_check_audit": four_check_audit,
         "checks": checks,
@@ -1125,6 +1132,7 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     render_matrix = _dict(checks.get("render_domain_probe_matrix"))
     prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
     combined_gate = _dict(checks.get("combined_material_light_default_gate"))
+    default_path = _dict(checks.get("default_rendering_path"))
     view_tone_gate = _dict(checks.get("view_specific_prepared_scale_square_tone_gate"))
     rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
     calibration = _dict(checks.get("calibration_scene"))
@@ -1141,6 +1149,12 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     combined_material_light_ready = (
         combined_gate.get("status") == "combined_material_light_default_ready"
         and calibration.get("default_rendering_ready") is True
+    )
+    default_rendering_path_ready = (
+        default_path.get("status") == "default_rendering_path_uses_combined_material_light"
+    )
+    combined_material_light_promoted = (
+        combined_material_light_ready and default_rendering_path_ready
     )
     lighting_default_ready = combined_material_light_ready or (
         render_matrix.get("status") == "render_domain_delta_resolved"
@@ -1190,7 +1204,10 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "combined_source_status": combined_gate.get("status"),
             "probe_status": material_status,
             "decision": (
-                "Prepared scale-square plus directional-light orientation is ready for "
+                "The default prepared-USD path uses prepared scale-square plus "
+                "directional-light orientation."
+                if combined_material_light_promoted
+                else "Prepared scale-square plus directional-light orientation is ready for "
                 "default-rendering review."
                 if material_default_ready
                 else (
@@ -1237,7 +1254,10 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "rgb_tone_status": rgb_tone.get("status"),
             "calibration_status": calibration.get("status"),
             "decision": (
-                "Combined material and directional-light evidence is ready for "
+                "Combined material and directional-light rendering is now the default "
+                "prepared-USD path without report-side RGB compensation."
+                if combined_material_light_promoted
+                else "Combined material and directional-light evidence is ready for "
                 "default-rendering review without report-side RGB compensation."
                 if lighting_default_ready
                 else (
@@ -1254,7 +1274,13 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
         },
     ]
     unresolved = [row["check_id"] for row in rows if not row["resolved"]]
-    if camera_proven and raw_fpv_proven and not material_default_ready:
+    if combined_material_light_promoted:
+        root_cause = "render_domain_resolved_by_combined_material_light_default_path"
+    elif combined_material_light_ready:
+        root_cause = "render_domain_ready_for_combined_material_light_default_path"
+    elif not unresolved:
+        root_cause = "render_domain_resolved_by_default_rendering_gates"
+    elif camera_proven and raw_fpv_proven and not material_default_ready:
         root_cause = "render_domain_not_camera"
     elif not camera_proven:
         root_cause = "camera_geometry_not_proven"
@@ -1268,8 +1294,8 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "unresolved_check_ids": unresolved,
         "interpretation": (
             "This audit maps the user-requested four checks onto the machine gates. "
-            "Camera and RAW_FPV can pass independently while material, texture, lighting, "
-            "and tone remain comparison-only render-domain work."
+            "Camera and RAW_FPV are checked independently from render-domain material, "
+            "texture, lighting, and tone gates."
         ),
     }
 
