@@ -1133,7 +1133,7 @@ def test_worker_robot_pose_near_receptacle_uses_shared_pose_resolver() -> None:
     assert pose["same_room_as_target"] is True
 
 
-def test_worker_robot_views_prefers_canonical_camera_control(
+def test_worker_robot_views_uses_robot_head_camera_for_fpv(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1157,7 +1157,14 @@ def test_worker_robot_views_prefers_canonical_camera_control(
     monkeypatch.setattr(worker, "_apply_qpos", lambda *_args: None)
     monkeypatch.setattr(worker, "_refresh_object_positions", lambda *_args: None)
     monkeypatch.setattr(worker.mujoco, "mj_forward", lambda *_args: None)
-    monkeypatch.setattr(worker, "_render_fixed_camera", lambda *_args, **_kwargs: frame.copy())
+    fixed_camera_calls: list[str] = []
+
+    def fake_render_fixed_camera(_model, _data, camera_name: str, **_kwargs):
+        fixed_camera_calls.append(camera_name)
+        return frame.copy()
+
+    monkeypatch.setattr(worker, "_render_fixed_camera", fake_render_fixed_camera)
+    monkeypatch.setattr(worker, "_render_free_camera", lambda *_args, **_kwargs: frame.copy())
     monkeypatch.setattr(
         worker, "_render_robot_map", lambda *_args, **_kwargs: worker.Image.new("RGB", (4, 4))
     )
@@ -1167,40 +1174,28 @@ def test_worker_robot_views_prefers_canonical_camera_control(
         lambda *_args, **_kwargs: {"status": "ok", "object_pixels": 1, "boxes": []},
     )
 
-    def fake_render_camera_views(
-        _model: object,
-        _data: object,
-        *,
-        state: dict[str, object],
-        output_dir: Path,
-        camera_request: dict[str, object],
-        width: int,
-        height: int,
-    ) -> dict[str, object]:
-        del _model, _data, state
-        output_dir.mkdir(parents=True, exist_ok=True)
-        views = []
-        for item in camera_request["views"]:
-            assert isinstance(item, dict)
-            image_path = output_dir / f"{item['view_id']}.png"
-            worker.Image.fromarray(frame).save(image_path)
-            views.append({**item, "image_path": str(image_path), "shape": list(frame.shape)})
-        return {"ok": True, "views": views, "render_resolution": {"width": width, "height": height}}
+    def fail_canonical_render(*_args, **_kwargs):
+        raise AssertionError("MuJoCo robot FPV must use robot_0/head_camera")
 
-    monkeypatch.setattr(worker, "_render_camera_views_with_model_data", fake_render_camera_views)
+    monkeypatch.setattr(worker, "_render_camera_views_with_model_data", fail_canonical_render)
     result = worker.write_robot_views(state, tmp_path, "0001_observe", width=16, height=12)
 
     assert result["ok"] is True
     assert state["tool_event_counts"] == {"robot_views:request": 1}
-    assert result["camera_control_contract"]["same_pose_api"] is True
-    assert result["camera_control_contract"]["camera_model"] == "canonical_eye_target_camera_v1"
-    assert result["camera_control_contract"]["lighting_profile"]["profile_id"] == (
-        "scene_probe_existing_usd_lights_v1"
+    assert fixed_camera_calls[:2] == ["robot_0/head_camera", "robot_0/camera_follower"]
+    assert result["camera_control_contract"]["same_pose_api"] is False
+    assert result["camera_control_contract"]["status"] == "robot_mounted_head_camera_robot_view"
+    assert result["camera_control_contract"]["camera_model"] == "robot_mounted_head_camera_v1"
+    assert result["camera_control_contract"]["agent_facing_fpv"]["source"] == (
+        "robot_0/head_camera"
     )
-    assert result["camera_control_contract"]["color_profile"]["profile_id"] == (
-        "display_srgb_soft_highlight_v1"
+    assert result["camera_control_contract"]["agent_facing_fpv"]["robot_mounted"] is True
+    assert result["camera_diagnostics"]["schema"] == "mujoco_robot_view_camera_diagnostics_v1"
+    assert result["camera_diagnostics"]["render_resolution"] == {"width": 16, "height": 12}
+    assert result["camera_diagnostics"]["views"]["fpv"]["camera_name"] == "robot_0/head_camera"
+    assert result["camera_diagnostics"]["views"]["chase"]["camera_name"] == (
+        "robot_0/camera_follower"
     )
-    assert result["camera_control_contract"]["agent_facing_fpv"]["canonical_camera_control"] is True
     assert Path(result["views"]["fpv"]).is_file()
 
 
@@ -1242,7 +1237,10 @@ def test_worker_robot_views_keeps_backend_local_fallback_without_pose(
 
     assert result["ok"] is True
     assert result["camera_control_contract"]["same_pose_api"] is False
-    assert result["camera_control_contract"]["status"] == "backend_local_robot_camera"
+    assert result["camera_control_contract"]["status"] == "robot_mounted_head_camera_robot_view"
+    assert result["camera_control_contract"]["agent_facing_fpv"]["source"] == (
+        "robot_0/head_camera"
+    )
 
 
 def test_worker_focus_payload_uses_held_object_closeup_before_receptacle_place() -> None:

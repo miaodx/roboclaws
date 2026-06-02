@@ -9,6 +9,7 @@ from typing import Any
 
 from roboclaws.mcp.profiles import REAL_ROBOT_CLEANUP_PROFILE, contract_profile_metadata
 from roboclaws.molmo_cleanup.agibot_map_bundle import write_agibot_nav2_map_bundle
+from roboclaws.molmo_cleanup.agibot_map_defaults import DEFAULT_AGIBOT_CONFIDENCE_LAYER
 from roboclaws.molmo_cleanup.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.molmo_cleanup.realworld_contract import REALWORLD_CONTRACT
 from roboclaws.molmo_cleanup.report import render_cleanup_report, write_state_snapshot
@@ -43,6 +44,7 @@ HUMAN_TAKEOVER_FAILURE_TYPES = {
     "timeout",
     "pnc_busy",
     "pnc_failed",
+    "gdk_localization_not_ready",
     "normal_navi_exception",
     "local_motion_failed",
     "relative_move_failed",
@@ -603,7 +605,7 @@ def run_physical_agibot_cleanup_pilot(
             "runner_script": str(adapter.runner_script),
             "agibot_map_artifact_dir": str(agibot_map_artifact_dir or ""),
             "real_movement_enabled": real_movement_enabled,
-            "next_confidence_layer": "Agibot Robot Map 9 Semantic Actions Rehearsal",
+            "next_confidence_layer": DEFAULT_AGIBOT_CONFIDENCE_LAYER,
             "subphase_reports": subphase_reports,
             "gdk_imported_by_roboclaws": False,
             "public_tool_boundary": [

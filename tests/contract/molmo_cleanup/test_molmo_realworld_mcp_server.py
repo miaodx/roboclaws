@@ -16,6 +16,7 @@ from roboclaws.molmo_cleanup.realworld_contract import (
     MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
+    RealWorldCleanupContract,
     RICH_MAP_MODE,
 )
 from roboclaws.molmo_cleanup.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
@@ -520,6 +521,40 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert hasattr(image_block, "data")
     assert isinstance(image_block.data, bytes)
     assert len(image_block.data) > 0
+
+
+def test_realworld_mcp_raw_fpv_artifact_filters_private_camera_contract_keys(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(scenario),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+    metric_map = contract.metric_map()
+    contract.navigate_to_waypoint(metric_map["inspection_waypoints"][0]["waypoint_id"])
+    observation = contract.observe()
+    observation_id = observation["raw_fpv_observation"]["observation_id"]
+
+    attached = contract.attach_raw_fpv_observation_artifact(
+        observation_id,
+        views={"fpv": "robot_views/raw_fpv_001.fpv.png"},
+        robot_view_label="0001_observe_raw_fpv_001",
+        camera_control_contract={
+            "schema": "robot_view_camera_control_contract_v1",
+            "agent_facing_fpv": {"source": "robot_0/head_camera"},
+            "robot_pose": {
+                "target_receptacle_id": "private_sink_01",
+                "pose_request": {"target_receptacle_id": "private_sink_01"},
+            },
+        },
+    )
+
+    assert attached is not None
+    assert attached["camera_control_contract"]["schema"] == (
+        "robot_view_camera_control_contract_v1"
+    )
+    assert "target_receptacle_id" not in json.dumps(attached)
 
 
 def test_realworld_mcp_camera_labels_declare_response_is_agent_compact(

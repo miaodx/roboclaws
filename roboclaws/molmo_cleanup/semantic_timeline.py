@@ -152,18 +152,27 @@ def robot_view_camera_control_summary(steps: list[dict[str, Any]]) -> dict[str, 
             "contract_count": 0,
         }
     canonical_count = sum(1 for item in contracts if item.get("same_pose_api") is True)
-    status = (
-        "all_robot_views_use_canonical_camera_control"
-        if canonical_count == len(contracts)
-        else "mixed_or_backend_local_robot_views"
+    head_camera_count = sum(
+        1
+        for item in contracts
+        if item.get("camera_model")
+        in {"robot_mounted_head_camera_v1", "robot_head_camera_equivalent_v1"}
     )
+    if head_camera_count == len(contracts):
+        status = "all_robot_views_use_head_camera_fpv"
+    elif canonical_count == len(contracts):
+        status = "all_robot_views_use_canonical_camera_control"
+    else:
+        status = "mixed_or_backend_local_robot_views"
     return {
         "schema": "robot_view_camera_control_summary_v1",
         "status": status,
         "same_pose_api": canonical_count == len(contracts),
+        "head_camera_fpv": head_camera_count == len(contracts),
         "step_count": len(steps),
         "contract_count": len(contracts),
         "canonical_contract_count": canonical_count,
+        "head_camera_contract_count": head_camera_count,
         "backend_local_contract_count": len(contracts) - canonical_count,
     }
 

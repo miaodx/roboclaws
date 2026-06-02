@@ -937,7 +937,7 @@ the follow-up `val_0` proof passed at
 Repeat this flow for additional MolmoSpaces scenes before changing defaults.
 The preferred cleanup command now prepares the flattened semantic USD, checks
 `summary.json.status=ready`, and then runs the strict cleanup gate with
-segmentation evidence and canonical robot-view camera control:
+segmentation evidence and head-camera FPV robot-view provenance:
 
 ```bash
 just agent::harness molmo-isaac-prepared-cleanup-smoke \
@@ -963,7 +963,7 @@ same-camera pose/FOV/room-scale mismatch. A follow-up code slice moved cleanup
 robot-view pose generation onto `cleanup_robot_pose_request_v1` /
 `cleanup_robot_pose_result_v1`: MuJoCo and Isaac now both call the shared
 `roboclaws.cleanup_robot_pose.near_target_v1` scene-frame resolver before
-building the canonical eye/target camera request. Isaac USD indexing also
+building the historical canonical eye/target camera request. Isaac USD indexing also
 extracts `room_*_visual_*` mesh world bounds into `room_outlines`, so the shared
 resolver can use the same room-scale input instead of deriving a backend-local
 support pose from receptacle bounds alone.
@@ -979,17 +979,23 @@ poses use `pose_source=roboclaws_shared_scene_frame_support_pose`,
 `resolver=roboclaws.cleanup_robot_pose.near_target_v1`. The strict cleanup
 checker passed with `--require-canonical-robot-view-camera-control`,
 `--require-isaac-robot-view-provenance`, and the other real Isaac runtime gates.
-This closes the pose/camera-control proof gap for the current `val_1` prepared
-scene. The remaining visible mismatch is Isaac/MuJoCo render-domain difference
-such as exposure, lighting, material, and tone mapping; it is no longer explained
-by room scale, camera eye/target, FOV, or backend-local robot-view placement.
+That closes the historical scene-camera pose/control proof gap for the current
+`val_1` prepared scene, but it is no longer the robot FPV acceptance contract
+because canonical eye/target capture is still a free-camera view rather than the
+RBY1M-mounted head camera. The current gate is
+`--require-robot-head-camera-fpv`, which accepts MuJoCo `robot_0/head_camera` and
+Isaac `robot_head_camera_equivalent_v1` until the RBY1M URDF-to-USD import adds
+`/World/robot_0/head_camera`. The remaining visible mismatch is Isaac/MuJoCo
+render-domain difference such as exposure, lighting, material, and tone mapping;
+it is no longer explained by room scale, camera eye/target, FOV, or
+backend-local robot-view placement.
 
 After the robot-view contract started carrying the explicit lighting profile,
 a fresh real prepared-cleanup run passed at
 `output/isaaclab/cleanup-smoke/0529_val1_lighting_contract_cleanup/`. The strict
-checker now requires `--require-canonical-robot-view-camera-control` to prove
+checker used the historical canonical camera-control gate to prove
 `lighting_profile.profile_id=scene_probe_existing_usd_lights_v1` on every
-canonical robot-view contract. The new run reports 6/6 canonical robot-view
+canonical scene-camera contract. The new run reports 6/6 canonical scene-camera
 contracts, `backend_local_contract_count=0`,
 `frame=molmospaces_scene_frame_v1`,
 `pose_source=roboclaws_shared_scene_frame_support_pose`, and the same shared
@@ -1003,7 +1009,7 @@ eye/target, FOV, or backend-local camera placement as the primary explanation.
 
 A follow-up color-management run passed at
 `output/isaaclab/cleanup-smoke/0530_val1_color_contract_cleanup/` against the
-same prepared `val_1` USD. It keeps the same strict camera gate:
+same prepared `val_1` USD. It keeps the same historical scene-camera gate:
 `robot_view_camera_control.status=all_robot_views_use_canonical_camera_control`,
 `canonical_contract_count=6`, `backend_local_contract_count=0`, and
 `same_pose_api=true`. Every robot-view camera-control contract carries
@@ -1013,7 +1019,9 @@ same prepared `val_1` USD. It keeps the same strict camera gate:
 `lighting_profile.profile_id=scene_probe_existing_usd_lights_v1`. The report's
 primary `*.fpv.png` robot views are byte-identical to the canonical camera
 control captures under `*.fpv.canonical_camera_control/`, so the compatibility
-filename is not a stale backend-local view.
+filename is not a stale backend-local view. Current robot-FPV reports should not
+use this as a head-camera claim; they must report
+`all_robot_views_use_head_camera_fpv` instead.
 
 The fresher render-only parity proof is
 `output/molmo/scene-camera-comparison/0530_0009/`. It reports

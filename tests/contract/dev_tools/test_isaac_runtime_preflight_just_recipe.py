@@ -150,8 +150,8 @@ def test_agent_harness_allows_isaac_cleanup_smoke_target() -> None:
     assert "--require-isaac-local-scene-usd" in harness_text
     assert "--require-isaac-selected-usd-bindings" in harness_text
     assert "--require-isaac-robot-view-provenance" in harness_text
-    assert "require_canonical_robot_view_camera_control" in harness_text
-    assert "--require-canonical-robot-view-camera-control" in harness_text
+    assert "require_robot_head_camera_fpv" in harness_text
+    assert "--require-robot-head-camera-fpv" in harness_text
     assert 'map_bundle="scene-index"' in harness_text
     assert "--require-isaac-scene-index-map-context" in harness_text
     assert "--require-isaac-segmentation-evidence" in harness_text
@@ -200,7 +200,7 @@ def test_agent_harness_allows_isaac_prepared_cleanup_smoke_target() -> None:
     assert 'require_segmentation_evidence="true"' in harness_text
     assert 'segmentation_data_types="semantic_segmentation"' in harness_text
     assert 'segmentation_semantic_filter="usd_prim_path"' in harness_text
-    assert "require_canonical_robot_view_camera_control=true" in harness_text
+    assert "require_robot_head_camera_fpv=true" in harness_text
     assert 'map_bundle="scene-index"' in harness_text
     assert "just harness::molmo-isaac-cleanup-smoke" in harness_text
 
