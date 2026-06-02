@@ -113,6 +113,7 @@ def build_summary(
     probes = [_probe_summary(spec) for spec in probe_specs]
     raw_fpv_runs = [_raw_fpv_summary(path) for path in raw_fpv_run_result_paths or []]
     calibration = _calibration_summary(calibration_manifest_paths or [])
+    render_domain_probe_matrix = _render_domain_probe_matrix_check(baselines, probes)
     checks = {
         "head_camera_contract": _head_camera_contract_check(baselines),
         "corpus_coverage": _corpus_coverage_check(
@@ -121,7 +122,12 @@ def build_summary(
             required_seed_count=required_seed_count,
         ),
         "rgb_tone_cross_validation": _rgb_tone_cross_validation_check(baselines, probes),
-        "render_domain_probe_matrix": _render_domain_probe_matrix_check(baselines, probes),
+        "render_domain_probe_matrix": render_domain_probe_matrix,
+        "prepared_scale_square_default_gate": _prepared_scale_square_default_gate_check(
+            render_domain_probe_matrix,
+            required_scene_count=required_scene_count,
+            required_seed_count=required_seed_count,
+        ),
         "raw_fpv_input_lane": _raw_fpv_input_lane_check(raw_fpv_runs),
         "calibration_scene": calibration,
     }
@@ -400,6 +406,154 @@ def _render_domain_probe_matrix_check(
     }
 
 
+def _prepared_scale_square_default_gate_check(
+    render_domain_probe_matrix: dict[str, Any],
+    *,
+    required_scene_count: int,
+    required_seed_count: int,
+    chase_regression_tolerance: float = 1.0,
+) -> dict[str, Any]:
+    matrix = _dict(render_domain_probe_matrix.get("probe_matrix"))
+    material_rows = _list_dicts(matrix.get("material_response"))
+    prepared_rows = [
+        row
+        for row in material_rows
+        if "prepared_scale_square_gate" in str(row.get("label") or "").lower()
+    ]
+    comparable = [row for row in prepared_rows if row.get("comparable")]
+    scene_signatures = sorted({str(row.get("scene_signature") or "") for row in comparable})
+    seeds = sorted(
+        {
+            seed
+            for seed in (
+                _seed_from_scene_signature(str(row.get("scene_signature") or ""))
+                for row in comparable
+            )
+            if seed is not None
+        }
+    )
+    fpv_improved = [row for row in comparable if row.get("fpv_improved")]
+    fpv_worse = [row for row in comparable if row.get("fpv_worse")]
+    chase_regressions = [
+        row
+        for row in comparable
+        if _float_or_none(row.get("chase_delta")) is not None
+        and _float_or_none(row.get("chase_delta")) > chase_regression_tolerance
+    ]
+    baseline_render_statuses = [
+        status
+        for status in _list_strings(render_domain_probe_matrix.get("baseline_render_statuses"))
+        if status and status != "render_domain_delta_resolved"
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not prepared_rows:
+        blockers.append({"reason": "no_prepared_scale_square_probe"})
+    if len(comparable) != len(prepared_rows):
+        blockers.append(
+            {
+                "reason": "not_all_prepared_probes_comparable",
+                "prepared_probe_count": len(prepared_rows),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if len(scene_signatures) < required_scene_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_scene_corpus",
+                "scene_signature_count": len(scene_signatures),
+                "required_scene_count": required_scene_count,
+            }
+        )
+    if len(seeds) < required_seed_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_seed_corpus",
+                "seed_count": len(seeds),
+                "required_seed_count": required_seed_count,
+            }
+        )
+    if len(fpv_improved) != len(comparable):
+        blockers.append(
+            {
+                "reason": "not_all_comparable_probes_improve_fpv",
+                "fpv_improved_count": len(fpv_improved),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if fpv_worse:
+        blockers.append(
+            {
+                "reason": "fpv_regression",
+                "labels": [row.get("label") for row in fpv_worse],
+            }
+        )
+    if chase_regressions:
+        blockers.append(
+            {
+                "reason": "chase_regression",
+                "tolerance": chase_regression_tolerance,
+                "labels": [row.get("label") for row in chase_regressions],
+            }
+        )
+    if baseline_render_statuses:
+        blockers.append(
+            {
+                "reason": "render_domain_residuals_active",
+                "baseline_render_statuses": baseline_render_statuses,
+            }
+        )
+    if not prepared_rows:
+        status = "not_evaluated"
+    elif fpv_worse:
+        status = "do_not_promote"
+    elif comparable and len(fpv_improved) == len(comparable) and not blockers:
+        status = "prepared_scale_square_default_ready"
+    elif comparable and fpv_improved:
+        status = "comparison_only_not_default"
+    else:
+        status = "neutral_do_not_promote"
+    return {
+        "status": status,
+        "comparison_only": status != "prepared_scale_square_default_ready",
+        "default_candidate": status == "prepared_scale_square_default_ready",
+        "prepared_probe_count": len(prepared_rows),
+        "comparable_probe_count": len(comparable),
+        "fpv_improved_count": len(fpv_improved),
+        "fpv_worse_count": len(fpv_worse),
+        "chase_regression_count": len(chase_regressions),
+        "scene_signature_count": len(scene_signatures),
+        "scene_signatures": scene_signatures,
+        "seed_count": len(seeds),
+        "seeds": seeds,
+        "required_scene_count": required_scene_count,
+        "required_seed_count": required_seed_count,
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "blockers": blockers,
+        "probes": [
+            {
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "scene_signature": row.get("scene_signature"),
+                "fpv_delta": row.get("fpv_delta"),
+                "chase_delta": row.get("chase_delta"),
+                "fpv_improved": row.get("fpv_improved"),
+                "comparable": row.get("comparable"),
+            }
+            for row in prepared_rows
+        ],
+        "recommended_next_action": (
+            "Keep prepared scale-square comparison-only until FPV gain, chase "
+            "non-regression tolerance, and remaining render-domain residual gates pass."
+            if status != "prepared_scale_square_default_ready"
+            else "Prepared scale-square is ready for default-rendering review."
+        ),
+        "interpretation": (
+            "This gate decides whether the opt-in prepared USD texture scale/fallback "
+            "squaring evidence is strong enough to become default rendering behavior."
+        ),
+    }
+
+
 def _raw_fpv_summary(path: Path) -> dict[str, Any]:
     payload = _read_json(path)
     camera = _dict(payload.get("robot_view_camera_control"))
@@ -505,10 +659,18 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
     render_domain_resolved = checks["render_domain_probe_matrix"].get("status") == (
         "render_domain_delta_resolved"
     )
+    prepared_scale_ready = checks.get("prepared_scale_square_default_gate", {}).get("status") == (
+        "prepared_scale_square_default_ready"
+    )
     rgb_ready_for_default = checks["rgb_tone_cross_validation"].get("status") == (
         "default_rgb_tone_ready"
     )
-    if foundational_checks_pass and render_domain_resolved and rgb_ready_for_default:
+    if (
+        foundational_checks_pass
+        and render_domain_resolved
+        and prepared_scale_ready
+        and rgb_ready_for_default
+    ):
         return "passed"
     if checks["head_camera_contract"].get("status") == HEAD_CAMERA_PASS_STATUS:
         return "active"
@@ -528,6 +690,9 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
             "Generate a root-visible calibration-scene report before promoting any "
             "RGB/luminance gain to default rendering."
         )
+    prepared_gate = checks.get("prepared_scale_square_default_gate", {})
+    if prepared_gate.get("status") == "comparison_only_not_default":
+        return str(prepared_gate.get("recommended_next_action") or "")
     if checks["rgb_tone_cross_validation"].get("comparison_only") is True:
         return (
             "Keep RGB/tone as comparison-only and review remaining render-domain residuals "
@@ -654,6 +819,16 @@ def _scene_signature(scene: dict[str, Any]) -> str:
     )
 
 
+def _seed_from_scene_signature(scene_signature: str) -> int | None:
+    parts = scene_signature.split("|")
+    if len(parts) < 3:
+        return None
+    try:
+        return int(parts[2])
+    except ValueError:
+        return None
+
+
 def _render_checks_by_id(render_domain_checks: dict[str, Any]) -> dict[str, dict[str, Any]]:
     checks = {}
     for item in render_domain_checks.get("checks") or []:
@@ -686,6 +861,13 @@ def _delta(left: Any, right: Any) -> float | None:
         return None
 
 
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _find_first_dict(payload: Any, key: str) -> dict[str, Any] | None:
     if isinstance(payload, dict):
         for item_key, value in payload.items():
@@ -710,6 +892,12 @@ def _list_dicts(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _list_strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item is not None]
 
 
 def _read_json(path: Path) -> dict[str, Any]:

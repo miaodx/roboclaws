@@ -455,6 +455,13 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   preserves the head-camera contract and lowers FPV from `38.0980` to
   `32.5230` (`-5.5750`), matching the ad hoc global scale-square result
   `32.5266`. Chase is effectively flat (`83.7516` to `83.7739`, `+0.0223`).
+- The visual-parity summary now has an explicit machine-readable
+  `prepared_scale_square_default_gate`. Current status is
+  `comparison_only_not_default`: all 3 comparable prepared probes improve FPV,
+  but the gate blocks default promotion on `chase_regression`
+  (`val1_seed6_prepared_scale_square_gate`, tolerance `1.0`) and
+  `render_domain_residuals_active`
+  (`lighting_shadow_contract_delta`, `target_material_texture_or_binding_gap`).
 
 ## Next Action
 
@@ -487,6 +494,8 @@ seed-6 and render-domain residuals remain. The next useful slice is a broader
 prepared-USD `--material-texture-scale-mode square` default-promotion gate
 across additional scenes/targets, with explicit acceptance criteria for FPV
 gain, chase non-regression tolerance, and remaining material-binding residuals.
+The summary gate already encodes those blockers, so future runs should drive
+`prepared_scale_square_default_gate` instead of relying on manual report notes.
 
 ## Touched Areas
 

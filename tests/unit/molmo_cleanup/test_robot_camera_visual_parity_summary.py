@@ -252,6 +252,96 @@ def test_visual_parity_summary_stays_active_when_render_domain_is_unresolved(
     )
 
 
+def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_prepared_gate")
+    baselines = [
+        _write_robot_camera_manifest(
+            tmp_path / f"baseline_{index}_seed_{seed}" / "comparison_manifest.json",
+            scene_index=index,
+            seed=seed,
+            generated_mess_count=2,
+            fpv=fpv,
+            chase=chase,
+            location_count=4,
+        )
+        for index, seed, fpv, chase in [
+            (0, 6, 38.0, 83.0),
+            (1, 6, 36.0, 72.0),
+            (1, 8, 37.0, 71.0),
+        ]
+    ]
+    probes = [
+        _write_robot_camera_manifest(
+            tmp_path / "val0_prepared_scale_square_gate" / "comparison_manifest.json",
+            scene_index=0,
+            seed=6,
+            generated_mess_count=2,
+            fpv=32.0,
+            chase=83.1,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "val1_seed6_prepared_scale_square_gate" / "comparison_manifest.json",
+            scene_index=1,
+            seed=6,
+            generated_mess_count=2,
+            fpv=29.0,
+            chase=75.0,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "val1_seed8_prepared_scale_square_gate" / "comparison_manifest.json",
+            scene_index=1,
+            seed=8,
+            generated_mess_count=2,
+            fpv=29.0,
+            chase=70.8,
+            location_count=4,
+        ),
+    ]
+    calibration = tmp_path / "calibration" / "comparison_manifest.json"
+    calibration.parent.mkdir(parents=True)
+    calibration.write_text(
+        json.dumps(
+            {
+                "schema": "scene_camera_comparison_v1",
+                "status": "success",
+                "summary": {
+                    "render_domain_calibration": {
+                        "status": "view_dependent_render_domain_delta",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=baselines,
+        probe_specs=[f"{path.parent.name}={path}" for path in probes],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[calibration],
+        required_scene_count=3,
+        required_seed_count=2,
+    )
+
+    gate = manifest["checks"]["prepared_scale_square_default_gate"]
+    assert gate["status"] == "comparison_only_not_default"
+    assert gate["comparison_only"] is True
+    assert gate["default_candidate"] is False
+    assert gate["prepared_probe_count"] == 3
+    assert gate["fpv_improved_count"] == 3
+    assert gate["chase_regression_count"] == 1
+    assert {blocker["reason"] for blocker in gate["blockers"]} >= {
+        "chase_regression",
+        "render_domain_residuals_active",
+    }
+    assert "comparison-only" in manifest["recommended_next_action"]
+
+
 def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_rgb(
     tmp_path: Path,
 ) -> None:
@@ -262,6 +352,7 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
         "corpus_coverage": {"status": "broad_corpus_ready"},
         "calibration_scene": {"status": "calibration_scene_evidence_loaded"},
         "render_domain_probe_matrix": {"status": "render_domain_delta_resolved"},
+        "prepared_scale_square_default_gate": {"status": "prepared_scale_square_default_ready"},
         "rgb_tone_cross_validation": {
             "status": "default_rgb_tone_ready",
             "comparison_only": False,
