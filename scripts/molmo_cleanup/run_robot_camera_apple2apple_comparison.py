@@ -1175,6 +1175,7 @@ def _material_response_probe_history(
     comparable_count = 0
     improved_count = 0
     worsened_count = 0
+    neutral_count = 0
     for path in paths:
         probe = _load_material_response_probe_manifest(path, output_dir=output_dir)
         if probe.get("status") == "loaded":
@@ -1188,6 +1189,12 @@ def _material_response_probe_history(
                 improved_count += 1
             if delta.get("fpv_worse") is True:
                 worsened_count += 1
+            if (
+                comparable
+                and delta.get("fpv_improvement") is not True
+                and delta.get("fpv_worse") is not True
+            ):
+                neutral_count += 1
         probes.append(probe)
     if improved_count:
         status = "prior_probe_improved"
@@ -1205,6 +1212,7 @@ def _material_response_probe_history(
         "comparable_probe_count": comparable_count,
         "improved_probe_count": improved_count,
         "worsened_probe_count": worsened_count,
+        "neutral_probe_count": neutral_count,
         "probes": probes,
         "interpretation": (
             "Historical material-response probes are comparison evidence only. They "
@@ -1458,7 +1466,14 @@ def _usd_preview_surface_material_model_check(
         status = "usd_preview_surface_binding_gap"
     else:
         status = "usd_preview_surface_vs_mujoco_material_model_delta"
-    if probe_history.get("worsened_probe_count"):
+    if probe_history.get("worsened_probe_count") and probe_history.get("neutral_probe_count"):
+        next_action = (
+            "Do not promote global material-response edits yet: prior raw/colorspace or "
+            "combined probes worsened FPV, while roughness-only evidence is below the "
+            "improvement threshold. Continue with target-specific material probes or a "
+            "broader corpus before changing defaults."
+        )
+    elif probe_history.get("worsened_probe_count"):
         next_action = (
             "Do not promote the already-worse material-response probe directly; split "
             "texture sourceColorSpace, PreviewSurface roughness, and target-specific "

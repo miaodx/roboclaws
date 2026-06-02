@@ -622,6 +622,14 @@ def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
     }
     probe_path = tmp_path / "material_probe_manifest.json"
     probe_path.write_text(json.dumps(probe), encoding="utf-8")
+    neutral_probe = json.loads(json.dumps(baseline))
+    neutral_probe["scene"]["scene_usd_path"] = (
+        "output/isaaclab/val_0_scene_refs_fix_material_roughness1_only/scene_semantic.usda"
+    )
+    neutral_probe["summary"]["fpv_mean_abs_rgb_avg"] = 37.5747
+    neutral_probe["summary"]["chase_mean_abs_rgb_avg"] = 90.6459
+    neutral_probe_path = tmp_path / "neutral_material_probe_manifest.json"
+    neutral_probe_path.write_text(json.dumps(neutral_probe), encoding="utf-8")
 
     check = run_camera._usd_preview_surface_material_model_check(
         manifest=baseline,
@@ -655,19 +663,24 @@ def test_robot_camera_preview_surface_check_summarizes_worse_material_probe(
                 },
             }
         ],
-        probe_manifest_paths=[probe_path],
+        probe_manifest_paths=[probe_path, neutral_probe_path],
     )
 
     history = check["probe_history"]
     assert history["schema"] == "robot_camera_material_response_probe_history_v1"
     assert history["status"] == "prior_probes_worse"
-    assert history["comparable_probe_count"] == 1
+    assert history["comparable_probe_count"] == 2
     assert history["worsened_probe_count"] == 1
+    assert history["neutral_probe_count"] == 1
     assert history["probes"][0]["comparable_to_current"] is True
     assert history["probes"][0]["delta_vs_current"]["fpv_mean_abs_rgb_delta"] == 7.3974
     assert history["probes"][0]["delta_vs_current"]["fpv_worse"] is True
     assert history["probes"][0]["delta_vs_current"]["chase_improvement"] is True
+    assert history["probes"][1]["delta_vs_current"]["fpv_mean_abs_rgb_delta"] == -0.5233
+    assert history["probes"][1]["delta_vs_current"]["fpv_improvement"] is False
+    assert history["probes"][1]["delta_vs_current"]["fpv_worse"] is False
     assert "Do not promote" in check["recommended_next_action"]
+    assert "below the improvement threshold" in check["recommended_next_action"]
 
 
 def test_robot_camera_render_contract_diagnostics_prioritizes_missing_target_binding(

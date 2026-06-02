@@ -117,6 +117,24 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `status=prior_probes_worse`, `comparable_probe_count=1`, and
   `worsened_probe_count=1`. Do not promote the combined
   `sourceColorSpace=raw` plus `roughness=1.0` edit as a default.
+- The split material-response probes narrow that result. The raw-only variant
+  (`sourceColorSpace=raw`, roughness unchanged) at
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_4loc_material_raw_only_probe/report.html`
+  worsened 4-location FPV from `39.1959` to `46.9881` (`+7.7922`) while
+  improving chase; treat raw texture colorspace as negative FPV evidence, not a
+  default. The roughness-only 4-location variant at
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_4loc_material_roughness1_only_probe/report.html`
+  changed FPV from `39.1959` to `38.8417` (`-0.3542`) and worsened chase from
+  `82.3657` to `88.7648`; this is below the report's `>1.0` FPV improvement
+  threshold. The 8-location roughness-only variant at
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_material_roughness1_only_probe/report.html`
+  changed FPV from `38.0980` to `37.5747` (`-0.5233`) and worsened chase from
+  `83.7516` to `90.6459`. For the user-flagged `0008` dining table, roughness
+  lowered FPV from `45.4961` to `44.3709` (`-1.1252`) and Isaac luminance from
+  `131.0136` to `129.7169`, but the object remains a high residual
+  `view_dependent_color_residual`. The refreshed 8-location baseline now
+  attaches all four material probes with `comparable_probe_count=4`,
+  `worsened_probe_count=2`, and `neutral_probe_count=2`.
 - The refreshed 8-location post-FOV RGB-gain probe improved FPV avg from
   `38.0980` to `35.0612` and changed the residual split to 4 low-residual FPV
   views, 3 geometry/texture edge residuals, and 1 render-domain residual. Its
@@ -151,14 +169,15 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Next Action
 
-Keep FPV pose and the head-camera FOV contract unchanged. Next, split the
-negative combined material-response result into narrower comparison-only probes:
-`sourceColorSpace` only, PreviewSurface `roughness` only, and then target-specific
-sampler/material probes for high-residual objects such as the `0008` dining
-table if either isolated probe is informative. Keep RGB gain comparison-only
-until it improves a broader post-FOV corpus. For light/shadow specifically, do
-not retry simple dome removal, shadow enabling, or the old combined
-MuJoCo-like light/shadow USD edit; split light count, shadow flags,
+Keep FPV pose and the head-camera FOV contract unchanged. Do not promote global
+raw colorspace, combined raw+roughness, or global roughness-only as defaults
+from the current evidence. Next material direction should be target-specific:
+start with the `0008` dining table / `LightWoodCounters3` path and compare a
+small sampler/material override against baseline, or broaden roughness-only to a
+multi-scene corpus before treating its weak FPV gain as real. Keep RGB gain
+comparison-only until it improves a broader post-FOV corpus. For light/shadow
+specifically, do not retry simple dome removal, shadow enabling, or the old
+combined MuJoCo-like light/shadow USD edit; split light count, shadow flags,
 intensity/direction, and material response only in a comparison-only probe.
 
 ## Touched Areas
