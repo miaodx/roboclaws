@@ -462,6 +462,17 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   (`val1_seed6_prepared_scale_square_gate`, tolerance `1.0`) and
   `render_domain_residuals_active`
   (`lighting_shadow_contract_delta`, `target_material_texture_or_binding_gap`).
+- The refreshed summary now classifies that `val1_seed6` chase blocker instead
+  of treating it as an opaque number. The paired-view diagnostics say
+  `diagnostic_class=tone_luminance_side_effect`: FPV improves on 5/6 locations
+  with zero FPV regressions and average FPV delta `-7.1603`, while chase edge
+  residual is essentially unchanged (`edge_abs_diff_delta_avg=0.0163`) and the
+  chase regression comes from luminance-gap shifts on high-luminance auxiliary
+  views. The largest chase regressions are dining table `0003` (`+14.4875`),
+  pillow `0006` (`+12.3877`), and bowl `0005` (`+6.9027`). Keep this as a
+  default-promotion blocker until render residuals are resolved or the chase
+  role is explicitly re-gated, but do not treat it as evidence of camera pose,
+  lens, or USD geometry regression.
 
 ## Next Action
 

@@ -258,19 +258,58 @@ def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_ch
     summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_prepared_gate")
     baselines = [
         _write_robot_camera_manifest(
-            tmp_path / f"baseline_{index}_seed_{seed}" / "comparison_manifest.json",
-            scene_index=index,
-            seed=seed,
+            tmp_path / "baseline_0_seed_6" / "comparison_manifest.json",
+            scene_index=0,
+            seed=6,
             generated_mess_count=2,
-            fpv=fpv,
-            chase=chase,
+            fpv=38.0,
+            chase=83.0,
             location_count=4,
-        )
-        for index, seed, fpv, chase in [
-            (0, 6, 38.0, 83.0),
-            (1, 6, 36.0, 72.0),
-            (1, 8, 37.0, 71.0),
-        ]
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_1_seed_6" / "comparison_manifest.json",
+            scene_index=1,
+            seed=6,
+            generated_mess_count=2,
+            fpv=36.0,
+            chase=72.0,
+            location_count=4,
+            locations=[
+                _image_diff_location(
+                    "0001_bed",
+                    target_id="bed_1",
+                    fpv_mean=50.0,
+                    fpv_edge=4.0,
+                    fpv_mujoco_luma=90.0,
+                    fpv_isaac_luma=105.0,
+                    chase_mean=60.0,
+                    chase_edge=8.0,
+                    chase_mujoco_luma=150.0,
+                    chase_isaac_luma=130.0,
+                ),
+                _image_diff_location(
+                    "0002_pillow",
+                    target_id="pillow_1",
+                    fpv_mean=40.0,
+                    fpv_edge=4.5,
+                    fpv_mujoco_luma=110.0,
+                    fpv_isaac_luma=125.0,
+                    chase_mean=65.0,
+                    chase_edge=8.5,
+                    chase_mujoco_luma=145.0,
+                    chase_isaac_luma=130.0,
+                ),
+            ],
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_1_seed_8" / "comparison_manifest.json",
+            scene_index=1,
+            seed=8,
+            generated_mess_count=2,
+            fpv=37.0,
+            chase=71.0,
+            location_count=4,
+        ),
     ]
     probes = [
         _write_robot_camera_manifest(
@@ -290,6 +329,32 @@ def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_ch
             fpv=29.0,
             chase=75.0,
             location_count=4,
+            locations=[
+                _image_diff_location(
+                    "0001_bed",
+                    target_id="bed_1",
+                    fpv_mean=45.0,
+                    fpv_edge=4.0,
+                    fpv_mujoco_luma=90.0,
+                    fpv_isaac_luma=80.0,
+                    chase_mean=70.0,
+                    chase_edge=8.0,
+                    chase_mujoco_luma=150.0,
+                    chase_isaac_luma=90.0,
+                ),
+                _image_diff_location(
+                    "0002_pillow",
+                    target_id="pillow_1",
+                    fpv_mean=35.0,
+                    fpv_edge=4.5,
+                    fpv_mujoco_luma=110.0,
+                    fpv_isaac_luma=105.0,
+                    chase_mean=80.0,
+                    chase_edge=8.5,
+                    chase_mujoco_luma=145.0,
+                    chase_isaac_luma=90.0,
+                ),
+            ],
         ),
         _write_robot_camera_manifest(
             tmp_path / "val1_seed8_prepared_scale_square_gate" / "comparison_manifest.json",
@@ -339,6 +404,10 @@ def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_ch
         "chase_regression",
         "render_domain_residuals_active",
     }
+    chase_diagnostics = gate["chase_regression_diagnostics"]
+    assert chase_diagnostics[0]["diagnostic_class"] == "tone_luminance_side_effect"
+    assert chase_diagnostics[0]["chase"]["edge_regression_count"] == 0
+    assert chase_diagnostics[0]["chase"]["luminance_gap_regression_count"] == 2
     assert "comparison-only" in manifest["recommended_next_action"]
 
 
@@ -374,6 +443,7 @@ def _write_robot_camera_manifest(
     camera_status: str = "fpv_contract_shared_with_static_head_camera_pitch_correction",
     lens_status: str = "fpv_lens_aligned",
     pose_status: str = "fpv_world_pose_aligned",
+    locations: list[dict] | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True)
     payload = {
@@ -415,9 +485,49 @@ def _write_robot_camera_manifest(
                 "dropped_unbound_target_count": 0,
             },
         },
+        "locations": locations or [],
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def _image_diff_location(
+    label: str,
+    *,
+    target_id: str,
+    fpv_mean: float,
+    fpv_edge: float,
+    fpv_mujoco_luma: float,
+    fpv_isaac_luma: float,
+    chase_mean: float,
+    chase_edge: float,
+    chase_mujoco_luma: float,
+    chase_isaac_luma: float,
+) -> dict:
+    return {
+        "label": label,
+        "target": {"target_id": target_id},
+        "image_diffs": {
+            "fpv": _image_diff(fpv_mean, fpv_edge, fpv_mujoco_luma, fpv_isaac_luma),
+            "chase": _image_diff(chase_mean, chase_edge, chase_mujoco_luma, chase_isaac_luma),
+        },
+    }
+
+
+def _image_diff(
+    mean_abs_rgb: float,
+    edge_abs_diff: float,
+    mujoco_luminance: float,
+    isaac_luminance: float,
+) -> dict:
+    return {
+        "mean_abs_rgb": mean_abs_rgb,
+        "residual": {
+            "edge_abs_diff": edge_abs_diff,
+            "left_metrics": {"mean_luminance": mujoco_luminance},
+            "right_metrics": {"mean_luminance": isaac_luminance},
+        },
+    }
 
 
 def _write_raw_fpv_run_result(path: Path) -> Path:

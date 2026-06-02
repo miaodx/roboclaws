@@ -370,6 +370,14 @@ def _render_domain_probe_matrix_check(
         kind = str(probe.get("probe_kind") or "unknown")
         baseline = baseline_by_scene.get(str(probe.get("scene_signature")))
         delta = _delta_vs_baseline(baseline, probe)
+        paired_view_diagnostics = (
+            _paired_view_delta_diagnostics(
+                Path(str(baseline.get("path"))),
+                Path(str(probe.get("path"))),
+            )
+            if baseline and delta.get("comparable")
+            else {"status": "not_comparable"}
+        )
         matrix.setdefault(kind, []).append(
             {
                 "label": probe.get("label"),
@@ -380,6 +388,7 @@ def _render_domain_probe_matrix_check(
                 "fpv_improved": delta.get("fpv_improved"),
                 "fpv_worse": delta.get("fpv_worse"),
                 "comparable": delta.get("comparable"),
+                "paired_view_diagnostics": paired_view_diagnostics,
             }
         )
     status_by_kind = {
@@ -493,6 +502,12 @@ def _prepared_scale_square_default_gate_check(
                 "reason": "chase_regression",
                 "tolerance": chase_regression_tolerance,
                 "labels": [row.get("label") for row in chase_regressions],
+                "diagnostic_classes": sorted(
+                    {
+                        _classify_chase_regression(row, chase_regression_tolerance)
+                        for row in chase_regressions
+                    }
+                ),
             }
         )
     if baseline_render_statuses:
@@ -521,6 +536,10 @@ def _prepared_scale_square_default_gate_check(
         "fpv_improved_count": len(fpv_improved),
         "fpv_worse_count": len(fpv_worse),
         "chase_regression_count": len(chase_regressions),
+        "chase_regression_diagnostics": [
+            _chase_regression_diagnostic(row, chase_regression_tolerance)
+            for row in chase_regressions
+        ],
         "scene_signature_count": len(scene_signatures),
         "scene_signatures": scene_signatures,
         "seed_count": len(seeds),
@@ -538,12 +557,14 @@ def _prepared_scale_square_default_gate_check(
                 "chase_delta": row.get("chase_delta"),
                 "fpv_improved": row.get("fpv_improved"),
                 "comparable": row.get("comparable"),
+                "paired_view_diagnostics_status": _dict(row.get("paired_view_diagnostics")).get(
+                    "status"
+                ),
             }
             for row in prepared_rows
         ],
         "recommended_next_action": (
-            "Keep prepared scale-square comparison-only until FPV gain, chase "
-            "non-regression tolerance, and remaining render-domain residual gates pass."
+            _prepared_scale_square_next_action(chase_regressions, chase_regression_tolerance)
             if status != "prepared_scale_square_default_ready"
             else "Prepared scale-square is ready for default-rendering review."
         ),
@@ -753,6 +774,236 @@ def _delta_vs_baseline(
     }
 
 
+def _paired_view_delta_diagnostics(
+    baseline_path: Path,
+    probe_path: Path,
+) -> dict[str, Any]:
+    if not baseline_path.is_file() or not probe_path.is_file():
+        return {
+            "status": "missing_manifest",
+            "baseline_path": str(baseline_path),
+            "probe_path": str(probe_path),
+        }
+    baseline_locations = _locations_by_label(_read_json(baseline_path))
+    probe_locations = _locations_by_label(_read_json(probe_path))
+    labels = sorted(set(baseline_locations) & set(probe_locations))
+    if not labels:
+        return {
+            "status": "no_paired_locations",
+            "baseline_location_count": len(baseline_locations),
+            "probe_location_count": len(probe_locations),
+        }
+    return {
+        "status": "paired_view_diagnostics_loaded",
+        "paired_location_count": len(labels),
+        "views": {
+            view: _paired_view_delta_summary(labels, baseline_locations, probe_locations, view)
+            for view in ("fpv", "chase")
+        },
+        "interpretation": (
+            "Per-location image-diff deltas classify whether a probe changes camera-view "
+            "geometry/edge residuals or mostly shifts luminance/tone. Chase remains "
+            "auxiliary report evidence, not the policy input."
+        ),
+    }
+
+
+def _paired_view_delta_summary(
+    labels: list[str],
+    baseline_locations: dict[str, dict[str, Any]],
+    probe_locations: dict[str, dict[str, Any]],
+    view: str,
+) -> dict[str, Any]:
+    rows = []
+    for label in labels:
+        baseline_metrics = _view_diff_metrics(baseline_locations[label], view)
+        probe_metrics = _view_diff_metrics(probe_locations[label], view)
+        mean_delta = _delta(
+            probe_metrics.get("mean_abs_rgb"),
+            baseline_metrics.get("mean_abs_rgb"),
+        )
+        edge_delta = _delta(
+            probe_metrics.get("edge_abs_diff"),
+            baseline_metrics.get("edge_abs_diff"),
+        )
+        luminance_gap_delta = _delta(
+            probe_metrics.get("luminance_gap"),
+            baseline_metrics.get("luminance_gap"),
+        )
+        isaac_luminance_delta = _delta(
+            probe_metrics.get("isaac_mean_luminance"),
+            baseline_metrics.get("isaac_mean_luminance"),
+        )
+        if all(value is None for value in (mean_delta, edge_delta, luminance_gap_delta)):
+            continue
+        rows.append(
+            {
+                "label": label,
+                "target_id": _dict(baseline_locations[label].get("target")).get("target_id"),
+                "mean_abs_rgb_delta": mean_delta,
+                "edge_abs_diff_delta": edge_delta,
+                "luminance_gap_delta": luminance_gap_delta,
+                "isaac_luminance_delta": isaac_luminance_delta,
+            }
+        )
+    regressed = [
+        row
+        for row in rows
+        if _float_or_none(row.get("mean_abs_rgb_delta")) is not None
+        and _float_or_none(row.get("mean_abs_rgb_delta")) > 1.0
+    ]
+    improved = [
+        row
+        for row in rows
+        if _float_or_none(row.get("mean_abs_rgb_delta")) is not None
+        and _float_or_none(row.get("mean_abs_rgb_delta")) < -1.0
+    ]
+    edge_regressions = [
+        row
+        for row in rows
+        if _float_or_none(row.get("edge_abs_diff_delta")) is not None
+        and _float_or_none(row.get("edge_abs_diff_delta")) > 0.5
+    ]
+    luminance_gap_regressions = [
+        row
+        for row in rows
+        if _float_or_none(row.get("luminance_gap_delta")) is not None
+        and _float_or_none(row.get("luminance_gap_delta")) > 1.0
+    ]
+    return {
+        "paired_location_count": len(rows),
+        "mean_abs_rgb_delta_avg": _average(row.get("mean_abs_rgb_delta") for row in rows),
+        "edge_abs_diff_delta_avg": _average(row.get("edge_abs_diff_delta") for row in rows),
+        "luminance_gap_delta_avg": _average(row.get("luminance_gap_delta") for row in rows),
+        "isaac_luminance_delta_avg": _average(row.get("isaac_luminance_delta") for row in rows),
+        "regressed_location_count": len(regressed),
+        "improved_location_count": len(improved),
+        "edge_regression_count": len(edge_regressions),
+        "luminance_gap_regression_count": len(luminance_gap_regressions),
+        "top_regressions": sorted(
+            regressed,
+            key=lambda row: _float_or_none(row.get("mean_abs_rgb_delta")) or 0.0,
+            reverse=True,
+        )[:3],
+    }
+
+
+def _locations_by_label(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    locations = {}
+    for index, location in enumerate(_list_dicts(payload.get("locations"))):
+        label = (
+            location.get("label")
+            or _dict(location.get("target")).get("target_id")
+            or f"location_{index:04d}"
+        )
+        locations.setdefault(str(label), location)
+    return locations
+
+
+def _view_diff_metrics(location: dict[str, Any], view: str) -> dict[str, Any]:
+    diff = _dict(_dict(location.get("image_diffs")).get(view))
+    residual = _dict(diff.get("residual"))
+    left_metrics = _dict(residual.get("left_metrics"))
+    right_metrics = _dict(residual.get("right_metrics"))
+    mujoco_luminance = _float_or_none(left_metrics.get("mean_luminance"))
+    isaac_luminance = _float_or_none(right_metrics.get("mean_luminance"))
+    luminance_gap = (
+        abs(isaac_luminance - mujoco_luminance)
+        if mujoco_luminance is not None and isaac_luminance is not None
+        else None
+    )
+    return {
+        "mean_abs_rgb": _float_or_none(diff.get("mean_abs_rgb")),
+        "edge_abs_diff": _float_or_none(residual.get("edge_abs_diff")),
+        "mujoco_mean_luminance": mujoco_luminance,
+        "isaac_mean_luminance": isaac_luminance,
+        "luminance_gap": luminance_gap,
+    }
+
+
+def _classify_chase_regression(
+    row: dict[str, Any],
+    chase_regression_tolerance: float,
+) -> str:
+    chase_delta = _float_or_none(row.get("chase_delta"))
+    if chase_delta is None or chase_delta <= chase_regression_tolerance:
+        return "no_chase_regression"
+    diagnostics = _dict(row.get("paired_view_diagnostics"))
+    if diagnostics.get("status") != "paired_view_diagnostics_loaded":
+        return "unclassified_chase_regression"
+    chase = _dict(_dict(diagnostics.get("views")).get("chase"))
+    edge_delta_avg = _float_or_none(chase.get("edge_abs_diff_delta_avg"))
+    luminance_gap_delta_avg = _float_or_none(chase.get("luminance_gap_delta_avg"))
+    edge_regression_count = int(chase.get("edge_regression_count") or 0)
+    luminance_gap_regression_count = int(chase.get("luminance_gap_regression_count") or 0)
+    if edge_delta_avg is not None and edge_delta_avg > 0.5:
+        return "edge_geometry_regression"
+    if (
+        edge_regression_count == 0
+        and luminance_gap_regression_count > 0
+        and luminance_gap_delta_avg is not None
+        and luminance_gap_delta_avg > 1.0
+    ):
+        return "tone_luminance_side_effect"
+    return "mixed_or_unclassified_chase_regression"
+
+
+def _chase_regression_diagnostic(
+    row: dict[str, Any],
+    chase_regression_tolerance: float,
+) -> dict[str, Any]:
+    diagnostics = _dict(row.get("paired_view_diagnostics"))
+    views = _dict(diagnostics.get("views"))
+    chase = _dict(views.get("chase"))
+    fpv = _dict(views.get("fpv"))
+    return {
+        "label": row.get("label"),
+        "path": row.get("path"),
+        "scene_signature": row.get("scene_signature"),
+        "chase_delta": row.get("chase_delta"),
+        "tolerance": chase_regression_tolerance,
+        "diagnostic_class": _classify_chase_regression(row, chase_regression_tolerance),
+        "paired_view_status": diagnostics.get("status"),
+        "chase": {
+            "paired_location_count": chase.get("paired_location_count"),
+            "mean_abs_rgb_delta_avg": chase.get("mean_abs_rgb_delta_avg"),
+            "edge_abs_diff_delta_avg": chase.get("edge_abs_diff_delta_avg"),
+            "luminance_gap_delta_avg": chase.get("luminance_gap_delta_avg"),
+            "isaac_luminance_delta_avg": chase.get("isaac_luminance_delta_avg"),
+            "regressed_location_count": chase.get("regressed_location_count"),
+            "improved_location_count": chase.get("improved_location_count"),
+            "edge_regression_count": chase.get("edge_regression_count"),
+            "luminance_gap_regression_count": chase.get("luminance_gap_regression_count"),
+            "top_regressions": chase.get("top_regressions"),
+        },
+        "fpv": {
+            "mean_abs_rgb_delta_avg": fpv.get("mean_abs_rgb_delta_avg"),
+            "regressed_location_count": fpv.get("regressed_location_count"),
+            "improved_location_count": fpv.get("improved_location_count"),
+        },
+    }
+
+
+def _prepared_scale_square_next_action(
+    chase_regressions: list[dict[str, Any]],
+    chase_regression_tolerance: float,
+) -> str:
+    diagnostic_classes = {
+        _classify_chase_regression(row, chase_regression_tolerance) for row in chase_regressions
+    }
+    if diagnostic_classes == {"tone_luminance_side_effect"}:
+        return (
+            "Keep prepared scale-square comparison-only: FPV improves under the frozen "
+            "head-camera contract, while the auxiliary chase regression is currently "
+            "classified as a tone/luminance side effect. Resolve or explicitly gate the "
+            "remaining render-domain residuals before promoting default rendering."
+        )
+    return (
+        "Keep prepared scale-square comparison-only until FPV gain, chase "
+        "non-regression tolerance, and remaining render-domain residual gates pass."
+    )
+
+
 def _probe_kind_status(rows: list[dict[str, Any]]) -> str:
     comparable = [row for row in rows if row.get("comparable")]
     if not comparable:
@@ -866,6 +1117,15 @@ def _float_or_none(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _average(values: Any) -> float | None:
+    numbers = [
+        float(value) for value in values if value is not None and _float_or_none(value) is not None
+    ]
+    if not numbers:
+        return None
+    return round(sum(numbers) / len(numbers), 4)
 
 
 def _find_first_dict(payload: Any, key: str) -> dict[str, Any] | None:
