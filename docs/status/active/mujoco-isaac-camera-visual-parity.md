@@ -624,6 +624,14 @@ not fixed by single global tone compensation:
   `[1.589143, 1.423057, 1.304406]`, matching the existing comparison-only
   profile core values. This only makes the report-side compensation auditable;
   it does not change MuJoCo/Isaac default rendering or the RAW_FPV policy input.
+- The summary gate now requires actual view-specific profile evidence instead
+  of only trusting probe labels. Each
+  `prepared_scale_square_view_rgb` probe must expose `backend_view_rgb_gain`
+  for both `fpv` and `chase` in its Isaac color profile state before
+  `view_specific_prepared_scale_square_tone_gate` can be ready for review. The
+  refreshed summary records `view_rgb_gain_profile_count=3`,
+  `required_view_rgb_gain_views=["fpv","chase"]`, no blockers, and
+  `has_required_view_rgb_gain=true` for all three current probes.
 
 Decision delta: a single global color/tone profile cannot satisfy both FPV and
 chase under prepared scale-square. A view-specific tone profile can satisfy the

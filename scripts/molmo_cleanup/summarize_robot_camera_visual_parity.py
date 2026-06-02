@@ -398,6 +398,7 @@ def _render_domain_probe_matrix_check(
                 "fpv_worse": delta.get("fpv_worse"),
                 "comparable": delta.get("comparable"),
                 "paired_view_diagnostics": paired_view_diagnostics,
+                "rgb_gain_source": probe.get("rgb_gain_source"),
             }
         )
     status_by_kind = {
@@ -612,6 +613,16 @@ def _view_specific_prepared_scale_square_tone_gate_check(
     )
     fpv_improved = [row for row in comparable if row.get("fpv_improved")]
     fpv_worse = [row for row in comparable if row.get("fpv_worse")]
+    required_views = ("fpv", "chase")
+    missing_view_gain_rows = [
+        {
+            "label": row.get("label"),
+            "available_views": _view_rgb_gain_views(row),
+            "required_views": list(required_views),
+        }
+        for row in view_rows
+        if not _has_required_view_rgb_gains(row, required_views=required_views)
+    ]
     chase_regressions = [
         row
         for row in comparable
@@ -660,6 +671,13 @@ def _view_specific_prepared_scale_square_tone_gate_check(
                 "labels": [row.get("label") for row in fpv_worse],
             }
         )
+    if missing_view_gain_rows:
+        blockers.append(
+            {
+                "reason": "missing_backend_view_rgb_gain",
+                "rows": missing_view_gain_rows,
+            }
+        )
     if chase_regressions:
         blockers.append(
             {
@@ -688,6 +706,8 @@ def _view_specific_prepared_scale_square_tone_gate_check(
         "fpv_improved_count": len(fpv_improved),
         "fpv_worse_count": len(fpv_worse),
         "chase_regression_count": len(chase_regressions),
+        "view_rgb_gain_profile_count": len(view_rows) - len(missing_view_gain_rows),
+        "required_view_rgb_gain_views": list(required_views),
         "scene_signature_count": len(scene_signatures),
         "scene_signatures": scene_signatures,
         "seed_count": len(seeds),
@@ -705,6 +725,11 @@ def _view_specific_prepared_scale_square_tone_gate_check(
                 "chase_delta": row.get("chase_delta"),
                 "fpv_improved": row.get("fpv_improved"),
                 "comparable": row.get("comparable"),
+                "view_rgb_gain_views": _view_rgb_gain_views(row),
+                "has_required_view_rgb_gain": _has_required_view_rgb_gains(
+                    row,
+                    required_views=required_views,
+                ),
             }
             for row in view_rows
         ],
@@ -1305,8 +1330,16 @@ def _rgb_gain_source(manifest_path: Path) -> dict[str, Any]:
     override = _dict(state.get("robot_view_color_profile_override"))
     profile = _dict(state.get("robot_view_color_profile"))
     gain = _dict(override.get("backend_rgb_gain")) or _dict(profile.get("backend_rgb_gain"))
+    view_gain = _dict(override.get("backend_view_rgb_gain")) or _dict(
+        profile.get("backend_view_rgb_gain")
+    )
     source = str(
         override.get("backend_rgb_gain_source") or profile.get("backend_rgb_gain_source") or ""
+    )
+    view_source = str(
+        override.get("backend_view_rgb_gain_source")
+        or profile.get("backend_view_rgb_gain_source")
+        or ""
     )
     manifest_source = source.split(" global least-squares ", 1)[0] if source else ""
     source_summary = {}
@@ -1314,12 +1347,33 @@ def _rgb_gain_source(manifest_path: Path) -> dict[str, Any]:
         source_summary = _robot_camera_manifest_summary(Path(manifest_source))
     return {
         "backend_rgb_gain": gain,
+        "backend_view_rgb_gain": view_gain,
         "source": source,
+        "view_source": view_source,
         "manifest_path": manifest_source,
         "source_manifest_loaded": bool(source_summary),
         "source_scene": source_summary.get("scene"),
         "source_scene_signature": source_summary.get("scene_signature"),
     }
+
+
+def _view_rgb_gain_views(row: dict[str, Any]) -> list[str]:
+    source = _dict(row.get("rgb_gain_source"))
+    backend_view_gain = _dict(source.get("backend_view_rgb_gain"))
+    views = set()
+    for gains_by_view in backend_view_gain.values():
+        if isinstance(gains_by_view, dict):
+            views.update(str(view) for view in gains_by_view)
+    return sorted(views)
+
+
+def _has_required_view_rgb_gains(
+    row: dict[str, Any],
+    *,
+    required_views: tuple[str, ...],
+) -> bool:
+    views = set(_view_rgb_gain_views(row))
+    return all(view in views for view in required_views)
 
 
 def _source_scene_signature(source: dict[str, Any]) -> str:

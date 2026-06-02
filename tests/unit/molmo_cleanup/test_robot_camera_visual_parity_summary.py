@@ -496,7 +496,10 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
                             "global least-squares FPV RGB gain"
                         ),
                         "backend_view_rgb_gain": {
-                            "isaaclab_subprocess": {"chase": [1.5, 1.4, 1.3]}
+                            "isaaclab_subprocess": {
+                                "fpv": [0.94, 0.84, 0.82],
+                                "chase": [1.5, 1.4, 1.3],
+                            }
                         },
                     }
                 }
@@ -537,13 +540,112 @@ def test_visual_parity_summary_marks_view_specific_tone_ready_for_review(
     assert gate["probe_count"] == 3
     assert gate["fpv_improved_count"] == 3
     assert gate["chase_regression_count"] == 0
+    assert gate["view_rgb_gain_profile_count"] == 3
+    assert gate["required_view_rgb_gain_views"] == ["fpv", "chase"]
     assert gate["blockers"] == []
+    assert all(row["has_required_view_rgb_gain"] for row in gate["probes"])
     four_check_rows = {row["check_id"]: row for row in manifest["four_check_audit"]["rows"]}
     assert four_check_rows["material_texture_response"]["status"] == (
         "review_ready_comparison_only"
     )
     assert four_check_rows["light_brightness_tone"]["status"] == ("review_ready_comparison_only")
     assert "view-specific" in manifest["recommended_next_action"]
+
+
+def test_visual_parity_summary_requires_actual_view_specific_rgb_profile(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_view_tone_missing")
+    baselines = [
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_0_seed_6" / "comparison_manifest.json",
+            scene_index=0,
+            seed=6,
+            generated_mess_count=2,
+            fpv=38.0,
+            chase=83.0,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_1_seed_6" / "comparison_manifest.json",
+            scene_index=1,
+            seed=6,
+            generated_mess_count=2,
+            fpv=36.0,
+            chase=72.0,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "baseline_1_seed_8" / "comparison_manifest.json",
+            scene_index=1,
+            seed=8,
+            generated_mess_count=2,
+            fpv=37.0,
+            chase=71.0,
+            location_count=4,
+        ),
+    ]
+    probes = [
+        _write_robot_camera_manifest(
+            tmp_path / "val0_prepared_scale_square_view_rgb" / "comparison_manifest.json",
+            scene_index=0,
+            seed=6,
+            generated_mess_count=2,
+            fpv=32.0,
+            chase=83.7,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "val1_prepared_scale_square_view_rgb" / "comparison_manifest.json",
+            scene_index=1,
+            seed=6,
+            generated_mess_count=2,
+            fpv=30.0,
+            chase=71.5,
+            location_count=4,
+        ),
+        _write_robot_camera_manifest(
+            tmp_path / "val1_seed8_prepared_scale_square_view_rgb" / "comparison_manifest.json",
+            scene_index=1,
+            seed=8,
+            generated_mess_count=2,
+            fpv=30.5,
+            chase=71.4,
+            location_count=4,
+        ),
+    ]
+    for path in probes:
+        (path.parent / "isaac_state.json").write_text(
+            json.dumps(
+                {
+                    "robot_view_color_profile_override": {
+                        "backend_rgb_gain": {"isaaclab_subprocess": [0.94, 0.84, 0.82]},
+                        "backend_rgb_gain_source": (
+                            "output/molmo/robot-camera-apple2apple/seed6_prepared "
+                            "global least-squares FPV RGB gain"
+                        ),
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=baselines,
+        probe_specs=[f"{path.parent.name}={path}" for path in probes],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=3,
+        required_seed_count=2,
+    )
+
+    gate = manifest["checks"]["view_specific_prepared_scale_square_tone_gate"]
+    assert gate["status"] == "comparison_only_needs_broader_gate"
+    assert gate["ready_for_review"] is False
+    assert gate["view_rgb_gain_profile_count"] == 0
+    assert {blocker["reason"] for blocker in gate["blockers"]} == {"missing_backend_view_rgb_gain"}
+    assert all(not row["has_required_view_rgb_gain"] for row in gate["probes"])
 
 
 def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_rgb(
