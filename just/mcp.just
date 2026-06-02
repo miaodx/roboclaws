@@ -60,7 +60,7 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788" allow_privileged_tools="0"
     fi
 
     echo "==> starting roboclaws MCP server (scene={{scene}}, host={{host}}, port={{port}})" >&2
-    server_args=(.venv/bin/python examples/mcp/coding_agent_nav_server.py --scene "{{scene}}" --host "{{host}}" --port "{{port}}")
+    server_args=(.venv/bin/python -m roboclaws.cli.agent_server --scene "{{scene}}" --host "{{host}}" --port "{{port}}")
     if [[ "$allow_privileged_tools" == "1" || "$allow_privileged_tools" == "true" ]]; then
       server_args+=(--allow-privileged-tools)
     fi
