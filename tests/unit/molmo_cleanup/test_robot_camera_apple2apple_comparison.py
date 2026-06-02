@@ -164,6 +164,7 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
                         "prim_path": "/World/robot_0/head_camera",
                         "focal_length_mm": 24.0,
                         "horizontal_aperture_mm": 20.955,
+                        "render_resolution": {"width": 540, "height": 360},
                     }
                 }
             },
@@ -180,12 +181,15 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
     assert per_location["fpv_camera_metadata"]["isaac"]["prim_path"] == (
         "/World/robot_0/head_camera"
     )
+    assert per_location["fpv_lens_delta"]["status"] == "fpv_lens_contract_delta"
+    assert per_location["fpv_lens_delta"]["isaac_vertical_fov_deg"] == 32.454394
     assert per_location["head_articulation"]["status"] == ("isaac_static_head_pitch_not_applied")
     assert per_location["chase_contract"]["same_camera_contract"] is False
     assert summary["status"] == "fpv_contract_shared_with_static_head_articulation_gap"
     assert summary["fpv_head_camera_contract_count"] == 1
     assert summary["robot_pose_match_count"] == 1
     assert summary["isaac_static_head_pitch_gap_count"] == 1
+    assert summary["fpv_lens_gap_count"] == 1
 
 
 def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_correction() -> None:
@@ -283,6 +287,9 @@ def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_corr
                             "head_pitch": 0.653613,
                             "head_pitch_applied": True,
                         },
+                        "focal_length_mm": 24.0,
+                        "horizontal_aperture_mm": 29.82337649,
+                        "render_resolution": {"width": 540, "height": 360},
                     }
                 }
             },
@@ -297,8 +304,12 @@ def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_corr
     )
     assert per_location["head_articulation"]["isaac_head_pitch_applied"] is True
     assert per_location["fpv_world_pose_delta"]["position_delta_m"] == 0.005
+    assert per_location["fpv_lens_delta"]["status"] == "fpv_lens_aligned"
+    assert per_location["fpv_lens_delta"]["vertical_fov_delta_deg"] == 0.0
     assert summary["status"] == "fpv_contract_shared_with_static_head_camera_pitch_correction"
     assert summary["isaac_static_head_pitch_gap_count"] == 0
+    assert summary["fpv_lens_gap_count"] == 0
+    assert summary["fpv_lens_delta_summary"]["status"] == "fpv_lens_aligned"
     assert summary["fpv_world_pose_delta_summary"]["status"] == "fpv_world_pose_aligned"
     assert summary["fpv_world_pose_delta_summary"]["position_delta_m_max"] == 0.005
 

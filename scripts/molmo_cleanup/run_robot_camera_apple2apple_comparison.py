@@ -814,6 +814,11 @@ def _camera_contract_diagnostics(locations: list[dict[str, Any]]) -> dict[str, A
         if _dict(item.get("head_articulation")).get("status")
         == "isaac_static_head_pitch_not_applied"
     )
+    lens_gap_count = sum(
+        1
+        for item in diagnostics
+        if _dict(item.get("fpv_lens_delta")).get("status") == "fpv_lens_contract_delta"
+    )
     chase_same_camera_count = sum(
         1 for item in diagnostics if _dict(item.get("chase_contract")).get("same_camera_contract")
     )
@@ -828,6 +833,12 @@ def _camera_contract_diagnostics(locations: list[dict[str, Any]]) -> dict[str, A
         next_action = (
             "FPV uses head cameras and shared root pose, but Isaac static robot import does "
             "not apply head pitch; test articulated Isaac import or a proven head-link transform."
+        )
+    elif lens_gap_count:
+        status = "fpv_contract_shared_with_lens_gap"
+        next_action = (
+            "FPV uses head cameras and shared root pose, but lens/FOV differs; align Isaac "
+            "head-camera vertical FOV before triaging renderer or material residuals."
         )
     elif static_import_count:
         status = "fpv_contract_shared_with_static_head_camera_pitch_correction"
@@ -856,8 +867,10 @@ def _camera_contract_diagnostics(locations: list[dict[str, Any]]) -> dict[str, A
         "robot_pose_match_count": pose_match_count,
         "isaac_static_import_count": static_import_count,
         "isaac_static_head_pitch_gap_count": head_pitch_gap_count,
+        "fpv_lens_gap_count": lens_gap_count,
         "chase_same_camera_contract_count": chase_same_camera_count,
         "fpv_world_pose_delta_summary": _fpv_world_pose_delta_summary(diagnostics),
+        "fpv_lens_delta_summary": _fpv_lens_delta_summary(diagnostics),
         "chase_note": chase_note,
         "recommended_next_action": next_action,
     }
@@ -921,6 +934,46 @@ def _fpv_world_pose_delta_summary(diagnostics: list[dict[str, Any]]) -> dict[str
     }
 
 
+def _fpv_lens_delta_summary(diagnostics: list[dict[str, Any]]) -> dict[str, Any]:
+    ready = [
+        _dict(item.get("fpv_lens_delta"))
+        for item in diagnostics
+        if _dict(item.get("fpv_lens_delta")).get("status")
+        in {"fpv_lens_aligned", "fpv_lens_near_aligned", "fpv_lens_contract_delta"}
+    ]
+    vertical_fov_deltas = [
+        value
+        for value in (_float_or_none(item.get("vertical_fov_delta_deg")) for item in ready)
+        if value is not None
+    ]
+    max_vertical_fov_delta = max(vertical_fov_deltas) if vertical_fov_deltas else None
+    if not diagnostics:
+        status = "no_successful_camera_contracts"
+    elif len(ready) < len(diagnostics):
+        status = "missing_fpv_lens_metadata"
+    elif max_vertical_fov_delta is not None and max_vertical_fov_delta <= 0.25:
+        status = "fpv_lens_aligned"
+    elif max_vertical_fov_delta is not None and max_vertical_fov_delta <= 1.0:
+        status = "fpv_lens_near_aligned"
+    else:
+        status = "fpv_lens_contract_delta"
+    return {
+        "schema": "robot_camera_fpv_lens_delta_summary_v1",
+        "status": status,
+        "ready_count": len(ready),
+        "location_count": len(diagnostics),
+        "vertical_fov_delta_deg_avg": _avg(value for value in vertical_fov_deltas),
+        "vertical_fov_delta_deg_max": round(float(max_vertical_fov_delta), 6)
+        if max_vertical_fov_delta is not None
+        else None,
+        "interpretation": (
+            "Compares MuJoCo head-camera fovy with Isaac USD head-camera equivalent "
+            "vertical FOV. Small deltas mean apparent zoom/framing differences should "
+            "be triaged as renderer/material/geometry rather than camera intrinsics."
+        ),
+    }
+
+
 def _location_camera_contract_diagnostics(item: dict[str, Any]) -> dict[str, Any]:
     contracts = _dict(item.get("contracts"))
     camera_diagnostics = _dict(item.get("camera_diagnostics"))
@@ -952,6 +1005,10 @@ def _location_camera_contract_diagnostics(item: dict[str, Any]) -> dict[str, Any
         "mujoco_pose_delta": mujoco_pose_delta,
         "isaac_pose_delta": isaac_pose_delta,
         "fpv_world_pose_delta": _fpv_world_pose_delta(
+            mujoco_fpv_metadata,
+            isaac_fpv_metadata,
+        ),
+        "fpv_lens_delta": _fpv_lens_delta(
             mujoco_fpv_metadata,
             isaac_fpv_metadata,
         ),
@@ -1004,8 +1061,12 @@ def _compact_camera_metadata(
         "fovy_deg",
         "focal_length_mm",
         "horizontal_aperture_mm",
+        "vertical_aperture_mm",
+        "vertical_fov_deg",
+        "horizontal_fov_deg",
         "clipping_range",
         "render_resolution",
+        "lens_application",
         "robot_pose_stage_application",
     )
     return {key: view.get(key) for key in keys if key in view}
@@ -1046,6 +1107,64 @@ def _fpv_world_pose_delta(
             "when present."
         ),
     }
+
+
+def _fpv_lens_delta(
+    mujoco_metadata: dict[str, Any],
+    isaac_metadata: dict[str, Any],
+) -> dict[str, Any]:
+    mujoco_vertical_fov = _float_or_none(mujoco_metadata.get("fovy_deg"))
+    isaac_vertical_fov = _float_or_none(isaac_metadata.get("vertical_fov_deg"))
+    if isaac_vertical_fov is None:
+        isaac_vertical_fov = _isaac_vertical_fov_from_metadata(isaac_metadata)
+    if mujoco_vertical_fov is None or isaac_vertical_fov is None:
+        return {
+            "schema": "robot_camera_fpv_lens_delta_v1",
+            "status": "missing_fpv_lens_metadata",
+        }
+    vertical_fov_delta = abs(float(mujoco_vertical_fov) - float(isaac_vertical_fov))
+    if vertical_fov_delta <= 0.25:
+        status = "fpv_lens_aligned"
+    elif vertical_fov_delta <= 1.0:
+        status = "fpv_lens_near_aligned"
+    else:
+        status = "fpv_lens_contract_delta"
+    return {
+        "schema": "robot_camera_fpv_lens_delta_v1",
+        "status": status,
+        "mujoco_vertical_fov_deg": round(float(mujoco_vertical_fov), 6),
+        "isaac_vertical_fov_deg": round(float(isaac_vertical_fov), 6),
+        "vertical_fov_delta_deg": round(float(vertical_fov_delta), 6),
+        "isaac_focal_length_mm": _float_or_none(isaac_metadata.get("focal_length_mm")),
+        "isaac_horizontal_aperture_mm": _float_or_none(
+            isaac_metadata.get("horizontal_aperture_mm")
+        ),
+        "note": (
+            "MuJoCo fixed camera fovy is vertical FOV. Isaac USD camera stores focal "
+            "length and horizontal aperture, so this derives equivalent vertical FOV "
+            "from the render aspect ratio when diagnostics do not provide it directly."
+        ),
+    }
+
+
+def _isaac_vertical_fov_from_metadata(metadata: dict[str, Any]) -> float | None:
+    focal_length = _float_or_none(metadata.get("focal_length_mm"))
+    horizontal_aperture = _float_or_none(metadata.get("horizontal_aperture_mm"))
+    resolution = _dict(metadata.get("render_resolution"))
+    width = _float_or_none(resolution.get("width"))
+    height = _float_or_none(resolution.get("height"))
+    if (
+        focal_length is None
+        or horizontal_aperture is None
+        or width is None
+        or height is None
+        or focal_length <= 0.0
+        or width <= 0.0
+        or height <= 0.0
+    ):
+        return None
+    vertical_aperture = float(horizontal_aperture) * float(height) / float(width)
+    return math.degrees(2.0 * math.atan(vertical_aperture / (2.0 * float(focal_length))))
 
 
 def _vec3_or_none(value: Any) -> tuple[float, float, float] | None:
