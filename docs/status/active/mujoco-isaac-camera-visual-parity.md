@@ -403,6 +403,26 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `active`: head-camera geometry, RAW_FPV input, corpus coverage, and
   calibration evidence are loaded, but render-domain residuals remain and RGB /
   material-response edits are still comparison-only.
+- The prepared flattened semantic USD pipeline now has an explicit default-off
+  material conversion gate:
+  `scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py`
+  accepts `--material-texture-scale-mode none|identity|square`, with `none` as
+  the default. The summary records `material_texture_scale_mode`,
+  `material_texture_scale_rewrite_count`, and
+  `material_texture_scale_default_candidate`. Focused tests prove the default
+  leaves `UsdUVTexture` scale/fallback inputs unchanged, while explicit
+  `square` rewrites those inputs and labels the output as a default-candidate
+  artifact. This makes future validation reproducible through the prepared-USD
+  path without changing default cleanup rendering.
+- A real `val_1` prepared-USD smoke of that new gate passed under the Isaac/USD
+  Python environment:
+  `output/isaaclab/flattened-semantic-usd/val_1_material_scale_square_prepared_gate/summary.json`
+  reports `status=ready`, `material_texture_scale_mode=square`,
+  `material_texture_scale_rewrite_count=106`,
+  `material_texture_scale_default_candidate=true`, `matched_entry_count=40`,
+  and `renderable_labeled_prim_count=817`. The rewrite count matches the prior
+  ad hoc `val_1_material_scale_square` probe, so the maintained prepared-USD
+  gate is ready for the next apple-to-apple validation run.
 
 ## Next Action
 
@@ -430,11 +450,10 @@ rendering while the calibration result remains view-dependent. Texture
 scale/fallback squaring is now the strongest material-response direction, with
 positive FPV evidence on `val_0`, held-out `val_1` seed-6, and held-out
 `val_1` seed-8 bound targets, but it is still comparison-only because chase can
-worsen on seed-6 and render-domain residuals remain. The next useful slice is a
-small default-conversion design gate: encode the scale/fallback conversion
-behind an explicit opt-in/default-candidate path, prove it preserves the
-head-camera and RAW_FPV contracts, and run one additional scene or target corpus
-before promoting it to default cleanup rendering.
+worsen on seed-6 and render-domain residuals remain. The next useful slice is
+to run the new prepared-USD `--material-texture-scale-mode square` artifact
+through one apple-to-apple scene or target corpus, then compare it against the
+ad hoc probe artifacts before promoting it to default cleanup rendering.
 
 ## Touched Areas
 
@@ -443,6 +462,7 @@ before promoting it to default cleanup rendering.
 - `scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py`
 - `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`
 - `scripts/isaac_lab_cleanup/make_molmospaces_light_shadow_probe_usd.py`
+- `scripts/isaac_lab_cleanup/prepare_molmospaces_flattened_semantic_usd.py`
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
@@ -450,6 +470,7 @@ before promoting it to default cleanup rendering.
 - `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_light_shadow_probe_usd.py`
+- `tests/unit/molmo_cleanup/test_prepare_molmospaces_flattened_semantic_usd.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_rgb_gain_profile.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py`
