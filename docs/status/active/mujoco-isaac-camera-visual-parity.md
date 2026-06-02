@@ -297,6 +297,18 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `val_0`/seed-6 FPV least-squares fit. This is evidence that tone/color
   response is a real direction, but it is not yet broad enough for a default
   cleanup rendering calibration.
+- A read-only visual-parity summary gate now exists at
+  `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`. It folds the
+  current post-FOV baselines, RGB/tone probes, light/material probes, and the
+  RAW_FPV cleanup run into
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`.
+  The current summary status is `active`, not complete: head-camera geometry is
+  aligned, RAW_FPV agent input uses the head camera, RGB/tone is positive but
+  still comparison-only, light/material probes are neutral/do-not-promote, corpus
+  coverage is only 2 scene signatures / 1 seed, and the referenced default
+  calibration artifact
+  `output/molmo/scene-camera-comparison/0530_0009/comparison_manifest.json` is
+  not present in this root checkout.
 
 ## Next Action
 
@@ -318,6 +330,10 @@ slice, make it a comparison-only intensity/direction probe with a clear FPV
 threshold. Keep RAW_FPV and world-labels as separate evidence lanes:
 world-labels uses images as report evidence only, while camera-raw uses the
 head-camera FPV images as agent input.
+The next proof-backed step is to run additional bound-target post-FOV
+apple-to-apple baselines across held-out scene indices and seeds, then evaluate
+the existing RGB/tone profiles there. Rebuild a root-visible calibration-scene
+report before promoting any RGB/luminance gain to default rendering behavior.
 
 ## Touched Areas
 
@@ -329,10 +345,12 @@ head-camera FPV images as agent input.
 - `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`
 - `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py`
 - `scripts/molmo_cleanup/run_robot_camera_apple2apple_comparison.py`
+- `scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py`
 - `tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py`
 - `tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
 - `tests/unit/molmo_cleanup/test_molmospaces_light_shadow_probe_usd.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_rgb_gain_profile.py`
 - `tests/unit/molmo_cleanup/test_robot_camera_apple2apple_comparison.py`
+- `tests/unit/molmo_cleanup/test_robot_camera_visual_parity_summary.py`
 - Generated evidence under `output/isaaclab/` and
   `output/molmo/robot-camera-apple2apple/`
