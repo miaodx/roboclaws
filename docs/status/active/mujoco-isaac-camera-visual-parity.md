@@ -353,12 +353,43 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   The `0008` target itself drops from `45.4961` to `27.6042`, changes from
   `view_dependent_color_residual` to `low_residual`, and lowers Isaac FPV
   luminance from `131.0136` to `112.1958` against MuJoCo `88.0260`. This is the
-  strongest material-specific evidence so far that Isaac/MuJoCo visual mismatch
-  includes USD texture scale/fallback versus MJCF RGBA/texture modulation
-  response, not a camera-angle problem. The visual summary now classifies this
-  as `material_response=has_fpv_gain_comparison_only`, while the overall gate
-  stays `active` because the direction is validated on only one target and RGB
-  remains comparison-only.
+  strongest target-specific material evidence so far that Isaac/MuJoCo visual
+  mismatch includes USD texture scale/fallback versus MJCF RGBA/texture
+  modulation response, not a camera-angle problem.
+- A global comparison-only texture scale/fallback probe now strengthens that
+  root-cause direction. The `val_0` prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_0_scene_refs_fix_material_scale_square/scene_semantic.usda`
+  rewrites 358 `UsdUVTexture` scale/fallback inputs, and the corresponding
+  report
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_material_scale_square_probe/report.html`
+  preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the head-camera
+  contract while lowering overall FPV from `38.0980` to `32.5266` (`-5.5714`).
+  Per-target FPV improves on 7/8 locations, including `0008` from `45.4961` to
+  `22.6553`, `0002` bed from `48.5167` to `36.2543`, and `0006` desk from
+  `36.0030` to `30.6165`; countertop `0004` is the only small regression
+  (`17.3423` to `18.4671`). Chase is effectively unchanged overall
+  (`83.7516` to `83.7645`), which keeps chase auxiliary and prevents using it
+  as the policy metric.
+- A held-out `val_1`, seed-6, 2-mess, fair bound-target scale-square probe now
+  covers the same conversion direction outside the original `val_0` slice. The
+  prepared USD at
+  `output/isaaclab/flattened-semantic-usd/val_1_material_scale_square/scene_semantic.usda`
+  rewrites 106 texture scale/fallback inputs. The report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_material_scale_square_probe/report.html`
+  preserves the head-camera contract and lowers FPV from `36.5655` to
+  `29.4056` (`-7.1599`), with all 6 bound targets non-worse or better. The
+  largest FPV drops are bed `0001` from `47.4883` to `31.2545`, pillow `0006`
+  from `42.0106` to `34.3779`, and dining table `0003` from `46.1260` to
+  `37.5900`. Chase worsens from `72.2838` to `75.1952`, so this remains an
+  FPV-only comparison probe, not a default visual policy.
+- The refreshed visual-parity summary at
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
+  now records `val0_global_scale_square` (`fpv_delta=-5.5714`) and
+  `val1_scale_square` (`fpv_delta=-7.1599`) under
+  `material_response=has_fpv_gain_comparison_only`. The overall gate remains
+  `active`: head-camera geometry, RAW_FPV input, corpus coverage, and
+  calibration evidence are loaded, but render-domain residuals remain and RGB /
+  material-response edits are still comparison-only.
 
 ## Next Action
 
@@ -382,13 +413,12 @@ world-labels uses images as report evidence only, while camera-raw uses the
 head-camera FPV images as agent input.
 The next proof-backed step is not more camera work. Keep the calibration report
 attached to the summary gate; do not promote any RGB/luminance gain to default
-rendering while the calibration result remains view-dependent. The next useful
-slice is cross-target validation of the positive texture scale/fallback
-material-response direction on other high-residual exact-bound bed/table/desk
-materials, ideally on `val_1` held-out targets before any default material
-conversion is considered. Do not promote the `0008` square-scale edit globally
-from one target; treat it as root-cause evidence and a candidate conversion
-direction to validate across more targets, scenes, and seeds.
+rendering while the calibration result remains view-dependent. Texture
+scale/fallback squaring is now the strongest material-response direction, with
+positive FPV evidence on `val_0` and held-out `val_1` seed-6 bound targets, but
+it is still comparison-only because chase can worsen and seed-8 has not tested
+this same conversion. The next useful slice is a seed-8 or additional-scene
+scale-square validation before any default material conversion is considered.
 
 ## Touched Areas
 
