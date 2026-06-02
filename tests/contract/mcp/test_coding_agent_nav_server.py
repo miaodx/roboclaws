@@ -1,21 +1,16 @@
-# ruff: noqa: I001
-
 from __future__ import annotations
 
 import json
-import sys
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "mcp"))
-
-from coding_agent_nav_server import (  # noqa: E402
-    _client_setup_commands,
-    _mcp_url,
-    _parse_args,
-    _snapshots_dir,
+from roboclaws.cli.agent_server import (
+    client_setup_commands,
+    mcp_url,
+    parse_ai2thor_nav_args,
     run_coding_agent_nav_server,
+    snapshots_dir,
 )
 
 
@@ -47,7 +42,7 @@ def _make_fake_mcp_server() -> MagicMock:
 
 
 def test_parse_args_defaults() -> None:
-    args = _parse_args([])
+    args = parse_ai2thor_nav_args([])
     assert args.scene == "FloorPlan201"
     assert args.host == "127.0.0.1"
     assert args.port == 18788
@@ -56,8 +51,8 @@ def test_parse_args_defaults() -> None:
 
 def test_client_setup_commands_match_current_http_mcp_cli_syntax() -> None:
     url = "http://127.0.0.1:18788/mcp"
-    assert _mcp_url("127.0.0.1", 18788) == url
-    assert _client_setup_commands(url) == {
+    assert mcp_url("127.0.0.1", 18788) == url
+    assert client_setup_commands(url) == {
         "Codex": (
             "scripts/dev/coding_agent_docker.sh run codex mcp add roboclaws "
             "--url http://127.0.0.1:18788/mcp"
@@ -71,7 +66,7 @@ def test_client_setup_commands_match_current_http_mcp_cli_syntax() -> None:
 
 def test_snapshot_layout_matches_photo_task_checker(tmp_path: Path) -> None:
     run_dir = tmp_path / "run"
-    assert _snapshots_dir(run_dir) == run_dir / "snapshots" / "agent-0"
+    assert snapshots_dir(run_dir) == run_dir / "snapshots" / "agent-0"
 
 
 def test_run_direct_server_starts_mcp_and_writes_result(
@@ -82,9 +77,9 @@ def test_run_direct_server_starts_mcp_and_writes_result(
     fake_server = _make_fake_mcp_server()
 
     with (
-        patch("coding_agent_nav_server.MultiAgentEngine") as engine_cls,
+        patch("roboclaws.cli.agent_server.MultiAgentEngine") as engine_cls,
         patch(
-            "coding_agent_nav_server.make_roboclaws_mcp",
+            "roboclaws.cli.agent_server.make_roboclaws_mcp",
             return_value=fake_server,
         ) as mcp_factory,
     ):

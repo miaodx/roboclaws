@@ -1,1 +1,0 @@
-mcp/coding_agent_nav_server.py

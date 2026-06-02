@@ -10,7 +10,7 @@ the pinned `Dockerfile.coding-agents` image.
 
 ```bash
 uv sync --extra dev --extra openclaw
-python examples/mcp/coding_agent_nav_server.py --scene FloorPlan201
+python -m roboclaws.cli.agent_server --scene FloorPlan201
 ```
 
 Preferred one-command workflow:
@@ -170,7 +170,7 @@ python scripts/openclaw/check_photo_task.py --run-dir output/runs/<timestamp>
   an AI2-THOR navigation profile. Its canonical public capability tools are
   `observe`, `observe_archived`, `move`, and `done`.
 - Privileged tools: `scene_objects` and `goto` are not part of the default
-  server surface. Start `examples/mcp/coding_agent_nav_server.py` with
+  server surface. Start `python -m roboclaws.cli.agent_server` with
   `--allow-privileged-tools` only for photo tasks or harness iteration that
   intentionally needs simulator helpers. They are excluded from the canonical
   profile metadata and must not be described as real-robot perception or
