@@ -398,7 +398,9 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
   now records `val0_global_scale_square` (`fpv_delta=-5.5714`),
   `val1_scale_square` (`fpv_delta=-7.1599`), and
-  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) under
+  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) plus the maintained
+  prepared-USD gate `val1_seed8_prepared_scale_square_gate`
+  (`fpv_delta=-7.7401`) under
   `material_response=has_fpv_gain_comparison_only`. The overall gate remains
   `active`: head-camera geometry, RAW_FPV input, corpus coverage, and
   calibration evidence are loaded, but render-domain residuals remain and RGB /
@@ -421,8 +423,19 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `material_texture_scale_rewrite_count=106`,
   `material_texture_scale_default_candidate=true`, `matched_entry_count=40`,
   and `renderable_labeled_prim_count=817`. The rewrite count matches the prior
-  ad hoc `val_1_material_scale_square` probe, so the maintained prepared-USD
-  gate is ready for the next apple-to-apple validation run.
+  ad hoc `val_1_material_scale_square` probe.
+- The maintained prepared-USD gate now also has an apple-to-apple validation
+  run:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_prepared_scale_square_gate_probe/report.html`.
+  It preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the
+  robot-mounted head-camera contract while lowering FPV from the comparable
+  seed-8 baseline `37.2184` to `29.4783` (`-7.7401`). Chase moves from
+  `71.7464` to `71.2846` (`-0.4618`). The first prepared-gate run looked like
+  baseline because the texture scale rewrite happened before the final USD
+  stage save and was overwritten by the layer cache; the prepare script now
+  applies the opt-in rewrite after `flat_stage.GetRootLayer().Save()`, so the
+  final `scene_semantic.usda` contains the squared `UsdUVTexture`
+  scale/fallback values used by the report.
 
 ## Next Action
 
@@ -448,12 +461,12 @@ The next proof-backed step is not more camera work. Keep the calibration report
 attached to the summary gate; do not promote any RGB/luminance gain to default
 rendering while the calibration result remains view-dependent. Texture
 scale/fallback squaring is now the strongest material-response direction, with
-positive FPV evidence on `val_0`, held-out `val_1` seed-6, and held-out
-`val_1` seed-8 bound targets, but it is still comparison-only because chase can
-worsen on seed-6 and render-domain residuals remain. The next useful slice is
-to run the new prepared-USD `--material-texture-scale-mode square` artifact
-through one apple-to-apple scene or target corpus, then compare it against the
-ad hoc probe artifacts before promoting it to default cleanup rendering.
+positive FPV evidence on `val_0`, held-out `val_1` seed-6, held-out `val_1`
+seed-8 bound targets, and the maintained prepared-USD seed-8 gate, but it is
+still comparison-only because chase can worsen on seed-6 and render-domain
+residuals remain. The next useful slice is to broaden the prepared-USD
+`--material-texture-scale-mode square` corpus across additional scenes/targets,
+then decide whether it can become default cleanup rendering.
 
 ## Touched Areas
 
