@@ -1973,6 +1973,7 @@ def _capture_isaac_lab_camera_views(
     segmentation_views: list[dict[str, Any]] = []
     total_render_steps = 0
     robot_pose_application: dict[str, Any] = {}
+    camera_diagnostics: dict[str, dict[str, Any]] = {}
     color_profile = robot_view_display_color_profile()
     color_management: dict[str, dict[str, Any]] = {}
     for view_name in ROBOT_VIEW_KEYS:
@@ -1985,10 +1986,25 @@ def _capture_isaac_lab_camera_views(
                 scene_bounds=scene_bounds,
                 semantic_pose_state=semantic_pose_state,
             )
+            camera_diagnostics[view_name] = _usd_camera_diagnostics(
+                stage_utils=stage_utils,
+                prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
+                view_name=view_name,
+                width=width,
+                height=height,
+                robot_pose_application=robot_pose_application,
+            )
         else:
             camera = scene_camera
             positions, targets = view_poses[view_name]
             camera.set_world_poses_from_view(positions, targets)
+            camera_diagnostics[view_name] = _isaac_eye_target_camera_diagnostics(
+                view_name=view_name,
+                positions=positions,
+                targets=targets,
+                width=width,
+                height=height,
+            )
         rgb_image = None
         for _ in range(24):
             sim.step()
@@ -2029,6 +2045,12 @@ def _capture_isaac_lab_camera_views(
         "robot_stage": robot_stage,
         "robot_view_uses_mounted_head_camera": mounted_head_camera,
         "robot_pose_stage_application": robot_pose_application,
+        "camera_diagnostics": {
+            "schema": "isaac_robot_view_camera_diagnostics_v1",
+            "backend": ISAACLAB_SUBPROCESS_BACKEND,
+            "render_resolution": {"width": width, "height": height},
+            "views": camera_diagnostics,
+        },
         "color_profile": color_profile,
         "color_management": color_management,
         "semantic_pose_stage_application": pose_apply,
@@ -3134,6 +3156,112 @@ def _position_robot_for_head_camera_view(
             "the robot root, while head pitch remains recorded for parity diagnostics."
         ),
     }
+
+
+def _usd_camera_diagnostics(
+    *,
+    stage_utils: Any,
+    prim_path: str,
+    view_name: str,
+    width: int,
+    height: int,
+    robot_pose_application: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    try:
+        stage = stage_utils.get_current_stage()
+        prim = stage.GetPrimAtPath(prim_path) if stage is not None else None
+        if not prim or not prim.IsValid():
+            return {
+                "schema": "isaac_usd_camera_diagnostics_v1",
+                "status": "missing_camera_prim",
+                "view_name": view_name,
+                "prim_path": prim_path,
+            }
+        from pxr import UsdGeom
+
+        camera = UsdGeom.Camera(prim)
+        xform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(0.0)
+        return {
+            "schema": "isaac_usd_camera_diagnostics_v1",
+            "status": "ready",
+            "view_name": view_name,
+            "camera_type": "usd_camera_prim",
+            "prim_path": prim_path,
+            "world_matrix_rowmajor": _matrix4d_rowmajor(xform),
+            "focal_length_mm": _usd_attr_float(camera.GetFocalLengthAttr()),
+            "horizontal_aperture_mm": _usd_attr_float(camera.GetHorizontalApertureAttr()),
+            "clipping_range": _usd_vec(camera.GetClippingRangeAttr()),
+            "render_resolution": {"width": width, "height": height},
+            "robot_pose_stage_application": _dict(robot_pose_application),
+        }
+    except Exception as exc:
+        return {
+            "schema": "isaac_usd_camera_diagnostics_v1",
+            "status": "unavailable",
+            "view_name": view_name,
+            "prim_path": prim_path,
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _isaac_eye_target_camera_diagnostics(
+    *,
+    view_name: str,
+    positions: Any,
+    targets: Any,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    return {
+        "schema": "isaac_eye_target_camera_diagnostics_v1",
+        "status": "ready",
+        "view_name": view_name,
+        "camera_type": "eye_target_scene_camera",
+        "eye": _tensor_first_vec3(positions),
+        "target": _tensor_first_vec3(targets),
+        "focal_length_mm": 24.0,
+        "horizontal_aperture_mm": 20.955,
+        "render_resolution": {"width": width, "height": height},
+    }
+
+
+def _matrix4d_rowmajor(matrix: Any) -> list[float]:
+    return [round(float(matrix[row][column]), 6) for row in range(4) for column in range(4)]
+
+
+def _usd_attr_float(attr: Any) -> float | None:
+    if not attr:
+        return None
+    value = attr.Get()
+    if value is None:
+        return None
+    return round(float(value), 6)
+
+
+def _usd_vec(attr: Any) -> list[float] | None:
+    if not attr:
+        return None
+    value = attr.Get()
+    if value is None:
+        return None
+    try:
+        return [round(float(item), 6) for item in value]
+    except TypeError:
+        return None
+
+
+def _tensor_first_vec3(value: Any) -> list[float]:
+    if hasattr(value, "detach"):
+        value = value.detach()
+    if hasattr(value, "cpu"):
+        value = value.cpu()
+    if hasattr(value, "tolist"):
+        value = value.tolist()
+    if isinstance(value, list) and value and isinstance(value[0], list):
+        value = value[0]
+    if not isinstance(value, list | tuple) or len(value) < 3:
+        return []
+    return [round(float(value[index]), 6) for index in range(3)]
 
 
 def _robot_pose_yaw_deg(pose: dict[str, Any]) -> float | None:
@@ -5378,6 +5506,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         room_outline_count=len(state.get("room_outlines") or []),
         color_profile=_dict(state.get("robot_view_color_profile")),
         color_management=_dict(state.get("robot_view_color_management")),
+        camera_diagnostics=_dict(state.get("robot_view_camera_diagnostics")),
         focus=focus,
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
@@ -5741,11 +5870,13 @@ def _real_semantic_pose_robot_view_images(
         "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
         "robot_stage": _dict(capture.get("robot_stage")),
         "robot_pose_stage_application": _dict(capture.get("robot_pose_stage_application")),
+        "camera_diagnostics": _dict(capture.get("camera_diagnostics")),
         "color_profile": _dict(capture.get("color_profile")),
         "color_management": _dict(capture.get("color_management")),
     }
     state["robot_view_color_profile"] = _dict(capture.get("color_profile"))
     state["robot_view_color_management"] = _dict(capture.get("color_management"))
+    state["robot_view_camera_diagnostics"] = _dict(capture.get("camera_diagnostics"))
     state.pop("canonical_robot_view_camera_control_request", None)
     state.pop("canonical_robot_view_camera_control_capture", None)
     mapping_gaps = [

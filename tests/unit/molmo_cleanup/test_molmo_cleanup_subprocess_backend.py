@@ -1190,6 +1190,12 @@ def test_worker_robot_views_uses_robot_head_camera_for_fpv(
         "robot_0/head_camera"
     )
     assert result["camera_control_contract"]["agent_facing_fpv"]["robot_mounted"] is True
+    assert result["camera_diagnostics"]["schema"] == "mujoco_robot_view_camera_diagnostics_v1"
+    assert result["camera_diagnostics"]["render_resolution"] == {"width": 16, "height": 12}
+    assert result["camera_diagnostics"]["views"]["fpv"]["camera_name"] == "robot_0/head_camera"
+    assert result["camera_diagnostics"]["views"]["chase"]["camera_name"] == (
+        "robot_0/camera_follower"
+    )
     assert Path(result["views"]["fpv"]).is_file()
 
 

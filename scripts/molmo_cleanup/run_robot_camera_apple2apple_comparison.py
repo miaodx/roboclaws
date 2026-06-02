@@ -413,12 +413,20 @@ def _location_result(
             "mujoco": mujoco_views.get("view_provenance", {}),
             "isaac": isaac_views.get("view_provenance", {}),
         },
+        "camera_diagnostics": {
+            "mujoco": mujoco_views.get("camera_diagnostics", {}),
+            "isaac": isaac_views.get("camera_diagnostics", {}),
+        },
         "camera_contract_diagnostics": _location_camera_contract_diagnostics(
             {
                 "robot_pose": robot_pose,
                 "contracts": {
                     "mujoco": mujoco_views.get("camera_control_contract", {}),
                     "isaac": isaac_views.get("camera_control_contract", {}),
+                },
+                "camera_diagnostics": {
+                    "mujoco": mujoco_views.get("camera_diagnostics", {}),
+                    "isaac": isaac_views.get("camera_diagnostics", {}),
                 },
             }
         ),
@@ -542,6 +550,7 @@ def _camera_contract_diagnostics(locations: list[dict[str, Any]]) -> dict[str, A
 
 def _location_camera_contract_diagnostics(item: dict[str, Any]) -> dict[str, Any]:
     contracts = _dict(item.get("contracts"))
+    camera_diagnostics = _dict(item.get("camera_diagnostics"))
     mujoco_contract = _dict(contracts.get("mujoco"))
     isaac_contract = _dict(contracts.get("isaac"))
     requested_pose = _dict(item.get("robot_pose"))
@@ -578,6 +587,10 @@ def _location_camera_contract_diagnostics(item: dict[str, Any]) -> dict[str, Any
             "head_camera_equivalent": isaac_fpv.get("head_camera_equivalent"),
         },
         "isaac_robot_import": isaac_import,
+        "fpv_camera_metadata": {
+            "mujoco": _compact_camera_metadata(camera_diagnostics, "mujoco", "fpv"),
+            "isaac": _compact_camera_metadata(camera_diagnostics, "isaac", "fpv"),
+        },
         "head_articulation": head_articulation,
         "chase_contract": _chase_contract_diagnostics(mujoco_contract, isaac_contract),
     }
@@ -589,6 +602,32 @@ def _is_head_camera_fpv(fpv: dict[str, Any]) -> bool:
     return bool(fpv.get("robot_mounted")) and (
         "head_camera" in source or "head_camera" in prim_path
     )
+
+
+def _compact_camera_metadata(
+    camera_diagnostics: dict[str, Any],
+    lane: str,
+    view_key: str,
+) -> dict[str, Any]:
+    view = _dict(_dict(_dict(camera_diagnostics.get(lane)).get("views")).get(view_key))
+    if not view:
+        return {"status": "missing_camera_metadata"}
+    keys = (
+        "schema",
+        "status",
+        "camera_type",
+        "camera_name",
+        "prim_path",
+        "world_position",
+        "world_matrix_rowmajor",
+        "fovy_deg",
+        "focal_length_mm",
+        "horizontal_aperture_mm",
+        "clipping_range",
+        "render_resolution",
+        "robot_pose_stage_application",
+    )
+    return {key: view.get(key) for key in keys if key in view}
 
 
 def _robot_pose_delta(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:

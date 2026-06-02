@@ -672,6 +672,16 @@ def write_robot_views(
     verify_camera = _focus_camera(state, focus)
     verify = _render_free_camera(model, data, verify_camera, width=width, height=height)
     chase = _render_fixed_camera(model, data, "robot_0/camera_follower", width=width, height=height)
+    camera_diagnostics = {
+        "schema": "mujoco_robot_view_camera_diagnostics_v1",
+        "backend": BACKEND,
+        "render_resolution": {"width": width, "height": height},
+        "views": {
+            "fpv": _fixed_camera_diagnostics(model, data, "robot_0/head_camera"),
+            "chase": _fixed_camera_diagnostics(model, data, "robot_0/camera_follower"),
+            "verify": _free_camera_diagnostics(verify_camera),
+        },
+    }
     fpv_camera = "robot_0/head_camera"
     focus["fpv_visibility"] = _focus_visibility(
         model,
@@ -749,6 +759,7 @@ def write_robot_views(
         view_variant="molmospaces-rby1m-fpv-map-chase-verify",
         view_provenance=state.get("robot_view_provenance", {}),
         camera_control_contract=camera_control_contract,
+        camera_diagnostics=camera_diagnostics,
         color_profile=color_profile,
         color_management=color_management,
         focus=focus,
@@ -2451,6 +2462,82 @@ def _render_fixed_camera(
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
+
+
+def _fixed_camera_diagnostics(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    camera_name: str,
+) -> dict[str, Any]:
+    try:
+        camera_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, camera_name)
+        if camera_id < 0:
+            return {
+                "schema": "mujoco_fixed_camera_diagnostics_v1",
+                "status": "missing_camera",
+                "camera_name": camera_name,
+            }
+        world_position = _array_row(getattr(data, "cam_xpos"), camera_id, 3)
+        world_xmat = _array_row(getattr(data, "cam_xmat"), camera_id, 9)
+        return {
+            "schema": "mujoco_fixed_camera_diagnostics_v1",
+            "status": "ready",
+            "camera_name": camera_name,
+            "camera_id": int(camera_id),
+            "camera_type": "fixed",
+            "world_position": world_position,
+            "world_xmat_rowmajor": world_xmat,
+            "fovy_deg": _array_scalar(getattr(model, "cam_fovy", None), camera_id),
+            "model_pos": _array_row(getattr(model, "cam_pos"), camera_id, 3),
+            "model_quat_wxyz": _array_row(getattr(model, "cam_quat"), camera_id, 4),
+            "znear": _optional_float(getattr(getattr(model, "vis", None), "map", None), "znear"),
+            "zfar": _optional_float(getattr(getattr(model, "vis", None), "map", None), "zfar"),
+        }
+    except Exception as exc:
+        return {
+            "schema": "mujoco_fixed_camera_diagnostics_v1",
+            "status": "unavailable",
+            "camera_name": camera_name,
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _free_camera_diagnostics(camera: mujoco.MjvCamera) -> dict[str, Any]:
+    try:
+        return {
+            "schema": "mujoco_free_camera_diagnostics_v1",
+            "status": "ready",
+            "camera_type": "free",
+            "lookat": [round(float(value), 6) for value in camera.lookat],
+            "distance": round(float(camera.distance), 6),
+            "azimuth": round(float(camera.azimuth), 6),
+            "elevation": round(float(camera.elevation), 6),
+        }
+    except Exception as exc:
+        return {
+            "schema": "mujoco_free_camera_diagnostics_v1",
+            "status": "unavailable",
+            "reason": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _array_row(array: Any, index: int, length: int) -> list[float]:
+    return [round(float(value), 6) for value in array[index][:length]]
+
+
+def _array_scalar(array: Any, index: int) -> float | None:
+    if array is None:
+        return None
+    return round(float(array[index]), 6)
+
+
+def _optional_float(parent: Any, attribute: str) -> float | None:
+    if parent is None or not hasattr(parent, attribute):
+        return None
+    try:
+        return round(float(getattr(parent, attribute)), 6)
+    except (TypeError, ValueError):
+        return None
 
 
 def _focus_camera(state: dict[str, Any], focus: dict[str, Any]) -> mujoco.MjvCamera:

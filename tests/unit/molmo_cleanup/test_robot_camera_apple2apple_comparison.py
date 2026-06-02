@@ -141,6 +141,32 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
                 },
             },
         },
+        "camera_diagnostics": {
+            "mujoco": {
+                "views": {
+                    "fpv": {
+                        "schema": "mujoco_fixed_camera_diagnostics_v1",
+                        "status": "ready",
+                        "camera_type": "fixed",
+                        "camera_name": "robot_0/head_camera",
+                        "world_position": [6.37, 8.87, 1.55],
+                        "fovy_deg": 45.0,
+                    }
+                }
+            },
+            "isaac": {
+                "views": {
+                    "fpv": {
+                        "schema": "isaac_usd_camera_diagnostics_v1",
+                        "status": "ready",
+                        "camera_type": "usd_camera_prim",
+                        "prim_path": "/World/robot_0/head_camera",
+                        "focal_length_mm": 24.0,
+                        "horizontal_aperture_mm": 20.955,
+                    }
+                }
+            },
+        },
     }
 
     per_location = run_camera._location_camera_contract_diagnostics(location)
@@ -149,6 +175,10 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
     assert per_location["fpv_head_camera_contract"] is True
     assert per_location["robot_pose_match"] is True
     assert per_location["isaac_robot_import"]["static_only"] is True
+    assert per_location["fpv_camera_metadata"]["mujoco"]["camera_name"] == "robot_0/head_camera"
+    assert per_location["fpv_camera_metadata"]["isaac"]["prim_path"] == (
+        "/World/robot_0/head_camera"
+    )
     assert per_location["head_articulation"]["status"] == ("isaac_static_head_pitch_not_applied")
     assert per_location["chase_contract"]["same_camera_contract"] is False
     assert summary["status"] == "fpv_contract_shared_with_static_head_articulation_gap"

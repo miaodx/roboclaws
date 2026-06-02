@@ -2506,6 +2506,16 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             "robot_view_images": {key: str(path) for key, path in view_paths.items()},
             "render_steps": 9,
             "robot_view_uses_mounted_head_camera": False,
+            "camera_diagnostics": {
+                "schema": "isaac_robot_view_camera_diagnostics_v1",
+                "views": {
+                    "fpv": {
+                        "schema": "isaac_eye_target_camera_diagnostics_v1",
+                        "status": "ready",
+                        "camera_type": "eye_target_scene_camera",
+                    }
+                },
+            },
         }
 
     def fake_capture_scene_camera_views(
@@ -2625,6 +2635,10 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
     assert result["camera_control_contract"]["robot_pose"]["pose_request"]["resolver"] == (
         "roboclaws.cleanup_robot_pose.near_target_v1"
     )
+    assert result["camera_diagnostics"]["schema"] == "isaac_robot_view_camera_diagnostics_v1"
+    assert result["camera_diagnostics"]["views"]["fpv"]["camera_type"] == (
+        "eye_target_scene_camera"
+    )
     assert "isaac_lab_camera_rgb_head_camera_equivalent" in json.dumps(result["view_provenance"])
     state = isaac_lab_backend_worker.read_state(state_path)
     assert state["semantic_pose_state"]["rendered_to_usd"] is True
@@ -2726,6 +2740,17 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
                 "head_camera_prim_exists": True,
                 "head_camera_prim_path": "/World/robot_0/head_camera",
             },
+            "camera_diagnostics": {
+                "schema": "isaac_robot_view_camera_diagnostics_v1",
+                "views": {
+                    "fpv": {
+                        "schema": "isaac_usd_camera_diagnostics_v1",
+                        "status": "ready",
+                        "camera_type": "usd_camera_prim",
+                        "prim_path": "/World/robot_0/head_camera",
+                    }
+                },
+            },
         }
 
     monkeypatch.setattr(isaac_lab_backend_worker, "real_runtime_smoke", fake_real_runtime_smoke)
@@ -2797,6 +2822,10 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
     )
     assert result["camera_control_contract"]["robot_pose"]["x"] == pytest.approx(6.37057)
     assert result["camera_control_contract"]["robot_pose"]["yaw_deg"] == pytest.approx(90.0)
+    assert result["camera_diagnostics"]["schema"] == "isaac_robot_view_camera_diagnostics_v1"
+    assert result["camera_diagnostics"]["views"]["fpv"]["prim_path"] == (
+        "/World/robot_0/head_camera"
+    )
     state = isaac_lab_backend_worker.read_state(state_path)
     assert state["semantic_pose_view_capture"]["robot_mounted_head_camera"] is True
     assert state["semantic_pose_view_capture"]["head_camera_equivalent"] is False
