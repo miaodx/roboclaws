@@ -613,8 +613,17 @@ not fixed by single global tone compensation:
   (`71.7464 -> 72.1970`, `+0.4506`). On `val_0` seed-6 it keeps FPV improved
   (`38.0980 -> 32.3450`, `-5.7530`) and keeps chase within tolerance
   (`83.7516 -> 84.5279`, `+0.7763`). This strengthens the view-specific tone
-  direction, but it is still comparison-only because it uses a manually composed
-  FPV/chase profile and has not been promoted to a default-rendering contract.
+  direction, but it is still comparison-only and has not been promoted to a
+  default-rendering contract.
+- The view-specific tone profile is now reproducible instead of hand-composed:
+  `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py` accepts repeated
+  `--view-gain VIEW=MANIFEST` inputs and writes
+  `backend_view_rgb_gain`. Re-running it for the current evidence writes
+  `output/molmo/robot-camera-apple2apple/profiles/0602_val1_seed6_prepared_scale_square_view_rgb_gain.generated.json`
+  with base/FPV gain `[0.944061, 0.844818, 0.822146]` and chase gain
+  `[1.589143, 1.423057, 1.304406]`, matching the existing comparison-only
+  profile core values. This only makes the report-side compensation auditable;
+  it does not change MuJoCo/Isaac default rendering or the RAW_FPV policy input.
 
 Decision delta: a single global color/tone profile cannot satisfy both FPV and
 chase under prepared scale-square. A view-specific tone profile can satisfy the
