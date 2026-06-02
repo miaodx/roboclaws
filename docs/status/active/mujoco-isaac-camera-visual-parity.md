@@ -707,6 +707,7 @@ Default-rendering parity now has its own machine layer:
 `default_rendering_visual_parity.status=not_ready`. The current blockers are
 `render_domain_probe_matrix=render_domain_delta_active`,
 `prepared_scale_square_default_gate=comparison_only_not_default`,
+`combined_material_light_default_gate=needs_broader_corpus`,
 `rgb_tone_cross_validation=comparison_only_rgb_tone_positive`, the
 `val1_seed6_prepared_scale_square_gate` auxiliary chase/tone-luminance
 regression, active baseline render residuals
@@ -721,6 +722,21 @@ and `rotateX=+5` calibration probes remain non-default history. The refreshed
 recommendation now points at resolving or explicitly gating the remaining
 default-rendering residuals instead of re-reviewing the already formalized
 report-side gate or calibration gate.
+
+The latest robot-camera combined material+light probe is now tracked explicitly
+instead of only living in report notes:
+`output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_scale_square_dirlight_rotx_p25_probe/report.html`.
+It keeps the frozen head-camera contract (`fpv_lens_aligned` and
+`fpv_world_pose_aligned`) and improves the `val_0` seed-6 robot-camera slice
+from baseline FPV/chase `38.0980` / `83.7516` to prepared scale-square
+`32.5230` / `83.7739`, then to scale-square plus `DistantLight rotateX=+25`
+`30.6571` / `81.7209`. The summary records this as
+`combined_material_light_default_gate.status=needs_broader_corpus`, with
+`fpv_delta=-7.4409`, `chase_delta=-2.0307`, one comparable probe, one scene
+signature, and seed `6`. This is the strongest `val_0` combined robot-camera
+candidate so far, but it is not a default-rendering proof because it lacks
+held-out scene/seed coverage and `render_domain_probe_matrix` plus RGB/tone
+remain active default blockers.
 
 ## Touched Areas
 

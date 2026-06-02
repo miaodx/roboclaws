@@ -128,6 +128,11 @@ def build_summary(
             required_scene_count=required_scene_count,
             required_seed_count=required_seed_count,
         ),
+        "combined_material_light_default_gate": _combined_material_light_default_gate_check(
+            render_domain_probe_matrix,
+            required_scene_count=required_scene_count,
+            required_seed_count=required_seed_count,
+        ),
         "view_specific_prepared_scale_square_tone_gate": (
             _view_specific_prepared_scale_square_tone_gate_check(
                 render_domain_probe_matrix,
@@ -591,6 +596,136 @@ def _prepared_scale_square_default_gate_check(
     }
 
 
+def _combined_material_light_default_gate_check(
+    render_domain_probe_matrix: dict[str, Any],
+    *,
+    required_scene_count: int,
+    required_seed_count: int,
+    chase_regression_tolerance: float = 1.0,
+) -> dict[str, Any]:
+    matrix = _dict(render_domain_probe_matrix.get("probe_matrix"))
+    material_rows = _list_dicts(matrix.get("material_response"))
+    combined_rows = [
+        row
+        for row in material_rows
+        if "scale_square" in str(row.get("label") or "").lower()
+        and "rotx" in str(row.get("label") or "").lower()
+    ]
+    comparable = [row for row in combined_rows if row.get("comparable")]
+    scene_signatures = sorted({str(row.get("scene_signature") or "") for row in comparable})
+    seeds = sorted(
+        {
+            seed
+            for seed in (
+                _seed_from_scene_signature(str(row.get("scene_signature") or ""))
+                for row in comparable
+            )
+            if seed is not None
+        }
+    )
+    fpv_improved = [row for row in comparable if row.get("fpv_improved")]
+    fpv_worse = [row for row in comparable if row.get("fpv_worse")]
+    chase_regressions = [
+        row
+        for row in comparable
+        if _float_or_none(row.get("chase_delta")) is not None
+        and _float_or_none(row.get("chase_delta")) > chase_regression_tolerance
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not combined_rows:
+        blockers.append({"reason": "no_combined_material_light_probe"})
+    if len(comparable) != len(combined_rows):
+        blockers.append(
+            {
+                "reason": "not_all_combined_probes_comparable",
+                "probe_count": len(combined_rows),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if len(scene_signatures) < required_scene_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_scene_corpus",
+                "scene_signature_count": len(scene_signatures),
+                "required_scene_count": required_scene_count,
+            }
+        )
+    if len(seeds) < required_seed_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_seed_corpus",
+                "seed_count": len(seeds),
+                "required_seed_count": required_seed_count,
+            }
+        )
+    if len(fpv_improved) != len(comparable):
+        blockers.append(
+            {
+                "reason": "not_all_comparable_probes_improve_fpv",
+                "fpv_improved_count": len(fpv_improved),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if fpv_worse:
+        blockers.append(
+            {
+                "reason": "fpv_regression",
+                "labels": [row.get("label") for row in fpv_worse],
+            }
+        )
+    if chase_regressions:
+        blockers.append(
+            {
+                "reason": "chase_regression",
+                "tolerance": chase_regression_tolerance,
+                "labels": [row.get("label") for row in chase_regressions],
+            }
+        )
+    if not combined_rows:
+        status = "not_evaluated"
+    elif fpv_worse:
+        status = "do_not_promote"
+    elif comparable and len(fpv_improved) == len(comparable) and not chase_regressions:
+        status = "combined_material_light_default_ready" if not blockers else "needs_broader_corpus"
+    else:
+        status = "comparison_only_not_default"
+    return {
+        "status": status,
+        "comparison_only": status != "combined_material_light_default_ready",
+        "default_candidate": status == "combined_material_light_default_ready",
+        "probe_count": len(combined_rows),
+        "comparable_probe_count": len(comparable),
+        "fpv_improved_count": len(fpv_improved),
+        "fpv_worse_count": len(fpv_worse),
+        "chase_regression_count": len(chase_regressions),
+        "scene_signature_count": len(scene_signatures),
+        "scene_signatures": scene_signatures,
+        "seed_count": len(seeds),
+        "seeds": seeds,
+        "required_scene_count": required_scene_count,
+        "required_seed_count": required_seed_count,
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "blockers": blockers,
+        "probes": [
+            {
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "scene_signature": row.get("scene_signature"),
+                "fpv_delta": row.get("fpv_delta"),
+                "chase_delta": row.get("chase_delta"),
+                "fpv_improved": row.get("fpv_improved"),
+                "comparable": row.get("comparable"),
+            }
+            for row in combined_rows
+        ],
+        "interpretation": (
+            "This gate tracks combined prepared scale-square material conversion plus "
+            "directional-light orientation probes. It needs held-out scene/seed coverage "
+            "before default rendering promotion."
+        ),
+    }
+
+
 def _view_specific_prepared_scale_square_tone_gate_check(
     render_domain_probe_matrix: dict[str, Any],
     *,
@@ -904,6 +1039,7 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     raw_fpv = _dict(checks.get("raw_fpv_input_lane"))
     render_matrix = _dict(checks.get("render_domain_probe_matrix"))
     prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
+    combined_gate = _dict(checks.get("combined_material_light_default_gate"))
     view_tone_gate = _dict(checks.get("view_specific_prepared_scale_square_tone_gate"))
     rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
     calibration = _dict(checks.get("calibration_scene"))
@@ -912,7 +1048,10 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
     light_shadow_status = str(probe_status_by_kind.get("light_shadow") or "not_evaluated")
     camera_proven = head_camera.get("status") == HEAD_CAMERA_PASS_STATUS
     raw_fpv_proven = raw_fpv.get("status") == RAW_FPV_PASS_STATUS
-    material_default_ready = prepared_gate.get("status") == "prepared_scale_square_default_ready"
+    material_default_ready = (
+        prepared_gate.get("status") == "prepared_scale_square_default_ready"
+        or combined_gate.get("status") == "combined_material_light_default_ready"
+    )
     view_specific_tone_ready = bool(view_tone_gate.get("formal_comparison_gate_ready"))
     lighting_default_ready = (
         render_matrix.get("status") == "render_domain_delta_resolved"
@@ -959,9 +1098,11 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
             ),
             "source_check": "prepared_scale_square_default_gate",
             "source_status": prepared_gate.get("status"),
+            "combined_source_status": combined_gate.get("status"),
             "probe_status": material_status,
             "decision": (
-                "Prepared scale-square is ready for default-rendering review."
+                "Prepared scale-square plus directional-light orientation is ready for "
+                "default-rendering review."
                 if material_default_ready
                 else (
                     "Use the view-specific report-side comparison gate for visual evidence, "
@@ -1055,13 +1196,17 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
     prepared_scale_ready = checks.get("prepared_scale_square_default_gate", {}).get("status") == (
         "prepared_scale_square_default_ready"
     )
+    combined_material_light_ready = (
+        checks.get("combined_material_light_default_gate", {}).get("status")
+        == "combined_material_light_default_ready"
+    )
     rgb_ready_for_default = checks["rgb_tone_cross_validation"].get("status") == (
         "default_rgb_tone_ready"
     )
     if (
         foundational_checks_pass
         and render_domain_resolved
-        and prepared_scale_ready
+        and (prepared_scale_ready or combined_material_light_ready)
         and rgb_ready_for_default
     ):
         return "passed"
@@ -1121,7 +1266,6 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
         "corpus_coverage": "broad_corpus_ready",
         "calibration_scene": "calibration_scene_evidence_loaded",
         "render_domain_probe_matrix": "render_domain_delta_resolved",
-        "prepared_scale_square_default_gate": "prepared_scale_square_default_ready",
         "rgb_tone_cross_validation": "default_rgb_tone_ready",
     }
     blockers = [
@@ -1135,7 +1279,23 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
         if _dict(checks.get(check_id)).get("status") != expected
     ]
     prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
-    blockers.extend(_list_dicts(prepared_gate.get("blockers")))
+    combined_gate = _dict(checks.get("combined_material_light_default_gate"))
+    material_gate_ready = (
+        prepared_gate.get("status") == "prepared_scale_square_default_ready"
+        or combined_gate.get("status") == "combined_material_light_default_ready"
+    )
+    if not material_gate_ready:
+        blockers.append(
+            {
+                "reason": "material_light_default_gate_not_ready",
+                "check_id": "prepared_scale_square_default_gate",
+                "alternate_check_id": "combined_material_light_default_gate",
+                "prepared_scale_square_status": prepared_gate.get("status"),
+                "combined_material_light_status": combined_gate.get("status"),
+            }
+        )
+        blockers.extend(_list_dicts(prepared_gate.get("blockers")))
+        blockers.extend(_list_dicts(combined_gate.get("blockers")))
     calibration = _dict(checks.get("calibration_scene"))
     if calibration.get("default_rendering_ready") is not True:
         blockers.append(
@@ -1161,7 +1321,11 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
         "status": "default_rendering_visual_parity_ready" if ready else "not_ready",
         "ready": ready,
         "policy_scope": "default_rendering",
-        "source_checks": sorted(required_statuses),
+        "source_checks": sorted(required_statuses)
+        + [
+            "prepared_scale_square_default_gate",
+            "combined_material_light_default_gate",
+        ],
         "blockers": blockers,
         "interpretation": (
             "Default-rendering visual parity requires renderer/material/tone gates to pass "

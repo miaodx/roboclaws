@@ -386,6 +386,56 @@ def test_visual_parity_summary_uses_ready_calibration_candidate_despite_failed_h
     assert len(calibration["non_default_rendering_candidates"]) == 1
 
 
+def test_visual_parity_summary_tracks_combined_material_light_candidate(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_combined_light")
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "val0_baseline" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=38.0,
+        chase=84.0,
+        location_count=8,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "val0_scale_square_rotx25" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=30.0,
+        chase=82.0,
+        location_count=8,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"val0_scale_square_rotx25={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=3,
+        required_seed_count=2,
+    )
+
+    gate = manifest["checks"]["combined_material_light_default_gate"]
+    assert gate["status"] == "needs_broader_corpus"
+    assert gate["fpv_improved_count"] == 1
+    assert gate["chase_regression_count"] == 0
+    assert gate["probes"][0]["fpv_delta"] == -8.0
+    assert gate["probes"][0]["chase_delta"] == -2.0
+    assert {blocker["reason"] for blocker in gate["blockers"]} >= {
+        "needs_broader_scene_corpus",
+        "needs_broader_seed_corpus",
+    }
+    default_rendering = manifest["default_rendering_visual_parity"]
+    assert any(
+        blocker.get("reason") == "material_light_default_gate_not_ready"
+        for blocker in default_rendering["blockers"]
+    )
+
+
 def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
     tmp_path: Path,
 ) -> None:
