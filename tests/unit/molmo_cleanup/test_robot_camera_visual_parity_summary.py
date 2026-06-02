@@ -894,6 +894,121 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
     assert audit["unresolved_check_ids"] == []
 
 
+def test_visual_parity_summary_marks_combined_material_light_promotion_candidate(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_combined_pass")
+    checks = {
+        "head_camera_contract": {"status": "head_camera_geometry_aligned"},
+        "raw_fpv_input_lane": {"status": "raw_fpv_agent_input_uses_head_camera"},
+        "corpus_coverage": {"status": "broad_corpus_ready"},
+        "calibration_scene": {
+            "status": "calibration_scene_evidence_loaded",
+            "default_rendering_ready": True,
+        },
+        "render_domain_probe_matrix": {"status": "render_domain_delta_active"},
+        "prepared_scale_square_default_gate": {"status": "comparison_only_not_default"},
+        "combined_material_light_default_gate": {"status": "combined_material_light_default_ready"},
+        "view_specific_prepared_scale_square_tone_gate": {
+            "status": "view_specific_report_comparison_gate_ready",
+            "formal_comparison_gate_ready": True,
+        },
+        "rgb_tone_cross_validation": {
+            "status": "comparison_only_rgb_tone_positive",
+            "comparison_only": True,
+        },
+    }
+
+    assert summary._overall_status(checks) == "active"
+    default_rendering = summary._default_rendering_visual_parity(checks)
+    assert default_rendering["status"] == "default_rendering_promotion_candidate_ready"
+    assert default_rendering["ready"] is False
+    assert default_rendering["promotion_candidate_ready"] is True
+    assert default_rendering["promotion_path"] == "combined_material_light_default_gate"
+    assert default_rendering["blockers"] == [
+        {
+            "actual": "not_proven",
+            "check_id": "default_rendering_path",
+            "expected": "default_rendering_path_uses_combined_material_light",
+            "reason": "default_rendering_path_not_promoted",
+        }
+    ]
+    audit = summary._four_check_audit(checks)
+    assert audit["status"] == "passed"
+    assert audit["unresolved_check_ids"] == []
+
+
+def test_visual_parity_summary_passes_after_combined_material_light_path_is_promoted(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_combined_promoted")
+    checks = {
+        "head_camera_contract": {"status": "head_camera_geometry_aligned"},
+        "raw_fpv_input_lane": {"status": "raw_fpv_agent_input_uses_head_camera"},
+        "corpus_coverage": {"status": "broad_corpus_ready"},
+        "calibration_scene": {
+            "status": "calibration_scene_evidence_loaded",
+            "default_rendering_ready": True,
+        },
+        "render_domain_probe_matrix": {"status": "render_domain_delta_active"},
+        "prepared_scale_square_default_gate": {"status": "comparison_only_not_default"},
+        "combined_material_light_default_gate": {"status": "combined_material_light_default_ready"},
+        "default_rendering_path": {"status": "default_rendering_path_uses_combined_material_light"},
+        "view_specific_prepared_scale_square_tone_gate": {
+            "status": "view_specific_report_comparison_gate_ready",
+            "formal_comparison_gate_ready": True,
+        },
+        "rgb_tone_cross_validation": {
+            "status": "comparison_only_rgb_tone_positive",
+            "comparison_only": True,
+        },
+    }
+
+    assert summary._overall_status(checks) == "passed"
+    default_rendering = summary._default_rendering_visual_parity(checks)
+    assert default_rendering["status"] == "default_rendering_visual_parity_ready"
+    assert default_rendering["ready"] is True
+    assert default_rendering["promotion_candidate_ready"] is True
+    assert default_rendering["blockers"] == []
+    audit = summary._four_check_audit(checks)
+    assert audit["status"] == "passed"
+    assert audit["unresolved_check_ids"] == []
+
+
+def test_visual_parity_summary_combined_gate_still_requires_default_calibration(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_combined_calib")
+    checks = {
+        "head_camera_contract": {"status": "head_camera_geometry_aligned"},
+        "raw_fpv_input_lane": {"status": "raw_fpv_agent_input_uses_head_camera"},
+        "corpus_coverage": {"status": "broad_corpus_ready"},
+        "calibration_scene": {
+            "status": "calibration_scene_evidence_loaded",
+            "default_rendering_ready": False,
+        },
+        "render_domain_probe_matrix": {"status": "render_domain_delta_active"},
+        "prepared_scale_square_default_gate": {"status": "comparison_only_not_default"},
+        "combined_material_light_default_gate": {"status": "combined_material_light_default_ready"},
+        "view_specific_prepared_scale_square_tone_gate": {
+            "status": "view_specific_report_comparison_gate_ready",
+            "formal_comparison_gate_ready": True,
+        },
+        "rgb_tone_cross_validation": {
+            "status": "comparison_only_rgb_tone_positive",
+            "comparison_only": True,
+        },
+    }
+
+    assert summary._overall_status(checks) == "active"
+    default_rendering = summary._default_rendering_visual_parity(checks)
+    assert default_rendering["status"] == "not_ready"
+    assert any(
+        blocker.get("reason") == "calibration_not_default_rendering_ready"
+        for blocker in default_rendering["blockers"]
+    )
+
+
 def _write_robot_camera_manifest(
     path: Path,
     *,

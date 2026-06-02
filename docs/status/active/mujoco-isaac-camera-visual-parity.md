@@ -697,46 +697,46 @@ The summary now exposes that boundary directly as
 `report_side_visual_parity.status=report_side_visual_parity_ready` with
 `ready=true`, `policy_scope=report_side_comparison_only`,
 `default_rendering_candidate=false`, and no blockers. The top-level summary
-remains `active` because `four_check_audit.unresolved_check_ids` still contains
-`material_texture_response` and `light_brightness_tone` for default-rendering
-parity. In short: the report-side comparison can be read as aligned under the
-formal view-specific tone gate, but default Isaac/MuJoCo rendering is still not
-promoted as visually equivalent.
+remains `active` until the default prepared-USD rendering path is actually
+promoted or reviewed. In short: the report-side comparison can be read as
+aligned under the formal view-specific tone gate, and the combined material plus
+directional-light candidate now clears the four-check evidence gate, but cleanup
+defaults have not yet been rewired to that candidate.
 
 Default-rendering parity now has its own machine layer:
-`default_rendering_visual_parity.status=not_ready`. The current blockers are
-`render_domain_probe_matrix=render_domain_delta_active`,
-`prepared_scale_square_default_gate=comparison_only_not_default`,
-`combined_material_light_default_gate=needs_broader_corpus`,
-`rgb_tone_cross_validation=comparison_only_rgb_tone_positive`, the
-`val1_seed6_prepared_scale_square_gate` auxiliary chase/tone-luminance
-regression, active baseline render residuals
-(`lighting_shadow_contract_delta`, `target_material_texture_or_binding_gap`),
-and `rgb_tone_comparison_only`. The calibration gate is no longer the active
-default blocker: it has one default-rendering candidate at
+`default_rendering_visual_parity.status=default_rendering_promotion_candidate_ready`,
+with `promotion_candidate_ready=true`, `ready=false`, and
+`promotion_path=combined_material_light_default_gate`. The current blocker is
+`default_rendering_path_not_promoted`: the evidence candidate is ready, but the
+default prepared-USD rendering path has not yet been wired or proven to use
+`scale_square + DistantLight rotateX=+25`. The calibration gate is no longer
+the active default blocker: it has one default-rendering candidate at
 `output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p25_calibration/0603_0022/comparison_manifest.json`
 with residual `7.4522` and
 `render_domain_calibration_status=global_luminance_gain_sufficient`. The older
 baseline, scale-square-only, no-dome, no-shadow, `rotateX=-35`, `rotateX=+15`,
 and `rotateX=+5` calibration probes remain non-default history. The refreshed
-recommendation now points at resolving or explicitly gating the remaining
-default-rendering residuals instead of re-reviewing the already formalized
-report-side gate or calibration gate.
+recommendation now points at wiring or reviewing the default prepared-USD
+rendering path before claiming cleanup defaults changed.
 
-The latest robot-camera combined material+light probe is now tracked explicitly
-instead of only living in report notes:
+The combined material+light robot-camera evidence is now tracked explicitly
+instead of only living in report notes. The first probe was
 `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_scale_square_dirlight_rotx_p25_probe/report.html`.
 It keeps the frozen head-camera contract (`fpv_lens_aligned` and
 `fpv_world_pose_aligned`) and improves the `val_0` seed-6 robot-camera slice
 from baseline FPV/chase `38.0980` / `83.7516` to prepared scale-square
 `32.5230` / `83.7739`, then to scale-square plus `DistantLight rotateX=+25`
-`30.6571` / `81.7209`. The summary records this as
-`combined_material_light_default_gate.status=needs_broader_corpus`, with
-`fpv_delta=-7.4409`, `chase_delta=-2.0307`, one comparable probe, one scene
-signature, and seed `6`. This is the strongest `val_0` combined robot-camera
-candidate so far, but it is not a default-rendering proof because it lacks
-held-out scene/seed coverage and `render_domain_probe_matrix` plus RGB/tone
-remain active default blockers.
+`30.6571` / `81.7209`. Two held-out robot-camera probes now cover the same
+candidate on `val_1`: seed-6 improves FPV/chase from `36.5655` / `72.2838`
+through prepared scale-square `29.4052` / `75.1960` to
+`27.2732` / `72.6383`, and seed-8 improves from `37.2184` / `71.7464` through
+prepared scale-square `29.4783` / `71.2846` to `26.5081` / `71.5982`. The
+summary now records
+`combined_material_light_default_gate.status=combined_material_light_default_ready`
+with 3 comparable probes, 3 scene signatures, 2 seeds, all FPV-improved, and no
+chase regression above the 1.0 tolerance. This clears the evidence gate for the
+combined candidate, but it is still not a claim that cleanup defaults changed
+until `default_rendering_path` proves the prepared-USD path uses it.
 
 ## Touched Areas
 

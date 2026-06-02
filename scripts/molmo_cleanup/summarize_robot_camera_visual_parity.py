@@ -1053,7 +1053,11 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
         or combined_gate.get("status") == "combined_material_light_default_ready"
     )
     view_specific_tone_ready = bool(view_tone_gate.get("formal_comparison_gate_ready"))
-    lighting_default_ready = (
+    combined_material_light_ready = (
+        combined_gate.get("status") == "combined_material_light_default_ready"
+        and calibration.get("default_rendering_ready") is True
+    )
+    lighting_default_ready = combined_material_light_ready or (
         render_matrix.get("status") == "render_domain_delta_resolved"
         and rgb_tone.get("comparison_only") is False
         and calibration.get("status") == "calibration_scene_evidence_loaded"
@@ -1128,12 +1132,16 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
                 )
             ),
             "source_check": (
-                "render_domain_probe_matrix"
+                "combined_material_light_default_gate"
+                if combined_material_light_ready
+                else "render_domain_probe_matrix"
                 if not view_specific_tone_ready
                 else "view_specific_prepared_scale_square_tone_gate"
             ),
             "source_status": (
-                render_matrix.get("status")
+                combined_gate.get("status")
+                if combined_material_light_ready
+                else render_matrix.get("status")
                 if not view_specific_tone_ready
                 else view_tone_gate.get("status")
             ),
@@ -1144,7 +1152,8 @@ def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
             "rgb_tone_status": rgb_tone.get("status"),
             "calibration_status": calibration.get("status"),
             "decision": (
-                "Lighting/tone evidence is ready for default-rendering review."
+                "Combined material and directional-light evidence is ready for "
+                "default-rendering review without report-side RGB compensation."
                 if lighting_default_ready
                 else (
                     "Use view-specific tone only as a formal report-side comparison gate; "
@@ -1190,6 +1199,9 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
     foundational_checks_pass = all(
         checks[key].get("status") == status for key, status in required_pass.items()
     )
+    calibration_default_ready = (
+        checks.get("calibration_scene", {}).get("default_rendering_ready") is True
+    )
     render_domain_resolved = checks["render_domain_probe_matrix"].get("status") == (
         "render_domain_delta_resolved"
     )
@@ -1200,14 +1212,21 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
         checks.get("combined_material_light_default_gate", {}).get("status")
         == "combined_material_light_default_ready"
     )
+    default_rendering_path_ready = checks.get("default_rendering_path", {}).get("status") == (
+        "default_rendering_path_uses_combined_material_light"
+    )
+    combined_material_light_promoted = (
+        combined_material_light_ready and default_rendering_path_ready
+    )
     rgb_ready_for_default = checks["rgb_tone_cross_validation"].get("status") == (
         "default_rgb_tone_ready"
     )
     if (
         foundational_checks_pass
-        and render_domain_resolved
+        and calibration_default_ready
+        and (render_domain_resolved or combined_material_light_promoted)
         and (prepared_scale_ready or combined_material_light_ready)
-        and rgb_ready_for_default
+        and (rgb_ready_for_default or combined_material_light_promoted)
     ):
         return "passed"
     if checks["head_camera_contract"].get("status") == HEAD_CAMERA_PASS_STATUS:
@@ -1260,14 +1279,28 @@ def _report_side_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[str, A
 
 
 def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    required_statuses = {
+    foundational_required_statuses = {
         "head_camera_contract": HEAD_CAMERA_PASS_STATUS,
         "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
         "corpus_coverage": "broad_corpus_ready",
         "calibration_scene": "calibration_scene_evidence_loaded",
+    }
+    render_required_statuses = {
         "render_domain_probe_matrix": "render_domain_delta_resolved",
         "rgb_tone_cross_validation": "default_rgb_tone_ready",
     }
+    prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
+    combined_gate = _dict(checks.get("combined_material_light_default_gate"))
+    material_gate_ready = (
+        prepared_gate.get("status") == "prepared_scale_square_default_ready"
+        or combined_gate.get("status") == "combined_material_light_default_ready"
+    )
+    combined_material_light_ready = (
+        combined_gate.get("status") == "combined_material_light_default_ready"
+    )
+    default_rendering_path_ready = checks.get("default_rendering_path", {}).get("status") == (
+        "default_rendering_path_uses_combined_material_light"
+    )
     blockers = [
         {
             "reason": "required_check_not_ready",
@@ -1275,15 +1308,20 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
             "expected": expected,
             "actual": _dict(checks.get(check_id)).get("status"),
         }
-        for check_id, expected in required_statuses.items()
+        for check_id, expected in foundational_required_statuses.items()
         if _dict(checks.get(check_id)).get("status") != expected
     ]
-    prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
-    combined_gate = _dict(checks.get("combined_material_light_default_gate"))
-    material_gate_ready = (
-        prepared_gate.get("status") == "prepared_scale_square_default_ready"
-        or combined_gate.get("status") == "combined_material_light_default_ready"
-    )
+    if not combined_material_light_ready:
+        blockers.extend(
+            {
+                "reason": "required_check_not_ready",
+                "check_id": check_id,
+                "expected": expected,
+                "actual": _dict(checks.get(check_id)).get("status"),
+            }
+            for check_id, expected in render_required_statuses.items()
+            if _dict(checks.get(check_id)).get("status") != expected
+        )
     if not material_gate_ready:
         blockers.append(
             {
@@ -1296,6 +1334,15 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
         )
         blockers.extend(_list_dicts(prepared_gate.get("blockers")))
         blockers.extend(_list_dicts(combined_gate.get("blockers")))
+    if combined_material_light_ready and not default_rendering_path_ready:
+        blockers.append(
+            {
+                "reason": "default_rendering_path_not_promoted",
+                "check_id": "default_rendering_path",
+                "expected": "default_rendering_path_uses_combined_material_light",
+                "actual": _dict(checks.get("default_rendering_path")).get("status", "not_proven"),
+            }
+        )
     calibration = _dict(checks.get("calibration_scene"))
     if calibration.get("default_rendering_ready") is not True:
         blockers.append(
@@ -1307,7 +1354,7 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
         )
     blockers.extend(_list_dicts(calibration.get("default_rendering_blockers")))
     rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
-    if rgb_tone.get("comparison_only") is True:
+    if rgb_tone.get("comparison_only") is True and not combined_material_light_ready:
         blockers.append(
             {
                 "reason": "rgb_tone_comparison_only",
@@ -1316,20 +1363,45 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
             }
         )
     ready = not blockers
+    promotion_candidate_ready = (
+        combined_material_light_ready
+        and calibration.get("default_rendering_ready") is True
+        and not [
+            blocker
+            for blocker in blockers
+            if blocker.get("reason") != "default_rendering_path_not_promoted"
+        ]
+    )
     return {
         "schema": "robot_camera_default_rendering_visual_parity_v1",
-        "status": "default_rendering_visual_parity_ready" if ready else "not_ready",
+        "status": (
+            "default_rendering_visual_parity_ready"
+            if ready
+            else (
+                "default_rendering_promotion_candidate_ready"
+                if promotion_candidate_ready
+                else "not_ready"
+            )
+        ),
         "ready": ready,
+        "promotion_candidate_ready": promotion_candidate_ready,
         "policy_scope": "default_rendering",
-        "source_checks": sorted(required_statuses)
+        "source_checks": sorted({**foundational_required_statuses, **render_required_statuses})
         + [
             "prepared_scale_square_default_gate",
             "combined_material_light_default_gate",
+            "default_rendering_path",
         ],
+        "promotion_path": (
+            "combined_material_light_default_gate"
+            if combined_material_light_ready
+            else "render_domain_probe_matrix_and_default_rgb_tone"
+        ),
         "blockers": blockers,
         "interpretation": (
             "Default-rendering visual parity requires renderer/material/tone gates to pass "
-            "without report-side compensation. It is stricter than report-side visual parity."
+            "without report-side compensation. A combined material plus directional-light "
+            "gate can satisfy this without the report-side RGB/tone profile."
         ),
     }
 
@@ -1348,7 +1420,14 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
             "RGB/luminance gain to default rendering."
         )
     prepared_gate = checks.get("prepared_scale_square_default_gate", {})
+    combined_gate = checks.get("combined_material_light_default_gate", {})
     view_tone_gate = checks.get("view_specific_prepared_scale_square_tone_gate", {})
+    if combined_gate.get("status") == "combined_material_light_default_ready":
+        return (
+            "Combined scale-square material conversion plus directional-light orientation "
+            "is ready as the default-rendering promotion candidate. Next, wire or review "
+            "the default prepared-USD rendering path before claiming cleanup defaults changed."
+        )
     if prepared_gate.get("status") == "comparison_only_not_default":
         return str(prepared_gate.get("recommended_next_action") or "")
     if checks["rgb_tone_cross_validation"].get("comparison_only") is True:
