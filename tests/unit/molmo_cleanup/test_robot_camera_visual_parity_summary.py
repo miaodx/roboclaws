@@ -124,10 +124,10 @@ def test_visual_parity_summary_flags_camera_contract_gap(tmp_path: Path) -> None
     }
 
 
-def test_visual_parity_summary_can_pass_when_corpus_and_calibration_are_proven(
+def test_visual_parity_summary_stays_active_when_render_domain_is_unresolved(
     tmp_path: Path,
 ) -> None:
-    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_pass")
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_foundational")
     baselines = [
         _write_robot_camera_manifest(
             tmp_path / f"val{index}_seed{seed}" / "comparison_manifest.json",
@@ -169,11 +169,33 @@ def test_visual_parity_summary_can_pass_when_corpus_and_calibration_are_proven(
         required_seed_count=2,
     )
 
-    assert manifest["status"] == "passed"
+    assert manifest["status"] == "active"
     assert manifest["checks"]["corpus_coverage"]["status"] == "broad_corpus_ready"
     assert manifest["checks"]["calibration_scene"]["status"] == (
         "calibration_scene_evidence_loaded"
     )
+    assert manifest["checks"]["render_domain_probe_matrix"]["status"] == (
+        "render_domain_delta_active"
+    )
+
+
+def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_rgb(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_pass")
+    checks = {
+        "head_camera_contract": {"status": "head_camera_geometry_aligned"},
+        "raw_fpv_input_lane": {"status": "raw_fpv_agent_input_uses_head_camera"},
+        "corpus_coverage": {"status": "broad_corpus_ready"},
+        "calibration_scene": {"status": "calibration_scene_evidence_loaded"},
+        "render_domain_probe_matrix": {"status": "render_domain_delta_resolved"},
+        "rgb_tone_cross_validation": {
+            "status": "default_rgb_tone_ready",
+            "comparison_only": False,
+        },
+    }
+
+    assert summary._overall_status(checks) == "passed"
 
 
 def _write_robot_camera_manifest(

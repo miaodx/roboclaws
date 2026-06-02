@@ -317,6 +317,18 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   and only about `5.7%` luminance-delta improvement. This is stronger evidence
   that the remaining visual gap is per-room light/material/tone response rather
   than camera geometry or one global brightness scale.
+- A held-out seed slice now covers `val_1`, seed `8`, 2 mess objects, and 4
+  bound targets:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_baseline/report.html`.
+  It preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the
+  head-camera contract, with FPV `37.2184`. Applying the existing `val_0`
+  RGB-gain profile in
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_val0_rgb_gain_probe/report.html`
+  lowers FPV to `35.5147` (`-1.7037`) while chase improves slightly from
+  `71.7464` to `71.0975`. Refreshing the visual-parity summary with this seed
+  slice makes the corpus foundation pass (`3` scene signatures, `2` seeds, `18`
+  successful locations), but the overall summary stays `active` because
+  render-domain residuals remain and RGB/tone is still comparison-only.
 
 ## Next Action
 
@@ -338,11 +350,13 @@ slice, make it a comparison-only intensity/direction probe with a clear FPV
 threshold. Keep RAW_FPV and world-labels as separate evidence lanes:
 world-labels uses images as report evidence only, while camera-raw uses the
 head-camera FPV images as agent input.
-The next proof-backed step is to run additional bound-target post-FOV
-apple-to-apple baselines across held-out scene indices and seeds, then evaluate
-the existing RGB/tone profiles there. Keep the calibration report attached to
-the summary gate; do not promote any RGB/luminance gain to default rendering
-while the calibration result remains view-dependent.
+The next proof-backed step is not more camera work. Keep the calibration report
+attached to the summary gate; do not promote any RGB/luminance gain to default
+rendering while the calibration result remains view-dependent. The next useful
+slice is a comparison-only render-domain probe that targets remaining high
+residual exact-bound bed/table material response under the frozen head-camera
+contract, or preparation of a genuinely new scene index if broader scene
+coverage is required beyond the current 3-signature foundation.
 
 ## Touched Areas
 

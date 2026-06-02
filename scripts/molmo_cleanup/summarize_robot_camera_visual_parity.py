@@ -499,7 +499,16 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
         "corpus_coverage": "broad_corpus_ready",
         "calibration_scene": "calibration_scene_evidence_loaded",
     }
-    if all(checks[key].get("status") == status for key, status in required_pass.items()):
+    foundational_checks_pass = all(
+        checks[key].get("status") == status for key, status in required_pass.items()
+    )
+    render_domain_resolved = checks["render_domain_probe_matrix"].get("status") == (
+        "render_domain_delta_resolved"
+    )
+    rgb_ready_for_default = checks["rgb_tone_cross_validation"].get("status") == (
+        "default_rgb_tone_ready"
+    )
+    if foundational_checks_pass and render_domain_resolved and rgb_ready_for_default:
         return "passed"
     if checks["head_camera_contract"].get("status") == HEAD_CAMERA_PASS_STATUS:
         return "active"
@@ -518,6 +527,11 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
         return (
             "Generate a root-visible calibration-scene report before promoting any "
             "RGB/luminance gain to default rendering."
+        )
+    if checks["rgb_tone_cross_validation"].get("comparison_only") is True:
+        return (
+            "Keep RGB/tone as comparison-only and review remaining render-domain residuals "
+            "before changing default cleanup rendering."
         )
     return "Review remaining render-domain residuals before changing default cleanup rendering."
 
