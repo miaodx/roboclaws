@@ -647,6 +647,15 @@ not fixed by single global tone compensation:
   also worsens residual to `13.9678`. Both remain
   `view_dependent_render_domain_delta`, so do not promote simple DomeLight
   removal or shadow enabling, even in combination with scale-square.
+- Directional-light orientation is a more useful light-domain axis than the
+  simple toggles. Keeping prepared scale-square and changing only the Isaac
+  DistantLight `rotateX` from `-10` to `-35`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_m35_calibration/0603_0016/report.html`)
+  improves residual to `9.8196`; changing it to `+15`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p15_calibration/0603_0017/report.html`)
+  improves residual further to `9.2077`. Both are still
+  `view_dependent_render_domain_delta`, so this is promising calibration
+  evidence, not default-rendering readiness.
 - The summary gate now requires actual view-specific profile evidence instead
   of only trusting probe labels. Each
   `prepared_scale_square_view_rgb` probe must expose `backend_view_rgb_gain`
@@ -702,7 +711,8 @@ scale-square calibration probe at
 `output/molmo/scene-camera-comparison/0602_val0_scene_refs_scale_square_calibration/0603_0003/comparison_manifest.json`
 with residual `11.6923`. The stacked light/shadow calibration probes are also
 blocked: scale-square plus no-dome is `25.5330`, and scale-square plus
-enable-shadows is `13.9678`. All four report
+enable-shadows is `13.9678`. The directional-light probes improve the residual
+to `9.8196` at `rotateX=-35` and `9.2077` at `rotateX=+15`, but all six report
 `render_domain_calibration_status=view_dependent_render_domain_delta`. The
 refreshed recommendation now points at resolving or explicitly gating those
 default-rendering residuals instead of re-reviewing the already formalized
