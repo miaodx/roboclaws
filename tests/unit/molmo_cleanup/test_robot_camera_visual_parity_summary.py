@@ -6,6 +6,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "summarize_robot_camera_visual_parity.py"
+TINY_PNG = (
+    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+    b"\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f"
+    b"\x00\x01\x01\x01\x00\xc9\xfe\x92\xef\x00\x00\x00\x00IEND\xaeB`\x82"
+)
 
 
 def _load_module(path: Path, name: str):
@@ -429,6 +434,16 @@ def test_visual_parity_summary_tracks_combined_material_light_candidate(
         "needs_broader_scene_corpus",
         "needs_broader_seed_corpus",
     }
+    assert manifest["visual_samples"]
+    assert manifest["visual_samples"][0]["images"]["fpv"]["mujoco"].endswith(
+        "val0_baseline/mujoco/robot_views/0001_target.fpv.png"
+    )
+    report_html = (tmp_path / "summary" / "report.html").read_text(encoding="utf-8")
+    assert "<h2>Visual Samples</h2>" in report_html
+    assert "<img src='../val0_baseline/mujoco/robot_views/0001_target.fpv.png'" in report_html
+    assert "<img src='../val0_scale_square_rotx25/isaac/robot_views/0001_target.fpv.png'" in (
+        report_html
+    )
     default_rendering = manifest["default_rendering_visual_parity"]
     assert any(
         blocker.get("reason") == "material_light_default_gate_not_ready"
@@ -1039,6 +1054,7 @@ def _write_robot_camera_manifest(
     locations: list[dict] | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True)
+    default_locations = [_visual_location(path.parent)] if locations is None else locations
     payload = {
         "schema": "roboclaws_robot_camera_apple2apple_comparison_v1",
         "status": "success",
@@ -1078,10 +1094,32 @@ def _write_robot_camera_manifest(
                 "dropped_unbound_target_count": 0,
             },
         },
-        "locations": locations or [],
+        "locations": default_locations,
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def _visual_location(output_dir: Path) -> dict:
+    label = "0001_target"
+    views = {"mujoco": {}, "isaac": {}}
+    for backend in ("mujoco", "isaac"):
+        for view in ("fpv", "chase"):
+            rel = Path(backend) / "robot_views" / f"{label}.{view}.png"
+            image_path = output_dir / rel
+            image_path.parent.mkdir(parents=True, exist_ok=True)
+            image_path.write_bytes(TINY_PNG)
+            views[backend][view] = rel.as_posix()
+    return {
+        "label": label,
+        "target": {"target_id": "target"},
+        "status": "success",
+        "views": views,
+        "image_diffs": {
+            "fpv": _image_diff(42.0, 3.0, 85.0, 95.0),
+            "chase": _image_diff(70.0, 7.0, 95.0, 105.0),
+        },
+    }
 
 
 def _image_diff_location(

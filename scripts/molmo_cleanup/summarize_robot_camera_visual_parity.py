@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,12 @@ from roboclaws.household.camera_control import DEFAULT_SCENE_PROBE_COLOR_PROFILE
 
 SCHEMA = "roboclaws_robot_camera_visual_parity_summary_v1"
 ROBOT_CAMERA_MANIFEST_SCHEMA = "roboclaws_robot_camera_apple2apple_comparison_v1"
+VISUAL_SAMPLE_VIEWS = ("fpv", "chase")
+VISUAL_SAMPLE_BACKENDS = ("mujoco", "isaac")
+VISUAL_SAMPLE_PROBE_LABEL_PARTS = (
+    "scale_square_rotx25",
+    "default_combined_path",
+)
 RAW_FPV_PASS_STATUS = "raw_fpv_agent_input_uses_head_camera"
 HEAD_CAMERA_PASS_STATUS = "head_camera_geometry_aligned"
 CAMERA_STATUS_ACCEPTED = {
@@ -163,6 +170,11 @@ def build_summary(
     four_check_audit = _four_check_audit(checks)
     report_side_visual_parity = _report_side_visual_parity(checks)
     default_rendering_visual_parity = _default_rendering_visual_parity(checks)
+    visual_samples = _visual_samples_for_report(
+        baselines=baselines,
+        probes=probes,
+        output_dir=output_dir,
+    )
     manifest: dict[str, Any] = {
         "schema": SCHEMA,
         "status": status,
@@ -190,6 +202,7 @@ def build_summary(
             ),
         },
         "four_check_audit": four_check_audit,
+        "visual_samples": visual_samples,
         "checks": checks,
         "baselines": baselines,
         "probes": probes,
@@ -256,6 +269,112 @@ def _probe_summary(spec: str) -> dict[str, Any]:
     summary["probe_kind"] = _infer_probe_kind(summary)
     summary["rgb_gain_source"] = _rgb_gain_source(path)
     return summary
+
+
+def _visual_samples_for_report(
+    *,
+    baselines: list[dict[str, Any]],
+    probes: list[dict[str, Any]],
+    output_dir: Path,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    sample_sources = [
+        ("baseline", item)
+        for item in baselines
+        if isinstance(item, dict) and item.get("comparison_status") == "success"
+    ]
+    sample_sources.extend(
+        ("probe", item)
+        for item in probes
+        if isinstance(item, dict) and _is_visual_sample_probe(item)
+    )
+    for kind, summary in sample_sources:
+        sample = _visual_sample_from_manifest_summary(summary, kind=kind, output_dir=output_dir)
+        if sample:
+            rows.append(sample)
+    return rows
+
+
+def _is_visual_sample_probe(summary: dict[str, Any]) -> bool:
+    label = str(summary.get("label") or "").lower()
+    return any(part in label for part in VISUAL_SAMPLE_PROBE_LABEL_PARTS)
+
+
+def _visual_sample_from_manifest_summary(
+    summary: dict[str, Any],
+    *,
+    kind: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    manifest_path = Path(str(summary.get("path") or ""))
+    if not manifest_path.is_file():
+        return {}
+    payload = _read_json(manifest_path)
+    locations = [
+        location
+        for location in _list_dicts(payload.get("locations"))
+        if location.get("status", "success") == "success"
+    ]
+    if not locations:
+        return {}
+    location = max(
+        locations,
+        key=lambda item: (
+            _float_or_none(_dict(_dict(item.get("image_diffs")).get("fpv")).get("mean_abs_rgb"))
+            or -1.0
+        ),
+    )
+    images: dict[str, dict[str, str]] = {}
+    missing: list[str] = []
+    for view in VISUAL_SAMPLE_VIEWS:
+        images[view] = {}
+        for backend in VISUAL_SAMPLE_BACKENDS:
+            image_path = _view_image_path(location, backend=backend, view=view)
+            if not image_path:
+                missing.append(f"{backend}.{view}")
+                continue
+            absolute_image_path = manifest_path.parent / image_path
+            if not absolute_image_path.is_file():
+                missing.append(f"{backend}.{view}")
+            images[view][backend] = _html_relpath(absolute_image_path, output_dir)
+    fpv_metrics = _view_diff_metrics(location, "fpv")
+    chase_metrics = _view_diff_metrics(location, "chase")
+    return {
+        "kind": kind,
+        "label": summary.get("label") or kind,
+        "manifest_path": str(manifest_path),
+        "scene_signature": summary.get("scene_signature"),
+        "location_label": location.get("label"),
+        "target_id": _dict(location.get("target")).get("target_id"),
+        "images": images,
+        "missing_images": missing,
+        "fpv_mean_abs_rgb": fpv_metrics.get("mean_abs_rgb"),
+        "chase_mean_abs_rgb": chase_metrics.get("mean_abs_rgb"),
+        "fpv_residual_class": _residual_class(location, "fpv"),
+        "chase_residual_class": _residual_class(location, "chase"),
+    }
+
+
+def _view_image_path(location: dict[str, Any], *, backend: str, view: str) -> Path | None:
+    path = _dict(_dict(location.get("views")).get(backend)).get(view)
+    return Path(str(path)) if path else None
+
+
+def _residual_class(location: dict[str, Any], view: str) -> str:
+    return str(
+        _dict(_dict(_dict(location.get("image_diffs")).get(view)).get("residual")).get(
+            "residual_class"
+        )
+        or ""
+    )
+
+
+def _html_relpath(path: Path, start: Path) -> str:
+    try:
+        relpath = os.path.relpath(path, start=start)
+    except ValueError:
+        relpath = str(path)
+    return relpath.replace(os.sep, "/")
 
 
 def _head_camera_contract_check(baselines: list[dict[str, Any]]) -> dict[str, Any]:
@@ -2042,6 +2161,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
     four_check = _dict(manifest.get("four_check_audit"))
     report_side = _dict(manifest.get("report_side_visual_parity"))
     default_rendering = _dict(manifest.get("default_rendering_visual_parity"))
+    visual_samples = _render_visual_samples(_list_dicts(manifest.get("visual_samples")))
     four_check_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
@@ -2091,6 +2211,23 @@ def _render_report(manifest: dict[str, Any]) -> str:
     th, td {{ border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }}
     th {{ background: #f3f3f3; }}
     code {{ background: #f6f6f6; padding: 1px 4px; }}
+    .visual-samples {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 18px;
+    }}
+    .sample {{ border: 1px solid #d7d7d7; padding: 12px; background: #fafafa; }}
+    .sample h3 {{ margin: 0 0 6px; font-size: 16px; }}
+    .view-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }}
+    figure {{ margin: 0; }}
+    img {{ display: block; width: 100%; height: auto; border: 1px solid #ccc; background: #111; }}
+    figcaption {{ color: #555; font-size: 12px; margin-top: 4px; }}
+    .muted {{ color: #666; }}
   </style>
 </head>
 <body>
@@ -2113,6 +2250,8 @@ def _render_report(manifest: dict[str, Any]) -> str:
     </thead>
     <tbody>{four_check_rows}</tbody>
   </table>
+  <h2>Visual Samples</h2>
+  {visual_samples}
   <h2>Checks</h2>
   <table><thead><tr><th>Check</th><th>Status</th><th>Interpretation</th></tr></thead><tbody>{rows}</tbody></table>
   <h2>Baselines</h2>
@@ -2122,6 +2261,65 @@ def _render_report(manifest: dict[str, Any]) -> str:
 </body>
 </html>
 """
+
+
+def _render_visual_samples(samples: list[dict[str, Any]]) -> str:
+    if not samples:
+        return "<p class='muted'>No image samples were available in the input manifests.</p>"
+    cards = []
+    for sample in samples:
+        title = " / ".join(
+            part
+            for part in (
+                str(sample.get("kind") or ""),
+                str(sample.get("label") or ""),
+                str(sample.get("location_label") or ""),
+            )
+            if part
+        )
+        metrics = f"FPV {sample.get('fpv_mean_abs_rgb')}, chase {sample.get('chase_mean_abs_rgb')}"
+        missing = _list_strings(sample.get("missing_images"))
+        missing_note = (
+            "<p class='muted'>Missing images: " + html.escape(", ".join(missing)) + "</p>"
+            if missing
+            else ""
+        )
+        cards.append(
+            "<section class='sample'>"
+            f"<h3>{html.escape(title)}</h3>"
+            f"<p class='muted'>{html.escape(str(sample.get('scene_signature') or ''))}</p>"
+            f"<p>{html.escape(metrics)}</p>"
+            + _render_visual_sample_view(sample, "fpv")
+            + _render_visual_sample_view(sample, "chase")
+            + missing_note
+            + "</section>"
+        )
+    return "<div class='visual-samples'>" + "\n".join(cards) + "</div>"
+
+
+def _render_visual_sample_view(sample: dict[str, Any], view: str) -> str:
+    images = _dict(_dict(sample.get("images")).get(view))
+    mujoco = images.get("mujoco")
+    isaac = images.get("isaac")
+    if not mujoco and not isaac:
+        return ""
+    residual = sample.get(f"{view}_residual_class") or ""
+    cells = []
+    for backend, path in (("MuJoCo", mujoco), ("Isaac", isaac)):
+        if not path:
+            continue
+        cells.append(
+            "<figure>"
+            f"<img src='{html.escape(str(path), quote=True)}' "
+            f"alt='{html.escape(backend)} {html.escape(view.upper())}'>"
+            f"<figcaption>{html.escape(backend)} {html.escape(view.upper())}</figcaption>"
+            "</figure>"
+        )
+    return (
+        f"<h4>{html.escape(view.upper())} "
+        f"<span class='muted'>{html.escape(str(residual))}</span></h4>"
+        "<div class='view-grid'>" + "\n".join(cells) + "</div>"
+    )
 
 
 if __name__ == "__main__":
