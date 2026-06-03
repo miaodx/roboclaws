@@ -725,6 +725,32 @@ matches the probe behavior: FPV/chase are `26.5103` / `71.5521`, with
 `fpv_lens_aligned` and `fpv_world_pose_aligned`, versus the earlier rotx25
 probe `26.5081` / `71.5982`.
 
+- 2026-06-03 box visual-state parity check closed the user-flagged
+  closed-in-MuJoCo/open-in-Isaac gap for
+  `box_7c54a26cba93093ca8aceb6fbac82646_1_0_2`. The default prepared
+  `val_1_combined_material_light_default_path` USD now freezes visual physics
+  after flattening and labeling: summary reports
+  `visual_physics_status=frozen_static_visual_usd`,
+  `visual_physics_joint_removed_count=43`,
+  `visual_physics_api_schema_removed_count=1566`, and
+  `visual_physics_property_removed_count=1241`. The regenerated robot-camera
+  apple-to-apple report at
+  `output/molmo/robot-camera-apple2apple/0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html`
+  embeds MuJoCo/Isaac FPV and chase image pairs and records
+  `state_status=visual_state_static_ref_baked` for that box. MuJoCo evidence
+  has 4/4 flap joints at MJCF ref/range endpoints; Isaac evidence has zero
+  physics joints, physics API schema prims, or physics properties under the box,
+  so PhysX cannot re-open the flaps during report capture.
+- The same 0603 report keeps the robot-view camera contract aligned:
+  `fpv_lens_aligned`, `fpv_world_pose_aligned`, FPV pose delta max `0.005m`,
+  and `fpv_residual_low` across all 4 FPV views with FPV mean-abs-RGB
+  `26.5192`. Chase is still auxiliary report evidence; after the chase-follower
+  fix it uses the same robot-relative rear/high contract in both backends, but
+  the current residual is still higher (`51.4715`) and classified as
+  `geometry_or_texture_edge_residual` across the 4 chase views. Treat remaining
+  deltas as render-domain/geometry-material-light response, not another FPV
+  camera or box-articulation issue.
+
 ## Touched Areas
 
 - `scripts/isaac_lab_cleanup/install_molmospaces_usd_references.py`
