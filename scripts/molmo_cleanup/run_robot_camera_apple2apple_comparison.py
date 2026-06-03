@@ -36,6 +36,8 @@ SCHEMA = "roboclaws_robot_camera_apple2apple_comparison_v1"
 MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
+OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
+OBJECT_VISUAL_STATE_CATEGORIES = {"box"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -156,17 +158,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
             "render_width": args.render_width,
             "render_height": args.render_height,
         },
-        "camera_contract": {
-            "fpv": {
-                MUJOCO_LANE_ID: "robot_0/head_camera",
-                ISAAC_LANE_ID: "/World/robot_0/head_camera",
-            },
-            "chase": {
-                MUJOCO_LANE_ID: "robot_0/camera_follower",
-                ISAAC_LANE_ID: "external rear/high report camera",
-            },
-            "policy_input_note": "FPV is the robot camera. Chase is report evidence only.",
-        },
+        "camera_contract": _robot_camera_contract(),
         "lanes": {},
         "locations": [],
         "artifacts": {
@@ -246,6 +238,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         mujoco_state,
         limit=max(1, int(args.location_count)),
         scene_binding_diagnostics=_dict(isaac_state.get("scene_binding_diagnostics")),
+        isaac_state=isaac_state,
     )
     manifest["target_selection"] = target_selection
     candidates = [_dict(item) for item in target_selection.get("selected_targets") or []]
@@ -379,11 +372,24 @@ def refresh_report_only(
     if not manifest_path.is_file():
         raise FileNotFoundError(manifest_path)
     manifest = _read_json(manifest_path)
+    manifest["camera_contract"] = _robot_camera_contract()
+    mujoco_state = _read_json(output_dir / "mujoco_state.json")
+    isaac_state = _read_json(output_dir / "isaac_state.json")
+    existing_selection = _dict(manifest.get("target_selection"))
+    requested_limit = int(
+        existing_selection.get("requested_limit") or len(manifest.get("locations") or []) or 4
+    )
+    target_selection = _select_comparison_targets(
+        mujoco_state,
+        limit=max(1, requested_limit),
+        scene_binding_diagnostics=_dict(isaac_state.get("scene_binding_diagnostics")),
+        isaac_state=isaac_state,
+    )
+    manifest["target_selection"] = target_selection
     locations = list(manifest.get("locations") or [])
     _refresh_location_camera_contract_diagnostics(locations)
     manifest["summary"] = _summary(locations)
-    if manifest.get("target_selection"):
-        manifest["summary"]["target_selection"] = manifest["target_selection"]
+    manifest["summary"]["target_selection"] = target_selection
     _attach_render_contract_diagnostics(
         manifest,
         output_dir=output_dir,
@@ -448,6 +454,20 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _robot_camera_contract() -> dict[str, Any]:
+    return {
+        "fpv": {
+            MUJOCO_LANE_ID: "robot_0/head_camera",
+            ISAAC_LANE_ID: "/World/robot_0/head_camera",
+        },
+        "chase": {
+            MUJOCO_LANE_ID: "robot_0/camera_follower",
+            ISAAC_LANE_ID: "robot_relative_camera_follower",
+        },
+        "policy_input_note": "FPV is the robot camera. Chase is report evidence only.",
+    }
+
+
 def _comparison_targets(state: dict[str, Any], *, limit: int) -> list[dict[str, str]]:
     targets: list[dict[str, str]] = []
     for receptacle_id in sorted((state.get("receptacles") or {}).keys()):
@@ -466,16 +486,21 @@ def _select_comparison_targets(
     *,
     limit: int,
     scene_binding_diagnostics: dict[str, Any] | None,
+    isaac_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     candidates = _comparison_targets(state, limit=max(1, limit * 4))
-    binding_ids = _bound_comparison_target_ids(scene_binding_diagnostics or {})
+    binding_ids = _bound_comparison_target_ids(
+        scene_binding_diagnostics or {},
+        isaac_state=isaac_state or {},
+    )
     if any(binding_ids.values()):
-        selected = [
+        bound_candidates = [
             item
             for item in candidates
             if str(item.get("target_id") or "")
             in binding_ids.get(str(item.get("kind") or ""), set())
-        ][:limit]
+        ]
+        selected = bound_candidates[:limit]
         dropped = [
             item
             for item in candidates
@@ -492,33 +517,64 @@ def _select_comparison_targets(
         "status": status,
         "requested_limit": limit,
         "candidate_count": len(candidates),
-        "isaac_bound_candidate_count": len(selected),
+        "isaac_bound_candidate_count": len(bound_candidates) if any(binding_ids.values()) else 0,
         "selected_count": len(selected),
         "selected_targets": selected,
         "dropped_unbound_target_count": len(dropped),
         "dropped_unbound_targets": dropped[:10],
+        "not_selected_bound_target_count": max(
+            0,
+            (len(bound_candidates) if any(binding_ids.values()) else len(candidates))
+            - len(selected),
+        ),
+        "not_selected_bound_targets": (
+            bound_candidates[len(selected) : len(selected) + 10]
+            if any(binding_ids.values())
+            else candidates[len(selected) : len(selected) + 10]
+        ),
         "interpretation": (
-            "Robot-camera apple-to-apple visual parity compares targets that both backends "
-            "can bind to USD/MJCF render contracts. Targets without Isaac USD binding "
-            "evidence are dropped from the comparison set instead of being counted as "
-            "render-domain material gaps."
+            "Robot-camera apple-to-apple image parity renders a bounded subset of targets "
+            "that both backends can bind to USD/MJCF render contracts. Objects outside "
+            "this selected image subset are still covered by object_parity_audit when "
+            "state/index evidence is available."
         ),
     }
 
 
 def _bound_comparison_target_ids(
     scene_binding_diagnostics: dict[str, Any],
+    *,
+    isaac_state: dict[str, Any] | None = None,
 ) -> dict[str, set[str]]:
     return {
-        "receptacle": _bound_ids_from_groups(
-            scene_binding_diagnostics,
-            ("receptacle_bindings", "selected_target_receptacle_bindings"),
+        "receptacle": set(
+            _bound_ids_from_index(_dict((isaac_state or {}).get("receptacle_index")))
+            | _bound_ids_from_groups(
+                scene_binding_diagnostics,
+                ("receptacle_bindings", "selected_target_receptacle_bindings"),
+            )
         ),
-        "object": _bound_ids_from_groups(
-            scene_binding_diagnostics,
-            ("object_bindings", "selected_object_bindings"),
+        "object": set(
+            _bound_ids_from_index(_dict((isaac_state or {}).get("object_index")))
+            | _bound_ids_from_groups(
+                scene_binding_diagnostics,
+                ("object_bindings", "selected_object_bindings"),
+            )
         ),
     }
+
+
+def _bound_ids_from_index(index: dict[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for target_id, raw_entry in index.items():
+        entry = _dict(raw_entry)
+        if entry.get("valid_stage_prim") is False:
+            continue
+        if entry.get("geometry_status") == "missing":
+            continue
+        if entry.get("usd_prim_path"):
+            ids.add(str(target_id))
+    return ids
 
 
 def _bound_ids_from_groups(
@@ -796,6 +852,17 @@ def _attach_render_contract_diagnostics(
     )
     manifest["render_domain_checks"] = domain_checks
     manifest.setdefault("summary", {})["render_domain_checks"] = domain_checks
+    object_audit = _object_parity_audit(
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+        mujoco_contract=mujoco_contract,
+        isaac_contract=isaac_contract,
+        scene_binding_diagnostics=scene_binding_diagnostics,
+    )
+    manifest["object_parity_audit"] = object_audit
+    manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
+        object_audit
+    )
 
 
 def _scene_binding_summary(scene_binding_diagnostics: dict[str, Any]) -> dict[str, Any]:
@@ -811,6 +878,430 @@ def _scene_binding_summary(scene_binding_diagnostics: dict[str, Any]) -> dict[st
             "selected_target_receptacle_bound_count"
         ),
     }
+
+
+def _object_parity_audit(
+    *,
+    mujoco_state: dict[str, Any],
+    isaac_state: dict[str, Any],
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+    scene_binding_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    object_ids = sorted(
+        set(_dict(mujoco_state.get("objects")))
+        | set(_dict(isaac_state.get("object_index")))
+        | _bound_ids_from_groups(scene_binding_diagnostics, ("object_bindings",))
+    )
+    receptacle_ids = sorted(
+        set(_dict(mujoco_state.get("receptacles")))
+        | set(_dict(isaac_state.get("receptacle_index")))
+        | _bound_ids_from_groups(scene_binding_diagnostics, ("receptacle_bindings",))
+    )
+    for target_id in object_ids:
+        items.append(
+            _object_parity_item(
+                kind="object",
+                target_id=str(target_id),
+                mujoco_state=mujoco_state,
+                isaac_state=isaac_state,
+                mujoco_contract=mujoco_contract,
+                isaac_contract=isaac_contract,
+                scene_binding_diagnostics=scene_binding_diagnostics,
+            )
+        )
+    for target_id in receptacle_ids:
+        items.append(
+            _object_parity_item(
+                kind="receptacle",
+                target_id=str(target_id),
+                mujoco_state=mujoco_state,
+                isaac_state=isaac_state,
+                mujoco_contract=mujoco_contract,
+                isaac_contract=isaac_contract,
+                scene_binding_diagnostics=scene_binding_diagnostics,
+            )
+        )
+    high_priority_statuses = {
+        "missing_isaac_index",
+        "missing_mujoco_state",
+        "isaac_geometry_gap",
+        "missing_usd_prim_path",
+        "category_delta",
+        "pose_delta",
+        "support_metadata_delta",
+        "state_delta",
+        "state_not_rendered_to_usd",
+        "visual_state_unverified",
+        "material_or_texture_name_delta",
+        "missing_object_binding_evidence",
+    }
+    high_priority = [
+        item
+        for item in items
+        if any(status in high_priority_statuses for status in _object_parity_item_statuses(item))
+    ]
+    if not items:
+        status = "no_scene_objects"
+        next_action = "No MuJoCo or Isaac scene objects were available for object parity audit."
+    elif high_priority:
+        status = "object_parity_gaps_detected"
+        next_action = (
+            "Inspect high-priority object parity rows before changing camera settings. "
+            "Start with missing bindings, category/pose/support deltas, and USD state "
+            "that is not rendered to geometry."
+        )
+    else:
+        status = "object_parity_index_aligned"
+        next_action = (
+            "Object indices and compact material/state contracts align for this scene; "
+            "remaining residuals are likely renderer response or robot visual import."
+        )
+    return {
+        "schema": "robot_camera_object_parity_audit_v1",
+        "status": status,
+        "item_count": len(items),
+        "object_count": sum(1 for item in items if item.get("kind") == "object"),
+        "receptacle_count": sum(1 for item in items if item.get("kind") == "receptacle"),
+        "high_priority_gap_count": len(high_priority),
+        "binding_status_counts": _status_counts(item.get("binding_status") for item in items),
+        "category_status_counts": _status_counts(item.get("category_status") for item in items),
+        "pose_status_counts": _status_counts(item.get("pose_status") for item in items),
+        "support_status_counts": _status_counts(item.get("support_status") for item in items),
+        "state_status_counts": _status_counts(item.get("state_status") for item in items),
+        "render_contract_status_counts": _status_counts(
+            _dict(item.get("render_contract_delta")).get("status") for item in items
+        ),
+        "high_priority_items": high_priority[:20],
+        "items": items,
+        "recommended_next_action": next_action,
+        "interpretation": (
+            "This audit checks scene objects/receptacles beyond the limited image target "
+            "set. It compares MuJoCo state and MJCF render contracts against Isaac USD "
+            "indices, compact USD bounds, parent/support metadata, semantic open state, "
+            "and PreviewSurface material bindings."
+        ),
+    }
+
+
+def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": audit.get("schema"),
+        "status": audit.get("status"),
+        "item_count": audit.get("item_count"),
+        "object_count": audit.get("object_count"),
+        "receptacle_count": audit.get("receptacle_count"),
+        "high_priority_gap_count": audit.get("high_priority_gap_count"),
+        "binding_status_counts": audit.get("binding_status_counts"),
+        "category_status_counts": audit.get("category_status_counts"),
+        "pose_status_counts": audit.get("pose_status_counts"),
+        "support_status_counts": audit.get("support_status_counts"),
+        "state_status_counts": audit.get("state_status_counts"),
+        "render_contract_status_counts": audit.get("render_contract_status_counts"),
+        "high_priority_items": audit.get("high_priority_items"),
+        "recommended_next_action": audit.get("recommended_next_action"),
+    }
+
+
+def _object_parity_item(
+    *,
+    kind: str,
+    target_id: str,
+    mujoco_state: dict[str, Any],
+    isaac_state: dict[str, Any],
+    mujoco_contract: dict[str, Any],
+    isaac_contract: dict[str, Any],
+    scene_binding_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    mujoco_entry = _mujoco_state_entry(mujoco_state, kind, target_id)
+    isaac_entry = _isaac_index_entry(isaac_state, kind, target_id)
+    target = {"kind": kind, "target_id": target_id}
+    binding = _target_usd_binding(scene_binding_diagnostics, target)
+    usd_prim_path = str(
+        isaac_entry.get("usd_prim_path")
+        or binding.get("usd_prim_path")
+        or _dict(_dict(isaac_entry.get("usd_world_bounds")).get("prim")).get("path")
+        or ""
+    )
+    mujoco_category = _object_category_key(mujoco_entry.get("category"))
+    isaac_category = _object_category_key(
+        isaac_entry.get("category") or isaac_entry.get("usd_category") or binding.get("category")
+    )
+    mujoco_position = _vec3_or_none(mujoco_entry.get("position"))
+    isaac_position = _isaac_index_position(isaac_entry)
+    pose_delta = (
+        round(_vec_distance(mujoco_position, isaac_position), 6)
+        if mujoco_position is not None and isaac_position is not None
+        else None
+    )
+    mujoco_render = _mujoco_view_render_contract(mujoco_contract, anchor_id=target_id)
+    isaac_render = _isaac_view_render_contract(isaac_contract, usd_prim_path=usd_prim_path)
+    render_delta = _view_render_contract_delta(
+        suspicion="object_material_texture_binding_contract",
+        mujoco=mujoco_render,
+        isaac=isaac_render,
+    )
+    return {
+        "kind": kind,
+        "target_id": target_id,
+        "binding_status": _object_binding_status(mujoco_entry, isaac_entry, usd_prim_path),
+        "selected_public_target": _is_selected_public_target(
+            scene_binding_diagnostics,
+            kind,
+            target_id,
+        ),
+        "mujoco": _compact_mujoco_object_entry(mujoco_entry),
+        "isaac": _compact_isaac_index_entry(isaac_entry, usd_prim_path=usd_prim_path),
+        "category_status": _object_category_status(
+            mujoco_category=mujoco_category,
+            isaac_category=isaac_category,
+            mujoco_entry=mujoco_entry,
+            isaac_entry=isaac_entry,
+        ),
+        "pose_status": _object_pose_status(mujoco_position, isaac_position, pose_delta),
+        "pose_delta_m": pose_delta,
+        "support_status": _object_support_status(mujoco_entry, isaac_entry),
+        "state_status": _object_state_status(
+            target_id=target_id,
+            kind=kind,
+            mujoco_entry=mujoco_entry,
+            isaac_entry=isaac_entry,
+            mujoco_state=mujoco_state,
+            isaac_state=isaac_state,
+        ),
+        "render_contract_delta": _compact_render_contract_delta(render_delta),
+        "render_contract": {
+            "mujoco_status": mujoco_render.get("status"),
+            "isaac_status": isaac_render.get("status"),
+            "mujoco_visual_geom_count": mujoco_render.get("visual_geom_count"),
+            "isaac_material_binding_count": isaac_render.get("material_binding_count"),
+            "mujoco_materials": mujoco_render.get("materials"),
+            "isaac_materials": isaac_render.get("materials"),
+            "mujoco_texture_basenames": _path_basenames(
+                [str(value) for value in mujoco_render.get("texture_files") or []]
+            ),
+            "isaac_texture_basenames": _path_basenames(
+                [str(value) for value in isaac_render.get("texture_files") or []]
+            ),
+        },
+    }
+
+
+def _mujoco_state_entry(state: dict[str, Any], kind: str, target_id: str) -> dict[str, Any]:
+    group = "receptacles" if kind == "receptacle" else "objects"
+    return _dict(_dict(state.get(group)).get(target_id))
+
+
+def _isaac_index_entry(state: dict[str, Any], kind: str, target_id: str) -> dict[str, Any]:
+    group = "receptacle_index" if kind == "receptacle" else "object_index"
+    return _dict(_dict(state.get(group)).get(target_id))
+
+
+def _isaac_index_position(entry: dict[str, Any]) -> tuple[float, float, float] | None:
+    bounds = _dict(entry.get("usd_world_bounds"))
+    center = _vec3_or_none(bounds.get("center"))
+    if center is not None:
+        return center
+    return _vec3_or_none(entry.get("position"))
+
+
+def _object_binding_status(
+    mujoco_entry: dict[str, Any],
+    isaac_entry: dict[str, Any],
+    usd_prim_path: str,
+) -> str:
+    if not mujoco_entry and not isaac_entry:
+        return "missing_both"
+    if not mujoco_entry:
+        return "missing_mujoco_state"
+    if not isaac_entry:
+        return "missing_isaac_index"
+    if not usd_prim_path:
+        return "missing_usd_prim_path"
+    if (
+        isaac_entry.get("geometry_status") == "missing"
+        or isaac_entry.get("valid_stage_prim") is False
+    ):
+        return "isaac_geometry_gap"
+    if isaac_entry.get("has_renderable_geometry") is False:
+        return "isaac_geometry_gap"
+    return "bound_in_both"
+
+
+def _object_category_status(
+    *,
+    mujoco_category: str,
+    isaac_category: str,
+    mujoco_entry: dict[str, Any],
+    isaac_entry: dict[str, Any],
+) -> str:
+    if not mujoco_entry or not isaac_entry:
+        return "missing_entry"
+    if not mujoco_category or not isaac_category:
+        return "missing_category"
+    return "category_aligned" if mujoco_category == isaac_category else "category_delta"
+
+
+def _object_pose_status(
+    mujoco_position: tuple[float, float, float] | None,
+    isaac_position: tuple[float, float, float] | None,
+    pose_delta: float | None,
+) -> str:
+    if mujoco_position is None or isaac_position is None or pose_delta is None:
+        return "pose_missing"
+    if pose_delta <= OBJECT_PARITY_POSE_THRESHOLD_M:
+        return "pose_aligned"
+    return "pose_delta"
+
+
+def _object_support_status(mujoco_entry: dict[str, Any], isaac_entry: dict[str, Any]) -> str:
+    if not mujoco_entry or not isaac_entry:
+        return "missing_entry"
+    mujoco_parent = str(
+        mujoco_entry.get("location_id")
+        or mujoco_entry.get("contained_in")
+        or mujoco_entry.get("parent")
+        or ""
+    )
+    isaac_parent = str(isaac_entry.get("parent") or isaac_entry.get("support_receptacle_id") or "")
+    if not mujoco_parent and not isaac_parent:
+        return "support_not_reported"
+    if not mujoco_parent and isaac_parent:
+        return "support_available_in_isaac_only"
+    if mujoco_parent and not isaac_parent:
+        return "support_available_in_mujoco_only"
+    if mujoco_parent == isaac_parent:
+        return "support_metadata_aligned"
+    return "support_metadata_delta"
+
+
+def _object_state_status(
+    *,
+    target_id: str,
+    kind: str,
+    mujoco_entry: dict[str, Any],
+    isaac_entry: dict[str, Any],
+    mujoco_state: dict[str, Any],
+    isaac_state: dict[str, Any],
+) -> str:
+    articulations = _dict(_dict(isaac_state.get("semantic_pose_state")).get("articulations"))
+    articulation = _dict(articulations.get(target_id))
+    category = _object_category_key(
+        mujoco_entry.get("category")
+        or isaac_entry.get("category")
+        or isaac_entry.get("usd_category")
+    )
+    if kind != "receptacle" and not articulation:
+        if category in OBJECT_VISUAL_STATE_CATEGORIES:
+            return "visual_state_unverified"
+        return "not_applicable"
+    mujoco_open = target_id in {
+        str(value) for value in mujoco_state.get("open_receptacle_ids") or []
+    }
+    isaac_open_ids = {str(value) for value in isaac_state.get("open_receptacle_ids") or []}
+    isaac_open = target_id in isaac_open_ids or articulation.get("open") is True
+    if mujoco_open != isaac_open:
+        return "state_delta"
+    if isaac_open and articulation and articulation.get("rendered_to_usd") is False:
+        return "state_not_rendered_to_usd"
+    return "state_aligned"
+
+
+def _is_selected_public_target(
+    scene_binding_diagnostics: dict[str, Any],
+    kind: str,
+    target_id: str,
+) -> bool:
+    groups = (
+        ("selected_target_receptacle_bindings",)
+        if kind == "receptacle"
+        else ("selected_object_bindings",)
+    )
+    return any(target_id in _dict(scene_binding_diagnostics.get(group)) for group in groups)
+
+
+def _compact_mujoco_object_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "object_id",
+        "receptacle_id",
+        "category",
+        "name",
+        "upstream_object_id",
+        "location_id",
+        "contained_in",
+        "pickupable",
+        "position",
+        "support_top_z",
+    )
+    return {key: entry.get(key) for key in keys if key in entry}
+
+
+def _object_category_key(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _compact_isaac_index_entry(entry: dict[str, Any], *, usd_prim_path: str) -> dict[str, Any]:
+    keys = (
+        "asset_id",
+        "category",
+        "usd_category",
+        "metadata_object_id",
+        "metadata_handle",
+        "parent",
+        "geometry_status",
+        "has_renderable_geometry",
+        "mesh_descendant_count",
+        "renderable_descendant_count",
+        "missing_referenced_asset_count",
+        "valid_stage_prim",
+    )
+    compact = {key: entry.get(key) for key in keys if key in entry}
+    if usd_prim_path:
+        compact["usd_prim_path"] = usd_prim_path
+    bounds = _dict(entry.get("usd_world_bounds"))
+    if bounds:
+        compact["usd_world_bounds"] = {
+            key: bounds.get(key) for key in ("center", "size", "min", "max") if key in bounds
+        }
+    return compact
+
+
+def _compact_render_contract_delta(delta: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "status",
+        "mujoco_status",
+        "isaac_status",
+        "mujoco_material_count",
+        "isaac_material_count",
+        "mujoco_texture_count",
+        "isaac_texture_count",
+        "material_names_only_in_mujoco",
+        "material_names_only_in_isaac",
+        "texture_files_only_in_mujoco",
+        "texture_files_only_in_isaac",
+    )
+    return {key: delta.get(key) for key in keys if key in delta}
+
+
+def _object_parity_item_statuses(item: dict[str, Any]) -> set[str]:
+    return {
+        str(value)
+        for value in (
+            item.get("binding_status"),
+            item.get("category_status"),
+            item.get("pose_status"),
+            item.get("support_status"),
+            item.get("state_status"),
+            _dict(item.get("render_contract_delta")).get("status"),
+        )
+        if value
+    }
+
+
+def _status_counts(values: Any) -> dict[str, int]:
+    collected = [str(value) for value in values if value]
+    return {name: collected.count(name) for name in sorted(set(collected))}
 
 
 def _location_render_contract_diagnostics(
@@ -1903,8 +2394,9 @@ def _camera_contract_diagnostics(locations: list[dict[str, Any]]) -> dict[str, A
         status = "no_successful_camera_contracts"
         next_action = "Run at least one successful comparison location."
     chase_note = (
-        "Chase is report evidence only. It is not expected to be the same camera contract "
-        "unless both backends explicitly use the same chase camera model."
+        "Chase is report evidence only. Current robot-camera parity runs expect both "
+        "backends to use a robot-relative rear/high follower camera, but FPV remains "
+        "the policy/input camera contract."
     )
     return {
         "schema": "robot_camera_contract_diagnostics_v1",
@@ -2787,9 +3279,63 @@ def _render_report(manifest: dict[str, Any]) -> str:
         + html.escape(str(manifest.get("purpose")))
         + "</p><pre>"
         + html.escape(json.dumps(manifest.get("summary", {}), indent=2, sort_keys=True))
-        + "</pre></header>"
+        + "</pre>"
+        + _render_object_parity_audit(manifest)
+        + "</header>"
         + "".join(rows)
         + "</body></html>"
+    )
+
+
+def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
+    audit = _dict(manifest.get("object_parity_audit")) or _dict(
+        _dict(manifest.get("summary")).get("object_parity_audit")
+    )
+    if not audit:
+        return ""
+    rows = []
+    for item in audit.get("high_priority_items") or []:
+        if not isinstance(item, dict):
+            continue
+        render_delta = _dict(item.get("render_contract_delta"))
+        mujoco = _dict(item.get("mujoco"))
+        isaac = _dict(item.get("isaac"))
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('kind') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('target_id') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('binding_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('category_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('pose_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('support_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('state_status') or ''))}</td>"
+            f"<td>{html.escape(str(render_delta.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(mujoco.get('category') or ''))}</td>"
+            f"<td>{html.escape(str(isaac.get('category') or isaac.get('usd_category') or ''))}</td>"
+            f"<td>{html.escape(str(isaac.get('asset_id') or ''))}</td>"
+            "</tr>"
+        )
+    table = (
+        "<table><thead><tr>"
+        "<th>Kind</th><th>Target</th><th>Binding</th><th>Category</th>"
+        "<th>Pose</th><th>Support</th><th>State</th><th>Render</th>"
+        "<th>MuJoCo Cat</th><th>Isaac Cat</th><th>Isaac Asset</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        if rows
+        else "<p>No high-priority object parity gaps were detected.</p>"
+    )
+    return (
+        "<h2>Object Parity Audit</h2>"
+        "<p>Status: <code>"
+        + html.escape(str(audit.get("status") or ""))
+        + "</code>; items "
+        + html.escape(str(audit.get("item_count") or 0))
+        + "; high-priority gaps "
+        + html.escape(str(audit.get("high_priority_gap_count") or 0))
+        + ".</p><p>"
+        + html.escape(str(audit.get("recommended_next_action") or ""))
+        + "</p>"
+        + table
     )
 
 

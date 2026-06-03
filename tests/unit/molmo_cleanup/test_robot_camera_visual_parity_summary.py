@@ -444,13 +444,51 @@ def test_visual_parity_summary_tracks_combined_material_light_candidate(
     assert "<img src='../val0_scale_square_rotx25/isaac/robot_views/0001_target.fpv.png'" in (
         report_html
     )
-    assert "non-comparable auxiliary" in report_html
-    assert "robot_0/camera_follower / external rear/high report camera" in report_html
+    assert "non-comparable auxiliary" not in report_html
+    assert "robot_0/camera_follower / robot_relative_camera_follower" in report_html
+    assert "Object Parity" in report_html
     default_rendering = manifest["default_rendering_visual_parity"]
     assert any(
         blocker.get("reason") == "material_light_default_gate_not_ready"
         for blocker in default_rendering["blockers"]
     )
+
+
+def test_visual_parity_summary_surfaces_object_parity_audit(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_object_audit")
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "val1_baseline" / "comparison_manifest.json",
+        scene_index=1,
+        seed=8,
+        generated_mess_count=2,
+        fpv=26.5,
+        chase=51.4,
+        location_count=4,
+        object_parity_audit={
+            "status": "object_parity_gaps_detected",
+            "item_count": 29,
+            "high_priority_gap_count": 6,
+        },
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    baseline_summary = manifest["baselines"][0]
+    assert baseline_summary["object_parity_status"] == "object_parity_gaps_detected"
+    assert baseline_summary["object_parity_high_priority_gap_count"] == 6
+    report_html = (tmp_path / "summary" / "report.html").read_text(encoding="utf-8")
+    assert "object_parity_gaps_detected" in report_html
+    assert "<th>Object Gaps</th>" in report_html
 
 
 def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
@@ -1054,6 +1092,7 @@ def _write_robot_camera_manifest(
     lens_status: str = "fpv_lens_aligned",
     pose_status: str = "fpv_world_pose_aligned",
     locations: list[dict] | None = None,
+    object_parity_audit: dict | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True)
     default_locations = [_visual_location(path.parent)] if locations is None else locations
@@ -1095,6 +1134,7 @@ def _write_robot_camera_manifest(
                 "selected_count": location_count,
                 "dropped_unbound_target_count": 0,
             },
+            "object_parity_audit": object_parity_audit or {},
         },
         "locations": default_locations,
     }
@@ -1123,11 +1163,11 @@ def _visual_location(output_dir: Path) -> dict:
         },
         "camera_contract_diagnostics": {
             "chase_contract": {
-                "same_camera_contract": False,
+                "same_camera_contract": True,
                 "mujoco_source": "robot_0/camera_follower",
-                "isaac_source": "external rear/high report camera",
+                "isaac_source": "robot_relative_camera_follower",
                 "evidence_note": (
-                    "Chase is auxiliary report evidence; FPV is the policy/input camera contract."
+                    "Chase now uses a robot-relative rear/high report camera in both backends."
                 ),
             }
         },

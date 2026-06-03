@@ -857,6 +857,59 @@ def test_robot_camera_comparison_target_selection_filters_unbound_isaac_targets(
     assert selection["dropped_unbound_targets"][0]["target_id"] == "alarmclock_1"
 
 
+def test_robot_camera_comparison_target_selection_uses_isaac_scene_index() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_target_selection_scene_index",
+    )
+    selection = run_camera._select_comparison_targets(
+        {
+            "receptacles": {
+                "bed_1": {},
+                "table_1": {},
+            },
+            "objects": {
+                "box_1": {},
+                "bowl_1": {},
+            },
+        },
+        limit=2,
+        scene_binding_diagnostics={},
+        isaac_state={
+            "receptacle_index": {
+                "bed_1": {
+                    "usd_prim_path": "/World/bed_1",
+                    "geometry_status": "renderable",
+                },
+                "table_1": {
+                    "usd_prim_path": "/World/table_1",
+                    "geometry_status": "renderable",
+                },
+            },
+            "object_index": {
+                "box_1": {
+                    "usd_prim_path": "/World/box_1",
+                    "geometry_status": "renderable",
+                },
+                "bowl_1": {
+                    "usd_prim_path": "/World/bowl_1",
+                    "geometry_status": "renderable",
+                },
+            },
+        },
+    )
+
+    assert selection["status"] == "isaac_bound_targets_selected"
+    assert selection["isaac_bound_candidate_count"] == 4
+    assert [item["target_id"] for item in selection["selected_targets"]] == ["bed_1", "table_1"]
+    assert selection["not_selected_bound_target_count"] == 2
+    assert [item["target_id"] for item in selection["not_selected_bound_targets"]] == [
+        "bowl_1",
+        "box_1",
+    ]
+    assert selection["dropped_unbound_target_count"] == 0
+
+
 def test_robot_camera_comparison_target_selection_preserves_legacy_order_without_bindings() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -952,6 +1005,196 @@ def Xform "World"
     assert summary["status"] == "target_material_texture_or_binding_gap"
     assert summary["high_priority_target_delta_count"] == 1
     assert location["target_contract_delta"]["status"] == "missing_object_binding_evidence"
+
+
+def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_object_parity_audit",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset>
+    <texture name="BoxTex" file="box_closed.png"/>
+    <texture name="BowlTex" file="bowl.png"/>
+    <material name="material_Box" texture="BoxTex"/>
+    <material name="material_Bowl" texture="BowlTex"/>
+  </asset>
+  <worldbody>
+    <body name="box_1"><geom name="box_1_visual_0" material="material_Box"/></body>
+    <body name="bowl_1"><geom name="bowl_1_visual_0" material="material_Bowl"/></body>
+    <body name="table_1"><geom name="table_1_visual_0" material="material_Box"/></body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Xform "box_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/box_1/Looks/material_Box_Open>
+    }
+    def Scope "Looks"
+    {
+      def Material "material_Box_Open"
+      {
+        def Shader "PreviewSurface"
+        {
+          uniform token info:id = "UsdPreviewSurface"
+          color3f inputs:diffuseColor = (0.6, 0.4, 0.2)
+        }
+      }
+    }
+  }
+  def Xform "bowl_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/bowl_1/Looks/material_Bowl>
+    }
+    def Scope "Looks"
+    {
+      def Material "material_Bowl"
+      {
+        def Shader "PreviewSurface"
+        {
+          uniform token info:id = "UsdPreviewSurface"
+          color3f inputs:diffuseColor = (1, 1, 1)
+        }
+      }
+    }
+  }
+  def Xform "table_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/table_1/Looks/material_Box>
+    }
+    def Scope "Looks"
+    {
+      def Material "material_Box"
+      {
+        def Shader "PreviewSurface"
+        {
+          uniform token info:id = "UsdPreviewSurface"
+          color3f inputs:diffuseColor = (1, 1, 1)
+        }
+      }
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    mujoco_state = {
+        "scene_xml": str(mujoco_xml),
+        "objects": {
+            "box_1": {
+                "object_id": "box_1",
+                "category": "Box",
+                "location_id": "",
+                "position": [1.0, 2.0, 0.5],
+            },
+            "bowl_1": {
+                "object_id": "bowl_1",
+                "category": "Bowl",
+                "location_id": "table_1",
+                "position": [2.0, 2.0, 0.7],
+            },
+        },
+        "receptacles": {
+            "table_1": {
+                "receptacle_id": "table_1",
+                "category": "DiningTable",
+                "position": [2.0, 2.0, 0.6],
+            }
+        },
+        "open_receptacle_ids": ["table_1"],
+    }
+    isaac_state = {
+        "scene_usd": str(isaac_usd),
+        "object_index": {
+            "box_1": {
+                "asset_id": "Box_10",
+                "category": "Box",
+                "parent": "table_1",
+                "usd_prim_path": "/World/box_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [1.01, 2.02, 0.51],
+                    "size": [0.5, 0.4, 0.3],
+                },
+            },
+            "bowl_1": {
+                "asset_id": "Bowl_12",
+                "category": "Plate",
+                "parent": "table_1",
+                "usd_prim_path": "/World/bowl_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [2.0, 2.0, 0.7],
+                    "size": [0.2, 0.2, 0.1],
+                },
+            },
+        },
+        "receptacle_index": {
+            "table_1": {
+                "asset_id": "Dining_Table_203",
+                "category": "DiningTable",
+                "usd_prim_path": "/World/table_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [2.0, 2.0, 0.6],
+                    "size": [1.0, 1.0, 0.6],
+                },
+            }
+        },
+        "open_receptacle_ids": ["table_1"],
+        "semantic_pose_state": {
+            "articulations": {
+                "table_1": {
+                    "open": True,
+                    "rendered_to_usd": False,
+                }
+            }
+        },
+        "scene_binding_diagnostics": {},
+    }
+    audit = run_camera._object_parity_audit(
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+        mujoco_contract=run_camera._mujoco_render_contract_from_xml(str(mujoco_xml)),
+        isaac_contract=run_camera._isaac_render_contract_from_usda(str(isaac_usd)),
+        scene_binding_diagnostics={},
+    )
+
+    assert audit["schema"] == "robot_camera_object_parity_audit_v1"
+    assert audit["status"] == "object_parity_gaps_detected"
+    assert audit["object_count"] == 2
+    assert audit["receptacle_count"] == 1
+    items = {item["target_id"]: item for item in audit["items"]}
+    assert items["box_1"]["binding_status"] == "bound_in_both"
+    assert items["box_1"]["state_status"] == "visual_state_unverified"
+    assert items["box_1"]["support_status"] == "support_available_in_isaac_only"
+    assert items["box_1"]["render_contract_delta"]["status"] == "material_or_texture_name_delta"
+    assert items["box_1"]["isaac"]["asset_id"] == "Box_10"
+    assert items["bowl_1"]["category_status"] == "category_delta"
+    assert items["table_1"]["state_status"] == "state_not_rendered_to_usd"
+    high_priority_ids = {item["target_id"] for item in audit["high_priority_items"]}
+    assert {"box_1", "bowl_1", "table_1"} <= high_priority_ids
 
 
 def test_robot_camera_patch_isaac_pose_can_set_comparison_color_profile(

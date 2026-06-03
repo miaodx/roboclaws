@@ -226,6 +226,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     target_selection = _dict(summary.get("target_selection") or payload.get("target_selection"))
     render_checks = _dict(summary.get("render_domain_checks"))
     render = _dict(summary.get("render_contract_diagnostics"))
+    object_parity = _dict(summary.get("object_parity_audit") or payload.get("object_parity_audit"))
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
     return {
@@ -253,6 +254,9 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "fpv_world_pose_status": fpv_pose.get("status"),
         "render_domain_status": render_checks.get("status"),
         "render_contract_status": render.get("status"),
+        "object_parity_status": object_parity.get("status"),
+        "object_parity_high_priority_gap_count": object_parity.get("high_priority_gap_count"),
+        "object_parity_item_count": object_parity.get("item_count"),
         "target_selection": {
             "status": target_selection.get("status"),
             "selected_count": target_selection.get("selected_count"),
@@ -2192,6 +2196,8 @@ def _render_report(manifest: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
         f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
         f"<td>{html.escape(str(item.get('chase_mean_abs_rgb_avg') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
         "</tr>"
         for item in manifest.get("baselines") or []
         if isinstance(item, dict)
@@ -2202,9 +2208,19 @@ def _render_report(manifest: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('probe_kind') or ''))}</td>"
         f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
         f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
         "</tr>"
         for item in manifest.get("probes") or []
         if isinstance(item, dict)
+    )
+    baseline_header = (
+        "<tr><th>Manifest</th><th>Scene</th><th>FPV</th><th>Chase</th>"
+        "<th>Object Parity</th><th>Object Gaps</th></tr>"
+    )
+    probe_header = (
+        "<tr><th>Label</th><th>Kind</th><th>Scene</th><th>FPV</th>"
+        "<th>Object Parity</th><th>Object Gaps</th></tr>"
     )
     return f"""<!doctype html>
 <html lang="en">
@@ -2261,9 +2277,9 @@ def _render_report(manifest: dict[str, Any]) -> str:
   <h2>Checks</h2>
   <table><thead><tr><th>Check</th><th>Status</th><th>Interpretation</th></tr></thead><tbody>{rows}</tbody></table>
   <h2>Baselines</h2>
-  <table><thead><tr><th>Manifest</th><th>Scene</th><th>FPV</th><th>Chase</th></tr></thead><tbody>{baseline_rows}</tbody></table>
+  <table><thead>{baseline_header}</thead><tbody>{baseline_rows}</tbody></table>
   <h2>Probes</h2>
-  <table><thead><tr><th>Label</th><th>Kind</th><th>Scene</th><th>FPV</th></tr></thead><tbody>{probe_rows}</tbody></table>
+  <table><thead>{probe_header}</thead><tbody>{probe_rows}</tbody></table>
 </body>
 </html>
 """
@@ -2312,8 +2328,7 @@ def _render_visual_sample_view(sample: dict[str, Any], view: str) -> str:
     residual = sample.get(f"{view}_residual_class") or ""
     view_note = ""
     view_badge = ""
-    if view == "chase" and not sample.get("chase_same_camera_contract"):
-        view_badge = " non-comparable auxiliary"
+    if view == "chase":
         source_note = " / ".join(
             part
             for part in (
@@ -2326,6 +2341,8 @@ def _render_visual_sample_view(sample: dict[str, Any], view: str) -> str:
         if source_note:
             note = f"{note} Sources: {source_note}."
         view_note = f"<p class='muted'>{html.escape(note)}</p>" if note else ""
+        if not sample.get("chase_same_camera_contract"):
+            view_badge = " non-comparable auxiliary"
     cells = []
     for backend, path in (("MuJoCo", mujoco), ("Isaac", isaac)):
         if not path:
