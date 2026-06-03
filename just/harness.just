@@ -8,6 +8,7 @@
 # - just harness::run <task>          run one iteration on a task
 # - just harness::navigator <task>    explicit navigator-harness alias
 # - just harness::molmo-cleanup-codex-perf  live Codex cleanup performance lane
+# - just harness::codex-cleanup-harness8  eight-case Codex cleanup regression grid
 # - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
 # - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
@@ -178,6 +179,10 @@ molmo-cleanup-codex-perf *overrides:
       exit 0
     fi
     exec "${cmd[@]}"
+
+# Eight-case live Codex cleanup regression grid.
+codex-cleanup-harness8 mode="dry-run" *overrides:
+    just molmo::codex-harness8 "{{mode}}" {{overrides}}
 
 # ADR-0003 real-world-style cleanup harness. The default runs the real
 # MolmoSpaces subprocess backend over three mess seeds, with the agent limited

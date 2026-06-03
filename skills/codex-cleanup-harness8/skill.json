@@ -1,0 +1,52 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "codex-cleanup-harness8",
+  "summary": "Run and review the eight-case live Codex household-cleanup regression grid.",
+  "abstraction_level": "harness_skill",
+  "role": "cleanup_regression_evidence",
+  "status": "active",
+  "mcp": {
+    "profiles": [
+      "household_world_v1",
+      "household_manipulation_v1",
+      "household_episode_v1"
+    ],
+    "required_tools": [],
+    "optional_tools": [],
+    "privileged_tools": [],
+    "boundary_notes": "This skill triggers public task and harness recipes only. Cleanup behavior remains owned by molmo-realworld-cleanup."
+  },
+  "capability_requirements": {
+    "profiles": [
+      "household_world_v1",
+      "household_manipulation_v1",
+      "household_episode_v1"
+    ],
+    "backend_variants": [
+      "molmospaces_subprocess"
+    ],
+    "notes": "The grid compares world-labels, sanitized world-labels, Grounding DINO camera labels, and RAW_FPV, with and without a DINO semantic-map-build prior."
+  },
+  "scripts": [
+    {
+      "path": "../../scripts/molmo_cleanup/run_codex_cleanup_harness8.py",
+      "kind": "harness",
+      "summary": "Builds the eight-row manifest, executes selected rows through just task::run, and renders JSON/HTML summaries."
+    }
+  ],
+  "evidence_outputs": [
+    "codex_cleanup_harness8.json",
+    "codex_cleanup_harness8.html",
+    "run_result.json",
+    "report.html",
+    "runtime_metric_map.json"
+  ],
+  "lifecycle": {
+    "refactor_signals": [
+      "the grid grows beyond a focused Codex cleanup regression set",
+      "review requires cross-driver comparisons instead of one Codex route",
+      "harness logic starts encoding cleanup tactics instead of evidence collection"
+    ],
+    "promote_to_mcp_when": []
+  }
+}
