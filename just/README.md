@@ -146,6 +146,7 @@ Current task mappings:
 - `ai2thor-nav` direct Codex/Claude: `ai2thor-navigator`
 - `photo-chairs` direct Codex/Claude: `capture-object-photo`
 - `semantic-map-build` direct: `molmo-realworld-cleanup` with cleanup actions disabled
+- `semantic-map-build` live Codex: `molmo-realworld-cleanup` with cleanup actions disabled for simulator backends; dedicated Agibot map-build runner for `backend=agibot_gdk`
 - `household-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
 
 Python owns route metadata and reusable launch pieces:
@@ -298,6 +299,7 @@ Prompt mappings for agents:
 | Prompt | Command |
 |---|---|
 | "run the semantic map build task" | `just task::run semantic-map-build direct world-labels` |
+| "run the semantic map build task with codex" | `just task::run semantic-map-build codex world-labels backend=molmospaces_subprocess` |
 | "run the household cleanup task with codex" | `just task::run household-cleanup codex world-labels` |
 | "run the household cleanup task with codex with smoke profile" | `just task::run household-cleanup codex smoke` |
 | "run the household cleanup camera raw profile" | `just task::run household-cleanup direct camera-raw` |

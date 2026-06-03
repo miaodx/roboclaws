@@ -1,4 +1,4 @@
-"""Household cleanup live-agent kickoff prompts."""
+"""Household live-agent kickoff prompts."""
 
 from __future__ import annotations
 
@@ -30,6 +30,52 @@ COMMON_CLEANUP_RULES = (
 )
 
 WORLD_LABELS_PROMPT = COMMON_PREFIX + COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES
+
+SEMANTIC_MAP_BUILD_RULES = (
+    "This run is semantic-map-build, not household-cleanup. User task: {task}. "
+    "Do not pick, place, place_inside, open_receptacle, close_receptacle, or clean any "
+    "object. Call metric_map first, then fixture_hints, build an exact waypoint "
+    "checklist from metric_map.inspection_waypoints, and sweep every inspection "
+    "waypoint with navigate_to_waypoint then observe. Mark a waypoint complete only "
+    "after that waypoint_id has an observe response. For camera-labels, call "
+    "declare_visual_candidates for each raw FPV observation with observation_id only "
+    "and omit candidates so the configured visual-grounding pipeline labels the "
+    "frame. Use the returned observations and runtime_metric_map public anchors as "
+    "map evidence only. Compare the checklist before done, visit any missing "
+    "waypoint_id, and call done only after every metric_map.inspection_waypoints "
+    "waypoint_id has been observed so runtime_metric_map.json and report.html are "
+    "generated."
+)
+
+WORLD_LABELS_SANITIZED_PROMPT = (
+    COMMON_PREFIX
+    + COMMON_WAYPOINT_RULES
+    + "treat visible_object_detections as perfect structured detections without "
+    "cleanup destination oracle fields; do not wait for or rely on "
+    "cleanup_recommended, and treat every observed detection as a cleanup "
+    "candidate to evaluate. If destination_policy_status is policy_required, "
+    "use destination_policy.preferred_fixture_categories and "
+    "destination_policy.placement_tool_by_fixture_category to select a matching "
+    "public semantic anchor or fixture instead of skipping the object. Because "
+    "sanitized candidate_fixture_id values are hidden, first complete an anchor "
+    "discovery sweep of every metric_map.inspection_waypoints waypoint before "
+    "the first pick unless a done recovery payload already gives a non-empty "
+    "destination_options.candidate_fixture_id for the object. After a "
+    "successful placement, do not re-clean observed handles from that completed "
+    "area. Once every metric_map.inspection_waypoints waypoint has been observed "
+    "and held_object_id is empty, call done as the authoritative closeout probe "
+    "before starting another optional cleanup chain; if done returns "
+    "pending_cleanup_candidates, clean exactly those listed handles and then "
+    "call done again. If done reports a held candidate, do not call done again "
+    "until that object is placed with destination_options.candidate_fixture_id "
+    "and destination_options.recommended_tool. If open_receptacle has succeeded "
+    "while holding an object, the next cleanup tool must be place_inside for the "
+    "same fixture_id before done, metric_map, observe, or another navigate call. "
+    "Use metric_map, fixture_hints, "
+    "runtime_metric_map.public_semantic_anchors, destination_policy, and tool "
+    "recovery hints to choose where to place observed objects. "
+    + COMMON_CLEANUP_RULES
+)
 
 CAMERA_LABELS_PROMPT = (
     COMMON_PREFIX
@@ -99,14 +145,42 @@ def render_kickoff_prompt(profile: str) -> str:
         return CAMERA_RAW_PROMPT
     if profile == "camera-labels":
         return CAMERA_LABELS_PROMPT
+    if profile == "world-labels-sanitized":
+        return WORLD_LABELS_SANITIZED_PROMPT
     return WORLD_LABELS_PROMPT
 
 
+def render_semantic_map_build_prompt(profile: str, task: str) -> str:
+    """Render the live-agent kickoff prompt for a semantic-map-build lane."""
+
+    prompt = COMMON_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
+    if profile == "camera-raw":
+        return (
+            prompt
+            + " This is the raw-FPV map-build lane: inspect each raw FPV image block "
+            "returned by observe, record only public map evidence, and do not declare "
+            "cleanup candidates."
+        )
+    if profile == "world-labels-sanitized":
+        return (
+            prompt
+            + " Treat visible_object_detections as structured public detections without "
+            "destination oracle fields; use them only as map labels."
+        )
+    return prompt
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Render a household cleanup kickoff prompt.")
+    parser = argparse.ArgumentParser(description="Render a household live-agent kickoff prompt.")
     parser.add_argument("--profile", default="world-labels")
+    parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--task", default="")
     args = parser.parse_args(argv)
-    print(render_kickoff_prompt(args.profile))
+    if args.task_name == "semantic-map-build":
+        task = args.task or "build a semantic map of this room"
+        print(render_semantic_map_build_prompt(args.profile, task))
+    else:
+        print(render_kickoff_prompt(args.profile))
     return 0
 
 

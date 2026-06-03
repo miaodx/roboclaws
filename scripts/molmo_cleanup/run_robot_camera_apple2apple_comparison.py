@@ -37,7 +37,28 @@ MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
 OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
-OBJECT_VISUAL_STATE_CATEGORIES = {"box"}
+OBJECT_VISUAL_STATE_REGISTRY = {
+    "box": {
+        "schema": "robot_camera_object_visual_state_registry_entry_v1",
+        "category": "box",
+        "status": "active_category_contract",
+        "protected_by": "prepared_usd_visual_physics_freeze",
+        "policy": (
+            "MuJoCo box flap joints render at MJCF ref/range endpoints. Prepared Isaac "
+            "report USDs must freeze baked visual xforms and remove physics state before "
+            "camera capture so the flaps cannot re-open during static visual comparison."
+        ),
+        "evidence_artifact": (
+            "output/molmo/robot-camera-apple2apple/"
+            "0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html"
+        ),
+        "promotion_rule": (
+            "Keep this category-level contract until corpus evidence shows another "
+            "visual-state category needs its own registry entry."
+        ),
+    }
+}
+OBJECT_VISUAL_STATE_CATEGORIES = set(OBJECT_VISUAL_STATE_REGISTRY)
 ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
 
 
@@ -872,9 +893,15 @@ def _attach_render_contract_diagnostics(
         mujoco_contract=mujoco_contract,
         isaac_contract=isaac_contract,
         scene_binding_diagnostics=scene_binding_diagnostics,
+        locations=successful_locations,
+        output_dir=output_dir,
     )
     manifest["object_parity_audit"] = object_audit
+    manifest["object_visual_parity_audit"] = object_audit
     manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
+        object_audit
+    )
+    manifest.setdefault("summary", {})["object_visual_parity_audit"] = _compact_object_parity_audit(
         object_audit
     )
     gate_diagnostics = _object_render_parity_diagnostics(
@@ -1064,6 +1091,8 @@ def _object_parity_audit(
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     scene_binding_diagnostics: dict[str, Any],
+    locations: list[dict[str, Any]] | None = None,
+    output_dir: Path | None = None,
 ) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     object_ids = sorted(
@@ -1086,6 +1115,8 @@ def _object_parity_audit(
                 mujoco_contract=mujoco_contract,
                 isaac_contract=isaac_contract,
                 scene_binding_diagnostics=scene_binding_diagnostics,
+                locations=locations or [],
+                output_dir=output_dir,
             )
         )
     for target_id in receptacle_ids:
@@ -1098,6 +1129,8 @@ def _object_parity_audit(
                 mujoco_contract=mujoco_contract,
                 isaac_contract=isaac_contract,
                 scene_binding_diagnostics=scene_binding_diagnostics,
+                locations=locations or [],
+                output_dir=output_dir,
             )
         )
     high_priority_statuses = {
@@ -1151,6 +1184,7 @@ def _object_parity_audit(
         "render_contract_status_counts": _status_counts(
             _dict(item.get("render_contract_delta")).get("status") for item in items
         ),
+        "category_status_summary": _object_category_status_summary(items),
         "high_priority_items": high_priority[:20],
         "items": items,
         "recommended_next_action": next_action,
@@ -1177,9 +1211,63 @@ def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
         "support_status_counts": audit.get("support_status_counts"),
         "state_status_counts": audit.get("state_status_counts"),
         "render_contract_status_counts": audit.get("render_contract_status_counts"),
+        "category_status_summary": audit.get("category_status_summary"),
         "high_priority_items": audit.get("high_priority_items"),
         "recommended_next_action": audit.get("recommended_next_action"),
     }
+
+
+def _object_category_status_summary(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        mujoco = _dict(item.get("mujoco"))
+        isaac = _dict(item.get("isaac"))
+        category = (
+            _object_category_key(mujoco.get("category"))
+            or _object_category_key(isaac.get("category"))
+            or _object_category_key(isaac.get("usd_category"))
+            or "unknown"
+        )
+        grouped.setdefault(category, []).append(item)
+    rows = []
+    for category, category_items in sorted(grouped.items()):
+        records = [_object_gate_record(item) for item in category_items]
+        rows.append(
+            {
+                "category": category,
+                "item_count": len(category_items),
+                "kind_counts": _status_counts(item.get("kind") for item in category_items),
+                "object_gate_status_counts": _status_counts(
+                    record.get("object_gate_status") for record in records
+                ),
+                "object_gate_classification_counts": _status_counts(
+                    record.get("classification") for record in records
+                ),
+                "binding_status_counts": _status_counts(
+                    item.get("binding_status") for item in category_items
+                ),
+                "category_status_counts": _status_counts(
+                    item.get("category_status") for item in category_items
+                ),
+                "pose_status_counts": _status_counts(
+                    item.get("pose_status") for item in category_items
+                ),
+                "support_status_counts": _status_counts(
+                    item.get("support_status") for item in category_items
+                ),
+                "state_status_counts": _status_counts(
+                    item.get("state_status") for item in category_items
+                ),
+                "rgb_view_evidence_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
+                ),
+                "render_contract_status_counts": _status_counts(
+                    _dict(item.get("render_contract_delta")).get("status")
+                    for item in category_items
+                ),
+            }
+        )
+    return rows
 
 
 def _object_render_parity_diagnostics(
@@ -1278,6 +1366,7 @@ def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
     object_gate_status = "comparable" if classification == "comparable" else "not_comparable"
     render_delta = _dict(item.get("render_contract_delta"))
     visual_state = _dict(item.get("visual_state_contract"))
+    rgb_evidence = _dict(item.get("rgb_view_evidence"))
     return {
         "kind": item.get("kind"),
         "target_id": item.get("target_id"),
@@ -1291,6 +1380,7 @@ def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
         "state_status": item.get("state_status"),
         "render_contract_status": render_delta.get("status"),
         "visual_state_status": visual_state.get("status"),
+        "rgb_view_evidence_status": rgb_evidence.get("status"),
         "pose_delta_m": item.get("pose_delta_m"),
         "mujoco_category": _dict(item.get("mujoco")).get("category"),
         "isaac_category": _dict(item.get("isaac")).get("category")
@@ -1416,6 +1506,8 @@ def _object_parity_item(
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     scene_binding_diagnostics: dict[str, Any],
+    locations: list[dict[str, Any]],
+    output_dir: Path | None,
 ) -> dict[str, Any]:
     mujoco_entry = _mujoco_state_entry(mujoco_state, kind, target_id)
     isaac_entry = _isaac_index_entry(isaac_state, kind, target_id)
@@ -1484,6 +1576,12 @@ def _object_parity_item(
             isaac_state=isaac_state,
             isaac_contract=isaac_contract,
             usd_prim_path=usd_prim_path,
+        ),
+        "rgb_view_evidence": _object_rgb_view_evidence(
+            kind=kind,
+            target_id=target_id,
+            locations=locations,
+            output_dir=output_dir,
         ),
         "render_contract_delta": _compact_render_contract_delta(render_delta),
         "render_contract": {
@@ -1591,6 +1689,93 @@ def _object_support_status(mujoco_entry: dict[str, Any], isaac_entry: dict[str, 
     return "support_metadata_delta"
 
 
+def _object_rgb_view_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    locations: list[dict[str, Any]],
+    output_dir: Path | None,
+) -> dict[str, Any]:
+    selected = None
+    for item in locations:
+        if not isinstance(item, dict):
+            continue
+        target = _dict(item.get("target"))
+        same_kind = str(target.get("kind") or "") == kind
+        same_target = str(target.get("target_id") or "") == target_id
+        if same_kind and same_target:
+            selected = item
+            break
+    if selected is None:
+        return {
+            "status": "not_captured_in_selected_views",
+            "selected_target": False,
+            "view_status_counts": {},
+        }
+    views = []
+    for backend_id in ("mujoco", "isaac"):
+        backend_views = _dict(_dict(selected.get("views")).get(backend_id))
+        for view_key in ("fpv", "chase"):
+            image_path = str(backend_views.get(view_key) or "")
+            evidence = _image_nonblank_evidence(image_path=image_path, output_dir=output_dir)
+            views.append(
+                {
+                    "backend": backend_id,
+                    "view": view_key,
+                    "image_path": image_path,
+                    **evidence,
+                }
+            )
+    status_counts = _status_counts(item.get("status") for item in views)
+    if views and all(item.get("status") == "nonblank_rgb" for item in views):
+        status = "selected_views_nonblank"
+    elif any(item.get("status") == "blank_rgb" for item in views):
+        status = "selected_views_blank_rgb"
+    elif any(str(item.get("status") or "").startswith("missing") for item in views):
+        status = "selected_views_missing_image"
+    else:
+        status = "selected_views_unverified"
+    return {
+        "schema": "robot_camera_object_rgb_view_evidence_v1",
+        "status": status,
+        "selected_target": True,
+        "view_status_counts": status_counts,
+        "views": views,
+        "interpretation": (
+            "Selected target FPV/chase image evidence checks whether the rendered RGB "
+            "views are present and nonblank. It is not object segmentation and does not "
+            "prove per-pixel object coverage without bbox/segmentation evidence."
+        ),
+    }
+
+
+def _image_nonblank_evidence(*, image_path: str, output_dir: Path | None) -> dict[str, Any]:
+    if not image_path:
+        return {"status": "missing_image_path"}
+    path = Path(image_path)
+    if not path.is_absolute() and output_dir is not None:
+        path = output_dir / path
+    if not path.exists():
+        return {"status": "missing_image_file"}
+    try:
+        with Image.open(path) as raw:
+            metrics = _image_visual_metrics(raw.convert("RGB"))
+    except OSError as exc:
+        return {"status": "unreadable_image", "error": str(exc)}
+    nonblank = (
+        metrics.get("mean_luminance", 0.0) > 1.0
+        or metrics.get("edge_mean", 0.0) > 0.1
+        or metrics.get("overexposed_fraction", 0.0) > 0.0
+    )
+    return {
+        "status": "nonblank_rgb" if nonblank else "blank_rgb",
+        "mean_luminance": metrics.get("mean_luminance"),
+        "edge_mean": metrics.get("edge_mean"),
+        "overexposed_fraction": metrics.get("overexposed_fraction"),
+        "underexposed_fraction": metrics.get("underexposed_fraction"),
+    }
+
+
 def _object_state_status(
     *,
     target_id: str,
@@ -1659,6 +1844,7 @@ def _object_visual_state_contract(
     )
     if kind != "object" or category not in OBJECT_VISUAL_STATE_CATEGORIES:
         return {"status": "not_applicable"}
+    registry_entry = dict(OBJECT_VISUAL_STATE_REGISTRY.get(category) or {})
     mujoco_articulation = _mujoco_ref_endpoint_articulation_contract(
         target_id=target_id,
         mujoco_state=mujoco_state,
@@ -1705,6 +1891,9 @@ def _object_visual_state_contract(
         "status": status,
         "target_id": target_id,
         "category": category,
+        "registry": registry_entry,
+        "protected_by": registry_entry.get("protected_by"),
+        "evidence_artifact": registry_entry.get("evidence_artifact"),
         "mujoco": mujoco_articulation,
         "isaac": isaac_articulation,
         "reason": reason,
@@ -4080,16 +4269,51 @@ def _render_object_render_parity_diagnostics(manifest: dict[str, Any]) -> str:
 
 
 def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
-    audit = _dict(manifest.get("object_parity_audit")) or _dict(
-        _dict(manifest.get("summary")).get("object_parity_audit")
+    summary = _dict(manifest.get("summary"))
+    audit = (
+        _dict(manifest.get("object_visual_parity_audit"))
+        or _dict(manifest.get("object_parity_audit"))
+        or _dict(summary.get("object_visual_parity_audit"))
+        or _dict(summary.get("object_parity_audit"))
     )
     if not audit:
         return ""
+
+    def counts_cell(item: dict[str, Any], key: str) -> str:
+        return "<td>" + html.escape(json.dumps(item.get(key) or {}, sort_keys=True)) + "</td>"
+
+    category_rows = []
+    for item in audit.get("category_status_summary") or []:
+        if not isinstance(item, dict):
+            continue
+        category_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('category') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('item_count') or 0))}</td>"
+            + counts_cell(item, "kind_counts")
+            + counts_cell(item, "object_gate_status_counts")
+            + counts_cell(item, "object_gate_classification_counts")
+            + counts_cell(item, "binding_status_counts")
+            + counts_cell(item, "state_status_counts")
+            + counts_cell(item, "rgb_view_evidence_status_counts")
+            + counts_cell(item, "render_contract_status_counts")
+            + "</tr>"
+        )
+    category_table = (
+        "<h3>Category Status Summary</h3><table><thead><tr>"
+        "<th>Category</th><th>Items</th><th>Kinds</th><th>Object Gate</th>"
+        "<th>Classes</th><th>Binding</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
+        "</tr></thead><tbody>" + "".join(category_rows) + "</tbody></table>"
+        if category_rows
+        else "<p>No category/status summary rows were recorded.</p>"
+    )
     rows = []
     for item in audit.get("high_priority_items") or []:
         if not isinstance(item, dict):
             continue
         render_delta = _dict(item.get("render_contract_delta"))
+        visual_state = _dict(item.get("visual_state_contract"))
+        rgb_evidence = _dict(item.get("rgb_view_evidence"))
         mujoco = _dict(item.get("mujoco"))
         isaac = _dict(item.get("isaac"))
         rows.append(
@@ -4101,7 +4325,10 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('pose_status') or ''))}</td>"
             f"<td>{html.escape(str(item.get('support_status') or ''))}</td>"
             f"<td>{html.escape(str(item.get('state_status') or ''))}</td>"
+            f"<td>{html.escape(str(rgb_evidence.get('status') or ''))}</td>"
             f"<td>{html.escape(str(render_delta.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(visual_state.get('protected_by') or ''))}</td>"
+            f"<td>{html.escape(str(visual_state.get('evidence_artifact') or ''))}</td>"
             f"<td>{html.escape(str(mujoco.get('category') or ''))}</td>"
             f"<td>{html.escape(str(isaac.get('category') or isaac.get('usd_category') or ''))}</td>"
             f"<td>{html.escape(str(isaac.get('asset_id') or ''))}</td>"
@@ -4110,7 +4337,8 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
     table = (
         "<table><thead><tr>"
         "<th>Kind</th><th>Target</th><th>Binding</th><th>Category</th>"
-        "<th>Pose</th><th>Support</th><th>State</th><th>Render</th>"
+        "<th>Pose</th><th>Support</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
+        "<th>Protected By</th><th>Evidence</th>"
         "<th>MuJoCo Cat</th><th>Isaac Cat</th><th>Isaac Asset</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
         if rows
@@ -4127,6 +4355,7 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
         + ".</p><p>"
         + html.escape(str(audit.get("recommended_next_action") or ""))
         + "</p>"
+        + category_table
         + table
     )
 

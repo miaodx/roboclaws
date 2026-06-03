@@ -79,6 +79,21 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    its `support_estimate.fixture_id`, treat that public candidate as cleanup
    work and use the `candidate_fixture_id` as the target. Do not leave such a
    handle pending just because the current surface looks plausible.
+   In `world-labels-sanitized`, detections intentionally omit
+   `candidate_fixture_id`, `cleanup_recommended`, and `recommended_tool`.
+   Treat `destination_policy` as public category/fixture-affordance guidance:
+   match `destination_policy.preferred_fixture_categories` against
+   `runtime_metric_map.public_semantic_anchors` or other public fixture
+   evidence, then use `destination_policy.placement_tool` unless a tool
+   recovery response requires a different public tool. When
+   `destination_policy.placement_tool_by_fixture_category` has an entry for the
+   matched public fixture category, use that entry. This policy is not private
+   destination truth; it only says which public fixture categories are
+   semantically suitable. Because sanitized `candidate_fixture_id` values are
+   hidden, first complete an anchor discovery sweep of every
+   `metric_map.inspection_waypoints` waypoint before the first pick unless a
+   `done` recovery payload already gives a non-empty
+   `destination_options.candidate_fixture_id` for the object.
    The server rejects skipped semantic phases: if you call `pick` before
    `navigate_to_object`, or `place` before `navigate_to_receptacle`, recover by
    calling the `required_tool` named in the error response.
@@ -98,8 +113,21 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `metric_map.inspection_waypoints` waypoint id has an `observe` response and
    you have cleaned every public recommended candidate. If `done` returns
    `pending_cleanup_candidates`, clean those listed observed handles with their
-   `candidate_fixture_id`, then call `done` again. Do not stop because you
-   guess the hidden target count.
+   `candidate_fixture_id`, then call `done` again. If all waypoints are
+   observed and you are not holding an object, call `done` as the authoritative
+   closeout probe before starting another optional cleanup chain; when `done`
+   returns pending candidates, clean exactly those listed handles and call
+   `done` again. If `done` returns a held candidate, do not call `done` again
+   until that object is placed using its `destination_options.candidate_fixture_id`
+   and `destination_options.recommended_tool`. If `open_receptacle` has
+   succeeded while you are holding an object, the next cleanup tool is
+   `place_inside` for the same `fixture_id`; do not call `done`, `metric_map`,
+   `observe`, or another navigation tool before that placement. Re-observed
+   visible objects can be stale evidence after a
+   successful placement; do not retry handles that tool recovery marks
+   `already_handled`, and do not switch to another handle from the same stale
+   area just because it appeared in the same observation. Do not stop because
+   you guess the hidden target count.
 
 ## Boundaries
 

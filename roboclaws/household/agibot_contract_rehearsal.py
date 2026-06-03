@@ -9,10 +9,6 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from roboclaws.household.realworld_cleanup import (
-    SYNTHETIC_BACKEND,
-    run_realworld_cleanup,
-)
 from roboclaws.household.agibot_sdk_runner import BLOCKED_MANIPULATION_TOOLS
 from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
 from roboclaws.household.backend_contract import CleanupBackendSession
@@ -22,6 +18,10 @@ from roboclaws.household.cleanup_primitive_evidence import (
 from roboclaws.household.manipulation_provenance import api_semantic_manipulation_evidence
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
 from roboclaws.household.profiles import MOLMOSPACES_SIM_BACKEND
+from roboclaws.household.realworld_cleanup import (
+    SYNTHETIC_BACKEND,
+    run_realworld_cleanup,
+)
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     MINIMAL_MAP_MODE,
@@ -469,6 +469,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     run_dir: Path,
     task_name: str,
     profile: str,
+    task_prompt: str | None = None,
     seed: int = 7,
     generated_mess_count: int = 5,
     runtime: str = RUNTIME_FIXTURE,
@@ -497,6 +498,10 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     run_dir = Path(run_dir).resolve()
     run_dir.mkdir(parents=True, exist_ok=True)
     is_semantic_map_build = task_name == REHEARSAL_TASK_SEMANTIC_MAP_BUILD
+    default_task_prompt = (
+        "帮我建立这个房间的语义地图" if is_semantic_map_build else "帮我收拾这个房间"
+    )
+    selected_task_prompt = str(task_prompt or default_task_prompt)
     perception_mode = _prehardware_perception_mode(profile)
     backend = SYNTHETIC_BACKEND if runtime == RUNTIME_FIXTURE else "molmospaces_subprocess"
     if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS and not include_robot:
@@ -527,7 +532,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     result = run_realworld_cleanup(
         output_dir=run_dir,
         seed=seed,
-        task_prompt=("帮我建立这个房间的语义地图" if is_semantic_map_build else "帮我收拾这个房间"),
+        task_prompt=selected_task_prompt,
         backend=backend,
         fixture_hint_mode="room_only",
         perception_mode=perception_mode,
@@ -548,6 +553,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
         result=result,
         task_name=task_name,
+        task_prompt=selected_task_prompt,
         runtime=runtime,
         profile=profile,
         visual_grounding=visual_grounding,
@@ -684,6 +690,7 @@ def _write_prehardware_runtime_export(
     run_dir: Path,
     result: dict[str, Any],
     task_name: str,
+    task_prompt: str,
     runtime: str,
     profile: str,
     visual_grounding: str,
@@ -699,6 +706,7 @@ def _write_prehardware_runtime_export(
     payload = {
         "schema": "agibot_molmospaces_minimal_map_prehardware_runtime_export_v1",
         "task_name": task_name,
+        "task_prompt": task_prompt,
         "runtime": runtime,
         "profile": profile,
         "visual_grounding_pipeline_id": visual_grounding,

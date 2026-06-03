@@ -27,6 +27,17 @@ The default decision is: add or improve a skill. Promote behavior into MCP only
 when multiple skills need the same stable capability, the IO belongs in one
 profile, public/private boundaries are clear, and traces can preserve substeps.
 
+## Maintained Skills
+
+- `ai2thor-navigator`: base AI2-THOR navigation skill over the public navigation
+  MCP surface.
+- `capture-object-photo`: photo-capture behavior that may opt into privileged
+  AI2-THOR demo helpers.
+- `molmo-realworld-cleanup`: household cleanup behavior over public household
+  world, manipulation, and episode capabilities.
+- `actionable-semantic-map-conversion`: offline robot semantic-memory conversion
+  into `actionable_semantic_map_snapshot_v1` for downstream household tasks.
+
 See `README.md` for the big-picture MCP and skill design principles, and
 `docs/human/mcp-skills-and-semantic-profiles.md` for the detailed profile
 reference.

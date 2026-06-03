@@ -47,7 +47,10 @@ CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION = (
     "receptacle first only for fridge/refrigerator targets. Use place only for "
     "surface targets such as table, sofa, bed, desk, sink, counter, or stand. If a "
     "tool returns error_reason=semantic_order with required_tool, call that exact "
-    "required_tool next instead of substituting another cleanup tool."
+    "required_tool next instead of substituting another cleanup tool. After "
+    "open_receptacle succeeds while you are holding an object, the next cleanup "
+    "tool must be place_inside with that same fixture_id before done, metric_map, "
+    "observe, or another navigate call."
 )
 
 
@@ -71,6 +74,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
+    parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--policy", required=True)
     parser.add_argument("--task", required=True)
     parser.add_argument("--min-generated-mess-count", required=True)
@@ -203,6 +207,7 @@ class LiveCodexCleanupRunner:
     def _run_codex(self) -> None:
         self._write_status("running-codex")
         self._mark_timing("codex_exec_start")
+        task_name = getattr(self.args, "task_name", "household-cleanup")
         env = os.environ.copy()
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
         env.setdefault(
@@ -211,11 +216,11 @@ class LiveCodexCleanupRunner:
         )
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
-            task_name="household-cleanup",
+            task_name=task_name,
             skill_name="molmo-realworld-cleanup",
             workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "household-cleanup")
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", task_name)
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", "molmo-realworld-cleanup")
         env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
@@ -256,7 +261,10 @@ class LiveCodexCleanupRunner:
         print(f"==> kickoff: {self.args.kickoff_prompt}")
 
         event_paths: list[Path] = []
-        max_turns = max(1, int(self.args.codex_max_continuations) + 1)
+        max_turns = _codex_max_turns(
+            profile=self.args.profile,
+            requested_continuations=self.args.codex_max_continuations,
+        )
         for turn_index in range(max_turns):
             is_initial_turn = turn_index == 0
             prompt = (
@@ -265,6 +273,8 @@ class LiveCodexCleanupRunner:
                 else _codex_continuation_prompt(
                     turn_index=turn_index,
                     profile=self.args.profile,
+                    final_turn=turn_index + 1 == max_turns,
+                    run_dir=self.run_dir,
                 )
             )
             suffix = "" if is_initial_turn else f"-continuation-{turn_index}"
@@ -342,6 +352,8 @@ class LiveCodexCleanupRunner:
                                 "type": recoverable_error,
                             }
                         )
+                    if recoverable_error == "provider_rate_limit":
+                        time.sleep(30)
                     continue
                 self._mark_timing("codex_exec_end")
                 self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)
@@ -375,6 +387,7 @@ class LiveCodexCleanupRunner:
     def _check_result(self) -> None:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
+        task_name = getattr(self.args, "task_name", "household-cleanup")
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -384,6 +397,8 @@ class LiveCodexCleanupRunner:
             CHECKER_SCRIPT,
             "--expect-task",
             self.args.task,
+            "--expect-task-name",
+            task_name,
             "--expect-backend",
             self.args.backend,
             "--expect-policy",
@@ -398,7 +413,7 @@ class LiveCodexCleanupRunner:
             "--require-advisory-scoring",
             *self.args.checker_visual_arg,
         ]
-        if self.args.profile in {
+        if task_name == "household-cleanup" and self.args.profile in {
             "smoke",
             "world-labels",
             "camera-labels",
@@ -408,13 +423,15 @@ class LiveCodexCleanupRunner:
         if self.args.profile == "world-labels":
             _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
             _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
-            _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
+            if task_name == "household-cleanup":
+                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
             _append_missing_checker_value(checker_args, "--min-model-declared-observations", "7")
             _append_missing_checker_value(checker_args, "--min-model-declared-actions", "7")
-            _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "7")
+            if task_name == "household-cleanup":
+                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "7")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         checker_args.append(str(run_result))
 
@@ -701,7 +718,104 @@ def _combined_codex_event_summary(paths: list[Path]) -> dict[str, Any]:
     }
 
 
-def _codex_continuation_prompt(*, turn_index: int, profile: str) -> str:
+def _load_latest_trace_response(run_dir: Path, tool_name: str) -> dict[str, Any] | None:
+    trace_path = run_dir / "trace.jsonl"
+    if not trace_path.is_file():
+        return None
+    latest: dict[str, Any] | None = None
+    for line in trace_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("event") != "response" or event.get("tool") != tool_name:
+            continue
+        response = event.get("response")
+        if isinstance(response, dict):
+            latest = dict(response)
+            latest["__trace_ts"] = float(event.get("ts") or 0.0)
+    return latest
+
+
+def _latest_trace_cleanup_hint(run_dir: Path | None) -> str:
+    if run_dir is None:
+        return ""
+    open_response = _load_latest_trace_response(run_dir, "open_receptacle") or {}
+    open_ts = float(open_response.get("__trace_ts") or 0.0)
+    later_cleanup_ts = max(
+        float((_load_latest_trace_response(run_dir, tool_name) or {}).get("__trace_ts") or 0.0)
+        for tool_name in ("place", "place_inside", "close_receptacle")
+    )
+    held_object_id = str(open_response.get("object_id") or "")
+    opened_fixture_id = str(
+        open_response.get("fixture_id") or open_response.get("receptacle_id") or ""
+    )
+    if (
+        open_response.get("ok") is True
+        and held_object_id
+        and opened_fixture_id
+        and open_ts > later_cleanup_ts
+    ):
+        return (
+            " Last trace state: open_receptacle already succeeded for "
+            f"{opened_fixture_id} while holding {held_object_id}. Do not call done, "
+            "metric_map, observe, or navigate again first; immediately call "
+            f"place_inside(fixture_id={opened_fixture_id}), then close_receptacle "
+            "if needed, observe, and only then continue closeout."
+        )
+
+    done_response = _load_latest_trace_response(run_dir, "done") or {}
+    if done_response.get("error_reason") != "pending_cleanup_candidates":
+        metric_map_response = _load_latest_trace_response(run_dir, "metric_map") or {}
+        runtime_map = metric_map_response.get("runtime_metric_map")
+        worklist_summary = {}
+        if isinstance(runtime_map, dict):
+            worklist_summary = runtime_map.get("cleanup_worklist_summary") or {}
+        held_object_id = str(worklist_summary.get("held_object_id") or "")
+        if held_object_id:
+            return (
+                " Last metric_map state says held_object_id is "
+                f"{held_object_id}. Stop waypoint sweeping while holding it. Call "
+                "done now as a public recovery probe to get destination_options for "
+                "that held object, then place it before any further sweep or pick."
+            )
+        return ""
+    pending = done_response.get("pending_cleanup_candidates")
+    if not isinstance(pending, list):
+        return ""
+    for item in pending:
+        if not isinstance(item, dict) or item.get("state") != "held":
+            continue
+        options = item.get("destination_options")
+        option = options[0] if isinstance(options, list) and options else {}
+        if not isinstance(option, dict):
+            option = {}
+        fixture_id = str(
+            option.get("candidate_fixture_id") or item.get("candidate_fixture_id") or ""
+        )
+        recommended_tool = str(option.get("recommended_tool") or "place")
+        object_id = str(item.get("object_id") or "")
+        if not fixture_id or not object_id:
+            continue
+        return (
+            " Last done response rejected closeout because you are holding "
+            f"{object_id}. Do not call done again until it is placed. Next call "
+            f"navigate_to_receptacle(fixture_id={fixture_id}); for fridge/refrigerator "
+            f"open it and then call {recommended_tool}(fixture_id={fixture_id}) before "
+            "close_receptacle/observe/done."
+        )
+    return ""
+
+
+def _codex_continuation_prompt(
+    *,
+    turn_index: int,
+    profile: str,
+    final_turn: bool = False,
+    run_dir: Path | None = None,
+) -> str:
     if profile == "camera-raw":
         perception_instruction = (
             "For camera-raw observations, inspect the raw FPV image block yourself. "
@@ -724,11 +838,56 @@ def _codex_continuation_prompt(*, turn_index: int, profile: str) -> str:
             "camera_model_candidates with navigate_to_object -> pick -> "
             "navigate_to_receptacle -> open? -> place/place_inside."
         )
+    elif profile == "world-labels-sanitized":
+        perception_instruction = (
+            "For world-labels-sanitized observations, visible_object_detections are "
+            "observation evidence, not a mandatory work queue. Before acting on a "
+            "re-observed handle, call metric_map if needed and check "
+            "runtime_metric_map.observed_objects plus cleanup_worklist state; skip "
+            "handles whose public state/actionability shows placed, held, "
+            "already_handled, or not pending. If a cleanup tool returns "
+            "already_handled, follow its recovery_hint and do not inspect, navigate "
+            "to, or pick another handle from the same stale area just because it "
+            "appeared in the same observe response. Because sanitized candidate_fixture_id "
+            "values are hidden, finish the anchor discovery sweep before the first "
+            "pick unless a done recovery payload already gives a non-empty "
+            "destination_options.candidate_fixture_id for the object. If "
+            "held_object_id is non-empty, "
+            "finish that held object's required_tool chain before calling done or "
+            "picking any other object. If all inspection_waypoints are "
+            "observed and held_object_id is empty, call done as the authoritative "
+            "closeout probe before starting another optional cleanup chain; if done "
+            "returns pending_cleanup_candidates, clean exactly those listed handles "
+            "and then call done again. If done returns a held candidate, do not call "
+            "done again until you navigate to its destination_options.candidate_fixture_id "
+            "and use destination_options.recommended_tool. When a pending sanitized "
+            "candidate has an empty candidate_fixture_id, choose a public "
+            "destination_options.candidate_fixture_id and its recommended_tool."
+        )
     else:
         perception_instruction = (
             "Continue cleaning public observed cleanup candidates with the profile's "
             "available observation handles and cleanup tools."
         )
+    closeout_instruction = ""
+    if final_turn:
+        closeout_instruction = (
+            " This is the final automatic continuation. Treat it as mandatory closeout, "
+            "not optional cleanup. Do not start a new optional cleanup chain from "
+            "visible_object_detections. If metric_map or done reports "
+            "unvisited_waypoint_ids, next_waypoint_id, or "
+            "required_tool=navigate_to_waypoint, do not call done first; immediately "
+            "call navigate_to_waypoint for the required waypoint and then call observe "
+            "in the same turn. Repeat that navigate_to_waypoint -> observe pair for "
+            "remaining unvisited waypoints when the public response lists them. Only "
+            "after every inspection waypoint has an observe response and held_object_id "
+            "is empty, call done. If done returns pending_cleanup_candidates, handle "
+            "only those exact pending candidates. If you are holding an object, do not "
+            "call done again; place it using destination_options.candidate_fixture_id "
+            "and destination_options.recommended_tool or the current required_tool, "
+            "then continue the mandatory coverage/done closeout."
+        )
+    trace_hint = _latest_trace_cleanup_hint(run_dir)
     return _codex_live_prompt(
         "Continue the same active cleanup MCP session. This is automatic "
         f"continuation turn {turn_index}; do not restart the scenario and do not read "
@@ -746,7 +905,7 @@ def _codex_continuation_prompt(*, turn_index: int, profile: str) -> str:
         "Observe after each successful placement, sweep remaining inspection_waypoints with "
         "navigate_to_waypoint -> observe, and call done only after every "
         "inspection waypoint has an observe response and pending public cleanup "
-        "candidates are handled."
+        f"candidates are handled.{trace_hint}{closeout_instruction}"
     )
 
 
@@ -756,6 +915,16 @@ def _codex_live_prompt(prompt: str) -> str:
         f"{CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION}\n\n"
         f"{prompt}"
     )
+
+
+def _codex_max_turns(*, profile: str, requested_continuations: int) -> int:
+    continuations = max(0, int(requested_continuations))
+    if profile == "world-labels-sanitized":
+        # The sanitized minimal-map lane sweeps fourteen generated waypoints while
+        # choosing destinations without cleanup oracle hints, so the generic live
+        # Codex turn budget can reach its final turn before coverage closeout.
+        continuations = max(continuations, 14)
+    return max(1, continuations + 1)
 
 
 def _recoverable_provider_tool_error(*paths: Path) -> str | None:
@@ -779,6 +948,8 @@ def _recoverable_provider_tool_error(*paths: Path) -> str | None:
             return "missing_mcp_namespace_tool"
         if "function_call name" in text and "not declared in tools" in text:
             return "misrouted_undeclared_tool_call"
+        if "429 too many requests" in text or "exceeded retry limit, last status: 429" in text:
+            return "provider_rate_limit"
     return None
 
 

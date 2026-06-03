@@ -32,6 +32,7 @@ def main(argv: list[str] | None = None) -> int:
             run_dir=run_dir,
             task_name=args.task_name,
             profile=args.profile,
+            task_prompt=args.task_prompt,
             seed=args.seed,
             generated_mess_count=args.generated_mess_count,
             runtime=args.runtime,
@@ -120,9 +121,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("world-labels", "camera-raw", "camera-labels"),
+        choices=("world-labels", "world-labels-sanitized", "camera-raw", "camera-labels"),
         default="camera-labels",
         help="Input/evidence lane for --flow prehardware.",
+    )
+    parser.add_argument(
+        "--task-prompt",
+        help=(
+            "Override the task prompt recorded by the prehardware flow. Useful for "
+            "testing open-ended evidence-refresh wording before a live G2 run."
+        ),
     )
     parser.add_argument(
         "--visual-grounding",

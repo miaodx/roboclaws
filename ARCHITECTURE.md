@@ -78,7 +78,8 @@ Key pieces:
   cleanup and semantic-map sweep CLI used by `just` and harness recipes.
 - `roboclaws/household/semantic_cleanup_loop.py` owns the direct semantic
   cleanup flow.
-- `roboclaws/maps/` owns reusable navigation map artifacts and projections.
+- `roboclaws/maps/` owns reusable navigation map artifacts, projections, and
+  Actionable Semantic Map Snapshot conversion.
 - `roboclaws/household/realworld_mcp_server.py` exposes the cleanup MCP
   surface for coding agents and OpenClaw-style clients.
 - `roboclaws/cli/household_agent_server.py` and
@@ -94,12 +95,16 @@ Key pieces:
 The clean-slate direction is:
 
 - `semantic-map-build` is a Runnable Task for producing Runtime Metric Map
-  snapshots.
+  snapshots, which can be wrapped as an Actionable Semantic Map Snapshot for
+  downstream task consumption.
 - `household-cleanup` is a Runnable Task for cleanup runs.
 - The canonical map flow is minimal-first: start from occupancy/free-space
   navigation context, run `semantic-map-build`, then feed the resulting
-  `runtime_metric_map.json` to cleanup with `runtime_map_prior=...` when a
-  prior sweep is useful.
+  `runtime_metric_map.json` or `actionable_semantic_map_snapshot.json` to
+  cleanup with `runtime_map_prior=...` when a prior sweep is useful.
+- Offline Agibot `navigation_memory.json` conversion happens at the map-artifact
+  boundary and produces the same Actionable Semantic Map Snapshot contract;
+  cleanup and open household tasks should not add Agibot-only loading branches.
 - `household_world_v1` is the reusable world-understanding capability profile.
 - Manipulation capability should be composed as a separate requirement when a
   skill needs `pick`, `place`, `open_receptacle`, or `close_receptacle`.
@@ -122,17 +127,21 @@ just task::run household-cleanup direct world-labels seed=7
 
 For household tasks, the third positional token is a cleanup input/evidence
 lane. `world-labels` means the agent receives structured object handles and
-labels; it does not select online/offline map behavior. The default map
-projection is `map_mode=minimal`, which exposes occupancy geometry, generated
-exploration candidates, and runtime semantic anchors instead of authored room
-or fixture labels. Use `runtime_map_prior=...` to consume a prebuilt runtime map
-snapshot. `map_mode=rich` remains only as an explicit legacy/debug shortcut for
+labels; `world-labels-sanitized` keeps structured detections while withholding
+destination/tool oracle hints. Cleanup lanes do not select online/offline map
+behavior. The default map projection is `map_mode=minimal`, which exposes
+occupancy geometry, generated exploration candidates, and runtime semantic
+anchors instead of authored room or fixture labels. Use `runtime_map_prior=...`
+to consume a raw runtime map or canonical Actionable Semantic Map Snapshot
+prior. `map_mode=rich` remains only as an explicit legacy/debug shortcut for
 tests that need pre-authored public fixture semantics.
 
 The clean-slate household naming is the public surface: `semantic-map-build`
-produces Runtime Metric Map snapshots, and `household-cleanup` consumes
-household-world evidence for cleanup. Older Molmo-specific task/profile names
-are legacy compatibility details, not the canonical task layer.
+produces Runtime Metric Map evidence, `actionable_semantic_map_snapshot_v1`
+is the canonical downstream artifact contract, and `household-cleanup`
+consumes household-world evidence for cleanup. Older Molmo-specific
+task/profile names are legacy compatibility details, not the canonical task
+layer.
 
 ## Capability Profiles
 
@@ -168,6 +177,8 @@ Every serious run should produce reviewable evidence:
 - `agent_view.json` / `run_result.json` for public agent-facing state.
 - `runtime_metric_map.json` when a run builds or updates household world
   evidence.
+- `actionable_semantic_map_snapshot.json` when online runtime-map output or
+  offline Agibot navigation memory is packaged for downstream household tasks.
 - `report.html` for human review.
 - Optional planner-proof bundles when cleanup substeps are checked against
   local RBY1M/CuRobo proof.

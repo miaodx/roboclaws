@@ -47,7 +47,7 @@ AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
 DEFAULT_TASK_PROMPT = "Build a semantic map from Agibot G2 public navigation and camera evidence."
 AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(
-    {"smoke", "world-labels", "camera-raw", "camera-labels"}
+    {"smoke", "world-labels", "world-labels-sanitized", "camera-raw", "camera-labels"}
 )
 AGIBOT_SEMANTIC_MAP_BUILD_TOOLS = (
     "metric_map",
@@ -833,7 +833,7 @@ def _normalized_evidence_lane(value: str) -> str:
     if lane not in AGIBOT_SEMANTIC_MAP_BUILD_LANES:
         raise ValueError(
             f"unsupported Agibot semantic-map-build evidence lane {lane!r}; "
-            "expected smoke|world-labels|camera-raw|camera-labels"
+            "expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels"
         )
     return lane
 

@@ -423,6 +423,7 @@ just molmo::cleanup <driver> <profile>
 | Driver | `openclaw-live` | Live OpenClaw Gateway connected to the cleanup MCP server. |
 | Profile | `smoke` | Synthetic contract sanity; world labels; semantic report. |
 | Profile | `world-labels` | MolmoSpaces/RBY1M report; agent receives structured world labels, not images. |
+| Profile | `world-labels-sanitized` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints. |
 | Profile | `camera-raw` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
 | Profile | `camera-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates. |
 
@@ -521,6 +522,7 @@ sections.
 | Synthetic cleanup smoke | `api_semantic_synthetic` | Summary, before/after, semantic substeps, score, advisory/private sections where available. No robot timeline. |
 | Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, chase, map, verification. |
 | Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
+| Sanitized detector evidence | `profile=world-labels-sanitized` | Structured detections with producer/source/region/actionability fields. Destination and tool selection remain policy-required. |
 | Model-declared camera cleanup | `camera-raw` or `camera-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |
 | Camera-label producer evidence | `profile=camera-labels` or `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Model-Declared Observations with visual-grounding pipeline provenance. |
 | Planner proof attached | `--planner-proof-run-result ...` | Attached Planner Proof, Cleanup Primitive Gate, Planner Cleanup Bridge. |

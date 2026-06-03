@@ -7,6 +7,7 @@ from roboclaws.launch.task_specs import TaskSpec
 HOUSEHOLD_PROFILES: tuple[str, ...] = (
     "smoke",
     "world-labels",
+    "world-labels-sanitized",
     "camera-raw",
     "camera-labels",
 )

@@ -89,6 +89,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("path", type=Path, help="run_result.json or a directory of seed-* runs")
     parser.add_argument("--expect-task")
+    parser.add_argument("--expect-task-name")
     parser.add_argument("--expect-backend")
     parser.add_argument("--expect-policy")
     parser.add_argument("--expect-profile")
@@ -212,6 +213,7 @@ def main() -> None:
             data,
             path.parent,
             expect_task=args.expect_task,
+            expect_task_name=args.expect_task_name,
             expect_backend=args.expect_backend,
             expect_policy=expect_policy,
             expect_profile=args.expect_profile,
@@ -290,6 +292,7 @@ def _assert_result(
     *,
     expect_task: str | None,
     expect_backend: str | None,
+    expect_task_name: str | None = None,
     expect_policy: str | None = "deterministic_sweep_baseline",
     expect_profile: str | None = None,
     expect_mcp_server: str | None = None,
@@ -394,6 +397,8 @@ def _assert_result(
         assert float(data.get("sweep_coverage_rate") or 0.0) >= min_sweep_coverage, data
     if expect_task is not None:
         assert data.get("task_prompt") == expect_task, data
+    if expect_task_name is not None:
+        assert data.get("task_name") == expect_task_name, data
     if expect_backend is not None:
         assert data.get("backend") == expect_backend, data
     if expect_mcp_server is not None:

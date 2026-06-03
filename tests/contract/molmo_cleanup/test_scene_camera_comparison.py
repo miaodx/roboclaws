@@ -27,6 +27,7 @@ from roboclaws.household.scene_camera_comparison import (
     _image_visual_metrics,
     _isaac_view_specs,
     _molmospaces_view_specs,
+    _native_isaac_render_diagnostics,
     _normalize_color_profile_for_replay,
     _offline_color_profile_replay,
     _projection_diagnostics,
@@ -168,6 +169,50 @@ def Xform "val_1"
     manifest["lanes"][ISAAC_LANE_ID]["views"][1]["usd_prim_path"] = (  # type: ignore[index]
         "/val_1/Geometry/bed_01"
     )
+
+
+def _native_isaac_diagnostics() -> dict[str, object]:
+    return {
+        "schema": "isaac_native_render_diagnostics_v1",
+        "status": "captured",
+        "renderer_mode": "RayTracedLighting",
+        "capture_method": "isaac_scene_camera_rgb",
+        "view_kind": "scene_camera",
+        "settings_api_available": True,
+        "available_setting_count": 3,
+        "missing_setting_count": 1,
+        "camera_prim_paths": ["/World/scene_camera"],
+        "render_product_paths": ["/Render/Products/scene_camera"],
+        "render_resolution": {"width": 960, "height": 640},
+        "isaac_lab_isp_active": False,
+        "default_render_settings_changed": False,
+        "post_render_comparison_profile": {
+            "applied": True,
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "source": "not_a_native_renderer_setting",
+        },
+        "tone_mapping": {
+            "operator": {
+                "status": "available",
+                "value": "ACES",
+                "setting_path": "/rtx/post/tonemap/op",
+            },
+        },
+        "camera_exposure": {
+            "auto_exposure_enabled": {
+                "status": "available",
+                "value": False,
+                "setting_path": "/rtx/post/tonemap/autoExposure/enabled",
+            },
+        },
+        "renderer": {
+            "mode": {
+                "status": "available",
+                "value": "RayTracedLighting",
+                "setting_path": "/rtx/rendermode",
+            },
+        },
+    }
 
 
 def _manifest() -> dict[str, object]:
@@ -508,6 +553,7 @@ def _manifest() -> dict[str, object]:
                     "existing_light_count": 2,
                     "added_light_count": 0,
                 },
+                "native_render_diagnostics": _native_isaac_diagnostics(),
                 "images": {
                     "room_01_room_2": {
                         "path": "isaaclab/camera_views/room_01_room_2.png",
@@ -595,9 +641,13 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Target Vs USD Bounds Diagnostics" in html
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
+    assert "Native Isaac Render Diagnostics" in html
     assert "Render Domain Source Diagnostics" in html
     assert "Render Domain View Triage" in html
     assert "Render Domain Contract Probe" in html
+    assert "native_settings_recorded" in html
+    assert "/rtx/post/tonemap/op" in html
+    assert "not_a_native_renderer_setting" in html
     assert "geometry_swap_ready_render_domain_pending" in html
     assert "render_domain_residual_high" in html
     assert "same_explicit_eye_target_pose" in html
@@ -1043,6 +1093,32 @@ def test_scene_camera_comparison_manifest_is_json_serializable() -> None:
     assert SCENE_CAMERA_COMPARISON_SCHEMA in encoded
     assert "private_manifest" not in encoded
     assert "_state" not in encoded
+
+
+def test_scene_camera_native_isaac_render_diagnostics_are_summarized() -> None:
+    manifest = _manifest()
+
+    diagnostics = _native_isaac_render_diagnostics(manifest)
+
+    assert diagnostics["status"] == "native_settings_recorded"
+    assert diagnostics["native_settings_recorded"] is True
+    assert diagnostics["default_render_settings_changed"] is False
+    assert diagnostics["settings_api_available"] is True
+    assert diagnostics["camera_prim_paths"] == ["/World/scene_camera"]
+    assert diagnostics["render_product_paths"] == ["/Render/Products/scene_camera"]
+    assert diagnostics["post_render_comparison_profile"]["source"] == (
+        "not_a_native_renderer_setting"
+    )
+    assert diagnostics["tone_mapping"]["operator"] == {
+        "status": "available",
+        "value": "ACES",
+        "setting_path": "/rtx/post/tonemap/op",
+    }
+    assert diagnostics["camera_exposure"]["auto_exposure_enabled"] == {
+        "status": "available",
+        "value": False,
+        "setting_path": "/rtx/post/tonemap/autoExposure/enabled",
+    }
 
 
 def test_scene_camera_comparison_default_color_profile_contract() -> None:
