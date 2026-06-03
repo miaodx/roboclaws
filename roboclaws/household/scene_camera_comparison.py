@@ -46,6 +46,18 @@ SURFACE_AIM_HEIGHT_ALLOWANCE_M = 0.3
 ROOM_CAMERA_HEIGHT_M = 1.45
 ROOM_CAMERA_INSET_FRACTION = 0.35
 REPO_ROOT = Path(__file__).resolve().parents[2]
+USD_PHYSICS_PRIM_TYPE_NAMES = (
+    "PhysicsFixedJoint",
+    "PhysicsPrismaticJoint",
+    "PhysicsRevoluteJoint",
+)
+USD_PHYSICS_API_SCHEMA_NAMES = (
+    "PhysicsArticulationRootAPI",
+    "PhysicsCollisionAPI",
+    "PhysicsFilteredPairsAPI",
+    "PhysicsMassAPI",
+    "PhysicsRigidBodyAPI",
+)
 
 OFFICIAL_RENDER_SOURCE_REFERENCES = (
     {
@@ -2737,6 +2749,7 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8", errors="ignore")
     material_blocks = _usda_material_blocks(text)
     prim_blocks = _usda_prim_blocks(text)
+    physics_contract = _usda_visual_physics_contract(prim_blocks)
     material_bindings: dict[str, list[dict[str, Any]]] = {}
     shadow_disabled = []
     for prim_path, block in prim_blocks.items():
@@ -2766,6 +2779,45 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         "material_bindings": material_bindings,
         "lights": lights,
         "shadow_disabled_prims": shadow_disabled,
+        **physics_contract,
+    }
+
+
+def _usda_visual_physics_contract(prim_blocks: dict[str, str]) -> dict[str, Any]:
+    physics_joint_paths: list[str] = []
+    physics_api_schema_prim_paths: list[str] = []
+    physics_property_prim_paths: list[str] = []
+    for prim_path, block in prim_blocks.items():
+        first_line = block.splitlines()[0] if block else ""
+        if any(f" {type_name} " in f" {first_line} " for type_name in USD_PHYSICS_PRIM_TYPE_NAMES):
+            physics_joint_paths.append(prim_path)
+            continue
+        direct_block = _usda_direct_prim_block(block)
+        if any(schema in direct_block for schema in USD_PHYSICS_API_SCHEMA_NAMES):
+            physics_api_schema_prim_paths.append(prim_path)
+        if re.search(r"(?m)^\s+(?:custom\s+)?[\w:<>\[\]]*\s*physics:", direct_block) or re.search(
+            r"(?m)^\s+(?:custom\s+)?[\w:<>\[\]]*\s*physx",
+            direct_block,
+        ):
+            physics_property_prim_paths.append(prim_path)
+    physics_joint_paths = sorted(set(physics_joint_paths))
+    physics_api_schema_prim_paths = sorted(set(physics_api_schema_prim_paths))
+    physics_property_prim_paths = sorted(set(physics_property_prim_paths))
+    status = (
+        "frozen_static_visual_usd"
+        if not physics_joint_paths
+        and not physics_api_schema_prim_paths
+        and not physics_property_prim_paths
+        else "physics_articulation_preserved"
+    )
+    return {
+        "visual_physics_status": status,
+        "physics_joint_count": len(physics_joint_paths),
+        "physics_api_schema_prim_count": len(physics_api_schema_prim_paths),
+        "physics_property_prim_count": len(physics_property_prim_paths),
+        "physics_joint_paths": physics_joint_paths,
+        "physics_api_schema_prim_paths": physics_api_schema_prim_paths,
+        "physics_property_prim_paths": physics_property_prim_paths,
     }
 
 
@@ -3000,6 +3052,22 @@ def _isaac_view_render_contract(
         or str(prim) == usd_prim_path
         or str(prim).startswith(usd_prim_path + "/")
     ]
+    physics_joint_paths = _usd_paths_under(
+        isaac.get("physics_joint_paths") or [], usd_prim_path=usd_prim_path
+    )
+    physics_api_schema_prim_paths = _usd_paths_under(
+        isaac.get("physics_api_schema_prim_paths") or [], usd_prim_path=usd_prim_path
+    )
+    physics_property_prim_paths = _usd_paths_under(
+        isaac.get("physics_property_prim_paths") or [], usd_prim_path=usd_prim_path
+    )
+    visual_physics_status = (
+        "frozen_static_visual_usd"
+        if not physics_joint_paths
+        and not physics_api_schema_prim_paths
+        and not physics_property_prim_paths
+        else "physics_articulation_preserved"
+    )
     return {
         "status": "bound" if bindings else "missing_usd_material_bindings",
         "bound_prim_count": len({str(item.get("prim_path") or "") for item in bindings}),
@@ -3023,7 +3091,25 @@ def _isaac_view_render_contract(
         "bindings": bindings[:8],
         "lights": isaac.get("lights") or [],
         "shadow_disabled_prims": shadow_disabled_prims[:8],
+        "visual_physics_status": visual_physics_status,
+        "physics_joint_count": len(physics_joint_paths),
+        "physics_api_schema_prim_count": len(physics_api_schema_prim_paths),
+        "physics_property_prim_count": len(physics_property_prim_paths),
+        "physics_joint_paths": physics_joint_paths[:8],
+        "physics_api_schema_prim_paths": physics_api_schema_prim_paths[:8],
+        "physics_property_prim_paths": physics_property_prim_paths[:8],
     }
+
+
+def _usd_paths_under(paths: Any, *, usd_prim_path: str) -> list[str]:
+    if not usd_prim_path:
+        return sorted(str(path) for path in paths or [] if str(path))
+    prefix = usd_prim_path.rstrip("/") + "/"
+    return sorted(
+        str(path)
+        for path in paths or []
+        if str(path) == usd_prim_path or str(path).startswith(prefix)
+    )
 
 
 def _view_render_contract_delta(

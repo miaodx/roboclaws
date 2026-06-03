@@ -54,6 +54,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "existing RGB scale a second time while preserving alpha."
         ),
     )
+    parser.add_argument(
+        "--texture-scale-power",
+        type=float,
+        help=(
+            "Comparison-only probe for intermediate UsdUVTexture scale/fallback response. "
+            "Raises existing RGB scale/fallback values to this power while preserving alpha; "
+            "for example 1.5 sits between source values and --texture-scale-mode square."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -68,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         roughness=args.roughness,
         diffuse_texture_file=args.diffuse_texture_file,
         texture_scale_mode=args.texture_scale_mode,
+        texture_scale_power=args.texture_scale_power,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0 if summary["status"] in {"ready", "no_changes"} else 2
@@ -83,6 +93,7 @@ def make_material_response_probe_usd(
     roughness: float | None = None,
     diffuse_texture_file: Path | None = None,
     texture_scale_mode: str | None = None,
+    texture_scale_power: float | None = None,
 ) -> dict[str, Any]:
     if not scene_usd_path.is_file():
         raise FileNotFoundError(scene_usd_path)
@@ -93,6 +104,10 @@ def make_material_response_probe_usd(
         raise ValueError("--diffuse-texture-file requires --material-path-contains")
     if diffuse_texture_file is not None and not diffuse_texture_file.is_file():
         raise FileNotFoundError(diffuse_texture_file)
+    if texture_scale_mode is not None and texture_scale_power is not None:
+        raise ValueError("--texture-scale-mode and --texture-scale-power are mutually exclusive")
+    if texture_scale_power is not None and texture_scale_power <= 0:
+        raise ValueError("--texture-scale-power must be positive")
     if material_path_contains:
         (
             updated,
@@ -108,6 +123,7 @@ def make_material_response_probe_usd(
             roughness=roughness,
             diffuse_texture_file=diffuse_texture_file,
             texture_scale_mode=texture_scale_mode,
+            texture_scale_power=texture_scale_power,
         )
     else:
         matched_material_block_count = None
@@ -128,10 +144,11 @@ def make_material_response_probe_usd(
                 f"float inputs:roughness = {_format_float(roughness)}",
                 updated,
             )
-        if texture_scale_mode is not None:
+        if texture_scale_mode is not None or texture_scale_power is not None:
             updated, texture_scale_rewrite_count = _rewrite_texture_scale_inputs(
                 updated,
                 mode=texture_scale_mode,
+                power=texture_scale_power,
             )
     output_usd_path.parent.mkdir(parents=True, exist_ok=True)
     output_usd_path.write_text(updated, encoding="utf-8")
@@ -158,6 +175,7 @@ def make_material_response_probe_usd(
             "roughness": roughness,
             "diffuse_texture_file": str(diffuse_texture_file) if diffuse_texture_file else None,
             "texture_scale_mode": texture_scale_mode,
+            "texture_scale_power": texture_scale_power,
         },
         "matched_material_block_count": matched_material_block_count,
         "source_color_space_rewrite_count": source_color_space_rewrite_count,
@@ -184,6 +202,7 @@ def _rewrite_matching_material_blocks(
     roughness: float | None,
     diffuse_texture_file: Path | None,
     texture_scale_mode: str | None,
+    texture_scale_power: float | None,
 ) -> tuple[str, int, int, int, int, int]:
     parts: list[str] = []
     cursor = 0
@@ -222,10 +241,11 @@ def _rewrite_matching_material_blocks(
                 texture_file=diffuse_texture_file,
             )
             diffuse_texture_injection_count += count
-        if texture_scale_mode is not None:
+        if texture_scale_mode is not None or texture_scale_power is not None:
             rewritten, count = _rewrite_texture_scale_inputs(
                 rewritten,
                 mode=texture_scale_mode,
+                power=texture_scale_power,
             )
             texture_scale_rewrite_count += count
         parts.append(text[cursor:block_start])
@@ -244,7 +264,19 @@ def _rewrite_matching_material_blocks(
     )
 
 
-def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
+def _rewrite_texture_scale_inputs(
+    text: str,
+    *,
+    mode: str | None = None,
+    power: float | None = None,
+) -> tuple[str, int]:
+    if mode is not None and power is not None:
+        raise ValueError("mode and power are mutually exclusive")
+    if mode is None and power is None:
+        return text, 0
+    if power is not None and power <= 0:
+        raise ValueError("power must be positive")
+
     def replacement(match: re.Match[str]) -> str:
         values = _parse_float_values(match.group(2))
         if not values:
@@ -253,10 +285,14 @@ def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
             rewritten = [1.0 for _ in values]
         elif mode == "square":
             rewritten = [value * value for value in values]
-            if len(rewritten) >= 4:
-                rewritten[3] = values[3]
+        elif power is not None:
+            if any(value < 0 for value in values):
+                return match.group(0)
+            rewritten = [value**power for value in values]
         else:
             raise ValueError(f"unsupported texture scale mode: {mode}")
+        if len(rewritten) >= 4:
+            rewritten[3] = values[3]
         return f"{match.group(1)}({_format_float_list(rewritten)})"
 
     return re.subn(

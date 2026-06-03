@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,6 +19,12 @@ from roboclaws.household.camera_control import DEFAULT_SCENE_PROBE_COLOR_PROFILE
 
 SCHEMA = "roboclaws_robot_camera_visual_parity_summary_v1"
 ROBOT_CAMERA_MANIFEST_SCHEMA = "roboclaws_robot_camera_apple2apple_comparison_v1"
+VISUAL_SAMPLE_VIEWS = ("fpv", "chase")
+VISUAL_SAMPLE_BACKENDS = ("mujoco", "isaac")
+VISUAL_SAMPLE_PROBE_LABEL_PARTS = (
+    "scale_square_rotx25",
+    "default_combined_path",
+)
 RAW_FPV_PASS_STATUS = "raw_fpv_agent_input_uses_head_camera"
 HEAD_CAMERA_PASS_STATUS = "head_camera_geometry_aligned"
 CAMERA_STATUS_ACCEPTED = {
@@ -70,6 +77,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional scene-camera calibration manifest with render-domain calibration evidence.",
     )
     parser.add_argument(
+        "--prepared-usd-summary",
+        type=Path,
+        action="append",
+        default=[],
+        help=(
+            "Optional prepared semantic USD summary.json proving which default rendering "
+            "preset the prepared-USD path uses. Repeat for a corpus."
+        ),
+    )
+    parser.add_argument(
         "--required-scene-count",
         type=int,
         default=3,
@@ -89,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         probe_specs=args.probe_manifest,
         raw_fpv_run_result_paths=args.raw_fpv_run_result,
         calibration_manifest_paths=args.calibration_manifest,
+        prepared_usd_summary_paths=args.prepared_usd_summary,
         required_scene_count=args.required_scene_count,
         required_seed_count=args.required_seed_count,
     )
@@ -105,6 +123,7 @@ def build_summary(
     probe_specs: list[str],
     raw_fpv_run_result_paths: list[Path] | None = None,
     calibration_manifest_paths: list[Path] | None = None,
+    prepared_usd_summary_paths: list[Path] | None = None,
     required_scene_count: int = 3,
     required_seed_count: int = 2,
 ) -> dict[str, Any]:
@@ -113,6 +132,10 @@ def build_summary(
     probes = [_probe_summary(spec) for spec in probe_specs]
     raw_fpv_runs = [_raw_fpv_summary(path) for path in raw_fpv_run_result_paths or []]
     calibration = _calibration_summary(calibration_manifest_paths or [])
+    prepared_usd_summaries = [
+        _prepared_usd_summary(path) for path in prepared_usd_summary_paths or []
+    ]
+    render_domain_probe_matrix = _render_domain_probe_matrix_check(baselines, probes)
     checks = {
         "head_camera_contract": _head_camera_contract_check(baselines),
         "corpus_coverage": _corpus_coverage_check(
@@ -121,14 +144,42 @@ def build_summary(
             required_seed_count=required_seed_count,
         ),
         "rgb_tone_cross_validation": _rgb_tone_cross_validation_check(baselines, probes),
-        "render_domain_probe_matrix": _render_domain_probe_matrix_check(baselines, probes),
+        "render_domain_probe_matrix": render_domain_probe_matrix,
+        "prepared_scale_square_default_gate": _prepared_scale_square_default_gate_check(
+            render_domain_probe_matrix,
+            required_scene_count=required_scene_count,
+            required_seed_count=required_seed_count,
+        ),
+        "combined_material_light_default_gate": _combined_material_light_default_gate_check(
+            render_domain_probe_matrix,
+            required_scene_count=required_scene_count,
+            required_seed_count=required_seed_count,
+        ),
+        "view_specific_prepared_scale_square_tone_gate": (
+            _view_specific_prepared_scale_square_tone_gate_check(
+                render_domain_probe_matrix,
+                required_scene_count=required_scene_count,
+                required_seed_count=required_seed_count,
+            )
+        ),
         "raw_fpv_input_lane": _raw_fpv_input_lane_check(raw_fpv_runs),
         "calibration_scene": calibration,
+        "default_rendering_path": _default_rendering_path_check(prepared_usd_summaries),
     }
     status = _overall_status(checks)
+    four_check_audit = _four_check_audit(checks)
+    report_side_visual_parity = _report_side_visual_parity(checks)
+    default_rendering_visual_parity = _default_rendering_visual_parity(checks)
+    visual_samples = _visual_samples_for_report(
+        baselines=baselines,
+        probes=probes,
+        output_dir=output_dir,
+    )
     manifest: dict[str, Any] = {
         "schema": SCHEMA,
         "status": status,
+        "report_side_visual_parity": report_side_visual_parity,
+        "default_rendering_visual_parity": default_rendering_visual_parity,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "purpose": (
             "Read-only parity gate for MuJoCo and Isaac robot-camera visual evidence. "
@@ -139,8 +190,19 @@ def build_summary(
             "mujoco_fpv": "robot_0/head_camera",
             "isaac_fpv": "/World/robot_0/head_camera",
             "chase": "auxiliary report evidence only",
-            "render_probes": "comparison_only_until_broader_corpus_and_calibration_pass",
+            "report_side_visual_parity": "formal_view_specific_tone_comparison_gate",
+            "default_rendering_visual_parity": (
+                "combined_material_light_prepared_usd_default_path"
+                if default_rendering_visual_parity.get("ready")
+                else "blocked_until_renderer_gates_pass"
+            ),
+            "render_probes": (
+                "default_combined_material_light_when_gate_and_path_ready; "
+                "other probes remain historical comparison evidence"
+            ),
         },
+        "four_check_audit": four_check_audit,
+        "visual_samples": visual_samples,
         "checks": checks,
         "baselines": baselines,
         "probes": probes,
@@ -164,6 +226,15 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     target_selection = _dict(summary.get("target_selection") or payload.get("target_selection"))
     render_checks = _dict(summary.get("render_domain_checks"))
     render = _dict(summary.get("render_contract_diagnostics"))
+    object_parity = _dict(summary.get("object_parity_audit") or payload.get("object_parity_audit"))
+    object_render = _dict(
+        summary.get("object_render_parity_diagnostics")
+        or payload.get("object_render_parity_diagnostics")
+    )
+    native_isaac_render = _dict(
+        summary.get("native_isaac_render_diagnostics")
+        or payload.get("native_isaac_render_diagnostics")
+    )
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
     return {
@@ -191,12 +262,47 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "fpv_world_pose_status": fpv_pose.get("status"),
         "render_domain_status": render_checks.get("status"),
         "render_contract_status": render.get("status"),
+        "object_parity_status": object_parity.get("status"),
+        "object_parity_high_priority_gap_count": object_parity.get("high_priority_gap_count"),
+        "object_parity_item_count": object_parity.get("item_count"),
+        "object_render_gate_status": object_render.get("status"),
+        "object_gate_status": object_render.get("object_gate_status"),
+        "object_gate_failure_count": object_render.get("object_gate_failure_count"),
+        "object_gate_comparable_count": object_render.get("object_gate_comparable_count"),
+        "render_gate_status": object_render.get("render_gate_status"),
+        "native_isaac_render_status": native_isaac_render.get("status"),
+        "native_isaac_settings_api_available": native_isaac_render.get("settings_api_available"),
+        "native_isaac_default_render_settings_changed": native_isaac_render.get(
+            "default_render_settings_changed"
+        ),
+        "native_isaac_render_diagnostics": _compact_native_isaac_render_diagnostics(
+            native_isaac_render
+        ),
         "target_selection": {
             "status": target_selection.get("status"),
             "selected_count": target_selection.get("selected_count"),
             "dropped_unbound_target_count": target_selection.get("dropped_unbound_target_count"),
         },
         "render_domain_checks": _render_checks_by_id(render_checks),
+    }
+
+
+def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
+    if not diagnostics:
+        return {}
+    return {
+        "schema": diagnostics.get("schema"),
+        "status": diagnostics.get("status"),
+        "renderer_mode": diagnostics.get("renderer_mode"),
+        "capture_method": diagnostics.get("capture_method"),
+        "settings_api_available": diagnostics.get("settings_api_available"),
+        "available_setting_count": diagnostics.get("available_setting_count"),
+        "missing_setting_count": diagnostics.get("missing_setting_count"),
+        "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
+        "render_product_paths": diagnostics.get("render_product_paths") or [],
+        "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
+        "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
+        "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
     }
 
 
@@ -207,6 +313,118 @@ def _probe_summary(spec: str) -> dict[str, Any]:
     summary["probe_kind"] = _infer_probe_kind(summary)
     summary["rgb_gain_source"] = _rgb_gain_source(path)
     return summary
+
+
+def _visual_samples_for_report(
+    *,
+    baselines: list[dict[str, Any]],
+    probes: list[dict[str, Any]],
+    output_dir: Path,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    sample_sources = [
+        ("baseline", item)
+        for item in baselines
+        if isinstance(item, dict) and item.get("comparison_status") == "success"
+    ]
+    sample_sources.extend(
+        ("probe", item)
+        for item in probes
+        if isinstance(item, dict) and _is_visual_sample_probe(item)
+    )
+    for kind, summary in sample_sources:
+        sample = _visual_sample_from_manifest_summary(summary, kind=kind, output_dir=output_dir)
+        if sample:
+            rows.append(sample)
+    return rows
+
+
+def _is_visual_sample_probe(summary: dict[str, Any]) -> bool:
+    label = str(summary.get("label") or "").lower()
+    return any(part in label for part in VISUAL_SAMPLE_PROBE_LABEL_PARTS)
+
+
+def _visual_sample_from_manifest_summary(
+    summary: dict[str, Any],
+    *,
+    kind: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    manifest_path = Path(str(summary.get("path") or ""))
+    if not manifest_path.is_file():
+        return {}
+    payload = _read_json(manifest_path)
+    locations = [
+        location
+        for location in _list_dicts(payload.get("locations"))
+        if location.get("status", "success") == "success"
+    ]
+    if not locations:
+        return {}
+    location = max(
+        locations,
+        key=lambda item: (
+            _float_or_none(_dict(_dict(item.get("image_diffs")).get("fpv")).get("mean_abs_rgb"))
+            or -1.0
+        ),
+    )
+    images: dict[str, dict[str, str]] = {}
+    missing: list[str] = []
+    for view in VISUAL_SAMPLE_VIEWS:
+        images[view] = {}
+        for backend in VISUAL_SAMPLE_BACKENDS:
+            image_path = _view_image_path(location, backend=backend, view=view)
+            if not image_path:
+                missing.append(f"{backend}.{view}")
+                continue
+            absolute_image_path = manifest_path.parent / image_path
+            if not absolute_image_path.is_file():
+                missing.append(f"{backend}.{view}")
+            images[view][backend] = _html_relpath(absolute_image_path, output_dir)
+    fpv_metrics = _view_diff_metrics(location, "fpv")
+    chase_metrics = _view_diff_metrics(location, "chase")
+    chase_contract = _dict(_dict(location.get("camera_contract_diagnostics")).get("chase_contract"))
+    return {
+        "kind": kind,
+        "label": summary.get("label") or kind,
+        "manifest_path": str(manifest_path),
+        "scene_signature": summary.get("scene_signature"),
+        "location_label": location.get("label"),
+        "target_id": _dict(location.get("target")).get("target_id"),
+        "images": images,
+        "missing_images": missing,
+        "fpv_mean_abs_rgb": fpv_metrics.get("mean_abs_rgb"),
+        "chase_mean_abs_rgb": chase_metrics.get("mean_abs_rgb"),
+        "fpv_residual_class": _residual_class(location, "fpv"),
+        "chase_residual_class": _residual_class(location, "chase"),
+        "chase_same_camera_contract": bool(chase_contract.get("same_camera_contract")),
+        "chase_contract_note": chase_contract.get("evidence_note")
+        or "Chase is auxiliary report evidence, not the policy/input camera.",
+        "chase_mujoco_source": chase_contract.get("mujoco_source"),
+        "chase_isaac_source": chase_contract.get("isaac_source"),
+    }
+
+
+def _view_image_path(location: dict[str, Any], *, backend: str, view: str) -> Path | None:
+    path = _dict(_dict(location.get("views")).get(backend)).get(view)
+    return Path(str(path)) if path else None
+
+
+def _residual_class(location: dict[str, Any], view: str) -> str:
+    return str(
+        _dict(_dict(_dict(location.get("image_diffs")).get(view)).get("residual")).get(
+            "residual_class"
+        )
+        or ""
+    )
+
+
+def _html_relpath(path: Path, start: Path) -> str:
+    try:
+        relpath = os.path.relpath(path, start=start)
+    except ValueError:
+        relpath = str(path)
+    return relpath.replace(os.sep, "/")
 
 
 def _head_camera_contract_check(baselines: list[dict[str, Any]]) -> dict[str, Any]:
@@ -364,6 +582,14 @@ def _render_domain_probe_matrix_check(
         kind = str(probe.get("probe_kind") or "unknown")
         baseline = baseline_by_scene.get(str(probe.get("scene_signature")))
         delta = _delta_vs_baseline(baseline, probe)
+        paired_view_diagnostics = (
+            _paired_view_delta_diagnostics(
+                Path(str(baseline.get("path"))),
+                Path(str(probe.get("path"))),
+            )
+            if baseline and delta.get("comparable")
+            else {"status": "not_comparable"}
+        )
         matrix.setdefault(kind, []).append(
             {
                 "label": probe.get("label"),
@@ -374,6 +600,8 @@ def _render_domain_probe_matrix_check(
                 "fpv_improved": delta.get("fpv_improved"),
                 "fpv_worse": delta.get("fpv_worse"),
                 "comparable": delta.get("comparable"),
+                "paired_view_diagnostics": paired_view_diagnostics,
+                "rgb_gain_source": probe.get("rgb_gain_source"),
             }
         )
     status_by_kind = {
@@ -396,6 +624,470 @@ def _render_domain_probe_matrix_check(
         "interpretation": (
             "Light/shadow, texture, and PreviewSurface probes are comparison-only. Simple "
             "switches should not be promoted when they are neutral or worse for FPV."
+        ),
+    }
+
+
+def _prepared_scale_square_default_gate_check(
+    render_domain_probe_matrix: dict[str, Any],
+    *,
+    required_scene_count: int,
+    required_seed_count: int,
+    chase_regression_tolerance: float = 1.0,
+) -> dict[str, Any]:
+    matrix = _dict(render_domain_probe_matrix.get("probe_matrix"))
+    material_rows = _list_dicts(matrix.get("material_response"))
+    prepared_rows = [
+        row
+        for row in material_rows
+        if "prepared_scale_square_gate" in str(row.get("label") or "").lower()
+    ]
+    comparable = [row for row in prepared_rows if row.get("comparable")]
+    scene_signatures = sorted({str(row.get("scene_signature") or "") for row in comparable})
+    seeds = sorted(
+        {
+            seed
+            for seed in (
+                _seed_from_scene_signature(str(row.get("scene_signature") or ""))
+                for row in comparable
+            )
+            if seed is not None
+        }
+    )
+    fpv_improved = [row for row in comparable if row.get("fpv_improved")]
+    fpv_worse = [row for row in comparable if row.get("fpv_worse")]
+    chase_regressions = [
+        row
+        for row in comparable
+        if _float_or_none(row.get("chase_delta")) is not None
+        and _float_or_none(row.get("chase_delta")) > chase_regression_tolerance
+    ]
+    baseline_render_statuses = [
+        status
+        for status in _list_strings(render_domain_probe_matrix.get("baseline_render_statuses"))
+        if status and status != "render_domain_delta_resolved"
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not prepared_rows:
+        blockers.append({"reason": "no_prepared_scale_square_probe"})
+    if len(comparable) != len(prepared_rows):
+        blockers.append(
+            {
+                "reason": "not_all_prepared_probes_comparable",
+                "prepared_probe_count": len(prepared_rows),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if len(scene_signatures) < required_scene_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_scene_corpus",
+                "scene_signature_count": len(scene_signatures),
+                "required_scene_count": required_scene_count,
+            }
+        )
+    if len(seeds) < required_seed_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_seed_corpus",
+                "seed_count": len(seeds),
+                "required_seed_count": required_seed_count,
+            }
+        )
+    if len(fpv_improved) != len(comparable):
+        blockers.append(
+            {
+                "reason": "not_all_comparable_probes_improve_fpv",
+                "fpv_improved_count": len(fpv_improved),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if fpv_worse:
+        blockers.append(
+            {
+                "reason": "fpv_regression",
+                "labels": [row.get("label") for row in fpv_worse],
+            }
+        )
+    if chase_regressions:
+        blockers.append(
+            {
+                "reason": "chase_regression",
+                "tolerance": chase_regression_tolerance,
+                "labels": [row.get("label") for row in chase_regressions],
+                "diagnostic_classes": sorted(
+                    {
+                        _classify_chase_regression(row, chase_regression_tolerance)
+                        for row in chase_regressions
+                    }
+                ),
+            }
+        )
+    if baseline_render_statuses:
+        blockers.append(
+            {
+                "reason": "render_domain_residuals_active",
+                "baseline_render_statuses": baseline_render_statuses,
+            }
+        )
+    if not prepared_rows:
+        status = "not_evaluated"
+    elif fpv_worse:
+        status = "do_not_promote"
+    elif comparable and len(fpv_improved) == len(comparable) and not blockers:
+        status = "prepared_scale_square_default_ready"
+    elif comparable and fpv_improved:
+        status = "comparison_only_not_default"
+    else:
+        status = "neutral_do_not_promote"
+    return {
+        "status": status,
+        "comparison_only": status != "prepared_scale_square_default_ready",
+        "default_candidate": status == "prepared_scale_square_default_ready",
+        "prepared_probe_count": len(prepared_rows),
+        "comparable_probe_count": len(comparable),
+        "fpv_improved_count": len(fpv_improved),
+        "fpv_worse_count": len(fpv_worse),
+        "chase_regression_count": len(chase_regressions),
+        "chase_regression_diagnostics": [
+            _chase_regression_diagnostic(row, chase_regression_tolerance)
+            for row in chase_regressions
+        ],
+        "scene_signature_count": len(scene_signatures),
+        "scene_signatures": scene_signatures,
+        "seed_count": len(seeds),
+        "seeds": seeds,
+        "required_scene_count": required_scene_count,
+        "required_seed_count": required_seed_count,
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "blockers": blockers,
+        "probes": [
+            {
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "scene_signature": row.get("scene_signature"),
+                "fpv_delta": row.get("fpv_delta"),
+                "chase_delta": row.get("chase_delta"),
+                "fpv_improved": row.get("fpv_improved"),
+                "comparable": row.get("comparable"),
+                "paired_view_diagnostics_status": _dict(row.get("paired_view_diagnostics")).get(
+                    "status"
+                ),
+            }
+            for row in prepared_rows
+        ],
+        "recommended_next_action": (
+            _prepared_scale_square_next_action(chase_regressions, chase_regression_tolerance)
+            if status != "prepared_scale_square_default_ready"
+            else "Prepared scale-square is ready for default-rendering review."
+        ),
+        "interpretation": (
+            "This gate decides whether the opt-in prepared USD texture scale/fallback "
+            "squaring evidence is strong enough to become default rendering behavior."
+        ),
+    }
+
+
+def _combined_material_light_default_gate_check(
+    render_domain_probe_matrix: dict[str, Any],
+    *,
+    required_scene_count: int,
+    required_seed_count: int,
+    chase_regression_tolerance: float = 1.0,
+) -> dict[str, Any]:
+    matrix = _dict(render_domain_probe_matrix.get("probe_matrix"))
+    material_rows = _list_dicts(matrix.get("material_response"))
+    combined_rows = [
+        row
+        for row in material_rows
+        if "scale_square" in str(row.get("label") or "").lower()
+        and "rotx" in str(row.get("label") or "").lower()
+    ]
+    comparable = [row for row in combined_rows if row.get("comparable")]
+    scene_signatures = sorted({str(row.get("scene_signature") or "") for row in comparable})
+    seeds = sorted(
+        {
+            seed
+            for seed in (
+                _seed_from_scene_signature(str(row.get("scene_signature") or ""))
+                for row in comparable
+            )
+            if seed is not None
+        }
+    )
+    fpv_improved = [row for row in comparable if row.get("fpv_improved")]
+    fpv_worse = [row for row in comparable if row.get("fpv_worse")]
+    chase_regressions = [
+        row
+        for row in comparable
+        if _float_or_none(row.get("chase_delta")) is not None
+        and _float_or_none(row.get("chase_delta")) > chase_regression_tolerance
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not combined_rows:
+        blockers.append({"reason": "no_combined_material_light_probe"})
+    if len(comparable) != len(combined_rows):
+        blockers.append(
+            {
+                "reason": "not_all_combined_probes_comparable",
+                "probe_count": len(combined_rows),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if len(scene_signatures) < required_scene_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_scene_corpus",
+                "scene_signature_count": len(scene_signatures),
+                "required_scene_count": required_scene_count,
+            }
+        )
+    if len(seeds) < required_seed_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_seed_corpus",
+                "seed_count": len(seeds),
+                "required_seed_count": required_seed_count,
+            }
+        )
+    if len(fpv_improved) != len(comparable):
+        blockers.append(
+            {
+                "reason": "not_all_comparable_probes_improve_fpv",
+                "fpv_improved_count": len(fpv_improved),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if fpv_worse:
+        blockers.append(
+            {
+                "reason": "fpv_regression",
+                "labels": [row.get("label") for row in fpv_worse],
+            }
+        )
+    if chase_regressions:
+        blockers.append(
+            {
+                "reason": "chase_regression",
+                "tolerance": chase_regression_tolerance,
+                "labels": [row.get("label") for row in chase_regressions],
+            }
+        )
+    if not combined_rows:
+        status = "not_evaluated"
+    elif fpv_worse:
+        status = "do_not_promote"
+    elif comparable and len(fpv_improved) == len(comparable) and not chase_regressions:
+        status = "combined_material_light_default_ready" if not blockers else "needs_broader_corpus"
+    else:
+        status = "comparison_only_not_default"
+    return {
+        "status": status,
+        "comparison_only": status != "combined_material_light_default_ready",
+        "default_candidate": status == "combined_material_light_default_ready",
+        "probe_count": len(combined_rows),
+        "comparable_probe_count": len(comparable),
+        "fpv_improved_count": len(fpv_improved),
+        "fpv_worse_count": len(fpv_worse),
+        "chase_regression_count": len(chase_regressions),
+        "scene_signature_count": len(scene_signatures),
+        "scene_signatures": scene_signatures,
+        "seed_count": len(seeds),
+        "seeds": seeds,
+        "required_scene_count": required_scene_count,
+        "required_seed_count": required_seed_count,
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "blockers": blockers,
+        "probes": [
+            {
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "scene_signature": row.get("scene_signature"),
+                "fpv_delta": row.get("fpv_delta"),
+                "chase_delta": row.get("chase_delta"),
+                "fpv_improved": row.get("fpv_improved"),
+                "comparable": row.get("comparable"),
+            }
+            for row in combined_rows
+        ],
+        "interpretation": (
+            "This gate tracks combined prepared scale-square material conversion plus "
+            "directional-light orientation probes. It needs held-out scene/seed coverage "
+            "before default rendering promotion."
+        ),
+    }
+
+
+def _view_specific_prepared_scale_square_tone_gate_check(
+    render_domain_probe_matrix: dict[str, Any],
+    *,
+    required_scene_count: int,
+    required_seed_count: int,
+    chase_regression_tolerance: float = 1.0,
+) -> dict[str, Any]:
+    matrix = _dict(render_domain_probe_matrix.get("probe_matrix"))
+    tone_rows = _list_dicts(matrix.get("tone_color"))
+    view_rows = [
+        row
+        for row in tone_rows
+        if "prepared_scale_square_view_rgb" in str(row.get("label") or "").lower()
+    ]
+    comparable = [row for row in view_rows if row.get("comparable")]
+    scene_signatures = sorted({str(row.get("scene_signature") or "") for row in comparable})
+    seeds = sorted(
+        {
+            seed
+            for seed in (
+                _seed_from_scene_signature(str(row.get("scene_signature") or ""))
+                for row in comparable
+            )
+            if seed is not None
+        }
+    )
+    fpv_improved = [row for row in comparable if row.get("fpv_improved")]
+    fpv_worse = [row for row in comparable if row.get("fpv_worse")]
+    required_views = ("fpv", "chase")
+    missing_view_gain_rows = [
+        {
+            "label": row.get("label"),
+            "available_views": _view_rgb_gain_views(row),
+            "required_views": list(required_views),
+        }
+        for row in view_rows
+        if not _has_required_view_rgb_gains(row, required_views=required_views)
+    ]
+    chase_regressions = [
+        row
+        for row in comparable
+        if _float_or_none(row.get("chase_delta")) is not None
+        and _float_or_none(row.get("chase_delta")) > chase_regression_tolerance
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not view_rows:
+        blockers.append({"reason": "no_view_specific_prepared_scale_square_tone_probe"})
+    if len(comparable) != len(view_rows):
+        blockers.append(
+            {
+                "reason": "not_all_view_specific_probes_comparable",
+                "probe_count": len(view_rows),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if len(scene_signatures) < required_scene_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_scene_corpus",
+                "scene_signature_count": len(scene_signatures),
+                "required_scene_count": required_scene_count,
+            }
+        )
+    if len(seeds) < required_seed_count:
+        blockers.append(
+            {
+                "reason": "needs_broader_seed_corpus",
+                "seed_count": len(seeds),
+                "required_seed_count": required_seed_count,
+            }
+        )
+    if len(fpv_improved) != len(comparable):
+        blockers.append(
+            {
+                "reason": "not_all_comparable_probes_improve_fpv",
+                "fpv_improved_count": len(fpv_improved),
+                "comparable_probe_count": len(comparable),
+            }
+        )
+    if fpv_worse:
+        blockers.append(
+            {
+                "reason": "fpv_regression",
+                "labels": [row.get("label") for row in fpv_worse],
+            }
+        )
+    if missing_view_gain_rows:
+        blockers.append(
+            {
+                "reason": "missing_backend_view_rgb_gain",
+                "rows": missing_view_gain_rows,
+            }
+        )
+    if chase_regressions:
+        blockers.append(
+            {
+                "reason": "chase_regression",
+                "tolerance": chase_regression_tolerance,
+                "labels": [row.get("label") for row in chase_regressions],
+            }
+        )
+    formal_comparison_gate_ready = bool(view_rows and not blockers)
+    if not view_rows:
+        status = "not_evaluated"
+    elif comparable and len(fpv_improved) == len(comparable) and not chase_regressions:
+        if not blockers:
+            status = "view_specific_report_comparison_gate_ready"
+        else:
+            status = "comparison_only_needs_broader_gate"
+    elif fpv_worse:
+        status = "do_not_promote"
+    else:
+        status = "comparison_only_not_default"
+    return {
+        "status": status,
+        "comparison_only": True,
+        "formal_comparison_gate_ready": formal_comparison_gate_ready,
+        "ready_for_review": formal_comparison_gate_ready,
+        "policy_scope": (
+            "report_side_comparison_only"
+            if formal_comparison_gate_ready
+            else "comparison_only_probe"
+        ),
+        "default_rendering_candidate": False,
+        "probe_count": len(view_rows),
+        "comparable_probe_count": len(comparable),
+        "fpv_improved_count": len(fpv_improved),
+        "fpv_worse_count": len(fpv_worse),
+        "chase_regression_count": len(chase_regressions),
+        "view_rgb_gain_profile_count": len(view_rows) - len(missing_view_gain_rows),
+        "required_view_rgb_gain_views": list(required_views),
+        "scene_signature_count": len(scene_signatures),
+        "scene_signatures": scene_signatures,
+        "seed_count": len(seeds),
+        "seeds": seeds,
+        "required_scene_count": required_scene_count,
+        "required_seed_count": required_seed_count,
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "blockers": blockers,
+        "probes": [
+            {
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "scene_signature": row.get("scene_signature"),
+                "fpv_delta": row.get("fpv_delta"),
+                "chase_delta": row.get("chase_delta"),
+                "fpv_improved": row.get("fpv_improved"),
+                "comparable": row.get("comparable"),
+                "view_rgb_gain_views": _view_rgb_gain_views(row),
+                "has_required_view_rgb_gain": _has_required_view_rgb_gains(
+                    row,
+                    required_views=required_views,
+                ),
+            }
+            for row in view_rows
+        ],
+        "recommended_next_action": (
+            "Review whether view-specific report-side tone compensation should become a "
+            "formal comparison gate. Do not promote it to default rendering; keep "
+            "RAW_FPV FPV as the policy/input metric and chase as auxiliary report evidence."
+            if formal_comparison_gate_ready
+            else (
+                "Keep view-specific tone comparison-only until all comparable probes improve "
+                "FPV, stay within chase tolerance, and cover the required corpus."
+            )
+        ),
+        "interpretation": (
+            "This gate evaluates prepared scale-square plus view-specific tone compensation. "
+            "It can clear the auxiliary chase side effect as report-side comparison evidence, "
+            "but it is not a default-rendering policy."
         ),
     }
 
@@ -445,6 +1137,75 @@ def _raw_fpv_input_lane_check(raw_fpv_runs: list[dict[str, Any]]) -> dict[str, A
     }
 
 
+def _prepared_usd_summary(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {"status": "missing", "path": str(path)}
+    payload = _read_json(path)
+    return {
+        "status": payload.get("status"),
+        "path": str(path),
+        "source_scene_usd_path": payload.get("source_scene_usd_path"),
+        "output_usd_path": payload.get("output_usd_path"),
+        "rendering_parity_preset": payload.get("rendering_parity_preset"),
+        "material_texture_scale_mode": payload.get("material_texture_scale_mode"),
+        "material_texture_scale_rewrite_count": payload.get("material_texture_scale_rewrite_count"),
+        "distant_light_rotate_x": payload.get("distant_light_rotate_x"),
+        "distant_light_rotate_x_rewrite_count": payload.get("distant_light_rotate_x_rewrite_count"),
+        "distant_light_rotate_x_insert_count": payload.get("distant_light_rotate_x_insert_count"),
+        "default_rendering_path_status": payload.get("default_rendering_path_status"),
+        "default_rendering_path_uses_combined_material_light": payload.get(
+            "default_rendering_path_uses_combined_material_light"
+        ),
+    }
+
+
+def _default_rendering_path_check(prepared_usd_summaries: list[dict[str, Any]]) -> dict[str, Any]:
+    loaded = [item for item in prepared_usd_summaries if item.get("status") in {"ready", "partial"}]
+    ready = [
+        item
+        for item in loaded
+        if item.get("default_rendering_path_status")
+        == "default_rendering_path_uses_combined_material_light"
+        and item.get("default_rendering_path_uses_combined_material_light") is True
+    ]
+    blockers: list[dict[str, Any]] = []
+    if not prepared_usd_summaries:
+        blockers.append({"reason": "prepared_usd_summary_not_provided"})
+    missing = [item for item in prepared_usd_summaries if item.get("status") == "missing"]
+    if missing:
+        blockers.append(
+            {
+                "reason": "prepared_usd_summary_missing",
+                "paths": [item.get("path") for item in missing],
+            }
+        )
+    if len(ready) != len(loaded):
+        blockers.append(
+            {
+                "reason": "not_all_prepared_usd_paths_use_combined_material_light",
+                "loaded_count": len(loaded),
+                "ready_count": len(ready),
+            }
+        )
+    status = (
+        "default_rendering_path_uses_combined_material_light"
+        if loaded and len(ready) == len(loaded) and not blockers
+        else "default_rendering_path_not_proven"
+    )
+    return {
+        "status": status,
+        "summary_count": len(prepared_usd_summaries),
+        "loaded_count": len(loaded),
+        "ready_count": len(ready),
+        "blockers": blockers,
+        "summaries": prepared_usd_summaries,
+        "interpretation": (
+            "This check proves whether the prepared semantic USD path uses the validated "
+            "combined material scale-square plus DistantLight rotateX=+25 rendering preset."
+        ),
+    }
+
+
 def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, Any]:
     default_source = str(
         DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_luminance_gain_source") or ""
@@ -454,6 +1215,28 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
         candidates.append(_calibration_manifest_summary(path))
     default_source_exists = bool(default_source and Path(default_source).is_file())
     usable = [item for item in candidates if item.get("render_domain_calibration_status")]
+    default_ready = any(
+        item.get("render_domain_calibration_status") == "global_luminance_gain_sufficient"
+        for item in usable
+    )
+    non_default_candidates = [
+        {
+            "reason": "render_domain_calibration_not_default_ready",
+            "path": item.get("path"),
+            "render_domain_calibration_status": item.get("render_domain_calibration_status"),
+            "mean_abs_calibrated_luminance_residual": item.get(
+                "mean_abs_calibrated_luminance_residual"
+            ),
+        }
+        for item in usable
+        if item.get("render_domain_calibration_status") != "global_luminance_gain_sufficient"
+    ]
+    default_candidates = [
+        item
+        for item in usable
+        if item.get("render_domain_calibration_status") == "global_luminance_gain_sufficient"
+    ]
+    default_blockers = [] if default_ready else non_default_candidates
     if usable:
         status = "calibration_scene_evidence_loaded"
     elif default_source and not default_source_exists:
@@ -466,6 +1249,10 @@ def _calibration_summary(calibration_manifest_paths: list[Path]) -> dict[str, An
         "default_luminance_gain_source_exists": default_source_exists,
         "provided_manifest_count": len(calibration_manifest_paths),
         "usable_manifest_count": len(usable),
+        "default_rendering_ready": default_ready,
+        "default_rendering_candidates": default_candidates,
+        "non_default_rendering_candidates": non_default_candidates,
+        "default_rendering_blockers": default_blockers,
         "manifests": candidates,
         "interpretation": (
             "A real calibration scene/report is needed before turning comparison-only "
@@ -478,16 +1265,206 @@ def _calibration_manifest_summary(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {"status": "missing", "path": str(path)}
     payload = _read_json(path)
-    calibration = _find_first_dict(payload, "render_domain_calibration") or {}
+    calibration, calibration_source = _scene_level_render_domain_calibration(payload)
     return {
         "status": "loaded",
         "path": str(path),
         "schema": payload.get("schema"),
         "comparison_status": payload.get("status"),
+        "render_domain_calibration_source": calibration_source,
         "render_domain_calibration_status": calibration.get("status"),
         "global_isaac_luminance_gain": calibration.get("global_isaac_luminance_gain"),
         "mean_abs_calibrated_luminance_residual": calibration.get(
             "mean_abs_calibrated_luminance_residual"
+        ),
+    }
+
+
+def _scene_level_render_domain_calibration(payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    visual_diagnostics = _dict(payload.get("visual_diagnostics"))
+    calibration = _dict(visual_diagnostics.get("render_domain_calibration"))
+    if calibration:
+        return calibration, "visual_diagnostics.render_domain_calibration"
+
+    summary = _dict(payload.get("summary"))
+    calibration = _dict(summary.get("render_domain_calibration"))
+    if calibration:
+        return calibration, "summary.render_domain_calibration"
+
+    calibration = _find_first_dict(payload, "render_domain_calibration") or {}
+    return calibration, "first_render_domain_calibration" if calibration else ""
+
+
+def _four_check_audit(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    head_camera = _dict(checks.get("head_camera_contract"))
+    raw_fpv = _dict(checks.get("raw_fpv_input_lane"))
+    render_matrix = _dict(checks.get("render_domain_probe_matrix"))
+    prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
+    combined_gate = _dict(checks.get("combined_material_light_default_gate"))
+    default_path = _dict(checks.get("default_rendering_path"))
+    view_tone_gate = _dict(checks.get("view_specific_prepared_scale_square_tone_gate"))
+    rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
+    calibration = _dict(checks.get("calibration_scene"))
+    probe_status_by_kind = _dict(render_matrix.get("probe_status_by_kind"))
+    material_status = str(probe_status_by_kind.get("material_response") or "not_evaluated")
+    light_shadow_status = str(probe_status_by_kind.get("light_shadow") or "not_evaluated")
+    camera_proven = head_camera.get("status") == HEAD_CAMERA_PASS_STATUS
+    raw_fpv_proven = raw_fpv.get("status") == RAW_FPV_PASS_STATUS
+    material_default_ready = (
+        prepared_gate.get("status") == "prepared_scale_square_default_ready"
+        or combined_gate.get("status") == "combined_material_light_default_ready"
+    )
+    view_specific_tone_ready = bool(view_tone_gate.get("formal_comparison_gate_ready"))
+    combined_material_light_ready = (
+        combined_gate.get("status") == "combined_material_light_default_ready"
+        and calibration.get("default_rendering_ready") is True
+    )
+    default_rendering_path_ready = (
+        default_path.get("status") == "default_rendering_path_uses_combined_material_light"
+    )
+    combined_material_light_promoted = (
+        combined_material_light_ready and default_rendering_path_ready
+    )
+    lighting_default_ready = combined_material_light_ready or (
+        render_matrix.get("status") == "render_domain_delta_resolved"
+        and rgb_tone.get("comparison_only") is False
+        and calibration.get("status") == "calibration_scene_evidence_loaded"
+    )
+    rows = [
+        {
+            "check_id": "camera_geometry",
+            "resolved": camera_proven,
+            "status": "proven_aligned" if camera_proven else "not_proven",
+            "source_check": "head_camera_contract",
+            "source_status": head_camera.get("status"),
+            "decision": (
+                "Keep MuJoCo robot_0/head_camera and Isaac /World/robot_0/head_camera frozen."
+                if camera_proven
+                else "Fix FPV pose/lens before render-domain tuning."
+            ),
+        },
+        {
+            "check_id": "raw_fpv_input_lane",
+            "resolved": raw_fpv_proven,
+            "status": "proven_head_camera_input" if raw_fpv_proven else "not_proven",
+            "source_check": "raw_fpv_input_lane",
+            "source_status": raw_fpv.get("status"),
+            "decision": (
+                "Treat camera-raw RAW_FPV as the agent-input lane; world-label "
+                "images remain report evidence."
+                if raw_fpv_proven
+                else "Run a camera-raw cleanup probe before claiming agent-input parity."
+            ),
+        },
+        {
+            "check_id": "material_texture_response",
+            "resolved": material_default_ready,
+            "status": (
+                "default_ready"
+                if material_default_ready
+                else (
+                    "review_ready_comparison_only"
+                    if view_specific_tone_ready
+                    else "active_comparison_only"
+                )
+            ),
+            "source_check": "prepared_scale_square_default_gate",
+            "source_status": prepared_gate.get("status"),
+            "combined_source_status": combined_gate.get("status"),
+            "probe_status": material_status,
+            "decision": (
+                "The default prepared-USD path uses prepared scale-square plus "
+                "directional-light orientation."
+                if combined_material_light_promoted
+                else "Prepared scale-square plus directional-light orientation is ready for "
+                "default-rendering review."
+                if material_default_ready
+                else (
+                    "Use the view-specific report-side comparison gate for visual evidence, "
+                    "but keep material/texture defaults blocked by active render residuals."
+                    if view_specific_tone_ready
+                    else (
+                        "Keep material/texture probes comparison-only; texture scale/sampler/"
+                        "material response remains active."
+                    )
+                )
+            ),
+        },
+        {
+            "check_id": "light_brightness_tone",
+            "resolved": lighting_default_ready,
+            "status": (
+                "default_ready"
+                if lighting_default_ready
+                else (
+                    "review_ready_comparison_only"
+                    if view_specific_tone_ready
+                    else "active_comparison_only"
+                )
+            ),
+            "source_check": (
+                "combined_material_light_default_gate"
+                if combined_material_light_ready
+                else "render_domain_probe_matrix"
+                if not view_specific_tone_ready
+                else "view_specific_prepared_scale_square_tone_gate"
+            ),
+            "source_status": (
+                combined_gate.get("status")
+                if combined_material_light_ready
+                else render_matrix.get("status")
+                if not view_specific_tone_ready
+                else view_tone_gate.get("status")
+            ),
+            "policy_scope": view_tone_gate.get("policy_scope")
+            if view_specific_tone_ready
+            else None,
+            "probe_status": light_shadow_status,
+            "rgb_tone_status": rgb_tone.get("status"),
+            "calibration_status": calibration.get("status"),
+            "decision": (
+                "Combined material and directional-light rendering is now the default "
+                "prepared-USD path without report-side RGB compensation."
+                if combined_material_light_promoted
+                else "Combined material and directional-light evidence is ready for "
+                "default-rendering review without report-side RGB compensation."
+                if lighting_default_ready
+                else (
+                    "Use view-specific tone only as a formal report-side comparison gate; "
+                    "keep light, shadow, RGB, and luminance defaults blocked until "
+                    "calibration and residual gates pass."
+                    if view_specific_tone_ready
+                    else (
+                        "Keep light, shadow, RGB, and luminance changes comparison-only "
+                        "until calibration and residual gates pass."
+                    )
+                )
+            ),
+        },
+    ]
+    unresolved = [row["check_id"] for row in rows if not row["resolved"]]
+    if combined_material_light_promoted:
+        root_cause = "render_domain_resolved_by_combined_material_light_default_path"
+    elif combined_material_light_ready:
+        root_cause = "render_domain_ready_for_combined_material_light_default_path"
+    elif not unresolved:
+        root_cause = "render_domain_resolved_by_default_rendering_gates"
+    elif camera_proven and raw_fpv_proven and not material_default_ready:
+        root_cause = "render_domain_not_camera"
+    elif not camera_proven:
+        root_cause = "camera_geometry_not_proven"
+    else:
+        root_cause = "input_or_render_domain_not_proven"
+    return {
+        "schema": "robot_camera_four_check_audit_v1",
+        "status": "active" if unresolved else "passed",
+        "root_cause_classification": root_cause,
+        "rows": rows,
+        "unresolved_check_ids": unresolved,
+        "interpretation": (
+            "This audit maps the user-requested four checks onto the machine gates. "
+            "Camera and RAW_FPV are checked independently from render-domain material, "
+            "texture, lighting, and tone gates."
         ),
     }
 
@@ -502,17 +1479,211 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
     foundational_checks_pass = all(
         checks[key].get("status") == status for key, status in required_pass.items()
     )
+    calibration_default_ready = (
+        checks.get("calibration_scene", {}).get("default_rendering_ready") is True
+    )
     render_domain_resolved = checks["render_domain_probe_matrix"].get("status") == (
         "render_domain_delta_resolved"
+    )
+    prepared_scale_ready = checks.get("prepared_scale_square_default_gate", {}).get("status") == (
+        "prepared_scale_square_default_ready"
+    )
+    combined_material_light_ready = (
+        checks.get("combined_material_light_default_gate", {}).get("status")
+        == "combined_material_light_default_ready"
+    )
+    default_rendering_path_ready = checks.get("default_rendering_path", {}).get("status") == (
+        "default_rendering_path_uses_combined_material_light"
+    )
+    combined_material_light_promoted = (
+        combined_material_light_ready and default_rendering_path_ready
     )
     rgb_ready_for_default = checks["rgb_tone_cross_validation"].get("status") == (
         "default_rgb_tone_ready"
     )
-    if foundational_checks_pass and render_domain_resolved and rgb_ready_for_default:
+    if (
+        foundational_checks_pass
+        and calibration_default_ready
+        and (render_domain_resolved or combined_material_light_promoted)
+        and (prepared_scale_ready or combined_material_light_ready)
+        and (rgb_ready_for_default or combined_material_light_promoted)
+    ):
         return "passed"
     if checks["head_camera_contract"].get("status") == HEAD_CAMERA_PASS_STATUS:
         return "active"
     return "needs_camera_work"
+
+
+def _report_side_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    required_statuses = {
+        "head_camera_contract": HEAD_CAMERA_PASS_STATUS,
+        "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
+        "corpus_coverage": "broad_corpus_ready",
+        "calibration_scene": "calibration_scene_evidence_loaded",
+    }
+    blockers = [
+        {
+            "reason": "required_check_not_ready",
+            "check_id": check_id,
+            "expected": expected,
+            "actual": _dict(checks.get(check_id)).get("status"),
+        }
+        for check_id, expected in required_statuses.items()
+        if _dict(checks.get(check_id)).get("status") != expected
+    ]
+    view_tone_gate = _dict(checks.get("view_specific_prepared_scale_square_tone_gate"))
+    if not view_tone_gate.get("formal_comparison_gate_ready"):
+        blockers.append(
+            {
+                "reason": "formal_view_specific_tone_gate_not_ready",
+                "check_id": "view_specific_prepared_scale_square_tone_gate",
+                "actual": view_tone_gate.get("status"),
+            }
+        )
+    ready = not blockers
+    return {
+        "schema": "robot_camera_report_side_visual_parity_v1",
+        "status": "report_side_visual_parity_ready" if ready else "not_ready",
+        "ready": ready,
+        "policy_scope": "report_side_comparison_only",
+        "default_rendering_candidate": False,
+        "source_checks": sorted(required_statuses)
+        + ["view_specific_prepared_scale_square_tone_gate"],
+        "blockers": blockers,
+        "interpretation": (
+            "Report-side visual parity means MuJoCo and Isaac use aligned robot-mounted "
+            "head-camera FPV evidence and a formal view-specific tone comparison gate. "
+            "It is separate from default renderer promotion."
+        ),
+    }
+
+
+def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    foundational_required_statuses = {
+        "head_camera_contract": HEAD_CAMERA_PASS_STATUS,
+        "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
+        "corpus_coverage": "broad_corpus_ready",
+        "calibration_scene": "calibration_scene_evidence_loaded",
+    }
+    render_required_statuses = {
+        "render_domain_probe_matrix": "render_domain_delta_resolved",
+        "rgb_tone_cross_validation": "default_rgb_tone_ready",
+    }
+    prepared_gate = _dict(checks.get("prepared_scale_square_default_gate"))
+    combined_gate = _dict(checks.get("combined_material_light_default_gate"))
+    material_gate_ready = (
+        prepared_gate.get("status") == "prepared_scale_square_default_ready"
+        or combined_gate.get("status") == "combined_material_light_default_ready"
+    )
+    combined_material_light_ready = (
+        combined_gate.get("status") == "combined_material_light_default_ready"
+    )
+    default_rendering_path_ready = checks.get("default_rendering_path", {}).get("status") == (
+        "default_rendering_path_uses_combined_material_light"
+    )
+    blockers = [
+        {
+            "reason": "required_check_not_ready",
+            "check_id": check_id,
+            "expected": expected,
+            "actual": _dict(checks.get(check_id)).get("status"),
+        }
+        for check_id, expected in foundational_required_statuses.items()
+        if _dict(checks.get(check_id)).get("status") != expected
+    ]
+    if not combined_material_light_ready:
+        blockers.extend(
+            {
+                "reason": "required_check_not_ready",
+                "check_id": check_id,
+                "expected": expected,
+                "actual": _dict(checks.get(check_id)).get("status"),
+            }
+            for check_id, expected in render_required_statuses.items()
+            if _dict(checks.get(check_id)).get("status") != expected
+        )
+    if not material_gate_ready:
+        blockers.append(
+            {
+                "reason": "material_light_default_gate_not_ready",
+                "check_id": "prepared_scale_square_default_gate",
+                "alternate_check_id": "combined_material_light_default_gate",
+                "prepared_scale_square_status": prepared_gate.get("status"),
+                "combined_material_light_status": combined_gate.get("status"),
+            }
+        )
+        blockers.extend(_list_dicts(prepared_gate.get("blockers")))
+        blockers.extend(_list_dicts(combined_gate.get("blockers")))
+    if combined_material_light_ready and not default_rendering_path_ready:
+        blockers.append(
+            {
+                "reason": "default_rendering_path_not_promoted",
+                "check_id": "default_rendering_path",
+                "expected": "default_rendering_path_uses_combined_material_light",
+                "actual": _dict(checks.get("default_rendering_path")).get("status", "not_proven"),
+            }
+        )
+    calibration = _dict(checks.get("calibration_scene"))
+    if calibration.get("default_rendering_ready") is not True:
+        blockers.append(
+            {
+                "reason": "calibration_not_default_rendering_ready",
+                "check_id": "calibration_scene",
+                "status": calibration.get("status"),
+            }
+        )
+    blockers.extend(_list_dicts(calibration.get("default_rendering_blockers")))
+    rgb_tone = _dict(checks.get("rgb_tone_cross_validation"))
+    if rgb_tone.get("comparison_only") is True and not combined_material_light_ready:
+        blockers.append(
+            {
+                "reason": "rgb_tone_comparison_only",
+                "check_id": "rgb_tone_cross_validation",
+                "status": rgb_tone.get("status"),
+            }
+        )
+    ready = not blockers
+    promotion_candidate_ready = (
+        combined_material_light_ready
+        and calibration.get("default_rendering_ready") is True
+        and not [
+            blocker
+            for blocker in blockers
+            if blocker.get("reason") != "default_rendering_path_not_promoted"
+        ]
+    )
+    return {
+        "schema": "robot_camera_default_rendering_visual_parity_v1",
+        "status": (
+            "default_rendering_visual_parity_ready"
+            if ready
+            else (
+                "default_rendering_promotion_candidate_ready"
+                if promotion_candidate_ready
+                else "not_ready"
+            )
+        ),
+        "ready": ready,
+        "promotion_candidate_ready": promotion_candidate_ready,
+        "policy_scope": "default_rendering",
+        "source_checks": sorted({**foundational_required_statuses, **render_required_statuses})
+        + [
+            "prepared_scale_square_default_gate",
+            "combined_material_light_default_gate",
+            "default_rendering_path",
+        ],
+        "promotion_path": (
+            "combined_material_light_default_gate"
+            if combined_material_light_ready
+            else "render_domain_probe_matrix_and_default_rgb_tone"
+        ),
+        "blockers": blockers,
+        "interpretation": (
+            "Default-rendering visual parity requires renderer/material/tone gates to pass "
+            "without report-side compensation. A combined material plus directional-light "
+            "gate can satisfy this without the report-side RGB/tone profile."
+        ),
+    }
 
 
 def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
@@ -528,10 +1699,33 @@ def _recommended_next_action(checks: dict[str, dict[str, Any]]) -> str:
             "Generate a root-visible calibration-scene report before promoting any "
             "RGB/luminance gain to default rendering."
         )
+    prepared_gate = checks.get("prepared_scale_square_default_gate", {})
+    combined_gate = checks.get("combined_material_light_default_gate", {})
+    default_rendering = _default_rendering_visual_parity(checks)
+    if default_rendering.get("status") == "default_rendering_visual_parity_ready":
+        return (
+            "Default-rendering visual parity is ready through the combined scale-square "
+            "material conversion plus DistantLight rotateX=+25 prepared-USD path. Keep "
+            "the head-camera contract frozen and broaden monitoring on future scenes."
+        )
+    view_tone_gate = checks.get("view_specific_prepared_scale_square_tone_gate", {})
+    if combined_gate.get("status") == "combined_material_light_default_ready":
+        return (
+            "Combined scale-square material conversion plus directional-light orientation "
+            "is ready as the default-rendering promotion candidate. Next, wire or review "
+            "the default prepared-USD rendering path before claiming cleanup defaults changed."
+        )
+    if prepared_gate.get("status") == "comparison_only_not_default":
+        return str(prepared_gate.get("recommended_next_action") or "")
     if checks["rgb_tone_cross_validation"].get("comparison_only") is True:
         return (
             "Keep RGB/tone as comparison-only and review remaining render-domain residuals "
             "before changing default cleanup rendering."
+        )
+    if view_tone_gate.get("formal_comparison_gate_ready"):
+        return (
+            "Report-side visual parity is ready. Keep default rendering active until "
+            "material/texture, light/brightness/tone, and RGB/tone default gates pass."
         )
     return "Review remaining render-domain residuals before changing default cleanup rendering."
 
@@ -588,6 +1782,236 @@ def _delta_vs_baseline(
     }
 
 
+def _paired_view_delta_diagnostics(
+    baseline_path: Path,
+    probe_path: Path,
+) -> dict[str, Any]:
+    if not baseline_path.is_file() or not probe_path.is_file():
+        return {
+            "status": "missing_manifest",
+            "baseline_path": str(baseline_path),
+            "probe_path": str(probe_path),
+        }
+    baseline_locations = _locations_by_label(_read_json(baseline_path))
+    probe_locations = _locations_by_label(_read_json(probe_path))
+    labels = sorted(set(baseline_locations) & set(probe_locations))
+    if not labels:
+        return {
+            "status": "no_paired_locations",
+            "baseline_location_count": len(baseline_locations),
+            "probe_location_count": len(probe_locations),
+        }
+    return {
+        "status": "paired_view_diagnostics_loaded",
+        "paired_location_count": len(labels),
+        "views": {
+            view: _paired_view_delta_summary(labels, baseline_locations, probe_locations, view)
+            for view in ("fpv", "chase")
+        },
+        "interpretation": (
+            "Per-location image-diff deltas classify whether a probe changes camera-view "
+            "geometry/edge residuals or mostly shifts luminance/tone. Chase remains "
+            "auxiliary report evidence, not the policy input."
+        ),
+    }
+
+
+def _paired_view_delta_summary(
+    labels: list[str],
+    baseline_locations: dict[str, dict[str, Any]],
+    probe_locations: dict[str, dict[str, Any]],
+    view: str,
+) -> dict[str, Any]:
+    rows = []
+    for label in labels:
+        baseline_metrics = _view_diff_metrics(baseline_locations[label], view)
+        probe_metrics = _view_diff_metrics(probe_locations[label], view)
+        mean_delta = _delta(
+            probe_metrics.get("mean_abs_rgb"),
+            baseline_metrics.get("mean_abs_rgb"),
+        )
+        edge_delta = _delta(
+            probe_metrics.get("edge_abs_diff"),
+            baseline_metrics.get("edge_abs_diff"),
+        )
+        luminance_gap_delta = _delta(
+            probe_metrics.get("luminance_gap"),
+            baseline_metrics.get("luminance_gap"),
+        )
+        isaac_luminance_delta = _delta(
+            probe_metrics.get("isaac_mean_luminance"),
+            baseline_metrics.get("isaac_mean_luminance"),
+        )
+        if all(value is None for value in (mean_delta, edge_delta, luminance_gap_delta)):
+            continue
+        rows.append(
+            {
+                "label": label,
+                "target_id": _dict(baseline_locations[label].get("target")).get("target_id"),
+                "mean_abs_rgb_delta": mean_delta,
+                "edge_abs_diff_delta": edge_delta,
+                "luminance_gap_delta": luminance_gap_delta,
+                "isaac_luminance_delta": isaac_luminance_delta,
+            }
+        )
+    regressed = [
+        row
+        for row in rows
+        if _float_or_none(row.get("mean_abs_rgb_delta")) is not None
+        and _float_or_none(row.get("mean_abs_rgb_delta")) > 1.0
+    ]
+    improved = [
+        row
+        for row in rows
+        if _float_or_none(row.get("mean_abs_rgb_delta")) is not None
+        and _float_or_none(row.get("mean_abs_rgb_delta")) < -1.0
+    ]
+    edge_regressions = [
+        row
+        for row in rows
+        if _float_or_none(row.get("edge_abs_diff_delta")) is not None
+        and _float_or_none(row.get("edge_abs_diff_delta")) > 0.5
+    ]
+    luminance_gap_regressions = [
+        row
+        for row in rows
+        if _float_or_none(row.get("luminance_gap_delta")) is not None
+        and _float_or_none(row.get("luminance_gap_delta")) > 1.0
+    ]
+    return {
+        "paired_location_count": len(rows),
+        "mean_abs_rgb_delta_avg": _average(row.get("mean_abs_rgb_delta") for row in rows),
+        "edge_abs_diff_delta_avg": _average(row.get("edge_abs_diff_delta") for row in rows),
+        "luminance_gap_delta_avg": _average(row.get("luminance_gap_delta") for row in rows),
+        "isaac_luminance_delta_avg": _average(row.get("isaac_luminance_delta") for row in rows),
+        "regressed_location_count": len(regressed),
+        "improved_location_count": len(improved),
+        "edge_regression_count": len(edge_regressions),
+        "luminance_gap_regression_count": len(luminance_gap_regressions),
+        "top_regressions": sorted(
+            regressed,
+            key=lambda row: _float_or_none(row.get("mean_abs_rgb_delta")) or 0.0,
+            reverse=True,
+        )[:3],
+    }
+
+
+def _locations_by_label(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    locations = {}
+    for index, location in enumerate(_list_dicts(payload.get("locations"))):
+        label = (
+            location.get("label")
+            or _dict(location.get("target")).get("target_id")
+            or f"location_{index:04d}"
+        )
+        locations.setdefault(str(label), location)
+    return locations
+
+
+def _view_diff_metrics(location: dict[str, Any], view: str) -> dict[str, Any]:
+    diff = _dict(_dict(location.get("image_diffs")).get(view))
+    residual = _dict(diff.get("residual"))
+    left_metrics = _dict(residual.get("left_metrics"))
+    right_metrics = _dict(residual.get("right_metrics"))
+    mujoco_luminance = _float_or_none(left_metrics.get("mean_luminance"))
+    isaac_luminance = _float_or_none(right_metrics.get("mean_luminance"))
+    luminance_gap = (
+        abs(isaac_luminance - mujoco_luminance)
+        if mujoco_luminance is not None and isaac_luminance is not None
+        else None
+    )
+    return {
+        "mean_abs_rgb": _float_or_none(diff.get("mean_abs_rgb")),
+        "edge_abs_diff": _float_or_none(residual.get("edge_abs_diff")),
+        "mujoco_mean_luminance": mujoco_luminance,
+        "isaac_mean_luminance": isaac_luminance,
+        "luminance_gap": luminance_gap,
+    }
+
+
+def _classify_chase_regression(
+    row: dict[str, Any],
+    chase_regression_tolerance: float,
+) -> str:
+    chase_delta = _float_or_none(row.get("chase_delta"))
+    if chase_delta is None or chase_delta <= chase_regression_tolerance:
+        return "no_chase_regression"
+    diagnostics = _dict(row.get("paired_view_diagnostics"))
+    if diagnostics.get("status") != "paired_view_diagnostics_loaded":
+        return "unclassified_chase_regression"
+    chase = _dict(_dict(diagnostics.get("views")).get("chase"))
+    edge_delta_avg = _float_or_none(chase.get("edge_abs_diff_delta_avg"))
+    luminance_gap_delta_avg = _float_or_none(chase.get("luminance_gap_delta_avg"))
+    edge_regression_count = int(chase.get("edge_regression_count") or 0)
+    luminance_gap_regression_count = int(chase.get("luminance_gap_regression_count") or 0)
+    if edge_delta_avg is not None and edge_delta_avg > 0.5:
+        return "edge_geometry_regression"
+    if (
+        edge_regression_count == 0
+        and luminance_gap_regression_count > 0
+        and luminance_gap_delta_avg is not None
+        and luminance_gap_delta_avg > 1.0
+    ):
+        return "tone_luminance_side_effect"
+    return "mixed_or_unclassified_chase_regression"
+
+
+def _chase_regression_diagnostic(
+    row: dict[str, Any],
+    chase_regression_tolerance: float,
+) -> dict[str, Any]:
+    diagnostics = _dict(row.get("paired_view_diagnostics"))
+    views = _dict(diagnostics.get("views"))
+    chase = _dict(views.get("chase"))
+    fpv = _dict(views.get("fpv"))
+    return {
+        "label": row.get("label"),
+        "path": row.get("path"),
+        "scene_signature": row.get("scene_signature"),
+        "chase_delta": row.get("chase_delta"),
+        "tolerance": chase_regression_tolerance,
+        "diagnostic_class": _classify_chase_regression(row, chase_regression_tolerance),
+        "paired_view_status": diagnostics.get("status"),
+        "chase": {
+            "paired_location_count": chase.get("paired_location_count"),
+            "mean_abs_rgb_delta_avg": chase.get("mean_abs_rgb_delta_avg"),
+            "edge_abs_diff_delta_avg": chase.get("edge_abs_diff_delta_avg"),
+            "luminance_gap_delta_avg": chase.get("luminance_gap_delta_avg"),
+            "isaac_luminance_delta_avg": chase.get("isaac_luminance_delta_avg"),
+            "regressed_location_count": chase.get("regressed_location_count"),
+            "improved_location_count": chase.get("improved_location_count"),
+            "edge_regression_count": chase.get("edge_regression_count"),
+            "luminance_gap_regression_count": chase.get("luminance_gap_regression_count"),
+            "top_regressions": chase.get("top_regressions"),
+        },
+        "fpv": {
+            "mean_abs_rgb_delta_avg": fpv.get("mean_abs_rgb_delta_avg"),
+            "regressed_location_count": fpv.get("regressed_location_count"),
+            "improved_location_count": fpv.get("improved_location_count"),
+        },
+    }
+
+
+def _prepared_scale_square_next_action(
+    chase_regressions: list[dict[str, Any]],
+    chase_regression_tolerance: float,
+) -> str:
+    diagnostic_classes = {
+        _classify_chase_regression(row, chase_regression_tolerance) for row in chase_regressions
+    }
+    if diagnostic_classes == {"tone_luminance_side_effect"}:
+        return (
+            "Keep prepared scale-square comparison-only: FPV improves under the frozen "
+            "head-camera contract, while the auxiliary chase regression is currently "
+            "classified as a tone/luminance side effect. Resolve or explicitly gate the "
+            "remaining render-domain residuals before promoting default rendering."
+        )
+    return (
+        "Keep prepared scale-square comparison-only until FPV gain, chase "
+        "non-regression tolerance, and remaining render-domain residual gates pass."
+    )
+
+
 def _probe_kind_status(rows: list[dict[str, Any]]) -> str:
     comparable = [row for row in rows if row.get("comparable")]
     if not comparable:
@@ -607,8 +2031,16 @@ def _rgb_gain_source(manifest_path: Path) -> dict[str, Any]:
     override = _dict(state.get("robot_view_color_profile_override"))
     profile = _dict(state.get("robot_view_color_profile"))
     gain = _dict(override.get("backend_rgb_gain")) or _dict(profile.get("backend_rgb_gain"))
+    view_gain = _dict(override.get("backend_view_rgb_gain")) or _dict(
+        profile.get("backend_view_rgb_gain")
+    )
     source = str(
         override.get("backend_rgb_gain_source") or profile.get("backend_rgb_gain_source") or ""
+    )
+    view_source = str(
+        override.get("backend_view_rgb_gain_source")
+        or profile.get("backend_view_rgb_gain_source")
+        or ""
     )
     manifest_source = source.split(" global least-squares ", 1)[0] if source else ""
     source_summary = {}
@@ -616,12 +2048,33 @@ def _rgb_gain_source(manifest_path: Path) -> dict[str, Any]:
         source_summary = _robot_camera_manifest_summary(Path(manifest_source))
     return {
         "backend_rgb_gain": gain,
+        "backend_view_rgb_gain": view_gain,
         "source": source,
+        "view_source": view_source,
         "manifest_path": manifest_source,
         "source_manifest_loaded": bool(source_summary),
         "source_scene": source_summary.get("scene"),
         "source_scene_signature": source_summary.get("scene_signature"),
     }
+
+
+def _view_rgb_gain_views(row: dict[str, Any]) -> list[str]:
+    source = _dict(row.get("rgb_gain_source"))
+    backend_view_gain = _dict(source.get("backend_view_rgb_gain"))
+    views = set()
+    for gains_by_view in backend_view_gain.values():
+        if isinstance(gains_by_view, dict):
+            views.update(str(view) for view in gains_by_view)
+    return sorted(views)
+
+
+def _has_required_view_rgb_gains(
+    row: dict[str, Any],
+    *,
+    required_views: tuple[str, ...],
+) -> bool:
+    views = set(_view_rgb_gain_views(row))
+    return all(view in views for view in required_views)
 
 
 def _source_scene_signature(source: dict[str, Any]) -> str:
@@ -652,6 +2105,16 @@ def _scene_signature(scene: dict[str, Any]) -> str:
             "render_height",
         )
     )
+
+
+def _seed_from_scene_signature(scene_signature: str) -> int | None:
+    parts = scene_signature.split("|")
+    if len(parts) < 3:
+        return None
+    try:
+        return int(parts[2])
+    except ValueError:
+        return None
 
 
 def _render_checks_by_id(render_domain_checks: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -686,6 +2149,22 @@ def _delta(left: Any, right: Any) -> float | None:
         return None
 
 
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _average(values: Any) -> float | None:
+    numbers = [
+        float(value) for value in values if value is not None and _float_or_none(value) is not None
+    ]
+    if not numbers:
+        return None
+    return round(sum(numbers) / len(numbers), 4)
+
+
 def _find_first_dict(payload: Any, key: str) -> dict[str, Any] | None:
     if isinstance(payload, dict):
         for item_key, value in payload.items():
@@ -712,6 +2191,12 @@ def _list_dicts(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def _list_strings(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if item is not None]
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -723,6 +2208,20 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _render_report(manifest: dict[str, Any]) -> str:
     checks = _dict(manifest.get("checks"))
+    four_check = _dict(manifest.get("four_check_audit"))
+    report_side = _dict(manifest.get("report_side_visual_parity"))
+    default_rendering = _dict(manifest.get("default_rendering_visual_parity"))
+    visual_samples = _render_visual_samples(_list_dicts(manifest.get("visual_samples")))
+    four_check_rows = "\n".join(
+        "<tr>"
+        f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('source_status') or item.get('probe_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('decision') or ''))}</td>"
+        "</tr>"
+        for item in four_check.get("rows") or []
+        if isinstance(item, dict)
+    )
     rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(check_id)}</td>"
@@ -737,6 +2236,11 @@ def _render_report(manifest: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
         f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
         f"<td>{html.escape(str(item.get('chase_mean_abs_rgb_avg') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_render_gate_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_gate_failure_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('render_gate_status') or ''))}</td>"
         "</tr>"
         for item in manifest.get("baselines") or []
         if isinstance(item, dict)
@@ -747,9 +2251,24 @@ def _render_report(manifest: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('probe_kind') or ''))}</td>"
         f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
         f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_render_gate_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_gate_failure_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('render_gate_status') or ''))}</td>"
         "</tr>"
         for item in manifest.get("probes") or []
         if isinstance(item, dict)
+    )
+    baseline_header = (
+        "<tr><th>Manifest</th><th>Scene</th><th>FPV</th><th>Chase</th>"
+        "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
+        "<th>Gate Failures</th><th>Render Gate</th></tr>"
+    )
+    probe_header = (
+        "<tr><th>Label</th><th>Kind</th><th>Scene</th><th>FPV</th>"
+        "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
+        "<th>Gate Failures</th><th>Render Gate</th></tr>"
     )
     return f"""<!doctype html>
 <html lang="en">
@@ -762,21 +2281,135 @@ def _render_report(manifest: dict[str, Any]) -> str:
     th, td {{ border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; }}
     th {{ background: #f3f3f3; }}
     code {{ background: #f6f6f6; padding: 1px 4px; }}
+    .visual-samples {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 18px;
+    }}
+    .sample {{ border: 1px solid #d7d7d7; padding: 12px; background: #fafafa; }}
+    .sample h3 {{ margin: 0 0 6px; font-size: 16px; }}
+    .view-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 8px;
+    }}
+    figure {{ margin: 0; }}
+    img {{ display: block; width: 100%; height: auto; border: 1px solid #ccc; background: #111; }}
+    figcaption {{ color: #555; font-size: 12px; margin-top: 4px; }}
+    .muted {{ color: #666; }}
   </style>
 </head>
 <body>
   <h1>Robot Camera Visual Parity</h1>
   <p>Status: <code>{html.escape(str(manifest.get("status")))}</code></p>
+  <p>Report-side visual parity:
+    <code>{html.escape(str(report_side.get("status") or ""))}</code>
+    ({html.escape(str(report_side.get("policy_scope") or ""))})
+  </p>
+  <p>Default-rendering visual parity:
+    <code>{html.escape(str(default_rendering.get("status") or ""))}</code>
+    ({html.escape(str(default_rendering.get("policy_scope") or ""))})
+  </p>
   <p>{html.escape(str(manifest.get("recommended_next_action") or ""))}</p>
+  <h2>Four-Check Audit</h2>
+  <p>{html.escape(str(four_check.get("interpretation") or ""))}</p>
+  <table>
+    <thead>
+      <tr><th>Check</th><th>Status</th><th>Source Status</th><th>Decision</th></tr>
+    </thead>
+    <tbody>{four_check_rows}</tbody>
+  </table>
+  <h2>Visual Samples</h2>
+  {visual_samples}
   <h2>Checks</h2>
   <table><thead><tr><th>Check</th><th>Status</th><th>Interpretation</th></tr></thead><tbody>{rows}</tbody></table>
   <h2>Baselines</h2>
-  <table><thead><tr><th>Manifest</th><th>Scene</th><th>FPV</th><th>Chase</th></tr></thead><tbody>{baseline_rows}</tbody></table>
+  <table><thead>{baseline_header}</thead><tbody>{baseline_rows}</tbody></table>
   <h2>Probes</h2>
-  <table><thead><tr><th>Label</th><th>Kind</th><th>Scene</th><th>FPV</th></tr></thead><tbody>{probe_rows}</tbody></table>
+  <table><thead>{probe_header}</thead><tbody>{probe_rows}</tbody></table>
 </body>
 </html>
 """
+
+
+def _render_visual_samples(samples: list[dict[str, Any]]) -> str:
+    if not samples:
+        return "<p class='muted'>No image samples were available in the input manifests.</p>"
+    cards = []
+    for sample in samples:
+        title = " / ".join(
+            part
+            for part in (
+                str(sample.get("kind") or ""),
+                str(sample.get("label") or ""),
+                str(sample.get("location_label") or ""),
+            )
+            if part
+        )
+        metrics = f"FPV {sample.get('fpv_mean_abs_rgb')}, chase {sample.get('chase_mean_abs_rgb')}"
+        missing = _list_strings(sample.get("missing_images"))
+        missing_note = (
+            "<p class='muted'>Missing images: " + html.escape(", ".join(missing)) + "</p>"
+            if missing
+            else ""
+        )
+        cards.append(
+            "<section class='sample'>"
+            f"<h3>{html.escape(title)}</h3>"
+            f"<p class='muted'>{html.escape(str(sample.get('scene_signature') or ''))}</p>"
+            f"<p>{html.escape(metrics)}</p>"
+            + _render_visual_sample_view(sample, "fpv")
+            + _render_visual_sample_view(sample, "chase")
+            + missing_note
+            + "</section>"
+        )
+    return "<div class='visual-samples'>" + "\n".join(cards) + "</div>"
+
+
+def _render_visual_sample_view(sample: dict[str, Any], view: str) -> str:
+    images = _dict(_dict(sample.get("images")).get(view))
+    mujoco = images.get("mujoco")
+    isaac = images.get("isaac")
+    if not mujoco and not isaac:
+        return ""
+    residual = sample.get(f"{view}_residual_class") or ""
+    view_note = ""
+    view_badge = ""
+    if view == "chase":
+        source_note = " / ".join(
+            part
+            for part in (
+                str(sample.get("chase_mujoco_source") or ""),
+                str(sample.get("chase_isaac_source") or ""),
+            )
+            if part
+        )
+        note = str(sample.get("chase_contract_note") or "")
+        if source_note:
+            note = f"{note} Sources: {source_note}."
+        view_note = f"<p class='muted'>{html.escape(note)}</p>" if note else ""
+        if not sample.get("chase_same_camera_contract"):
+            view_badge = " non-comparable auxiliary"
+    cells = []
+    for backend, path in (("MuJoCo", mujoco), ("Isaac", isaac)):
+        if not path:
+            continue
+        cells.append(
+            "<figure>"
+            f"<img src='{html.escape(str(path), quote=True)}' "
+            f"alt='{html.escape(backend)} {html.escape(view.upper())}'>"
+            f"<figcaption>{html.escape(backend)} {html.escape(view.upper())}</figcaption>"
+            "</figure>"
+        )
+    return (
+        f"<h4>{html.escape(view.upper())} "
+        f"<span class='muted'>{html.escape(str(residual) + view_badge)}</span></h4>"
+        + view_note
+        + "<div class='view-grid'>"
+        + "\n".join(cells)
+        + "</div>"
+    )
 
 
 if __name__ == "__main__":

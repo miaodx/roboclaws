@@ -8,8 +8,23 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "roboclaws_molmospaces_flattened_semantic_usd_v1"
+DEFAULT_RENDERING_PARITY_PRESET = "combined-material-light"
+COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG = 25.0
 LABEL_INSTANCES = ("class", "kind", "usd_prim_path")
 RENDERABLE_TYPE_NAMES = {"Mesh", "Cube", "Sphere", "Capsule", "Cone", "Cylinder"}
+PHYSICS_API_SCHEMA_NAMES = {
+    "PhysicsArticulationRootAPI",
+    "PhysicsCollisionAPI",
+    "PhysicsFilteredPairsAPI",
+    "PhysicsMassAPI",
+    "PhysicsRigidBodyAPI",
+}
+PHYSICS_PRIM_TYPE_NAMES = {
+    "PhysicsFixedJoint",
+    "PhysicsPrismaticJoint",
+    "PhysicsRevoluteJoint",
+}
+PHYSICS_PROPERTY_PREFIXES = ("physics:", "physx")
 MOLMOSPACES_RECEPTACLE_CATEGORY_NORMS = {
     "bed",
     "bookshelf",
@@ -47,13 +62,32 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Also label the metadata root prims, not only renderable descendants.",
     )
     parser.add_argument(
+        "--rendering-parity-preset",
+        choices=("combined-material-light", "source-preserving"),
+        default=DEFAULT_RENDERING_PARITY_PRESET,
+        help=(
+            "Prepared-USD rendering preset. The default applies the validated "
+            "scale-square material conversion plus DistantLight rotateX=+25; "
+            "'source-preserving' keeps source USD material and light settings."
+        ),
+    )
+    parser.add_argument(
         "--material-texture-scale-mode",
         choices=("none", "identity", "square"),
-        default="none",
+        default=None,
         help=(
-            "Opt-in default-candidate material conversion for UsdUVTexture "
-            "scale/fallback inputs. The default 'none' preserves source USD material "
-            "response."
+            "Optional override for UsdUVTexture scale/fallback inputs. Omit this to use "
+            "the selected rendering parity preset."
+        ),
+    )
+    parser.add_argument(
+        "--freeze-visual-physics",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Strip physics APIs/joints from the flattened report USD after visual xforms "
+            "are baked. This keeps Isaac capture from re-solving THOR articulated assets "
+            "such as Box flaps away from the MuJoCo visual pose."
         ),
     )
     return parser.parse_args(argv)
@@ -66,7 +100,9 @@ def main(argv: list[str] | None = None) -> int:
         output_usd_path=args.output_usd_path,
         summary_output=args.summary_output,
         label_containers=args.label_containers,
+        rendering_parity_preset=args.rendering_parity_preset,
         material_texture_scale_mode=args.material_texture_scale_mode,
+        freeze_visual_physics=args.freeze_visual_physics,
     )
     print(json.dumps(summary, sort_keys=True))
     return 0 if summary["status"] in {"ready", "partial"} else 2
@@ -78,7 +114,9 @@ def prepare_flattened_semantic_usd(
     output_usd_path: Path,
     summary_output: Path | None = None,
     label_containers: bool = True,
-    material_texture_scale_mode: str = "none",
+    rendering_parity_preset: str = DEFAULT_RENDERING_PARITY_PRESET,
+    material_texture_scale_mode: str | None = None,
+    freeze_visual_physics: bool = True,
 ) -> dict[str, Any]:
     from pxr import Sdf, Usd, UsdGeom
 
@@ -112,10 +150,30 @@ def prepare_flattened_semantic_usd(
         usd_geom=UsdGeom,
         label_containers=label_containers,
     )
+    visual_physics_summary = (
+        _freeze_visual_physics(flat_stage)
+        if freeze_visual_physics
+        else _visual_physics_not_frozen()
+    )
     flat_stage.GetRootLayer().Save()
+    preset = _rendering_parity_preset(rendering_parity_preset)
+    effective_material_texture_scale_mode = (
+        material_texture_scale_mode
+        if material_texture_scale_mode is not None
+        else str(preset["material_texture_scale_mode"])
+    )
     material_conversion_summary = _apply_material_texture_scale_candidate(
         output_usd_path=output_usd_path,
-        mode=material_texture_scale_mode,
+        mode=effective_material_texture_scale_mode,
+    )
+    light_conversion_summary = _apply_distant_light_orientation_candidate(
+        output_usd_path=output_usd_path,
+        rotate_x=preset["distant_light_rotate_x"],
+    )
+    default_rendering_path_status = _default_rendering_path_status(
+        rendering_parity_preset=rendering_parity_preset,
+        material_conversion_summary=material_conversion_summary,
+        light_conversion_summary=light_conversion_summary,
     )
 
     blockers = []
@@ -141,13 +199,24 @@ def prepare_flattened_semantic_usd(
         "matched_entry_count": len(entries),
         "label_instances": list(LABEL_INSTANCES),
         "label_containers": bool(label_containers),
-        "material_texture_scale_mode": material_texture_scale_mode,
+        "rendering_parity_preset": rendering_parity_preset,
+        "material_texture_scale_mode": effective_material_texture_scale_mode,
         "material_texture_scale_rewrite_count": material_conversion_summary[
             "texture_scale_rewrite_count"
         ],
         "material_texture_scale_default_candidate": material_conversion_summary[
             "default_candidate"
         ],
+        "distant_light_rotate_x": light_conversion_summary["rotate_x"],
+        "distant_light_rotate_x_rewrite_count": light_conversion_summary["rewrite_count"],
+        "distant_light_rotate_x_insert_count": light_conversion_summary["insert_count"],
+        "distant_light_rotate_x_default_candidate": light_conversion_summary["default_candidate"],
+        "default_rendering_path_status": default_rendering_path_status,
+        "default_rendering_path_uses_combined_material_light": (
+            default_rendering_path_status == "default_rendering_path_uses_combined_material_light"
+        ),
+        "visual_physics_freeze_enabled": bool(freeze_visual_physics),
+        **visual_physics_summary,
         "scene_metadata_copied": metadata_copied,
         "blockers": blockers,
         **label_summary,
@@ -158,6 +227,141 @@ def prepare_flattened_semantic_usd(
             json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     return summary
+
+
+def _freeze_visual_physics(stage: Any) -> dict[str, Any]:
+    removed_joint_paths: list[str] = []
+    removed_api_schema_count = 0
+    removed_property_count = 0
+    for prim in list(stage.Traverse()):
+        type_name = str(prim.GetTypeName() or "")
+        if type_name in PHYSICS_PRIM_TYPE_NAMES:
+            removed_joint_paths.append(str(prim.GetPath()))
+            stage.RemovePrim(prim.GetPath())
+            continue
+        removed_api_schema_count += _remove_physics_api_schemas(prim)
+        for prop_name in list(prim.GetPropertyNames()):
+            if _is_physics_property_name(str(prop_name)):
+                prim.RemoveProperty(prop_name)
+                removed_property_count += 1
+    return {
+        "visual_physics_status": "frozen_static_visual_usd",
+        "visual_physics_joint_removed_count": len(removed_joint_paths),
+        "visual_physics_api_schema_removed_count": removed_api_schema_count,
+        "visual_physics_property_removed_count": removed_property_count,
+        "visual_physics_removed_joint_samples": removed_joint_paths[:25],
+        "visual_physics_freeze_reason": (
+            "Flattened USD already contains the visual xforms from the MolmoSpaces "
+            "conversion. Removing physics schemas and joints prevents Isaac report "
+            "capture from re-solving articulated THOR assets away from the MuJoCo "
+            "visual/rest pose."
+        ),
+    }
+
+
+def _visual_physics_not_frozen() -> dict[str, Any]:
+    return {
+        "visual_physics_status": "source_physics_preserved",
+        "visual_physics_joint_removed_count": 0,
+        "visual_physics_api_schema_removed_count": 0,
+        "visual_physics_property_removed_count": 0,
+        "visual_physics_removed_joint_samples": [],
+        "visual_physics_freeze_reason": (
+            "Physics schemas and joints were preserved by caller request."
+        ),
+    }
+
+
+def _remove_physics_api_schemas(prim: Any) -> int:
+    from pxr import Sdf, Vt
+
+    removed = _remove_physics_api_schema_metadata(prim)
+    attr = prim.GetAttribute("apiSchemas")
+    if not attr or not attr.IsValid():
+        return removed
+    current = [str(value) for value in list(attr.Get() or [])]
+    kept = [value for value in current if value not in PHYSICS_API_SCHEMA_NAMES]
+    attr_removed = len(current) - len(kept)
+    if not attr_removed:
+        return removed
+    attr.Set(Vt.TokenArray(kept))
+    if not kept:
+        prim.RemoveProperty("apiSchemas")
+    elif attr.GetTypeName() != Sdf.ValueTypeNames.TokenArray:
+        attr.Set(Vt.TokenArray(kept))
+    return removed + attr_removed
+
+
+def _remove_physics_api_schema_metadata(prim: Any) -> int:
+    from pxr import Sdf
+
+    api_schemas = prim.GetMetadata("apiSchemas")
+    if api_schemas is None:
+        return 0
+    if isinstance(api_schemas, Sdf.TokenListOp):
+        explicit = _filter_physics_api_schemas(api_schemas.explicitItems)
+        prepended = _filter_physics_api_schemas(api_schemas.prependedItems)
+        appended = _filter_physics_api_schemas(api_schemas.appendedItems)
+        deleted = list(api_schemas.deletedItems or [])
+        ordered = _filter_physics_api_schemas(api_schemas.orderedItems)
+        removed = (
+            len(api_schemas.explicitItems or [])
+            + len(api_schemas.prependedItems or [])
+            + len(api_schemas.appendedItems or [])
+            + len(api_schemas.orderedItems or [])
+            - len(explicit)
+            - len(prepended)
+            - len(appended)
+            - len(ordered)
+        )
+        if not removed:
+            return 0
+        replacement = Sdf.TokenListOp()
+        replacement.explicitItems = explicit
+        replacement.prependedItems = prepended
+        replacement.appendedItems = appended
+        replacement.deletedItems = deleted
+        replacement.orderedItems = ordered
+        if explicit or prepended or appended or deleted or ordered:
+            prim.SetMetadata("apiSchemas", replacement)
+        else:
+            prim.ClearMetadata("apiSchemas")
+        return removed
+    if isinstance(api_schemas, (list, tuple)):
+        current = [str(value) for value in api_schemas]
+        kept = _filter_physics_api_schemas(current)
+        removed = len(current) - len(kept)
+        if not removed:
+            return 0
+        if kept:
+            prim.SetMetadata("apiSchemas", kept)
+        else:
+            prim.ClearMetadata("apiSchemas")
+        return removed
+    return 0
+
+
+def _filter_physics_api_schemas(values: Any) -> list[str]:
+    return [str(value) for value in values or [] if str(value) not in PHYSICS_API_SCHEMA_NAMES]
+
+
+def _is_physics_property_name(name: str) -> bool:
+    lowered = name.lower()
+    return any(lowered.startswith(prefix) for prefix in PHYSICS_PROPERTY_PREFIXES)
+
+
+def _rendering_parity_preset(name: str) -> dict[str, str | float | None]:
+    if name == "combined-material-light":
+        return {
+            "material_texture_scale_mode": "square",
+            "distant_light_rotate_x": COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG,
+        }
+    if name == "source-preserving":
+        return {
+            "material_texture_scale_mode": "none",
+            "distant_light_rotate_x": None,
+        }
+    raise ValueError(f"unsupported rendering parity preset: {name}")
 
 
 def _apply_material_texture_scale_candidate(
@@ -182,6 +386,56 @@ def _apply_material_texture_scale_candidate(
     }
 
 
+def _apply_distant_light_orientation_candidate(
+    *,
+    output_usd_path: Path,
+    rotate_x: float | None,
+) -> dict[str, Any]:
+    if rotate_x is None:
+        return {
+            "rotate_x": None,
+            "rewrite_count": 0,
+            "insert_count": 0,
+            "default_candidate": False,
+        }
+    text = output_usd_path.read_text(encoding="utf-8", errors="ignore")
+    updated, rewrite_count, insert_count = _rewrite_distant_light_rotate_x(
+        text,
+        rotate_x=rotate_x,
+    )
+    if rewrite_count or insert_count:
+        output_usd_path.write_text(updated, encoding="utf-8")
+    return {
+        "rotate_x": rotate_x,
+        "rewrite_count": rewrite_count,
+        "insert_count": insert_count,
+        "default_candidate": True,
+    }
+
+
+def _default_rendering_path_status(
+    *,
+    rendering_parity_preset: str,
+    material_conversion_summary: dict[str, Any],
+    light_conversion_summary: dict[str, Any],
+) -> str:
+    if rendering_parity_preset == "source-preserving":
+        return "source_preserving_rendering_path"
+    material_ready = (
+        material_conversion_summary.get("mode") == "square"
+        and int(material_conversion_summary.get("texture_scale_rewrite_count") or 0) > 0
+    )
+    light_ready = light_conversion_summary.get(
+        "rotate_x"
+    ) == COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG and (
+        int(light_conversion_summary.get("rewrite_count") or 0) > 0
+        or int(light_conversion_summary.get("insert_count") or 0) > 0
+    )
+    if material_ready and light_ready:
+        return "default_rendering_path_uses_combined_material_light"
+    return "default_rendering_path_candidate_incomplete"
+
+
 def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
     def replacement(match: re.Match[str]) -> str:
         values = _parse_float_values(match.group(2))
@@ -202,6 +456,63 @@ def _rewrite_texture_scale_inputs(text: str, *, mode: str) -> tuple[str, int]:
         replacement,
         text,
     )
+
+
+def _rewrite_distant_light_rotate_x(text: str, *, rotate_x: float) -> tuple[str, int, int]:
+    parts: list[str] = []
+    cursor = 0
+    rewrites = 0
+    inserts = 0
+    for match in re.finditer(r'(?m)^(\s*)def DistantLight "[^"]+"\s*\{\s*$', text):
+        block_start = match.start()
+        block_end = _balanced_block_end(text, match.end() - 1)
+        if block_end is None:
+            continue
+        block = text[block_start:block_end]
+        rewritten, count = re.subn(
+            r"float xformOp:rotateX = [^\s]+",
+            f"float xformOp:rotateX = {_format_float(rotate_x)}",
+            block,
+        )
+        rewrites += count
+        if count == 0:
+            rewritten = _insert_distant_light_rotate_x(rewritten, rotate_x=rotate_x)
+            inserts += int(rewritten != block)
+        parts.append(text[cursor:block_start])
+        parts.append(rewritten)
+        cursor = block_end
+    if not parts:
+        return text, 0, 0
+    parts.append(text[cursor:])
+    return "".join(parts), rewrites, inserts
+
+
+def _insert_distant_light_rotate_x(block: str, *, rotate_x: float) -> str:
+    close_index = block.rfind("}")
+    if close_index < 0:
+        return block
+    match = re.search(r'(?m)^(\s*)def DistantLight "', block)
+    indent = match.group(1) + "    " if match else "    "
+    insertion = (
+        f"{indent}float xformOp:rotateX = {_format_float(rotate_x)}\n"
+        f'{indent}uniform token[] xformOpOrder = ["xformOp:rotateX"]\n'
+    )
+    return block[:close_index] + insertion + block[close_index:]
+
+
+def _balanced_block_end(text: str, open_brace_index: int) -> int | None:
+    depth = 0
+    for index in range(open_brace_index, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                if index + 1 < len(text) and text[index + 1] == "\n":
+                    return index + 2
+                return index + 1
+    return None
 
 
 def _parse_float_values(raw: str) -> list[float]:
