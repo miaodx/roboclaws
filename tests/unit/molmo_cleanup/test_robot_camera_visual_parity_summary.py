@@ -444,6 +444,8 @@ def test_visual_parity_summary_tracks_combined_material_light_candidate(
     assert "<img src='../val0_scale_square_rotx25/isaac/robot_views/0001_target.fpv.png'" in (
         report_html
     )
+    assert "non-comparable auxiliary" in report_html
+    assert "robot_0/camera_follower / external rear/high report camera" in report_html
     default_rendering = manifest["default_rendering_visual_parity"]
     assert any(
         blocker.get("reason") == "material_light_default_gate_not_ready"
@@ -1118,6 +1120,16 @@ def _visual_location(output_dir: Path) -> dict:
         "image_diffs": {
             "fpv": _image_diff(42.0, 3.0, 85.0, 95.0),
             "chase": _image_diff(70.0, 7.0, 95.0, 105.0),
+        },
+        "camera_contract_diagnostics": {
+            "chase_contract": {
+                "same_camera_contract": False,
+                "mujoco_source": "robot_0/camera_follower",
+                "isaac_source": "external rear/high report camera",
+                "evidence_note": (
+                    "Chase is auxiliary report evidence; FPV is the policy/input camera contract."
+                ),
+            }
         },
     }
 

@@ -176,6 +176,7 @@ def robot_mounted_head_camera_control_contract(
     verify_source: str,
     pose_source: str,
     lens_source: str,
+    chase_source: str | None = None,
     camera_model: str = ROBOT_MOUNTED_HEAD_CAMERA_MODEL,
     status: str = ROBOT_MOUNTED_HEAD_CAMERA_STATUS,
     camera_prim_path: str | None = None,
@@ -208,6 +209,10 @@ def robot_mounted_head_camera_control_contract(
         },
         "report_verify_view": {
             "source": verify_source,
+            "canonical_camera_control": False,
+        },
+        "report_chase_view": {
+            "source": chase_source or "backend_local_report_chase_camera",
             "canonical_camera_control": False,
         },
         "pose_source": pose_source,

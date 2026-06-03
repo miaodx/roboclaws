@@ -339,6 +339,7 @@ def _visual_sample_from_manifest_summary(
             images[view][backend] = _html_relpath(absolute_image_path, output_dir)
     fpv_metrics = _view_diff_metrics(location, "fpv")
     chase_metrics = _view_diff_metrics(location, "chase")
+    chase_contract = _dict(_dict(location.get("camera_contract_diagnostics")).get("chase_contract"))
     return {
         "kind": kind,
         "label": summary.get("label") or kind,
@@ -352,6 +353,11 @@ def _visual_sample_from_manifest_summary(
         "chase_mean_abs_rgb": chase_metrics.get("mean_abs_rgb"),
         "fpv_residual_class": _residual_class(location, "fpv"),
         "chase_residual_class": _residual_class(location, "chase"),
+        "chase_same_camera_contract": bool(chase_contract.get("same_camera_contract")),
+        "chase_contract_note": chase_contract.get("evidence_note")
+        or "Chase is auxiliary report evidence, not the policy/input camera.",
+        "chase_mujoco_source": chase_contract.get("mujoco_source"),
+        "chase_isaac_source": chase_contract.get("isaac_source"),
     }
 
 
@@ -2304,6 +2310,22 @@ def _render_visual_sample_view(sample: dict[str, Any], view: str) -> str:
     if not mujoco and not isaac:
         return ""
     residual = sample.get(f"{view}_residual_class") or ""
+    view_note = ""
+    view_badge = ""
+    if view == "chase" and not sample.get("chase_same_camera_contract"):
+        view_badge = " non-comparable auxiliary"
+        source_note = " / ".join(
+            part
+            for part in (
+                str(sample.get("chase_mujoco_source") or ""),
+                str(sample.get("chase_isaac_source") or ""),
+            )
+            if part
+        )
+        note = str(sample.get("chase_contract_note") or "")
+        if source_note:
+            note = f"{note} Sources: {source_note}."
+        view_note = f"<p class='muted'>{html.escape(note)}</p>" if note else ""
     cells = []
     for backend, path in (("MuJoCo", mujoco), ("Isaac", isaac)):
         if not path:
@@ -2317,8 +2339,11 @@ def _render_visual_sample_view(sample: dict[str, Any], view: str) -> str:
         )
     return (
         f"<h4>{html.escape(view.upper())} "
-        f"<span class='muted'>{html.escape(str(residual))}</span></h4>"
-        "<div class='view-grid'>" + "\n".join(cells) + "</div>"
+        f"<span class='muted'>{html.escape(str(residual) + view_badge)}</span></h4>"
+        + view_note
+        + "<div class='view-grid'>"
+        + "\n".join(cells)
+        + "</div>"
     )
 
 

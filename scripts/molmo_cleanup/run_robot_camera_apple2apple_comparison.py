@@ -2395,14 +2395,24 @@ def _chase_contract_diagnostics(
 ) -> dict[str, Any]:
     mujoco_source = str(_dict(mujoco_contract.get("report_verify_view")).get("source") or "")
     isaac_source = str(_dict(isaac_contract.get("report_verify_view")).get("source") or "")
+    same_camera_contract = (
+        str(_dict(mujoco_contract.get("report_chase_view")).get("source") or "")
+        == "robot_0/camera_follower"
+        and str(_dict(isaac_contract.get("report_chase_view")).get("source") or "")
+        == "robot_relative_camera_follower"
+    )
     return {
-        "same_camera_contract": False,
+        "same_camera_contract": same_camera_contract,
         "mujoco_source": "robot_0/camera_follower",
-        "isaac_source": "external rear/high report camera",
+        "isaac_source": "robot_relative_camera_follower"
+        if same_camera_contract
+        else "external rear/high report camera",
         "mujoco_verify_source": mujoco_source,
         "isaac_verify_source": isaac_source,
         "evidence_note": (
-            "Chase is auxiliary report evidence; FPV is the policy/input camera contract."
+            "Chase now uses a robot-relative rear/high report camera in both backends."
+            if same_camera_contract
+            else "Chase is auxiliary report evidence; FPV is the policy/input camera contract."
         ),
     }
 

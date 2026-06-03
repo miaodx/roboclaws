@@ -192,6 +192,30 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
     assert summary["fpv_lens_gap_count"] == 1
 
 
+def test_robot_camera_contract_diagnostics_recognizes_robot_relative_chase_contract() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_chase_contract",
+    )
+
+    chase = run_camera._chase_contract_diagnostics(
+        {
+            "report_chase_view": {"source": "robot_0/camera_follower"},
+            "report_verify_view": {"source": "mujoco_focus_camera"},
+        },
+        {
+            "report_chase_view": {"source": "robot_relative_camera_follower"},
+            "report_verify_view": {
+                "source": "isaac_lab_camera_rgb_semantic_pose_robot_views:verify"
+            },
+        },
+    )
+
+    assert chase["same_camera_contract"] is True
+    assert chase["mujoco_source"] == "robot_0/camera_follower"
+    assert chase["isaac_source"] == "robot_relative_camera_follower"
+
+
 def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_correction() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,

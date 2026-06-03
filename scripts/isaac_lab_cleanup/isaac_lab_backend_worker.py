@@ -110,6 +110,8 @@ RBY1M_HEAD_CAMERA_ZERO_POSITION_M = (0.072, 0.0, 1.556)
 RBY1M_HEAD_CAMERA_ZERO_QUAT_WXYZ = (-0.5, -0.5, 0.5, 0.5)
 RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG = 45.0
 RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM = 24.0
+RBY1M_CHASE_CAMERA_OFFSET_M = (-1.3, 0.0, 2.705)
+RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = (0.0, 0.0, 1.1)
 ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
 ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
     "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
@@ -1944,10 +1946,16 @@ def _capture_isaac_lab_camera_views(
         "rgb",
         *(segmentation_data_types if include_segmentation else ()),
     ]
+    robot_view_horizontal_aperture = _horizontal_aperture_from_lens(
+        {"vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
+        width=width,
+        height=height,
+        focal_length=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
+    )
     camera_spawn = sim_utils.PinholeCameraCfg(
-        focal_length=24.0,
+        focal_length=RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM,
         focus_distance=4.0,
-        horizontal_aperture=20.955,
+        horizontal_aperture=robot_view_horizontal_aperture,
     )
     head_camera = (
         Camera(
@@ -1982,7 +1990,12 @@ def _capture_isaac_lab_camera_views(
             spawn=camera_spawn,
         )
     )
-    view_poses = _isaac_camera_view_poses(torch=torch, device=sim.device, scene_bounds=scene_bounds)
+    view_poses = _isaac_camera_view_poses(
+        torch=torch,
+        device=sim.device,
+        scene_bounds=scene_bounds,
+        semantic_pose_state=semantic_pose_state,
+    )
     sim.reset()
     saved: dict[str, str] = {}
     segmentation_views: list[dict[str, Any]] = []
@@ -2020,6 +2033,13 @@ def _capture_isaac_lab_camera_views(
                 targets=targets,
                 width=width,
                 height=height,
+                camera_basis="robot_relative_camera_follower"
+                if view_name == "chase"
+                and _robot_relative_chase_eye_target(
+                    _dict(_dict(semantic_pose_state).get("robot_pose"))
+                )
+                is not None
+                else "scene_bounds_eye_target",
             )
         rgb_image = None
         for _ in range(24):
@@ -3025,10 +3045,12 @@ def _isaac_camera_view_poses(
     torch: Any,
     device: Any,
     scene_bounds: dict[str, list[float]] | None = None,
+    semantic_pose_state: dict[str, Any] | None = None,
 ) -> dict[str, tuple[Any, Any]]:
     def tensor(values: list[list[float]]) -> Any:
         return torch.tensor(values, dtype=torch.float32, device=device)
 
+    pose = _dict(_dict(semantic_pose_state).get("robot_pose"))
     if scene_bounds:
         center = scene_bounds["center"]
         size = scene_bounds["size"]
@@ -3038,15 +3060,21 @@ def _isaac_camera_view_poses(
         floor_z = scene_bounds["min"][2]
         target_z = max(floor_z + 0.9, center[2])
         target = [center[0], center[1], target_z]
+        chase_eye_target = _robot_relative_chase_eye_target(pose)
+        chase_pose = (
+            (tensor([[*chase_eye_target[0]]]), tensor([[*chase_eye_target[1]]]))
+            if chase_eye_target is not None
+            else (
+                tensor([[center[0] + span_x * 0.55, center[1] - span_y * 0.75, floor_z + 2.4]]),
+                tensor([[center[0], center[1], target_z * 0.9]]),
+            )
+        )
         return {
             "fpv": (
                 tensor([[center[0] - span_x * 0.35, center[1] - span_y * 0.55, floor_z + 1.25]]),
                 tensor([target]),
             ),
-            "chase": (
-                tensor([[center[0] + span_x * 0.55, center[1] - span_y * 0.75, floor_z + 2.4]]),
-                tensor([[center[0], center[1], target_z * 0.9]]),
-            ),
+            "chase": chase_pose,
             "map": (
                 tensor([[center[0], center[1], scene_bounds["max"][2] + span * 1.25]]),
                 tensor([[center[0], center[1], floor_z]]),
@@ -3057,12 +3085,43 @@ def _isaac_camera_view_poses(
             ),
         }
 
+    chase_eye_target = _robot_relative_chase_eye_target(pose)
+    chase_pose = (
+        (tensor([[*chase_eye_target[0]]]), tensor([[*chase_eye_target[1]]]))
+        if chase_eye_target is not None
+        else (tensor([[2.4, -2.6, 1.8]]), tensor([[0.0, 0.0, 0.35]]))
+    )
     return {
         "fpv": (tensor([[1.35, -1.35, 1.1]]), tensor([[0.05, 0.0, 0.55]])),
-        "chase": (tensor([[2.4, -2.6, 1.8]]), tensor([[0.0, 0.0, 0.35]])),
+        "chase": chase_pose,
         "map": (tensor([[0.05, -0.05, 4.2]]), tensor([[0.0, 0.0, 0.0]])),
         "verify": (tensor([[0.9, -1.0, 0.85]]), tensor([[0.2, -0.15, 0.55]])),
     }
+
+
+def _robot_relative_chase_eye_target(
+    pose: dict[str, Any],
+) -> tuple[tuple[float, float, float], tuple[float, float, float]] | None:
+    if not _has_xy(pose):
+        return None
+    yaw_deg = _robot_pose_yaw_deg(pose)
+    if yaw_deg is None:
+        return None
+    yaw = math.radians(float(yaw_deg))
+    cos_yaw = math.cos(yaw)
+    sin_yaw = math.sin(yaw)
+
+    def transform(offset: tuple[float, float, float]) -> tuple[float, float, float]:
+        return (
+            float(pose["x"]) + offset[0] * cos_yaw - offset[1] * sin_yaw,
+            float(pose["y"]) + offset[0] * sin_yaw + offset[1] * cos_yaw,
+            float(pose.get("z", 0.0)) + offset[2],
+        )
+
+    return (
+        transform(RBY1M_CHASE_CAMERA_OFFSET_M),
+        transform(RBY1M_CHASE_CAMERA_TARGET_OFFSET_M),
+    )
 
 
 def _ensure_rby1m_robot_on_stage(
@@ -3383,10 +3442,18 @@ def _isaac_eye_target_camera_diagnostics(
     targets: Any,
     width: int,
     height: int,
+    camera_basis: str = "scene_bounds_eye_target",
 ) -> dict[str, Any]:
+    focal_length = RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM
+    horizontal_aperture = _horizontal_aperture_from_lens(
+        {"vertical_fov_deg": RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG},
+        width=width,
+        height=height,
+        focal_length=focal_length,
+    )
     fov = _usd_camera_fov_metadata(
-        focal_length=24.0,
-        horizontal_aperture=20.955,
+        focal_length=focal_length,
+        horizontal_aperture=horizontal_aperture,
         width=width,
         height=height,
     )
@@ -3395,10 +3462,11 @@ def _isaac_eye_target_camera_diagnostics(
         "status": "ready",
         "view_name": view_name,
         "camera_type": "eye_target_scene_camera",
+        "camera_basis": camera_basis,
         "eye": _tensor_first_vec3(positions),
         "target": _tensor_first_vec3(targets),
-        "focal_length_mm": 24.0,
-        "horizontal_aperture_mm": 20.955,
+        "focal_length_mm": focal_length,
+        "horizontal_aperture_mm": horizontal_aperture,
         **fov,
         "render_resolution": {"width": width, "height": height},
     }
@@ -5878,6 +5946,7 @@ def _robot_view_camera_control_contract(
                 )
             ),
             verify_source=str(provenance.get("verify") or "isaac_lab_semantic_pose_verify_camera"),
+            chase_source="robot_relative_camera_follower",
             pose_source=str(
                 _dict(robot_pose).get("pose_source") or "roboclaws_shared_scene_frame_support_pose"
             ),
@@ -5901,7 +5970,8 @@ def _robot_view_camera_control_contract(
                     "Isaac cleanup FPV uses the imported RBY1M mounted head camera "
                     "when the robot USD import artifact is present. Without that "
                     "artifact it remains explicitly marked as head-camera-equivalent. "
-                    "Chase/map views remain auxiliary report evidence."
+                    "Chase is rendered from a robot-relative rear/high report camera; "
+                    "map remains auxiliary report evidence."
                 ),
             }
         )
@@ -6462,8 +6532,9 @@ def _semantic_pose_robot_view_provenance(
     provenance["evidence_note"] = (
         "Robot-view images were recaptured from the loaded USD scene after applying "
         "backend semantic pose state. FPV is either the imported RBY1M mounted head "
-        "camera or an explicit head-camera-equivalent view; chase/map remain auxiliary report "
-        "views. This is still semantic pose rendering, not planner-backed or "
+        "camera or an explicit head-camera-equivalent view; chase is a robot-relative "
+        "rear/high report view and map remains auxiliary report evidence. "
+        "This is still semantic pose rendering, not planner-backed or "
         "physics-backed manipulation."
     )
     return provenance

@@ -2827,7 +2827,14 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
                         "status": "ready",
                         "camera_type": "usd_camera_prim",
                         "prim_path": "/World/robot_0/head_camera",
-                    }
+                    },
+                    "chase": {
+                        "schema": "isaac_eye_target_camera_diagnostics_v1",
+                        "status": "ready",
+                        "camera_type": "eye_target_scene_camera",
+                        "camera_basis": "robot_relative_camera_follower",
+                        "vertical_fov_deg": 45.0,
+                    },
                 },
             },
         }
@@ -2896,6 +2903,9 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
     assert result["camera_control_contract"]["agent_facing_fpv"]["camera_prim_path"] == (
         "/World/robot_0/head_camera"
     )
+    assert result["camera_control_contract"]["report_chase_view"]["source"] == (
+        "robot_relative_camera_follower"
+    )
     assert result["camera_control_contract"]["robot_pose"]["pose_source"] == (
         "apple2apple_shared_robot_pose"
     )
@@ -2905,9 +2915,59 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
     assert result["camera_diagnostics"]["views"]["fpv"]["prim_path"] == (
         "/World/robot_0/head_camera"
     )
+    assert result["camera_diagnostics"]["views"]["chase"]["camera_basis"] == (
+        "robot_relative_camera_follower"
+    )
+    assert result["camera_diagnostics"]["views"]["chase"]["vertical_fov_deg"] == pytest.approx(45.0)
     state = isaac_lab_backend_worker.read_state(state_path)
     assert state["semantic_pose_view_capture"]["robot_mounted_head_camera"] is True
     assert state["semantic_pose_view_capture"]["head_camera_equivalent"] is False
+
+
+def test_isaac_chase_pose_uses_robot_relative_camera_follower() -> None:
+    pose = {
+        "x": 3.008962,
+        "y": 4.828715,
+        "z": 0.0,
+        "theta": math.radians(105.0),
+    }
+
+    eye, target = isaac_lab_backend_worker._robot_relative_chase_eye_target(pose)
+
+    assert eye == pytest.approx((3.345426, 3.573012, 2.705), abs=1e-6)
+    assert target == pytest.approx((3.008962, 4.828715, 1.1), abs=1e-6)
+
+
+def test_isaac_camera_view_poses_prefers_robot_relative_chase() -> None:
+    class _TinyTorch:
+        float32 = "float32"
+
+        @staticmethod
+        def tensor(values, *, dtype, device):
+            return values
+
+    poses = isaac_lab_backend_worker._isaac_camera_view_poses(
+        torch=_TinyTorch,
+        device="cpu",
+        scene_bounds={
+            "center": [4.941462, 4.92055, 0.55],
+            "size": [10.0, 10.0, 2.0],
+            "min": [0.0, 0.0, -0.101716],
+            "max": [10.0, 10.0, 1.5],
+        },
+        semantic_pose_state={
+            "robot_pose": {
+                "x": 3.008962,
+                "y": 4.828715,
+                "z": 0.0,
+                "yaw_deg": 105.0,
+            }
+        },
+    )
+
+    chase_eye, chase_target = poses["chase"]
+    assert chase_eye[0] == pytest.approx([3.345426, 3.573012, 2.705], abs=1e-6)
+    assert chase_target[0] == pytest.approx([3.008962, 4.828715, 1.1], abs=1e-6)
 
 
 def test_isaac_lab_real_worker_views_fallback_when_semantic_pose_rerender_fails(

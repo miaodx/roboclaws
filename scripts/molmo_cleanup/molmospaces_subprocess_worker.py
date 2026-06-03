@@ -736,6 +736,7 @@ def write_robot_views(
         backend="molmospaces-mujoco",
         fpv_source="robot_0/head_camera",
         verify_source="mujoco_focus_camera",
+        chase_source="robot_0/camera_follower",
         pose_source="rby1m_robot_qpos",
         lens_source="mujoco_model_camera_defaults",
         robot_pose=dict(state.get("robot_pose") or {}),
