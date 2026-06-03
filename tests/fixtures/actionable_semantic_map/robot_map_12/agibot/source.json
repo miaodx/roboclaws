@@ -1,0 +1,38 @@
+{
+  "alias": "robot_map_12",
+  "api_calls_used": [
+    "gdk_init",
+    "Map.get_curr_map",
+    "Map.get_map",
+    "gdk_release"
+  ],
+  "artifacts": {
+    "nav2_yaml": "artifacts/maps/robot_map_12/agibot/nav2.yaml",
+    "occupancy_pgm": "artifacts/maps/robot_map_12/agibot/occupancy.pgm",
+    "raw_map": "artifacts/maps/robot_map_12/agibot/raw_map.json.gz",
+    "source": "artifacts/maps/robot_map_12/agibot/source.json"
+  },
+  "current_agibot_map": {
+    "id": 12,
+    "is_curr_map": true,
+    "name": ""
+  },
+  "discovery_uri": "http://10.42.1.101:2379",
+  "fetched_at_ns": 1780304738059754756,
+  "gdk_init": "GDKRes.kSuccess",
+  "gdk_release": "GDKRes.kSuccess",
+  "locator_ip": "10.42.1.102",
+  "motion_or_write_calls_used": [],
+  "navigation_submission": false,
+  "read_only": true,
+  "requested_map_id": "12",
+  "robot_host": "10.42.1.101",
+  "schema": "agibot.map_fetch.source.v1",
+  "source_agibot_map": {
+    "counter": 0,
+    "id": 12,
+    "name": "",
+    "status": 1,
+    "timestamp_ns": 0
+  }
+}

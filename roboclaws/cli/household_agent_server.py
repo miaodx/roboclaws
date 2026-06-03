@@ -45,6 +45,7 @@ from roboclaws.household.subprocess_backend import (
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
+from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
@@ -222,7 +223,8 @@ def _is_loopback_url(url: str) -> bool:
 def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
     if path is None or str(path) == "":
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return runtime_metric_map_from_prior_artifact(payload)
 
 
 def run_molmo_realworld_cleanup_agent_server(

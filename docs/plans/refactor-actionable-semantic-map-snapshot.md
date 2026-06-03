@@ -1,18 +1,57 @@
 ---
 refactor_scope: actionable-semantic-map-snapshot
-status: CONTINUE
+status: DONE
 accepted_severities:
   - P0
   - P1
   - P2
-last_verified: null
+last_verified: 2026-06-03
 ---
 
 # Refactor Scope: Actionable Semantic Map Snapshot
 
 ## Status
 
-CONTINUE
+DONE
+
+## Intuitive-Flow Autoplan Reconciliation
+
+**Review date:** 2026-06-03
+**Review route:** `intuitive-flow` inline review. The vendored gstack
+`autoplan` skill document is available, but the full interactive/subagent
+review surface is not available in this host and the repo policy forbids bare
+host Codex/Claude launches for supported demo routes. The decisions below are
+reconciled into this plan before implementation, following the existing
+Roboclaws pre-GSD plan pattern.
+
+Accepted decisions:
+
+- Add one canonical `actionable_semantic_map_snapshot_v1` wrapper around the
+  existing `runtime_metric_map_v1` payload instead of introducing an
+  Agibot-only cleanup loading branch.
+- Keep deterministic conversion under `roboclaws.maps`: parse
+  `navigation_memory.json`, Nav2 metadata, occupancy cells, source provenance,
+  stable ids, reachability/actionability defaults, and materialized consumer
+  targets. Agent/skill semantic judgment remains represented as explicit
+  classification fields on each converted anchor.
+- Prove downstream equivalence with contract tests: online semantic-map-build
+  output and offline converted navigation memory must have the same
+  consumer-facing snapshot sections, and actionable anchors must materialize to
+  navigation waypoints plus fixture/receptacle candidates.
+- Preserve current Runtime Metric Map safety: movable prior objects stay in
+  `observed_objects` as `needs_confirm` priors, not static fixture candidates
+  or pickable cleanup targets.
+- Use a checked-in test fixture copied from the local
+  `robot_map_12` artifact folder because `vendors/agibot_sdk` is a submodule;
+  the converter still accepts the real vendor path when present locally.
+
+Deferred decisions:
+
+- Do not add a new public MCP tool or runnable task in this slice.
+- Do not mutate the source Agibot map folder or any source Navigation Map
+  Artifact.
+- Do not require real Agibot GDK, OpenClaw, VLM relabeling, or physical robot
+  validation for the first contract slice.
 
 ## Target
 
@@ -52,30 +91,30 @@ targets for downstream tools to consume it directly.
 
 ## Accepted Cleanup Checklist
 
-- [ ] Define the canonical **Actionable Semantic Map Snapshot** contract:
+- [x] Define the canonical **Actionable Semantic Map Snapshot** contract:
       source navigation-map reference, `runtime_metric_map_v1`, public semantic
       anchors, materialized inspection waypoints, materialized
       fixture/receptacle candidates, affordances, reachability/actionability
       status, and evidence/provenance.
-- [ ] Make the contract explicit that online `semantic-map-build` output and
+- [x] Make the contract explicit that online `semantic-map-build` output and
       offline `navigation_memory.json` conversion produce the same downstream
       artifact shape. Only provenance should differ.
-- [ ] Add a conversion boundary for
+- [x] Add a conversion boundary for
       `vendors/agibot_sdk/artifacts/maps/*/navigation_memory.json` that can be
       owned by a skill: deterministic scripts perform file parsing, map-frame
       checks, and scaffold generation; an agent supplies semantic
       classification such as anchor type, affordances, object-vs-fixture, and
       review status.
-- [ ] Add contract tests proving a converted Agibot navigation-memory artifact
+- [x] Add contract tests proving a converted Agibot navigation-memory artifact
       can be loaded as the same semantic-map snapshot shape expected from an
       online build result.
-- [ ] Add contract tests proving cleanup/open-task consumers can materialize
+- [x] Add contract tests proving cleanup/open-task consumers can materialize
       actionable anchors as valid navigation waypoints and fixture/receptacle
       targets without reading private truth.
-- [ ] Preserve existing Runtime Metric Map prior safety for movable objects:
+- [x] Preserve existing Runtime Metric Map prior safety for movable objects:
       observed-object priors remain `needs_confirm` until current-run evidence
       confirms them.
-- [ ] Update human/agent docs only where they describe the map artifact
+- [x] Update human/agent docs only where they describe the map artifact
       boundary: Minimal Navigation Map Artifact, Runtime Metric Map, Public
       Semantic Anchor, Prebuilt Robot Map Bundle, and semantic-map-build output.
 
@@ -259,3 +298,13 @@ hardware validation under this gate.
   contract slice must use `robot_map_12` as a real conversion fixture but must
   not require real Agibot hardware, OpenClaw, VLM, or physical manipulation
   validation.
+- 2026-06-03: Implemented the first contract slice. Added
+  `roboclaws.maps.actionable_snapshot`, the Agibot navigation-memory converter,
+  the skill-owned wrapper, `robot_map_12` test fixture, shared
+  `runtime_map_prior` snapshot unwrapping, and contract tests for online/offline
+  shape equivalence, consumer materialization, private-truth exclusion, and
+  movable-prior non-actionability. Focused verification passed:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_actionable_semantic_map_snapshot.py tests/contract/maps/test_nav2_map_bundle_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/skills/test_skill_manifests.py -q`;
+  `ruff check` and `ruff format --check` on touched Python/script files; direct
+  converter and skill wrapper runs both exported 9 anchors, 6 fixtures, and 9
+  waypoints.

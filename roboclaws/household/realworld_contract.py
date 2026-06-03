@@ -218,9 +218,7 @@ class RealWorldCleanupContract:
         self.perception_mode = perception_mode
         self.map_mode = map_mode
         self.cleanup_profile = (
-            str(cleanup_profile or "").strip().lower().replace("_", "-")
-            if cleanup_profile
-            else ""
+            str(cleanup_profile or "").strip().lower().replace("_", "-") if cleanup_profile else ""
         )
         self.sanitize_world_labels = self.cleanup_profile == WORLD_LABELS_SANITIZED_PROFILE
         self.visible_detection_exposure_policy = (
@@ -1811,16 +1809,31 @@ class RealWorldCleanupContract:
         self,
         detection: dict[str, Any],
     ) -> dict[str, Any] | None:
+        public_runtime_fixtures = self._public_runtime_fixture_candidates()
         public_hints = {
             "rooms": [
                 {
                     "room_id": "runtime_semantic_anchors",
                     "room_label": "Runtime semantic anchors",
-                    "fixtures": self._public_runtime_fixture_candidates(),
+                    "fixtures": public_runtime_fixtures,
                 }
             ]
         }
-        return infer_target_fixture_for_detection(detection, public_hints)
+        inferred = infer_target_fixture_for_detection(detection, public_hints)
+        if inferred is not None:
+            return inferred
+        requested = self.internal_fixture_id_for_public_reference(
+            str((detection.get("support_estimate") or {}).get("fixture_id") or "")
+        )
+        if not requested:
+            return None
+        for fixture in public_runtime_fixtures:
+            if (
+                self.internal_fixture_id_for_public_reference(str(fixture.get("fixture_id") or ""))
+                == requested
+            ):
+                return fixture
+        return None
 
     def _resolve_runtime_anchor_target_fixture_id(self, category: str) -> str:
         if self.map_mode != MINIMAL_MAP_MODE:
@@ -1919,7 +1932,9 @@ class RealWorldCleanupContract:
             ),
             {},
         )
-        fixture_id = self._best_internal_fixture_for_anchor(anchor) if anchor else ""
+        fixture_id = (
+            self._best_internal_fixture_for_anchor(anchor) if _is_place_anchor(anchor) else ""
+        )
         if fixture_id:
             self._public_anchor_ids_by_private_fixture_id.setdefault(fixture_id, anchor_id)
         return fixture_id
@@ -3911,6 +3926,9 @@ def _runtime_map_anchor_priors_from_snapshot(
             "producer_id": str(item.get("producer_id") or ""),
             "confidence": _float_or_zero(item.get("confidence")),
             "freshness": "prior",
+            "actionability": str(item.get("actionability") or ""),
+            "reachability_status": str(item.get("reachability_status") or ""),
+            "classification_status": str(item.get("classification_status") or ""),
             "source_observation_id": str(item.get("source_observation_id") or ""),
             "promotion_status": "prior_runtime_snapshot",
             "evidence": dict(item.get("evidence") or {}),
@@ -4823,6 +4841,9 @@ def _semantic_anchor_type_for_fixture(fixture: dict[str, Any]) -> str:
 
 
 def _is_place_anchor(anchor: dict[str, Any]) -> bool:
+    actionability = str(anchor.get("actionability") or "actionable")
+    if actionability != "actionable":
+        return False
     anchor_type = str(anchor.get("anchor_type") or "")
     if anchor_type not in {"surface", "receptacle", "fixture"}:
         return False

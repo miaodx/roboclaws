@@ -199,6 +199,9 @@ Canonical public capability tools cover household world evidence only:
 - public metric map and fixture context;
 - runtime metric map snapshots, observed-object priors, and update candidates
   exposed through `metric_map()` / Agent View;
+- Actionable Semantic Map Snapshot artifacts that package online
+  `runtime_metric_map_v1` output or offline Agibot `navigation_memory.json`
+  conversion into one downstream consumer contract;
 - room and waypoint navigation for evidence capture;
 - public observation, camera adjustment, visual candidate declaration, and
   visible-object inspection.
@@ -207,6 +210,14 @@ Canonical public capability tools cover household world evidence only:
 inspection, search, and future household tasks. It excludes manipulation and
 task-completion tools such as `pick`, `place`, `open_receptacle`,
 `close_receptacle`, and `done`.
+
+The artifact boundary is task-neutral: `semantic-map-build` may emit a raw
+`runtime_metric_map.json`, and map-conversion skills may turn Agibot
+`navigation_memory.json` into `actionable_semantic_map_snapshot_v1`. Cleanup
+and open household tasks consume the canonical snapshot or its runtime-map
+payload through `runtime_map_prior=...`; they should not add an Agibot-specific
+loading path. Movable-object priors from any snapshot remain `needs_confirm`
+until current-run evidence observes them again.
 
 Backend variants such as `api_semantic_synthetic`, `molmospaces_subprocess`,
 `nav2_ros2`, and `agibot_gdk` are profile metadata/config. They are not new
@@ -284,6 +295,7 @@ Task-like public names belong in the runnable task catalog:
 Reusable strategy names belong in skills:
 
 - `capture-object-photo`
+- `actionable-semantic-map-conversion`
 
 Backend variants such as `molmospaces_subprocess`, `api_semantic_synthetic`,
 `agibot_g2`, or `ros2_nav2` should be profile metadata or run configuration,
@@ -382,6 +394,7 @@ describe what public robot capabilities the agent is allowed to rely on.
 | AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
 | Photo capture skill | `skills/capture-object-photo/SKILL.md` |
 | ADR-0003 Molmo cleanup skill | `skills/molmo-realworld-cleanup/SKILL.md` |
+| Actionable semantic map conversion skill | `skills/actionable-semantic-map-conversion/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |
 | Skill manifest tests | `tests/contract/skills/test_skill_manifests.py` |
 | Shareable architecture diagram | `docs/human/mcp-skills-and-semantic-profiles.svg` |

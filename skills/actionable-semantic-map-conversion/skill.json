@@ -1,0 +1,42 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "actionable-semantic-map-conversion",
+  "summary": "Convert offline robot semantic memory into the canonical Actionable Semantic Map Snapshot contract.",
+  "abstraction_level": "agent_skill",
+  "role": "map_artifact_conversion",
+  "status": "active",
+  "mcp": {
+    "profiles": ["household_world_v1"],
+    "required_tools": [],
+    "optional_tools": [],
+    "privileged_tools": [],
+    "boundary_notes": "This skill operates at the map-artifact boundary. It parses public navigation memory and Nav2 map files, records classification/actionability status, and must not read private cleanup scoring truth."
+  },
+  "capability_requirements": {
+    "profiles": ["household_world_v1"],
+    "backend_variants": ["agibot_gdk", "nav2_ros2", "api_semantic_synthetic"],
+    "notes": "The output is consumed by household-world tasks through runtime_map_prior, not through an Agibot-specific cleanup path."
+  },
+  "scripts": [
+    {
+      "path": "scripts/convert_navigation_memory.py",
+      "kind": "converter",
+      "summary": "Skill-owned wrapper around scripts/maps/convert_agibot_navigation_memory.py; deterministically parses navigation_memory.json, Nav2 YAML, occupancy grid, and source metadata into actionable_semantic_map_snapshot_v1."
+    }
+  ],
+  "evidence_outputs": [
+    "actionable_semantic_map_snapshot.json",
+    "materialized_targets.json"
+  ],
+  "lifecycle": {
+    "refactor_signals": [
+      "multiple offline map formats need conversion into the same snapshot contract",
+      "agent semantic classification overrides need review UI or batch tooling"
+    ],
+    "promote_to_mcp_when": [
+      "several skills need online conversion through a stable robot capability surface",
+      "classification inputs and review states are stable",
+      "public/private artifact boundaries remain enforceable in traces"
+    ]
+  }
+}

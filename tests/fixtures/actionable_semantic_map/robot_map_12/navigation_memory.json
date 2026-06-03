@@ -1,0 +1,541 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-06-03T06:08:14+00:00",
+  "items": [
+    {
+      "id": "plastic_bottle_table_1",
+      "label": "塑料水瓶",
+      "kind": "plastic_bottle",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "bottle",
+        "plastic bottle",
+        "water bottle",
+        "塑料水瓶",
+        "塑料瓶",
+        "水",
+        "水瓶",
+        "瓶子",
+        "那瓶水"
+      ],
+      "pose": {
+        "x": 6.420079767802475,
+        "y": 1.466199507782179,
+        "z": 0.9087220323218748,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 5.525,
+        "y": 1.3250000000000002,
+        "z": 0.0,
+        "yaw": 0.15646139278815172
+      },
+      "confidence": 0.88,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "selected_frame": "frame_004849",
+        "contact_pixel": [
+          55,
+          125
+        ],
+        "last_instruction": "去把长条桌子上的水瓶拿到水槽灌满水放进冰箱",
+        "run_id": "run_20260602_190613_5370bf89"
+      },
+      "notes": "用户指令明确要求把长条桌子上的水瓶拿到水槽灌满水再放进冰箱。catalog/navigation_memory 中已有 plastic_bottle_table_1、sink_kitchen_1、fridge_main 的 map-frame pose 和 nav_goal，且证据帧分别为 frame_004849、frame_001300 与 frame_001750，因此解析为固定顺序的多站 route_sequence；全程只产生 mock 抓取、接水和放置动作信号，不发送真实机械臂命令。",
+      "last_seen_at": "2026-06-02T11:08:39+00:00",
+      "successful_runs": [
+        "run_20260602_175444_86b319b9",
+        "run_20260602_190613_5370bf89"
+      ],
+      "created_at": "2026-06-02T09:54:56+00:00",
+      "updated_at": "2026-06-02T11:08:39+00:00"
+    },
+    {
+      "id": "long_table",
+      "label": "长条桌",
+      "kind": "surface",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "long table",
+        "table",
+        "桌子",
+        "长条桌",
+        "长桌"
+      ],
+      "pose": {
+        "x": 6.25,
+        "y": 1.3,
+        "z": 0.75,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 5.525,
+        "y": 0.775,
+        "z": 0.0,
+        "yaw": 0.6267429012110471
+      },
+      "confidence": 0.78,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "selected_frame": "frame_004849",
+        "last_instruction": "去长条桌那里",
+        "run_id": "run_20260602_180402_cc2ec295"
+      },
+      "notes": "",
+      "last_seen_at": "2026-06-02T10:04:13+00:00",
+      "successful_runs": [
+        "run_20260602_175444_86b319b9",
+        "run_20260602_180402_cc2ec295"
+      ],
+      "created_at": "2026-06-02T09:54:56+00:00",
+      "updated_at": "2026-06-02T10:04:13+00:00"
+    },
+    {
+      "id": "computer_monitor_1",
+      "label": "电脑显示器",
+      "kind": "monitor",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "computer monitor",
+        "display",
+        "monitor",
+        "显示器",
+        "电脑屏幕",
+        "电脑显示器"
+      ],
+      "pose": {
+        "x": 1.33,
+        "y": 5.19,
+        "z": 0.88,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 1.275,
+        "y": 4.275,
+        "z": 0.0,
+        "yaw": 1.49
+      },
+      "confidence": 0.76,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "selected_frame": "frame_006500",
+        "supporting_frames": [
+          "frame_006450",
+          "frame_006500"
+        ],
+        "contact_pixel": [
+          138,
+          90
+        ],
+        "rgb_observation": "Black computer monitor on a wheeled workstation in the living-room TV-cabinet area, with keyboard, host, and cables nearby.",
+        "depth_projection": {
+          "frame_006450": {
+            "contact_pixel": [
+              140,
+              80
+            ],
+            "median_depth_m": 2.873,
+            "map_xyz": [
+              1.2929644403248477,
+              5.174582224600334,
+              0.8652982991116902
+            ]
+          },
+          "frame_006500": {
+            "contact_pixel": [
+              138,
+              90
+            ],
+            "median_depth_m": 2.389,
+            "map_xyz": [
+              1.3466918092326179,
+              5.196792543712089,
+              0.8822331363711139
+            ]
+          }
+        },
+        "nav_goal_selection": {
+          "requested_standoff_goal": [
+            1.35,
+            4.3
+          ],
+          "snapped_free_cell_goal": [
+            1.275,
+            4.275
+          ],
+          "yaw_to_target": 1.49,
+          "standoff_m": 0.9,
+          "estimated_path_length_from_start_m": 4.77
+        },
+        "last_instruction": "去电脑显示器那里",
+        "run_id": "run_20260602_181542_455b9955"
+      },
+      "notes": "The instruction asks to go to a concrete object, '电脑显示器'. This target was not present in the known catalog, so I searched the likely living-room workstation/TV-cabinet area instead of falling back to fridge/bottle/table. Frames frame_006450 and frame_006500 show a black computer monitor on a wheeled workstation, with keyboard/host/cables. Depth projection from the monitor body is consistent around map x=1.3, y=5.18, z=0.87, and a free navigation goal was selected in front of it.",
+      "last_seen_at": "2026-06-02T10:28:37+00:00",
+      "successful_runs": [
+        "run_20260602_181542_455b9955"
+      ],
+      "created_at": "2026-06-02T10:28:37+00:00",
+      "updated_at": "2026-06-02T10:28:37+00:00"
+    },
+    {
+      "id": "sink_kitchen_1",
+      "label": "水槽",
+      "kind": "sink",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "kitchen sink",
+        "sink",
+        "水槽",
+        "洗手槽",
+        "洗碗池"
+      ],
+      "pose": {
+        "x": -2.1,
+        "y": -5.146,
+        "z": 0.827,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": -1.225,
+        "y": -5.025,
+        "z": 0.0,
+        "yaw": -3.004
+      },
+      "confidence": 0.74,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "grounding_artifact": "sink_grounding_evidence.json",
+        "selected_frame": "frame_001300",
+        "supporting_frames": [
+          "frame_001000",
+          "frame_000900"
+        ],
+        "contact_pixel": [
+          398,
+          148
+        ],
+        "depth_projection": {
+          "median_depth_m": 1.599,
+          "map_xyz": [
+            -2.1,
+            -5.146,
+            0.827
+          ]
+        },
+        "navigation_precheck": {
+          "standoff_m": 0.9,
+          "requested_nav_goal_xy": [
+            -1.206,
+            -5.039
+          ],
+          "snapped_nav_goal_xy": [
+            -1.225,
+            -5.025
+          ],
+          "precheck_path_length_m": 6.501
+        },
+        "last_instruction": "去把长条桌子上的水瓶拿到水槽灌满水放进冰箱",
+        "run_id": "run_20260602_190613_5370bf89"
+      },
+      "notes": "用户指令明确要求把长条桌子上的水瓶拿到水槽灌满水再放进冰箱。catalog/navigation_memory 中已有 plastic_bottle_table_1、sink_kitchen_1、fridge_main 的 map-frame pose 和 nav_goal，且证据帧分别为 frame_004849、frame_001300 与 frame_001750，因此解析为固定顺序的多站 route_sequence；全程只产生 mock 抓取、接水和放置动作信号，不发送真实机械臂命令。",
+      "last_seen_at": "2026-06-02T11:08:39+00:00",
+      "successful_runs": [
+        "run_20260602_184622_d2c724e1",
+        "run_20260602_190613_5370bf89"
+      ],
+      "created_at": "2026-06-02T10:52:48+00:00",
+      "updated_at": "2026-06-02T11:08:39+00:00"
+    },
+    {
+      "id": "fridge_main",
+      "label": "冰箱",
+      "kind": "appliance",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "fridge",
+        "refrigerator",
+        "冰箱",
+        "冷藏柜"
+      ],
+      "pose": {
+        "x": 1.6879071220842632,
+        "y": -6.198088938751296,
+        "z": 0.8150550404618264,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 1.125,
+        "y": -5.825,
+        "z": 0.0,
+        "yaw": -0.5853136166620925
+      },
+      "confidence": 0.92,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "selected_frame": "frame_001750",
+        "contact_pixel": [
+          570,
+          155
+        ],
+        "last_instruction": "先走到冰箱，再走到吧台前，再走到咖啡机，再走到大白色沙发，再走到石头书装饰，再走到写着衣服的纸箱",
+        "run_id": "run_20260603_105156_bd1f1cc9"
+      },
+      "notes": "这是严格顺序的多站导航任务。冰箱命中 catalog 的 fridge_main；“吧台前”命中 catalog 的 kitchen_center/吧台区域锚点。咖啡机、大白色沙发、石头书装饰、写着衣服的纸箱不是当前 catalog 的独立目标，因此按厨房台面、客厅沙发区、电视柜、入口纸箱墙的轨迹先验抽样帧，并用 RGB-D + camera_map_poses 估计 map-frame pose 与可达 nav_goal。石头书装饰和衣服纸箱的语义置信度低于冰箱/沙发，但均有局部视觉证据和可达站位；没有把未知物体默认到冰箱或任意房间中心。",
+      "last_seen_at": "2026-06-03T03:02:17+00:00",
+      "successful_runs": [
+        "run_20260602_190613_5370bf89",
+        "run_20260603_093001_661f5c76",
+        "run_20260603_094634_3b1805eb",
+        "run_20260603_105156_bd1f1cc9"
+      ],
+      "created_at": "2026-06-02T11:08:39+00:00",
+      "updated_at": "2026-06-03T03:02:17+00:00"
+    },
+    {
+      "id": "coffee_table_1",
+      "label": "客厅茶几",
+      "kind": "surface",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "coffee table",
+        "living room coffee table",
+        "客厅茶几",
+        "茶几"
+      ],
+      "pose": {
+        "x": -0.95,
+        "y": 3.65,
+        "z": 0.48,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 0.075,
+        "y": 3.325,
+        "z": 0.0,
+        "yaw": 2.835
+      },
+      "confidence": 0.72,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "grounding_artifact": "coffee_table_grounding_evidence.json",
+        "selected_frame": "frame_007000",
+        "supporting_frames": [
+          "frame_007010",
+          "frame_007025",
+          "frame_007100"
+        ],
+        "visual_description": "客厅沙发区中部的棕色低矮长方形茶几，桌面上有绿植，位于两组浅色沙发与橙色休闲椅之间。",
+        "support_pixels": [
+          {
+            "frame": "frame_007000",
+            "uv": [
+              325,
+              150
+            ],
+            "median_depth_m": 2.447,
+            "map_xyz": [
+              -0.961,
+              3.609,
+              0.471
+            ]
+          },
+          {
+            "frame": "frame_007025",
+            "uv": [
+              330,
+              150
+            ],
+            "median_depth_m": 2.396,
+            "map_xyz": [
+              -0.953,
+              3.48,
+              0.491
+            ]
+          },
+          {
+            "frame": "frame_007100",
+            "uv": [
+              95,
+              180
+            ],
+            "median_depth_m": 2.11,
+            "map_xyz": [
+              -0.989,
+              3.854,
+              0.464
+            ]
+          }
+        ],
+        "navigation_precheck": {
+          "standoff_m": 0.9,
+          "requested_nav_goal_xy": [
+            -0.08,
+            3.421
+          ],
+          "snapped_free_cell_goal": [
+            0.075,
+            3.325
+          ],
+          "precheck_path_length_m_from_origin": 3.321
+        },
+        "last_instruction": "去冰箱拿瓶水放到客厅的茶几上",
+        "run_id": "run_20260603_093001_661f5c76"
+      },
+      "notes": "指令是多站转移动作：先到已知目标 fridge_main 执行 mock 取瓶装水，再到客厅茶几执行 mock 放置。冰箱在 catalog/navigation_memory 中有高置信位姿；“茶几”不在已知目标库中，因此按客厅/沙发区先验检查 frame_007000、frame_007010、frame_007025 和 frame_007100，视觉上均可见沙发区中部的棕色低矮茶几，深度投影集中在 map 约 (-0.95, 3.65, 0.48)，并选取可达 nav_goal (0.075, 3.325, yaw 2.835)。本流程只生成导航与 mock action 信号，不发送真实机械臂命令。",
+      "last_seen_at": "2026-06-03T01:37:59+00:00",
+      "successful_runs": [
+        "run_20260603_093001_661f5c76"
+      ],
+      "created_at": "2026-06-03T01:37:59+00:00",
+      "updated_at": "2026-06-03T01:37:59+00:00"
+    },
+    {
+      "id": "kitchen_center",
+      "label": "厨房/吧台区域",
+      "kind": "room",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "counter",
+        "kitchen",
+        "厨房",
+        "厨房/吧台区域",
+        "吧台"
+      ],
+      "pose": {
+        "x": 0.6,
+        "y": -4.8,
+        "z": 0.0,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 0.6,
+        "y": -4.8,
+        "z": 0.0,
+        "yaw": 0.0
+      },
+      "confidence": 0.76,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "near_frames": [
+          "frame_001000",
+          "frame_001500"
+        ],
+        "last_instruction": "先走到冰箱，再走到吧台前，再走到咖啡机，再走到大白色沙发，再走到石头书装饰，再走到写着衣服的纸箱",
+        "run_id": "run_20260603_105156_bd1f1cc9"
+      },
+      "notes": "这是严格顺序的多站导航任务。冰箱命中 catalog 的 fridge_main；“吧台前”命中 catalog 的 kitchen_center/吧台区域锚点。咖啡机、大白色沙发、石头书装饰、写着衣服的纸箱不是当前 catalog 的独立目标，因此按厨房台面、客厅沙发区、电视柜、入口纸箱墙的轨迹先验抽样帧，并用 RGB-D + camera_map_poses 估计 map-frame pose 与可达 nav_goal。石头书装饰和衣服纸箱的语义置信度低于冰箱/沙发，但均有局部视觉证据和可达站位；没有把未知物体默认到冰箱或任意房间中心。",
+      "last_seen_at": "2026-06-03T03:02:17+00:00",
+      "successful_runs": [
+        "run_20260603_105156_bd1f1cc9"
+      ],
+      "created_at": "2026-06-03T03:02:17+00:00",
+      "updated_at": "2026-06-03T03:02:17+00:00"
+    },
+    {
+      "id": "large_white_sofa_1",
+      "label": "大白色沙发",
+      "kind": "sofa",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "couch",
+        "large white sofa",
+        "white sofa",
+        "大沙发",
+        "大白色沙发",
+        "白色沙发"
+      ],
+      "pose": {
+        "x": -0.62,
+        "y": 5.12,
+        "z": 0.08,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 0.075,
+        "y": 3.325,
+        "yaw": 1.94
+      },
+      "confidence": 0.71,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "grounding_artifact": "artifacts/multistop_grounding_evidence.json",
+        "selected_frame": "frame_007100",
+        "supporting_frames": [
+          "frame_007000",
+          "frame_007010"
+        ],
+        "selected_pixel": [
+          245,
+          170
+        ],
+        "visual_description": "客厅茶几/电视柜视角中最显眼的大白色沙发。",
+        "navigation_precheck": {
+          "path_length_m_from_origin": 3.321,
+          "visited_cells": 131
+        },
+        "last_instruction": "先走到冰箱，再走到吧台前，再走到咖啡机，再走到大白色沙发，再走到石头书装饰，再走到写着衣服的纸箱",
+        "run_id": "run_20260603_105156_bd1f1cc9"
+      },
+      "notes": "这是严格顺序的多站导航任务。冰箱命中 catalog 的 fridge_main；“吧台前”命中 catalog 的 kitchen_center/吧台区域锚点。咖啡机、大白色沙发、石头书装饰、写着衣服的纸箱不是当前 catalog 的独立目标，因此按厨房台面、客厅沙发区、电视柜、入口纸箱墙的轨迹先验抽样帧，并用 RGB-D + camera_map_poses 估计 map-frame pose 与可达 nav_goal。石头书装饰和衣服纸箱的语义置信度低于冰箱/沙发，但均有局部视觉证据和可达站位；没有把未知物体默认到冰箱或任意房间中心。",
+      "last_seen_at": "2026-06-03T03:02:17+00:00",
+      "successful_runs": [
+        "run_20260603_105156_bd1f1cc9"
+      ],
+      "created_at": "2026-06-03T03:02:17+00:00",
+      "updated_at": "2026-06-03T03:02:17+00:00"
+    },
+    {
+      "id": "stone_book_decor_1",
+      "label": "石头书装饰",
+      "kind": "decor",
+      "scene_id": "living_room_g2",
+      "aliases": [
+        "stone book decor",
+        "stone decor",
+        "书本装饰",
+        "石头书",
+        "石头书装饰",
+        "石头摆件"
+      ],
+      "pose": {
+        "x": 2.3,
+        "y": 4.75,
+        "z": 0.43,
+        "yaw": 0.0
+      },
+      "nav_goal": {
+        "x": 1.725,
+        "y": 4.225,
+        "yaw": 0.74
+      },
+      "confidence": 0.59,
+      "source": "successful_navigation_run",
+      "evidence": {
+        "grounding_artifact": "artifacts/multistop_grounding_evidence.json",
+        "selected_frame": "frame_006900",
+        "supporting_frames": [
+          "frame_006500"
+        ],
+        "selected_pixel": [
+          470,
+          190
+        ],
+        "visual_description": "电视柜台面上的白色石质/书本状装饰候选。",
+        "navigation_precheck": {
+          "path_length_m_from_origin": 4.904,
+          "visited_cells": 2163
+        },
+        "last_instruction": "先走到冰箱，再走到吧台前，再走到咖啡机，再走到大白色沙发，再走到石头书装饰，再走到写着衣服的纸箱",
+        "run_id": "run_20260603_105156_bd1f1cc9"
+      },
+      "notes": "这是严格顺序的多站导航任务。冰箱命中 catalog 的 fridge_main；“吧台前”命中 catalog 的 kitchen_center/吧台区域锚点。咖啡机、大白色沙发、石头书装饰、写着衣服的纸箱不是当前 catalog 的独立目标，因此按厨房台面、客厅沙发区、电视柜、入口纸箱墙的轨迹先验抽样帧，并用 RGB-D + camera_map_poses 估计 map-frame pose 与可达 nav_goal。石头书装饰和衣服纸箱的语义置信度低于冰箱/沙发，但均有局部视觉证据和可达站位；没有把未知物体默认到冰箱或任意房间中心。",
+      "last_seen_at": "2026-06-03T03:02:17+00:00",
+      "successful_runs": [
+        "run_20260603_105156_bd1f1cc9"
+      ],
+      "created_at": "2026-06-03T03:02:17+00:00",
+      "updated_at": "2026-06-03T03:02:17+00:00"
+    }
+  ]
+}

@@ -94,6 +94,7 @@ from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_client_from_env,
 )
+from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
 SEMANTIC_SWEEP_POLICY = "semantic_sweep_baseline"
@@ -820,7 +821,8 @@ def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
     if path is None:
         return None
     prior_path = Path(path)
-    return json.loads(prior_path.read_text(encoding="utf-8"))
+    payload = json.loads(prior_path.read_text(encoding="utf-8"))
+    return runtime_metric_map_from_prior_artifact(payload)
 
 
 def _failed_score(contract: RealWorldCleanupContract) -> dict[str, Any]:
