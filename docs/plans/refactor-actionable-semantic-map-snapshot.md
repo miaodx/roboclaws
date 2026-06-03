@@ -79,6 +79,132 @@ targets for downstream tools to consume it directly.
       boundary: Minimal Navigation Map Artifact, Runtime Metric Map, Public
       Semantic Anchor, Prebuilt Robot Map Bundle, and semantic-map-build output.
 
+## Success Criteria
+
+The primary success rule is:
+
+```text
+Online semantic-map-build output and offline converted navigation_memory output
+produce the same downstream artifact contract. Cleanup and open household tasks
+consume it through one path.
+```
+
+Concrete acceptance criteria:
+
+- The two producer paths are structurally equivalent:
+  `Minimal Navigation Map Artifact -> semantic-map-build` and
+  `navigation_memory.json -> conversion skill` both produce an Actionable
+  Semantic Map Snapshot. They may differ in producer/provenance metadata only.
+- Semantic entries are both agent-visible and tool-consumable. If an anchor is
+  marked actionable, the consumer can materialize a valid navigation waypoint
+  and, when appropriate, a fixture/receptacle target with affordances.
+- Static, semi-static, and movable semantics stay separated. Fixed destinations
+  such as fridges, sinks, tables, sofas, and room areas can become
+  fixture/receptacle/surface/room anchors. Movable objects such as a plastic
+  bottle must not be promoted into static fixtures.
+- Private scoring truth remains absent from every agent-facing artifact:
+  generated mess sets, acceptable destination sets, private manifests, target
+  counts, and scorer-only truth are forbidden.
+- Prior movable objects remain non-actionable until current-run evidence
+  confirms them. A converted or prior observed object must default to
+  `needs_confirm`, not `actionable`.
+- Uncertainty is explicit. Reachability conflicts, low-confidence semantics,
+  missing referenced evidence artifacts, or ambiguous object-vs-fixture
+  classifications must be represented with status fields such as
+  `needs_review`, `observe_only`, `costmap_disagrees`, `projected`, or
+  equivalent contract values.
+- No special cleanup/open-task branch is introduced for Agibot
+  `navigation_memory.json`. The conversion happens at the map-artifact boundary;
+  downstream tasks consume the canonical snapshot.
+
+Counterexamples that fail this gate:
+
+- The agent can see `fridge_main`, but `navigate_to_waypoint` or
+  `navigate_to_receptacle` treats it as an unknown target.
+- Online semantic-map-build output and offline converted output require
+  different cleanup loading paths.
+- `plastic_bottle_table_1` appears in static fixture semantics.
+- A prior movable object from a previous snapshot is directly pickable without
+  current-run confirmation.
+- The converted artifact leaks private cleanup truth or silently mutates the
+  source navigation map.
+
+## Vendor Fixture Use
+
+Use
+`vendors/agibot_sdk/artifacts/maps/robot_map_12/navigation_memory.json` as the
+primary real input fixture for the offline conversion path.
+
+The test fixture should include the whole map folder, not only the JSON file:
+
+- `navigation_memory.json` for semantic memory entries.
+- `agibot/nav2.yaml` for map-frame metadata.
+- `agibot/occupancy.pgm` for offline costmap/free-cell checks.
+- `agibot/source.json` and `agibot/raw_map.json.gz` for source provenance when
+  needed.
+
+This vendor map is intentionally valuable because it includes mixed semantic
+types and edge cases:
+
+- `fridge_main`, `sink_kitchen_1`, `coffee_table_1`, `long_table`, and
+  `large_white_sofa_1` cover receptacle/surface/fixture classification.
+- `kitchen_center` covers a room-area anchor.
+- `stone_book_decor_1` covers a low-confidence landmark/decor candidate.
+- `plastic_bottle_table_1` covers movable-object handling and must not become
+  a static fixture.
+- `fridge_main` has evidence of successful navigation but its current
+  `nav_goal` does not land on a free occupancy cell. The conversion must record
+  this conflict explicitly instead of silently hiding it.
+
+Do not make the tests depend on byte-for-byte equality of the entire converted
+JSON. Evidence notes, timestamps, and source text may change. Prefer a frozen
+expected summary under `tests/fixtures` or equivalent contract assertions for
+the fields that matter:
+
+- anchor count and required anchor ids
+- materialized waypoint ids
+- fixture/receptacle/surface classification for known entries
+- movable-object non-promotion for `plastic_bottle_table_1`
+- reachability status for `fridge_main`
+- no forbidden private keys
+- producer/provenance values identifying offline navigation-memory conversion
+
+## Test Strategy
+
+First-pass verification does not require real hardware.
+
+Required offline/mock tests:
+
+- Unit tests for deterministic parsing of `navigation_memory.json`, Nav2 YAML
+  parsing, world-to-grid projection, free-cell checks, and stable id generation.
+- Unit tests for semantic normalization defaults: anchor type, affordances,
+  object-vs-fixture-vs-landmark classification, actionability, and review
+  status.
+- Contract tests that convert `robot_map_12` into an Actionable Semantic Map
+  Snapshot and assert the success criteria above.
+- Contract tests that compare the consumer-facing shape of an online
+  semantic-map-build snapshot and an offline converted snapshot. The assertion
+  should be equivalence of contract shape and consumer materialization, not
+  identical provenance.
+- Contract tests proving actionable anchors can materialize into navigation
+  waypoints and fixture/receptacle candidates through the same loading path
+  used by cleanup/open tasks.
+- Checker tests proving private-truth exclusion and prior-object
+  non-actionability still hold.
+- One mock or smoke cleanup/open-task run that consumes the converted snapshot
+  and proves the task reads targets from the artifact rather than a special
+  Agibot-only branch.
+
+Optional local follow-up tests:
+
+- Real Agibot GDK map fetch or PNC navigation validation.
+- OpenClaw Gateway or physical robot consumption of the converted snapshot.
+- Real VLM semantic relabeling or visual evidence expansion.
+- Real manipulation proof for pick/place/open/close.
+
+Those local gates are useful confidence evidence, but they do not block the
+first contract slice unless a later scope update explicitly requires them.
+
 ## Parked Cross-Seam / Future Ideas
 
 - Full room-wide semantic annotation is out of scope; the first conversion may
@@ -99,7 +225,8 @@ targets for downstream tools to consume it directly.
 - L1 Unit/mock: unit tests for deterministic conversion helpers, map-frame
   projection, reachability status assignment, and affordance normalization.
 - L2 Contract: contract tests for snapshot schema, no-private-truth guarantees,
-  online/offline artifact equivalence, and cleanup consumer materialization.
+  vendor `robot_map_12` conversion, online/offline artifact equivalence, and
+  cleanup/open-task consumer materialization.
 - L3 Mock regression: one mock or smoke cleanup/open-task run consuming the
   converted snapshot through the same path used for online build output.
 - L4+ Local-only gates are optional follow-up evidence for real Agibot/OpenClaw
@@ -127,3 +254,8 @@ hardware validation under this gate.
   Decision: the prebuilt semantic memory should not be treated as minimal-map
   input. It should convert to the same canonical completion artifact as an
   online semantic-map-build run, with different provenance only.
+- 2026-06-03: Extended gate with explicit success criteria, vendor fixture use,
+  offline/mock test strategy, and local hardware boundary. Decision: the first
+  contract slice must use `robot_map_12` as a real conversion fixture but must
+  not require real Agibot hardware, OpenClaw, VLM, or physical manipulation
+  validation.
