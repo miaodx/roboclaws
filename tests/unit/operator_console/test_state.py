@@ -14,7 +14,7 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
         json.dumps(
             {
                 "run_id": "run",
-                "route": get_route("mujoco-cleanup").to_payload(),
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
                 "phase": "running",
                 "backend_lock": "molmospaces_mujoco",
                 "started_at_epoch": 1.0,
@@ -49,7 +49,7 @@ def test_state_derives_latest_tool_checker_and_artifact_links(tmp_path: Path) ->
     )
     (run_dir / "report.html").write_text("<html></html>", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_route("mujoco-cleanup"))
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
 
     assert state["status"] == "passed"
     assert state["latest_action"] == "pick"

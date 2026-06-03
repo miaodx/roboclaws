@@ -200,6 +200,11 @@ pre,
   gap: 8px;
 }
 
+.route-fields[hidden],
+#common-fields[hidden] {
+  display: none;
+}
+
 .route-card {
   display: grid;
   gap: 8px;

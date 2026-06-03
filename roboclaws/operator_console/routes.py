@@ -1,4 +1,4 @@
-"""Explicit route registry for the standalone Codex operator console."""
+"""Explicit route registry for the standalone agent operator console."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class RouteGate:
 
 @dataclass(frozen=True)
 class ConsoleRoute:
-    """One route card in the Codex-only operator console."""
+    """One route card in the local operator console."""
 
     id: str
     label: str
@@ -45,6 +45,8 @@ class ConsoleRoute:
     pause_supported: bool = False
     emergency_stop_required: bool = False
     resource_kind: str = "simulator"
+    driver_label: str = ""
+    driver_family: str = "coding_agent"
 
     def base_args(self) -> list[str]:
         return [
@@ -69,14 +71,15 @@ class ConsoleRoute:
             else "This route cannot accept a custom prompt safely. Use the default task prompt."
         )
         payload["default_prompt"] = self.task_prompt_default
+        payload["driver_label"] = self.driver_label or self.driver.title()
         return payload
 
 
 PROVIDER_KEY_GATE = RouteGate(
     id="provider_key",
-    label="Provider key route present",
+    label="Agent provider route present",
     kind="provider_key",
-    help_text="Load a repo-local Codex provider key route before launch.",
+    help_text="Load a repo-local coding-agent provider route before launch.",
 )
 ISAAC_PREFLIGHT_GATE = RouteGate(
     id="isaac_preflight",
@@ -107,9 +110,39 @@ AGIBOT_ESTOP_GATE = RouteGate(
 )
 
 
+def _cleanup_route(
+    *,
+    route_id: str,
+    label: str,
+    driver: str,
+    backend: str,
+    lock_name: str,
+    default_mess_count: int,
+    gates: tuple[RouteGate, ...],
+    resource_kind: str = "simulator",
+) -> ConsoleRoute:
+    return ConsoleRoute(
+        id=route_id,
+        label=label,
+        task="household-cleanup",
+        driver=driver,
+        profile="world-labels",
+        backend=backend,
+        lock_name=lock_name,
+        supports_prompt=True,
+        enabled=True,
+        checker_id="cleanup_report",
+        task_prompt_default="帮我收拾这个房间",
+        default_overrides=("seed=7", f"generated_mess_count={default_mess_count}"),
+        gates=gates,
+        resource_kind=resource_kind,
+        driver_label="Claude Code" if driver == "claude" else "Codex",
+    )
+
+
 SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
     ConsoleRoute(
-        id="mujoco-cleanup",
+        id="codex-mujoco-cleanup",
         label="MuJoCo Cleanup",
         task="household-cleanup",
         driver="codex",
@@ -122,25 +155,39 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         task_prompt_default="帮我收拾这个房间",
         default_overrides=("seed=7", "generated_mess_count=5"),
         gates=(PROVIDER_KEY_GATE,),
+        driver_label="Codex",
     ),
-    ConsoleRoute(
-        id="isaac-cleanup",
+    _cleanup_route(
+        route_id="claude-mujoco-cleanup",
+        label="MuJoCo Cleanup",
+        driver="claude",
+        backend="molmospaces_subprocess",
+        lock_name="molmospaces_mujoco",
+        default_mess_count=5,
+        gates=(PROVIDER_KEY_GATE,),
+    ),
+    _cleanup_route(
+        route_id="codex-isaac-cleanup",
         label="Isaac Cleanup",
-        task="household-cleanup",
         driver="codex",
-        profile="world-labels",
         backend="isaaclab_subprocess",
         lock_name="isaac_gpu",
-        supports_prompt=True,
-        enabled=True,
-        checker_id="cleanup_report",
-        task_prompt_default="帮我收拾这个房间",
-        default_overrides=("seed=7", "generated_mess_count=1"),
+        default_mess_count=1,
+        gates=(PROVIDER_KEY_GATE, ISAAC_PREFLIGHT_GATE),
+        resource_kind="gpu",
+    ),
+    _cleanup_route(
+        route_id="claude-isaac-cleanup",
+        label="Isaac Cleanup",
+        driver="claude",
+        backend="isaaclab_subprocess",
+        lock_name="isaac_gpu",
+        default_mess_count=1,
         gates=(PROVIDER_KEY_GATE, ISAAC_PREFLIGHT_GATE),
         resource_kind="gpu",
     ),
     ConsoleRoute(
-        id="agibot-g2-map-build",
+        id="codex-agibot-g2-map-build",
         label="Agibot G2 Map Build",
         task="semantic-map-build",
         driver="codex",
@@ -162,9 +209,10 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         ),
         emergency_stop_required=True,
         resource_kind="physical_robot",
+        driver_label="Codex",
     ),
     ConsoleRoute(
-        id="mujoco-map-build",
+        id="codex-mujoco-map-build",
         label="MuJoCo Map Build",
         task="semantic-map-build",
         driver="codex",
@@ -177,9 +225,10 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         task_prompt_default="帮我建立这个房间的语义地图",
         default_overrides=("seed=7", "generated_mess_count=5"),
         gates=(PROVIDER_KEY_GATE,),
+        driver_label="Codex",
     ),
     ConsoleRoute(
-        id="isaac-map-build",
+        id="codex-isaac-map-build",
         label="Isaac Map Build",
         task="semantic-map-build",
         driver="codex",
@@ -193,6 +242,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         default_overrides=("seed=7", "generated_mess_count=1"),
         gates=(PROVIDER_KEY_GATE, ISAAC_PREFLIGHT_GATE),
         resource_kind="gpu",
+        driver_label="Codex",
     ),
 )
 
@@ -213,12 +263,13 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         disabled_reason="Physical manipulation is blocked. Run Agibot G2 Map Build first.",
         emergency_stop_required=True,
         resource_kind="physical_robot",
+        driver_label="Codex",
     ),
     ConsoleRoute(
-        id="non-codex-routes",
-        label="Direct / OpenClaw / Claude / VLM",
+        id="unsupported-drivers",
+        label="Direct / OpenClaw / VLM",
         task="household-cleanup",
-        driver="codex",
+        driver="direct",
         profile="world-labels",
         backend="unsupported",
         lock_name="unsupported",
@@ -226,7 +277,22 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         enabled=False,
         checker_id="unsupported",
         task_prompt_default="",
-        disabled_reason="This console is Codex-only for v1.",
+        disabled_reason="This console supports local coding-agent drivers only.",
+    ),
+    ConsoleRoute(
+        id="claude-map-build",
+        label="Claude Map Build",
+        task="semantic-map-build",
+        driver="claude",
+        profile="world-labels",
+        backend="unsupported",
+        lock_name="unsupported",
+        supports_prompt=False,
+        enabled=False,
+        checker_id="unsupported",
+        task_prompt_default="",
+        disabled_reason="semantic-map-build does not support the Claude driver yet.",
+        driver_label="Claude Code",
     ),
     ConsoleRoute(
         id="ai2thor-games",
@@ -241,6 +307,7 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         checker_id="unsupported",
         task_prompt_default="",
         disabled_reason="Navigation games are outside this operator console.",
+        driver_label="Codex",
     ),
 )
 

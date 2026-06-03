@@ -1,4 +1,4 @@
-"""Stdlib HTTP server for the standalone Codex operator console."""
+"""Stdlib HTTP server for the standalone agent operator console."""
 
 from __future__ import annotations
 
@@ -147,7 +147,7 @@ def run_server(root: Path, host: str, port: int) -> None:
     handler = partial(ConsoleRequestHandler, root=root)
     server = ThreadingHTTPServer((host, port), handler)
     url_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
-    print(f"Codex Operator Console: http://{url_host}:{port}")
+    print(f"Agent Operator Console: http://{url_host}:{port}")
     try:
         server.serve_forever()
     finally:
@@ -155,7 +155,7 @@ def run_server(root: Path, host: str, port: int) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Run the standalone Codex operator console.")
+    parser = argparse.ArgumentParser(description="Run the standalone agent operator console.")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--repo-root", type=Path, default=Path.cwd())

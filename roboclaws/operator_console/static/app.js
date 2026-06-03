@@ -17,6 +17,10 @@ const els = {
   seedInput: document.getElementById("seed-input"),
   messInput: document.getElementById("mess-count-input"),
   portInput: document.getElementById("port-input"),
+  commonFields: document.getElementById("common-fields"),
+  isaacFields: document.getElementById("isaac-fields"),
+  agibotFields: document.getElementById("agibot-fields"),
+  agibotGateFields: document.getElementById("agibot-gate-fields"),
   contextInput: document.getElementById("context-json-input"),
   isaacSceneInput: document.getElementById("isaac-scene-input"),
   isaacPreflightGate: document.getElementById("isaac-preflight-gate"),
@@ -71,7 +75,9 @@ function bindEvents() {
     els.estopGate,
   ].forEach((input) => {
     input.addEventListener("input", renderSelection);
+    input.addEventListener("input", renderRoutes);
     input.addEventListener("change", renderSelection);
+    input.addEventListener("change", renderRoutes);
   });
   els.startButton.addEventListener("click", confirmLaunch);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
@@ -102,20 +108,18 @@ function renderRoutes() {
   els.routeList.innerHTML = "";
   for (const route of state.routes) {
     const button = document.createElement("button");
-    const readiness = state.readiness[route.id] || {};
+    const readiness = effectiveReadiness(route);
     const selectable = Boolean(route.enabled);
-    const canStart = selectable && readiness.can_start !== false;
-    const stateClass = canStart ? "ready" : selectable ? "needs_action" : "blocked";
-    const stateLabel = canStart ? "READY" : selectable ? "GATED" : "BLOCKED";
+    const display = routeStatusDisplay(route, readiness);
     button.type = "button";
     button.className = `route-card${route.id === state.selectedRoute.id ? " active" : ""}`;
     button.disabled = !selectable;
     button.innerHTML = `
       <div class="route-card-title">
         <span>${escapeHtml(route.label)}</span>
-        <span class="badge ${stateClass}">${stateLabel}</span>
+        <span class="badge ${display.className}">${display.label}</span>
       </div>
-      <div class="meta-label">${escapeHtml(route.task)} / ${escapeHtml(route.profile)}</div>
+      <div class="meta-label">${escapeHtml(route.driver_label)} / ${escapeHtml(route.profile)}</div>
       <div>${escapeHtml(route.backend)}</div>
       ${
         route.disabled_reason
@@ -138,6 +142,7 @@ function renderSelection() {
     return;
   }
   const readiness = effectiveReadiness(route);
+  renderRouteFields(route);
   els.taskPrompt.disabled = !route.supports_prompt;
   els.taskPrompt.placeholder = route.task_prompt_default || route.default_prompt || "";
   els.promptHelp.textContent = route.supports_prompt
@@ -163,9 +168,50 @@ function renderSelection() {
     els.gateList.textContent = "No route-specific gates.";
   }
 
-  els.commandPreview.textContent = (route.argv_preview || route.command_preview || []).join(" ");
+  els.commandPreview.textContent = commandPreview(route);
   els.startButton.disabled = !route.enabled || readiness.can_start === false;
   els.startHelp.textContent = readiness.blocker || route.disabled_reason || "";
+}
+
+function routeStatusDisplay(route, readiness) {
+  if (!route.enabled) {
+    return { label: "UNAVAILABLE", className: "blocked" };
+  }
+  if (readiness.can_start !== false) {
+    return { label: "READY", className: "ready" };
+  }
+  const kind = readiness.blocker_kind || "";
+  if (kind === "locked") return { label: "LOCKED", className: "blocked" };
+  if (kind === "needs_provider") return { label: "NEEDS PROVIDER", className: "needs_action" };
+  if (kind === "needs_isaac_preflight") {
+    return { label: "NEEDS PREFLIGHT", className: "needs_action" };
+  }
+  if (kind === "needs_agibot_context" || kind === "needs_agibot_gates") {
+    return { label: "NEEDS OPERATOR GATES", className: "needs_action" };
+  }
+  return { label: "NEEDS ACTION", className: "needs_action" };
+}
+
+function renderRouteFields(route) {
+  const gateIds = new Set((route.gates || []).map((gate) => gate.id));
+  const usesIsaac = gateIds.has("isaac_preflight") || route.backend === "isaaclab_subprocess";
+  const usesAgibot =
+    gateIds.has("context_json") ||
+    gateIds.has("localization_ready") ||
+    route.backend === "agibot_gdk";
+
+  els.commonFields.hidden = !route.enabled;
+  els.isaacFields.hidden = !usesIsaac;
+  els.agibotFields.hidden = !usesAgibot;
+  els.agibotGateFields.hidden = !usesAgibot;
+}
+
+function commandPreview(route) {
+  const parts = route.argv_preview || route.command_preview || [];
+  if (!parts.length) {
+    return "Route unavailable.";
+  }
+  return parts.join(" ");
 }
 
 function effectiveReadiness(route) {
@@ -192,6 +238,7 @@ function effectiveReadiness(route) {
     ...base,
     can_start: !blocker,
     blocker,
+    blocker_kind: blocker ? (base.blocker_kind || firstBlockingGateKind(gates)) : "",
     gates,
   };
 }
@@ -211,12 +258,18 @@ function applyLocalGateEvidence(gate) {
   gate.message = "Operator evidence accepted for this launch.";
 }
 
+function firstBlockingGateKind(gates) {
+  const gate = gates.find((item) => item.status !== "ready");
+  return gate ? gate.kind || "" : "";
+}
+
 function confirmLaunch() {
   const route = state.selectedRoute;
   const promptSource = els.taskPrompt.value.trim() ? "custom" : "default";
   els.confirmBody.innerHTML = `
     <dl class="state-list">
       <dt>Route</dt><dd>${escapeHtml(route.label)}</dd>
+      <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver)}</dd>
       <dt>Backend</dt><dd>${escapeHtml(route.backend)}</dd>
       <dt>Profile</dt><dd>${escapeHtml(route.profile)}</dd>
       <dt>Lock</dt><dd>${escapeHtml(route.lock_name)}</dd>
@@ -296,7 +349,7 @@ async function pollState() {
 
 function renderRunState(payload) {
   const route = payload.route || state.selectedRoute || {};
-  els.runTitle.textContent = `${route.label || "Codex run"} / ${payload.run_id}`;
+  els.runTitle.textContent = `${route.label || "Agent run"} / ${payload.run_id}`;
   els.routeStatus.textContent = payload.phase || payload.status || "Running";
   els.routeStatus.className = `badge ${statusClass(payload.phase || payload.status)}`;
   els.lockStatus.textContent = `lock: ${route.lock_name || payload.backend_lock || "none"}`;
@@ -310,7 +363,7 @@ function renderRunState(payload) {
   els.decisionPanel.innerHTML = `
     <strong>${escapeHtml(payload.latest_action || "No action")}</strong>
     <p>${escapeHtml(
-      decision.observation_summary || "No decision yet. Codex has not called a robot tool."
+      decision.observation_summary || "No decision yet. The agent has not called a robot tool."
     )}</p>
     <p>${escapeHtml(decision.reasoning || decision.decision || "")}</p>
     ${decision.blocked_reason ? `<p class="field-help">${escapeHtml(decision.blocked_reason)}</p>` : ""}

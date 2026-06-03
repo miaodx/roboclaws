@@ -36,19 +36,21 @@ def _just_bin() -> str:
     pytest.skip("just binary is not available")
 
 
-def test_console_route_registry_is_codex_only_and_explains_disabled_routes() -> None:
+def test_console_route_registry_exposes_agent_routes_and_explains_disabled_routes() -> None:
     routes = list_console_routes()
     supported = [route for route in routes if route.enabled]
     disabled = {route.id: route.disabled_reason for route in routes if not route.enabled}
 
     assert {route.id for route in supported} == {
-        "mujoco-cleanup",
-        "isaac-cleanup",
-        "agibot-g2-map-build",
-        "mujoco-map-build",
-        "isaac-map-build",
+        "codex-mujoco-cleanup",
+        "claude-mujoco-cleanup",
+        "codex-isaac-cleanup",
+        "claude-isaac-cleanup",
+        "codex-agibot-g2-map-build",
+        "codex-mujoco-map-build",
+        "codex-isaac-map-build",
     }
-    assert {route.driver for route in supported} == {"codex"}
+    assert {route.driver for route in supported} == {"codex", "claude"}
     assert {route.lock_name for route in supported} == {
         "molmospaces_mujoco",
         "isaac_gpu",
@@ -57,12 +59,17 @@ def test_console_route_registry_is_codex_only_and_explains_disabled_routes() -> 
     assert disabled["agibot-g2-cleanup"] == (
         "Physical manipulation is blocked. Run Agibot G2 Map Build first."
     )
-    assert disabled["non-codex-routes"] == "This console is Codex-only for v1."
+    assert disabled["unsupported-drivers"] == (
+        "This console supports local coding-agent drivers only."
+    )
+    assert disabled["claude-map-build"] == (
+        "semantic-map-build does not support the Claude driver yet."
+    )
     validate_supported_routes_against_catalog()
 
 
 def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Path) -> None:
-    route = get_route("mujoco-cleanup")
+    route = get_route("codex-mujoco-cleanup")
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -86,7 +93,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
 
 
 def test_console_readiness_enforces_locks_and_preflights(tmp_path: Path) -> None:
-    route = get_route("isaac-cleanup")
+    route = get_route("codex-isaac-cleanup")
     readiness = route_readiness(tmp_path, route, env={"XM_LLM_API_KEY": "key"})
     assert readiness["can_start"] is False
     assert "Isaac preflight has not passed" in readiness["blocker"]
@@ -156,7 +163,7 @@ def test_operator_state_derives_public_fields_and_artifact_links(tmp_path: Path)
     )
     (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
 
-    state = derive_operator_state(tmp_path, run_dir, get_route("mujoco-cleanup"))
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
 
     assert state["run_id"] == "run-a"
     assert state["latest_tool_call"]["name"] == "navigate_to_object"

@@ -10,22 +10,47 @@ from roboclaws.operator_console.routes import (
 )
 
 
-def test_route_registry_exposes_only_codex_enabled_targets() -> None:
+def test_route_registry_exposes_supported_agent_targets() -> None:
     enabled = list_console_routes(include_disabled=False)
     assert {route.id for route in enabled} == {
-        "mujoco-cleanup",
-        "isaac-cleanup",
-        "agibot-g2-map-build",
-        "mujoco-map-build",
-        "isaac-map-build",
+        "codex-mujoco-cleanup",
+        "claude-mujoco-cleanup",
+        "codex-isaac-cleanup",
+        "claude-isaac-cleanup",
+        "codex-agibot-g2-map-build",
+        "codex-mujoco-map-build",
+        "codex-isaac-map-build",
     }
-    assert all(route.driver == "codex" for route in enabled)
-    assert {(route.task, route.profile, route.backend, route.lock_name) for route in enabled} == {
-        ("household-cleanup", "world-labels", "molmospaces_subprocess", "molmospaces_mujoco"),
-        ("household-cleanup", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
-        ("semantic-map-build", "camera-labels", "agibot_gdk", "agibot_g2"),
-        ("semantic-map-build", "world-labels", "molmospaces_subprocess", "molmospaces_mujoco"),
-        ("semantic-map-build", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
+    assert {route.driver for route in enabled} == {"codex", "claude"}
+    assert {
+        (route.task, route.driver, route.profile, route.backend, route.lock_name)
+        for route in enabled
+    } == {
+        (
+            "household-cleanup",
+            "codex",
+            "world-labels",
+            "molmospaces_subprocess",
+            "molmospaces_mujoco",
+        ),
+        (
+            "household-cleanup",
+            "claude",
+            "world-labels",
+            "molmospaces_subprocess",
+            "molmospaces_mujoco",
+        ),
+        ("household-cleanup", "codex", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
+        ("household-cleanup", "claude", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
+        ("semantic-map-build", "codex", "camera-labels", "agibot_gdk", "agibot_g2"),
+        (
+            "semantic-map-build",
+            "codex",
+            "world-labels",
+            "molmospaces_subprocess",
+            "molmospaces_mujoco",
+        ),
+        ("semantic-map-build", "codex", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
     }
     validate_supported_routes_against_catalog()
 
@@ -37,10 +62,13 @@ def test_disabled_routes_have_concrete_blockers() -> None:
     assert get_route("agibot-g2-cleanup").disabled_reason == (
         "Physical manipulation is blocked. Run Agibot G2 Map Build first."
     )
+    assert get_route("claude-map-build").disabled_reason == (
+        "semantic-map-build does not support the Claude driver yet."
+    )
 
 
 def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
-    route = get_route("mujoco-cleanup")
+    route = get_route("codex-mujoco-cleanup")
     argv = build_launch_argv(
         route,
         root=tmp_path,

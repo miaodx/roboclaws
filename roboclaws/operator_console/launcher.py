@@ -1,4 +1,4 @@
-"""Safe launcher for Codex operator-console routes."""
+"""Safe launcher for operator-console coding-agent routes."""
 
 from __future__ import annotations
 
@@ -28,8 +28,37 @@ class LaunchRequest:
     gates: dict[str, bool] | None = None
 
 
-def provider_key_present(env: dict[str, str] | None = None) -> bool:
+def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str, str]:
+    """Return an environment with repo-local ``.env`` values loaded when present."""
+
+    env_map = dict(os.environ if env is None else env)
+    dotenv_path = root / ".env"
+    if not dotenv_path.exists():
+        return env_map
+    for raw_line in dotenv_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in env_map:
+            continue
+        env_map[key] = _clean_dotenv_value(value)
+    return env_map
+
+
+def provider_key_present(route: ConsoleRoute, env: dict[str, str] | None = None) -> bool:
     env_map = os.environ if env is None else env
+    if route.driver == "claude":
+        return any(
+            env_map.get(key)
+            for key in (
+                "ANTHROPIC_API_KEY",
+                "XM_LLM_API_KEY",
+                "KIMI_API_KEY",
+                "MIMO_TP_KEY",
+            )
+        )
     return any(
         env_map.get(key)
         for key in (
@@ -95,10 +124,11 @@ def start_console_run(
 ) -> dict[str, Any]:
     """Validate gates, acquire the route lock, and spawn the live run."""
 
+    run_env = load_repo_dotenv(root, env)
     route = get_route(request.route_id)
     gate_payload = request.gates or {}
     overrides = request.overrides or {}
-    readiness = route_readiness(root, route, overrides=overrides, gates=gate_payload, env=env)
+    readiness = route_readiness(root, route, overrides=overrides, gates=gate_payload, env=run_env)
     if not readiness["can_start"]:
         raise ConsoleLaunchError(str(readiness["blocker"]))
 
@@ -121,7 +151,7 @@ def start_console_run(
             process = subprocess.Popen(
                 argv,
                 cwd=root,
-                env=env,
+                env=run_env,
                 stdout=log_stream,
                 stderr=subprocess.STDOUT,
                 start_new_session=True,
@@ -159,8 +189,14 @@ def route_readiness(
     """Return route gate state used by both API and UI."""
 
     if not route.enabled:
-        return {"can_start": False, "blocker": route.disabled_reason, "gates": []}
+        return {
+            "can_start": False,
+            "blocker": route.disabled_reason,
+            "blocker_kind": "unavailable",
+            "gates": [],
+        }
 
+    env_map = load_repo_dotenv(root, env)
     override_map = overrides or {}
     gate_map = gates or {}
     gate_rows: list[dict[str, Any]] = []
@@ -168,20 +204,27 @@ def route_readiness(
     lock_state = ResourceLock(root, route.lock_name).read()
     if lock_state.held and not lock_state.stale:
         blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
+        blocker_kind = "locked"
+    else:
+        blocker_kind = ""
     for gate in route.gates:
         ok = True
         message = "Ready"
         evidence = ""
+        kind = "ready"
         if gate.kind == "provider_key":
-            ok = provider_key_present(env)
+            ok = provider_key_present(route, env_map)
             if not ok:
-                message = "Load a repo-local Codex provider key route before launch."
+                label = route.driver_label or route.driver
+                message = f"No {label} provider route found in repo .env."
+                kind = "needs_provider"
         elif gate.kind == "isaac_preflight":
             accepted = accepted_isaac_preflight(root)
             ok = accepted is not None or gate_map.get(gate.id) is True
             evidence = str(accepted or "")
             if not ok:
                 message = "Isaac preflight has not passed. Run the preflight gate before launch."
+                kind = "needs_isaac_preflight"
         elif gate.kind == "request_field":
             ok = bool(override_map.get(gate.id))
             if not ok:
@@ -189,17 +232,23 @@ def route_readiness(
                     "Attach context, localization, run enablement, and "
                     "E-stop readiness evidence."
                 )
+                kind = "needs_agibot_context"
         elif gate.kind == "operator_gate":
             ok = gate_map.get(gate.id) is True
             if not ok:
                 message = "Agibot operator gates are incomplete."
+                kind = "needs_agibot_gates"
+        if ok:
+            kind = "ready"
         if not ok and not blocker:
             blocker = message
+            blocker_kind = kind
         gate_rows.append(
             {
                 "id": gate.id,
                 "label": gate.label,
                 "status": "ready" if ok else "needs_action",
+                "kind": kind,
                 "message": message,
                 "evidence": evidence,
             }
@@ -207,6 +256,7 @@ def route_readiness(
     return {
         "can_start": not blocker,
         "blocker": blocker,
+        "blocker_kind": blocker_kind,
         "lock": lock_state.to_payload(),
         "gates": gate_rows,
     }
@@ -269,6 +319,15 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
 
 def _override_key(value: str) -> str:
     return value.split("=", 1)[0]
+
+
+def _clean_dotenv_value(value: str) -> str:
+    clean = value.strip()
+    if clean.startswith("export "):
+        clean = clean.removeprefix("export ").strip()
+    if len(clean) >= 2 and clean[0] == clean[-1] and clean[0] in {"'", '"'}:
+        clean = clean[1:-1]
+    return clean
 
 
 def _new_run_id(route: ConsoleRoute) -> str:

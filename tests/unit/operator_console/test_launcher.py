@@ -7,6 +7,7 @@ from unittest.mock import patch
 from roboclaws.operator_console.launcher import (
     LaunchRequest,
     build_launch_argv,
+    load_repo_dotenv,
     route_readiness,
     start_console_run,
 )
@@ -18,13 +19,13 @@ from roboclaws.operator_console.routes import get_route
 def test_launcher_readiness_validates_isaac_and_agibot_gates(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("XM_LLM_API_KEY", "test-key")
 
-    isaac = route_readiness(tmp_path, get_route("isaac-cleanup"))
+    isaac = route_readiness(tmp_path, get_route("codex-isaac-cleanup"))
     assert not isaac["can_start"]
     assert "Isaac preflight" in isaac["blocker"]
 
     agibot = route_readiness(
         tmp_path,
-        get_route("agibot-g2-map-build"),
+        get_route("codex-agibot-g2-map-build"),
         overrides={"context_json": str(tmp_path / "context.json")},
         gates={"localization_ready": True, "run_enabled": False, "estop_ready": True},
     )
@@ -33,7 +34,7 @@ def test_launcher_readiness_validates_isaac_and_agibot_gates(tmp_path: Path, mon
 
 
 def test_launcher_builds_route_specific_overrides(tmp_path: Path) -> None:
-    route = get_route("agibot-g2-map-build")
+    route = get_route("codex-agibot-g2-map-build")
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -50,7 +51,7 @@ def test_launcher_builds_route_specific_overrides(tmp_path: Path) -> None:
 
 
 def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
-    route = get_route("mujoco-cleanup")
+    route = get_route("codex-mujoco-cleanup")
     argv = build_launch_argv(
         route,
         root=tmp_path,
@@ -65,7 +66,7 @@ def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
 
 
 def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
-    route = get_route("mujoco-cleanup")
+    route = get_route("codex-mujoco-cleanup")
     seen_lock_owner = ""
 
     class FakeProcess:
@@ -93,9 +94,29 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert persisted["lock"]["owner_run_id"] == state["run_id"]
 
 
-def test_provider_gate_requires_codex_key_route(tmp_path: Path, monkeypatch) -> None:
+def test_provider_gate_requires_agent_key_route(tmp_path: Path, monkeypatch) -> None:
     for key in ("XM_LLM_API_KEY", "CODEX_API_KEY", "KIMI_API_KEY", "MIMO_TP_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv(key, raising=False)
-    readiness = route_readiness(tmp_path, get_route("mujoco-cleanup"))
+    readiness = route_readiness(tmp_path, get_route("codex-mujoco-cleanup"))
     assert not readiness["can_start"]
-    assert "provider key" in readiness["blocker"].lower()
+    assert "provider route" in readiness["blocker"].lower()
+    assert readiness["blocker_kind"] == "needs_provider"
+
+
+def test_provider_gate_auto_loads_repo_dotenv(tmp_path: Path, monkeypatch) -> None:
+    for key in ("XM_LLM_API_KEY", "CODEX_API_KEY", "KIMI_API_KEY", "MIMO_TP_KEY", "OPENAI_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
+    (tmp_path / ".env").write_text("XM_LLM_API_KEY=from-dotenv\n", encoding="utf-8")
+
+    readiness = route_readiness(tmp_path, get_route("codex-mujoco-cleanup"))
+
+    assert readiness["can_start"] is True
+    assert load_repo_dotenv(tmp_path, {})["XM_LLM_API_KEY"] == "from-dotenv"
+
+
+def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
+    route = get_route("claude-mujoco-cleanup")
+    argv = build_launch_argv(route, root=tmp_path, run_id="run-1")
+
+    assert argv[:4] == ["just", "task::run", "household-cleanup", "claude"]
+    assert "backend=molmospaces_subprocess" in argv
