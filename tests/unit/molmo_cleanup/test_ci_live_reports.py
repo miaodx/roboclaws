@@ -953,7 +953,9 @@ def test_live_codex_recovers_from_misrouted_undeclared_coding_tool_error(
     assert "roboclaws__" in calls[1][-1]
 
 
-def test_live_codex_recovers_from_provider_rate_limit(tmp_path: Path, monkeypatch) -> None:
+def test_live_codex_provider_rate_limit_exits_for_row_retry(
+    tmp_path: Path, monkeypatch
+) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -976,7 +978,6 @@ def test_live_codex_recovers_from_provider_rate_limit(tmp_path: Path, monkeypatc
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
     calls: list[list[str]] = []
-    sleeps: list[float] = []
 
     def fake_prepare_agent_workspace(**_kwargs):
         return agent_dir, agent_dir
@@ -988,30 +989,28 @@ def test_live_codex_recovers_from_provider_rate_limit(tmp_path: Path, monkeypatc
         calls.append(command)
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(calls) == 1:
-            stdout_path.write_text(
-                '{"type":"error","message":"exceeded retry limit, last status: '
-                '429 Too Many Requests"}\n',
-                encoding="utf-8",
-            )
-            stderr_path.write_text("", encoding="utf-8")
-            return 1
-        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
-        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
-        return 0
+        stdout_path.write_text(
+            '{"type":"error","message":"exceeded retry limit, last status: '
+            '429 Too Many Requests"}\n',
+            encoding="utf-8",
+        )
+        stderr_path.write_text("", encoding="utf-8")
+        return 1
 
     monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
     monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
     monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
-    monkeypatch.setattr(run_codex.time, "sleep", lambda seconds: sleeps.append(seconds))
 
-    runner._run_codex()
+    try:
+        runner._run_codex()
+    except run_codex.ProviderRateLimitError as exc:
+        assert "rate limit" in str(exc)
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected provider rate limit to exit for row retry")
 
-    assert len(calls) == 2
-    assert sleeps == [30]
-    assert runner.live_timing["codex_recoverable_errors"] == [
-        {"turn": 1, "type": "provider_rate_limit"}
-    ]
+    assert len(calls) == 1
+    assert "codex_recoverable_errors" not in runner.live_timing
+    assert runner.live_timing["codex_events"]["type_counts"]["error"] == 1
 
 
 def test_live_codex_world_labels_checker_defaults_to_official_nav2_floor(

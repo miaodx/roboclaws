@@ -196,6 +196,8 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
             "dry-run",
             f"output_dir={output_dir}",
             "row=direct-world-labels-sanitized",
+            "rate_limit_retries=2",
+            "rate_limit_retry_sleep_s=0",
         ],
         cwd=REPO_ROOT,
         env=env,

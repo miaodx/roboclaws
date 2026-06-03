@@ -1555,8 +1555,8 @@ class RealWorldCleanupContract:
     def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]:
         """Build run-local anchors for fixed places discovered through public evidence."""
 
-        anchors: list[dict[str, Any]] = [dict(item) for item in self._runtime_map_anchor_priors]
-        seen = {str(item.get("anchor_id") or "") for item in anchors}
+        anchors: list[dict[str, Any]] = []
+        seen: set[str] = set()
 
         if self.map_mode == MINIMAL_MAP_MODE:
             for waypoint in self._public_waypoints:
@@ -1583,6 +1583,14 @@ class RealWorldCleanupContract:
                 continue
             anchors.append(anchor)
             seen.add(anchor_id)
+
+        for prior_anchor in self._runtime_map_anchor_priors:
+            anchor_id = str(prior_anchor.get("anchor_id") or "")
+            if anchor_id and anchor_id in seen:
+                continue
+            anchors.append(dict(prior_anchor))
+            if anchor_id:
+                seen.add(anchor_id)
 
         for anchor in anchors:
             _assert_no_forbidden_agent_view_keys(anchor)

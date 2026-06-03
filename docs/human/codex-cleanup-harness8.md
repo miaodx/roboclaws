@@ -78,6 +78,16 @@ just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/$(date +%m%d_%H%M)
 ```
 
+Provider `429 Too Many Requests` / rate-limit failures are treated as
+infrastructure failures and are retried once by default. For a noisier provider
+window, raise the retry budget without changing cleanup behavior:
+
+```bash
+just agent::harness codex-cleanup-harness8 execute \
+  output_dir=output/molmo/codex-harness8/0603_refactor_check \
+  rate_limit_retries=2 rate_limit_retry_sleep_s=90
+```
+
 Execute one row:
 
 ```bash
@@ -122,6 +132,7 @@ The minimum review fields are:
 - disturbance count
 - unrecovered semantic-order error count
 - wall time and tool-call count
+- retry count / rate-limit evidence
 - report link
 
 For source and skill changes, compare against the most recent accepted harness
@@ -134,6 +145,10 @@ run. Treat these as regression triggers:
 - DINO rows failing due to service, timeout, or declaration contract errors;
 - large wall-time increases not explained by provider rate limits or sidecar
   latency.
+
+Rows with `status=rate_limited` and `behavior_status=infra_failure` did not
+produce behavioral evidence after the configured retry budget. Rerun those rows
+before drawing cleanup-regression conclusions.
 
 Exact/private restore is useful evidence, but it is not the primary objective
 for sanitized public-policy cleanup. Use semantic accepted, sweep coverage, and

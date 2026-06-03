@@ -54,6 +54,10 @@ CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION = (
 )
 
 
+class ProviderRateLimitError(RuntimeError):
+    """Raised when Codex provider rate limiting should be retried by the caller."""
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Own the server, Codex exec, checker, and status files for one live run.",
@@ -339,6 +343,14 @@ class LiveCodexCleanupRunner:
                     break
                 recoverable_error = _recoverable_provider_tool_error(codex_events_path, stderr_path)
                 if turn_index + 1 < max_turns and recoverable_error:
+                    if recoverable_error == "provider_rate_limit":
+                        self._mark_timing("codex_exec_end")
+                        self.live_timing["codex_events"] = _combined_codex_event_summary(
+                            event_paths
+                        )
+                        raise ProviderRateLimitError(
+                            "Codex provider rate limit; rerun the whole cleanup row"
+                        )
                     print(
                         "==> Codex attempted an unsupported provider/tool call "
                         f"({recoverable_error}); continuing with recovery prompt"
@@ -351,8 +363,6 @@ class LiveCodexCleanupRunner:
                                 "type": recoverable_error,
                             }
                         )
-                    if recoverable_error == "provider_rate_limit":
-                        time.sleep(30)
                     continue
                 self._mark_timing("codex_exec_end")
                 self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)

@@ -28,6 +28,19 @@ HARNESS_SCHEMA = "codex_cleanup_harness8_v1"
 ROW_SCHEMA = "codex_cleanup_harness8_row_v1"
 DIRECT_MAP_MODE = "direct"
 PRIOR_MAP_MODE = "dino-prior"
+RATE_LIMIT_LOG_NAMES = (
+    "driver.log",
+    "codex.stderr.log",
+    "codex-last-message.md",
+)
+RATE_LIMIT_PATTERNS = (
+    "429 too many requests",
+    "too many requests",
+    "provider_rate_limit",
+    "rate limit",
+    "ratelimit",
+    "exceeded retry limit",
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -51,6 +64,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--row", action="append", default=[])
     parser.add_argument("--live-wait-timeout-s", type=float, default=7200.0)
     parser.add_argument("--live-wait-poll-s", type=float, default=10.0)
+    parser.add_argument(
+        "--rate-limit-retries",
+        type=int,
+        default=1,
+        help=(
+            "Additional whole-row retries for provider 429/rate-limit failures. "
+            "Ordinary cleanup failures are not retried."
+        ),
+    )
+    parser.add_argument("--rate-limit-retry-sleep-s", type=float, default=60.0)
     return parser.parse_args(argv)
 
 
@@ -310,7 +333,7 @@ def _execute_harness(harness: dict[str, Any], args: argparse.Namespace) -> int:
 
     failure_count = 0
     for row in selected_rows:
-        status = _execute_row(row, args)
+        status = _execute_row_with_retries(row, args)
         if status != 0:
             failure_count += 1
             if not args.continue_on_error:
@@ -323,7 +346,7 @@ def _execute_prior_build(harness: dict[str, Any], args: argparse.Namespace) -> s
     if not setup_rows:
         raise RuntimeError("prior rows require a runtime-map prior but no setup row exists")
     row = setup_rows[0]
-    status = _execute_row(row, args)
+    status = _execute_row_with_retries(row, args)
     prior = _latest_runtime_map(Path(row["output_dir"]), seed=args.seed)
     if prior is None:
         if status != 0:
@@ -336,6 +359,51 @@ def _execute_prior_build(harness: dict[str, Any], args: argparse.Namespace) -> s
         )
     row["runtime_map_prior"] = str(prior)
     return str(prior)
+
+
+def _execute_row_with_retries(row: dict[str, Any], args: argparse.Namespace) -> int:
+    attempts: list[dict[str, Any]] = []
+    max_attempts = max(int(args.rate_limit_retries), 0) + 1
+    status = 1
+    final_rate_limit: dict[str, Any] | None = None
+    for attempt_index in range(max_attempts):
+        if attempt_index:
+            sleep_s = max(float(args.rate_limit_retry_sleep_s), 0.0)
+            if sleep_s:
+                time.sleep(sleep_s)
+        status = _execute_row(row, args)
+        rate_limit = _rate_limit_evidence(row)
+        final_rate_limit = rate_limit
+        attempts.append(
+            {
+                "attempt": attempt_index + 1,
+                "exit_status": status,
+                "run_dir": row.get("run_dir") or "",
+                "rate_limited": bool(rate_limit),
+                "rate_limit_evidence": rate_limit,
+                "finished_at": _utc_timestamp(),
+            }
+        )
+        if status == 0 or not rate_limit or attempt_index == max_attempts - 1:
+            break
+        print(
+            f"provider rate limit detected for {row.get('row_id')}; "
+            f"retrying attempt {attempt_index + 2}/{max_attempts}"
+        )
+
+    row["attempts"] = attempts
+    row["retry_count"] = max(len(attempts) - 1, 0)
+    row["rate_limit_retry_count"] = sum(1 for attempt in attempts if attempt["rate_limited"])
+    if status == 0 and len(attempts) > 1:
+        row["infra_note"] = "succeeded after provider rate-limit retry"
+    elif status != 0 and final_rate_limit:
+        row["status"] = "rate_limited"
+        row["behavior_status"] = "infra_failure"
+        row["reason"] = (
+            f"provider rate limited after {len(attempts)} attempt(s); "
+            f"{final_rate_limit.get('snippet') or final_rate_limit.get('source') or 'see logs'}"
+        )
+    return status
 
 
 def _execute_row(row: dict[str, Any], args: argparse.Namespace) -> int:
@@ -654,6 +722,54 @@ def _is_setup_row(row: dict[str, Any]) -> bool:
     return str(row.get("grid_role") or "") == "setup"
 
 
+def _rate_limit_evidence(row: dict[str, Any]) -> dict[str, Any] | None:
+    live_status = row.get("live_status") if isinstance(row.get("live_status"), dict) else {}
+    for key in ("reason", "error", "message", "phase"):
+        evidence = _rate_limit_match(str(live_status.get(key) or ""), source=f"live_status.{key}")
+        if evidence:
+            return evidence
+
+    run_dir_value = row.get("run_dir")
+    if not run_dir_value:
+        return None
+    run_dir = Path(str(run_dir_value))
+    paths = [run_dir / name for name in RATE_LIMIT_LOG_NAMES]
+    paths.extend(sorted(run_dir.glob("codex-continuation-*.stderr.log")))
+    paths.extend(sorted(run_dir.glob("codex-events*.jsonl")))
+    for path in paths:
+        if not path.is_file():
+            continue
+        evidence = _rate_limit_match(_tail_text(path), source=str(path.name))
+        if evidence:
+            return evidence
+    return None
+
+
+def _rate_limit_match(text: str, *, source: str) -> dict[str, Any] | None:
+    lowered = text.lower()
+    for pattern in RATE_LIMIT_PATTERNS:
+        index = lowered.find(pattern)
+        if index < 0:
+            continue
+        start = max(index - 90, 0)
+        end = min(index + len(pattern) + 140, len(text))
+        snippet = " ".join(text[start:end].split())
+        return {"source": source, "pattern": pattern, "snippet": snippet}
+    return None
+
+
+def _tail_text(path: Path, *, max_bytes: int = 256_000) -> str:
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(size - max_bytes, 0), os.SEEK_SET)
+            data = handle.read(max_bytes)
+    except OSError:
+        return ""
+    return data.decode("utf-8", errors="replace")
+
+
 def _command_for_row(row: dict[str, Any], *, just_bin: str) -> list[str]:
     command = [str(item) for item in row.get("command") or []]
     if command and command[0] == "just":
@@ -805,6 +921,13 @@ def _render_row(row: dict[str, Any]) -> str:
     else:
         order_text = ""
     reason = str(row.get("reason") or "")
+    retry_text = ""
+    retry_count = row.get("retry_count")
+    if isinstance(retry_count, int) and retry_count:
+        retry_text = f"<br>retry_count={retry_count}"
+    infra_note = str(row.get("infra_note") or "")
+    if infra_note:
+        retry_text += f"<br>{html.escape(infra_note)}"
     command = str(row.get("rerun_command") or "")
     return (
         "<tr>"
@@ -821,7 +944,7 @@ def _render_row(row: dict[str, Any]) -> str:
         f"<td>{html.escape(order_text)}</td>"
         f"<td>{html.escape(elapsed_text)}</td>"
         f"<td>{report}</td>"
-        f"<td><code>{html.escape(command)}</code><br>{html.escape(reason)}</td>"
+        f"<td><code>{html.escape(command)}</code><br>{html.escape(reason)}{retry_text}</td>"
         "</tr>"
     )
 

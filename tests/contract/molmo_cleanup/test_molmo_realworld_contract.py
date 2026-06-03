@@ -819,6 +819,52 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     _assert_no_forbidden_keys(agent_view)
 
 
+def test_minimal_runtime_map_current_anchor_overrides_same_id_prior_anchor() -> None:
+    seed_contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    _first_non_empty_observation(seed_contract)
+    seed_runtime_map = seed_contract.agent_view_payload()["runtime_metric_map"]
+    seed_anchor = next(
+        item
+        for item in seed_runtime_map["public_semantic_anchors"]
+        if item["anchor_type"] in {"fixture", "receptacle"}
+    )
+    prior_snapshot = {
+        "public_semantic_anchors": [
+            {
+                **seed_anchor,
+                "freshness": "current_run",
+                "promotion_status": "run_local",
+                "waypoint_id": "stale_prior_waypoint",
+                "pose": {"x": 999.0, "y": 999.0, "yaw": 0.0},
+            }
+        ]
+    }
+
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+        runtime_map_prior=prior_snapshot,
+    )
+    _first_non_empty_observation(contract)
+    runtime_map = contract.agent_view_payload()["runtime_metric_map"]
+    matching = [
+        item
+        for item in runtime_map["public_semantic_anchors"]
+        if item["anchor_id"] == seed_anchor["anchor_id"]
+    ]
+
+    assert len(matching) == 1
+    anchor = matching[0]
+    assert anchor["freshness"] == "current_run"
+    assert anchor["promotion_status"] == "run_local"
+    assert anchor["waypoint_id"] != "stale_prior_waypoint"
+    assert anchor["pose"] != {"x": 999.0, "y": 999.0, "yaw": 0.0}
+    _assert_no_forbidden_keys(runtime_map)
+
+
 def test_minimal_map_mode_keeps_public_waypoint_after_receptacle_navigation() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),

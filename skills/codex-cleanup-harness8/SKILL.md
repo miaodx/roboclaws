@@ -65,6 +65,15 @@ just agent::harness codex-cleanup-harness8 execute \
   row=dino-prior-world-labels,dino-prior-camera-labels-grounding-dino
 ```
 
+Provider `429 Too Many Requests` / rate-limit failures are retried once by
+default. During a noisy provider window, use:
+
+```bash
+just agent::harness codex-cleanup-harness8 execute \
+  output_dir=output/molmo/codex-harness8/0603_refactor_check \
+  rate_limit_retries=2 rate_limit_retry_sleep_s=90
+```
+
 Run the full grid:
 
 ```bash
@@ -92,6 +101,7 @@ summary. Review behavior metrics separately from strict checker exit status:
 - disturbance count
 - unrecovered semantic-order errors
 - wall time and tool-call count
+- retry count / rate-limit evidence
 - per-row `report.html`
 
 For source and skill changes, a practical pass means no obvious regression in
@@ -99,3 +109,6 @@ semantic accepted count, sweep coverage, disturbance count, or DINO service
 health. A `strict_checker_failed` row with `behavior_status=success` is still
 useful evidence; inspect the checker reason before treating it as cleanup
 behavior regression.
+
+A `rate_limited` row with `behavior_status=infra_failure` is not cleanup
+behavior evidence. Rerun it before comparing direct vs DINO-prior behavior.

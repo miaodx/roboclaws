@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+from argparse import Namespace
 from pathlib import Path
+
+from pytest import MonkeyPatch
 
 from scripts.molmo_cleanup import run_codex_cleanup_harness8 as harness8
 
@@ -96,3 +99,53 @@ def test_setup_row_refresh_treats_runtime_map_as_artifact_success(tmp_path: Path
     assert row["behavior_status"] == "artifact_success"
     assert row["metrics"]["runtime_semantic_anchor_count"] == 1
     assert "exact_restored" not in row["metrics"]
+
+
+def test_rate_limit_evidence_detects_provider_429_log(tmp_path: Path) -> None:
+    run_dir = tmp_path / "seed-7"
+    run_dir.mkdir()
+    (run_dir / "driver.log").write_text(
+        '{"type":"error","message":"exceeded retry limit, last status: 429 Too Many Requests"}',
+        encoding="utf-8",
+    )
+
+    evidence = harness8._rate_limit_evidence({"run_dir": str(run_dir)})
+
+    assert evidence is not None
+    assert evidence["pattern"] == "429 too many requests"
+    assert evidence["source"] == "driver.log"
+
+
+def test_execute_row_with_retries_marks_exhausted_rate_limit(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    row = {"row_id": "dino-prior-world-labels", "run_dir": str(tmp_path)}
+
+    def fake_execute_row(row_arg, _args):
+        row_arg["run_dir"] = str(tmp_path)
+        row_arg["status"] = "failed"
+        row_arg["behavior_status"] = "failed"
+        row_arg["reason"] = "command exited with status 1"
+        return 1
+
+    monkeypatch.setattr(harness8, "_execute_row", fake_execute_row)
+    monkeypatch.setattr(
+        harness8,
+        "_rate_limit_evidence",
+        lambda _row: {
+            "source": "driver.log",
+            "pattern": "429 too many requests",
+            "snippet": "429 Too Many Requests",
+        },
+    )
+
+    status = harness8._execute_row_with_retries(
+        row,
+        Namespace(rate_limit_retries=1, rate_limit_retry_sleep_s=0),
+    )
+
+    assert status == 1
+    assert row["status"] == "rate_limited"
+    assert row["behavior_status"] == "infra_failure"
+    assert row["retry_count"] == 1
+    assert len(row["attempts"]) == 2
