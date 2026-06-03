@@ -226,11 +226,11 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     target_selection = _dict(summary.get("target_selection") or payload.get("target_selection"))
     render_checks = _dict(summary.get("render_domain_checks"))
     render = _dict(summary.get("render_contract_diagnostics"))
-    object_parity = _dict(
-        summary.get("object_visual_parity_audit")
-        or summary.get("object_parity_audit")
-        or payload.get("object_visual_parity_audit")
-        or payload.get("object_parity_audit")
+    object_parity = _best_object_parity_audit(
+        summary.get("object_visual_parity_audit"),
+        summary.get("object_parity_audit"),
+        payload.get("object_visual_parity_audit"),
+        payload.get("object_parity_audit"),
     )
     object_render = _dict(
         summary.get("object_render_parity_diagnostics")
@@ -296,6 +296,11 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
 def _compact_object_visual_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
     if not audit:
         return {}
+    category_summary = _list_dicts(audit.get("category_status_summary"))
+    if not category_summary:
+        category_summary = _object_category_status_summary_from_items(
+            _list_dicts(audit.get("items"))
+        )
     return {
         "schema": audit.get("schema"),
         "status": audit.get("status"),
@@ -309,9 +314,70 @@ def _compact_object_visual_parity_audit(audit: dict[str, Any]) -> dict[str, Any]
         "support_status_counts": audit.get("support_status_counts") or {},
         "state_status_counts": audit.get("state_status_counts") or {},
         "render_contract_status_counts": audit.get("render_contract_status_counts") or {},
-        "category_status_summary": _list_dicts(audit.get("category_status_summary")),
+        "category_status_summary": category_summary,
         "recommended_next_action": audit.get("recommended_next_action"),
     }
+
+
+def _best_object_parity_audit(*candidates: Any) -> dict[str, Any]:
+    audits = [_dict(candidate) for candidate in candidates if _dict(candidate)]
+    if not audits:
+        return {}
+    return max(audits, key=_object_parity_audit_completeness_score)
+
+
+def _object_parity_audit_completeness_score(audit: dict[str, Any]) -> tuple[int, int, int]:
+    return (
+        len(_list_dicts(audit.get("category_status_summary"))),
+        len(_list_dicts(audit.get("items"))),
+        len(_list_dicts(audit.get("high_priority_items"))),
+    )
+
+
+def _object_category_status_summary_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        mujoco = _dict(item.get("mujoco"))
+        isaac = _dict(item.get("isaac"))
+        category = (
+            _object_category_key(mujoco.get("category"))
+            or _object_category_key(isaac.get("category"))
+            or _object_category_key(isaac.get("usd_category"))
+            or "unknown"
+        )
+        grouped.setdefault(category, []).append(item)
+    rows = []
+    for category, category_items in sorted(grouped.items()):
+        rows.append(
+            {
+                "category": category,
+                "item_count": len(category_items),
+                "kind_counts": _status_counts(item.get("kind") for item in category_items),
+                "binding_status_counts": _status_counts(
+                    item.get("binding_status") for item in category_items
+                ),
+                "category_status_counts": _status_counts(
+                    item.get("category_status") for item in category_items
+                ),
+                "pose_status_counts": _status_counts(
+                    item.get("pose_status") for item in category_items
+                ),
+                "support_status_counts": _status_counts(
+                    item.get("support_status") for item in category_items
+                ),
+                "state_status_counts": _status_counts(
+                    item.get("state_status") for item in category_items
+                ),
+                "rgb_view_evidence_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
+                ),
+                "render_contract_status_counts": _status_counts(
+                    _dict(item.get("render_contract_delta")).get("status")
+                    for item in category_items
+                ),
+            }
+        )
+    return rows
 
 
 def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
@@ -2144,6 +2210,15 @@ def _seed_from_scene_signature(scene_signature: str) -> int | None:
         return None
 
 
+def _object_category_key(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _status_counts(values: Any) -> dict[str, int]:
+    collected = [str(value) for value in values if value]
+    return {name: collected.count(name) for name in sorted(set(collected))}
+
+
 def _render_checks_by_id(render_domain_checks: dict[str, Any]) -> dict[str, dict[str, Any]]:
     checks = {}
     for item in render_domain_checks.get("checks") or []:
@@ -2378,7 +2453,9 @@ def _render_object_visual_parity_audit_rows(manifest: dict[str, Any]) -> str:
                 f"<td>{html.escape(str(audit.get('status') or ''))}</td>"
                 f"<td>{html.escape(str(category.get('category') or ''))}</td>"
                 f"<td>{html.escape(str(category.get('item_count') or 0))}</td>"
+                + _json_counts_cell(category, "binding_status_counts")
                 + _json_counts_cell(category, "category_status_counts")
+                + _json_counts_cell(category, "state_status_counts")
                 + _json_counts_cell(category, "object_gate_status_counts")
                 + _json_counts_cell(category, "rgb_view_evidence_status_counts")
                 + _json_counts_cell(category, "render_contract_status_counts")
@@ -2388,8 +2465,9 @@ def _render_object_visual_parity_audit_rows(manifest: dict[str, Any]) -> str:
         return "<p class='muted'>No object visual parity category summaries were recorded.</p>"
     return (
         "<table><thead><tr><th>Source</th><th>Manifest</th><th>Scene</th>"
-        "<th>Audit Status</th><th>Category</th><th>Items</th><th>Category Status</th>"
-        "<th>Object Gate</th><th>RGB Evidence</th><th>Render</th></tr></thead><tbody>"
+        "<th>Audit Status</th><th>Category</th><th>Items</th><th>Binding</th>"
+        "<th>Category Status</th><th>State</th><th>Object Gate</th>"
+        "<th>RGB Evidence</th><th>Render</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
     )

@@ -541,6 +541,82 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
     assert "nonblank_in_both_backends" in report_html
 
 
+def test_visual_parity_summary_derives_category_rows_from_legacy_object_items(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_legacy_items")
+    full_audit = {
+        "schema": "robot_camera_object_parity_audit_v1",
+        "status": "object_parity_gaps_detected",
+        "item_count": 2,
+        "high_priority_gap_count": 1,
+        "items": [
+            {
+                "kind": "object",
+                "binding_status": "bound",
+                "category_status": "matched_category",
+                "pose_status": "pose_aligned",
+                "support_status": "support_aligned",
+                "state_status": "visual_state_static_ref_baked",
+                "mujoco": {"category": "Box"},
+                "isaac": {"category": "Box"},
+                "rgb_view_evidence": {"status": "selected_views_nonblank"},
+                "render_contract_delta": {"status": "render_contract_aligned"},
+            },
+            {
+                "kind": "object",
+                "binding_status": "missing_isaac_binding",
+                "category_status": "missing_binding",
+                "pose_status": "not_comparable",
+                "support_status": "not_comparable",
+                "state_status": "not_applicable",
+                "mujoco": {"category": "GarbageCan"},
+                "isaac": {},
+                "render_contract_delta": {"status": "not_comparable"},
+            },
+        ],
+    }
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "val1_baseline" / "comparison_manifest.json",
+        scene_index=1,
+        seed=8,
+        generated_mess_count=2,
+        fpv=26.5,
+        chase=51.4,
+        location_count=4,
+        object_visual_parity_audit={
+            "schema": "robot_camera_object_parity_audit_v1",
+            "status": "object_parity_gaps_detected",
+            "item_count": 2,
+            "high_priority_gap_count": 1,
+        },
+        top_level_object_visual_parity_audit=full_audit,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    category_rows = {
+        item["category"]: item
+        for item in manifest["baselines"][0]["object_visual_parity_audit"][
+            "category_status_summary"
+        ]
+    }
+    assert category_rows["box"]["state_status_counts"] == {"visual_state_static_ref_baked": 1}
+    assert category_rows["box"]["rgb_view_evidence_status_counts"] == {"selected_views_nonblank": 1}
+    assert category_rows["garbagecan"]["binding_status_counts"] == {"missing_isaac_binding": 1}
+    report_html = (tmp_path / "summary" / "report.html").read_text(encoding="utf-8")
+    assert "selected_views_nonblank" in report_html
+    assert "missing_isaac_binding" in report_html
+
+
 def test_visual_parity_summary_carries_native_isaac_render_diagnostics(
     tmp_path: Path,
 ) -> None:
@@ -1200,6 +1276,7 @@ def _write_robot_camera_manifest(
     locations: list[dict] | None = None,
     object_parity_audit: dict | None = None,
     object_visual_parity_audit: dict | None = None,
+    top_level_object_visual_parity_audit: dict | None = None,
     object_render_parity_diagnostics: dict | None = None,
     native_isaac_render_diagnostics: dict | None = None,
 ) -> Path:
@@ -1250,6 +1327,8 @@ def _write_robot_camera_manifest(
         },
         "locations": default_locations,
     }
+    if top_level_object_visual_parity_audit is not None:
+        payload["object_visual_parity_audit"] = top_level_object_visual_parity_audit
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
 
