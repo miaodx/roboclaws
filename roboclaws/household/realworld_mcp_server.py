@@ -93,6 +93,7 @@ def make_molmo_realworld_cleanup_mcp(
     port: int = DEFAULT_PORT,
     policy: str = "realworld_contract_smoke_agent",
     agent_driven: bool | None = None,
+    task_name: str = "household-cleanup",
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     fixture_hint_mode: str = "room_only",
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -117,6 +118,7 @@ def make_molmo_realworld_cleanup_mcp(
         port=port,
         policy=policy,
         agent_driven=agent_driven,
+        task_name=task_name,
         task_prompt=task_prompt,
         fixture_hint_mode=fixture_hint_mode,
         perception_mode=perception_mode,
@@ -148,6 +150,7 @@ class RealWorldMolmoCleanupMCPServer:
         port: int = DEFAULT_PORT,
         policy: str = "realworld_contract_smoke_agent",
         agent_driven: bool | None = None,
+        task_name: str = "household-cleanup",
         task_prompt: str = DEFAULT_REALWORLD_TASK,
         fixture_hint_mode: str = "room_only",
         perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
@@ -168,6 +171,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.host = host
         self.port = int(port)
         self.policy = policy
+        self.task_name = task_name
         self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
         self.policy_uses_private_truth = False
         self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
@@ -402,6 +406,7 @@ class RealWorldMolmoCleanupMCPServer:
 
         run_result = {
             "backend": _backend_name(self.base_contract.backend, override=self.backend_name),
+            "task_name": self.task_name,
             "scenario_id": self.scenario.scenario_id,
             "seed": self.scenario.seed,
             "task_prompt": self.task_prompt,

@@ -39,7 +39,7 @@ default:
 
 # Explicit cleanup lane runner. The parameter remains named `profile` for
 # command compatibility with existing artifacts and recipes.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -65,6 +65,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     isaac_scene_usd_path="{{isaac_scene_usd_path}}"
     min_generated_mess_count_override="{{min_generated_mess_count_override}}"
     generated_mess_object_ids="{{generated_mess_object_ids}}"
+    task_name="{{task_name}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -95,6 +96,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     min_generated_mess_count_override="${min_generated_mess_count_override#min_generated_mess_count=}"
     min_generated_mess_count_override="${min_generated_mess_count_override#min_generated_mess_count_override=}"
     generated_mess_object_ids="${generated_mess_object_ids#generated_mess_object_ids=}"
+    task_name="${task_name#task_name=}"
+    task_name="${task_name#task-name=}"
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -137,8 +140,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         exit 1
         ;;
     esac
-    if [[ "$semantic_sweep_enabled" == "true" && "$driver" != "direct" ]]; then
-      echo "error: semantic sweep mode currently supports direct driver only" >&2
+    if [[ "$semantic_sweep_enabled" == "true" && "$driver" != "direct" && "$driver" != "codex-live" ]]; then
+      echo "error: semantic sweep mode currently supports direct or codex-live driver only" >&2
       exit 1
     fi
     case "$map_mode" in
@@ -268,7 +271,27 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     fi
     semantic_sweep_args=()
     checker_semantic_args=()
-    if [[ "$semantic_sweep_enabled" == "true" ]]; then
+    if [[ "$semantic_sweep_enabled" == "true" && "$driver" == "codex-live" ]]; then
+      checker_semantic_args=(--require-runtime-metric-map)
+      profile_requires_clean_success="false"
+      filtered_checker_visual_args=()
+      skip_checker_arg_value="false"
+      for checker_arg in "${checker_visual_args[@]}"; do
+        if [[ "$skip_checker_arg_value" == "true" ]]; then
+          skip_checker_arg_value="false"
+          continue
+        fi
+        case "$checker_arg" in
+          --min-semantic-accepted-count|--min-model-declared-actions)
+            skip_checker_arg_value="true"
+            ;;
+          *)
+            filtered_checker_visual_args+=("$checker_arg")
+            ;;
+        esac
+      done
+      checker_visual_args=("${filtered_checker_visual_args[@]}")
+    elif [[ "$semantic_sweep_enabled" == "true" ]]; then
       semantic_sweep_args=(--semantic-sweep)
       checker_semantic_args=(--require-semantic-sweep)
       profile_requires_clean_success="false"
@@ -409,11 +432,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           codex_bin="$PWD/${docker_shim_dir}/codex"
           claude_bin="$PWD/${docker_shim_dir}/claude"
           export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-household-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
-        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile")"
+        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task")"
 
         server_args=(
           --host "$server_host"
@@ -421,6 +444,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --output-dir "$run_dir"
           --seed "$seed"
           --policy "$policy"
+          --task-name "$task_name"
           --backend "$backend"
           --task "$task"
           --generated-mess-count "$generated_mess_count"
@@ -497,6 +521,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
+            --task-name "$task_name"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"

@@ -1,4 +1,4 @@
-"""Household cleanup live-agent kickoff prompts."""
+"""Household live-agent kickoff prompts."""
 
 from __future__ import annotations
 
@@ -30,6 +30,22 @@ COMMON_CLEANUP_RULES = (
 )
 
 WORLD_LABELS_PROMPT = COMMON_PREFIX + COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES
+
+SEMANTIC_MAP_BUILD_RULES = (
+    "This run is semantic-map-build, not household-cleanup. User task: {task}. "
+    "Do not pick, place, place_inside, open_receptacle, close_receptacle, or clean any "
+    "object. Call metric_map first, then fixture_hints, build an exact waypoint "
+    "checklist from metric_map.inspection_waypoints, and sweep every inspection "
+    "waypoint with navigate_to_waypoint then observe. Mark a waypoint complete only "
+    "after that waypoint_id has an observe response. For camera-labels, call "
+    "declare_visual_candidates for each raw FPV observation with observation_id only "
+    "and omit candidates so the configured visual-grounding pipeline labels the "
+    "frame. Use the returned observations and runtime_metric_map public anchors as "
+    "map evidence only. Compare the checklist before done, visit any missing "
+    "waypoint_id, and call done only after every metric_map.inspection_waypoints "
+    "waypoint_id has been observed so runtime_metric_map.json and report.html are "
+    "generated."
+)
 
 WORLD_LABELS_SANITIZED_PROMPT = (
     COMMON_PREFIX
@@ -125,11 +141,37 @@ def render_kickoff_prompt(profile: str) -> str:
     return WORLD_LABELS_PROMPT
 
 
+def render_semantic_map_build_prompt(profile: str, task: str) -> str:
+    """Render the live-agent kickoff prompt for a semantic-map-build lane."""
+
+    prompt = COMMON_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
+    if profile == "camera-raw":
+        return (
+            prompt
+            + " This is the raw-FPV map-build lane: inspect each raw FPV image block "
+            "returned by observe, record only public map evidence, and do not declare "
+            "cleanup candidates."
+        )
+    if profile == "world-labels-sanitized":
+        return (
+            prompt
+            + " Treat visible_object_detections as structured public detections without "
+            "destination oracle fields; use them only as map labels."
+        )
+    return prompt
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Render a household cleanup kickoff prompt.")
+    parser = argparse.ArgumentParser(description="Render a household live-agent kickoff prompt.")
     parser.add_argument("--profile", default="world-labels")
+    parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--task", default="")
     args = parser.parse_args(argv)
-    print(render_kickoff_prompt(args.profile))
+    if args.task_name == "semantic-map-build":
+        task = args.task or "build a semantic map of this room"
+        print(render_semantic_map_build_prompt(args.profile, task))
+    else:
+        print(render_kickoff_prompt(args.profile))
     return 0
 
 

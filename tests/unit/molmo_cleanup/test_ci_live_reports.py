@@ -1022,6 +1022,44 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
     assert command.count("--min-sweep-coverage") == 1
 
 
+def test_live_codex_semantic_map_build_checker_uses_map_task_identity(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        task_name="semantic-map-build",
+        task="帮我建立这个房间的语义地图",
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="world-labels",
+        min_generated_mess_count="5",
+        checker_visual_arg=["--require-runtime-metric-map"],
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    captured: dict[str, list[str]] = {}
+
+    def fake_run_and_tee(command, **_kwargs):
+        captured["command"] = command
+        return 0
+
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+
+    runner._check_result()
+
+    command = captured["command"]
+    assert command[command.index("--expect-task-name") + 1] == "semantic-map-build"
+    assert "--require-runtime-metric-map" in command
+    assert "--require-clean-agent-run" not in command
+    assert "--min-semantic-accepted-count" not in command
+    assert command[-1] == str(run_dir / "run_result.json")
+
+
 def test_live_claude_tee_keeps_artifact_when_console_is_nonblocking() -> None:
     run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
 

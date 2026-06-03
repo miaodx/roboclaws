@@ -71,6 +71,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
+    parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--policy", required=True)
     parser.add_argument("--task", required=True)
     parser.add_argument("--min-generated-mess-count", required=True)
@@ -203,6 +204,7 @@ class LiveCodexCleanupRunner:
     def _run_codex(self) -> None:
         self._write_status("running-codex")
         self._mark_timing("codex_exec_start")
+        task_name = getattr(self.args, "task_name", "household-cleanup")
         env = os.environ.copy()
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
         env.setdefault(
@@ -211,11 +213,11 @@ class LiveCodexCleanupRunner:
         )
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
-            task_name="household-cleanup",
+            task_name=task_name,
             skill_name="molmo-realworld-cleanup",
             workspace=Path(env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"]),
         )
-        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", "household-cleanup")
+        env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_TASK", task_name)
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS", "molmo-realworld-cleanup")
         env["ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE"] = str(agent_workspace)
         container_isolated = _docker_isolated_workspace_enabled(env)
@@ -379,6 +381,7 @@ class LiveCodexCleanupRunner:
     def _check_result(self) -> None:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
+        task_name = getattr(self.args, "task_name", "household-cleanup")
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -388,6 +391,8 @@ class LiveCodexCleanupRunner:
             CHECKER_SCRIPT,
             "--expect-task",
             self.args.task,
+            "--expect-task-name",
+            task_name,
             "--expect-backend",
             self.args.backend,
             "--expect-policy",
@@ -402,7 +407,7 @@ class LiveCodexCleanupRunner:
             "--require-advisory-scoring",
             *self.args.checker_visual_arg,
         ]
-        if self.args.profile in {
+        if task_name == "household-cleanup" and self.args.profile in {
             "smoke",
             "world-labels",
             "camera-labels",
@@ -412,13 +417,15 @@ class LiveCodexCleanupRunner:
         if self.args.profile == "world-labels":
             _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
             _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
-            _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
+            if task_name == "household-cleanup":
+                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
             _append_missing_checker_value(checker_args, "--min-model-declared-observations", "7")
             _append_missing_checker_value(checker_args, "--min-model-declared-actions", "7")
-            _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "7")
+            if task_name == "household-cleanup":
+                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "7")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         checker_args.append(str(run_result))
 
