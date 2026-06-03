@@ -89,7 +89,11 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `destination_policy.placement_tool_by_fixture_category` has an entry for the
    matched public fixture category, use that entry. This policy is not private
    destination truth; it only says which public fixture categories are
-   semantically suitable.
+   semantically suitable. Because sanitized `candidate_fixture_id` values are
+   hidden, first complete an anchor discovery sweep of every
+   `metric_map.inspection_waypoints` waypoint before the first pick unless a
+   `done` recovery payload already gives a non-empty
+   `destination_options.candidate_fixture_id` for the object.
    The server rejects skipped semantic phases: if you call `pick` before
    `navigate_to_object`, or `place` before `navigate_to_receptacle`, recover by
    calling the `required_tool` named in the error response.
@@ -113,7 +117,13 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    observed and you are not holding an object, call `done` as the authoritative
    closeout probe before starting another optional cleanup chain; when `done`
    returns pending candidates, clean exactly those listed handles and call
-   `done` again. Re-observed visible objects can be stale evidence after a
+   `done` again. If `done` returns a held candidate, do not call `done` again
+   until that object is placed using its `destination_options.candidate_fixture_id`
+   and `destination_options.recommended_tool`. If `open_receptacle` has
+   succeeded while you are holding an object, the next cleanup tool is
+   `place_inside` for the same `fixture_id`; do not call `done`, `metric_map`,
+   `observe`, or another navigation tool before that placement. Re-observed
+   visible objects can be stale evidence after a
    successful placement; do not retry handles that tool recovery marks
    `already_handled`, and do not switch to another handle from the same stale
    area just because it appeared in the same observation. Do not stop because

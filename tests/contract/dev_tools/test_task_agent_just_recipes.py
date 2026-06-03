@@ -1067,9 +1067,14 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
     assert "destination_policy.preferred_fixture_categories" in prompt
     assert "destination_policy.placement_tool_by_fixture_category" in prompt
     assert "instead of skipping the object" in prompt
+    assert "first complete an anchor discovery sweep" in prompt
+    assert "before the first pick" in prompt
     assert "do not re-clean observed handles" in prompt
     assert "call done as the authoritative closeout probe" in prompt
     assert "pending_cleanup_candidates" in prompt
+    assert "If done reports a held candidate" in prompt
+    assert "open_receptacle has succeeded while holding an object" in prompt
+    assert "the next cleanup tool must be place_inside" in prompt
     assert "runtime_metric_map.public_semantic_anchors" in prompt
     assert "tool recovery hints" in prompt
     assert "exact waypoint checklist" in prompt

@@ -555,9 +555,177 @@ def test_live_codex_sanitized_continuation_prompt_prioritizes_closeout() -> None
     assert "call done as the authoritative closeout probe" in continuation
     assert "pending_cleanup_candidates" in continuation
     assert "destination_options.candidate_fixture_id" in continuation
+    assert "If held_object_id is non-empty" in continuation
+    assert "do not call done again until you navigate" in continuation
+    assert "finish the anchor discovery sweep before the first pick" in continuation
     assert "visible_object_detections are observation evidence, not a mandatory work queue" in (
         continuation
     )
+
+
+def test_live_codex_sanitized_continuation_uses_latest_done_held_hint(tmp_path: Path) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "done",
+                        "ts": 10.0,
+                        "response": {
+                            "ok": False,
+                            "error_reason": "pending_cleanup_candidates",
+                            "pending_cleanup_candidates": [
+                                {
+                                    "object_id": "observed_001",
+                                    "state": "held",
+                                    "destination_options": [
+                                        {
+                                            "candidate_fixture_id": "anchor_fixture_002",
+                                            "recommended_tool": "place_inside",
+                                        }
+                                    ],
+                                }
+                            ],
+                        },
+                    }
+                )
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    continuation = run_codex._codex_continuation_prompt(
+        turn_index=9,
+        profile="world-labels-sanitized",
+        run_dir=tmp_path,
+    )
+
+    assert "Last done response rejected closeout because you are holding observed_001" in (
+        continuation
+    )
+    assert "Do not call done again until it is placed" in continuation
+    assert "navigate_to_receptacle(fixture_id=anchor_fixture_002)" in continuation
+    assert "place_inside(fixture_id=anchor_fixture_002)" in continuation
+
+
+def test_live_codex_sanitized_continuation_uses_latest_open_hint(tmp_path: Path) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "place_inside",
+                        "ts": 12.0,
+                        "response": {"ok": True, "fixture_id": "anchor_fixture_002"},
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "open_receptacle",
+                        "ts": 20.0,
+                        "response": {
+                            "ok": True,
+                            "object_id": "observed_001",
+                            "fixture_id": "anchor_fixture_002",
+                        },
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    continuation = run_codex._codex_continuation_prompt(
+        turn_index=14,
+        profile="world-labels-sanitized",
+        run_dir=tmp_path,
+    )
+
+    assert "Last trace state: open_receptacle already succeeded for anchor_fixture_002" in (
+        continuation
+    )
+    assert "Do not call done, metric_map, observe, or navigate again first" in continuation
+    assert "place_inside(fixture_id=anchor_fixture_002)" in continuation
+
+
+def test_live_codex_sanitized_open_hint_ignores_stale_open(tmp_path: Path) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "open_receptacle",
+                        "ts": 10.0,
+                        "response": {
+                            "ok": True,
+                            "object_id": "observed_001",
+                            "fixture_id": "anchor_fixture_002",
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "place_inside",
+                        "ts": 20.0,
+                        "response": {"ok": True, "fixture_id": "anchor_fixture_002"},
+                    }
+                ),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    continuation = run_codex._codex_continuation_prompt(
+        turn_index=10,
+        profile="world-labels-sanitized",
+        run_dir=tmp_path,
+    )
+
+    assert "Last trace state: open_receptacle already succeeded" not in continuation
+
+
+def test_live_codex_sanitized_continuation_uses_metric_map_held_hint(tmp_path: Path) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        json.dumps(
+            {
+                "event": "response",
+                "tool": "metric_map",
+                "ts": 10.0,
+                "response": {
+                    "ok": True,
+                    "runtime_metric_map": {
+                        "cleanup_worklist_summary": {
+                            "held_object_id": "observed_003",
+                        }
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    continuation = run_codex._codex_continuation_prompt(
+        turn_index=4,
+        profile="world-labels-sanitized",
+        run_dir=tmp_path,
+    )
+
+    assert "Last metric_map state says held_object_id is observed_003" in continuation
+    assert "Stop waypoint sweeping while holding it" in continuation
+    assert "Call done now as a public recovery probe" in continuation
 
 
 def test_live_codex_final_continuation_prompt_prioritizes_required_sweep() -> None:
@@ -578,6 +746,8 @@ def test_live_codex_final_continuation_prompt_prioritizes_required_sweep() -> No
     assert "then call observe in the same turn" in continuation
     assert "Only after every inspection waypoint has an observe response" in continuation
     assert "handle only those exact pending candidates" in continuation
+    assert "If you are holding an object, do not call done again" in continuation
+    assert "destination_options.recommended_tool" in continuation
 
 
 def test_live_codex_sanitized_lane_gets_larger_default_turn_budget() -> None:
@@ -941,6 +1111,67 @@ def test_live_codex_recovers_from_misrouted_undeclared_coding_tool_error(
     assert "never use mcp__cleanup__" in calls[1][-1]
     assert "mcp__roboclaws__" in calls[1][-1]
     assert "roboclaws__" in calls[1][-1]
+
+
+def test_live_codex_recovers_from_provider_rate_limit(tmp_path: Path, monkeypatch) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        codex_bin="codex",
+        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
+        codex_max_continuations=1,
+        kickoff_prompt="clean",
+        codex_model_arg=[],
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="camera-raw",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    calls: list[list[str]] = []
+    sleeps: list[float] = []
+
+    def fake_prepare_agent_workspace(**_kwargs):
+        return agent_dir, agent_dir
+
+    def fake_subprocess_run(*_args, **_kwargs):
+        return SimpleNamespace(returncode=0)
+
+    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
+        calls.append(command)
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        if len(calls) == 1:
+            stdout_path.write_text(
+                '{"type":"error","message":"exceeded retry limit, last status: '
+                '429 Too Many Requests"}\n',
+                encoding="utf-8",
+            )
+            stderr_path.write_text("", encoding="utf-8")
+            return 1
+        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
+        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
+    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+    monkeypatch.setattr(run_codex.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    runner._run_codex()
+
+    assert len(calls) == 2
+    assert sleeps == [30]
+    assert runner.live_timing["codex_recoverable_errors"] == [
+        {"turn": 1, "type": "provider_rate_limit"}
+    ]
 
 
 def test_live_codex_world_labels_checker_defaults_to_official_nav2_floor(

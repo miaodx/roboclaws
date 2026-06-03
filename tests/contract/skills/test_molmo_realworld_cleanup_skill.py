@@ -43,6 +43,10 @@ def test_cleanup_skill_prioritizes_done_over_optional_reclean_loops() -> None:
 
     assert "call `done` as the authoritative closeout probe" in compact
     assert "clean exactly those listed handles and call `done` again" in compact
+    assert "If `done` returns a held candidate, do not call `done` again" in compact
+    assert "the next cleanup tool is `place_inside` for the same `fixture_id`" in compact
+    assert "first complete an anchor discovery sweep" in compact
+    assert "before the first pick" in compact
     assert "`already_handled`" in compact
     assert "same stale area" in compact
 
