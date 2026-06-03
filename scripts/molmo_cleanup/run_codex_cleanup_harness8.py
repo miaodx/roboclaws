@@ -329,6 +329,9 @@ def _execute_harness(harness: dict[str, Any], args: argparse.Namespace) -> int:
     if any(row.get("requires_runtime_map_prior") for row in selected_rows) and not prior_path:
         prior_path = _execute_prior_build(harness, args)
         harness["runtime_map_prior"] = prior_path
+        if not prior_path:
+            _mark_prior_dependent_rows_blocked(selected_rows, harness)
+            return 1
         _replace_runtime_map_prior(harness, prior_path)
 
     failure_count = 0
@@ -349,6 +352,11 @@ def _execute_prior_build(harness: dict[str, Any], args: argparse.Namespace) -> s
     status = _execute_row_with_retries(row, args)
     prior = _latest_runtime_map(Path(row["output_dir"]), seed=args.seed)
     if prior is None:
+        if str(row.get("status") or "") == "rate_limited":
+            harness["setup_status"] = "rate_limited"
+            harness["behavior_status"] = "infra_failure"
+            harness["reason"] = row.get("reason") or "semantic-map prior build was rate limited"
+            return ""
         if status != 0:
             raise RuntimeError("semantic-map prior build failed")
         raise RuntimeError("semantic-map prior build produced no runtime_metric_map.json")
@@ -359,6 +367,23 @@ def _execute_prior_build(harness: dict[str, Any], args: argparse.Namespace) -> s
         )
     row["runtime_map_prior"] = str(prior)
     return str(prior)
+
+
+def _mark_prior_dependent_rows_blocked(
+    rows: list[dict[str, Any]],
+    harness: dict[str, Any],
+) -> None:
+    reason = str(
+        harness.get("reason")
+        or "runtime_map_prior unavailable because semantic-map prior setup failed"
+    )
+    for row in rows:
+        if not row.get("requires_runtime_map_prior"):
+            continue
+        row["status"] = "blocked"
+        row["behavior_status"] = "infra_failure"
+        row["reason"] = reason
+        row["updated_at"] = _utc_timestamp()
 
 
 def _execute_row_with_retries(row: dict[str, Any], args: argparse.Namespace) -> int:

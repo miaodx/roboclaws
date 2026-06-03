@@ -149,3 +149,55 @@ def test_execute_row_with_retries_marks_exhausted_rate_limit(
     assert row["behavior_status"] == "infra_failure"
     assert row["retry_count"] == 1
     assert len(row["attempts"]) == 2
+
+
+def test_prior_setup_rate_limit_blocks_prior_rows(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="",
+        visual_grounding_timeout_s="auto",
+    )
+    selected = [
+        row for row in harness["rows"] if row["row_id"] == "dino-prior-world-labels"
+    ]
+
+    executed_cleanup_rows: list[str] = []
+
+    def fake_execute_row_with_retries(row_arg, _args):
+        if row_arg["row_id"] == "setup-semantic-map-prior-dino":
+            row_arg["status"] = "rate_limited"
+            row_arg["behavior_status"] = "infra_failure"
+            row_arg["reason"] = "provider rate limited after 2 attempt(s)"
+            return 1
+        executed_cleanup_rows.append(row_arg["row_id"])
+        return 0
+
+    monkeypatch.setattr(
+        harness8,
+        "_execute_row_with_retries",
+        fake_execute_row_with_retries,
+    )
+
+    status = harness8._execute_harness(
+        harness,
+        Namespace(
+            runtime_map_prior="",
+            seed=7,
+            rate_limit_retries=1,
+            rate_limit_retry_sleep_s=0,
+            continue_on_error=True,
+            row=["dino-prior-world-labels"],
+        ),
+    )
+
+    assert status == 1
+    assert executed_cleanup_rows == []
+    assert harness["setup_status"] == "rate_limited"
+    assert selected[0]["status"] == "blocked"
+    assert selected[0]["behavior_status"] == "infra_failure"
