@@ -37,7 +37,28 @@ MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
 OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
-OBJECT_VISUAL_STATE_CATEGORIES = {"box"}
+OBJECT_VISUAL_STATE_REGISTRY = {
+    "box": {
+        "schema": "robot_camera_object_visual_state_registry_entry_v1",
+        "category": "box",
+        "status": "active_category_contract",
+        "protected_by": "prepared_usd_visual_physics_freeze",
+        "policy": (
+            "MuJoCo box flap joints render at MJCF ref/range endpoints. Prepared Isaac "
+            "report USDs must freeze baked visual xforms and remove physics state before "
+            "camera capture so the flaps cannot re-open during static visual comparison."
+        ),
+        "evidence_artifact": (
+            "output/molmo/robot-camera-apple2apple/"
+            "0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html"
+        ),
+        "promotion_rule": (
+            "Keep this category-level contract until corpus evidence shows another "
+            "visual-state category needs its own registry entry."
+        ),
+    }
+}
+OBJECT_VISUAL_STATE_CATEGORIES = set(OBJECT_VISUAL_STATE_REGISTRY)
 ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
 
 
@@ -1715,6 +1736,7 @@ def _object_visual_state_contract(
     )
     if kind != "object" or category not in OBJECT_VISUAL_STATE_CATEGORIES:
         return {"status": "not_applicable"}
+    registry_entry = dict(OBJECT_VISUAL_STATE_REGISTRY.get(category) or {})
     mujoco_articulation = _mujoco_ref_endpoint_articulation_contract(
         target_id=target_id,
         mujoco_state=mujoco_state,
@@ -1761,6 +1783,9 @@ def _object_visual_state_contract(
         "status": status,
         "target_id": target_id,
         "category": category,
+        "registry": registry_entry,
+        "protected_by": registry_entry.get("protected_by"),
+        "evidence_artifact": registry_entry.get("evidence_artifact"),
         "mujoco": mujoco_articulation,
         "isaac": isaac_articulation,
         "reason": reason,
@@ -4178,6 +4203,7 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
         if not isinstance(item, dict):
             continue
         render_delta = _dict(item.get("render_contract_delta"))
+        visual_state = _dict(item.get("visual_state_contract"))
         mujoco = _dict(item.get("mujoco"))
         isaac = _dict(item.get("isaac"))
         rows.append(
@@ -4190,6 +4216,8 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('support_status') or ''))}</td>"
             f"<td>{html.escape(str(item.get('state_status') or ''))}</td>"
             f"<td>{html.escape(str(render_delta.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(visual_state.get('protected_by') or ''))}</td>"
+            f"<td>{html.escape(str(visual_state.get('evidence_artifact') or ''))}</td>"
             f"<td>{html.escape(str(mujoco.get('category') or ''))}</td>"
             f"<td>{html.escape(str(isaac.get('category') or isaac.get('usd_category') or ''))}</td>"
             f"<td>{html.escape(str(isaac.get('asset_id') or ''))}</td>"
@@ -4199,6 +4227,7 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
         "<table><thead><tr>"
         "<th>Kind</th><th>Target</th><th>Binding</th><th>Category</th>"
         "<th>Pose</th><th>Support</th><th>State</th><th>Render</th>"
+        "<th>Protected By</th><th>Evidence</th>"
         "<th>MuJoCo Cat</th><th>Isaac Cat</th><th>Isaac Asset</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
         if rows

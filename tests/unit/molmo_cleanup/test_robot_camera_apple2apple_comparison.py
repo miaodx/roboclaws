@@ -1516,6 +1516,7 @@ def Xform "World"
     assert "visual_state_delta" in report_html
     assert "Category Status Summary" in report_html
     assert "diningtable" in report_html
+    assert "prepared_usd_visual_physics_freeze" in report_html
 
 
 def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
@@ -1564,6 +1565,12 @@ def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
     assert contract["mujoco"]["status"] == "mujoco_ref_endpoint_articulation"
     assert contract["mujoco"]["endpoint_joint_count"] == 2
     assert contract["isaac"]["status"] == "isaac_visual_physics_frozen"
+    assert run_camera.OBJECT_VISUAL_STATE_CATEGORIES == {"box"}
+    assert contract["protected_by"] == "prepared_usd_visual_physics_freeze"
+    assert contract["registry"]["status"] == "active_category_contract"
+    assert contract["evidence_artifact"].endswith(
+        "0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html"
+    )
     assert "PhysX will not re-open" in contract["reason"]
 
 
@@ -1603,6 +1610,7 @@ def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None
     )
 
     assert contract["status"] == "visual_state_articulation_physics_preserved"
+    assert contract["protected_by"] == "prepared_usd_visual_physics_freeze"
     assert contract["isaac"]["status"] == "isaac_articulation_physics_preserved"
     assert contract["isaac"]["physics_joint_count"] == 1
     assert "re-solve those joints" in contract["reason"]
