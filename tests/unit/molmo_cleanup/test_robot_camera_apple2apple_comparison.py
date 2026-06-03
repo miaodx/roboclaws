@@ -41,6 +41,108 @@ def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     assert diff["residual"]["rgb_gain_oracle"]["mean_abs_rgb_after_gain"] == 0.0
 
 
+def test_robot_camera_comparison_pins_isaac_mess_objects_to_mujoco(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_pinned_mess",
+    )
+    commands: list[list[str]] = []
+    output_dir = tmp_path / "comparison"
+    mujoco_state_path = output_dir / "mujoco_state.json"
+    isaac_state_path = output_dir / "isaac_state.json"
+
+    def fake_run_json(command: list[str], *, cwd: Path) -> dict:
+        commands.append(command)
+        if command[1].endswith("molmospaces_subprocess_worker.py") and "init" in command:
+            mujoco_state_path.parent.mkdir(parents=True, exist_ok=True)
+            mujoco_state_path.write_text(
+                json.dumps(
+                    {
+                        "receptacles": {},
+                        "objects": {},
+                        "private_manifest": {
+                            "targets": [
+                                {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                                {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                            ]
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {
+                "backend": "molmospaces_subprocess",
+                "ok": True,
+                "private_manifest": {
+                    "targets": [
+                        {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                        {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                    ]
+                },
+            }
+        if command[1].endswith("isaac_lab_backend_worker.py") and "init" in command:
+            isaac_state_path.write_text(
+                json.dumps(
+                    {
+                        "scene_binding_diagnostics": {},
+                        "receptacle_index": {},
+                        "object_index": {},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {"backend": "isaaclab_subprocess", "ok": True}
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(run_camera, "_run_json", fake_run_json)
+    monkeypatch.setattr(
+        run_camera,
+        "_select_comparison_targets",
+        lambda *args, **kwargs: {"selected_targets": [], "status": "unit_no_targets"},
+    )
+
+    args = type(
+        "Args",
+        (),
+        {
+            "output_dir": output_dir,
+            "mujoco_python": Path("python"),
+            "isaac_python": Path("isaac-python"),
+            "seed": 6,
+            "scene_source": "procthor-10k-val",
+            "scene_index": 0,
+            "generated_mess_count": 2,
+            "render_width": 540,
+            "render_height": 360,
+            "location_count": 1,
+            "scene_usd_path": tmp_path / "scene.usda",
+            "isaac_robot_view_color_profile_path": None,
+        },
+    )()
+    args.scene_usd_path.write_text("#usda 1.0\n", encoding="utf-8")
+
+    manifest = run_camera.run_comparison(args)
+
+    isaac_init_command = commands[1]
+    assert manifest["status"] == "blocked"
+    assert manifest["mess_generation"]["status"] == "isaac_pinned_to_mujoco_generated_mess"
+    assert manifest["mess_generation"]["pinned_generated_mess_object_ids"] == [
+        "apple_1",
+        "plate_1",
+    ]
+    assert isaac_init_command.count("--generated-mess-object-id") == 2
+    assert "--generated-mess-object-id" in isaac_init_command
+    assert isaac_init_command[-4:] == [
+        "--generated-mess-object-id",
+        "apple_1",
+        "--generated-mess-object-id",
+        "plate_1",
+    ]
+
+
 def test_robot_camera_residual_triage_prioritizes_geometry_edges() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,

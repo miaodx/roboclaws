@@ -211,31 +211,39 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
             ],
             cwd=Path.cwd(),
         )
+        pinned_mess_object_ids = _generated_mess_object_ids_from_init(mujoco_init)
+        if len(pinned_mess_object_ids) < int(args.generated_mess_count):
+            raise RuntimeError(
+                "MuJoCo init did not return enough generated mess object ids to pin Isaac "
+                f"({len(pinned_mess_object_ids)} < {args.generated_mess_count})"
+            )
+        isaac_init_command = [
+            str(args.isaac_python),
+            "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+            "--state-path",
+            str(isaac_state_path),
+            "init",
+            "--run-dir",
+            str(isaac_run_dir),
+            "--seed",
+            str(args.seed),
+            "--scene-source",
+            args.scene_source,
+            "--scene-index",
+            str(args.scene_index),
+            "--generated-mess-count",
+            str(args.generated_mess_count),
+            "--runtime-mode",
+            "real",
+            "--include-robot",
+            "--robot-name",
+            "rby1m",
+            "--scene-usd-path",
+            str(args.scene_usd_path),
+        ]
+        isaac_init_command.extend(_generated_mess_object_id_args(pinned_mess_object_ids))
         isaac_init = _run_json(
-            [
-                str(args.isaac_python),
-                "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-                "--state-path",
-                str(isaac_state_path),
-                "init",
-                "--run-dir",
-                str(isaac_run_dir),
-                "--seed",
-                str(args.seed),
-                "--scene-source",
-                args.scene_source,
-                "--scene-index",
-                str(args.scene_index),
-                "--generated-mess-count",
-                str(args.generated_mess_count),
-                "--runtime-mode",
-                "real",
-                "--include-robot",
-                "--robot-name",
-                "rby1m",
-                "--scene-usd-path",
-                str(args.scene_usd_path),
-            ],
+            isaac_init_command,
             cwd=Path.cwd(),
         )
     except Exception as exc:
@@ -247,6 +255,12 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     manifest["lanes"][MUJOCO_LANE_ID] = _lane_init_summary(mujoco_init)
     manifest["lanes"][ISAAC_LANE_ID] = _lane_init_summary(isaac_init)
     manifest["lanes"][ISAAC_LANE_ID]["robot_import"] = isaac_init.get("robot_import", {})
+    manifest["mess_generation"] = {
+        "schema": "robot_camera_apple2apple_mess_generation_v1",
+        "status": "isaac_pinned_to_mujoco_generated_mess",
+        "object_id_source": "mujoco_private_manifest_targets",
+        "pinned_generated_mess_object_ids": pinned_mess_object_ids,
+    }
 
     mujoco_state = _read_json(mujoco_state_path)
     isaac_state = _read_json(isaac_state_path)
@@ -459,6 +473,25 @@ def _parse_last_json_object(text: str) -> dict[str, Any]:
         if isinstance(value, dict):
             return value
     raise RuntimeError(f"worker output did not end with a JSON object: {text[-1000:]}")
+
+
+def _generated_mess_object_ids_from_init(init_result: dict[str, Any]) -> list[str]:
+    targets = _dict(init_result.get("private_manifest")).get("targets") or []
+    object_ids: list[str] = []
+    for target in targets:
+        if not isinstance(target, dict):
+            continue
+        object_id = str(target.get("object_id") or "")
+        if object_id:
+            object_ids.append(object_id)
+    return object_ids
+
+
+def _generated_mess_object_id_args(object_ids: list[str]) -> list[str]:
+    args: list[str] = []
+    for object_id in object_ids:
+        args.extend(["--generated-mess-object-id", object_id])
+    return args
 
 
 def _read_json(path: Path) -> dict[str, Any]:
