@@ -1337,16 +1337,21 @@ class RealWorldCleanupContract:
     def done(self, reason: str = "") -> dict[str, Any]:
         pending = self._pending_cleanup_candidates()
         if pending:
+            required_tool = "navigate_to_object"
+            if any(str(item.get("state") or "") == "held" for item in pending):
+                required_tool = "navigate_to_receptacle"
             return self._error(
                 "done",
                 "pending_cleanup_candidates",
-                required_tool="navigate_to_object",
+                required_tool=required_tool,
                 pending_observed_handles=[str(item["object_id"]) for item in pending],
                 pending_cleanup_candidates=pending,
                 recovery_hint=(
-                    "Clean pending observed handles before done: navigate_to_object -> pick -> "
-                    "navigate_to_receptacle(candidate_fixture_id) -> place/place_inside, using "
-                    "open_receptacle/close_receptacle for fridge-like fixtures."
+                    "Clean pending observed handles before done. For held objects, select a "
+                    "public destination_options.candidate_fixture_id and call "
+                    "navigate_to_receptacle -> open? -> place/place_inside. For pending "
+                    "objects, call navigate_to_object -> pick first. Use "
+                    "destination_options.recommended_tool when candidate_fixture_id is empty."
                 ),
             )
         coverage = self._sweep_coverage()
@@ -2321,9 +2326,32 @@ class RealWorldCleanupContract:
         worklist = self.cleanup_worklist_payload(fixture_hints=self.fixture_hints())
         pending = []
         for item in worklist.get("objects", []):
-            if item.get("state") != "pending":
+            state = str(item.get("state") or "")
+            if state not in {"pending", "held"}:
                 continue
             if item.get("grounding_status") in {"ambiguous", "unresolved"}:
+                continue
+            if self.sanitize_world_labels:
+                destination_options = self._destination_options_for_policy(
+                    item.get("destination_policy") or {}
+                )
+                pending.append(
+                    {
+                        "object_id": str(item.get("object_id") or ""),
+                        "category": str(item.get("category") or ""),
+                        "state": state,
+                        "source_fixture_id": str(item.get("source_fixture_id") or ""),
+                        "candidate_fixture_id": "",
+                        "destination_policy_status": str(
+                            item.get("destination_policy_status") or "policy_required"
+                        ),
+                        "destination_policy": dict(item.get("destination_policy") or {}),
+                        "destination_options": destination_options,
+                        "required_tool": "navigate_to_receptacle"
+                        if state == "held"
+                        else "navigate_to_object",
+                    }
+                )
                 continue
             candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
             source_fixture_id = str(item.get("source_fixture_id") or "")
@@ -2346,6 +2374,40 @@ class RealWorldCleanupContract:
                 }
             )
         return pending
+
+    def _destination_options_for_policy(self, policy: dict[str, Any]) -> list[dict[str, Any]]:
+        preferred = [
+            _normalize_fixture_category_label(item)
+            for item in policy.get("preferred_fixture_categories") or []
+        ]
+        if not preferred:
+            return []
+        options = []
+        for anchor in self._runtime_public_semantic_anchors():
+            if not _is_place_anchor(anchor):
+                continue
+            category = _normalize_fixture_category_label(anchor.get("category"))
+            if category not in preferred:
+                continue
+            anchor_id = str(anchor.get("anchor_id") or "")
+            if not anchor_id:
+                continue
+            tool_by_category = dict(policy.get("placement_tool_by_fixture_category") or {})
+            recommended_tool = str(
+                tool_by_category.get(category)
+                or policy.get("placement_tool")
+                or _public_destination_policy_tool_for_fixture_category(category)
+            )
+            options.append(
+                {
+                    "candidate_fixture_id": anchor_id,
+                    "candidate_fixture_category": category,
+                    "recommended_tool": recommended_tool,
+                    "candidate_source": "runtime_public_semantic_anchor",
+                    "waypoint_id": str(anchor.get("waypoint_id") or ""),
+                }
+            )
+        return options
 
     def camera_model_policy_payload(self) -> dict[str, Any]:
         events = [dict(item) for item in self._camera_model_policy_events]

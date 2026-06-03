@@ -1007,6 +1007,73 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
     _assert_no_forbidden_keys(done)
 
 
+def test_world_labels_sanitized_done_rejects_held_policy_required_object() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    detection = _first_detection_by_category(contract, "food")
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        if waypoint["visited"]:
+            continue
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    done = contract.done("finished while holding")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    assert done["required_tool"] == "navigate_to_receptacle"
+    pending = next(
+        item
+        for item in done["pending_cleanup_candidates"]
+        if item["object_id"] == detection["object_id"]
+    )
+    assert pending["object_id"] == detection["object_id"]
+    assert pending["state"] == "held"
+    assert pending["candidate_fixture_id"] == ""
+    assert pending["destination_policy"]["preferred_fixture_categories"] == [
+        "fridge",
+        "refrigerator",
+    ]
+    assert any(
+        option["candidate_fixture_category"] == "fridge"
+        and option["recommended_tool"] == "place_inside"
+        and option["candidate_fixture_id"].startswith("anchor_fixture_")
+        for option in pending["destination_options"]
+    )
+    _assert_no_forbidden_keys(done)
+
+
+def test_world_labels_sanitized_done_rejects_policy_required_pending_objects() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    observation = _first_non_empty_observation(contract)
+    detection = observation["visible_object_detections"][0]
+
+    done = contract.done("finished without cleaning sanitized detections")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    assert done["required_tool"] == "navigate_to_object"
+    assert detection["object_id"] in done["pending_observed_handles"]
+    pending = next(
+        item
+        for item in done["pending_cleanup_candidates"]
+        if item["object_id"] == detection["object_id"]
+    )
+    assert pending["destination_policy_status"] == "policy_required"
+    assert pending["candidate_fixture_id"] == ""
+    _assert_no_forbidden_keys(done)
+
+
 def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     fixture_hints = contract.fixture_hints()

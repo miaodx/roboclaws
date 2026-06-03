@@ -754,7 +754,9 @@ def _codex_continuation_prompt(
             "observed and held_object_id is empty, call done as the authoritative "
             "closeout probe before starting another optional cleanup chain; if done "
             "returns pending_cleanup_candidates, clean exactly those listed handles "
-            "and then call done again."
+            "and then call done again. When a pending sanitized candidate has an "
+            "empty candidate_fixture_id, choose a public "
+            "destination_options.candidate_fixture_id and its recommended_tool."
         )
     else:
         perception_instruction = (

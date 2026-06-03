@@ -554,6 +554,7 @@ def test_live_codex_sanitized_continuation_prompt_prioritizes_closeout() -> None
     assert "If all inspection_waypoints are observed and held_object_id is empty" in continuation
     assert "call done as the authoritative closeout probe" in continuation
     assert "pending_cleanup_candidates" in continuation
+    assert "destination_options.candidate_fixture_id" in continuation
     assert "visible_object_detections are observation evidence, not a mandatory work queue" in (
         continuation
     )
