@@ -265,6 +265,7 @@ class LiveCodexCleanupRunner:
                 else _codex_continuation_prompt(
                     turn_index=turn_index,
                     profile=self.args.profile,
+                    final_turn=turn_index + 1 == max_turns,
                 )
             )
             suffix = "" if is_initial_turn else f"-continuation-{turn_index}"
@@ -701,7 +702,12 @@ def _combined_codex_event_summary(paths: list[Path]) -> dict[str, Any]:
     }
 
 
-def _codex_continuation_prompt(*, turn_index: int, profile: str) -> str:
+def _codex_continuation_prompt(
+    *,
+    turn_index: int,
+    profile: str,
+    final_turn: bool = False,
+) -> str:
     if profile == "camera-raw":
         perception_instruction = (
             "For camera-raw observations, inspect the raw FPV image block yourself. "
@@ -724,10 +730,36 @@ def _codex_continuation_prompt(*, turn_index: int, profile: str) -> str:
             "camera_model_candidates with navigate_to_object -> pick -> "
             "navigate_to_receptacle -> open? -> place/place_inside."
         )
+    elif profile == "world-labels-sanitized":
+        perception_instruction = (
+            "For world-labels-sanitized observations, visible_object_detections are "
+            "observation evidence, not a mandatory work queue. Before acting on a "
+            "re-observed handle, call metric_map if needed and check "
+            "runtime_metric_map.observed_objects plus cleanup_worklist state; skip "
+            "handles whose public state/actionability shows placed, held, "
+            "already_handled, or not pending. If a cleanup tool returns "
+            "already_handled, follow its recovery_hint and do not inspect, navigate "
+            "to, or pick another handle from the same stale area just because it "
+            "appeared in the same observe response. If all inspection_waypoints are "
+            "observed and held_object_id is empty, call done as the authoritative "
+            "closeout probe before starting another optional cleanup chain; if done "
+            "returns pending_cleanup_candidates, clean exactly those listed handles "
+            "and then call done again."
+        )
     else:
         perception_instruction = (
             "Continue cleaning public observed cleanup candidates with the profile's "
             "available observation handles and cleanup tools."
+        )
+    closeout_instruction = ""
+    if final_turn:
+        closeout_instruction = (
+            " This is the final automatic continuation. Do not start a new optional "
+            "cleanup chain from visible_object_detections. If held_object_id is empty, "
+            "call done now so the server either closes the report or returns "
+            "pending_cleanup_candidates; handle only those exact pending candidates "
+            "if any are returned. If you are holding an object, place it using the "
+            "current required_tool or recovery_hint, then call done."
         )
     return _codex_live_prompt(
         "Continue the same active cleanup MCP session. This is automatic "
@@ -746,7 +778,7 @@ def _codex_continuation_prompt(*, turn_index: int, profile: str) -> str:
         "Observe after each successful placement, sweep remaining inspection_waypoints with "
         "navigate_to_waypoint -> observe, and call done only after every "
         "inspection waypoint has an observe response and pending public cleanup "
-        "candidates are handled."
+        f"candidates are handled.{closeout_instruction}"
     )
 
 

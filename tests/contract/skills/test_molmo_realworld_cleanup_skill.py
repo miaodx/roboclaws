@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 ROUTINE_PATH = (
     ROOT / "skills" / "molmo-realworld-cleanup" / "scripts" / "trace_preserving_cleanup.py"
 )
+SKILL_PATH = ROOT / "skills" / "molmo-realworld-cleanup" / "SKILL.md"
 
 
 def _load_routine_module() -> Any:
@@ -34,6 +35,16 @@ def _first_detection(server: Any) -> dict[str, Any]:
         if detections:
             return dict(detections[0])
     raise AssertionError("expected at least one visible detection")
+
+
+def test_cleanup_skill_prioritizes_done_over_optional_reclean_loops() -> None:
+    text = SKILL_PATH.read_text(encoding="utf-8")
+    compact = " ".join(text.split())
+
+    assert "call `done` as the authoritative closeout probe" in compact
+    assert "clean exactly those listed handles and call `done` again" in compact
+    assert "`already_handled`" in compact
+    assert "same stale area" in compact
 
 
 def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: Path) -> None:

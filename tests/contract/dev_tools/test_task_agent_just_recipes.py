@@ -1016,6 +1016,9 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
     assert "do not wait for or rely on cleanup_recommended" in prompt
     assert "destination_policy_status is policy_required" in prompt
     assert "instead of skipping the object" in prompt
+    assert "do not re-clean observed handles" in prompt
+    assert "call done as the authoritative closeout probe" in prompt
+    assert "pending_cleanup_candidates" in prompt
     assert "runtime_metric_map.public_semantic_anchors" in prompt
     assert "tool recovery hints" in prompt
     assert "exact waypoint checklist" in prompt

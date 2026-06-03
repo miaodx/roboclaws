@@ -538,6 +538,44 @@ def test_live_codex_raw_continuation_prompt_blocks_label_declarations() -> None:
     assert "mcp__roboclaws__" in continuation
 
 
+def test_live_codex_sanitized_continuation_prompt_prioritizes_closeout() -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+
+    continuation = run_codex._codex_continuation_prompt(
+        turn_index=8,
+        profile="world-labels-sanitized",
+    )
+
+    assert "For world-labels-sanitized observations" in continuation
+    assert "already_handled" in continuation
+    assert "do not inspect, navigate to, or pick another handle from the same stale area" in (
+        continuation
+    )
+    assert "If all inspection_waypoints are observed and held_object_id is empty" in continuation
+    assert "call done as the authoritative closeout probe" in continuation
+    assert "pending_cleanup_candidates" in continuation
+    assert "visible_object_detections are observation evidence, not a mandatory work queue" in (
+        continuation
+    )
+
+
+def test_live_codex_final_continuation_prompt_forces_closeout_probe() -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+
+    continuation = run_codex._codex_continuation_prompt(
+        turn_index=8,
+        profile="world-labels-sanitized",
+        final_turn=True,
+    )
+
+    assert "This is the final automatic continuation" in continuation
+    assert "Do not start a new optional cleanup chain from visible_object_detections" in (
+        continuation
+    )
+    assert "call done now so the server either closes the report" in continuation
+    assert "handle only those exact pending candidates" in continuation
+
+
 def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
     tmp_path: Path, monkeypatch
 ) -> None:

@@ -98,8 +98,15 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `metric_map.inspection_waypoints` waypoint id has an `observe` response and
    you have cleaned every public recommended candidate. If `done` returns
    `pending_cleanup_candidates`, clean those listed observed handles with their
-   `candidate_fixture_id`, then call `done` again. Do not stop because you
-   guess the hidden target count.
+   `candidate_fixture_id`, then call `done` again. If all waypoints are
+   observed and you are not holding an object, call `done` as the authoritative
+   closeout probe before starting another optional cleanup chain; when `done`
+   returns pending candidates, clean exactly those listed handles and call
+   `done` again. Re-observed visible objects can be stale evidence after a
+   successful placement; do not retry handles that tool recovery marks
+   `already_handled`, and do not switch to another handle from the same stale
+   area just because it appeared in the same observation. Do not stop because
+   you guess the hidden target count.
 
 ## Boundaries
 

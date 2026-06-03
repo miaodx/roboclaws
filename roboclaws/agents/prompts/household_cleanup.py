@@ -39,7 +39,12 @@ WORLD_LABELS_SANITIZED_PROMPT = (
     "cleanup_recommended, and treat every observed detection as a cleanup "
     "candidate to evaluate. If destination_policy_status is policy_required, "
     "choose the destination from public policy context instead of skipping the "
-    "object. Use metric_map, fixture_hints, "
+    "object. After a successful placement, do not re-clean observed handles from "
+    "that completed area. Once every metric_map.inspection_waypoints waypoint "
+    "has been observed and held_object_id is empty, call done as the authoritative "
+    "closeout probe before starting another optional cleanup chain; if done "
+    "returns pending_cleanup_candidates, clean exactly those listed handles and "
+    "then call done again. Use metric_map, fixture_hints, "
     "runtime_metric_map.public_semantic_anchors, and tool recovery hints to choose "
     "where to place observed objects. "
     + COMMON_CLEANUP_RULES
