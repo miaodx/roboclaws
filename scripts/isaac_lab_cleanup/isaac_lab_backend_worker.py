@@ -2570,13 +2570,30 @@ def _apply_semantic_pose_state_to_stage(
         if target is None:
             failed.append({"object_id": str(object_id), "reason": "missing_target_pose"})
             continue
-        UsdGeom.XformCommonAPI(object_prim).SetTranslate(Gf.Vec3d(*target))
+        try:
+            local_translate = _world_position_to_parent_local_translate(
+                UsdGeom=UsdGeom,
+                prim=object_prim,
+                world_position=target,
+            )
+        except RuntimeError as exc:
+            failed.append(
+                {
+                    "object_id": str(object_id),
+                    "reason": "parent_local_transform_failed",
+                    "detail": str(exc),
+                }
+            )
+            continue
+        UsdGeom.XformCommonAPI(object_prim).SetTranslate(Gf.Vec3d(*local_translate))
         applied.append(
             {
                 "object_id": str(object_id),
                 "object_usd_prim_path": object_prim_path,
                 "support_receptacle_id": support_id,
                 "target_position": list(target),
+                "authored_translate": list(local_translate),
+                "authored_translate_frame": "parent_local",
             }
         )
     return {
@@ -2586,8 +2603,28 @@ def _apply_semantic_pose_state_to_stage(
         "failed_object_count": len(failed),
         "applied_objects": applied,
         "failed_objects": failed,
-        "rendered_to_usd": bool(applied),
+        "rendered_to_usd": bool(applied) and not failed,
     }
+
+
+def _world_position_to_parent_local_translate(
+    *,
+    UsdGeom: Any,
+    prim: Any,
+    world_position: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    parent = prim.GetParent() if hasattr(prim, "GetParent") else None
+    if parent is None or not parent:
+        return tuple(float(value) for value in world_position)
+    try:
+        parent_world = UsdGeom.Xformable(parent).ComputeLocalToWorldTransform(0.0)
+        world_to_parent = parent_world.GetInverse()
+        local = world_to_parent.Transform(tuple(float(value) for value in world_position))
+        return (float(local[0]), float(local[1]), float(local[2]))
+    except Exception as exc:
+        raise RuntimeError(
+            "could not convert world semantic pose into parent-local USD frame"
+        ) from exc
 
 
 def _semantic_pose_target_position(
@@ -6540,6 +6577,23 @@ def _real_semantic_pose_robot_view_images(
     }
     if not _has_required_robot_view_images(images):
         return {}
+    semantic_pose_stage_application = _dict(capture.get("semantic_pose_stage_application"))
+    if semantic_pose_stage_application.get("rendered_to_usd") is not True:
+        state.setdefault("mapping_gaps", []).append(
+            {
+                "area": "semantic_pose_robot_view_rerender",
+                "status": "blocked_capability",
+                "source": REAL_ROBOT_VIEW_RERENDER_METHOD,
+                "detail": (
+                    "Isaac produced robot-view images, but semantic pose state was not "
+                    "applied to the USD stage, so the images are not accepted as "
+                    "semantic-pose-synced robot-view evidence."
+                ),
+                "semantic_pose_stage_application": semantic_pose_stage_application,
+            }
+        )
+        write_state_from_state_arg(state)
+        return {}
     mounted_head_camera = bool(capture.get("robot_view_uses_mounted_head_camera"))
     state["robot_view_images"] = images
     state["robot_view_provenance"] = _semantic_pose_robot_view_provenance(
@@ -6557,6 +6611,7 @@ def _real_semantic_pose_robot_view_images(
         "head_camera_equivalent": not mounted_head_camera,
         "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
         "robot_stage": _dict(capture.get("robot_stage")),
+        "semantic_pose_stage_application": semantic_pose_stage_application,
         "robot_pose_stage_application": _dict(capture.get("robot_pose_stage_application")),
         "camera_diagnostics": _dict(capture.get("camera_diagnostics")),
         "lighting_profile": _dict(capture.get("lighting_profile")),

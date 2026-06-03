@@ -1479,6 +1479,227 @@ def test_isaac_semantic_pose_stage_application_uses_exact_pose(
     assert result["applied_objects"][0]["target_position"] == [9.0, 8.0, 7.0]
 
 
+def test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_local(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+
+    class _FakeParent:
+        def __bool__(self) -> bool:
+            return True
+
+    class _FakePrim:
+        def __init__(self) -> None:
+            self.parent = _FakeParent()
+
+        def IsValid(self) -> bool:
+            return True
+
+        def GetParent(self) -> _FakeParent:
+            return self.parent
+
+    class _FakeStage:
+        def __init__(self) -> None:
+            self.prim = _FakePrim()
+
+        def GetPrimAtPath(self, path: str) -> _FakePrim:
+            assert path == "/World/Room/Objects/mug_01"
+            return self.prim
+
+    class _FakeParentWorldTransform:
+        def GetInverse(self) -> "_FakeParentWorldTransform":
+            return self
+
+        def Transform(self, value: object) -> tuple[float, float, float]:
+            x, y, z = value
+            return (float(x) - 10.0, float(y) - 20.0, float(z) - 0.5)
+
+    class _FakeXformable:
+        def __init__(self, parent: _FakeParent) -> None:
+            self.parent = parent
+
+        def ComputeLocalToWorldTransform(self, time_code: float) -> _FakeParentWorldTransform:
+            assert time_code == 0.0
+            return _FakeParentWorldTransform()
+
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            translations.append(value)
+
+    class _FakeGf:
+        @staticmethod
+        def Vec3d(*values: float) -> tuple[float, float, float]:
+            return (float(values[0]), float(values[1]), float(values[2]))
+
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeGf,
+        UsdGeom=types.SimpleNamespace(
+            XformCommonAPI=_FakeXformCommonAPI,
+            Xformable=_FakeXformable,
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+    result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        semantic_pose_state={
+            "object_poses": {
+                "mug_01": {
+                    "usd_prim_path": "/World/Room/Objects/mug_01",
+                    "support_receptacle_id": "sink_01",
+                    "position": [12.0, 23.0, 4.5],
+                }
+            },
+            "receptacle_index": {},
+        },
+    )
+
+    assert result["status"] == "applied"
+    assert translations == [pytest.approx((2.0, 3.0, 4.0))]
+    assert result["applied_objects"][0]["target_position"] == [12.0, 23.0, 4.5]
+    assert result["applied_objects"][0]["authored_translate"] == [2.0, 3.0, 4.0]
+    assert result["applied_objects"][0]["authored_translate_frame"] == "parent_local"
+
+
+def test_isaac_semantic_pose_stage_application_blocks_parent_transform_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+
+    class _FakeParent:
+        def __bool__(self) -> bool:
+            return True
+
+    class _FakePrim:
+        def IsValid(self) -> bool:
+            return True
+
+        def GetParent(self) -> _FakeParent:
+            return _FakeParent()
+
+    class _FakeStage:
+        def GetPrimAtPath(self, path: str) -> _FakePrim:
+            assert path == "/World/Room/Objects/mug_01"
+            return _FakePrim()
+
+    class _BrokenXformable:
+        def __init__(self, parent: _FakeParent) -> None:
+            self.parent = parent
+
+        def ComputeLocalToWorldTransform(self, time_code: float) -> object:
+            assert time_code == 0.0
+            raise RuntimeError("missing parent xform")
+
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            translations.append(value)
+
+    class _FakeGf:
+        @staticmethod
+        def Vec3d(*values: float) -> tuple[float, float, float]:
+            return (float(values[0]), float(values[1]), float(values[2]))
+
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeGf,
+        UsdGeom=types.SimpleNamespace(
+            XformCommonAPI=_FakeXformCommonAPI,
+            Xformable=_BrokenXformable,
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+    result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        semantic_pose_state={
+            "object_poses": {
+                "mug_01": {
+                    "usd_prim_path": "/World/Room/Objects/mug_01",
+                    "support_receptacle_id": "sink_01",
+                    "position": [12.0, 23.0, 4.5],
+                }
+            },
+            "receptacle_index": {},
+        },
+    )
+
+    assert result["status"] == "blocked"
+    assert result["applied_object_count"] == 0
+    assert result["failed_objects"][0]["reason"] == "parent_local_transform_failed"
+    assert translations == []
+
+
+def test_isaac_semantic_pose_stage_application_does_not_mark_partial_as_rendered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+
+    class _FakePrim:
+        def __init__(self, valid: bool) -> None:
+            self.valid = valid
+
+        def IsValid(self) -> bool:
+            return self.valid
+
+    class _FakeStage:
+        def GetPrimAtPath(self, path: str) -> _FakePrim:
+            return _FakePrim(path.endswith("/mug_01"))
+
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            translations.append(value)
+
+    class _FakeGf:
+        @staticmethod
+        def Vec3d(*values: float) -> tuple[float, float, float]:
+            return (float(values[0]), float(values[1]), float(values[2]))
+
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeGf,
+        UsdGeom=types.SimpleNamespace(XformCommonAPI=_FakeXformCommonAPI),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+    result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        semantic_pose_state={
+            "object_poses": {
+                "mug_01": {
+                    "usd_prim_path": "/World/Objects/mug_01",
+                    "support_receptacle_id": "sink_01",
+                    "position": [1.0, 2.0, 3.0],
+                },
+                "spoon_01": {
+                    "usd_prim_path": "/World/Objects/spoon_01",
+                    "support_receptacle_id": "sink_01",
+                    "position": [4.0, 5.0, 6.0],
+                },
+            },
+            "receptacle_index": {},
+        },
+    )
+
+    assert result["status"] == "partial"
+    assert result["applied_object_count"] == 1
+    assert result["failed_object_count"] == 1
+    assert result["rendered_to_usd"] is False
+    assert translations == [(1.0, 2.0, 3.0)]
+
+
 def test_isaac_stage_light_paths_detects_existing_lights_without_pxr() -> None:
     class _FakePrim:
         def __init__(self, path: str, is_light: bool, type_name: str = "") -> None:
@@ -2678,6 +2899,13 @@ def test_isaac_lab_real_worker_views_recapture_semantic_pose_state(
             "robot_view_images": {key: str(path) for key, path in view_paths.items()},
             "render_steps": 9,
             "robot_view_uses_mounted_head_camera": False,
+            "semantic_pose_stage_application": {
+                "schema": "isaac_semantic_pose_stage_application_v1",
+                "status": "applied",
+                "applied_object_count": 1,
+                "failed_object_count": 0,
+                "rendered_to_usd": True,
+            },
             "camera_diagnostics": {
                 "schema": "isaac_robot_view_camera_diagnostics_v1",
                 "views": {
@@ -2907,6 +3135,13 @@ def test_isaac_lab_real_worker_robot_views_use_imported_head_camera(
             "robot_view_images": {key: str(path) for key, path in view_paths.items()},
             "render_steps": 11,
             "robot_view_uses_mounted_head_camera": True,
+            "semantic_pose_stage_application": {
+                "schema": "isaac_semantic_pose_stage_application_v1",
+                "status": "applied",
+                "applied_object_count": 1,
+                "failed_object_count": 0,
+                "rendered_to_usd": True,
+            },
             "robot_stage": {
                 "status": "referenced",
                 "head_camera_prim_exists": True,
@@ -3166,6 +3401,132 @@ def test_isaac_lab_real_worker_views_fallback_when_semantic_pose_rerender_fails(
         item["area"] == "semantic_pose_robot_view_rerender"
         and item["status"] == "blocked_capability"
         and "unit rerender failure" in item["detail"]
+        for item in state["mapping_gaps"]
+    )
+
+
+def test_isaac_lab_real_worker_views_do_not_claim_refresh_without_usd_pose_application(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    state_path = tmp_path / "state.json"
+    image_path = run_dir / "isaac_runtime_smoke.png"
+    robot_view_images = _write_robot_view_images(run_dir)
+    scene_usd = run_dir / "scene.usda"
+    scene_usd.parent.mkdir(parents=True, exist_ok=True)
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    _write_nonblank_image(image_path)
+
+    def fake_real_runtime_smoke(args: object, scenario: object) -> dict[str, object]:
+        del args, scenario
+        return {
+            "image_path": str(image_path),
+            "scene_usd": str(scene_usd),
+            "loaded_asset_kind": "local_scene_usd",
+            "requested_scene_source": "procthor-10k-val",
+            "requested_scene_index": 0,
+            "requested_molmospaces_scene_usd": "molmospaces://procthor-10k-val/scene-0.usd",
+            "isaac_lab_version": "unit-isaaclab",
+            "isaac_sim_version": "unit-isaacsim",
+            "renderer_mode": "isaac_lab_headless_rtx",
+            "capture_method": "isaac_lab_camera_rgb",
+            "robot_view_capture_method": "isaac_lab_camera_rgb_static_robot_views",
+            "robot_view_images": robot_view_images,
+            "camera_resolution": [540, 360],
+            "stage_prim_count": 6,
+            "render_steps": 4,
+            "scene_index_diagnostics": {
+                "schema": "isaac_usd_scene_index_v1",
+                "status": "indexed",
+                "source": str(scene_usd),
+                "stage_prim_count": 6,
+                "object_candidate_count": 1,
+                "receptacle_candidate_count": 1,
+                "blockers": [],
+            },
+            "object_index": _unit_isaac_object_index(),
+            "receptacle_index": _unit_isaac_receptacle_index(),
+        }
+
+    def fake_capture_semantic_pose_robot_views(
+        *,
+        state: dict[str, object],
+        scene_usd: Path,
+        view_paths: dict[str, Path],
+        width: int,
+        height: int,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+    ) -> dict[str, object]:
+        del state, scene_usd, width, height, focus_object_id, focus_receptacle_id
+        for path in view_paths.values():
+            _write_nonblank_image(path)
+        return {
+            "robot_view_images": {key: str(path) for key, path in view_paths.items()},
+            "render_steps": 7,
+            "robot_view_uses_mounted_head_camera": False,
+            "semantic_pose_stage_application": {
+                "schema": "isaac_semantic_pose_stage_application_v1",
+                "status": "blocked",
+                "applied_object_count": 0,
+                "failed_object_count": 1,
+                "rendered_to_usd": False,
+                "failed_objects": [{"object_id": "mug_01", "reason": "missing_object_prim"}],
+            },
+        }
+
+    monkeypatch.setattr(isaac_lab_backend_worker, "real_runtime_smoke", fake_real_runtime_smoke)
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "capture_semantic_pose_robot_views",
+        fake_capture_semantic_pose_robot_views,
+    )
+    isaac_lab_backend_worker.init_state(
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                str(state_path),
+                "init",
+                "--run-dir",
+                str(run_dir),
+                "--runtime-mode",
+                "real",
+                "--include-robot",
+                "--scene-usd-path",
+                str(scene_usd),
+            ]
+        )
+    )
+
+    result = isaac_lab_backend_worker.write_robot_views(
+        isaac_lab_backend_worker.parse_args(
+            [
+                "--state-path",
+                str(state_path),
+                "robot_views",
+                "--output-dir",
+                str(run_dir / "robot_views"),
+                "--label",
+                "0001_semantic_pose",
+                "--render-width",
+                "64",
+                "--render-height",
+                "48",
+            ]
+        ),
+        isaac_lab_backend_worker.read_state(state_path),
+    )
+
+    assert result["ok"] is True
+    assert result["view_provenance"]["semantic_pose_state_refreshed"] is False
+    assert "isaac_lab_camera_rgb_static_robot_views" in json.dumps(result["view_provenance"])
+    state = isaac_lab_backend_worker.read_state(state_path)
+    assert state["semantic_pose_state"]["rendered_to_usd"] is False
+    assert any(
+        item["area"] == "semantic_pose_robot_view_rerender"
+        and item["status"] == "blocked_capability"
+        and item["semantic_pose_stage_application"]["rendered_to_usd"] is False
         for item in state["mapping_gaps"]
     )
 
