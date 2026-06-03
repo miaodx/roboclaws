@@ -559,7 +559,7 @@ def test_live_codex_sanitized_continuation_prompt_prioritizes_closeout() -> None
     )
 
 
-def test_live_codex_final_continuation_prompt_forces_closeout_probe() -> None:
+def test_live_codex_final_continuation_prompt_prioritizes_required_sweep() -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
 
     continuation = run_codex._codex_continuation_prompt(
@@ -572,8 +572,31 @@ def test_live_codex_final_continuation_prompt_forces_closeout_probe() -> None:
     assert "Do not start a new optional cleanup chain from visible_object_detections" in (
         continuation
     )
-    assert "call done now so the server either closes the report" in continuation
+    assert "do not call done first" in continuation
+    assert "call navigate_to_waypoint for the required waypoint" in continuation
+    assert "then call observe in the same turn" in continuation
+    assert "Only after every inspection waypoint has an observe response" in continuation
     assert "handle only those exact pending candidates" in continuation
+
+
+def test_live_codex_sanitized_lane_gets_larger_default_turn_budget() -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+
+    assert (
+        run_codex._codex_max_turns(
+            profile="world-labels-sanitized",
+            requested_continuations=8,
+        )
+        == 15
+    )
+    assert run_codex._codex_max_turns(profile="world-labels", requested_continuations=8) == 9
+    assert (
+        run_codex._codex_max_turns(
+            profile="world-labels-sanitized",
+            requested_continuations=20,
+        )
+        == 21
+    )
 
 
 def test_live_codex_recovers_from_misrouted_update_plan_tool_error(

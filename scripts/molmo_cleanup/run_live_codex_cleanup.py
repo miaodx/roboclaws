@@ -256,7 +256,10 @@ class LiveCodexCleanupRunner:
         print(f"==> kickoff: {self.args.kickoff_prompt}")
 
         event_paths: list[Path] = []
-        max_turns = max(1, int(self.args.codex_max_continuations) + 1)
+        max_turns = _codex_max_turns(
+            profile=self.args.profile,
+            requested_continuations=self.args.codex_max_continuations,
+        )
         for turn_index in range(max_turns):
             is_initial_turn = turn_index == 0
             prompt = (
@@ -754,12 +757,19 @@ def _codex_continuation_prompt(
     closeout_instruction = ""
     if final_turn:
         closeout_instruction = (
-            " This is the final automatic continuation. Do not start a new optional "
-            "cleanup chain from visible_object_detections. If held_object_id is empty, "
-            "call done now so the server either closes the report or returns "
-            "pending_cleanup_candidates; handle only those exact pending candidates "
-            "if any are returned. If you are holding an object, place it using the "
-            "current required_tool or recovery_hint, then call done."
+            " This is the final automatic continuation. Treat it as mandatory closeout, "
+            "not optional cleanup. Do not start a new optional cleanup chain from "
+            "visible_object_detections. If metric_map or done reports "
+            "unvisited_waypoint_ids, next_waypoint_id, or "
+            "required_tool=navigate_to_waypoint, do not call done first; immediately "
+            "call navigate_to_waypoint for the required waypoint and then call observe "
+            "in the same turn. Repeat that navigate_to_waypoint -> observe pair for "
+            "remaining unvisited waypoints when the public response lists them. Only "
+            "after every inspection waypoint has an observe response and held_object_id "
+            "is empty, call done. If done returns pending_cleanup_candidates, handle "
+            "only those exact pending candidates. If you are holding an object, place "
+            "it using the current required_tool or recovery_hint, then continue the "
+            "mandatory coverage/done closeout."
         )
     return _codex_live_prompt(
         "Continue the same active cleanup MCP session. This is automatic "
@@ -788,6 +798,16 @@ def _codex_live_prompt(prompt: str) -> str:
         f"{CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION}\n\n"
         f"{prompt}"
     )
+
+
+def _codex_max_turns(*, profile: str, requested_continuations: int) -> int:
+    continuations = max(0, int(requested_continuations))
+    if profile == "world-labels-sanitized":
+        # The sanitized minimal-map lane sweeps fourteen generated waypoints while
+        # choosing destinations without cleanup oracle hints, so the generic live
+        # Codex turn budget can reach its final turn before coverage closeout.
+        continuations = max(continuations, 14)
+    return max(1, continuations + 1)
 
 
 def _recoverable_provider_tool_error(*paths: Path) -> str | None:
