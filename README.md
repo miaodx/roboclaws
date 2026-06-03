@@ -80,6 +80,16 @@ just task::run <task> <driver> [report|profile] [key=value ...]
 For full command routing, profiles, and maintainer-only recipes, read
 [just/README.md](just/README.md).
 
+To monitor and launch the supported local Codex household routes from a
+standalone browser console, run:
+
+```bash
+just console::run
+```
+
+The console is Codex-only for v1 and uses route metadata instead of arbitrary
+browser-submitted shell commands.
+
 ## Demo Matrix
 
 GitHub Actions publishes the report site at
@@ -97,6 +107,7 @@ Pages republishes from successful `main` runs.
 | Semantic map build | A no-cleanup sweep starts from the minimal navigation map and builds public runtime map evidence. Online `runtime_metric_map.json` output and converted Agibot `navigation_memory.json` can both feed the canonical Actionable Semantic Map Snapshot contract. | `just task::run semantic-map-build direct world-labels seed=7 generated_mess_count=5` | Local artifact today. |
 | Household cleanup | A cleanup agent tidies a generated household mess from minimal map context while private scoring stays hidden. | `just task::run household-cleanup direct world-labels seed=7 generated_mess_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2.5](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5/seed-7/report.html) |
 | Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just task::run household-cleanup claude world-labels seed=7 generated_mess_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
+| Codex operator console | Standalone local browser console for Codex-only MuJoCo, Isaac, and Agibot G2 household/map routes with backend locks, gates, live state, and artifact links. | `just console::run` | Local-only operator surface. |
 | Railway appliance | Single-container hosted demo with UI, viewer, Gateway, and AI2-THOR. | `DEMO_PASSWORD=demo just appliance::run local` | Local appliance surface. |
 | Maintainer gate | Fast mock confidence check before shipping repo changes. | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
 

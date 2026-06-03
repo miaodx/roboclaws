@@ -91,6 +91,10 @@ Key pieces:
 - `roboclaws/household/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.
+- `roboclaws/operator_console/` provides the standalone local Codex operator
+  console. It exposes explicit Codex-only route metadata, per-backend locks,
+  route gates, normalized live operator state, redacted raw-log access, and
+  links to existing run artifacts.
 
 The clean-slate direction is:
 
@@ -123,6 +127,7 @@ Examples:
 just task::run ai2thor-nav codex visual
 just task::run semantic-map-build direct world-labels seed=7
 just task::run household-cleanup direct world-labels seed=7
+just console::run
 ```
 
 For household tasks, the third positional token is a cleanup input/evidence
@@ -142,6 +147,11 @@ is the canonical downstream artifact contract, and `household-cleanup`
 consumes household-world evidence for cleanup. Older Molmo-specific
 task/profile names are legacy compatibility details, not the canonical task
 layer.
+
+`just console::run` starts a standalone local operator console for supported
+Codex household routes. The console does not expose arbitrary shell commands:
+route selection comes from explicit console metadata and still resolves through
+the public task/catalog constraints.
 
 ## Capability Profiles
 
