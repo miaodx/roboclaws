@@ -255,6 +255,7 @@ class IsaacLabSubprocessBackend:
                 "output_path": str(result.get("output_path") or ""),
                 "visual_artifact_provenance": result.get("visual_artifact_provenance"),
                 "placeholder_visuals": result.get("placeholder_visuals"),
+                "native_render_diagnostics": result.get("native_render_diagnostics") or {},
                 "snapshot_provenance": provenance,
             }
         )
