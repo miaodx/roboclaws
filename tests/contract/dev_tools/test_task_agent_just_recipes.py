@@ -1015,6 +1015,8 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
     assert "perfect structured detections without cleanup destination oracle fields" in prompt
     assert "do not wait for or rely on cleanup_recommended" in prompt
     assert "destination_policy_status is policy_required" in prompt
+    assert "destination_policy.preferred_fixture_categories" in prompt
+    assert "destination_policy.placement_tool_by_fixture_category" in prompt
     assert "instead of skipping the object" in prompt
     assert "do not re-clean observed handles" in prompt
     assert "call done as the authoritative closeout probe" in prompt

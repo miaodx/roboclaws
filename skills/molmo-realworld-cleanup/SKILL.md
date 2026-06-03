@@ -79,6 +79,17 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    its `support_estimate.fixture_id`, treat that public candidate as cleanup
    work and use the `candidate_fixture_id` as the target. Do not leave such a
    handle pending just because the current surface looks plausible.
+   In `world-labels-sanitized`, detections intentionally omit
+   `candidate_fixture_id`, `cleanup_recommended`, and `recommended_tool`.
+   Treat `destination_policy` as public category/fixture-affordance guidance:
+   match `destination_policy.preferred_fixture_categories` against
+   `runtime_metric_map.public_semantic_anchors` or other public fixture
+   evidence, then use `destination_policy.placement_tool` unless a tool
+   recovery response requires a different public tool. When
+   `destination_policy.placement_tool_by_fixture_category` has an entry for the
+   matched public fixture category, use that entry. This policy is not private
+   destination truth; it only says which public fixture categories are
+   semantically suitable.
    The server rejects skipped semantic phases: if you call `pick` before
    `navigate_to_object`, or `place` before `navigate_to_receptacle`, recover by
    calling the `required_tool` named in the error response.

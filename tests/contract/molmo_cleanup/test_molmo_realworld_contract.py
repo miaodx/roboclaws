@@ -108,9 +108,46 @@ def test_world_labels_sanitized_observations_omit_destination_oracle_fields() ->
     assert detection["support_estimate"]
     assert "cleanup_recommended" not in detection
     assert detection["destination_policy_status"] == "policy_required"
+    assert detection["destination_policy"]["private_truth_included"] is False
+    assert detection["destination_policy"]["preferred_fixture_categories"]
+    assert "candidate_fixture_id" not in detection["destination_policy"]
     assert "candidate_fixture_id" not in detection
     assert "recommended_tool" not in detection
     _assert_no_forbidden_keys(sanitized_observation)
+
+
+def test_world_labels_sanitized_destination_policy_is_public_category_guidance() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+    )
+
+    policies_by_category = {}
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        for detection in observation["visible_object_detections"]:
+            policies_by_category.setdefault(
+                str(detection["category"]).lower(),
+                detection["destination_policy"],
+            )
+
+    food_policy = policies_by_category["food"]
+    dish_policy = policies_by_category["dish"]
+    book_policy = policies_by_category["book"]
+
+    assert food_policy["source"] == "public_category_fixture_affordance"
+    assert food_policy["preferred_fixture_categories"] == ["fridge", "refrigerator"]
+    assert food_policy["placement_tool"] == "place_inside"
+    assert food_policy["placement_tool_by_fixture_category"] == {
+        "fridge": "place_inside",
+        "refrigerator": "place_inside",
+    }
+    assert food_policy["private_truth_included"] is False
+    assert dish_policy["preferred_fixture_categories"] == ["sink", "countertop"]
+    assert dish_policy["placement_tool"] == "place"
+    assert book_policy["placement_tool_by_fixture_category"]["shelvingunit"] == "place_inside"
+    assert book_policy["placement_tool_by_fixture_category"]["desk"] == "place"
 
 
 def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> None:
@@ -656,9 +693,12 @@ def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_desti
     assert observed["candidate_fixture_id"] == ""
     assert observed["candidate_source"] == "policy_required_destination_selection"
     assert observed["destination_policy_status"] == "policy_required"
+    assert observed["destination_policy"]["preferred_fixture_categories"]
+    assert observed["destination_policy"]["private_truth_included"] is False
     assert "cleanup_recommended" not in worklist_item
     assert worklist_item["candidate_fixture_id"] == ""
     assert worklist_item["destination_policy_status"] == "policy_required"
+    assert worklist_item["destination_policy"] == observed["destination_policy"]
     assert runtime_map["producer_summary"]["producer_types"][
         SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
     ] >= 1

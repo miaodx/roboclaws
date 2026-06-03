@@ -176,6 +176,18 @@ _OBJECT_CATEGORY_TARGETS: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = 
     ),
 )
 
+_INSIDE_DESTINATION_CATEGORY_TERMS = frozenset(
+    {
+        "bookcase",
+        "bookshelf",
+        "fridge",
+        "refrigerator",
+        "shelf",
+        "shelving",
+        "shelvingunit",
+    }
+)
+
 
 class RealWorldCleanupContract:
     """ADR-0003 public/private cleanup contract.
@@ -1740,6 +1752,9 @@ class RealWorldCleanupContract:
         payload["perception_source"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
         payload["detection_exposure_policy"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
         payload["destination_policy_status"] = "policy_required"
+        payload["destination_policy"] = _public_destination_policy_for_category(
+            payload.get("category")
+        )
         support = dict(payload.get("support_estimate") or {})
         if support:
             support["source"] = "public_support_evidence"
@@ -2156,6 +2171,9 @@ class RealWorldCleanupContract:
         }
         if self.sanitize_world_labels:
             payload["destination_policy_status"] = "policy_required"
+            payload["destination_policy"] = _public_destination_policy_for_category(
+                payload.get("category")
+            )
         if detection.get("prior_object_id"):
             payload["prior_object_id"] = str(detection["prior_object_id"])
         if detection.get("snapshot_object_id"):
@@ -2222,6 +2240,9 @@ class RealWorldCleanupContract:
                 cleanup_recommended = False
                 candidate_source = "policy_required_destination_selection"
                 destination_policy_status = "policy_required"
+            destination_policy = _public_destination_policy_for_category(
+                detection.get("category")
+            )
             row = {
                 "object_id": handle,
                 "state": state,
@@ -2235,6 +2256,8 @@ class RealWorldCleanupContract:
                 "perception_source": lifecycle.get("perception_source", "visible_detection"),
                 "destination_policy_status": destination_policy_status,
             }
+            if self.sanitize_world_labels:
+                row["destination_policy"] = destination_policy
             if not self.sanitize_world_labels:
                 row["cleanup_recommended"] = cleanup_recommended
             lifecycle_rows.append(row)
@@ -4797,6 +4820,72 @@ def _fixture_affordances(fixture: dict[str, Any]) -> list[str]:
 def _recommended_place_tool(fixture_id: str, fixtures: dict[str, dict[str, Any]]) -> str:
     fixture = fixtures.get(fixture_id, {})
     return "place_inside" if _fixture_prefers_inside(fixture) else "place"
+
+
+def _public_destination_policy_for_category(category: Any) -> dict[str, Any]:
+    category_norm = _norm(category)
+    preferred: tuple[str, ...] = ()
+    for object_aliases, fixture_aliases in _OBJECT_CATEGORY_TARGETS:
+        if any(_norm(alias) and _norm(alias) in category_norm for alias in object_aliases):
+            preferred = fixture_aliases
+            break
+    if not preferred:
+        preferred = (
+            "countertop",
+            "table",
+            "desk",
+        )
+    normalized = [_normalize_fixture_category_label(item) for item in preferred]
+    normalized = [
+        item for index, item in enumerate(normalized) if item and item not in normalized[:index]
+    ]
+    placement_tool_by_category = {
+        item: _public_destination_policy_tool_for_fixture_category(item) for item in normalized
+    }
+    placement_tool = (
+        placement_tool_by_category.get(normalized[0], "place") if normalized else "place"
+    )
+    return {
+        "schema": "public_cleanup_destination_policy_v1",
+        "source": "public_category_fixture_affordance",
+        "preferred_fixture_categories": normalized,
+        "acceptable_fixture_categories": normalized,
+        "placement_tool": placement_tool,
+        "placement_tool_by_fixture_category": placement_tool_by_category,
+        "requires_public_anchor_selection": True,
+        "private_truth_included": False,
+        "instruction": (
+            "Select a public semantic anchor or fixture whose category matches one of "
+            "preferred_fixture_categories; do not infer or request private destination ids."
+        ),
+    }
+
+
+def _public_destination_policy_tool_for_fixture_category(category: Any) -> str:
+    return (
+        "place_inside"
+        if _norm(category) in _INSIDE_DESTINATION_CATEGORY_TERMS
+        else "place"
+    )
+
+
+def _normalize_fixture_category_label(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    compact = _norm(text)
+    aliases = {
+        "tvstand": "tvstand",
+        "tv stand": "tvstand",
+        "shelvingunit": "shelvingunit",
+        "shelving unit": "shelvingunit",
+        "book shelf": "bookshelf",
+        "laundry hamper": "laundryhamper",
+        "toy bin": "toybin",
+    }
+    if text in aliases:
+        return aliases[text]
+    if compact in aliases:
+        return aliases[compact]
+    return compact or text
 
 
 def _fixture_footprint(fixture_id: str) -> dict[str, Any]:
