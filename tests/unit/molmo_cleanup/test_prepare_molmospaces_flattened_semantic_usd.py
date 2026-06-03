@@ -210,6 +210,87 @@ def test_prepare_flattened_semantic_usd_material_scale_candidate_is_opt_in(
     assert "float xformOp:rotateX = -10" in square_text
 
 
+def test_prepare_flattened_semantic_usd_freezes_visual_physics_by_default(
+    tmp_path: Path,
+) -> None:
+    scene_dir = tmp_path / "val_1"
+    scene_dir.mkdir()
+    scene_usd = scene_dir / "scene.usda"
+    output_usd = tmp_path / "flattened" / "scene_semantic.usda"
+    _write_articulated_box_scene(scene_usd)
+    (scene_dir / "scene_metadata.json").write_text(
+        json.dumps(
+            {
+                "objects": {
+                    "box_01": {
+                        "asset_id": "Box_10",
+                        "object_id": "Box|surface|1",
+                        "category": "Box",
+                        "is_static": False,
+                        "children": [],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = prepare_flattened_semantic_usd(
+        scene_usd_path=scene_usd,
+        output_usd_path=output_usd,
+    )
+
+    output_text = output_usd.read_text(encoding="utf-8")
+    assert summary["visual_physics_status"] == "frozen_static_visual_usd"
+    assert summary["visual_physics_joint_removed_count"] == 1
+    assert summary["visual_physics_api_schema_removed_count"] >= 1
+    assert summary["visual_physics_property_removed_count"] >= 1
+    assert "def PhysicsRevoluteJoint" not in output_text
+    assert "PhysicsRigidBodyAPI" not in output_text
+    assert "physics:mass" not in output_text
+    assert 'def Mesh "mesh"' in output_text
+    assert "semantics:labels:class" in output_text
+
+
+def test_prepare_flattened_semantic_usd_can_preserve_source_physics(
+    tmp_path: Path,
+) -> None:
+    scene_dir = tmp_path / "val_1"
+    scene_dir.mkdir()
+    scene_usd = scene_dir / "scene.usda"
+    output_usd = tmp_path / "flattened" / "scene_semantic.usda"
+    _write_articulated_box_scene(scene_usd)
+    (scene_dir / "scene_metadata.json").write_text(
+        json.dumps(
+            {
+                "objects": {
+                    "box_01": {
+                        "asset_id": "Box_10",
+                        "object_id": "Box|surface|1",
+                        "category": "Box",
+                        "is_static": False,
+                        "children": [],
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    summary = prepare_flattened_semantic_usd(
+        scene_usd_path=scene_usd,
+        output_usd_path=output_usd,
+        freeze_visual_physics=False,
+    )
+
+    output_text = output_usd.read_text(encoding="utf-8")
+    assert summary["visual_physics_status"] == "source_physics_preserved"
+    assert summary["visual_physics_joint_removed_count"] == 0
+    assert "def PhysicsRevoluteJoint" in output_text
+    assert "PhysicsRigidBodyAPI" in output_text
+    assert "physics:mass" in output_text
+
+
 def _write_scene(path: Path) -> None:
     stage = Usd.Stage.CreateNew(str(path))
     stage.SetDefaultPrim(UsdGeom.Xform.Define(stage, "/val_1").GetPrim())
@@ -222,6 +303,37 @@ def _write_scene(path: Path) -> None:
     assert bowl.GetPrim().IsValid()
     assert sink.GetPrim().IsValid()
     stage.GetRootLayer().Save()
+
+
+def _write_articulated_box_scene(path: Path) -> None:
+    path.write_text(
+        """#usda 1.0
+def Xform "val_1"
+{
+    def Xform "Geometry"
+    {
+        def Xform "box_01" (
+            apiSchemas = ["PhysicsRigidBodyAPI"]
+        )
+        {
+            float physics:mass = 1
+
+            def Mesh "mesh"
+            {
+            }
+
+            def PhysicsRevoluteJoint "box_flap_joint"
+            {
+                uniform token physics:axis = "X"
+                float physics:lowerLimit = 0
+                float physics:upperLimit = 90
+            }
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
 
 
 def _write_scene_with_texture_scale(path: Path) -> None:

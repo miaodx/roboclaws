@@ -1007,6 +1007,57 @@ def Xform "World"
     assert location["target_contract_delta"]["status"] == "missing_object_binding_evidence"
 
 
+def test_robot_camera_isaac_render_contract_reports_visual_physics(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_visual_physics_contract",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+    def Xform "box_1" (
+        apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        float physics:mass = 1
+        def Mesh "mesh"
+        {
+            rel material:binding = </World/Looks/BoxMat>
+        }
+        def PhysicsRevoluteJoint "flap_joint"
+        {
+            float physics:lowerLimit = 0
+        }
+    }
+    def Scope "Looks"
+    {
+        def Material "BoxMat"
+        {
+            token outputs:surface.connect = </World/Looks/BoxMat/Shader.outputs:surface>
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    contract = run_camera._isaac_render_contract_from_usda(str(isaac_usd))
+    view = run_camera._isaac_view_render_contract(contract, usd_prim_path="/World/box_1")
+
+    assert contract["visual_physics_status"] == "physics_articulation_preserved"
+    assert contract["physics_joint_paths"] == ["/World/box_1/flap_joint"]
+    assert contract["physics_api_schema_prim_paths"] == ["/World/box_1"]
+    assert contract["physics_property_prim_paths"] == ["/World/box_1"]
+    assert view["visual_physics_status"] == "physics_articulation_preserved"
+    assert view["physics_joint_count"] == 1
+    assert view["physics_api_schema_prim_count"] == 1
+    assert view["physics_property_prim_count"] == 1
+
+
 def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Path) -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -1195,6 +1246,96 @@ def Xform "World"
     assert items["table_1"]["state_status"] == "state_not_rendered_to_usd"
     high_priority_ids = {item["target_id"] for item in audit["high_priority_items"]}
     assert {"box_1", "bowl_1", "table_1"} <= high_priority_ids
+
+
+def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_box_visual_state_frozen",
+    )
+
+    contract = run_camera._object_visual_state_contract(
+        target_id="box_1",
+        kind="object",
+        mujoco_entry={"category": "Box"},
+        isaac_entry={"category": "Box"},
+        mujoco_state={
+            "joint_states": {
+                "box_1": [
+                    {
+                        "joint_name": "box_1_box10flapinner1joint0",
+                        "joint_type": "hinge",
+                        "qpos": 2.91219,
+                        "ref": 2.91219,
+                        "range": [0.0, 2.91219],
+                    },
+                    {
+                        "joint_name": "box_1_box10flapinner2joint0",
+                        "joint_type": "hinge",
+                        "qpos": -3.06698,
+                        "ref": -3.06698,
+                        "range": [-3.06698, 0.0],
+                    },
+                ]
+            }
+        },
+        isaac_state={},
+        isaac_contract={
+            "status": "parsed",
+            "material_bindings": {},
+            "physics_joint_paths": [],
+            "physics_api_schema_prim_paths": [],
+            "physics_property_prim_paths": [],
+        },
+        usd_prim_path="/World/box_1",
+    )
+
+    assert contract["status"] == "visual_state_static_ref_baked"
+    assert contract["mujoco"]["status"] == "mujoco_ref_endpoint_articulation"
+    assert contract["mujoco"]["endpoint_joint_count"] == 2
+    assert contract["isaac"]["status"] == "isaac_visual_physics_frozen"
+    assert "PhysX will not re-open" in contract["reason"]
+
+
+def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_box_visual_state_physics",
+    )
+
+    contract = run_camera._object_visual_state_contract(
+        target_id="box_1",
+        kind="object",
+        mujoco_entry={"category": "Box"},
+        isaac_entry={"category": "Box"},
+        mujoco_state={
+            "joint_states": {
+                "box_1": [
+                    {
+                        "joint_name": "box_1_box10flapouter1joint0",
+                        "joint_type": "hinge",
+                        "qpos": -2.93938,
+                        "ref": -2.93938,
+                        "range": [-2.93938, 0.0],
+                    }
+                ]
+            }
+        },
+        isaac_state={},
+        isaac_contract={
+            "status": "parsed",
+            "material_bindings": {},
+            "physics_joint_paths": ["/World/box_1/Geometry/flap_joint"],
+            "physics_api_schema_prim_paths": ["/World/box_1/Geometry/flap"],
+            "physics_property_prim_paths": ["/World/box_1/Geometry/flap"],
+        },
+        usd_prim_path="/World/box_1",
+    )
+
+    assert contract["status"] == "visual_state_articulation_physics_preserved"
+    assert contract["isaac"]["status"] == "isaac_articulation_physics_preserved"
+    assert contract["isaac"]["physics_joint_count"] == 1
+    assert "re-solve those joints" in contract["reason"]
 
 
 def test_robot_camera_patch_isaac_pose_can_set_comparison_color_profile(
