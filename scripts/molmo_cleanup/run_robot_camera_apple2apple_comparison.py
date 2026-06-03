@@ -863,6 +863,15 @@ def _attach_render_contract_diagnostics(
     manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
         object_audit
     )
+    gate_diagnostics = _object_render_parity_diagnostics(
+        object_audit=object_audit,
+        render_domain_checks=domain_checks,
+        residual_triage=_dict(manifest.get("summary")).get("residual_triage"),
+    )
+    manifest["object_render_parity_diagnostics"] = gate_diagnostics
+    manifest.setdefault("summary", {})["object_render_parity_diagnostics"] = (
+        _compact_object_render_parity_diagnostics(gate_diagnostics)
+    )
 
 
 def _scene_binding_summary(scene_binding_diagnostics: dict[str, Any]) -> dict[str, Any]:
@@ -1002,6 +1011,220 @@ def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
         "render_contract_status_counts": audit.get("render_contract_status_counts"),
         "high_priority_items": audit.get("high_priority_items"),
         "recommended_next_action": audit.get("recommended_next_action"),
+    }
+
+
+def _object_render_parity_diagnostics(
+    *,
+    object_audit: dict[str, Any],
+    render_domain_checks: dict[str, Any],
+    residual_triage: dict[str, Any] | None,
+) -> dict[str, Any]:
+    items = _list_dicts(object_audit.get("items"))
+    item_records = [_object_gate_record(item) for item in items]
+    object_failures = [
+        item for item in item_records if item.get("object_gate_status") != "comparable"
+    ]
+    comparable = [item for item in item_records if item.get("object_gate_status") == "comparable"]
+    render_gate = _render_gate_diagnostics(
+        comparable_records=comparable,
+        render_domain_checks=render_domain_checks,
+        residual_triage=residual_triage or {},
+    )
+    object_gate_status = (
+        "no_object_records"
+        if not item_records
+        else "object_gate_failures_detected"
+        if object_failures
+        else "object_gate_comparable"
+    )
+    if object_gate_status == "no_object_records":
+        status = "no_object_records"
+        next_action = "Run a comparison with MuJoCo/Isaac state artifacts before parity claims."
+    elif object_failures:
+        status = "object_gate_failures_detected"
+        next_action = (
+            "Fix or mark non-comparable object bindings, geometry, pose, material, or "
+            "visual-state rows before treating RGB residuals as render-domain evidence."
+        )
+    else:
+        status = render_gate.get("status") or "render_gate_unclassified"
+        next_action = str(
+            render_gate.get("recommended_next_action")
+            or "Comparable object rows are ready for render-domain residual triage."
+        )
+    return {
+        "schema": "robot_camera_object_render_parity_diagnostics_v1",
+        "status": status,
+        "object_gate": {
+            "status": object_gate_status,
+            "item_count": len(item_records),
+            "comparable_count": len(comparable),
+            "failure_count": len(object_failures),
+            "status_counts": _status_counts(
+                item.get("object_gate_status") for item in item_records
+            ),
+            "classification_counts": _status_counts(
+                item.get("classification") for item in item_records
+            ),
+            "failure_records": object_failures[:20],
+            "comparable_records": comparable[:20],
+        },
+        "render_gate": render_gate,
+        "recommended_next_action": next_action,
+        "interpretation": (
+            "The Object Gate decides whether scene objects are present, bound, renderable, "
+            "posed, and in an auditable visual/material state. The Render Gate only "
+            "interprets camera RGB residuals after comparable object rows are separated "
+            "from missing or mismatched objects."
+        ),
+    }
+
+
+def _compact_object_render_parity_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
+    object_gate = _dict(diagnostics.get("object_gate"))
+    render_gate = _dict(diagnostics.get("render_gate"))
+    return {
+        "schema": diagnostics.get("schema"),
+        "status": diagnostics.get("status"),
+        "object_gate_status": object_gate.get("status"),
+        "object_gate_item_count": object_gate.get("item_count"),
+        "object_gate_comparable_count": object_gate.get("comparable_count"),
+        "object_gate_failure_count": object_gate.get("failure_count"),
+        "object_gate_status_counts": object_gate.get("status_counts"),
+        "object_gate_classification_counts": object_gate.get("classification_counts"),
+        "render_gate_status": render_gate.get("status"),
+        "render_gate_residual_status": render_gate.get("residual_status"),
+        "render_gate_render_domain_status": render_gate.get("render_domain_status"),
+        "recommended_next_action": diagnostics.get("recommended_next_action"),
+    }
+
+
+def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
+    statuses = _object_parity_item_statuses(item)
+    classification = _object_gate_classification(item, statuses)
+    blocking_status = _object_gate_blocking_status(item, statuses)
+    object_gate_status = "comparable" if classification == "comparable" else "not_comparable"
+    render_delta = _dict(item.get("render_contract_delta"))
+    visual_state = _dict(item.get("visual_state_contract"))
+    return {
+        "kind": item.get("kind"),
+        "target_id": item.get("target_id"),
+        "object_gate_status": object_gate_status,
+        "classification": classification,
+        "blocking_status": blocking_status,
+        "binding_status": item.get("binding_status"),
+        "category_status": item.get("category_status"),
+        "pose_status": item.get("pose_status"),
+        "support_status": item.get("support_status"),
+        "state_status": item.get("state_status"),
+        "render_contract_status": render_delta.get("status"),
+        "visual_state_status": visual_state.get("status"),
+        "pose_delta_m": item.get("pose_delta_m"),
+        "mujoco_category": _dict(item.get("mujoco")).get("category"),
+        "isaac_category": _dict(item.get("isaac")).get("category")
+        or _dict(item.get("isaac")).get("usd_category"),
+        "isaac_usd_prim_path": _dict(item.get("isaac")).get("usd_prim_path"),
+        "selected_public_target": item.get("selected_public_target"),
+    }
+
+
+def _object_gate_classification(item: dict[str, Any], statuses: set[str]) -> str:
+    binding_status = str(item.get("binding_status") or "")
+    if binding_status in {"missing_both", "missing_mujoco_state", "missing_isaac_index"}:
+        return "missing_binding"
+    if binding_status in {"missing_usd_prim_path", "isaac_geometry_gap"}:
+        return "missing_renderable_geometry"
+    if str(item.get("category_status") or "") == "category_delta":
+        return "not_comparable"
+    if str(item.get("pose_status") or "") == "pose_delta":
+        return "pose_delta"
+    if str(item.get("support_status") or "") == "support_metadata_delta":
+        return "pose_delta"
+    if str(item.get("state_status") or "") in {
+        "state_delta",
+        "state_not_rendered_to_usd",
+        "visual_state_articulation_physics_preserved",
+        "visual_state_unverified",
+    }:
+        return "visual_state_delta"
+    if str(_dict(item.get("render_contract_delta")).get("status") or "") in {
+        "material_or_texture_name_delta",
+        "missing_object_binding_evidence",
+    }:
+        return "material_delta"
+    if any(status.startswith("missing_") for status in statuses):
+        return "missing_binding"
+    return "comparable"
+
+
+def _object_gate_blocking_status(item: dict[str, Any], statuses: set[str]) -> str:
+    for value in (
+        item.get("binding_status"),
+        item.get("category_status"),
+        item.get("pose_status"),
+        item.get("support_status"),
+        item.get("state_status"),
+        _dict(item.get("visual_state_contract")).get("status"),
+        _dict(item.get("render_contract_delta")).get("status"),
+    ):
+        status = str(value or "")
+        if (
+            status
+            and status in statuses
+            and status
+            not in {
+                "bound_in_both",
+                "category_aligned",
+                "pose_aligned",
+                "support_metadata_aligned",
+                "support_not_reported",
+                "state_aligned",
+                "not_applicable",
+                "material_texture_names_match",
+            }
+        ):
+            return status
+    return ""
+
+
+def _render_gate_diagnostics(
+    *,
+    comparable_records: list[dict[str, Any]],
+    render_domain_checks: dict[str, Any],
+    residual_triage: dict[str, Any],
+) -> dict[str, Any]:
+    residual_status = str(residual_triage.get("status") or "")
+    render_domain_status = str(render_domain_checks.get("status") or "")
+    if not comparable_records:
+        status = "blocked_by_object_gate"
+        next_action = "No comparable object rows are available for render-domain residual claims."
+    elif (
+        render_domain_status
+        in {
+            "render_domain_delta_confirmed",
+            "render_domain_checks_low_priority",
+        }
+        or residual_status
+    ):
+        status = "render_domain_residual"
+        next_action = str(
+            render_domain_checks.get("recommended_next_action")
+            or residual_triage.get("recommended_next_action")
+            or "Continue render-domain triage on comparable object rows."
+        )
+    else:
+        status = "render_gate_unclassified"
+        next_action = "Attach render-domain checks and residual triage before render claims."
+    return {
+        "schema": "robot_camera_render_gate_diagnostics_v1",
+        "status": status,
+        "comparable_object_count": len(comparable_records),
+        "render_domain_status": render_domain_status,
+        "residual_status": residual_status,
+        "residual_triage": residual_triage,
+        "render_domain_check_status_counts": render_domain_checks.get("check_status_counts") or {},
+        "recommended_next_action": next_action,
     }
 
 
@@ -1553,6 +1776,7 @@ def _object_parity_item_statuses(item: dict[str, Any]) -> set[str]:
             item.get("pose_status"),
             item.get("support_status"),
             item.get("state_status"),
+            _dict(item.get("visual_state_contract")).get("status"),
             _dict(item.get("render_contract_delta")).get("status"),
         )
         if value
@@ -3420,6 +3644,10 @@ def _dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _list_dicts(value: Any) -> list[dict[str, Any]]:
+    return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
 def _get_float(item: dict[str, Any], path: tuple[str, ...]) -> float | None:
     value: Any = item
     for key in path:
@@ -3540,10 +3768,63 @@ def _render_report(manifest: dict[str, Any]) -> str:
         + "</p><pre>"
         + html.escape(json.dumps(manifest.get("summary", {}), indent=2, sort_keys=True))
         + "</pre>"
+        + _render_object_render_parity_diagnostics(manifest)
         + _render_object_parity_audit(manifest)
         + "</header>"
         + "".join(rows)
         + "</body></html>"
+    )
+
+
+def _render_object_render_parity_diagnostics(manifest: dict[str, Any]) -> str:
+    diagnostics = _dict(manifest.get("object_render_parity_diagnostics")) or _dict(
+        _dict(manifest.get("summary")).get("object_render_parity_diagnostics")
+    )
+    if not diagnostics:
+        return ""
+    object_gate = _dict(diagnostics.get("object_gate"))
+    render_gate = _dict(diagnostics.get("render_gate"))
+    failure_rows = []
+    for item in object_gate.get("failure_records") or []:
+        if not isinstance(item, dict):
+            continue
+        failure_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('kind') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('target_id') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('classification') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('blocking_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('binding_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('pose_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('state_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('render_contract_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('isaac_usd_prim_path') or ''))}</td>"
+            "</tr>"
+        )
+    failure_table = (
+        "<table><thead><tr><th>Kind</th><th>Target</th><th>Class</th>"
+        "<th>Blocking Status</th><th>Binding</th><th>Pose</th><th>State</th>"
+        "<th>Render Contract</th><th>Isaac Prim</th>"
+        "</tr></thead><tbody>" + "".join(failure_rows) + "</tbody></table>"
+        if failure_rows
+        else "<p>No Object Gate failures were detected.</p>"
+    )
+    return (
+        "<h2>Object/Render Gate</h2>"
+        "<p>Status: <code>"
+        + html.escape(str(diagnostics.get("status") or ""))
+        + "</code>. Object Gate <code>"
+        + html.escape(str(object_gate.get("status") or ""))
+        + "</code> with "
+        + html.escape(str(object_gate.get("comparable_count") or 0))
+        + " comparable and "
+        + html.escape(str(object_gate.get("failure_count") or 0))
+        + " failing rows. Render Gate <code>"
+        + html.escape(str(render_gate.get("status") or ""))
+        + "</code>.</p><p>"
+        + html.escape(str(diagnostics.get("recommended_next_action") or ""))
+        + "</p>"
+        + failure_table
     )
 
 

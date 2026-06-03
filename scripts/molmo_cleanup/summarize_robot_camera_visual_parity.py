@@ -227,6 +227,10 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     render_checks = _dict(summary.get("render_domain_checks"))
     render = _dict(summary.get("render_contract_diagnostics"))
     object_parity = _dict(summary.get("object_parity_audit") or payload.get("object_parity_audit"))
+    object_render = _dict(
+        summary.get("object_render_parity_diagnostics")
+        or payload.get("object_render_parity_diagnostics")
+    )
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
     return {
@@ -257,6 +261,11 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "object_parity_status": object_parity.get("status"),
         "object_parity_high_priority_gap_count": object_parity.get("high_priority_gap_count"),
         "object_parity_item_count": object_parity.get("item_count"),
+        "object_render_gate_status": object_render.get("status"),
+        "object_gate_status": object_render.get("object_gate_status"),
+        "object_gate_failure_count": object_render.get("object_gate_failure_count"),
+        "object_gate_comparable_count": object_render.get("object_gate_comparable_count"),
+        "render_gate_status": object_render.get("render_gate_status"),
         "target_selection": {
             "status": target_selection.get("status"),
             "selected_count": target_selection.get("selected_count"),
@@ -2198,6 +2207,9 @@ def _render_report(manifest: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('chase_mean_abs_rgb_avg') or ''))}</td>"
         f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
         f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_render_gate_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_gate_failure_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('render_gate_status') or ''))}</td>"
         "</tr>"
         for item in manifest.get("baselines") or []
         if isinstance(item, dict)
@@ -2210,17 +2222,22 @@ def _render_report(manifest: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
         f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
         f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_render_gate_status') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('object_gate_failure_count') or ''))}</td>"
+        f"<td>{html.escape(str(item.get('render_gate_status') or ''))}</td>"
         "</tr>"
         for item in manifest.get("probes") or []
         if isinstance(item, dict)
     )
     baseline_header = (
         "<tr><th>Manifest</th><th>Scene</th><th>FPV</th><th>Chase</th>"
-        "<th>Object Parity</th><th>Object Gaps</th></tr>"
+        "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
+        "<th>Gate Failures</th><th>Render Gate</th></tr>"
     )
     probe_header = (
         "<tr><th>Label</th><th>Kind</th><th>Scene</th><th>FPV</th>"
-        "<th>Object Parity</th><th>Object Gaps</th></tr>"
+        "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
+        "<th>Gate Failures</th><th>Render Gate</th></tr>"
     )
     return f"""<!doctype html>
 <html lang="en">

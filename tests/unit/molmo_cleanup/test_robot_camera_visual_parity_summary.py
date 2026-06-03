@@ -471,6 +471,13 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
             "item_count": 29,
             "high_priority_gap_count": 6,
         },
+        object_render_parity_diagnostics={
+            "status": "object_gate_failures_detected",
+            "object_gate_status": "object_gate_failures_detected",
+            "object_gate_failure_count": 6,
+            "object_gate_comparable_count": 23,
+            "render_gate_status": "render_domain_residual",
+        },
     )
 
     manifest = summary.build_summary(
@@ -486,9 +493,14 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
     baseline_summary = manifest["baselines"][0]
     assert baseline_summary["object_parity_status"] == "object_parity_gaps_detected"
     assert baseline_summary["object_parity_high_priority_gap_count"] == 6
+    assert baseline_summary["object_render_gate_status"] == "object_gate_failures_detected"
+    assert baseline_summary["object_gate_failure_count"] == 6
+    assert baseline_summary["render_gate_status"] == "render_domain_residual"
     report_html = (tmp_path / "summary" / "report.html").read_text(encoding="utf-8")
     assert "object_parity_gaps_detected" in report_html
     assert "<th>Object Gaps</th>" in report_html
+    assert "<th>Object/Render Gate</th>" in report_html
+    assert "object_gate_failures_detected" in report_html
 
 
 def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
@@ -1093,6 +1105,7 @@ def _write_robot_camera_manifest(
     pose_status: str = "fpv_world_pose_aligned",
     locations: list[dict] | None = None,
     object_parity_audit: dict | None = None,
+    object_render_parity_diagnostics: dict | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True)
     default_locations = [_visual_location(path.parent)] if locations is None else locations
@@ -1135,6 +1148,7 @@ def _write_robot_camera_manifest(
                 "dropped_unbound_target_count": 0,
             },
             "object_parity_audit": object_parity_audit or {},
+            "object_render_parity_diagnostics": object_render_parity_diagnostics or {},
         },
         "locations": default_locations,
     }

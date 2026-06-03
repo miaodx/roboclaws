@@ -1247,6 +1247,46 @@ def Xform "World"
     high_priority_ids = {item["target_id"] for item in audit["high_priority_items"]}
     assert {"box_1", "bowl_1", "table_1"} <= high_priority_ids
 
+    diagnostics = run_camera._object_render_parity_diagnostics(
+        object_audit=audit,
+        render_domain_checks={
+            "status": "render_domain_delta_confirmed",
+            "check_status_counts": {"light_shadow_contract_delta": 1},
+            "recommended_next_action": "Inspect renderer response.",
+        },
+        residual_triage={"status": "render_domain_geometry_or_texture_residual"},
+    )
+
+    assert diagnostics["schema"] == "robot_camera_object_render_parity_diagnostics_v1"
+    assert diagnostics["status"] == "object_gate_failures_detected"
+    object_gate = diagnostics["object_gate"]
+    assert object_gate["status"] == "object_gate_failures_detected"
+    assert object_gate["failure_count"] == 3
+    classifications = {
+        item["target_id"]: item["classification"] for item in object_gate["failure_records"]
+    }
+    assert classifications["box_1"] == "visual_state_delta"
+    assert classifications["bowl_1"] == "not_comparable"
+    assert classifications["table_1"] == "visual_state_delta"
+    blocking_statuses = {
+        item["target_id"]: item["blocking_status"] for item in object_gate["failure_records"]
+    }
+    assert blocking_statuses["bowl_1"] == "category_delta"
+    assert diagnostics["render_gate"]["status"] == "blocked_by_object_gate"
+
+    report_html = run_camera._render_report(
+        {
+            "purpose": "unit test",
+            "summary": {},
+            "object_render_parity_diagnostics": diagnostics,
+            "object_parity_audit": audit,
+            "locations": [],
+        }
+    )
+    assert "Object/Render Gate" in report_html
+    assert "object_gate_failures_detected" in report_html
+    assert "visual_state_delta" in report_html
+
 
 def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
     run_camera = _load_module(
