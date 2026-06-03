@@ -1171,6 +1171,19 @@ def test_isaac_mess_seed_updates_locations_and_pose_overrides() -> None:
         "private_manifest": {
             "targets": [{"object_id": "mug_01", "valid_receptacle_ids": ["sink_01"]}],
         },
+        "generated_mess_manifest": {
+            "schema": "roboclaws_generated_mess_manifest_v1",
+            "targets": [
+                {
+                    "object_id": "mug_01",
+                    "valid_receptacle_ids": ["sink_01"],
+                    "target_receptacle_id": "sink_01",
+                    "start_receptacle_id": "sofa_01",
+                    "relation": "on",
+                    "placement_index": 3,
+                }
+            ],
+        },
         "locations": {"mug_01": "sink_01"},
         "containment": {},
         "object_pose_overrides": {},
@@ -1208,7 +1221,10 @@ def test_isaac_mess_seed_updates_locations_and_pose_overrides() -> None:
     assert state["object_pose_overrides"]["mug_01"]["position_source"] == (
         "isaac_support_placement_resolver"
     )
-    assert state["mess_placement_diagnostics"][0]["diagnostic_source"] == "mess_seed"
+    assert state["object_pose_overrides"]["mug_01"]["source"] == "canonical_mess_manifest"
+    assert state["mess_placement_diagnostics"][0]["diagnostic_source"] == (
+        "canonical_mess_manifest"
+    )
     assert state["mess_placement_diagnostics"][0]["placement_support_status"] == ("direct_support")
 
 
@@ -2295,6 +2311,83 @@ def test_isaac_scene_index_can_pin_generated_mess_object_ids() -> None:
     assert scenario.private_manifest.targets[0].valid_receptacle_ids == ("fridge_01",)
 
 
+def test_isaac_scene_index_consumes_canonical_generated_mess_manifest() -> None:
+    object_index = {
+        "apple_01": {
+            "asset_id": "Apple_1",
+            "category": "Apple",
+            "kind": "object",
+            "parent": "counter_01",
+            "public_label": "Apple Apple|surface|1|3 Apple_1",
+        },
+        "plate_01": {
+            "asset_id": "Plate_1",
+            "category": "Plate",
+            "kind": "object",
+            "parent": "table_01",
+            "public_label": "Plate Plate|surface|1|4 Plate_1",
+        },
+    }
+    receptacle_index = {
+        "counter_01": {
+            "category": "CounterTop",
+            "kind": "receptacle",
+            "public_label": "CounterTop CounterTop|1|1",
+        },
+        "fridge_01": {
+            "category": "Fridge",
+            "kind": "receptacle",
+            "public_label": "Fridge Fridge|1|1",
+        },
+        "sink_01": {"category": "Sink", "kind": "receptacle", "public_label": "Sink Sink|1|1"},
+        "sofa_01": {"category": "Sofa", "kind": "receptacle", "public_label": "Sofa Sofa|1|1"},
+        "table_01": {
+            "category": "DiningTable",
+            "kind": "receptacle",
+            "public_label": "DiningTable DiningTable|1|1",
+        },
+    }
+    manifest = {
+        "schema": "roboclaws_generated_mess_manifest_v1",
+        "targets": [
+            {
+                "object_id": "apple_01",
+                "valid_receptacle_ids": ["fridge_01"],
+                "target_receptacle_id": "fridge_01",
+                "start_receptacle_id": "sofa_01",
+                "relation": "on",
+                "placement_index": 0,
+            },
+            {
+                "object_id": "plate_01",
+                "valid_receptacle_ids": ["sink_01"],
+                "target_receptacle_id": "sink_01",
+                "start_receptacle_id": "sofa_01",
+                "relation": "on",
+                "placement_index": 1,
+            },
+        ],
+    }
+
+    scenario = isaac_lab_backend_worker._scenario_from_scene_index(
+        scene_source="procthor-10k-val",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=2,
+        generated_mess_manifest=manifest,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+    assert scenario is not None
+    assert [item.object_id for item in scenario.objects] == ["apple_01", "plate_01"]
+    assert [item.location_id for item in scenario.objects] == ["sofa_01", "sofa_01"]
+    assert [target.valid_receptacle_ids[0] for target in scenario.private_manifest.targets] == [
+        "fridge_01",
+        "sink_01",
+    ]
+
+
 def test_isaac_scene_index_preserves_teddybear_category_for_placement() -> None:
     object_index = {
         "teddy_01": {
@@ -2361,7 +2454,7 @@ def test_isaac_object_bottom_offset_uses_usd_root_position_before_bbox_center() 
     )
 
 
-def test_isaac_scene_index_rejects_missing_pinned_generated_mess_id() -> None:
+def test_isaac_scene_index_rejects_missing_explicit_generated_mess_id() -> None:
     with pytest.raises(ValueError, match="explicit generated mess object id is unavailable"):
         isaac_lab_backend_worker._scenario_from_scene_index(
             scene_source="procthor-10k-val",

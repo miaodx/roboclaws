@@ -10,8 +10,10 @@ import pytest
 
 from roboclaws.household import subprocess_backend
 from roboclaws.household.generated_mess import (
+    build_generated_mess_manifest,
     generated_mess_success_threshold,
     select_generated_mess_targets,
+    targets_from_generated_mess_manifest,
 )
 from roboclaws.household.robot_view_camera_control import (
     canonical_cleanup_robot_view_camera_request,
@@ -489,6 +491,54 @@ def test_worker_select_targets_uses_seed_for_source_pool_diversity() -> None:
     assert [item["target_receptacle_id"] for item in first] == [
         item["target_receptacle_id"] for item in third
     ]
+
+
+def test_generated_mess_manifest_records_stable_start_receptacles() -> None:
+    receptacles = [
+        {"receptacle_id": "sink_01", "category": "Sink"},
+        {"receptacle_id": "fridge_01", "category": "Fridge"},
+        {"receptacle_id": "sofa_01", "category": "Sofa"},
+    ]
+    objects = [
+        {"object_id": "apple_01", "category": "Apple"},
+        {"object_id": "plate_01", "category": "Plate"},
+    ]
+
+    first = build_generated_mess_manifest(
+        objects,
+        receptacles,
+        target_count=2,
+        seed=6,
+        scene_source="procthor-10k-val",
+        scene_index=0,
+    )
+    second = build_generated_mess_manifest(
+        objects,
+        receptacles,
+        target_count=2,
+        seed=6,
+        scene_source="procthor-10k-val",
+        scene_index=0,
+    )
+    selected = targets_from_generated_mess_manifest(
+        objects,
+        receptacles,
+        first,
+        target_count=2,
+    )
+
+    assert first == second
+    assert first["schema"] == "roboclaws_generated_mess_manifest_v1"
+    assert [target["object_id"] for target in first["targets"]] == ["plate_01", "apple_01"]
+    assert [target["target_receptacle_id"] for target in first["targets"]] == [
+        "sink_01",
+        "fridge_01",
+    ]
+    assert [target["start_receptacle_id"] for target in first["targets"]] == [
+        "sofa_01",
+        "sofa_01",
+    ]
+    assert [item["start_receptacle_id"] for item in selected] == ["sofa_01", "sofa_01"]
 
 
 def test_worker_placement_diagnostic_records_support_relation() -> None:

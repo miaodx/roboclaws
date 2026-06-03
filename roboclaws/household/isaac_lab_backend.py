@@ -56,6 +56,7 @@ class IsaacLabSubprocessBackend:
         robot_name: str = "rby1m",
         generated_mess_count: int = 1,
         generated_mess_object_ids: tuple[str, ...] = (),
+        generated_mess_manifest_path: Path | None = None,
         map_bundle_dir: Path | None = None,
         scene_usd_path: Path | None = None,
         enable_segmentation: bool | None = None,
@@ -88,6 +89,8 @@ class IsaacLabSubprocessBackend:
         ]
         for object_id in generated_mess_object_ids:
             init_args.extend(["--generated-mess-object-id", str(object_id)])
+        if generated_mess_manifest_path is not None:
+            init_args.extend(["--generated-mess-manifest-path", str(generated_mess_manifest_path)])
         if include_robot:
             init_args.extend(["--include-robot", "--robot-name", robot_name])
         if map_bundle_dir is not None:

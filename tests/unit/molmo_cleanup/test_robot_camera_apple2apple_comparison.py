@@ -41,32 +41,85 @@ def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     assert diff["residual"]["rgb_gain_oracle"]["mean_abs_rgb_after_gain"] == 0.0
 
 
-def test_robot_camera_comparison_pins_isaac_mess_objects_to_mujoco(
+def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_pinned_mess",
+        "run_robot_camera_apple2apple_comparison_canonical_mess",
     )
     commands: list[list[str]] = []
     output_dir = tmp_path / "comparison"
-    mujoco_state_path = output_dir / "mujoco_state.json"
+    canonical_state_path = output_dir / "canonical_scene_state.json"
     isaac_state_path = output_dir / "isaac_state.json"
 
     def fake_run_json(command: list[str], *, cwd: Path) -> dict:
         commands.append(command)
         if command[1].endswith("molmospaces_subprocess_worker.py") and "init" in command:
-            mujoco_state_path.parent.mkdir(parents=True, exist_ok=True)
-            mujoco_state_path.write_text(
+            state_path = Path(command[command.index("--state-path") + 1])
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            if "--generated-mess-manifest-path" in command:
+                manifest_path = Path(command[command.index("--generated-mess-manifest-path") + 1])
+                generated_mess_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                state_path.write_text(
+                    json.dumps(
+                        {
+                            "receptacles": {
+                                "fridge_1": {"receptacle_id": "fridge_1", "category": "Fridge"},
+                                "sink_1": {"receptacle_id": "sink_1", "category": "Sink"},
+                                "sofa_1": {"receptacle_id": "sofa_1", "category": "Sofa"},
+                            },
+                            "objects": {
+                                "apple_1": {
+                                    "object_id": "apple_1",
+                                    "category": "Apple",
+                                    "seeded_start_receptacle_id": "sofa_1",
+                                },
+                                "plate_1": {
+                                    "object_id": "plate_1",
+                                    "category": "Plate",
+                                    "seeded_start_receptacle_id": "sofa_1",
+                                },
+                            },
+                            "generated_mess_manifest": generated_mess_manifest,
+                            "private_manifest": {
+                                "targets": [
+                                    {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                                    {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                                ]
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return {
+                    "backend": "molmospaces_subprocess",
+                    "ok": True,
+                    "private_manifest": {
+                        "targets": [
+                            {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                            {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                        ]
+                    },
+                    "generated_mess_manifest": generated_mess_manifest,
+                }
+            canonical_state_path.write_text(
                 json.dumps(
                     {
-                        "receptacles": {},
-                        "objects": {},
+                        "receptacles": {
+                            "fridge_1": {"receptacle_id": "fridge_1", "category": "Fridge"},
+                            "sink_1": {"receptacle_id": "sink_1", "category": "Sink"},
+                            "sofa_1": {"receptacle_id": "sofa_1", "category": "Sofa"},
+                        },
+                        "objects": {
+                            "apple_1": {"object_id": "apple_1", "category": "Apple"},
+                            "plate_1": {"object_id": "plate_1", "category": "Plate"},
+                        },
                         "private_manifest": {
                             "targets": [
-                                {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
                                 {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                                {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
                             ]
                         },
                     }
@@ -78,23 +131,38 @@ def test_robot_camera_comparison_pins_isaac_mess_objects_to_mujoco(
                 "ok": True,
                 "private_manifest": {
                     "targets": [
-                        {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
                         {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                        {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
                     ]
                 },
             }
         if command[1].endswith("isaac_lab_backend_worker.py") and "init" in command:
+            assert "--generated-mess-manifest-path" in command
+            manifest_path = Path(command[command.index("--generated-mess-manifest-path") + 1])
+            generated_mess_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             isaac_state_path.write_text(
                 json.dumps(
                     {
+                        "locations": {"apple_1": "sofa_1", "plate_1": "sofa_1"},
                         "scene_binding_diagnostics": {},
                         "receptacle_index": {},
                         "object_index": {},
+                        "generated_mess_manifest": generated_mess_manifest,
                     }
                 ),
                 encoding="utf-8",
             )
-            return {"backend": "isaaclab_subprocess", "ok": True}
+            return {
+                "backend": "isaaclab_subprocess",
+                "ok": True,
+                "private_manifest": {
+                    "targets": [
+                        {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                        {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                    ]
+                },
+                "generated_mess_manifest": generated_mess_manifest,
+            }
         raise AssertionError(f"unexpected command: {command}")
 
     monkeypatch.setattr(run_camera, "_run_json", fake_run_json)
@@ -126,20 +194,22 @@ def test_robot_camera_comparison_pins_isaac_mess_objects_to_mujoco(
 
     manifest = run_camera.run_comparison(args)
 
-    isaac_init_command = commands[1]
+    mujoco_init_command = commands[1]
+    isaac_init_command = commands[2]
     assert manifest["status"] == "blocked"
-    assert manifest["mess_generation"]["status"] == "isaac_pinned_to_mujoco_generated_mess"
-    assert manifest["mess_generation"]["pinned_generated_mess_object_ids"] == [
-        "apple_1",
+    assert manifest["mess_generation"]["status"] == "canonical_generated_mess_manifest"
+    assert manifest["mess_generation"]["canonical_generated_mess_object_ids"] == [
         "plate_1",
+        "apple_1",
     ]
-    assert isaac_init_command.count("--generated-mess-object-id") == 2
-    assert "--generated-mess-object-id" in isaac_init_command
-    assert isaac_init_command[-4:] == [
-        "--generated-mess-object-id",
-        "apple_1",
-        "--generated-mess-object-id",
-        "plate_1",
+    assert "--generated-mess-manifest-path" in mujoco_init_command
+    assert "--generated-mess-manifest-path" in isaac_init_command
+    assert "--generated-mess-object-id" not in isaac_init_command
+    manifest_path = output_dir / "generated_mess_manifest.json"
+    generated_mess_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert [target["start_receptacle_id"] for target in generated_mess_manifest["targets"]] == [
+        "sofa_1",
+        "sofa_1",
     ]
 
 

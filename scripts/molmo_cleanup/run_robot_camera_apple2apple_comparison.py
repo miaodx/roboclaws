@@ -19,6 +19,10 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.household.generated_mess import (
+    build_generated_mess_manifest,
+    generated_mess_manifest_object_ids,
+)
 from roboclaws.household.renderer_comparison import _relpath
 from roboclaws.household.scene_camera_comparison import (
     _isaac_render_contract_from_usda,
@@ -157,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
 def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    canonical_scene_state_path = output_dir / "canonical_scene_state.json"
+    generated_mess_manifest_path = output_dir / "generated_mess_manifest.json"
     mujoco_state_path = output_dir / "mujoco_state.json"
     isaac_state_path = output_dir / "isaac_state.json"
     mujoco_run_dir = output_dir / "mujoco"
@@ -186,10 +192,48 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         "artifacts": {
             "manifest": "comparison_manifest.json",
             "report": "report.html",
+            "generated_mess_manifest": "generated_mess_manifest.json",
         },
     }
 
+    canonical_mess_manifest: dict[str, Any] = {}
     try:
+        _run_json(
+            [
+                str(args.mujoco_python),
+                "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+                "--state-path",
+                str(canonical_scene_state_path),
+                "init",
+                "--seed",
+                str(args.seed),
+                "--scene-source",
+                args.scene_source,
+                "--scene-index",
+                str(args.scene_index),
+                "--generated-mess-count",
+                str(args.generated_mess_count),
+            ],
+            cwd=Path.cwd(),
+        )
+        canonical_mess_manifest = _canonical_generated_mess_manifest_from_state(
+            _read_json(canonical_scene_state_path),
+            args=args,
+        )
+        if int(canonical_mess_manifest.get("generated_mess_count") or 0) < int(
+            args.generated_mess_count
+        ):
+            raise RuntimeError(
+                "canonical generated mess manifest did not contain enough targets "
+                f"({canonical_mess_manifest.get('generated_mess_count')} < "
+                f"{args.generated_mess_count})"
+            )
+        _write_json(generated_mess_manifest_path, canonical_mess_manifest)
+        manifest["mess_generation"] = _mess_generation_summary(
+            canonical_mess_manifest,
+            output_dir=output_dir,
+            manifest_path=generated_mess_manifest_path,
+        )
         mujoco_init = _run_json(
             [
                 str(args.mujoco_python),
@@ -205,18 +249,14 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                 str(args.scene_index),
                 "--generated-mess-count",
                 str(args.generated_mess_count),
+                "--generated-mess-manifest-path",
+                str(generated_mess_manifest_path),
                 "--include-robot",
                 "--robot-name",
                 "rby1m",
             ],
             cwd=Path.cwd(),
         )
-        pinned_mess_object_ids = _generated_mess_object_ids_from_init(mujoco_init)
-        if len(pinned_mess_object_ids) < int(args.generated_mess_count):
-            raise RuntimeError(
-                "MuJoCo init did not return enough generated mess object ids to pin Isaac "
-                f"({len(pinned_mess_object_ids)} < {args.generated_mess_count})"
-            )
         isaac_init_command = [
             str(args.isaac_python),
             "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
@@ -233,6 +273,8 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
             str(args.scene_index),
             "--generated-mess-count",
             str(args.generated_mess_count),
+            "--generated-mess-manifest-path",
+            str(generated_mess_manifest_path),
             "--runtime-mode",
             "real",
             "--include-robot",
@@ -241,12 +283,27 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
             "--scene-usd-path",
             str(args.scene_usd_path),
         ]
-        isaac_init_command.extend(_generated_mess_object_id_args(pinned_mess_object_ids))
         isaac_init = _run_json(
             isaac_init_command,
             cwd=Path.cwd(),
         )
+        _validate_generated_mess_init(
+            lane_id=MUJOCO_LANE_ID,
+            init_result=mujoco_init,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_init(
+            lane_id=ISAAC_LANE_ID,
+            init_result=isaac_init,
+            canonical_manifest=canonical_mess_manifest,
+        )
     except Exception as exc:
+        if canonical_mess_manifest and "mess_generation" not in manifest:
+            manifest["mess_generation"] = _mess_generation_summary(
+                canonical_mess_manifest,
+                output_dir=output_dir,
+                manifest_path=generated_mess_manifest_path,
+            )
         manifest["status"] = "blocked"
         manifest["blocker"] = str(exc)
         _write_outputs(manifest, output_dir)
@@ -255,15 +312,25 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     manifest["lanes"][MUJOCO_LANE_ID] = _lane_init_summary(mujoco_init)
     manifest["lanes"][ISAAC_LANE_ID] = _lane_init_summary(isaac_init)
     manifest["lanes"][ISAAC_LANE_ID]["robot_import"] = isaac_init.get("robot_import", {})
-    manifest["mess_generation"] = {
-        "schema": "robot_camera_apple2apple_mess_generation_v1",
-        "status": "isaac_pinned_to_mujoco_generated_mess",
-        "object_id_source": "mujoco_private_manifest_targets",
-        "pinned_generated_mess_object_ids": pinned_mess_object_ids,
-    }
 
     mujoco_state = _read_json(mujoco_state_path)
     isaac_state = _read_json(isaac_state_path)
+    try:
+        _validate_generated_mess_state_locations(
+            lane_id=MUJOCO_LANE_ID,
+            state=mujoco_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_state_locations(
+            lane_id=ISAAC_LANE_ID,
+            state=isaac_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+    except Exception as exc:
+        manifest["status"] = "blocked"
+        manifest["blocker"] = str(exc)
+        _write_outputs(manifest, output_dir)
+        return manifest
     _attach_state_artifact_summaries(
         manifest,
         output_dir=output_dir,
@@ -475,23 +542,124 @@ def _parse_last_json_object(text: str) -> dict[str, Any]:
     raise RuntimeError(f"worker output did not end with a JSON object: {text[-1000:]}")
 
 
-def _generated_mess_object_ids_from_init(init_result: dict[str, Any]) -> list[str]:
-    targets = _dict(init_result.get("private_manifest")).get("targets") or []
-    object_ids: list[str] = []
-    for target in targets:
-        if not isinstance(target, dict):
-            continue
-        object_id = str(target.get("object_id") or "")
-        if object_id:
-            object_ids.append(object_id)
-    return object_ids
+def _canonical_generated_mess_manifest_from_state(
+    state: dict[str, Any],
+    *,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    objects = [_dict(item) for item in _dict(state.get("objects")).values()]
+    receptacles = [_dict(item) for item in _dict(state.get("receptacles")).values()]
+    if not objects:
+        raise RuntimeError("canonical scene state did not expose any generated-mess objects")
+    if not receptacles:
+        raise RuntimeError("canonical scene state did not expose any generated-mess receptacles")
+    return build_generated_mess_manifest(
+        objects,
+        receptacles,
+        target_count=int(args.generated_mess_count),
+        seed=int(args.seed),
+        scene_source=str(args.scene_source),
+        scene_index=int(args.scene_index),
+        scene_metadata_source="molmospaces_scene_metadata",
+    )
 
 
-def _generated_mess_object_id_args(object_ids: list[str]) -> list[str]:
-    args: list[str] = []
-    for object_id in object_ids:
-        args.extend(["--generated-mess-object-id", object_id])
-    return args
+def _mess_generation_summary(
+    canonical_manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    target_summaries = []
+    for target in canonical_manifest.get("targets", []):
+        item = _dict(target)
+        target_summaries.append(
+            {
+                "object_id": item.get("object_id"),
+                "target_receptacle_id": item.get("target_receptacle_id"),
+                "valid_receptacle_ids": item.get("valid_receptacle_ids") or [],
+                "start_receptacle_id": item.get("start_receptacle_id"),
+                "relation": item.get("relation"),
+                "placement_index": item.get("placement_index"),
+            }
+        )
+    return {
+        "schema": "robot_camera_apple2apple_mess_generation_v1",
+        "status": "canonical_generated_mess_manifest",
+        "manifest_schema": canonical_manifest.get("schema"),
+        "provenance": canonical_manifest.get("provenance"),
+        "object_id_source": "backend_neutral_generated_mess_manifest",
+        "artifact": _relpath(manifest_path, output_dir),
+        "seed": _dict(canonical_manifest.get("selection")).get("seed"),
+        "requested_generated_mess_count": canonical_manifest.get("requested_generated_mess_count"),
+        "generated_mess_count": canonical_manifest.get("generated_mess_count"),
+        "canonical_generated_mess_object_ids": generated_mess_manifest_object_ids(
+            canonical_manifest
+        ),
+        "targets": target_summaries,
+    }
+
+
+def _validate_generated_mess_init(
+    *,
+    lane_id: str,
+    init_result: dict[str, Any],
+    canonical_manifest: dict[str, Any],
+) -> None:
+    expected = _private_manifest_target_pairs(canonical_manifest)
+    actual = _private_manifest_target_pairs(_dict(init_result.get("private_manifest")))
+    if actual != expected:
+        raise RuntimeError(
+            f"{lane_id} generated mess targets did not match canonical manifest: "
+            f"{actual} != {expected}"
+        )
+
+
+def _validate_generated_mess_state_locations(
+    *,
+    lane_id: str,
+    state: dict[str, Any],
+    canonical_manifest: dict[str, Any],
+) -> None:
+    locations = _state_location_map(state)
+    expected = {
+        str(_dict(target).get("object_id") or ""): str(
+            _dict(target).get("start_receptacle_id") or ""
+        )
+        for target in canonical_manifest.get("targets", [])
+        if str(_dict(target).get("object_id") or "")
+    }
+    actual = {object_id: locations.get(object_id, "") for object_id in expected}
+    if actual != expected:
+        raise RuntimeError(
+            f"{lane_id} generated mess start locations did not match canonical manifest: "
+            f"{actual} != {expected}"
+        )
+
+
+def _private_manifest_target_pairs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "object_id": str(_dict(target).get("object_id") or ""),
+            "valid_receptacle_ids": [
+                str(item) for item in _dict(target).get("valid_receptacle_ids", []) if str(item)
+            ],
+        }
+        for target in manifest.get("targets", [])
+        if str(_dict(target).get("object_id") or "")
+    ]
+
+
+def _state_location_map(state: dict[str, Any]) -> dict[str, str]:
+    if isinstance(state.get("locations"), dict):
+        return {str(key): str(value) for key, value in _dict(state.get("locations")).items()}
+    locations: dict[str, str] = {}
+    for object_id, raw_obj in _dict(state.get("objects")).items():
+        obj = _dict(raw_obj)
+        locations[str(object_id)] = str(
+            obj.get("contained_in") or obj.get("seeded_start_receptacle_id") or ""
+        )
+    return locations
 
 
 def _read_json(path: Path) -> dict[str, Any]:

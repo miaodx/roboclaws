@@ -5,6 +5,9 @@ import random
 from collections.abc import Sequence
 from typing import Any
 
+GENERATED_MESS_MANIFEST_SCHEMA = "roboclaws_generated_mess_manifest_v1"
+GENERATED_MESS_MANIFEST_PROVENANCE = "backend_neutral_generated_mess"
+
 TARGET_RULES: tuple[tuple[tuple[str, ...], tuple[str, ...]], ...] = (
     (("Cup", "Mug", "Plate", "Bowl"), ("Sink",)),
     (("Book", "Newspaper"), ("ShelvingUnit", "Desk")),
@@ -69,6 +72,222 @@ def select_generated_mess_targets(
     return selected
 
 
+def build_generated_mess_manifest(
+    objects: list[dict[str, Any]],
+    receptacles: list[dict[str, Any]],
+    *,
+    target_count: int,
+    seed: int | None = None,
+    object_ids: Sequence[str] | None = None,
+    scene_source: str = "",
+    scene_index: int | None = None,
+    scene_metadata_source: str = "canonical_scene_metadata",
+    provenance: str = GENERATED_MESS_MANIFEST_PROVENANCE,
+) -> dict[str, Any]:
+    """Build a backend-neutral generated-mess run-control manifest."""
+    targets = select_generated_mess_targets(
+        objects,
+        receptacles,
+        target_count=target_count,
+        seed=seed,
+        object_ids=object_ids,
+    )
+    return generated_mess_manifest_from_targets(
+        targets,
+        receptacles,
+        requested_generated_mess_count=target_count,
+        seed=seed,
+        scene_source=scene_source,
+        scene_index=scene_index,
+        scene_metadata_source=scene_metadata_source,
+        provenance=provenance,
+    )
+
+
+def generated_mess_manifest_from_targets(
+    targets: list[dict[str, Any]],
+    receptacles: list[dict[str, Any]],
+    *,
+    requested_generated_mess_count: int,
+    seed: int | None = None,
+    scene_source: str = "",
+    scene_index: int | None = None,
+    scene_metadata_source: str = "canonical_scene_metadata",
+    provenance: str = GENERATED_MESS_MANIFEST_PROVENANCE,
+) -> dict[str, Any]:
+    target_receptacle_ids = {
+        str(target.get("target_receptacle_id") or "")
+        for target in targets
+        if str(target.get("target_receptacle_id") or "")
+    }
+    wrong_pool = generated_mess_wrong_receptacle_pool(receptacles, target_receptacle_ids)
+    manifest_targets: list[dict[str, Any]] = []
+    for index, target in enumerate(targets):
+        target_receptacle_id = str(target.get("target_receptacle_id") or "")
+        start_receptacle = (
+            wrong_pool[index % len(wrong_pool)]
+            if wrong_pool
+            else {"receptacle_id": target_receptacle_id}
+        )
+        if (
+            len(wrong_pool) > 1
+            and str(start_receptacle.get("receptacle_id") or "") == target_receptacle_id
+        ):
+            start_receptacle = wrong_pool[(index + 1) % len(wrong_pool)]
+        start_receptacle_id = str(start_receptacle.get("receptacle_id") or target_receptacle_id)
+        relation = "inside" if receptacle_prefers_inside(start_receptacle) else "on"
+        manifest_targets.append(
+            {
+                "object_id": str(target["object_id"]),
+                "category": str(target.get("category") or ""),
+                "target_receptacle_id": target_receptacle_id,
+                "valid_receptacle_ids": [target_receptacle_id],
+                "start_receptacle_id": start_receptacle_id,
+                "relation": relation,
+                "placement_index": index,
+            }
+        )
+    generated_count = len(manifest_targets)
+    return {
+        "schema": GENERATED_MESS_MANIFEST_SCHEMA,
+        "provenance": provenance,
+        "scene": {
+            "scene_source": scene_source,
+            "scene_index": scene_index,
+            "scene_metadata_source": scene_metadata_source,
+        },
+        "selection": {
+            "selector": "roboclaws.household.generated_mess.select_generated_mess_targets",
+            "seed": seed,
+            "requested_generated_mess_count": requested_generated_mess_count,
+        },
+        "requested_generated_mess_count": requested_generated_mess_count,
+        "generated_mess_count": generated_count,
+        "success_threshold": generated_mess_success_threshold(generated_count)
+        if generated_count
+        else 0,
+        "targets": manifest_targets,
+    }
+
+
+def targets_from_generated_mess_manifest(
+    objects: list[dict[str, Any]],
+    receptacles: list[dict[str, Any]],
+    manifest: dict[str, Any],
+    *,
+    target_count: int | None = None,
+) -> list[dict[str, Any]]:
+    """Validate and materialize selected targets from a generated-mess manifest."""
+    if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
+        raise ValueError(
+            "generated mess manifest schema mismatch: "
+            f"{manifest.get('schema')} != {GENERATED_MESS_MANIFEST_SCHEMA}"
+        )
+    manifest_targets = [_dict(item) for item in manifest.get("targets", [])]
+    if target_count is not None and len(manifest_targets) != int(target_count):
+        raise ValueError(
+            "generated mess manifest target count must match generated_mess_count "
+            f"({len(manifest_targets)} != {target_count})"
+        )
+
+    object_by_id = {str(item["object_id"]): item for item in objects}
+    receptacle_by_id = {str(item["receptacle_id"]): item for item in receptacles}
+    selected: list[dict[str, Any]] = []
+    for index, raw_target in enumerate(manifest_targets):
+        object_id = str(raw_target.get("object_id") or "")
+        if not object_id:
+            raise ValueError(f"generated mess manifest target {index} is missing object_id")
+        obj = object_by_id.get(object_id)
+        if obj is None:
+            raise ValueError(f"generated mess manifest object id is unavailable: {object_id}")
+        valid_receptacle_ids = [
+            str(item)
+            for item in (
+                raw_target.get("valid_receptacle_ids") or [raw_target.get("target_receptacle_id")]
+            )
+            if str(item)
+        ]
+        if not valid_receptacle_ids:
+            raise ValueError(
+                f"generated mess manifest target has no valid receptacle ids: {object_id}"
+            )
+        for receptacle_id in valid_receptacle_ids:
+            if receptacle_id not in receptacle_by_id:
+                raise ValueError(
+                    "generated mess manifest target receptacle id is unavailable: "
+                    f"{object_id} -> {receptacle_id}"
+                )
+        start_receptacle_id = str(raw_target.get("start_receptacle_id") or "")
+        if start_receptacle_id and start_receptacle_id not in receptacle_by_id:
+            raise ValueError(
+                "generated mess manifest start receptacle id is unavailable: "
+                f"{object_id} -> {start_receptacle_id}"
+            )
+        relation = str(raw_target.get("relation") or "")
+        if relation not in {"on", "inside"}:
+            start_receptacle = receptacle_by_id.get(start_receptacle_id, {})
+            relation = "inside" if receptacle_prefers_inside(start_receptacle) else "on"
+        selected_obj = dict(obj)
+        selected_obj["target_receptacle_id"] = valid_receptacle_ids[0]
+        selected_obj["valid_receptacle_ids"] = valid_receptacle_ids
+        selected_obj["start_receptacle_id"] = start_receptacle_id
+        selected_obj["relation"] = relation
+        selected_obj["placement_index"] = int(raw_target.get("placement_index") or index)
+        selected.append(selected_obj)
+    return selected
+
+
+def generated_mess_manifest_object_ids(manifest: dict[str, Any]) -> list[str]:
+    return [
+        str(_dict(target).get("object_id") or "")
+        for target in manifest.get("targets", [])
+        if str(_dict(target).get("object_id") or "")
+    ]
+
+
+def generated_mess_wrong_receptacle_pool(
+    receptacles: list[dict[str, Any]],
+    target_receptacle_ids: set[str],
+) -> list[dict[str, Any]]:
+    wrong_pool = [
+        item
+        for item in receptacles
+        if str(item.get("receptacle_id") or "") not in target_receptacle_ids
+        and not receptacle_requires_open(item)
+    ]
+    if not wrong_pool:
+        wrong_pool = [
+            item
+            for item in receptacles
+            if str(item.get("receptacle_id") or "") not in target_receptacle_ids
+        ]
+    return wrong_pool or list(receptacles)
+
+
+def receptacle_requires_open(receptacle: dict[str, Any]) -> bool:
+    text = receptacle_text(receptacle)
+    return "fridge" in text or "refrigerator" in text
+
+
+def receptacle_prefers_inside(receptacle: dict[str, Any]) -> bool:
+    return receptacle_requires_open(receptacle) or receptacle_is_open_container(receptacle)
+
+
+def receptacle_is_open_container(receptacle: dict[str, Any]) -> bool:
+    text = receptacle_text(receptacle)
+    return any(term in text for term in ("shelvingunit", "bookshelf", "bookcase", "shelf"))
+
+
+def receptacle_text(receptacle: dict[str, Any]) -> str:
+    parts = (
+        receptacle.get("receptacle_id", ""),
+        receptacle.get("name", ""),
+        receptacle.get("category", ""),
+        receptacle.get("kind", ""),
+    )
+    return " ".join(str(part) for part in parts).lower()
+
+
 def select_explicit_generated_mess_targets(
     objects: list[dict[str, Any]],
     receptacles: list[dict[str, Any]],
@@ -127,3 +346,7 @@ def first_receptacle_for_categories(
 
 def generated_mess_success_threshold(target_count: int) -> int:
     return max(1, math.ceil(target_count * 0.70))
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}

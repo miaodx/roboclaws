@@ -32,8 +32,10 @@ from roboclaws.household.camera_control import (
 )
 from roboclaws.household.color_management import apply_camera_color_profile
 from roboclaws.household.generated_mess import (
+    GENERATED_MESS_MANIFEST_SCHEMA,
     generated_mess_success_threshold,
     select_generated_mess_targets,
+    targets_from_generated_mess_manifest,
 )
 from roboclaws.household.isaac_lab_backend import (
     ISAAC_SEMANTIC_POSE_EVENT_SCHEMA,
@@ -238,6 +240,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Private run-control object id to include in the generated mess set. Repeatable.",
     )
     init.add_argument(
+        "--generated-mess-manifest-path",
+        type=Path,
+        help="Private backend-neutral generated mess manifest to apply during init.",
+    )
+    init.add_argument(
         "--generated-scene-kind",
         choices=GENERATED_SCENE_KINDS,
         default="roboclaws_smoke",
@@ -396,7 +403,8 @@ def _close_deferred_simulation_app() -> None:
 
 def init_state(args: argparse.Namespace) -> dict[str, Any]:
     args.scene_index = _effective_scene_index(args)
-    scenario = _scenario_for_init(args)
+    generated_mess_manifest = _load_generated_mess_manifest(args.generated_mess_manifest_path)
+    scenario = _scenario_for_init(args, generated_mess_manifest=generated_mess_manifest)
     scenario_source = _scenario_source(args)
     real_smoke = None
     if args.runtime_mode == "real":
@@ -448,6 +456,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
     )
     scene_specific_scenario = _scene_specific_scenario_if_needed(
         args=args,
+        generated_mess_manifest=generated_mess_manifest,
         scene_binding_diagnostics=scene_binding_diagnostics,
         object_index=object_index,
         receptacle_index=receptacle_index,
@@ -496,6 +505,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "requested_generated_mess_count": args.generated_mess_count,
         "scenario": scenario.public_payload(),
         "private_manifest": scenario.private_manifest.to_private_dict(),
+        "generated_mess_manifest": generated_mess_manifest,
         "locations": scenario.object_locations(),
         "held_object_id": None,
         "current_receptacle_id": initial_receptacle_id,
@@ -541,6 +551,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "primitive_provenance": ISAAC_SEMANTIC_POSE_PROVENANCE,
         "scenario": state["scenario"],
         "private_manifest": state["private_manifest"],
+        "generated_mess_manifest": state.get("generated_mess_manifest") or None,
         "runtime": runtime,
         "scene_usd": state["scene_usd"],
         "scene_load": scene_load,
@@ -4963,6 +4974,7 @@ def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
     targets = [_dict(item) for item in _dict(state.get("private_manifest")).get("targets", [])]
     if not targets:
         return
+    manifest_targets = _manifest_target_by_object_id(state)
     target_receptacle_ids = {
         receptacle_id
         for target in targets
@@ -4980,31 +4992,85 @@ def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
         if not object_id:
             continue
         target_ids = {str(item) for item in target.get("valid_receptacle_ids", []) if str(item)}
-        wrong = wrong_pool[index % len(wrong_pool)]
-        if len(wrong_pool) > 1 and str(wrong.get("receptacle_id") or "") in target_ids:
-            wrong = wrong_pool[(index + 1) % len(wrong_pool)]
+        manifest_target = manifest_targets.get(object_id)
+        wrong = _target_start_receptacle(state, wrong_pool, index, target_ids, manifest_target)
         receptacle_id = str(wrong.get("receptacle_id") or "")
         if not receptacle_id:
             continue
-        relation = "inside" if _receptacle_prefers_inside(wrong) else "on"
+        relation = _target_relation(wrong, manifest_target)
+        placement_index = _target_placement_index(index, manifest_target)
         placement_resolution = _apply_object_location(
             state,
             object_id=object_id,
             receptacle_id=receptacle_id,
             relation=relation,
-            placement_index=index,
-            source="mess_seed",
+            placement_index=placement_index,
+            source="canonical_mess_manifest" if manifest_target else "mess_seed",
         )
         diagnostic = _isaac_placement_diagnostic(
             state=state,
             object_id=object_id,
             receptacle_id=receptacle_id,
             relation=relation,
-            source="mess_seed",
+            source="canonical_mess_manifest" if manifest_target else "mess_seed",
             placement_resolution=placement_resolution,
         )
         diagnostics.append(diagnostic)
     state["mess_placement_diagnostics"] = diagnostics
+
+
+def _manifest_target_by_object_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    manifest = _dict(state.get("generated_mess_manifest"))
+    targets: dict[str, dict[str, Any]] = {}
+    for raw_target in manifest.get("targets", []):
+        target = _dict(raw_target)
+        object_id = str(target.get("object_id") or "")
+        if object_id:
+            targets[object_id] = target
+    return targets
+
+
+def _target_start_receptacle(
+    state: dict[str, Any],
+    wrong_pool: list[dict[str, Any]],
+    index: int,
+    target_ids: set[str],
+    manifest_target: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if manifest_target:
+        start_receptacle_id = str(manifest_target.get("start_receptacle_id") or "")
+        if start_receptacle_id:
+            receptacle = _receptacles_by_id(state).get(start_receptacle_id)
+            if receptacle is None:
+                raise ValueError(
+                    "generated mess manifest start receptacle id is unavailable: "
+                    f"{manifest_target.get('object_id')} -> {start_receptacle_id}"
+                )
+            return receptacle
+    wrong = wrong_pool[index % len(wrong_pool)]
+    if len(wrong_pool) > 1 and str(wrong.get("receptacle_id") or "") in target_ids:
+        wrong = wrong_pool[(index + 1) % len(wrong_pool)]
+    return wrong
+
+
+def _target_relation(
+    receptacle: dict[str, Any],
+    manifest_target: dict[str, Any] | None,
+) -> str:
+    if manifest_target:
+        relation = str(manifest_target.get("relation") or "")
+        if relation in {"on", "inside"}:
+            return relation
+    return "inside" if _receptacle_prefers_inside(receptacle) else "on"
+
+
+def _target_placement_index(index: int, manifest_target: dict[str, Any] | None) -> int:
+    if not manifest_target:
+        return index
+    try:
+        return int(manifest_target.get("placement_index"))
+    except (TypeError, ValueError):
+        return index
 
 
 def _mess_wrong_receptacle_pool(
@@ -7220,19 +7286,41 @@ def scenario_from_state(state: dict[str, Any]) -> CleanupScenario:
     )
 
 
-def _scenario_for_init(args: argparse.Namespace) -> CleanupScenario:
+def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError(f"generated mess manifest must be a JSON object: {path}")
+    if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
+        raise ValueError(
+            "generated mess manifest schema mismatch: "
+            f"{manifest.get('schema')} != {GENERATED_MESS_MANIFEST_SCHEMA}"
+        )
+    return manifest
+
+
+def _scenario_for_init(
+    args: argparse.Namespace,
+    *,
+    generated_mess_manifest: dict[str, Any] | None = None,
+) -> CleanupScenario:
+    if args.scene_usd_path is not None:
+        generated_mess_manifest = None
     if args.map_bundle_dir is None:
-        return _limit_scenario_to_generated_mess_count(
+        return _scenario_from_generated_mess_manifest_or_limit(
             build_cleanup_scenario(seed=args.seed),
             generated_mess_count=args.generated_mess_count,
+            generated_mess_manifest=generated_mess_manifest,
         )
-    return _limit_scenario_to_generated_mess_count(
+    return _scenario_from_generated_mess_manifest_or_limit(
         _scenario_from_map_bundle(
             args.map_bundle_dir,
             seed=args.seed,
             generated_mess_count=args.generated_mess_count,
         ),
         generated_mess_count=args.generated_mess_count,
+        generated_mess_manifest=generated_mess_manifest,
     )
 
 
@@ -7261,6 +7349,7 @@ def _scene_index_from_usd_path(path: Any) -> int | None:
 def _scene_specific_scenario_if_needed(
     *,
     args: argparse.Namespace,
+    generated_mess_manifest: dict[str, Any] | None,
     scene_binding_diagnostics: dict[str, Any],
     object_index: dict[str, dict[str, Any]],
     receptacle_index: dict[str, dict[str, Any]],
@@ -7268,7 +7357,7 @@ def _scene_specific_scenario_if_needed(
 ) -> CleanupScenario | None:
     if real_smoke is None or args.scene_usd_path is None:
         return None
-    if scene_binding_diagnostics.get("status") == "selected_bound":
+    if not generated_mess_manifest and scene_binding_diagnostics.get("status") == "selected_bound":
         return None
     return _scenario_from_scene_index(
         scene_source=args.scene_source,
@@ -7276,6 +7365,7 @@ def _scene_specific_scenario_if_needed(
         seed=args.seed,
         generated_mess_count=args.generated_mess_count,
         generated_mess_object_ids=tuple(getattr(args, "generated_mess_object_id", None) or ()),
+        generated_mess_manifest=generated_mess_manifest,
         object_index=object_index,
         receptacle_index=receptacle_index,
     )
@@ -7288,6 +7378,7 @@ def _scenario_from_scene_index(
     seed: int,
     generated_mess_count: int,
     generated_mess_object_ids: tuple[str, ...] = (),
+    generated_mess_manifest: dict[str, Any] | None = None,
     object_index: dict[str, dict[str, Any]],
     receptacle_index: dict[str, dict[str, Any]],
 ) -> CleanupScenario | None:
@@ -7318,13 +7409,22 @@ def _scenario_from_scene_index(
             }
         )
 
-    selected = select_generated_mess_targets(
-        selectable_objects,
-        [receptacle.to_public_dict() for receptacle in receptacles],
-        target_count=max(1, int(generated_mess_count)),
-        seed=seed,
-        object_ids=generated_mess_object_ids or None,
-    )
+    receptacle_payloads = [receptacle.to_public_dict() for receptacle in receptacles]
+    if generated_mess_manifest:
+        selected = targets_from_generated_mess_manifest(
+            selectable_objects,
+            receptacle_payloads,
+            generated_mess_manifest,
+            target_count=max(1, int(generated_mess_count)),
+        )
+    else:
+        selected = select_generated_mess_targets(
+            selectable_objects,
+            receptacle_payloads,
+            target_count=max(1, int(generated_mess_count)),
+            seed=seed,
+            object_ids=generated_mess_object_ids or None,
+        )
     if not selected:
         return None
 
@@ -7333,7 +7433,7 @@ def _scenario_from_scene_index(
             object_id=str(item["object_id"]),
             name=str(item["name"]),
             category=str(item["category"]),
-            location_id=str(item["location_id"]),
+            location_id=str(item.get("start_receptacle_id") or item["location_id"]),
         )
         for item in selected
     )
@@ -7515,6 +7615,62 @@ _CANONICAL_CLEANUP_CATEGORY_ALIASES = (
     ("Towel", ("linen", "towel", "cloth", "blanket", "shirt", "clothing")),
     ("ToyCar", ("toy", "toycar", "ball", "basketball", "soccer")),
 )
+
+
+def _scenario_from_generated_mess_manifest_or_limit(
+    scenario: CleanupScenario,
+    *,
+    generated_mess_count: int,
+    generated_mess_manifest: dict[str, Any] | None = None,
+) -> CleanupScenario:
+    if not generated_mess_manifest:
+        return _limit_scenario_to_generated_mess_count(
+            scenario,
+            generated_mess_count=generated_mess_count,
+        )
+    objects = [item.to_public_dict() for item in scenario.objects]
+    receptacles = [item.to_public_dict() for item in scenario.receptacles]
+    selected = targets_from_generated_mess_manifest(
+        objects,
+        receptacles,
+        generated_mess_manifest,
+        target_count=max(1, int(generated_mess_count)),
+    )
+    target_ids = {str(item["object_id"]) for item in selected}
+    source_objects = {item.object_id: item for item in scenario.objects}
+    selected_objects = []
+    for target in selected:
+        object_id = str(target["object_id"])
+        source = source_objects[object_id]
+        selected_objects.append(
+            CleanupObject(
+                object_id=source.object_id,
+                name=source.name,
+                category=source.category,
+                location_id=str(target.get("start_receptacle_id") or source.location_id),
+                pickupable=source.pickupable,
+            )
+        )
+    targets = tuple(
+        TargetRule(
+            object_id=str(item["object_id"]),
+            valid_receptacle_ids=tuple(str(value) for value in item["valid_receptacle_ids"]),
+        )
+        for item in selected
+    )
+    scenario_id = f"{scenario.scenario_id}-canonical-mess-{len(targets)}"
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=scenario.task,
+        seed=scenario.seed,
+        objects=tuple(item for item in selected_objects if item.object_id in target_ids),
+        receptacles=scenario.receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=targets,
+            success_threshold=generated_mess_success_threshold(len(targets)),
+        ),
+    )
 
 
 def _limit_scenario_to_generated_mess_count(
