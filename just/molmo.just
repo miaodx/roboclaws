@@ -14,6 +14,7 @@
 # Cleanup input/evidence lanes:
 # - smoke           synthetic contract sanity with world labels and semantic report
 # - world-labels    structured labels to the agent; robot-view images are report evidence
+# - world-labels-sanitized structured labels without destination/tool oracle hints
 # - camera-raw      raw camera artifacts to the agent
 # - camera-labels   camera-derived labels to the agent
 #
@@ -184,6 +185,21 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           checker_visual_args=(--require-robot-views "${checker_visual_args[@]}")
         fi
         ;;
+      world-labels-sanitized)
+        backend="molmospaces_subprocess"
+        min_generated_mess_count="$generated_mess_count"
+        visual_args=(--include-robot --robot-name rby1m)
+        checker_visual_args=(
+          --require-waypoint-honesty
+          --require-real-robot-alignment
+          --min-semantic-accepted-count 5
+          --min-sweep-coverage 1.0
+        )
+        if [[ "$robot_views" != "off" && "$robot_views" != "false" && "$robot_views" != "0" ]]; then
+          visual_args+=(--record-robot-views)
+          checker_visual_args=(--require-robot-views "${checker_visual_args[@]}")
+        fi
+        ;;
       camera-raw)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
@@ -214,7 +230,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
         ;;
       *)
-        echo "error: unsupported cleanup lane '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+        echo "error: unsupported cleanup lane '$profile' (expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)" >&2
         exit 1
         ;;
     esac

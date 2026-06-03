@@ -183,6 +183,7 @@ class RealWorldMolmoCleanupMCPServer:
                 map_bundle_dir=self.map_bundle_dir,
                 runtime_map_prior=runtime_map_prior,
                 map_mode=map_mode,
+                cleanup_profile=cleanup_profile,
                 visual_grounding_client=visual_grounding_client_from_env(
                     visual_grounding,
                     base_url=visual_grounding_base_url,

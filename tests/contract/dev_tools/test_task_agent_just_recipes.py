@@ -326,6 +326,19 @@ def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
     ]
 
 
+def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> None:
+    route = trace_task_run("household-cleanup", "direct", "world-labels-sanitized")
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "world-labels-sanitized",
+        "7",
+        "output/household/household-cleanup/direct-world-labels-sanitized",
+    ]
+
+
 @pytest.mark.parametrize(
     ("args", "expected"),
     (
@@ -431,6 +444,27 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     assert "prompt=household_cleanup" in plan_trace
     assert "checker=cleanup_report" in plan_trace
     assert "target=just agent::run household-cleanup codex camera-labels" in plan_trace
+
+
+def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
+    plan = resolve_task_launch(("household-cleanup", "codex", "world-labels-sanitized"))
+
+    assert plan.mode == "world-labels-sanitized"
+    assert plan.profile == "world-labels-sanitized"
+    assert plan.supported_profiles == (
+        "smoke",
+        "world-labels",
+        "world-labels-sanitized",
+        "camera-raw",
+        "camera-labels",
+    )
+    assert plan.argv == (
+        "just",
+        "agent::run",
+        "household-cleanup",
+        "codex",
+        "world-labels-sanitized",
+    )
 
 
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
@@ -973,6 +1007,16 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
+
+
+def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
+    prompt = render_kickoff_prompt("world-labels-sanitized")
+
+    assert "perfect structured detections without cleanup destination oracle fields" in prompt
+    assert "runtime_metric_map.public_semantic_anchors" in prompt
+    assert "tool recovery hints" in prompt
+    assert "exact waypoint checklist" in prompt
+    assert "metric_map.inspection_waypoints" in prompt
 
 
 def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:

@@ -52,6 +52,11 @@ DEFAULT_REALWORLD_TASK = "帮我收拾这个房间"
 VISIBLE_OBJECT_DETECTIONS_MODE = "visible_object_detections"
 RAW_FPV_ONLY_MODE = "raw_fpv_only"
 CAMERA_MODEL_POLICY_MODE = "camera_model_policy"
+WORLD_LABELS_DETECTION_POLICY = "world_labels"
+SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY = "sanitized_visible_object_detections"
+VISIBLE_DETECTION_EXPOSURE_POLICIES = frozenset(
+    {WORLD_LABELS_DETECTION_POLICY, SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY}
+)
 CAMERA_MODEL_POLICY_SCHEMA = "camera_model_policy_v1"
 CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
@@ -61,6 +66,8 @@ RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
 RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
+SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE = "sanitized_visible_object_detections"
+WORLD_LABELS_SANITIZED_PROFILE = "world-labels-sanitized"
 VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = "visual_candidate_already_handled"
 VISUAL_GROUNDING_CATEGORY_HINTS = [
     "food",
@@ -193,6 +200,7 @@ class RealWorldCleanupContract:
         visual_grounding_run_id: str = "",
         runtime_map_prior: dict[str, Any] | None = None,
         map_mode: str = DEFAULT_MAP_MODE,
+        cleanup_profile: str | None = None,
     ) -> None:
         if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
             raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
@@ -209,6 +217,17 @@ class RealWorldCleanupContract:
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = perception_mode
         self.map_mode = map_mode
+        self.cleanup_profile = (
+            str(cleanup_profile or "").strip().lower().replace("_", "-")
+            if cleanup_profile
+            else ""
+        )
+        self.sanitize_world_labels = self.cleanup_profile == WORLD_LABELS_SANITIZED_PROFILE
+        self.visible_detection_exposure_policy = (
+            SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+            if self.sanitize_world_labels
+            else WORLD_LABELS_DETECTION_POLICY
+        )
         self.visual_grounding_client = visual_grounding_client
         self.visual_grounding_pipeline_id = str(
             visual_grounding_pipeline_id
@@ -760,6 +779,11 @@ class RealWorldCleanupContract:
                 instruction=instruction,
             )
         detections = self._visible_detections_for_waypoint(waypoint)
+        perception_source = (
+            SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+            if self.sanitize_world_labels
+            else "robot_local_visible_object_detections"
+        )
         return self._ok(
             "observe",
             contract=REALWORLD_CONTRACT,
@@ -770,12 +794,13 @@ class RealWorldCleanupContract:
             else "held_object_area_check",
             waypoint_source=waypoint.get("waypoint_source", "static_map_coverage"),
             perception_mode=self.perception_mode,
+            detection_exposure_policy=self.visible_detection_exposure_policy,
             structured_detections_available=True,
             visible_object_detections=[
                 self._agent_visible_detection_payload(detection) for detection in detections
             ],
             held_object_id=self._held_handle,
-            perception_source="robot_local_visible_object_detections",
+            perception_source=perception_source,
             private_target_truth_included=False,
         )
 
@@ -1052,6 +1077,7 @@ class RealWorldCleanupContract:
             "inspect_visible_object",
             contract=REALWORLD_CONTRACT,
             detection=self._agent_visible_detection_payload(dict(detection)),
+            detection_exposure_policy=self.visible_detection_exposure_policy,
             private_target_truth_included=False,
         )
 
@@ -1402,6 +1428,7 @@ class RealWorldCleanupContract:
         payload = {
             "contract": REALWORLD_CONTRACT,
             "perception_mode": self.perception_mode,
+            "detection_exposure_policy": self.visible_detection_exposure_policy,
             "structured_detections_available": self.perception_mode
             == VISIBLE_OBJECT_DETECTIONS_MODE,
             "metric_map": metric_map,
@@ -1684,7 +1711,11 @@ class RealWorldCleanupContract:
 
     def _agent_visible_detection_payload(self, detection: dict[str, Any]) -> dict[str, Any]:
         if self.map_mode != MINIMAL_MAP_MODE:
-            return copy.deepcopy(detection)
+            payload = copy.deepcopy(detection)
+            if self.sanitize_world_labels:
+                payload = self._sanitized_visible_detection_payload(payload)
+            _assert_no_forbidden_agent_view_keys(payload)
+            return payload
         payload = self._public_fixture_reference_payload(copy.deepcopy(detection))
         support = dict(payload.get("support_estimate") or {})
         public_fixture_id = str(support.get("fixture_id") or "")
@@ -1692,7 +1723,27 @@ class RealWorldCleanupContract:
             support["source_fixture_hidden"] = True
             support["source"] = "public_semantic_anchor"
             payload["support_estimate"] = support
+        if self.sanitize_world_labels:
+            payload = self._sanitized_visible_detection_payload(payload)
         _assert_no_forbidden_agent_view_keys(payload)
+        return payload
+
+    def _sanitized_visible_detection_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload = copy.deepcopy(payload)
+        for key in ("candidate_fixture_id", "candidate_fixture_category", "recommended_tool"):
+            payload.pop(key, None)
+        payload["cleanup_recommended"] = False
+        payload["producer_type"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+        payload["producer_id"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+        payload["perception_source"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+        payload["detection_exposure_policy"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+        payload["destination_policy_status"] = "policy_required"
+        support = dict(payload.get("support_estimate") or {})
+        if support:
+            support["source"] = "public_support_evidence"
+            support["perception_source"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+            support["model_provenance"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+            payload["support_estimate"] = support
         return payload
 
     def _seed_public_fixture_anchor_ids_from_prior_anchors(self) -> None:
@@ -2036,8 +2087,32 @@ class RealWorldCleanupContract:
         actionability = _runtime_actionability(
             state=state,
             grounding_status=grounding_status,
-            cleanup_recommended=bool(worklist_item.get("cleanup_recommended")),
+            cleanup_recommended=bool(worklist_item.get("cleanup_recommended"))
+            and not self.sanitize_world_labels,
         )
+        candidate_fixture_id = ""
+        candidate_source = "policy_required_destination_selection"
+        producer_type = (
+            SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+            if self.sanitize_world_labels and self.perception_mode == VISIBLE_OBJECT_DETECTIONS_MODE
+            else producer_type
+        )
+        producer_id = (
+            SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+            if self.sanitize_world_labels and self.perception_mode == VISIBLE_OBJECT_DETECTIONS_MODE
+            else producer_id
+        )
+        if not self.sanitize_world_labels:
+            candidate_fixture_id = str(
+                self._public_fixture_reference_id(
+                    str(worklist_item.get("candidate_fixture_id") or "")
+                )
+            )
+            candidate_source = str(
+                worklist_item.get("candidate_source")
+                or detection.get("candidate_source")
+                or "public_category_fixture_affordance"
+            )
         payload = {
             "object_id": handle,
             "category": str(detection.get("category") or worklist_item.get("category") or ""),
@@ -2057,17 +2132,11 @@ class RealWorldCleanupContract:
             "actionability": actionability,
             "state": state,
             "grounding_status": grounding_status,
-            "candidate_fixture_id": str(
-                self._public_fixture_reference_id(
-                    str(worklist_item.get("candidate_fixture_id") or "")
-                )
-            ),
-            "candidate_source": str(
-                worklist_item.get("candidate_source")
-                or detection.get("candidate_source")
-                or "public_category_fixture_affordance"
-            ),
+            "candidate_fixture_id": candidate_fixture_id,
+            "candidate_source": candidate_source,
         }
+        if self.sanitize_world_labels:
+            payload["destination_policy_status"] = "policy_required"
         if detection.get("prior_object_id"):
             payload["prior_object_id"] = str(detection["prior_object_id"])
         if detection.get("snapshot_object_id"):
@@ -2123,6 +2192,17 @@ class RealWorldCleanupContract:
                 and public_candidate_fixture_id != public_source_fixture_id
                 and state not in _NON_ACTIONABLE_HANDLE_STATES
             )
+            candidate_source = (
+                "public_semantic_anchor"
+                if self.map_mode == MINIMAL_MAP_MODE and candidate_fixture_id
+                else "public_category_fixture_affordance"
+            )
+            destination_policy_status = "candidate_inferred"
+            if self.sanitize_world_labels:
+                public_candidate_fixture_id = ""
+                cleanup_recommended = False
+                candidate_source = "policy_required_destination_selection"
+                destination_policy_status = "policy_required"
             lifecycle_rows.append(
                 {
                     "object_id": handle,
@@ -2133,11 +2213,10 @@ class RealWorldCleanupContract:
                     "candidate_fixture_id": public_candidate_fixture_id,
                     "cleanup_recommended": cleanup_recommended,
                     "grounding_status": grounding_status,
-                    "candidate_source": "public_semantic_anchor"
-                    if self.map_mode == MINIMAL_MAP_MODE and candidate_fixture_id
-                    else "public_category_fixture_affordance",
+                    "candidate_source": candidate_source,
                     "last_waypoint_id": lifecycle.get("waypoint_id", ""),
                     "perception_source": lifecycle.get("perception_source", "visible_detection"),
+                    "destination_policy_status": destination_policy_status,
                 }
             )
         waypoint_rows = []
@@ -2443,6 +2522,10 @@ class RealWorldCleanupContract:
             if fixture_ids and location_id not in fixture_ids:
                 continue
             handle = self._handle_for_object(obj.object_id)
+            source_observation_id = _synthetic_observation_id(
+                handle,
+                public_waypoint.get("waypoint_id", ""),
+            )
             detection = {
                 "object_id": handle,
                 "category": obj.category,
@@ -2450,11 +2533,19 @@ class RealWorldCleanupContract:
                 "current_room_id": room_id,
                 "visibility_confidence": _visibility_confidence(handle),
                 "image_bbox": _image_bbox(handle),
+                "image_region": {"type": "bbox", "value": _image_bbox(handle)},
+                "perception_source": "visible_detection",
+                "producer_type": "visible_object_detections",
+                "producer_id": "simulator_visible_object_detections",
+                "source_observation_id": source_observation_id,
                 "support_estimate": {
                     "fixture_id": location_id,
                     "relation": _location_relation(obj.object_id, self.backend),
                     "confidence": 0.74,
                     "source": "visible_detection",
+                    "perception_source": "visible_detection",
+                    "model_provenance": "visible_object_detections",
+                    "source_observation_id": source_observation_id,
                 },
             }
             detection.update(self._public_candidate_hint(detection))

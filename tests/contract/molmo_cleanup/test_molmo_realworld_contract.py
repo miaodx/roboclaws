@@ -15,6 +15,8 @@ from roboclaws.household.realworld_contract import (
     REALWORLD_CONTRACT,
     RICH_MAP_MODE,
     RUNTIME_METRIC_MAP_SCHEMA,
+    SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY,
+    SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
     VISUAL_GROUNDING_CATEGORY_HINTS,
@@ -76,6 +78,39 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
     _assert_no_forbidden_keys(metric_map)
     _assert_no_forbidden_keys(fixture_hints)
     _assert_no_forbidden_keys(observation)
+
+
+def test_world_labels_sanitized_observations_omit_destination_oracle_fields() -> None:
+    rich_contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    rich_observation = _first_non_empty_observation(rich_contract)
+    rich_detection = rich_observation["visible_object_detections"][0]
+
+    sanitized_contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+    )
+    sanitized_observation = _first_non_empty_observation(sanitized_contract)
+    detection = sanitized_observation["visible_object_detections"][0]
+
+    assert "candidate_fixture_id" in rich_detection
+    assert "recommended_tool" in rich_detection
+    assert sanitized_observation["perception_source"] == (
+        SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    )
+    assert sanitized_observation["detection_exposure_policy"] == (
+        SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+    )
+    assert detection["object_id"].startswith("observed_")
+    assert detection["category"]
+    assert detection["image_region"]["type"] == "bbox"
+    assert detection["source_observation_id"]
+    assert detection["producer_type"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    assert detection["support_estimate"]
+    assert detection["cleanup_recommended"] is False
+    assert detection["destination_policy_status"] == "policy_required"
+    assert "candidate_fixture_id" not in detection
+    assert "recommended_tool" not in detection
+    _assert_no_forbidden_keys(sanitized_observation)
 
 
 def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> None:
@@ -597,6 +632,36 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
     for fixture in runtime_map["static_map"]["fixtures"]:
         assert "observed_objects" not in fixture
         assert not fixture["fixture_id"].startswith("observed_")
+    _assert_no_forbidden_keys(runtime_map)
+
+
+def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_destination() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+    )
+
+    _first_non_empty_observation(contract)
+    agent_view = contract.agent_view_payload()
+    runtime_map = agent_view["runtime_metric_map"]
+    observed = runtime_map["observed_objects"][0]
+    worklist_item = agent_view["cleanup_worklist"]["objects"][0]
+
+    assert agent_view["detection_exposure_policy"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+    assert observed["producer_type"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    assert observed["source_observation_id"]
+    assert observed["image_region"]["type"] == "bbox"
+    assert observed["grounding_status"] == "resolved"
+    assert observed["actionability"] == "pending"
+    assert observed["candidate_fixture_id"] == ""
+    assert observed["candidate_source"] == "policy_required_destination_selection"
+    assert observed["destination_policy_status"] == "policy_required"
+    assert worklist_item["cleanup_recommended"] is False
+    assert worklist_item["candidate_fixture_id"] == ""
+    assert worklist_item["destination_policy_status"] == "policy_required"
+    assert runtime_map["producer_summary"]["producer_types"][
+        SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    ] >= 1
     _assert_no_forbidden_keys(runtime_map)
 
 

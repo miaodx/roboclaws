@@ -120,7 +120,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("world-labels", "camera-raw", "camera-labels"),
+        choices=("world-labels", "world-labels-sanitized", "camera-raw", "camera-labels"),
         default="camera-labels",
         help="Input/evidence lane for --flow prehardware.",
     )

@@ -363,6 +363,7 @@ def run_realworld_cleanup(
         visual_grounding_run_id=f"seed-{seed}",
         runtime_map_prior=runtime_map_prior,
         map_mode=map_mode,
+        cleanup_profile=cleanup_profile,
     )
     planner_proof_evidence: dict[str, Any] | None = None
     if len(planner_proof_paths) == 1:

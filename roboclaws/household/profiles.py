@@ -6,7 +6,9 @@ from typing import Any
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     RAW_FPV_ONLY_MODE,
+    SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY,
     VISIBLE_OBJECT_DETECTIONS_MODE,
+    WORLD_LABELS_DETECTION_POLICY,
 )
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 
@@ -17,11 +19,15 @@ ISAACLAB_SUBPROCESS_BACKEND = "isaaclab_subprocess"
 
 SMOKE_PROFILE = "smoke"
 WORLD_LABELS_PROFILE = "world-labels"
+WORLD_LABELS_SANITIZED_PROFILE = "world-labels-sanitized"
 CAMERA_RAW_PROFILE = "camera-raw"
 CAMERA_LABELS_PROFILE = "camera-labels"
-ISAAC_COMPATIBLE_PROFILES = frozenset({WORLD_LABELS_PROFILE, CAMERA_RAW_PROFILE})
+ISAAC_COMPATIBLE_PROFILES = frozenset(
+    {WORLD_LABELS_PROFILE, WORLD_LABELS_SANITIZED_PROFILE, CAMERA_RAW_PROFILE}
+)
 
 WORLD_LABELS_INPUT = "world_labels"
+SANITIZED_WORLD_LABELS_INPUT = "sanitized_world_labels"
 RAW_CAMERA_INPUT = "raw_camera"
 CAMERA_LABELS_INPUT = "camera_labels"
 
@@ -55,6 +61,7 @@ class CleanupProfile:
     verifiers: tuple[str, ...]
     backend: str
     perception_mode: str
+    detection_exposure_policy: str
     include_robot: bool
     record_robot_views: bool
     requires_clean_success: bool
@@ -72,6 +79,7 @@ class CleanupProfile:
             "verifiers": list(self.verifiers),
             "backend": self.backend,
             "perception_mode": self.perception_mode,
+            "detection_exposure_policy": self.detection_exposure_policy,
             "include_robot": self.include_robot,
             "record_robot_views": self.record_robot_views,
             "requires_clean_success": self.requires_clean_success,
@@ -90,6 +98,7 @@ _PROFILES: dict[str, CleanupProfile] = {
         verifiers=(CONTRACT_ONLY_VERIFIER,),
         backend=SYNTHETIC_BACKEND,
         perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+        detection_exposure_policy=WORLD_LABELS_DETECTION_POLICY,
         include_robot=False,
         record_robot_views=False,
         requires_clean_success=True,
@@ -112,15 +121,49 @@ _PROFILES: dict[str, CleanupProfile] = {
         ),
         backend=MOLMOSPACES_SUBPROCESS_BACKEND,
         perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+        detection_exposure_policy=WORLD_LABELS_DETECTION_POLICY,
         include_robot=True,
         record_robot_views=True,
         requires_clean_success=True,
-        summary=("Structured-label cleanup input lane with RBY1M robot-view report artifacts."),
+        summary=(
+            "Oracle structured-label cleanup input lane upper bound with RBY1M "
+            "robot-view report artifacts."
+        ),
         model_input_note=(
-            "The agent receives observed object handles and structured labels. "
+            "The agent receives observed object handles, structured labels, and "
+            "cleanup-ready destination hints from simulator state. "
             "FPV, chase, map, and verification images are report evidence, not "
             "model input for this lane. This lane does not select online/offline "
             "map behavior; use map_mode and runtime_map_prior for that."
+        ),
+    ),
+    WORLD_LABELS_SANITIZED_PROFILE: CleanupProfile(
+        profile=WORLD_LABELS_SANITIZED_PROFILE,
+        agent_input=SANITIZED_WORLD_LABELS_INPUT,
+        input_provenance=SIMULATOR_STATE_PROVENANCE,
+        world_backend=MOLMOSPACES_SIM_BACKEND,
+        report=ROBOT_VIEW_REPORT,
+        verifiers=(
+            CLEANUP_SUCCESS_VERIFIER,
+            ROBOT_VIEW_HONESTY_VERIFIER,
+            REAL_ROBOT_ALIGNMENT_VERIFIER,
+        ),
+        backend=MOLMOSPACES_SUBPROCESS_BACKEND,
+        perception_mode=VISIBLE_OBJECT_DETECTIONS_MODE,
+        detection_exposure_policy=SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY,
+        include_robot=True,
+        record_robot_views=True,
+        requires_clean_success=True,
+        summary=(
+            "Perfect-detector structured-label ablation with destination and "
+            "cleanup oracle fields removed."
+        ),
+        model_input_note=(
+            "The agent receives run-local observed object handles, categories, "
+            "regions, source observations, and public support evidence from "
+            "simulator labels. Candidate destinations, cleanup recommendations, "
+            "and placement-tool hints are withheld so destination selection "
+            "remains policy-required."
         ),
     ),
     CAMERA_RAW_PROFILE: CleanupProfile(
@@ -136,6 +179,7 @@ _PROFILES: dict[str, CleanupProfile] = {
         ),
         backend=MOLMOSPACES_SUBPROCESS_BACKEND,
         perception_mode=RAW_FPV_ONLY_MODE,
+        detection_exposure_policy=WORLD_LABELS_DETECTION_POLICY,
         include_robot=True,
         record_robot_views=True,
         requires_clean_success=True,
@@ -162,6 +206,7 @@ _PROFILES: dict[str, CleanupProfile] = {
         ),
         backend=MOLMOSPACES_SUBPROCESS_BACKEND,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
+        detection_exposure_policy=WORLD_LABELS_DETECTION_POLICY,
         include_robot=True,
         record_robot_views=True,
         requires_clean_success=True,
@@ -247,6 +292,17 @@ def cleanup_profile_metadata_for_run(
                 "model input for this lane. This lane does not select online/offline "
                 "map behavior; use map_mode and runtime_map_prior for that."
             )
+        elif profile.profile == WORLD_LABELS_SANITIZED_PROFILE:
+            metadata["summary"] = (
+                "Sanitized structured-label cleanup ablation with Isaac Lab "
+                "semantic-pose backend artifacts."
+            )
+            metadata["model_input_note"] = (
+                "The agent receives run-local observed object handles, categories, "
+                "regions, source observations, and public support evidence from "
+                "Isaac semantic labels. Candidate destinations, cleanup "
+                "recommendations, and placement-tool hints are withheld."
+            )
         elif profile.profile == CAMERA_RAW_PROFILE:
             metadata["summary"] = (
                 "Raw camera-input cleanup via Isaac Lab mounted head-camera artifacts "
@@ -258,7 +314,9 @@ def cleanup_profile_metadata_for_run(
                 "public image evidence. Structured labels remain withheld before declaration."
             )
     metadata["record_robot_views"] = bool(record_robot_views)
-    if profile.profile == WORLD_LABELS_PROFILE and not record_robot_views:
+    if profile.profile in {WORLD_LABELS_PROFILE, WORLD_LABELS_SANITIZED_PROFILE} and (
+        not record_robot_views
+    ):
         metadata["report"] = SEMANTIC_REPORT
         metadata["model_input_note"] = (
             metadata["model_input_note"]
@@ -282,6 +340,7 @@ def validate_cleanup_profile_metadata(
         "agent_input",
         "input_provenance",
         "perception_mode",
+        "detection_exposure_policy",
         "include_robot",
         "requires_clean_success",
     ):
@@ -298,7 +357,7 @@ def validate_cleanup_profile_metadata(
     else:
         assert metadata.get("backend") == expected["backend"], metadata
         assert metadata.get("world_backend") == expected["world_backend"], metadata
-    if profile.profile == WORLD_LABELS_PROFILE:
+    if profile.profile in {WORLD_LABELS_PROFILE, WORLD_LABELS_SANITIZED_PROFILE}:
         assert metadata.get("report") in {ROBOT_VIEW_REPORT, SEMANTIC_REPORT}, metadata
     else:
         assert metadata.get("report") == expected["report"], metadata

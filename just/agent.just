@@ -146,10 +146,10 @@ run task driver mode="" *overrides:
     if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
       profile="${mode:-$(get profile world-labels)}"
       case "$profile" in
-        smoke|world-labels|camera-raw|camera-labels)
+        smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)
           ;;
         *)
-          echo "error: unsupported household cleanup lane '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          echo "error: unsupported household cleanup lane '$profile' (expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)" >&2
           exit 1
           ;;
       esac

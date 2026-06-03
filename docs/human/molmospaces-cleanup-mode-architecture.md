@@ -89,15 +89,17 @@ Simulator-vs-real provenance belongs in metadata, not in the profile name.
 | Profile | Agent input | Default backend | Default report | What it proves |
 | --- | --- | --- | --- | --- |
 | `smoke` | world labels | synthetic contract | semantic report | Cheap command and contract sanity. |
-| `world-labels` | world labels | MolmoSpaces sim | robot-view report | Current structured cleanup path with visual artifacts. No image reasoning. |
+| `world-labels` | world labels | MolmoSpaces sim | robot-view report | Oracle structured semantic upper bound with cleanup-ready destination hints. |
+| `world-labels-sanitized` | sanitized world labels | MolmoSpaces sim | robot-view report | Perfect-detector ablation: structured detections without destination/tool oracle hints. |
 | `camera-raw` | raw camera artifacts | MolmoSpaces sim | robot-view report | Image-input contract: structured labels are withheld. |
 | `camera-labels` | camera-derived labels | MolmoSpaces sim | robot-view report | Camera-perception-label contract. Today simulated; later real detector/VLM. |
 
-This gives humans four memorable buckets:
+This gives humans five memorable buckets:
 
 ```text
 smoke
 world-labels
+world-labels-sanitized
 camera-raw
 camera-labels
 ```
@@ -126,7 +128,7 @@ cleanup claim and does not exercise image input.
 
 ### `world-labels`
 
-Structured-label cleanup with robot-view report artifacts.
+Oracle structured-label cleanup upper bound with robot-view report artifacts.
 
 Expanded meaning:
 
@@ -140,12 +142,43 @@ verifier=cleanup_success + robot_view_honesty + real_robot_alignment
 
 This is the current "MolmoSpaces cleanup with visual result" behavior. The
 agent receives handles such as `observed_001`, object categories, support
-estimates, and public candidate fixture hints. The FPV/chase/map/verification
-images are report artifacts, not model input.
+estimates, public candidate fixture hints, cleanup recommendation flags, and
+placement-tool hints. The FPV/chase/map/verification images are report
+artifacts, not model input. Treat this lane as an oracle upper bound for
+structured semantic cleanup, not the default fairness baseline against camera
+lanes.
 
 Future real hardware can still use this profile if the labels come from a robot
 semantic map or object memory. The public profile should not change just because
 the provenance changes.
+
+### `world-labels-sanitized`
+
+Perfect-detector structured-label ablation with robot-view report artifacts.
+
+Expanded meaning:
+
+```text
+agent_input=sanitized_world_labels
+input_provenance=simulator_state
+world_backend=molmospaces_sim
+report=robot_view_report
+verifier=cleanup_success + robot_view_honesty + real_robot_alignment
+detection_exposure_policy=sanitized_visible_object_detections
+```
+
+The agent receives run-local observed handles such as `observed_001`, object
+categories, image regions, source observation ids, confidence, room/waypoint
+context, producer provenance, and approximate public support evidence. It does
+not receive `candidate_fixture_id`, `cleanup_recommended`, or
+`recommended_tool` in agent-facing detections. Runtime-map observed-object rows
+still report producer type, source observation, image region, grounding status,
+and actionability, but destination selection is marked policy-required instead
+of cleanup-ready.
+
+Use this as the preferred structured-detector ablation when comparing against
+`camera-labels` and `camera-raw`. It keeps perfect simulator detection/tracking
+while removing direct cleanup destination answers.
 
 ### `camera-raw`
 
@@ -318,6 +351,7 @@ The refactor should make these gaps visible and testable:
 | --- | --- |
 | `profile=smoke` | Cheap contract sanity still works. |
 | `profile=world-labels` | Current structured-label cleanup input lane still produces robot-view artifacts and does not imply image input or map build mode. |
+| `profile=world-labels-sanitized` | Structured detections keep producer/source/region/actionability fields while omitting destination/tool oracle hints. |
 | `profile=camera-raw` | Raw camera artifacts are actually used, structured labels are withheld before declaration, and model-declared handles can drive cleanup. |
 | `profile=camera-labels` | Camera-derived label path is separate from world-label path, records producer provenance, and uses the same declaration schema as raw camera cleanup. |
 
@@ -327,6 +361,15 @@ The most important regression test is:
 profile=world-labels must not be described as image reasoning, online mapping,
 or offline prior-map cleanup. Map behavior is selected by map_mode and
 runtime_map_prior.
+```
+
+The fair-comparison regression test is:
+
+```text
+profile=world-labels-sanitized must not expose candidate_fixture_id,
+cleanup_recommended=true, or recommended_tool in visible_object_detections.
+Runtime observed_objects should still expose producer_type,
+source_observation_id, image_region, grounding_status, and actionability.
 ```
 
 The second most important regression test is:
@@ -342,8 +385,8 @@ report summary, checker, and focused tests:
 
 1. `just task::run household-cleanup <driver> <profile>` treats the third
    positional argument as the cleanup profile.
-2. The public profiles are `smoke`, `world-labels`, `camera-raw`, and
-   `camera-labels`.
+2. The public profiles are `smoke`, `world-labels`,
+   `world-labels-sanitized`, `camera-raw`, and `camera-labels`.
 3. Old public profile values (`visual`, `semantic`, `raw-fpv`) are not accepted
    as cleanup profiles.
 4. Profile expansion lives in `roboclaws/household/profiles.py`, while
@@ -367,3 +410,6 @@ report summary, checker, and focused tests:
   implemented.
 - `profile=world-labels` keeps the current direct-driver multi-seed review
   behavior (`1 2 3`) and live-driver single-seed behavior.
+- `profile=world-labels-sanitized` keeps the `world-labels` backend,
+  robot-view, and minimal-map behavior, but strips destination/tool oracle hints
+  from the agent-facing detection and runtime-map boundary.

@@ -31,6 +31,16 @@ COMMON_CLEANUP_RULES = (
 
 WORLD_LABELS_PROMPT = COMMON_PREFIX + COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES
 
+WORLD_LABELS_SANITIZED_PROMPT = (
+    COMMON_PREFIX
+    + COMMON_WAYPOINT_RULES
+    + "treat visible_object_detections as perfect structured detections without "
+    "cleanup destination oracle fields; use metric_map, fixture_hints, "
+    "runtime_metric_map.public_semantic_anchors, and tool recovery hints to choose "
+    "where to place observed objects. "
+    + COMMON_CLEANUP_RULES
+)
+
 CAMERA_LABELS_PROMPT = (
     COMMON_PREFIX
     + "When the next action is an MCP tool call, make that tool call before "
@@ -99,6 +109,8 @@ def render_kickoff_prompt(profile: str) -> str:
         return CAMERA_RAW_PROMPT
     if profile == "camera-labels":
         return CAMERA_LABELS_PROMPT
+    if profile == "world-labels-sanitized":
+        return WORLD_LABELS_SANITIZED_PROMPT
     return WORLD_LABELS_PROMPT
 
 
