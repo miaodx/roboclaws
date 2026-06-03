@@ -256,3 +256,71 @@ def Xform "b"
     assert "float4 inputs:scale = (0.25, 0.0625, 0.01, 1)" in text
     assert "float4 inputs:fallback = (0.8, 0.7, 0.6, 1)" in text
     assert "float4 inputs:scale = (0.8, 0.7, 0.6, 1)" in text
+
+
+def test_material_response_probe_can_rewrite_texture_scale_with_power(
+    tmp_path: Path,
+) -> None:
+    probe = _load_module(
+        SCRIPT_PATH,
+        "make_molmospaces_material_response_probe_usd_texture_scale_power",
+    )
+    source_usd = tmp_path / "scene_semantic.usda"
+    source_usd.write_text(
+        """#usda 1.0
+def Xform "a"
+{
+    def Scope "Materials"
+    {
+        def Material "material_LightWoodCounters3"
+        {
+            token outputs:surface.connect = </a/M/material_LightWoodCounters3/PS.outputs:surface>
+            def Shader "DiffuseTexture"
+            {
+                float4 inputs:fallback = (0.5, 0.25, 0.1, 1)
+                float4 inputs:scale = (0.5, 0.25, 0.1, 1)
+            }
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+    output_usd = tmp_path / "targeted" / "scene_semantic.usda"
+
+    summary = probe.make_material_response_probe_usd(
+        scene_usd_path=source_usd,
+        output_usd_path=output_usd,
+        material_path_contains="/a/M/material_LightWoodCounters3",
+        texture_scale_power=1.5,
+    )
+
+    text = output_usd.read_text(encoding="utf-8")
+    assert summary["status"] == "ready"
+    assert summary["requested_overrides"]["texture_scale_power"] == 1.5
+    assert summary["texture_scale_rewrite_count"] == 2
+    assert "float4 inputs:fallback = (0.353553, 0.125, 0.0316228, 1)" in text
+    assert "float4 inputs:scale = (0.353553, 0.125, 0.0316228, 1)" in text
+
+
+def test_material_response_probe_rejects_texture_scale_mode_and_power(
+    tmp_path: Path,
+) -> None:
+    probe = _load_module(
+        SCRIPT_PATH,
+        "make_molmospaces_material_response_probe_usd_texture_scale_power_invalid",
+    )
+    source_usd = tmp_path / "scene_semantic.usda"
+    source_usd.write_text("#usda 1.0\n", encoding="utf-8")
+
+    try:
+        probe.make_material_response_probe_usd(
+            scene_usd_path=source_usd,
+            output_usd_path=tmp_path / "targeted" / "scene_semantic.usda",
+            texture_scale_mode="square",
+            texture_scale_power=1.5,
+        )
+    except ValueError as exc:
+        assert "mutually exclusive" in str(exc)
+    else:
+        raise AssertionError("expected mutually exclusive texture scale options to fail")

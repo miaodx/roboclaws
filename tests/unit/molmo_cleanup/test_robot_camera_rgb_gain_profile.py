@@ -107,6 +107,68 @@ def test_rgb_gain_profile_filters_targets(tmp_path: Path) -> None:
     assert written["backend_rgb_gain"]["isaaclab_subprocess"] == [0.5, 2.0, 2.0]
 
 
+def test_rgb_gain_profile_can_write_view_specific_gains(tmp_path: Path) -> None:
+    profile = _load_module(SCRIPT_PATH, "make_robot_camera_rgb_gain_profile_view")
+    fpv_left = tmp_path / "fpv_left.png"
+    fpv_right = tmp_path / "fpv_right.png"
+    chase_left = tmp_path / "chase_left.png"
+    chase_right = tmp_path / "chase_right.png"
+    Image.new("RGB", (1, 1), color=(10, 20, 30)).save(fpv_left)
+    Image.new("RGB", (1, 1), color=(20, 10, 15)).save(fpv_right)
+    Image.new("RGB", (1, 1), color=(30, 40, 50)).save(chase_left)
+    Image.new("RGB", (1, 1), color=(15, 20, 25)).save(chase_right)
+    manifest = tmp_path / "comparison_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "locations": [
+                    {
+                        "status": "success",
+                        "target": {"target_id": "bed_1"},
+                        "image_diffs": {
+                            "fpv": {"left": str(fpv_left), "right": str(fpv_right)},
+                            "chase": {
+                                "left": str(chase_left),
+                                "right": str(chase_right),
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "profile.json"
+    summary_output = tmp_path / "summary.json"
+
+    summary = profile.make_rgb_gain_profile(
+        manifest_path=manifest,
+        output_profile_path=output,
+        summary_output=summary_output,
+        view="fpv",
+        view_gain_specs=[f"fpv={manifest}", f"chase={manifest}"],
+    )
+
+    written = json.loads(output.read_text(encoding="utf-8"))
+    assert summary["status"] == "ready"
+    assert written["backend_rgb_gain"]["isaaclab_subprocess"] == [0.5, 2.0, 2.0]
+    assert written["backend_view_rgb_gain"]["isaaclab_subprocess"]["fpv"] == [
+        0.5,
+        2.0,
+        2.0,
+    ]
+    assert written["backend_view_rgb_gain"]["isaaclab_subprocess"]["chase"] == [
+        2.0,
+        2.0,
+        2.0,
+    ]
+    assert summary["view_fits"][0]["view"] == "fpv"
+    assert summary["view_fits"][1]["view"] == "chase"
+    assert json.loads(summary_output.read_text(encoding="utf-8"))["backend_view_rgb_gain"][
+        "isaaclab_subprocess"
+    ]["chase"] == [2.0, 2.0, 2.0]
+
+
 def test_rgb_gain_profile_no_pairs_does_not_write_profile(tmp_path: Path) -> None:
     profile = _load_module(SCRIPT_PATH, "make_robot_camera_rgb_gain_profile_no_pairs")
     manifest = tmp_path / "comparison_manifest.json"

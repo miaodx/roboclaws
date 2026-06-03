@@ -192,6 +192,30 @@ def test_robot_camera_contract_diagnostics_flags_static_isaac_head_pitch_gap() -
     assert summary["fpv_lens_gap_count"] == 1
 
 
+def test_robot_camera_contract_diagnostics_recognizes_robot_relative_chase_contract() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_chase_contract",
+    )
+
+    chase = run_camera._chase_contract_diagnostics(
+        {
+            "report_chase_view": {"source": "robot_0/camera_follower"},
+            "report_verify_view": {"source": "mujoco_focus_camera"},
+        },
+        {
+            "report_chase_view": {"source": "robot_relative_camera_follower"},
+            "report_verify_view": {
+                "source": "isaac_lab_camera_rgb_semantic_pose_robot_views:verify"
+            },
+        },
+    )
+
+    assert chase["same_camera_contract"] is True
+    assert chase["mujoco_source"] == "robot_0/camera_follower"
+    assert chase["isaac_source"] == "robot_relative_camera_follower"
+
+
 def test_robot_camera_contract_diagnostics_accepts_static_head_camera_pitch_correction() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -788,6 +812,222 @@ def test_robot_camera_tone_color_check_summarizes_improved_rgb_gain_probe(
     assert "strongest current comparison-only direction" in check["recommended_next_action"]
 
 
+def test_robot_camera_native_isaac_render_diagnostics_are_reported_separately(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_native_isaac_render",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset><material name="mat_table"/></asset>
+  <worldbody>
+    <light name="key"/>
+    <body name="table_1">
+      <geom name="table_1_visual_0" material="mat_table"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Xform "table_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/Looks/mat_table>
+    }
+  }
+  def Scope "Looks"
+  {
+    def Material "mat_table"
+    {
+      def Shader "PreviewSurface"
+      {
+        uniform token info:id = "UsdPreviewSurface"
+      }
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    native = {
+        "schema": "isaac_native_render_diagnostics_v1",
+        "status": "captured",
+        "renderer_mode": "isaac_lab_headless_rtx",
+        "capture_method": "isaac_lab_camera_rgb_static_robot_views",
+        "view_kind": "robot_views",
+        "settings_api_available": True,
+        "available_setting_count": 4,
+        "missing_setting_count": 2,
+        "tone_mapping": {
+            "operator": {
+                "status": "available",
+                "value": "aces",
+                "setting_path": "/rtx/post/tonemap/op",
+            }
+        },
+        "camera_exposure": {
+            "auto_exposure_enabled": {
+                "status": "available",
+                "value": False,
+                "setting_path": "/rtx/post/histogram/autoExposure/enabled",
+            },
+            "iso": {
+                "status": "available",
+                "value": 100,
+                "setting_path": "/rtx/post/camera/iso",
+            },
+        },
+        "ocio": {},
+        "color_correction": {},
+        "color_grading": {},
+        "renderer": {
+            "renderer": {
+                "status": "available",
+                "value": "RayTracedLighting",
+                "setting_path": "/renderer/active",
+            }
+        },
+        "camera_prim_paths": ["/World/robot_0/head_camera"],
+        "render_product_paths": ["/Render/Product/Fpv"],
+        "render_resolution": {"width": 540, "height": 360},
+        "isaac_lab_isp_active": False,
+        "settings_mutation_attempted": False,
+        "default_render_settings_changed": False,
+        "post_render_comparison_profile": {
+            "applied": False,
+            "source": "not_a_native_renderer_setting",
+        },
+    }
+    manifest = {
+        "schema": "roboclaws_robot_camera_apple2apple_comparison_v1",
+        "purpose": "unit",
+        "scene": {"scene_usd_path": str(isaac_usd)},
+        "locations": [
+            {
+                "status": "success",
+                "label": "0001_table_1",
+                "target": {"kind": "receptacle", "target_id": "table_1"},
+                "robot_pose": {},
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "camera_diagnostics": {
+                    "isaac": {
+                        "schema": "isaac_robot_view_camera_diagnostics_v1",
+                        "native_render_diagnostics": native,
+                    }
+                },
+                "image_diffs": {
+                    "fpv": {
+                        "mean_abs_rgb": 42.0,
+                        "nonzero_fraction": 1.0,
+                        "residual": {
+                            "residual_class": "view_dependent_color_residual",
+                            "rgb_gain_oracle": {"mean_abs_rgb_after_gain": 30.0},
+                        },
+                    },
+                    "chase": {
+                        "mean_abs_rgb": 12.0,
+                        "nonzero_fraction": 0.5,
+                        "residual": {"residual_class": "low_residual"},
+                    },
+                },
+            }
+        ],
+        "summary": {
+            "residual_triage": {
+                "status": "view_dependent_color_residual",
+            }
+        },
+    }
+    (tmp_path / "mujoco_state.json").write_text(
+        json.dumps(
+            {
+                "scene_xml": str(mujoco_xml),
+                "objects": {},
+                "receptacles": {
+                    "table_1": {
+                        "receptacle_id": "table_1",
+                        "category": "Table",
+                        "position": [0.0, 0.0, 0.5],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "isaac_state.json").write_text(
+        json.dumps(
+            {
+                "scene_usd": str(isaac_usd),
+                "native_render_diagnostics": native,
+                "receptacle_index": {
+                    "table_1": {
+                        "usd_prim_path": "/World/table_1",
+                        "category": "Table",
+                        "geometry_status": "renderable",
+                        "has_renderable_geometry": True,
+                        "valid_stage_prim": True,
+                        "usd_world_bounds": {"center": [0.0, 0.0, 0.5]},
+                    }
+                },
+                "object_index": {},
+                "scene_binding_diagnostics": {
+                    "receptacle_bindings": {
+                        "table_1": {
+                            "status": "bound",
+                            "public_id": "table_1",
+                            "kind": "receptacle",
+                            "category": "Table",
+                            "usd_prim_path": "/World/table_1",
+                            "geometry_status": "renderable",
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
+    run_camera._write_outputs(manifest, tmp_path)
+
+    native_summary = manifest["summary"]["native_isaac_render_diagnostics"]
+    native_detail = manifest["native_isaac_render_diagnostics"]
+    render_gate = manifest["object_render_parity_diagnostics"]["render_gate"]
+    assert native_summary["status"] == "native_settings_recorded"
+    assert native_summary["settings_api_available"] is True
+    assert native_detail["tone_mapping"]["operator"]["value"] == "aces"
+    assert native_detail["camera_exposure"]["auto_exposure_enabled"]["value"] is False
+    assert native_summary["default_render_settings_changed"] is False
+    assert native_summary["post_render_comparison_profile"]["source"] == (
+        "not_a_native_renderer_setting"
+    )
+    assert render_gate["native_isaac_status"] == "native_settings_recorded"
+    assert render_gate["native_isaac_render_diagnostics"]["status"] == ("native_settings_recorded")
+    assert (
+        manifest["lanes"][run_camera.ISAAC_LANE_ID]["native_render_diagnostics"][
+            "default_render_settings_changed"
+        ]
+        is False
+    )
+    report_html = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "Native Isaac Render Diagnostics" in report_html
+    assert "not_a_native_renderer_setting" in report_html
+    assert "/rtx/post/tonemap/op" in report_html
+
+
 def test_robot_camera_comparison_target_selection_filters_unbound_isaac_targets() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -831,6 +1071,59 @@ def test_robot_camera_comparison_target_selection_filters_unbound_isaac_targets(
     ]
     assert selection["dropped_unbound_target_count"] == 1
     assert selection["dropped_unbound_targets"][0]["target_id"] == "alarmclock_1"
+
+
+def test_robot_camera_comparison_target_selection_uses_isaac_scene_index() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_target_selection_scene_index",
+    )
+    selection = run_camera._select_comparison_targets(
+        {
+            "receptacles": {
+                "bed_1": {},
+                "table_1": {},
+            },
+            "objects": {
+                "box_1": {},
+                "bowl_1": {},
+            },
+        },
+        limit=2,
+        scene_binding_diagnostics={},
+        isaac_state={
+            "receptacle_index": {
+                "bed_1": {
+                    "usd_prim_path": "/World/bed_1",
+                    "geometry_status": "renderable",
+                },
+                "table_1": {
+                    "usd_prim_path": "/World/table_1",
+                    "geometry_status": "renderable",
+                },
+            },
+            "object_index": {
+                "box_1": {
+                    "usd_prim_path": "/World/box_1",
+                    "geometry_status": "renderable",
+                },
+                "bowl_1": {
+                    "usd_prim_path": "/World/bowl_1",
+                    "geometry_status": "renderable",
+                },
+            },
+        },
+    )
+
+    assert selection["status"] == "isaac_bound_targets_selected"
+    assert selection["isaac_bound_candidate_count"] == 4
+    assert [item["target_id"] for item in selection["selected_targets"]] == ["bed_1", "table_1"]
+    assert selection["not_selected_bound_target_count"] == 2
+    assert [item["target_id"] for item in selection["not_selected_bound_targets"]] == [
+        "bowl_1",
+        "box_1",
+    ]
+    assert selection["dropped_unbound_target_count"] == 0
 
 
 def test_robot_camera_comparison_target_selection_preserves_legacy_order_without_bindings() -> None:
@@ -928,6 +1221,377 @@ def Xform "World"
     assert summary["status"] == "target_material_texture_or_binding_gap"
     assert summary["high_priority_target_delta_count"] == 1
     assert location["target_contract_delta"]["status"] == "missing_object_binding_evidence"
+
+
+def test_robot_camera_isaac_render_contract_reports_visual_physics(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_visual_physics_contract",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+    def Xform "box_1" (
+        apiSchemas = ["PhysicsRigidBodyAPI"]
+    )
+    {
+        float physics:mass = 1
+        def Mesh "mesh"
+        {
+            rel material:binding = </World/Looks/BoxMat>
+        }
+        def PhysicsRevoluteJoint "flap_joint"
+        {
+            float physics:lowerLimit = 0
+        }
+    }
+    def Scope "Looks"
+    {
+        def Material "BoxMat"
+        {
+            token outputs:surface.connect = </World/Looks/BoxMat/Shader.outputs:surface>
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    contract = run_camera._isaac_render_contract_from_usda(str(isaac_usd))
+    view = run_camera._isaac_view_render_contract(contract, usd_prim_path="/World/box_1")
+
+    assert contract["visual_physics_status"] == "physics_articulation_preserved"
+    assert contract["physics_joint_paths"] == ["/World/box_1/flap_joint"]
+    assert contract["physics_api_schema_prim_paths"] == ["/World/box_1"]
+    assert contract["physics_property_prim_paths"] == ["/World/box_1"]
+    assert view["visual_physics_status"] == "physics_articulation_preserved"
+    assert view["physics_joint_count"] == 1
+    assert view["physics_api_schema_prim_count"] == 1
+    assert view["physics_property_prim_count"] == 1
+
+
+def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_object_parity_audit",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset>
+    <texture name="BoxTex" file="box_closed.png"/>
+    <texture name="BowlTex" file="bowl.png"/>
+    <material name="material_Box" texture="BoxTex"/>
+    <material name="material_Bowl" texture="BowlTex"/>
+  </asset>
+  <worldbody>
+    <body name="box_1"><geom name="box_1_visual_0" material="material_Box"/></body>
+    <body name="bowl_1"><geom name="bowl_1_visual_0" material="material_Bowl"/></body>
+    <body name="table_1"><geom name="table_1_visual_0" material="material_Box"/></body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Xform "box_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/box_1/Looks/material_Box_Open>
+    }
+    def Scope "Looks"
+    {
+      def Material "material_Box_Open"
+      {
+        def Shader "PreviewSurface"
+        {
+          uniform token info:id = "UsdPreviewSurface"
+          color3f inputs:diffuseColor = (0.6, 0.4, 0.2)
+        }
+      }
+    }
+  }
+  def Xform "bowl_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/bowl_1/Looks/material_Bowl>
+    }
+    def Scope "Looks"
+    {
+      def Material "material_Bowl"
+      {
+        def Shader "PreviewSurface"
+        {
+          uniform token info:id = "UsdPreviewSurface"
+          color3f inputs:diffuseColor = (1, 1, 1)
+        }
+      }
+    }
+  }
+  def Xform "table_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/table_1/Looks/material_Box>
+    }
+    def Scope "Looks"
+    {
+      def Material "material_Box"
+      {
+        def Shader "PreviewSurface"
+        {
+          uniform token info:id = "UsdPreviewSurface"
+          color3f inputs:diffuseColor = (1, 1, 1)
+        }
+      }
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    mujoco_state = {
+        "scene_xml": str(mujoco_xml),
+        "objects": {
+            "box_1": {
+                "object_id": "box_1",
+                "category": "Box",
+                "location_id": "",
+                "position": [1.0, 2.0, 0.5],
+            },
+            "bowl_1": {
+                "object_id": "bowl_1",
+                "category": "Bowl",
+                "location_id": "table_1",
+                "position": [2.0, 2.0, 0.7],
+            },
+        },
+        "receptacles": {
+            "table_1": {
+                "receptacle_id": "table_1",
+                "category": "DiningTable",
+                "position": [2.0, 2.0, 0.6],
+            }
+        },
+        "open_receptacle_ids": ["table_1"],
+    }
+    isaac_state = {
+        "scene_usd": str(isaac_usd),
+        "object_index": {
+            "box_1": {
+                "asset_id": "Box_10",
+                "category": "Box",
+                "parent": "table_1",
+                "usd_prim_path": "/World/box_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [1.01, 2.02, 0.51],
+                    "size": [0.5, 0.4, 0.3],
+                },
+            },
+            "bowl_1": {
+                "asset_id": "Bowl_12",
+                "category": "Plate",
+                "parent": "table_1",
+                "usd_prim_path": "/World/bowl_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [2.0, 2.0, 0.7],
+                    "size": [0.2, 0.2, 0.1],
+                },
+            },
+        },
+        "receptacle_index": {
+            "table_1": {
+                "asset_id": "Dining_Table_203",
+                "category": "DiningTable",
+                "usd_prim_path": "/World/table_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [2.0, 2.0, 0.6],
+                    "size": [1.0, 1.0, 0.6],
+                },
+            }
+        },
+        "open_receptacle_ids": ["table_1"],
+        "semantic_pose_state": {
+            "articulations": {
+                "table_1": {
+                    "open": True,
+                    "rendered_to_usd": False,
+                }
+            }
+        },
+        "scene_binding_diagnostics": {},
+    }
+    audit = run_camera._object_parity_audit(
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+        mujoco_contract=run_camera._mujoco_render_contract_from_xml(str(mujoco_xml)),
+        isaac_contract=run_camera._isaac_render_contract_from_usda(str(isaac_usd)),
+        scene_binding_diagnostics={},
+    )
+
+    assert audit["schema"] == "robot_camera_object_parity_audit_v1"
+    assert audit["status"] == "object_parity_gaps_detected"
+    assert audit["object_count"] == 2
+    assert audit["receptacle_count"] == 1
+    items = {item["target_id"]: item for item in audit["items"]}
+    assert items["box_1"]["binding_status"] == "bound_in_both"
+    assert items["box_1"]["state_status"] == "visual_state_unverified"
+    assert items["box_1"]["support_status"] == "support_available_in_isaac_only"
+    assert items["box_1"]["render_contract_delta"]["status"] == "material_or_texture_name_delta"
+    assert items["box_1"]["isaac"]["asset_id"] == "Box_10"
+    assert items["bowl_1"]["category_status"] == "category_delta"
+    assert items["table_1"]["state_status"] == "state_not_rendered_to_usd"
+    high_priority_ids = {item["target_id"] for item in audit["high_priority_items"]}
+    assert {"box_1", "bowl_1", "table_1"} <= high_priority_ids
+
+    diagnostics = run_camera._object_render_parity_diagnostics(
+        object_audit=audit,
+        render_domain_checks={
+            "status": "render_domain_delta_confirmed",
+            "check_status_counts": {"light_shadow_contract_delta": 1},
+            "recommended_next_action": "Inspect renderer response.",
+        },
+        residual_triage={"status": "render_domain_geometry_or_texture_residual"},
+    )
+
+    assert diagnostics["schema"] == "robot_camera_object_render_parity_diagnostics_v1"
+    assert diagnostics["status"] == "object_gate_failures_detected"
+    object_gate = diagnostics["object_gate"]
+    assert object_gate["status"] == "object_gate_failures_detected"
+    assert object_gate["failure_count"] == 3
+    classifications = {
+        item["target_id"]: item["classification"] for item in object_gate["failure_records"]
+    }
+    assert classifications["box_1"] == "visual_state_delta"
+    assert classifications["bowl_1"] == "not_comparable"
+    assert classifications["table_1"] == "visual_state_delta"
+    blocking_statuses = {
+        item["target_id"]: item["blocking_status"] for item in object_gate["failure_records"]
+    }
+    assert blocking_statuses["bowl_1"] == "category_delta"
+    assert diagnostics["render_gate"]["status"] == "blocked_by_object_gate"
+
+    report_html = run_camera._render_report(
+        {
+            "purpose": "unit test",
+            "summary": {},
+            "object_render_parity_diagnostics": diagnostics,
+            "object_parity_audit": audit,
+            "locations": [],
+        }
+    )
+    assert "Object/Render Gate" in report_html
+    assert "object_gate_failures_detected" in report_html
+    assert "visual_state_delta" in report_html
+
+
+def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_box_visual_state_frozen",
+    )
+
+    contract = run_camera._object_visual_state_contract(
+        target_id="box_1",
+        kind="object",
+        mujoco_entry={"category": "Box"},
+        isaac_entry={"category": "Box"},
+        mujoco_state={
+            "joint_states": {
+                "box_1": [
+                    {
+                        "joint_name": "box_1_box10flapinner1joint0",
+                        "joint_type": "hinge",
+                        "qpos": 2.91219,
+                        "ref": 2.91219,
+                        "range": [0.0, 2.91219],
+                    },
+                    {
+                        "joint_name": "box_1_box10flapinner2joint0",
+                        "joint_type": "hinge",
+                        "qpos": -3.06698,
+                        "ref": -3.06698,
+                        "range": [-3.06698, 0.0],
+                    },
+                ]
+            }
+        },
+        isaac_state={},
+        isaac_contract={
+            "status": "parsed",
+            "material_bindings": {},
+            "physics_joint_paths": [],
+            "physics_api_schema_prim_paths": [],
+            "physics_property_prim_paths": [],
+        },
+        usd_prim_path="/World/box_1",
+    )
+
+    assert contract["status"] == "visual_state_static_ref_baked"
+    assert contract["mujoco"]["status"] == "mujoco_ref_endpoint_articulation"
+    assert contract["mujoco"]["endpoint_joint_count"] == 2
+    assert contract["isaac"]["status"] == "isaac_visual_physics_frozen"
+    assert "PhysX will not re-open" in contract["reason"]
+
+
+def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_box_visual_state_physics",
+    )
+
+    contract = run_camera._object_visual_state_contract(
+        target_id="box_1",
+        kind="object",
+        mujoco_entry={"category": "Box"},
+        isaac_entry={"category": "Box"},
+        mujoco_state={
+            "joint_states": {
+                "box_1": [
+                    {
+                        "joint_name": "box_1_box10flapouter1joint0",
+                        "joint_type": "hinge",
+                        "qpos": -2.93938,
+                        "ref": -2.93938,
+                        "range": [-2.93938, 0.0],
+                    }
+                ]
+            }
+        },
+        isaac_state={},
+        isaac_contract={
+            "status": "parsed",
+            "material_bindings": {},
+            "physics_joint_paths": ["/World/box_1/Geometry/flap_joint"],
+            "physics_api_schema_prim_paths": ["/World/box_1/Geometry/flap"],
+            "physics_property_prim_paths": ["/World/box_1/Geometry/flap"],
+        },
+        usd_prim_path="/World/box_1",
+    )
+
+    assert contract["status"] == "visual_state_articulation_physics_preserved"
+    assert contract["isaac"]["status"] == "isaac_articulation_physics_preserved"
+    assert contract["isaac"]["physics_joint_count"] == 1
+    assert "re-solve those joints" in contract["reason"]
 
 
 def test_robot_camera_patch_isaac_pose_can_set_comparison_color_profile(

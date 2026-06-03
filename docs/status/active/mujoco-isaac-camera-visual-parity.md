@@ -2,7 +2,7 @@
 
 Owner/session: Codex local
 Started: 2026-06-02 16:30 Asia/Shanghai
-State: active
+State: complete; monitor future-scene regressions
 
 ## Scope
 
@@ -12,7 +12,14 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
 
 ## Source Of Truth
 
-- Current root commit before this note: `5f682eb9 feat: probe targeted diffuse texture material response`
+- Current root commit before latest four-check audit:
+  `8388410d feat: probe intermediate texture scale response`
+- Four-check summary:
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/visual_parity_summary.json`
+- Four-check report:
+  `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
+- Earlier root commit before this note:
+  `5f682eb9 feat: probe targeted diffuse texture material response`
 - Camera FOV fix commit: `b5e2be3d fix: align isaac head camera fov`
 - Report: `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_headpitch_lightingfix_scene_refs_fix/report.html`
 - Color/tone probe:
@@ -313,10 +320,11 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   Refreshing the visual-parity summary with that manifest changes
   `calibration_scene.status` to `calibration_scene_evidence_loaded`. Its
   calibration result is `view_dependent_render_domain_delta` with global Isaac
-  luminance gain about `1.06`, mean calibrated luminance residual about `14.84`,
-  and only about `5.7%` luminance-delta improvement. This is stronger evidence
-  that the remaining visual gap is per-room light/material/tone response rather
-  than camera geometry or one global brightness scale.
+  scene-level luminance gain `1.0595`, mean calibrated luminance residual
+  `14.8384`, and only about `5.7%` mean luminance-delta improvement from the
+  original per-view gap. The residual stays view-dependent, so this is stronger
+  evidence that the remaining visual gap is per-room light/material/tone
+  response rather than camera geometry or one global brightness scale.
 - A held-out seed slice now covers `val_1`, seed `8`, 2 mess objects, and 4
   bound targets:
   `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_baseline/report.html`.
@@ -398,9 +406,10 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   `output/molmo/robot-camera-apple2apple/0602_visual_parity_summary/report.html`
   now records `val0_global_scale_square` (`fpv_delta=-5.5714`),
   `val1_scale_square` (`fpv_delta=-7.1599`), and
-  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) plus the maintained
-  prepared-USD gate `val1_seed8_prepared_scale_square_gate`
-  (`fpv_delta=-7.7401`) under
+  `val1_seed8_scale_square` (`fpv_delta=-7.7162`) plus maintained
+  prepared-USD gates `val0_prepared_scale_square_gate` (`fpv_delta=-5.5750`),
+  `val1_seed6_prepared_scale_square_gate` (`fpv_delta=-7.1603`), and
+  `val1_seed8_prepared_scale_square_gate` (`fpv_delta=-7.7401`) under
   `material_response=has_fpv_gain_comparison_only`. The overall gate remains
   `active`: head-camera geometry, RAW_FPV input, corpus coverage, and
   calibration evidence are loaded, but render-domain residuals remain and RGB /
@@ -425,7 +434,7 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   and `renderable_labeled_prim_count=817`. The rewrite count matches the prior
   ad hoc `val_1_material_scale_square` probe.
 - The maintained prepared-USD gate now also has an apple-to-apple validation
-  run:
+  run for the `val_1` seed-8 bound-target slice:
   `output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_prepared_scale_square_gate_probe/report.html`.
   It preserves `fpv_lens_aligned`, `fpv_world_pose_aligned`, and the
   robot-mounted head-camera contract while lowering FPV from the comparable
@@ -436,37 +445,311 @@ the real robot-mounted head camera; chase camera is auxiliary report evidence.
   applies the opt-in rewrite after `flat_stage.GetRootLayer().Save()`, so the
   final `scene_semantic.usda` contains the squared `UsdUVTexture`
   scale/fallback values used by the report.
+- The maintained prepared-USD path now also reproduces the ad hoc scale-square
+  result on the `val_1` seed-6 6-target bound slice:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_gate_probe/report.html`.
+  FPV moves from `36.5655` to `29.4052` (`-7.1603`), essentially matching the
+  ad hoc `29.4056` result, while chase moves from `72.2838` to `75.1960`
+  (`+2.9122`). This keeps the edit comparison-only, but confirms the prepared
+  gate itself is not seed-8-specific.
+- The maintained prepared-USD path now also covers `val_0` seed-6 8 locations.
+  The prepared artifact
+  `output/isaaclab/flattened-semantic-usd/val_0_material_scale_square_prepared_gate/summary.json`
+  reports `status=ready`, `material_texture_scale_mode=square`,
+  `material_texture_scale_rewrite_count=358`,
+  `material_texture_scale_default_candidate=true`, `matched_entry_count=139`,
+  and `renderable_labeled_prim_count=3357`. Its apple-to-apple report
+  `output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_prepared_scale_square_gate_probe/report.html`
+  preserves the head-camera contract and lowers FPV from `38.0980` to
+  `32.5230` (`-5.5750`), matching the ad hoc global scale-square result
+  `32.5266`. Chase is effectively flat (`83.7516` to `83.7739`, `+0.0223`).
+- The visual-parity summary now has an explicit machine-readable
+  `prepared_scale_square_default_gate`. Current status is
+  `comparison_only_not_default`: all 3 comparable prepared probes improve FPV,
+  but the gate blocks default promotion on `chase_regression`
+  (`val1_seed6_prepared_scale_square_gate`, tolerance `1.0`) and
+  `render_domain_residuals_active`
+  (`lighting_shadow_contract_delta`, `target_material_texture_or_binding_gap`).
+- The refreshed summary now classifies that `val1_seed6` chase blocker instead
+  of treating it as an opaque number. The paired-view diagnostics say
+  `diagnostic_class=tone_luminance_side_effect`: FPV improves on 5/6 locations
+  with zero FPV regressions and average FPV delta `-7.1603`, while chase edge
+  residual is essentially unchanged (`edge_abs_diff_delta_avg=0.0163`) and the
+  chase regression comes from luminance-gap shifts on high-luminance auxiliary
+  views. The largest chase regressions are dining table `0003` (`+14.4875`),
+  pillow `0006` (`+12.3877`), and bowl `0005` (`+6.9027`). Keep this as a
+  default-promotion blocker until render residuals are resolved or the chase
+  role is explicitly re-gated, but do not treat it as evidence of camera pose,
+  lens, or USD geometry regression.
+- A follow-up comparison-only material probe now tests whether the LightWood
+  texture-scale response should sit between source values and full squaring.
+  `scripts/isaac_lab_cleanup/make_molmospaces_material_response_probe_usd.py`
+  accepts opt-in `--texture-scale-power`; the `val_1` target-specific artifact
+  at
+  `output/isaaclab/flattened-semantic-usd/val_1_diningtable_lightwood_scale_power15/summary.json`
+  rewrites only the dining-table `material_LightWoodCounters3` texture
+  scale/fallback inputs with `power=1.5`. Its apple-to-apple report
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_diningtable_lightwood_scale_power15_probe/report.html`
+  preserves the head-camera contract and leaves chase effectively unchanged
+  (`72.2838` to `72.2828`). It improves the dining table FPV from `46.1260` to
+  `40.9925`, but this is weaker than full scale-square (`37.5939`) and overall
+  FPV only reaches `35.1698`, far behind global/prepared scale-square
+  (`29.4052`). Treat `power=1.5` as useful calibration evidence, not a default
+  candidate or replacement for the stronger scale-square corpus.
 
 ## Next Action
 
-Keep FPV pose and the head-camera FOV contract unchanged. Do not promote global
-raw colorspace, combined raw+roughness, global roughness-only, or the `0008`
-target-specific roughness edit as defaults from the current evidence. Keep RGB
-gain comparison-only: it improves FPV on `val_0`, `val_1` 4-location, and the
-fair bound-target `val_1` 6-location slice, but chase can move the other way and
-render-domain material checks remain active. The combined pillow texture plus
-RGB-gain probe does not beat RGB-only, so texture-binding cleanup is lower
-priority than tone/light/material-response work. The next highest-value
-render-domain slice is the high-residual exact-bound bed/table/pillow material
-response on the fair `val_1` bound-target report, plus RGB/tone interaction on
-that same fair target set. For light/shadow specifically, `val_1` now also says
-simple dome removal and shadow enabling are neutral/small and no-dome-plus-RGB is
-worse than RGB-only; do not retry simple dome removal, shadow enabling, or the
-old combined MuJoCo-like light/shadow USD edit. If light/shadow remains the next
-slice, make it a comparison-only intensity/direction probe with a clear FPV
-threshold. Keep RAW_FPV and world-labels as separate evidence lanes:
-world-labels uses images as report evidence only, while camera-raw uses the
-head-camera FPV images as agent input.
-The next proof-backed step is not more camera work. Keep the calibration report
-attached to the summary gate; do not promote any RGB/luminance gain to default
-rendering while the calibration result remains view-dependent. Texture
-scale/fallback squaring is now the strongest material-response direction, with
-positive FPV evidence on `val_0`, held-out `val_1` seed-6, held-out `val_1`
-seed-8 bound targets, and the maintained prepared-USD seed-8 gate, but it is
-still comparison-only because chase can worsen on seed-6 and render-domain
-residuals remain. The next useful slice is to broaden the prepared-USD
-`--material-texture-scale-mode square` corpus across additional scenes/targets,
-then decide whether it can become default cleanup rendering.
+Keep FPV pose and the head-camera FOV contract unchanged. MuJoCo remains on
+`robot_0/head_camera`; Isaac remains on `/World/robot_0/head_camera`. Keep
+RAW_FPV and world-labels as separate evidence lanes: world-labels uses images as
+report evidence only, while camera-raw uses the head-camera FPV images as agent
+input.
+
+The current visual-parity summary is now `passed`. The old single-axis
+scale-square gate remains useful history but is no longer the promotion target:
+prepared scale-square alone is still `comparison_only_not_default` because of a
+`val_1` seed-6 auxiliary chase luminance side effect. Default-rendering parity is
+ready through the combined material plus directional-light path instead:
+`combined_material_light_default_gate.status=combined_material_light_default_ready`
+and `default_rendering_visual_parity.status=default_rendering_visual_parity_ready`.
+The prepared semantic USD default path now uses
+`rendering_parity_preset=combined-material-light`, which applies texture
+scale/fallback squaring and `DistantLight rotateX=+25`.
+
+Do not promote the older negative or neutral probes as defaults: global raw
+colorspace, combined raw+roughness, global roughness-only, target-specific
+`0008` roughness, pillow texture injection, simple DomeLight removal, and simple
+shadow enabling all remain historical do-not-promote evidence. Report-side
+view-specific RGB/tone profiles are also comparison-only; they are not needed for
+the default-rendering claim now that the combined material+light prepared path is
+wired.
+
+The next useful work is monitoring, not more camera surgery: keep the default
+combined-material-light path on future MuJoCo/Isaac apple-to-apple scenes and
+watch for regressions in `head_camera_contract`, `raw_fpv_input_lane`,
+`combined_material_light_default_gate`, and `default_rendering_path`.
+
+## Four-Check Audit 2026-06-02
+
+The current machine-readable summary says the four requested checks are split
+cleanly:
+
+- Camera geometry: `head_camera_contract.status=head_camera_geometry_aligned`.
+  The active FPV contract is frozen on the robot-mounted head camera, not a
+  chase or report-only camera. MuJoCo remains `robot_0/head_camera`; Isaac
+  remains `/World/robot_0/head_camera`.
+- RAW_FPV input lane:
+  `raw_fpv_input_lane.status=raw_fpv_agent_input_uses_head_camera`. The
+  `camera-raw` cleanup probe records `perception_mode=raw_fpv_only`,
+  `camera_status=all_robot_views_use_head_camera_fpv`, 16 head-camera contract
+  steps, and 6 RAW_FPV observations. World-label images remain report evidence,
+  not the policy/input lane.
+- Material/texture response:
+  `combined_material_light_default_gate.status=combined_material_light_default_ready`.
+  Prepared scale-square alone remains `comparison_only_not_default`, but adding
+  `DistantLight rotateX=+25` resolves the auxiliary chase side effect while
+  keeping all FPV slices improved. The combined gate covers `val_0` seed-6,
+  `val_1` seed-6, and `val_1` seed-8 with FPV deltas `-7.4409`, `-9.2923`, and
+  `-10.7103`.
+- Light/brightness/tone:
+  `default_rendering_visual_parity.status=default_rendering_visual_parity_ready`.
+  Simple light/shadow probes remain historical `neutral_do_not_promote`
+  evidence, and report-side RGB/tone probes remain comparison-only. The default
+  path no longer depends on those RGB/tone profiles because the combined
+  material+directional-light evidence passes without report-side compensation.
+
+The latest intermediate texture-scale probes remain useful historical narrowing:
+target-specific `power=1.5` and softened LightWood probes confirm that the gap
+was render-domain material response plus lighting/tone, not FPV camera pose. The
+default promotion path is now the broader combined material+light gate, not those
+intermediate probes.
+
+Current blocker fingerprint:
+`render_domain_visual_parity_monitoring`; root-cause classification:
+`render_domain_resolved_by_combined_material_light_default_path`; last decision
+delta: camera and RAW_FPV are proven aligned, and default-rendering parity is
+ready through the combined material+light prepared-USD path.
+
+## Tone-Mitigation Probes 2026-06-02
+
+The `val_1` seed-6 prepared scale-square chase blocker is now narrower. It is
+not fixed by single global tone compensation:
+
+- Prepared scale-square alone:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_gate_probe/report.html`
+  moves FPV `36.5655 -> 29.4052` (`-7.1603`) but moves chase
+  `72.2838 -> 75.1960` (`+2.9122`).
+- Prepared scale-square plus the held-out `val_0` FPV RGB profile:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_val0_rgb_gain_probe/report.html`
+  still improves FPV (`30.2630`, `-6.3025`) but worsens chase further
+  (`76.9372`, `+4.6534`). Do not use the cross-scene FPV RGB profile as a
+  chase blocker mitigation.
+- Prepared scale-square plus a chase-fitted RGB profile:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_chase_rgb_gain_probe/report.html`
+  fixes chase (`71.6620`, `-0.6218`) but breaks FPV (`47.8901`, `+11.3246`).
+  Do not use one global chase-derived RGB profile for policy/input views.
+- Prepared scale-square plus a view-specific RGB profile:
+  `output/molmo/robot-camera-apple2apple/0602_val1_seed6_2mess_8loc_fovfix_bound_prepared_scale_square_view_rgb_gain_probe/report.html`
+  keeps FPV strongly improved (`30.2755`, `-6.2900`) and fixes chase
+  (`71.6638`, `-0.6200`). This is useful diagnostic evidence that the auxiliary
+  chase side effect can be removed by view-specific report-side tone
+  compensation, but it is overfit/comparison-only and must not become a default
+  renderer profile without held-out validation.
+- The same comparison-only view-specific profile has now been sanity-checked on
+  two held-out slices. On `val_1` seed-8 it keeps FPV strongly improved
+  (`37.2184 -> 30.3806`, `-6.8378`) and keeps chase within tolerance
+  (`71.7464 -> 72.1970`, `+0.4506`). On `val_0` seed-6 it keeps FPV improved
+  (`38.0980 -> 32.3450`, `-5.7530`) and keeps chase within tolerance
+  (`83.7516 -> 84.5279`, `+0.7763`). This strengthens the view-specific tone
+  direction, but it is still comparison-only and has not been promoted to a
+  default-rendering contract.
+- The view-specific tone profile is now reproducible instead of hand-composed:
+  `scripts/molmo_cleanup/make_robot_camera_rgb_gain_profile.py` accepts repeated
+  `--view-gain VIEW=MANIFEST` inputs and writes
+  `backend_view_rgb_gain`. Re-running it for the current evidence writes
+  `output/molmo/robot-camera-apple2apple/profiles/0602_val1_seed6_prepared_scale_square_view_rgb_gain.generated.json`
+  with base/FPV gain `[0.944061, 0.844818, 0.822146]` and chase gain
+  `[1.589143, 1.423057, 1.304406]`, matching the existing comparison-only
+  profile core values. This only makes the report-side compensation auditable;
+  it does not change MuJoCo/Isaac default rendering or the RAW_FPV policy input.
+- The summary calibration reader now prefers the scene-level
+  `visual_diagnostics.render_domain_calibration` field over nested candidate
+  color-profile calibrations. That prevents comparison-profile replay evidence
+  from being mistaken for default-rendering calibration readiness. With that
+  source pinned, the baseline `val_0` calibration blocker is
+  `view_dependent_render_domain_delta` with residual `14.8384`.
+- A real scene-camera calibration probe using the prepared scale-square USD now
+  exists at
+  `output/molmo/scene-camera-comparison/0602_val0_scene_refs_scale_square_calibration/0603_0003/report.html`.
+  It improves scene-level calibration residual from `14.8384` to `11.6923` and
+  raises mean luminance-delta improvement from about `5.7%` to `20.4%`, but its
+  status remains `view_dependent_render_domain_delta`. This is positive
+  material-response evidence, not enough to promote prepared scale-square or
+  luminance gain as default cleanup rendering.
+- Two real calibration probes then stacked simple light/shadow toggles on top of
+  prepared scale-square. Removing the Isaac DomeLight
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_no_dome_calibration/0603_0009/report.html`)
+  worsens residual to `25.5330`. Enabling wall/ceiling shadows
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_no_shadow_calibration/0603_0011/report.html`)
+  also worsens residual to `13.9678`. Both remain
+  `view_dependent_render_domain_delta`, so do not promote simple DomeLight
+  removal or shadow enabling, even in combination with scale-square.
+- Directional-light orientation is a more useful light-domain axis than the
+  simple toggles. Keeping prepared scale-square and changing only the Isaac
+  DistantLight `rotateX` from `-10` to `-35`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_m35_calibration/0603_0016/report.html`)
+  improves residual to `9.8196`; changing it to `+15`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p15_calibration/0603_0017/report.html`)
+  improves residual further to `9.2077`. Both are still
+  `view_dependent_render_domain_delta`, so this is promising calibration
+  evidence, not default-rendering readiness.
+- Bracketing that axis with `rotateX=+5` and `rotateX=+25` changed the
+  calibration decision. `+5`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p5_calibration/0603_0021/report.html`)
+  regresses to residual `11.3574`, but `+25`
+  (`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p25_calibration/0603_0022/report.html`)
+  reaches residual `7.4522` and
+  `render_domain_calibration_status=global_luminance_gain_sufficient`. The
+  summary gate now treats this as the first default-rendering calibration
+  candidate while keeping the failed calibration probes as non-default history.
+- The summary gate now requires actual view-specific profile evidence instead
+  of only trusting probe labels. Each
+  `prepared_scale_square_view_rgb` probe must expose `backend_view_rgb_gain`
+  for both `fpv` and `chase` in its Isaac color profile state before
+  `view_specific_prepared_scale_square_tone_gate` can be ready for review. The
+  refreshed summary records `view_rgb_gain_profile_count=3`,
+  `required_view_rgb_gain_views=["fpv","chase"]`, no blockers, and
+  `has_required_view_rgb_gain=true` for all three current probes.
+- That same gate is now formalized as report-side comparison evidence:
+  `view_specific_prepared_scale_square_tone_gate.status=view_specific_report_comparison_gate_ready`,
+  `formal_comparison_gate_ready=true`,
+  `policy_scope=report_side_comparison_only`, and
+  `default_rendering_candidate=false`. The four-check audit now points the
+  light/brightness/tone row at this formal report-side gate while keeping the
+  row unresolved for default rendering. This lets reports use the view-specific
+  compensation as evidence without changing the policy/input RAW_FPV lane or
+  promoting Isaac/MuJoCo default renderer changes.
+
+Decision delta: a single global color/tone profile cannot satisfy both FPV and
+chase under prepared scale-square. A view-specific tone profile can satisfy the
+current FPV and auxiliary chase tolerance across the current three-slice corpus,
+and the summary now encodes that as
+`view_specific_prepared_scale_square_tone_gate.status=view_specific_report_comparison_gate_ready`.
+It remains report-side comparison-only by design and is no longer needed for
+the default-rendering claim now that the combined material+light path is wired.
+
+The summary now exposes that boundary directly as
+`report_side_visual_parity.status=report_side_visual_parity_ready` with
+`ready=true`, `policy_scope=report_side_comparison_only`,
+`default_rendering_candidate=false`, and no blockers. The top-level summary is
+now `passed`: report-side evidence is aligned, and default-rendering parity is
+ready through the combined material plus directional-light prepared-USD path.
+
+Default-rendering parity now has its own machine layer:
+`default_rendering_visual_parity.status=default_rendering_visual_parity_ready`,
+with `promotion_candidate_ready=true`, `ready=true`, and
+`promotion_path=combined_material_light_default_gate`. The
+`default_rendering_path` check now passes from a real prepared-USD summary:
+`output/isaaclab/flattened-semantic-usd/val_1_combined_material_light_default_path/summary.json`
+reports `rendering_parity_preset=combined-material-light`,
+`material_texture_scale_mode=square`,
+`material_texture_scale_rewrite_count=106`, `distant_light_rotate_x=25.0`, and
+`default_rendering_path_status=default_rendering_path_uses_combined_material_light`.
+The calibration gate is no longer the active default blocker: it has one
+default-rendering candidate at
+`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p25_calibration/0603_0022/comparison_manifest.json`
+with residual `7.4522` and
+`render_domain_calibration_status=global_luminance_gain_sufficient`. The older
+baseline, scale-square-only, no-dome, no-shadow, `rotateX=-35`, `rotateX=+15`,
+and `rotateX=+5` calibration probes remain non-default history.
+
+The combined material+light robot-camera evidence is now tracked explicitly
+instead of only living in report notes. The first probe was
+`output/molmo/robot-camera-apple2apple/0602_val0_seed6_8loc_scale_square_dirlight_rotx_p25_probe/report.html`.
+It keeps the frozen head-camera contract (`fpv_lens_aligned` and
+`fpv_world_pose_aligned`) and improves the `val_0` seed-6 robot-camera slice
+from baseline FPV/chase `38.0980` / `83.7516` to prepared scale-square
+`32.5230` / `83.7739`, then to scale-square plus `DistantLight rotateX=+25`
+`30.6571` / `81.7209`. Two held-out robot-camera probes now cover the same
+candidate on `val_1`: seed-6 improves FPV/chase from `36.5655` / `72.2838`
+through prepared scale-square `29.4052` / `75.1960` to
+`27.2732` / `72.6383`, and seed-8 improves from `37.2184` / `71.7464` through
+prepared scale-square `29.4783` / `71.2846` to `26.5081` / `71.5982`. The
+summary now records
+`combined_material_light_default_gate.status=combined_material_light_default_ready`
+with 3 comparable probes, 3 scene signatures, 2 seeds, all FPV-improved, and no
+chase regression above the 1.0 tolerance. A final real robot-camera comparison
+using the default prepared path at
+`output/molmo/robot-camera-apple2apple/0602_val1_seed8_2mess_4loc_fovfix_bound_default_combined_material_light_path/report.html`
+matches the probe behavior: FPV/chase are `26.5103` / `71.5521`, with
+`fpv_lens_aligned` and `fpv_world_pose_aligned`, versus the earlier rotx25
+probe `26.5081` / `71.5982`.
+
+- 2026-06-03 box visual-state parity check closed the user-flagged
+  closed-in-MuJoCo/open-in-Isaac gap for
+  `box_7c54a26cba93093ca8aceb6fbac82646_1_0_2`. The default prepared
+  `val_1_combined_material_light_default_path` USD now freezes visual physics
+  after flattening and labeling: summary reports
+  `visual_physics_status=frozen_static_visual_usd`,
+  `visual_physics_joint_removed_count=43`,
+  `visual_physics_api_schema_removed_count=1566`, and
+  `visual_physics_property_removed_count=1241`. The regenerated robot-camera
+  apple-to-apple report at
+  `output/molmo/robot-camera-apple2apple/0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html`
+  embeds MuJoCo/Isaac FPV and chase image pairs and records
+  `state_status=visual_state_static_ref_baked` for that box. MuJoCo evidence
+  has 4/4 flap joints at MJCF ref/range endpoints; Isaac evidence has zero
+  physics joints, physics API schema prims, or physics properties under the box,
+  so PhysX cannot re-open the flaps during report capture.
+- The same 0603 report keeps the robot-view camera contract aligned:
+  `fpv_lens_aligned`, `fpv_world_pose_aligned`, FPV pose delta max `0.005m`,
+  and `fpv_residual_low` across all 4 FPV views with FPV mean-abs-RGB
+  `26.5192`. Chase is still auxiliary report evidence; after the chase-follower
+  fix it uses the same robot-relative rear/high contract in both backends, but
+  the current residual is still higher (`51.4715`) and classified as
+  `geometry_or_texture_edge_residual` across the 4 chase views. Treat remaining
+  deltas as render-domain/geometry-material-light response, not another FPV
+  camera or box-articulation issue.
 
 ## Touched Areas
 
