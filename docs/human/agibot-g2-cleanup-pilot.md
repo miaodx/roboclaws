@@ -214,6 +214,7 @@ just task::run semantic-map-build direct camera-labels \
 
 检查：
 
+- `report.html` 的 Overview 页里有 **Map Evidence Refresh Summary**；
 - `output/agibot/molmospaces-sim/map-evidence-refresh/**/run_result.json`
   里的 `task_prompt` 等于上面的开放巡检 prompt；
 - `runtime/runtime_export.json` 也记录同一个 `task_prompt`；
@@ -221,6 +222,15 @@ just task::run semantic-map-build direct camera-labels \
   `source_map_mutated=false`；
 - `report.html` 显示这是 simulated / physical_robot=false，不要把它升级成
   hardware evidence。
+
+`Map Evidence Refresh Summary` 的读法：
+
+- `Agent-driven=no` 表示这只是 direct sim rehearsal，不是 Codex 自主选择目标；
+- `Public anchors`、`Visited anchors`、`Observed handles` 和 `Raw observations`
+  说明这次 sim 产生了多少地图/观察证据；
+- 目标表展示本次可复核的 map evidence target、waypoint 和 observation id；
+- 如果 summary 写着 “not autonomous target choice”，就只能把它当作
+  prompt/report 可读性 proof，不能作为开放式机器人 demo。
 
 如果要测试“真正由 Codex 读 prompt 后选择目标”，仍然要走下面的
 `semantic-map-build codex backend=agibot_gdk` 路线。当前 Agibot-shaped sim route
