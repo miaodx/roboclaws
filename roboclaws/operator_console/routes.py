@@ -47,6 +47,8 @@ class ConsoleRoute:
     resource_kind: str = "simulator"
     driver_label: str = ""
     driver_family: str = "coding_agent"
+    field_groups: tuple[str, ...] = ()
+    view_modes: tuple[str, ...] = ()
 
     def base_args(self) -> list[str]:
         return [
@@ -72,6 +74,8 @@ class ConsoleRoute:
         )
         payload["default_prompt"] = self.task_prompt_default
         payload["driver_label"] = self.driver_label or self.driver.title()
+        payload["field_groups"] = list(self.field_groups or _default_field_groups(self))
+        payload["view_modes"] = list(self.view_modes or _default_view_modes(self))
         return payload
 
 
@@ -260,7 +264,9 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         enabled=False,
         checker_id="blocked_capability",
         task_prompt_default="",
-        disabled_reason="Physical manipulation is blocked. Run Agibot G2 Map Build first.",
+        disabled_reason=(
+            "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
+        ),
         emergency_stop_required=True,
         resource_kind="physical_robot",
         driver_label="Codex",
@@ -345,3 +351,30 @@ def accepted_isaac_preflight(root: Path) -> Path | None:
     if not existing:
         return None
     return max(existing, key=lambda path: path.stat().st_mtime)
+
+
+def _default_field_groups(route: ConsoleRoute) -> tuple[str, ...]:
+    groups = ["common"]
+    gate_ids = {gate.id for gate in route.gates}
+    if "isaac_preflight" in gate_ids:
+        groups.append("isaac")
+    if "context_json" in gate_ids:
+        groups.append("agibot")
+    if {"localization_ready", "run_enabled", "estop_ready"} & gate_ids:
+        groups.append("agibot_gates")
+    return tuple(groups)
+
+
+def _default_view_modes(route: ConsoleRoute) -> tuple[str, ...]:
+    modes = ["overview", "fpv", "map"]
+    has_grounding = (
+        route.profile == "camera-labels"
+        or route.backend == "isaaclab_subprocess"
+        or any(item.startswith("visual_grounding=") for item in route.default_overrides)
+    )
+    if has_grounding:
+        modes.append("grounding")
+    if route.backend in {"molmospaces_subprocess", "isaaclab_subprocess"}:
+        modes.append("chase")
+    modes.append("outputs")
+    return tuple(modes)

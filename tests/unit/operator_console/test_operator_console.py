@@ -57,7 +57,7 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
         "agibot_g2",
     }
     assert disabled["agibot-g2-cleanup"] == (
-        "Physical manipulation is blocked. Run Agibot G2 Map Build first."
+        "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
     )
     assert disabled["unsupported-drivers"] == (
         "This console supports local coding-agent drivers only."
@@ -66,6 +66,23 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
         "semantic-map-build does not support the Claude driver yet."
     )
     validate_supported_routes_against_catalog()
+
+
+def test_console_route_payload_supports_backend_specific_ui_metadata() -> None:
+    mujoco = get_route("codex-mujoco-cleanup").to_payload()
+    isaac = get_route("codex-isaac-cleanup").to_payload()
+    agibot = get_route("codex-agibot-g2-map-build").to_payload()
+
+    assert mujoco["field_groups"] == ["common"]
+    assert "grounding" not in mujoco["view_modes"]
+    assert {"overview", "fpv", "map", "outputs"}.issubset(set(mujoco["view_modes"]))
+
+    assert isaac["field_groups"] == ["common", "isaac"]
+    assert "grounding" in isaac["view_modes"]
+
+    assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
+    assert "grounding" in agibot["view_modes"]
+    assert "chase" not in agibot["view_modes"]
 
 
 def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Path) -> None:

@@ -30,6 +30,10 @@ textarea {
   font: inherit;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 button {
   min-height: 44px;
   border: 1px solid var(--border);
@@ -76,12 +80,12 @@ textarea:focus {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 320px minmax(420px, 1fr) 360px;
+  grid-template-columns: 240px 300px minmax(520px, 1fr) 300px;
   grid-template-rows: 56px minmax(0, 1fr) 112px;
   grid-template-areas:
-    "top top top"
-    "routes workspace state"
-    "events events events";
+    "top top top top"
+    "routes setup workspace state"
+    "events events events events";
   height: 100vh;
   overflow: hidden;
 }
@@ -120,8 +124,10 @@ textarea:focus {
 }
 
 .route-rail,
+.setup-panel,
 .state-rail {
   overflow: auto;
+  overflow-x: hidden;
   background: var(--bg);
   border-right: 1px solid var(--border);
 }
@@ -133,6 +139,10 @@ textarea:focus {
 
 .route-rail {
   grid-area: routes;
+}
+
+.setup-panel {
+  grid-area: setup;
 }
 
 .state-rail {
@@ -209,10 +219,16 @@ pre,
   display: grid;
   gap: 8px;
   width: 100%;
+  min-width: 0;
   min-height: 88px;
   padding: 12px;
   text-align: left;
   border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.route-card > * {
+  min-width: 0;
 }
 
 .route-card.active {
@@ -220,20 +236,55 @@ pre,
   box-shadow: inset 4px 0 0 var(--accent);
 }
 
-.route-title {
+.route-card-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
   font-size: 16px;
   font-weight: 500;
+}
+
+.route-card-title span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.route-card .route-card-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.route-card .route-card-title span:first-child {
+  overflow-wrap: normal;
+}
+
+.route-card .route-card-title .badge {
+  justify-self: start;
+}
+
+.selected-route-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  flex: 0 0 auto;
   width: fit-content;
   border-radius: 4px;
   padding: 2px 6px;
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
   background: var(--bg);
   color: var(--muted);
 }
@@ -262,14 +313,14 @@ pre,
   font-size: 12px;
 }
 
-.view-tabs {
+.view-modes {
   display: flex;
   gap: 8px;
   padding: 16px;
   border-bottom: 1px solid var(--border);
 }
 
-.tab.active {
+.view-mode.active {
   color: #ffffff;
   background: var(--accent);
   border-color: var(--accent);
@@ -278,17 +329,62 @@ pre,
 .view-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
   gap: 16px;
   height: calc(100% - 77px);
   padding: 16px;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.mode-overview {
+  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-areas:
+    "fpv map"
+    "grounding map";
+}
+
+.mode-overview.no-grounding {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "fpv map";
+}
+
+.mode-overview [data-panel="map"] {
+  grid-area: map;
+}
+
+.mode-overview [data-panel="fpv"] {
+  grid-area: fpv;
+}
+
+.mode-overview [data-panel="grounding"] {
+  grid-area: grounding;
+}
+
+.mode-fpv,
+.mode-map,
+.mode-grounding,
+.mode-chase,
+.mode-outputs {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "focus";
 }
 
 .image-panel,
-.artifact-panel {
+.outputs-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.mode-fpv [data-panel="fpv"],
+.mode-map [data-panel="map"],
+.mode-grounding [data-panel="grounding"],
+.mode-chase [data-panel="chase"],
+.mode-outputs [data-panel="outputs"] {
+  grid-area: focus;
 }
 
 .panel-header {
@@ -311,7 +407,8 @@ pre,
   display: grid;
   place-items: center;
   overflow: hidden;
-  padding: 16px;
+  min-height: 0;
+  padding: 12px;
   color: var(--muted);
   text-align: center;
   background: var(--bg);
@@ -335,8 +432,9 @@ pre,
   aspect-ratio: 1 / 1;
 }
 
-.artifact-panel {
+.outputs-panel {
   padding: 16px;
+  overflow: auto;
 }
 
 .evidence-box,
@@ -425,11 +523,12 @@ dialog pre {
   }
 
   .global-controls,
-  .view-tabs {
+  .view-modes {
     flex-wrap: wrap;
   }
 
   .route-rail,
+  .setup-panel,
   .state-rail,
   .workspace {
     overflow: visible;
@@ -437,6 +536,21 @@ dialog pre {
 
   .view-grid {
     grid-template-columns: 1fr;
+    grid-template-areas: none;
     height: auto;
+    overflow: visible;
+  }
+
+  .mode-overview {
+    grid-template-areas:
+      "fpv"
+      "grounding"
+      "map";
+  }
+
+  .mode-overview.no-grounding {
+    grid-template-areas:
+      "fpv"
+      "map";
   }
 }

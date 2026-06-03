@@ -1,4 +1,4 @@
-"""Standalone Codex operator console package."""
+"""Standalone agent operator console package."""
 
 from __future__ import annotations
 

@@ -30,9 +30,14 @@
           <h2>Routes</h2>
           <div id="route-list" class="route-list"></div>
         </section>
+      </aside>
 
+      <aside class="setup-panel">
         <section class="rail-section">
-          <h2>Parameters</h2>
+          <h2>Setup</h2>
+          <div id="selected-route-summary" class="selected-route-summary">
+            Choose a route to configure its parameters and gates.
+          </div>
           <div id="common-fields">
           <label>
             Seed
@@ -95,32 +100,33 @@
       </aside>
 
       <main class="workspace">
-        <nav class="view-tabs" aria-label="Live views">
-          <button class="tab active" data-view="fpv">FPV</button>
-          <button class="tab" data-view="chase">Chase</button>
-          <button class="tab" data-view="map">Map</button>
-          <button class="tab" data-view="grounding">Grounding</button>
-          <button class="tab" data-view="artifacts">Artifacts</button>
+        <nav class="view-modes" aria-label="Workspace view modes">
+          <button class="view-mode active" data-view="overview">Overview</button>
+          <button class="view-mode" data-view="fpv">FPV</button>
+          <button class="view-mode" data-view="map">Map</button>
+          <button class="view-mode" data-view="grounding">Grounding</button>
+          <button class="view-mode" data-view="chase">Chase</button>
+          <button class="view-mode" data-view="outputs">Outputs</button>
         </nav>
-        <section id="visual-grid" class="view-grid">
+        <section id="visual-grid" class="view-grid mode-overview">
           <article class="image-panel" data-panel="fpv">
             <div class="panel-header"><span>FPV</span><button data-copy="fpv">Copy Path</button></div>
             <div class="image-frame ratio-4-3" id="fpv-frame">No frame yet. Waiting for the first observation artifact.</div>
-          </article>
-          <article class="image-panel" data-panel="chase">
-            <div class="panel-header"><span>Chase</span><button data-copy="chase">Copy Path</button></div>
-            <div class="image-frame ratio-16-9" id="chase-frame">Chase view unavailable for this backend.</div>
-          </article>
-          <article class="image-panel" data-panel="map">
-            <div class="panel-header"><span>Map</span><button data-copy="map">Copy Path</button></div>
-            <div class="image-frame ratio-1-1" id="map-frame">Map artifact has not been written yet.</div>
           </article>
           <article class="image-panel" data-panel="grounding">
             <div class="panel-header"><span>Grounding</span><button data-copy="grounding">Copy Path</button></div>
             <div class="image-frame ratio-4-3" id="grounding-frame">No grounding result yet.</div>
           </article>
-          <article id="artifact-panel" class="artifact-panel" data-panel="artifacts">
-            <h2>Artifacts</h2>
+          <article class="image-panel" data-panel="map">
+            <div class="panel-header"><span>Map</span><button data-copy="map">Copy Path</button></div>
+            <div class="image-frame" id="map-frame">Map artifact has not been written yet.</div>
+          </article>
+          <article class="image-panel" data-panel="chase">
+            <div class="panel-header"><span>Chase</span><button data-copy="chase">Copy Path</button></div>
+            <div class="image-frame ratio-16-9" id="chase-frame">Chase view unavailable for this backend.</div>
+          </article>
+          <article id="outputs-panel" class="outputs-panel" data-panel="outputs">
+            <h2>Outputs</h2>
             <div id="artifact-list" class="artifact-list"></div>
           </article>
         </section>

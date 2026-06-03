@@ -6,7 +6,7 @@ const state = {
   activeRouteId: "",
   activeState: null,
   pollTimer: null,
-  activeView: "fpv",
+  activeView: "overview",
 };
 
 const els = {
@@ -17,6 +17,7 @@ const els = {
   seedInput: document.getElementById("seed-input"),
   messInput: document.getElementById("mess-count-input"),
   portInput: document.getElementById("port-input"),
+  selectedRouteSummary: document.getElementById("selected-route-summary"),
   commonFields: document.getElementById("common-fields"),
   isaacFields: document.getElementById("isaac-fields"),
   agibotFields: document.getElementById("agibot-fields"),
@@ -60,7 +61,7 @@ async function boot() {
   renderRoutes();
   renderSelection();
   bindEvents();
-  renderViewTabs();
+  renderViewModes();
 }
 
 function bindEvents() {
@@ -96,10 +97,10 @@ function bindEvents() {
     }
   });
   els.toggleRawButton.addEventListener("click", toggleRawEvidence);
-  document.querySelectorAll(".tab").forEach((button) => {
+  document.querySelectorAll(".view-mode").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
-      renderViewTabs();
+      renderViewModes();
     });
   });
 }
@@ -113,6 +114,7 @@ function renderRoutes() {
     const display = routeStatusDisplay(route, readiness);
     button.type = "button";
     button.className = `route-card${route.id === state.selectedRoute.id ? " active" : ""}`;
+    button.dataset.routeId = route.id;
     button.disabled = !selectable;
     button.innerHTML = `
       <div class="route-card-title">
@@ -143,6 +145,9 @@ function renderSelection() {
   }
   const readiness = effectiveReadiness(route);
   renderRouteFields(route);
+  renderSelectedRouteSummary(route, readiness);
+  ensureActiveViewAvailable(route);
+  renderViewModes(route);
   els.taskPrompt.disabled = !route.supports_prompt;
   els.taskPrompt.placeholder = route.task_prompt_default || route.default_prompt || "";
   els.promptHelp.textContent = route.supports_prompt
@@ -192,18 +197,25 @@ function routeStatusDisplay(route, readiness) {
   return { label: "NEEDS ACTION", className: "needs_action" };
 }
 
-function renderRouteFields(route) {
-  const gateIds = new Set((route.gates || []).map((gate) => gate.id));
-  const usesIsaac = gateIds.has("isaac_preflight") || route.backend === "isaaclab_subprocess";
-  const usesAgibot =
-    gateIds.has("context_json") ||
-    gateIds.has("localization_ready") ||
-    route.backend === "agibot_gdk";
+function renderSelectedRouteSummary(route, readiness) {
+  const status = routeStatusDisplay(route, readiness);
+  els.selectedRouteSummary.innerHTML = `
+    <div class="route-card-title">
+      <span>${escapeHtml(route.label)}</span>
+      <span class="badge ${status.className}">${status.label}</span>
+    </div>
+    <div class="meta-label">${escapeHtml(route.driver_label)} / ${escapeHtml(route.profile)}</div>
+    <div class="field-help">${escapeHtml(route.backend)}</div>
+  `;
+}
 
-  els.commonFields.hidden = !route.enabled;
-  els.isaacFields.hidden = !usesIsaac;
-  els.agibotFields.hidden = !usesAgibot;
-  els.agibotGateFields.hidden = !usesAgibot;
+function renderRouteFields(route) {
+  const fieldGroups = new Set(route.field_groups || ["common"]);
+
+  els.commonFields.hidden = !route.enabled || !fieldGroups.has("common");
+  els.isaacFields.hidden = !fieldGroups.has("isaac");
+  els.agibotFields.hidden = !fieldGroups.has("agibot");
+  els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
 }
 
 function commandPreview(route) {
@@ -373,7 +385,7 @@ function renderRunState(payload) {
     payload.checker_status.checker_log || "Checker has not run yet."
   }`;
   renderArtifacts(payload.artifact_paths || []);
-  renderViews(payload.latest_view_assets || {});
+  renderViews(payload.latest_view_assets || {}, route);
   renderEvents(payload);
   renderControls(payload);
 }
@@ -399,11 +411,13 @@ function renderArtifacts(items) {
   }
 }
 
-function renderViews(assets) {
+function renderViews(assets, route = state.selectedRoute) {
   setImageSlot("fpv", assets.fpv, "No frame yet. Waiting for the first observation artifact.");
   setImageSlot("chase", assets.chase, "Chase view unavailable for this backend.");
   setImageSlot("map", assets.map, "Map artifact has not been written yet.");
   setImageSlot("grounding", assets.grounding, "No grounding result yet.");
+  ensureActiveViewAvailable(route);
+  renderViewModes(route);
 }
 
 function setImageSlot(name, asset, emptyText) {
@@ -423,26 +437,62 @@ function renderEvents(payload) {
     `phase=${payload.phase}`,
     `action=${payload.latest_action || "none"}`,
     `checker=${payload.checker_status.status || "pending"}`,
-    `artifacts=${payload.run_dir}`,
+    `outputs=${payload.run_dir}`,
   ];
   els.eventList.textContent = bits.join("  ");
 }
 
-function renderViewTabs() {
-  document.querySelectorAll(".tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === state.activeView);
-  });
+function renderViewModes(route = state.selectedRoute) {
   const visualGrid = document.getElementById("visual-grid");
-  const artifactPanel = document.getElementById("artifact-panel");
-  if (visualGrid) {
-    visualGrid.hidden = false;
+  if (!visualGrid || !route) {
+    return;
   }
-  if (artifactPanel) {
-    artifactPanel.hidden = state.activeView !== "artifacts";
-  }
-  document.querySelectorAll(".image-panel").forEach((panel) => {
-    panel.hidden = window.innerWidth <= 1040 && panel.dataset.panel !== state.activeView;
+  const modes = routeViewModes(route);
+  const hasGrounding = modes.has("grounding");
+  const activeView = state.activeView || "overview";
+  visualGrid.className = `view-grid mode-${activeView}${hasGrounding ? "" : " no-grounding"}`;
+
+  document.querySelectorAll(".view-mode").forEach((button) => {
+    const enabled = modes.has(button.dataset.view);
+    button.hidden = !enabled;
+    button.classList.toggle("active", enabled && button.dataset.view === activeView);
   });
+
+  const visiblePanels = visiblePanelsForView(activeView, modes);
+  document.querySelectorAll("[data-panel]").forEach((panel) => {
+    panel.hidden = !visiblePanels.has(panel.dataset.panel);
+  });
+}
+
+function ensureActiveViewAvailable(route = state.selectedRoute) {
+  if (!route) {
+    return;
+  }
+  const modes = routeViewModes(route);
+  if (!modes.has(state.activeView)) {
+    state.activeView = "overview";
+  }
+}
+
+function routeViewModes(route) {
+  return new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
+}
+
+function visiblePanelsForView(view, modes) {
+  if (view === "overview") {
+    const panels = new Set(["fpv", "map"]);
+    if (modes.has("grounding")) {
+      panels.add("grounding");
+    }
+    return panels;
+  }
+  if (!modes.has(view)) {
+    return new Set(["fpv", "map"]);
+  }
+  if (view === "outputs") {
+    return new Set(["outputs"]);
+  }
+  return new Set([view]);
 }
 
 async function postRunAction(action) {

@@ -60,11 +60,30 @@ def test_disabled_routes_have_concrete_blockers() -> None:
     assert disabled
     assert all(route.disabled_reason for route in disabled)
     assert get_route("agibot-g2-cleanup").disabled_reason == (
-        "Physical manipulation is blocked. Run Agibot G2 Map Build first."
+        "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
     )
     assert get_route("claude-map-build").disabled_reason == (
         "semantic-map-build does not support the Claude driver yet."
     )
+
+
+def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:
+    mujoco = get_route("codex-mujoco-cleanup").to_payload()
+    isaac = get_route("codex-isaac-cleanup").to_payload()
+    agibot = get_route("codex-agibot-g2-map-build").to_payload()
+
+    assert mujoco["field_groups"] == ["common"]
+    assert "overview" in mujoco["view_modes"]
+    assert "map" in mujoco["view_modes"]
+    assert "grounding" not in mujoco["view_modes"]
+    assert "outputs" in mujoco["view_modes"]
+
+    assert isaac["field_groups"] == ["common", "isaac"]
+    assert "grounding" in isaac["view_modes"]
+
+    assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
+    assert "grounding" in agibot["view_modes"]
+    assert "chase" not in agibot["view_modes"]
 
 
 def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:

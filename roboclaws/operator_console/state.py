@@ -130,7 +130,7 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Report", "report.html", "html"),
         ("Run Result", "run_result.json", "json"),
         ("Trace", "trace.jsonl", "jsonl"),
-        ("Codex Events", "codex-events.jsonl", "jsonl"),
+        ("Agent Events", "codex-events.jsonl", "jsonl"),
         ("Driver Log", "driver.log", "log"),
         ("Checker Output", "checker.log", "log"),
         ("Runtime Map", "runtime_metric_map.json", "json"),
