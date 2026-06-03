@@ -106,7 +106,7 @@ def test_world_labels_sanitized_observations_omit_destination_oracle_fields() ->
     assert detection["source_observation_id"]
     assert detection["producer_type"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
     assert detection["support_estimate"]
-    assert detection["cleanup_recommended"] is False
+    assert "cleanup_recommended" not in detection
     assert detection["destination_policy_status"] == "policy_required"
     assert "candidate_fixture_id" not in detection
     assert "recommended_tool" not in detection
@@ -656,7 +656,7 @@ def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_desti
     assert observed["candidate_fixture_id"] == ""
     assert observed["candidate_source"] == "policy_required_destination_selection"
     assert observed["destination_policy_status"] == "policy_required"
-    assert worklist_item["cleanup_recommended"] is False
+    assert "cleanup_recommended" not in worklist_item
     assert worklist_item["candidate_fixture_id"] == ""
     assert worklist_item["destination_policy_status"] == "policy_required"
     assert runtime_map["producer_summary"]["producer_types"][

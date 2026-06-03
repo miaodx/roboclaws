@@ -367,7 +367,9 @@ The fair-comparison regression test is:
 
 ```text
 profile=world-labels-sanitized must not expose candidate_fixture_id,
-cleanup_recommended=true, or recommended_tool in visible_object_detections.
+cleanup_recommended, or recommended_tool in visible_object_detections.
+It must not expose cleanup_recommended=false as a skip signal in sanitized
+agent-facing object rows.
 Runtime observed_objects should still expose producer_type,
 source_observation_id, image_region, grounding_status, and actionability.
 ```

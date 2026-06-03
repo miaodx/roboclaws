@@ -35,7 +35,11 @@ WORLD_LABELS_SANITIZED_PROMPT = (
     COMMON_PREFIX
     + COMMON_WAYPOINT_RULES
     + "treat visible_object_detections as perfect structured detections without "
-    "cleanup destination oracle fields; use metric_map, fixture_hints, "
+    "cleanup destination oracle fields; do not wait for or rely on "
+    "cleanup_recommended, and treat every observed detection as a cleanup "
+    "candidate to evaluate. If destination_policy_status is policy_required, "
+    "choose the destination from public policy context instead of skipping the "
+    "object. Use metric_map, fixture_hints, "
     "runtime_metric_map.public_semantic_anchors, and tool recovery hints to choose "
     "where to place observed objects. "
     + COMMON_CLEANUP_RULES

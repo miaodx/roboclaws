@@ -1728,9 +1728,13 @@ class RealWorldCleanupContract:
 
     def _sanitized_visible_detection_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
         payload = copy.deepcopy(payload)
-        for key in ("candidate_fixture_id", "candidate_fixture_category", "recommended_tool"):
+        for key in (
+            "candidate_fixture_id",
+            "candidate_fixture_category",
+            "cleanup_recommended",
+            "recommended_tool",
+        ):
             payload.pop(key, None)
-        payload["cleanup_recommended"] = False
         payload["producer_type"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
         payload["producer_id"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
         payload["perception_source"] = SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
@@ -2218,22 +2222,22 @@ class RealWorldCleanupContract:
                 cleanup_recommended = False
                 candidate_source = "policy_required_destination_selection"
                 destination_policy_status = "policy_required"
-            lifecycle_rows.append(
-                {
-                    "object_id": handle,
-                    "state": state,
-                    "category": detection.get("category", ""),
-                    "room_id": detection.get("current_room_id", lifecycle.get("room_id", "")),
-                    "source_fixture_id": public_source_fixture_id,
-                    "candidate_fixture_id": public_candidate_fixture_id,
-                    "cleanup_recommended": cleanup_recommended,
-                    "grounding_status": grounding_status,
-                    "candidate_source": candidate_source,
-                    "last_waypoint_id": lifecycle.get("waypoint_id", ""),
-                    "perception_source": lifecycle.get("perception_source", "visible_detection"),
-                    "destination_policy_status": destination_policy_status,
-                }
-            )
+            row = {
+                "object_id": handle,
+                "state": state,
+                "category": detection.get("category", ""),
+                "room_id": detection.get("current_room_id", lifecycle.get("room_id", "")),
+                "source_fixture_id": public_source_fixture_id,
+                "candidate_fixture_id": public_candidate_fixture_id,
+                "grounding_status": grounding_status,
+                "candidate_source": candidate_source,
+                "last_waypoint_id": lifecycle.get("waypoint_id", ""),
+                "perception_source": lifecycle.get("perception_source", "visible_detection"),
+                "destination_policy_status": destination_policy_status,
+            }
+            if not self.sanitize_world_labels:
+                row["cleanup_recommended"] = cleanup_recommended
+            lifecycle_rows.append(row)
         waypoint_rows = []
         for waypoint in self._public_waypoints:
             waypoint_id = str(waypoint["waypoint_id"])

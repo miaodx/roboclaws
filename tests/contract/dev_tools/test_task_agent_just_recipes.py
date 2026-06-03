@@ -1013,6 +1013,9 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
     prompt = render_kickoff_prompt("world-labels-sanitized")
 
     assert "perfect structured detections without cleanup destination oracle fields" in prompt
+    assert "do not wait for or rely on cleanup_recommended" in prompt
+    assert "destination_policy_status is policy_required" in prompt
+    assert "instead of skipping the object" in prompt
     assert "runtime_metric_map.public_semantic_anchors" in prompt
     assert "tool recovery hints" in prompt
     assert "exact waypoint checklist" in prompt
