@@ -1155,6 +1155,7 @@ def _object_parity_audit(
         "render_contract_status_counts": _status_counts(
             _dict(item.get("render_contract_delta")).get("status") for item in items
         ),
+        "category_status_summary": _object_category_status_summary(items),
         "high_priority_items": high_priority[:20],
         "items": items,
         "recommended_next_action": next_action,
@@ -1181,9 +1182,60 @@ def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
         "support_status_counts": audit.get("support_status_counts"),
         "state_status_counts": audit.get("state_status_counts"),
         "render_contract_status_counts": audit.get("render_contract_status_counts"),
+        "category_status_summary": audit.get("category_status_summary"),
         "high_priority_items": audit.get("high_priority_items"),
         "recommended_next_action": audit.get("recommended_next_action"),
     }
+
+
+def _object_category_status_summary(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        mujoco = _dict(item.get("mujoco"))
+        isaac = _dict(item.get("isaac"))
+        category = (
+            _object_category_key(mujoco.get("category"))
+            or _object_category_key(isaac.get("category"))
+            or _object_category_key(isaac.get("usd_category"))
+            or "unknown"
+        )
+        grouped.setdefault(category, []).append(item)
+    rows = []
+    for category, category_items in sorted(grouped.items()):
+        records = [_object_gate_record(item) for item in category_items]
+        rows.append(
+            {
+                "category": category,
+                "item_count": len(category_items),
+                "kind_counts": _status_counts(item.get("kind") for item in category_items),
+                "object_gate_status_counts": _status_counts(
+                    record.get("object_gate_status") for record in records
+                ),
+                "object_gate_classification_counts": _status_counts(
+                    record.get("classification") for record in records
+                ),
+                "binding_status_counts": _status_counts(
+                    item.get("binding_status") for item in category_items
+                ),
+                "category_status_counts": _status_counts(
+                    item.get("category_status") for item in category_items
+                ),
+                "pose_status_counts": _status_counts(
+                    item.get("pose_status") for item in category_items
+                ),
+                "support_status_counts": _status_counts(
+                    item.get("support_status") for item in category_items
+                ),
+                "state_status_counts": _status_counts(
+                    item.get("state_status") for item in category_items
+                ),
+                "render_contract_status_counts": _status_counts(
+                    _dict(item.get("render_contract_delta")).get("status")
+                    for item in category_items
+                ),
+            }
+        )
+    return rows
 
 
 def _object_render_parity_diagnostics(
@@ -4093,6 +4145,34 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
     )
     if not audit:
         return ""
+
+    def counts_cell(item: dict[str, Any], key: str) -> str:
+        return "<td>" + html.escape(json.dumps(item.get(key) or {}, sort_keys=True)) + "</td>"
+
+    category_rows = []
+    for item in audit.get("category_status_summary") or []:
+        if not isinstance(item, dict):
+            continue
+        category_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('category') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('item_count') or 0))}</td>"
+            + counts_cell(item, "kind_counts")
+            + counts_cell(item, "object_gate_status_counts")
+            + counts_cell(item, "object_gate_classification_counts")
+            + counts_cell(item, "binding_status_counts")
+            + counts_cell(item, "state_status_counts")
+            + counts_cell(item, "render_contract_status_counts")
+            + "</tr>"
+        )
+    category_table = (
+        "<h3>Category Status Summary</h3><table><thead><tr>"
+        "<th>Category</th><th>Items</th><th>Kinds</th><th>Object Gate</th>"
+        "<th>Classes</th><th>Binding</th><th>State</th><th>Render</th>"
+        "</tr></thead><tbody>" + "".join(category_rows) + "</tbody></table>"
+        if category_rows
+        else "<p>No category/status summary rows were recorded.</p>"
+    )
     rows = []
     for item in audit.get("high_priority_items") or []:
         if not isinstance(item, dict):
@@ -4135,6 +4215,7 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
         + ".</p><p>"
         + html.escape(str(audit.get("recommended_next_action") or ""))
         + "</p>"
+        + category_table
         + table
     )
 

@@ -1467,6 +1467,13 @@ def Xform "World"
     assert items["table_1"]["state_status"] == "state_not_rendered_to_usd"
     high_priority_ids = {item["target_id"] for item in audit["high_priority_items"]}
     assert {"box_1", "bowl_1", "table_1"} <= high_priority_ids
+    category_summary = {item["category"]: item for item in audit["category_status_summary"]}
+    assert category_summary["box"]["item_count"] == 1
+    assert category_summary["box"]["object_gate_classification_counts"] == {"visual_state_delta": 1}
+    assert category_summary["bowl"]["object_gate_classification_counts"] == {"not_comparable": 1}
+    assert category_summary["diningtable"]["object_gate_classification_counts"] == {
+        "visual_state_delta": 1
+    }
 
     diagnostics = run_camera._object_render_parity_diagnostics(
         object_audit=audit,
@@ -1507,6 +1514,8 @@ def Xform "World"
     assert "Object/Render Gate" in report_html
     assert "object_gate_failures_detected" in report_html
     assert "visual_state_delta" in report_html
+    assert "Category Status Summary" in report_html
+    assert "diningtable" in report_html
 
 
 def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
