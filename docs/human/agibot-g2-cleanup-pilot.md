@@ -18,6 +18,11 @@ block。用它做默认真机验收会让报告看起来像“任务失败”，
   验证真实流程最合适。它覆盖地图上下文、waypoint、导航、观察、相机证据、
   visual grounding、Runtime Metric Map、Actionable Semantic Map Snapshot 和
   报告，不依赖 manipulation 成功。
+- **当前对外 demo 形态：map evidence refresh / 开放巡检**
+  不要把它说成“重新建一遍语义地图”。更好的说法是：机器人已经有一份
+  语义地图，现在让 agent 基于已有地图自主选择几个最值得复核的 anchor 或
+  waypoint，过去观察、记录证据、解释选择和跳过原因。工程入口仍然先复用
+  `semantic-map-build`，因为它已经有导航、观察、runtime map 和报告链路。
 - **辅助合约任务：`household-cleanup` dry-run / rehearsal**
   用来确认 cleanup 任务会通过 `runtime_map_prior=...` 消费同一个语义地图产物，
   并且 manipulation 被清楚地标成 blocked。不要把它描述成物理 cleanup 成功。
@@ -33,8 +38,9 @@ block。用它做默认真机验收会让报告看起来像“任务失败”，
 ```text
 离线 navigation_memory 转 snapshot
   -> synthetic cleanup 消费 snapshot
+  -> Agibot-shaped sim map-evidence-refresh prompt rehearsal
   -> Agibot semantic-map-build dry-run
-  -> Agibot semantic-map-build 真机 movement run
+  -> Agibot semantic-map-build / map-evidence-refresh 真机 movement run
   -> 后续新增 Agibot photo/capture task
   -> 最后才考虑 physical cleanup
 ```
@@ -60,6 +66,10 @@ block。用它做默认真机验收会让报告看起来像“任务失败”，
 实现上，它可以先落成 `semantic-map-build` 的一个 policy/profile，名字可以是
 `inspection-tour` 或 `map-evidence-refresh`；等 Agibot 版 photo/capture task 打通后，
 再把最终证据从普通 observation 升级为带标签的 photo artifact。
+
+短期命名建议使用 `map_evidence_refresh`。它表达的是“基于已有地图刷新证据”，
+而不是“从零建图”。在代码还没有新增 public task 前，命令仍然走
+`semantic-map-build`。
 
 ## 前置条件
 
@@ -164,6 +174,58 @@ just task::run household-cleanup direct world-labels \
 这仍然是 synthetic run。它不验证 G2 localization、PNC navigation、真实相机图像
 或物体操作。
 
+### Sim-first 开放巡检 Prompt Rehearsal
+
+可以先在 Agibot-shaped MolmoSpaces sim 里跑相同的开放巡检 prompt。这个步骤适合
+快速检查：
+
+- `prompt=` 会进入任务产物和报告；
+- `semantic-map-build` 的 report shape 仍然正确；
+- minimal map、runtime semantic anchors、simulated observation 和 blocked
+  manipulation 边界没有被破坏。
+
+它不能证明 Codex 在真实 G2 上真的做出了开放式选择，也不能证明 G2 PNC、真实
+head camera、真实 visual grounding 或 manipulation。它是 prompt/report 形状
+rehearsal。
+
+最快的 fixture 版本：
+
+```bash
+OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
+
+just task::run semantic-map-build direct camera-labels \
+  backend=agibot_molmospaces_sim \
+  runtime=fixture \
+  rehearsal_mode=contract \
+  prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
+  output_dir=output/agibot/molmospaces-sim/map-evidence-refresh
+```
+
+如果本地 MolmoSpaces runtime 已安装，并且想要更接近真实相机证据的模拟图像：
+
+```bash
+just task::run semantic-map-build direct camera-labels \
+  backend=agibot_molmospaces_sim \
+  runtime=molmospaces-subprocess \
+  visual_grounding=grounding-dino \
+  prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
+  output_dir=output/agibot/molmospaces-sim/map-evidence-refresh-camera
+```
+
+检查：
+
+- `output/agibot/molmospaces-sim/map-evidence-refresh/**/run_result.json`
+  里的 `task_prompt` 等于上面的开放巡检 prompt；
+- `runtime/runtime_export.json` 也记录同一个 `task_prompt`；
+- `runtime_metric_map.json` 存在，并且 `minimal_map_mode=true`、
+  `source_map_mutated=false`；
+- `report.html` 显示这是 simulated / physical_robot=false，不要把它升级成
+  hardware evidence。
+
+如果要测试“真正由 Codex 读 prompt 后选择目标”，仍然要走下面的
+`semantic-map-build codex backend=agibot_gdk` 路线。当前 Agibot-shaped sim route
+是 direct rehearsal，不启动 coding agent。
+
 ### Agibot Dry-Run Rehearsal
 
 如果手上已有 `agibot_map_context.completed.json`，但当前没有机器人 session，
@@ -188,6 +250,8 @@ just task::run semantic-map-build codex camera-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-codex-dry-run \
+  policy=map_evidence_refresh \
+  prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
   visual_grounding=grounding-dino \
   visual_grounding_timeout_s=20
 ```
@@ -307,6 +371,8 @@ just task::run semantic-map-build codex camera-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-codex-dry-run \
+  policy=map_evidence_refresh \
+  prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
   visual_grounding=grounding-dino \
   visual_grounding_timeout_s=20
 ```
@@ -359,7 +425,8 @@ just task::run semantic-map-build codex camera-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
-  policy=codex_agibot_semantic_map_build_pilot \
+  policy=map_evidence_refresh \
+  prompt="$OPEN_EVIDENCE_REFRESH_PROMPT" \
   visual_grounding=grounding-dino \
   visual_grounding_timeout_s=20 \
   real_movement_enabled=true

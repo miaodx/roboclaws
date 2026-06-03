@@ -379,6 +379,7 @@ run task driver mode="" *overrides:
             --flow prehardware
             --task-name "$task"
             --profile "$profile"
+            --task-prompt "$prompt"
             --rehearsal-mode "$rehearsal_mode"
             --cleanup-object-count "$cleanup_object_count")
           if [[ "$profile" == "camera-labels" ]]; then
