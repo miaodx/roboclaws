@@ -1051,6 +1051,7 @@ def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) 
     else:
         geometry_status = "no_renderable_descendants"
     world_bounds = _usd_world_bounds(prim, usd_geom=usd_geom)
+    world_root_position = _usd_world_root_position(prim, usd_geom=usd_geom)
     return {
         "prim_type": str(prim.GetTypeName() or ""),
         "valid_stage_prim": True,
@@ -1064,6 +1065,7 @@ def _usd_prim_geometry_diagnostics(*, usd_path: Path, prim: Any, usd_geom: Any) 
         "is_instanceable": bool(prim.IsInstanceable()),
         "is_instance": bool(prim.IsInstance()),
         "usd_world_bounds": world_bounds,
+        "usd_world_root_position": world_root_position,
     }
 
 
@@ -1089,6 +1091,18 @@ def _usd_world_bounds(prim: Any, *, usd_geom: Any) -> dict[str, Any] | None:
         "center": _round_vec3(center),
         "size": _round_vec3(size),
     }
+
+
+def _usd_world_root_position(prim: Any, *, usd_geom: Any) -> list[float] | None:
+    try:
+        transform = usd_geom.Xformable(prim).ComputeLocalToWorldTransform(0.0)
+        position = transform.Transform((0.0, 0.0, 0.0))
+    except Exception:
+        return None
+    values = [float(value) for value in position]
+    if any(not math.isfinite(value) for value in values):
+        return None
+    return _round_vec3(values)
 
 
 def _support_pose_from_usd_bounds(
@@ -2585,7 +2599,22 @@ def _apply_semantic_pose_state_to_stage(
                 }
             )
             continue
-        UsdGeom.XformCommonAPI(object_prim).SetTranslate(Gf.Vec3d(*local_translate))
+        try:
+            translate_application = _set_usd_xform_translate(
+                UsdGeom=UsdGeom,
+                Gf=Gf,
+                prim=object_prim,
+                translate=local_translate,
+            )
+        except RuntimeError as exc:
+            failed.append(
+                {
+                    "object_id": str(object_id),
+                    "reason": "translate_authoring_failed",
+                    "detail": str(exc),
+                }
+            )
+            continue
         applied.append(
             {
                 "object_id": str(object_id),
@@ -2594,6 +2623,8 @@ def _apply_semantic_pose_state_to_stage(
                 "target_position": list(target),
                 "authored_translate": list(local_translate),
                 "authored_translate_frame": "parent_local",
+                "translate_application_method": translate_application.get("method"),
+                "authored_xform_op": translate_application.get("xform_op"),
             }
         )
     return {
@@ -2625,6 +2656,64 @@ def _world_position_to_parent_local_translate(
         raise RuntimeError(
             "could not convert world semantic pose into parent-local USD frame"
         ) from exc
+
+
+def _set_usd_xform_translate(
+    *,
+    UsdGeom: Any,
+    Gf: Any,
+    prim: Any,
+    translate: tuple[float, float, float],
+) -> dict[str, str]:
+    value = Gf.Vec3d(*translate)
+    xformable_type = getattr(UsdGeom, "Xformable", None)
+    if callable(xformable_type):
+        xformable = xformable_type(prim)
+        try:
+            ordered_ops = list(xformable.GetOrderedXformOps())
+        except Exception:
+            ordered_ops = []
+        for op in ordered_ops:
+            get_name = getattr(op, "GetOpName", None)
+            if callable(get_name) and str(get_name()) == "xformOp:translate":
+                _set_xform_op_value(op, value)
+                return {"method": "existing_xformOp_translate", "xform_op": str(get_name())}
+        type_translate = getattr(getattr(UsdGeom, "XformOp", None), "TypeTranslate", None)
+        if type_translate is not None:
+            for op in ordered_ops:
+                get_type = getattr(op, "GetOpType", None)
+                is_inverse = getattr(op, "IsInverseOp", None)
+                if callable(get_type) and get_type() == type_translate:
+                    if callable(is_inverse) and is_inverse():
+                        continue
+                    get_name = getattr(op, "GetOpName", None)
+                    op_name = str(get_name()) if callable(get_name) else "translate"
+                    _set_xform_op_value(op, value)
+                    return {"method": "existing_translate_op", "xform_op": op_name}
+        add_translate_op = getattr(xformable, "AddTranslateOp", None)
+        if callable(add_translate_op):
+            op = add_translate_op()
+            _set_xform_op_value(op, value)
+            get_name = getattr(op, "GetOpName", None)
+            op_name = str(get_name()) if callable(get_name) else "xformOp:translate"
+            return {"method": "added_xformOp_translate", "xform_op": op_name}
+
+    common_api_type = getattr(UsdGeom, "XformCommonAPI", None)
+    if callable(common_api_type):
+        result = common_api_type(prim).SetTranslate(value)
+        if result is False:
+            raise RuntimeError("USD XformCommonAPI refused xformOp:translate value")
+        return {"method": "xform_common_api", "xform_op": "xform_common_api"}
+    raise RuntimeError("USD prim has no translate-authoring API")
+
+
+def _set_xform_op_value(op: Any, value: Any) -> None:
+    set_value = getattr(op, "Set", None)
+    if not callable(set_value):
+        raise RuntimeError("USD translate op does not expose Set")
+    result = set_value(value)
+    if result is False:
+        raise RuntimeError("USD translate op refused authored value")
 
 
 def _semantic_pose_target_position(
@@ -5449,9 +5538,20 @@ def _isaac_object_footprint_half_extents(
 
 
 def _isaac_object_bottom_offset(state: dict[str, Any], object_id: str) -> float:
-    bounds = _dict(_isaac_object_world_bounds(state, object_id))
-    center = _vec3(bounds.get("center"))
+    entry = _isaac_index_entry(
+        state,
+        object_id,
+        index_name="object_index",
+        binding_groups=("selected_object_bindings", "object_bindings"),
+    )
+    bounds = _dict(entry.get("usd_world_bounds"))
+    root_position = _vec3(entry.get("usd_world_root_position"))
     min_point = _vec3(bounds.get("min"))
+    if root_position is not None and min_point is not None:
+        offset = float(root_position[2]) - float(min_point[2])
+        if 0.0 < offset <= 1.0:
+            return max(offset, 0.01)
+    center = _vec3(bounds.get("center"))
     if center is not None and min_point is not None:
         offset = float(center[2]) - float(min_point[2])
         if 0.0 < offset <= 1.0:
@@ -7303,8 +7403,9 @@ def _scene_cleanup_object_category(entry: dict[str, Any]) -> str:
     category = _scene_object_category(entry)
     tokens = _scene_entry_tokens("", entry)
     for category_aliases, _target_aliases in _SCENE_STRICT_CLEANUP_TARGET_ALIASES:
-        if any(alias in tokens for alias in category_aliases):
-            return _canonical_cleanup_category(category, category_aliases)
+        matched_aliases = tuple(alias for alias in category_aliases if alias in tokens)
+        if matched_aliases:
+            return _canonical_cleanup_category(category, matched_aliases)
     return category
 
 
@@ -7409,7 +7510,8 @@ _CANONICAL_CLEANUP_CATEGORY_ALIASES = (
         "RemoteControl",
         ("remotecontrol", "remote", "phone", "cellphone", "laptop", "tablet", "alarmclock"),
     ),
-    ("Pillow", ("pillow", "teddybear", "cushion")),
+    ("TeddyBear", ("teddybear", "teddy", "plush")),
+    ("Pillow", ("pillow", "cushion")),
     ("Towel", ("linen", "towel", "cloth", "blanket", "shirt", "clothing")),
     ("ToyCar", ("toy", "toycar", "ball", "basketball", "soccer")),
 )

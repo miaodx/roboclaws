@@ -1547,6 +1547,71 @@ def Xform "World"
     assert "prepared_usd_visual_physics_freeze" in report_html
 
 
+def test_robot_camera_object_parity_audit_uses_isaac_semantic_pose_position(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_object_parity_semantic_pose",
+    )
+    mujoco_state = {
+        "objects": {
+            "teddy_1": {
+                "object_id": "teddy_1",
+                "category": "TeddyBear",
+                "position": [1.0, 2.0, 0.8],
+            }
+        },
+        "receptacles": {},
+    }
+    isaac_state = {
+        "object_index": {
+            "teddy_1": {
+                "asset_id": "Teddy_Bear_1",
+                "category": "TeddyBear",
+                "parent": "bed_1",
+                "usd_prim_path": "/World/teddy_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [8.0, 9.0, 1.2],
+                    "size": [0.5, 0.4, 0.5],
+                },
+            }
+        },
+        "receptacle_index": {},
+        "semantic_pose_state": {
+            "object_poses": {
+                "teddy_1": {
+                    "object_id": "teddy_1",
+                    "position": [1.02, 2.0, 0.82],
+                    "position_source": "isaac_support_placement_resolver",
+                    "support_receptacle_id": "desk_1",
+                    "placement_support_status": "degraded_elevated",
+                }
+            },
+            "semantic_pose_view_capture": {
+                "rendered_to_usd": True,
+            },
+        },
+    }
+
+    audit = run_camera._object_parity_audit(
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+        mujoco_contract={},
+        isaac_contract={},
+        scene_binding_diagnostics={},
+        locations=[],
+        output_dir=tmp_path,
+    )
+
+    item = {item["target_id"]: item for item in audit["items"]}["teddy_1"]
+    assert item["pose_status"] == "pose_aligned"
+    assert item["pose_delta_m"] == 0.028284
+    assert item["isaac"]["position"] == [1.02, 2.0, 0.82]
+    assert item["isaac"]["position_source"] == "isaac_support_placement_resolver"
+
+
 def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,

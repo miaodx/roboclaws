@@ -1510,7 +1510,7 @@ def _object_parity_item(
     output_dir: Path | None,
 ) -> dict[str, Any]:
     mujoco_entry = _mujoco_state_entry(mujoco_state, kind, target_id)
-    isaac_entry = _isaac_index_entry(isaac_state, kind, target_id)
+    isaac_entry = _isaac_effective_index_entry(isaac_state, kind, target_id)
     target = {"kind": kind, "target_id": target_id}
     binding = _target_usd_binding(scene_binding_diagnostics, target)
     usd_prim_path = str(
@@ -1611,12 +1611,48 @@ def _isaac_index_entry(state: dict[str, Any], kind: str, target_id: str) -> dict
     return _dict(_dict(state.get(group)).get(target_id))
 
 
+def _isaac_effective_index_entry(
+    state: dict[str, Any],
+    kind: str,
+    target_id: str,
+) -> dict[str, Any]:
+    entry = _isaac_index_entry(state, kind, target_id)
+    if kind != "object":
+        return entry
+    pose = _dict(_dict(_dict(state.get("semantic_pose_state")).get("object_poses")).get(target_id))
+    if not pose:
+        return entry
+    effective = dict(entry)
+    position = _vec3_or_none(pose.get("position"))
+    if position is not None:
+        effective["position"] = [round(float(value), 6) for value in position]
+        effective["position_source"] = str(pose.get("position_source") or "semantic_pose_state")
+        effective["semantic_pose_position_applied"] = (
+            _dict(_dict(state.get("semantic_pose_state")).get("semantic_pose_view_capture")).get(
+                "rendered_to_usd"
+            )
+            is True
+        ) or _dict(state.get("semantic_pose_view_capture")).get("rendered_to_usd") is True
+    if pose.get("support_receptacle_id"):
+        effective["support_receptacle_id"] = str(pose.get("support_receptacle_id"))
+    if pose.get("support_usd_prim_path"):
+        effective["support_usd_prim_path"] = str(pose.get("support_usd_prim_path"))
+    if pose.get("placement_support_status"):
+        effective["placement_support_status"] = str(pose.get("placement_support_status"))
+    if pose.get("placement_resolution_source"):
+        effective["placement_resolution_source"] = str(pose.get("placement_resolution_source"))
+    return effective
+
+
 def _isaac_index_position(entry: dict[str, Any]) -> tuple[float, float, float] | None:
+    position = _vec3_or_none(entry.get("position"))
+    if position is not None:
+        return position
     bounds = _dict(entry.get("usd_world_bounds"))
     center = _vec3_or_none(bounds.get("center"))
     if center is not None:
         return center
-    return _vec3_or_none(entry.get("position"))
+    return None
 
 
 def _object_binding_status(
@@ -2106,6 +2142,11 @@ def _compact_isaac_index_entry(entry: dict[str, Any], *, usd_prim_path: str) -> 
         "renderable_descendant_count",
         "missing_referenced_asset_count",
         "valid_stage_prim",
+        "position",
+        "position_source",
+        "semantic_pose_position_applied",
+        "support_receptacle_id",
+        "placement_support_status",
     )
     compact = {key: entry.get(key) for key in keys if key in entry}
     if usd_prim_path:
