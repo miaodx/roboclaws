@@ -541,6 +541,73 @@ def test_generated_mess_manifest_records_stable_start_receptacles() -> None:
     assert [item["start_receptacle_id"] for item in selected] == ["sofa_01", "sofa_01"]
 
 
+def test_generated_mess_manifest_requires_explicit_relation_and_placement_index() -> None:
+    receptacles = [
+        {"receptacle_id": "sink_01", "category": "Sink"},
+        {"receptacle_id": "sofa_01", "category": "Sofa"},
+    ]
+    objects = [{"object_id": "plate_01", "category": "Plate"}]
+
+    with pytest.raises(ValueError, match="relation must be 'on' or 'inside'"):
+        targets_from_generated_mess_manifest(
+            objects,
+            receptacles,
+            {
+                "schema": "roboclaws_generated_mess_manifest_v1",
+                "targets": [
+                    {
+                        "object_id": "plate_01",
+                        "valid_receptacle_ids": ["sink_01"],
+                        "target_receptacle_id": "sink_01",
+                        "start_receptacle_id": "sofa_01",
+                        "placement_index": 0,
+                    }
+                ],
+            },
+            target_count=1,
+        )
+
+    with pytest.raises(ValueError, match="placement_index must be an integer"):
+        targets_from_generated_mess_manifest(
+            objects,
+            receptacles,
+            {
+                "schema": "roboclaws_generated_mess_manifest_v1",
+                "targets": [
+                    {
+                        "object_id": "plate_01",
+                        "valid_receptacle_ids": ["sink_01"],
+                        "target_receptacle_id": "sink_01",
+                        "start_receptacle_id": "sofa_01",
+                        "relation": "on",
+                    }
+                ],
+            },
+            target_count=1,
+        )
+
+    for placement_index in (1.2, True):
+        with pytest.raises(ValueError, match="placement_index must be an integer"):
+            targets_from_generated_mess_manifest(
+                objects,
+                receptacles,
+                {
+                    "schema": "roboclaws_generated_mess_manifest_v1",
+                    "targets": [
+                        {
+                            "object_id": "plate_01",
+                            "valid_receptacle_ids": ["sink_01"],
+                            "target_receptacle_id": "sink_01",
+                            "start_receptacle_id": "sofa_01",
+                            "relation": "on",
+                            "placement_index": placement_index,
+                        }
+                    ],
+                },
+                target_count=1,
+            )
+
+
 def test_worker_placement_diagnostic_records_support_relation() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()

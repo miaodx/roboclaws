@@ -225,14 +225,22 @@ def targets_from_generated_mess_manifest(
             )
         relation = str(raw_target.get("relation") or "")
         if relation not in {"on", "inside"}:
-            start_receptacle = receptacle_by_id.get(start_receptacle_id, {})
-            relation = "inside" if receptacle_prefers_inside(start_receptacle) else "on"
+            raise ValueError(
+                "generated mess manifest relation must be 'on' or 'inside': "
+                f"{object_id} -> {relation or '<missing>'}"
+            )
+        placement_index = raw_target.get("placement_index")
+        if isinstance(placement_index, bool) or not isinstance(placement_index, int):
+            raise ValueError(
+                "generated mess manifest placement_index must be an integer: "
+                f"{object_id} -> {placement_index!r}"
+            )
         selected_obj = dict(obj)
         selected_obj["target_receptacle_id"] = valid_receptacle_ids[0]
         selected_obj["valid_receptacle_ids"] = valid_receptacle_ids
         selected_obj["start_receptacle_id"] = start_receptacle_id
         selected_obj["relation"] = relation
-        selected_obj["placement_index"] = int(raw_target.get("placement_index") or index)
+        selected_obj["placement_index"] = placement_index
         selected.append(selected_obj)
     return selected
 

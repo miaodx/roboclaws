@@ -5013,6 +5013,7 @@ def _seed_generated_mess_placements(state: dict[str, Any]) -> None:
             receptacle_id=receptacle_id,
             relation=relation,
             source="canonical_mess_manifest" if manifest_target else "mess_seed",
+            placement_index=placement_index,
             placement_resolution=placement_resolution,
         )
         diagnostics.append(diagnostic)
@@ -5725,6 +5726,7 @@ def _isaac_placement_diagnostic(
     receptacle_id: str,
     relation: str,
     source: str,
+    placement_index: int | None = None,
     placement_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     obj = _dict(_objects_by_id(state).get(object_id))
@@ -5771,6 +5773,7 @@ def _isaac_placement_diagnostic(
         "receptacle_category": receptacle.get("category") or receptacle.get("kind"),
         "receptacle_usd_prim_path": _receptacle_usd_prim_path(state, receptacle_id),
         "relation": relation,
+        "placement_index": placement_index,
         "requested_position": _round_vec3(requested_position) if requested_position else [],
         "object_position": _round_vec3(object_position) if object_position else [],
         "receptacle_position": _round_vec3(receptacle_position) if receptacle_position else [],

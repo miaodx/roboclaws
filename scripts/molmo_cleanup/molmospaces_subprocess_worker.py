@@ -1397,6 +1397,7 @@ def _seed_misplaced_objects(
             relation=relation,
             requested_position=placement_position,
             source="canonical_mess_manifest" if manifest_target else "mess_seed",
+            placement_index=placement_index,
             placement_resolution=placement_resolution,
         )
         state.setdefault("mess_placement_diagnostics", []).append(diagnostic)
@@ -2190,6 +2191,7 @@ def _placement_diagnostic(
     relation: str,
     requested_position: list[float],
     source: str,
+    placement_index: int | None = None,
     placement_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     obj = state["objects"][object_id]
@@ -2213,6 +2215,7 @@ def _placement_diagnostic(
         "receptacle_category": receptacle.get("category"),
         "receptacle_body_name": receptacle.get("body_name"),
         "relation": relation,
+        "placement_index": placement_index,
         "requested_position": [round(float(value), 6) for value in requested_position],
         "object_position": [round(float(value), 6) for value in object_position],
         "receptacle_position": [round(float(value), 6) for value in receptacle_position],

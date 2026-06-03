@@ -213,6 +213,83 @@ def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(
     ]
 
 
+def test_robot_camera_report_renders_canonical_generated_mess_manifest() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_report_canonical_mess",
+    )
+
+    report_html = run_camera._render_report(
+        {
+            "purpose": "unit",
+            "summary": {},
+            "mess_generation": {
+                "schema": "robot_camera_apple2apple_mess_generation_v1",
+                "status": "canonical_generated_mess_manifest",
+                "artifact": "generated_mess_manifest.json",
+                "canonical_generated_mess_object_ids": ["plate_1", "apple_1"],
+                "targets": [
+                    {
+                        "object_id": "plate_1",
+                        "target_receptacle_id": "sink_1",
+                        "start_receptacle_id": "sofa_1",
+                        "relation": "on",
+                        "placement_index": 0,
+                    }
+                ],
+            },
+            "locations": [],
+        }
+    )
+
+    assert "Canonical Generated Mess Manifest" in report_html
+    assert "canonical_generated_mess_manifest" in report_html
+    assert "generated_mess_manifest.json" in report_html
+    assert "start_receptacle_id" in report_html
+    assert "plate_1" in report_html
+
+
+def test_robot_camera_blocks_on_canonical_placement_diagnostic_mismatch() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_placement_mismatch",
+    )
+    canonical_manifest = {
+        "targets": [
+            {
+                "object_id": "plate_1",
+                "start_receptacle_id": "sofa_1",
+                "relation": "on",
+                "placement_index": 0,
+            }
+        ]
+    }
+    state = {
+        "mess_placement_diagnostics": [
+            {
+                "diagnostic_source": "canonical_mess_manifest",
+                "object_id": "plate_1",
+                "receptacle_id": "desk_1",
+                "relation": "on",
+                "placement_index": 0,
+            }
+        ]
+    }
+
+    try:
+        run_camera._validate_generated_mess_placement_diagnostics(
+            lane_id=run_camera.MUJOCO_LANE_ID,
+            state=state,
+            canonical_manifest=canonical_manifest,
+        )
+    except RuntimeError as exc:
+        assert "placement diagnostics did not match canonical manifest" in str(exc)
+        assert "desk_1" in str(exc)
+        assert "sofa_1" in str(exc)
+    else:  # pragma: no cover - assertion branch.
+        raise AssertionError("expected placement diagnostic mismatch to block")
+
+
 def test_robot_camera_residual_triage_prioritizes_geometry_edges() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,

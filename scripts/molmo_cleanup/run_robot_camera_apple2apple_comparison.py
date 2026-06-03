@@ -326,6 +326,16 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
             state=isaac_state,
             canonical_manifest=canonical_mess_manifest,
         )
+        _validate_generated_mess_placement_diagnostics(
+            lane_id=MUJOCO_LANE_ID,
+            state=mujoco_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_placement_diagnostics(
+            lane_id=ISAAC_LANE_ID,
+            state=isaac_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
     except Exception as exc:
         manifest["status"] = "blocked"
         manifest["blocker"] = str(exc)
@@ -635,6 +645,52 @@ def _validate_generated_mess_state_locations(
             f"{lane_id} generated mess start locations did not match canonical manifest: "
             f"{actual} != {expected}"
         )
+
+
+def _validate_generated_mess_placement_diagnostics(
+    *,
+    lane_id: str,
+    state: dict[str, Any],
+    canonical_manifest: dict[str, Any],
+) -> None:
+    expected = _placement_contract_by_object(canonical_manifest.get("targets", []))
+    actual = _placement_contract_by_object(
+        item
+        for item in state.get("mess_placement_diagnostics", [])
+        if _dict(item).get("diagnostic_source") == "canonical_mess_manifest"
+    )
+    missing = sorted(set(expected) - set(actual))
+    if missing:
+        raise RuntimeError(
+            f"{lane_id} generated mess placement diagnostics missing canonical targets: {missing}"
+        )
+    mismatches = {
+        object_id: {"actual": actual[object_id], "expected": expected[object_id]}
+        for object_id in sorted(expected)
+        if actual.get(object_id) != expected[object_id]
+    }
+    if mismatches:
+        raise RuntimeError(
+            f"{lane_id} generated mess placement diagnostics did not match canonical "
+            f"manifest: {mismatches}"
+        )
+
+
+def _placement_contract_by_object(items: Any) -> dict[str, dict[str, Any]]:
+    contracts: dict[str, dict[str, Any]] = {}
+    for raw_item in items:
+        item = _dict(raw_item)
+        object_id = str(item.get("object_id") or "")
+        if not object_id:
+            continue
+        contracts[object_id] = {
+            "receptacle_id": str(
+                item.get("start_receptacle_id") or item.get("receptacle_id") or ""
+            ),
+            "relation": str(item.get("relation") or ""),
+            "placement_index": item.get("placement_index"),
+        }
+    return contracts
 
 
 def _private_manifest_target_pairs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
@@ -4378,12 +4434,24 @@ def _render_report(manifest: dict[str, Any]) -> str:
         + "</p><pre>"
         + html.escape(json.dumps(manifest.get("summary", {}), indent=2, sort_keys=True))
         + "</pre>"
+        + _render_generated_mess_manifest(manifest)
         + _render_native_isaac_render_diagnostics(manifest)
         + _render_object_render_parity_diagnostics(manifest)
         + _render_object_parity_audit(manifest)
         + "</header>"
         + "".join(rows)
         + "</body></html>"
+    )
+
+
+def _render_generated_mess_manifest(manifest: dict[str, Any]) -> str:
+    mess_generation = _dict(manifest.get("mess_generation"))
+    if not mess_generation:
+        return ""
+    return (
+        "<h2>Canonical Generated Mess Manifest</h2><pre>"
+        + html.escape(json.dumps(mess_generation, indent=2, sort_keys=True))
+        + "</pre>"
     )
 
 
