@@ -231,6 +231,10 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         summary.get("object_render_parity_diagnostics")
         or payload.get("object_render_parity_diagnostics")
     )
+    native_isaac_render = _dict(
+        summary.get("native_isaac_render_diagnostics")
+        or payload.get("native_isaac_render_diagnostics")
+    )
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
     return {
@@ -266,12 +270,39 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "object_gate_failure_count": object_render.get("object_gate_failure_count"),
         "object_gate_comparable_count": object_render.get("object_gate_comparable_count"),
         "render_gate_status": object_render.get("render_gate_status"),
+        "native_isaac_render_status": native_isaac_render.get("status"),
+        "native_isaac_settings_api_available": native_isaac_render.get("settings_api_available"),
+        "native_isaac_default_render_settings_changed": native_isaac_render.get(
+            "default_render_settings_changed"
+        ),
+        "native_isaac_render_diagnostics": _compact_native_isaac_render_diagnostics(
+            native_isaac_render
+        ),
         "target_selection": {
             "status": target_selection.get("status"),
             "selected_count": target_selection.get("selected_count"),
             "dropped_unbound_target_count": target_selection.get("dropped_unbound_target_count"),
         },
         "render_domain_checks": _render_checks_by_id(render_checks),
+    }
+
+
+def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
+    if not diagnostics:
+        return {}
+    return {
+        "schema": diagnostics.get("schema"),
+        "status": diagnostics.get("status"),
+        "renderer_mode": diagnostics.get("renderer_mode"),
+        "capture_method": diagnostics.get("capture_method"),
+        "settings_api_available": diagnostics.get("settings_api_available"),
+        "available_setting_count": diagnostics.get("available_setting_count"),
+        "missing_setting_count": diagnostics.get("missing_setting_count"),
+        "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
+        "render_product_paths": diagnostics.get("render_product_paths") or [],
+        "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
+        "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
+        "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
     }
 
 

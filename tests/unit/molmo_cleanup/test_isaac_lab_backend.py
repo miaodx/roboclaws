@@ -46,6 +46,18 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert backend.runtime["renderer_mode"] == "fake_isaac_protocol"
     assert backend.runtime["rendering"]["status"] == "fake_protocol"
     assert backend.runtime["rendering"]["real_rendering_proven"] is False
+    native_render = backend.runtime["rendering"]["native_render_diagnostics"]
+    assert native_render["schema"] == "isaac_native_render_diagnostics_v1"
+    assert native_render["status"] == "fake_protocol"
+    assert native_render["settings_api_available"] is False
+    assert native_render["settings_mutation_attempted"] is False
+    assert native_render["default_render_settings_changed"] is False
+    assert native_render["post_render_comparison_profile"]["source"] == (
+        "not_a_native_renderer_setting"
+    )
+    assert native_render["tone_mapping"]["operator"]["status"] == "not_available"
+    assert native_render["camera_exposure"]["auto_exposure_enabled"]["status"] == ("not_available")
+    assert native_render["ocio"]["config"]["status"] == "not_available"
     assert backend.runtime["visual_artifact_provenance"] == "fake_protocol_placeholder_image"
     assert backend.object_index
     assert backend.receptacle_index
@@ -95,6 +107,10 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     assert snapshot_path.stat().st_size > 0
     assert backend.snapshot_artifacts[-1]["placeholder_visuals"] is True
     assert (
+        backend.snapshot_artifacts[-1]["native_render_diagnostics"]["schema"]
+        == "isaac_native_render_diagnostics_v1"
+    )
+    assert (
         backend.snapshot_artifacts[-1]["snapshot_provenance"]["source"]
         == "placeholder_protocol_image"
     )
@@ -107,6 +123,8 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
     )
     assert views["ok"] is True
     assert views["view_variant"] == ISAACLAB_ROBOT_VIEW_VARIANT
+    assert views["native_render_diagnostics"]["schema"] == "isaac_native_render_diagnostics_v1"
+    assert views["native_render_diagnostics"]["default_render_settings_changed"] is False
     assert set(views["views"]) == {"fpv", "chase", "map", "verify"}
     for path in views["views"].values():
         assert Path(path).is_file()
@@ -566,6 +584,13 @@ def test_isaac_scene_camera_capture_applies_color_profile(
     assert result["color_management"]["fpv"]["backend_luminance_gain"]["gain"] == pytest.approx(
         0.7161647108631373
     )
+    assert result["native_render_diagnostics"]["schema"] == "isaac_native_render_diagnostics_v1"
+    assert result["native_render_diagnostics"]["view_kind"] == "scene_camera_request"
+    assert result["native_render_diagnostics"]["settings_mutation_attempted"] is False
+    assert result["native_render_diagnostics"]["default_render_settings_changed"] is False
+    assert result["native_render_diagnostics"]["post_render_comparison_profile"]["source"] == (
+        "not_a_native_renderer_setting"
+    )
     assert Path(result["images"]["fpv"]).is_file()
 
 
@@ -641,6 +666,12 @@ def test_isaac_write_camera_views_returns_color_contract(
                     "after": {"overexposed_fraction": 0.0},
                 }
             },
+            "native_render_diagnostics": {
+                "schema": "isaac_native_render_diagnostics_v1",
+                "status": "captured",
+                "settings_api_available": True,
+                "default_render_settings_changed": False,
+            },
             "lens": camera_request.get("lens"),
             "derived_lens": {"horizontal_aperture_mm": 29.8},
             "views": [
@@ -681,6 +712,68 @@ def test_isaac_write_camera_views_returns_color_contract(
     assert result["ok"] is True
     assert result["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert result["color_management"]["fpv"]["after"]["overexposed_fraction"] == 0.0
+    assert result["native_render_diagnostics"]["schema"] == "isaac_native_render_diagnostics_v1"
+    assert result["native_render_diagnostics"]["default_render_settings_changed"] is False
+
+
+def test_isaac_native_render_diagnostics_reads_available_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeSettings:
+        values = {
+            "/rtx/post/tonemap/op": "aces",
+            "/rtx/post/histogram/autoExposure/enabled": False,
+            "/rtx/post/camera/iso": 100,
+            "/rtx/post/ocio/view": "sRGB",
+            "/rtx/post/colorcorr/enabled": False,
+            "/rtx/post/colorGrading/enabled": False,
+            "/renderer/active": "RayTracedLighting",
+        }
+
+        def get(self, path: str) -> object:
+            return self.values.get(path)
+
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "_isaac_settings_interface",
+        lambda: _FakeSettings(),
+    )
+
+    diagnostics = isaac_lab_backend_worker._isaac_native_render_diagnostics(
+        renderer_mode="isaac_lab_headless_rtx",
+        capture_method="isaac_lab_camera_rgb",
+        view_kind="robot_views",
+        render_resolution={"width": 540, "height": 360},
+        camera_prim_paths=["/World/robot_0/head_camera"],
+        render_product_paths=["/Render/Product/Fpv"],
+        isaac_lab_isp_active=False,
+    )
+
+    assert diagnostics["schema"] == "isaac_native_render_diagnostics_v1"
+    assert diagnostics["status"] == "captured"
+    assert diagnostics["settings_api_available"] is True
+    assert diagnostics["tone_mapping"]["operator"]["value"] == "aces"
+    assert diagnostics["camera_exposure"]["auto_exposure_enabled"]["value"] is False
+    assert diagnostics["camera_exposure"]["iso"]["value"] == 100
+    assert diagnostics["tone_mapping"]["exposure_value"]["status"] == "not_available"
+    assert diagnostics["ocio"]["view"]["value"] == "sRGB"
+    assert diagnostics["renderer"]["renderer"]["value"] == "RayTracedLighting"
+    assert diagnostics["camera_prim_paths"] == ["/World/robot_0/head_camera"]
+    assert diagnostics["render_product_paths"] == ["/Render/Product/Fpv"]
+    assert diagnostics["isaac_lab_isp_active"] is False
+    assert diagnostics["settings_mutation_attempted"] is False
+    assert diagnostics["default_render_settings_changed"] is False
+
+
+def test_isaac_camera_render_product_paths_are_extracted() -> None:
+    camera = SimpleNamespace(
+        render_product_path="/Render/Product/Fpv",
+        data=SimpleNamespace(render_product_paths=["/Render/Product/Chase"]),
+    )
+
+    paths = isaac_lab_backend_worker._camera_render_product_paths(camera)
+
+    assert paths == ["/Render/Product/Fpv", "/Render/Product/Chase"]
 
 
 def test_isaac_scene_camera_spec_records_usd_bounds(monkeypatch: pytest.MonkeyPatch) -> None:

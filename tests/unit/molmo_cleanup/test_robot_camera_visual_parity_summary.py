@@ -503,6 +503,62 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
     assert "object_gate_failures_detected" in report_html
 
 
+def test_visual_parity_summary_carries_native_isaac_render_diagnostics(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_native_render")
+    native = {
+        "schema": "robot_camera_native_isaac_render_diagnostics_v1",
+        "status": "native_settings_recorded",
+        "renderer_mode": "isaac_lab_headless_rtx",
+        "capture_method": "isaac_lab_camera_rgb_static_robot_views",
+        "settings_api_available": True,
+        "available_setting_count": 4,
+        "missing_setting_count": 2,
+        "camera_prim_paths": ["/World/robot_0/head_camera"],
+        "render_product_paths": ["/Render/Product/Fpv"],
+        "isaac_lab_isp_active": False,
+        "default_render_settings_changed": False,
+        "post_render_comparison_profile": {
+            "applied": False,
+            "source": "not_a_native_renderer_setting",
+        },
+    }
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline" / "comparison_manifest.json",
+        scene_index=1,
+        seed=8,
+        generated_mess_count=2,
+        fpv=37.2,
+        chase=71.7,
+        location_count=4,
+        native_isaac_render_diagnostics=native,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+    )
+
+    baseline_summary = manifest["baselines"][0]
+    assert baseline_summary["native_isaac_render_status"] == "native_settings_recorded"
+    assert baseline_summary["native_isaac_settings_api_available"] is True
+    assert baseline_summary["native_isaac_default_render_settings_changed"] is False
+    assert baseline_summary["native_isaac_render_diagnostics"]["camera_prim_paths"] == [
+        "/World/robot_0/head_camera"
+    ]
+    assert (
+        baseline_summary["native_isaac_render_diagnostics"]["post_render_comparison_profile"][
+            "source"
+        ]
+        == "not_a_native_renderer_setting"
+    )
+    assert manifest["default_rendering_visual_parity"]["ready"] is False
+
+
 def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
     tmp_path: Path,
 ) -> None:
@@ -1106,6 +1162,7 @@ def _write_robot_camera_manifest(
     locations: list[dict] | None = None,
     object_parity_audit: dict | None = None,
     object_render_parity_diagnostics: dict | None = None,
+    native_isaac_render_diagnostics: dict | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True)
     default_locations = [_visual_location(path.parent)] if locations is None else locations
@@ -1149,6 +1206,7 @@ def _write_robot_camera_manifest(
             },
             "object_parity_audit": object_parity_audit or {},
             "object_render_parity_diagnostics": object_render_parity_diagnostics or {},
+            "native_isaac_render_diagnostics": native_isaac_render_diagnostics or {},
         },
         "locations": default_locations,
     }

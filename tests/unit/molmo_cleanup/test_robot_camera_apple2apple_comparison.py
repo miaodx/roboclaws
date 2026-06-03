@@ -812,6 +812,222 @@ def test_robot_camera_tone_color_check_summarizes_improved_rgb_gain_probe(
     assert "strongest current comparison-only direction" in check["recommended_next_action"]
 
 
+def test_robot_camera_native_isaac_render_diagnostics_are_reported_separately(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_native_isaac_render",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset><material name="mat_table"/></asset>
+  <worldbody>
+    <light name="key"/>
+    <body name="table_1">
+      <geom name="table_1_visual_0" material="mat_table"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Xform "table_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/Looks/mat_table>
+    }
+  }
+  def Scope "Looks"
+  {
+    def Material "mat_table"
+    {
+      def Shader "PreviewSurface"
+      {
+        uniform token info:id = "UsdPreviewSurface"
+      }
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    native = {
+        "schema": "isaac_native_render_diagnostics_v1",
+        "status": "captured",
+        "renderer_mode": "isaac_lab_headless_rtx",
+        "capture_method": "isaac_lab_camera_rgb_static_robot_views",
+        "view_kind": "robot_views",
+        "settings_api_available": True,
+        "available_setting_count": 4,
+        "missing_setting_count": 2,
+        "tone_mapping": {
+            "operator": {
+                "status": "available",
+                "value": "aces",
+                "setting_path": "/rtx/post/tonemap/op",
+            }
+        },
+        "camera_exposure": {
+            "auto_exposure_enabled": {
+                "status": "available",
+                "value": False,
+                "setting_path": "/rtx/post/histogram/autoExposure/enabled",
+            },
+            "iso": {
+                "status": "available",
+                "value": 100,
+                "setting_path": "/rtx/post/camera/iso",
+            },
+        },
+        "ocio": {},
+        "color_correction": {},
+        "color_grading": {},
+        "renderer": {
+            "renderer": {
+                "status": "available",
+                "value": "RayTracedLighting",
+                "setting_path": "/renderer/active",
+            }
+        },
+        "camera_prim_paths": ["/World/robot_0/head_camera"],
+        "render_product_paths": ["/Render/Product/Fpv"],
+        "render_resolution": {"width": 540, "height": 360},
+        "isaac_lab_isp_active": False,
+        "settings_mutation_attempted": False,
+        "default_render_settings_changed": False,
+        "post_render_comparison_profile": {
+            "applied": False,
+            "source": "not_a_native_renderer_setting",
+        },
+    }
+    manifest = {
+        "schema": "roboclaws_robot_camera_apple2apple_comparison_v1",
+        "purpose": "unit",
+        "scene": {"scene_usd_path": str(isaac_usd)},
+        "locations": [
+            {
+                "status": "success",
+                "label": "0001_table_1",
+                "target": {"kind": "receptacle", "target_id": "table_1"},
+                "robot_pose": {},
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "camera_diagnostics": {
+                    "isaac": {
+                        "schema": "isaac_robot_view_camera_diagnostics_v1",
+                        "native_render_diagnostics": native,
+                    }
+                },
+                "image_diffs": {
+                    "fpv": {
+                        "mean_abs_rgb": 42.0,
+                        "nonzero_fraction": 1.0,
+                        "residual": {
+                            "residual_class": "view_dependent_color_residual",
+                            "rgb_gain_oracle": {"mean_abs_rgb_after_gain": 30.0},
+                        },
+                    },
+                    "chase": {
+                        "mean_abs_rgb": 12.0,
+                        "nonzero_fraction": 0.5,
+                        "residual": {"residual_class": "low_residual"},
+                    },
+                },
+            }
+        ],
+        "summary": {
+            "residual_triage": {
+                "status": "view_dependent_color_residual",
+            }
+        },
+    }
+    (tmp_path / "mujoco_state.json").write_text(
+        json.dumps(
+            {
+                "scene_xml": str(mujoco_xml),
+                "objects": {},
+                "receptacles": {
+                    "table_1": {
+                        "receptacle_id": "table_1",
+                        "category": "Table",
+                        "position": [0.0, 0.0, 0.5],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "isaac_state.json").write_text(
+        json.dumps(
+            {
+                "scene_usd": str(isaac_usd),
+                "native_render_diagnostics": native,
+                "receptacle_index": {
+                    "table_1": {
+                        "usd_prim_path": "/World/table_1",
+                        "category": "Table",
+                        "geometry_status": "renderable",
+                        "has_renderable_geometry": True,
+                        "valid_stage_prim": True,
+                        "usd_world_bounds": {"center": [0.0, 0.0, 0.5]},
+                    }
+                },
+                "object_index": {},
+                "scene_binding_diagnostics": {
+                    "receptacle_bindings": {
+                        "table_1": {
+                            "status": "bound",
+                            "public_id": "table_1",
+                            "kind": "receptacle",
+                            "category": "Table",
+                            "usd_prim_path": "/World/table_1",
+                            "geometry_status": "renderable",
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
+    run_camera._write_outputs(manifest, tmp_path)
+
+    native_summary = manifest["summary"]["native_isaac_render_diagnostics"]
+    native_detail = manifest["native_isaac_render_diagnostics"]
+    render_gate = manifest["object_render_parity_diagnostics"]["render_gate"]
+    assert native_summary["status"] == "native_settings_recorded"
+    assert native_summary["settings_api_available"] is True
+    assert native_detail["tone_mapping"]["operator"]["value"] == "aces"
+    assert native_detail["camera_exposure"]["auto_exposure_enabled"]["value"] is False
+    assert native_summary["default_render_settings_changed"] is False
+    assert native_summary["post_render_comparison_profile"]["source"] == (
+        "not_a_native_renderer_setting"
+    )
+    assert render_gate["native_isaac_status"] == "native_settings_recorded"
+    assert render_gate["native_isaac_render_diagnostics"]["status"] == ("native_settings_recorded")
+    assert (
+        manifest["lanes"][run_camera.ISAAC_LANE_ID]["native_render_diagnostics"][
+            "default_render_settings_changed"
+        ]
+        is False
+    )
+    report_html = (tmp_path / "report.html").read_text(encoding="utf-8")
+    assert "Native Isaac Render Diagnostics" in report_html
+    assert "not_a_native_renderer_setting" in report_html
+    assert "/rtx/post/tonemap/op" in report_html
+
+
 def test_robot_camera_comparison_target_selection_filters_unbound_isaac_targets() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,

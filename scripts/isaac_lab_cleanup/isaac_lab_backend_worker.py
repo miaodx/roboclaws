@@ -68,6 +68,7 @@ DEFAULT_HEIGHT = 360
 ROBOT_VIEW_KEYS = ("fpv", "chase", "map", "verify")
 SCENE_BINDING_SCHEMA = "isaac_public_scene_bindings_v1"
 SEGMENTATION_SCHEMA = "isaac_segmentation_diagnostics_v1"
+ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
 ISAAC_SEGMENTATION_DATA_TYPES = (
     "semantic_segmentation",
     "instance_segmentation_fast",
@@ -112,6 +113,107 @@ RBY1M_HEAD_CAMERA_VERTICAL_FOV_DEG = 45.0
 RBY1M_HEAD_CAMERA_FOCAL_LENGTH_MM = 24.0
 RBY1M_CHASE_CAMERA_OFFSET_M = (-1.3, 0.0, 2.705)
 RBY1M_CHASE_CAMERA_TARGET_OFFSET_M = (0.0, 0.0, 1.1)
+ISAAC_NATIVE_RENDER_SETTING_PATHS = {
+    "tone_mapping": {
+        "operator": (
+            "/rtx/post/tonemap/op",
+            "/rtx/post/tonemap/operator",
+            "/rtx/post/tonemap/tonemapOp",
+        ),
+        "exposure_bias": (
+            "/rtx/post/tonemap/exposure",
+            "/rtx/post/tonemap/exposureBias",
+        ),
+        "exposure_value": (
+            "/rtx/post/tonemap/cameraExposure",
+            "/rtx/post/camera/exposure",
+            "/rtx/post/camera/exposureValue",
+        ),
+        "white_point": (
+            "/rtx/post/tonemap/whitepoint",
+            "/rtx/post/tonemap/whitePoint",
+        ),
+        "cm2_factor": ("/rtx/post/tonemap/cm2Factor",),
+        "max_white_luminance": ("/rtx/post/tonemap/maxWhiteLuminance",),
+    },
+    "camera_exposure": {
+        "auto_exposure_enabled": (
+            "/rtx/post/histogram/autoExposure/enabled",
+            "/rtx/post/tonemap/autoExposure",
+            "/rtx/post/tonemap/autoExposure/enabled",
+        ),
+        "auto_exposure_min": (
+            "/rtx/post/histogram/autoExposure/min",
+            "/rtx/post/tonemap/autoExposure/min",
+        ),
+        "auto_exposure_max": (
+            "/rtx/post/histogram/autoExposure/max",
+            "/rtx/post/tonemap/autoExposure/max",
+        ),
+        "iso": (
+            "/rtx/post/camera/iso",
+            "/rtx/post/tonemap/filmIso",
+        ),
+        "f_stop": (
+            "/rtx/post/camera/fStop",
+            "/rtx/post/tonemap/fNumber",
+        ),
+        "shutter_speed": (
+            "/rtx/post/camera/shutterSpeed",
+            "/rtx/post/tonemap/cameraShutter",
+        ),
+    },
+    "ocio": {
+        "enabled": (
+            "/rtx/post/ocio/enabled",
+            "/app/renderer/colorManagement/ocio/enabled",
+        ),
+        "config": (
+            "/rtx/post/ocio/config",
+            "/app/renderer/colorManagement/ocio/config",
+        ),
+        "display": (
+            "/rtx/post/ocio/display",
+            "/app/renderer/colorManagement/ocio/display",
+        ),
+        "view": (
+            "/rtx/post/ocio/view",
+            "/app/renderer/colorManagement/ocio/view",
+        ),
+        "look": (
+            "/rtx/post/ocio/look",
+            "/app/renderer/colorManagement/ocio/look",
+        ),
+    },
+    "color_correction": {
+        "enabled": ("/rtx/post/colorcorr/enabled",),
+        "mode": ("/rtx/post/colorcorr/mode",),
+        "saturation": ("/rtx/post/colorcorr/saturation",),
+        "contrast": ("/rtx/post/colorcorr/contrast",),
+        "gamma": ("/rtx/post/colorcorr/gamma",),
+        "gain": ("/rtx/post/colorcorr/gain",),
+        "offset": ("/rtx/post/colorcorr/offset",),
+    },
+    "color_grading": {
+        "enabled": ("/rtx/post/colorGrading/enabled",),
+        "lut": (
+            "/rtx/post/colorGrading/lut",
+            "/rtx/post/colorGrading/lutFile",
+        ),
+        "amount": ("/rtx/post/colorGrading/amount",),
+    },
+    "renderer": {
+        "renderer": (
+            "/renderer/active",
+            "/rtx/rendermode",
+        ),
+        "render_mode": (
+            "/rtx/mode",
+            "/rtx/renderMode",
+        ),
+        "anti_aliasing": ("/rtx/post/aa/op",),
+    },
+}
 ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
 ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
     "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
@@ -411,6 +513,9 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "scene_binding_diagnostics": scene_binding_diagnostics,
         "robot_view_images": _real_smoke_robot_view_images(real_smoke),
         "robot_view_provenance": _robot_view_provenance(args.runtime_mode, real_smoke),
+        "native_render_diagnostics": _dict(
+            _dict(runtime.get("rendering")).get("native_render_diagnostics")
+        ),
         "segmentation": segmentation,
         "robot": _robot_payload(args.robot_name) if args.include_robot else None,
         "robot_import": _rby1m_robot_import_plan(args.robot_name) if args.include_robot else None,
@@ -447,6 +552,7 @@ def init_state(args: argparse.Namespace) -> dict[str, Any]:
         "receptacle_index": state["receptacle_index"],
         "mapping_gaps": mapping_gaps,
         "segmentation": state["segmentation"],
+        "native_render_diagnostics": state["native_render_diagnostics"],
         "requested_generated_mess_count": args.generated_mess_count,
         "generated_mess_count": len(state["private_manifest"]["targets"]),
         "robot": state["robot"],
@@ -568,6 +674,7 @@ def real_runtime_smoke(
         "object_index": scene_index_diagnostics["object_index"],
         "receptacle_index": scene_index_diagnostics["receptacle_index"],
         "segmentation": segmentation,
+        "native_render_diagnostics": _dict(capture.get("native_render_diagnostics")),
     }
 
 
@@ -1997,6 +2104,21 @@ def _capture_isaac_lab_camera_views(
         semantic_pose_state=semantic_pose_state,
     )
     sim.reset()
+    native_render_diagnostics = _isaac_native_render_diagnostics(
+        renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
+        view_kind="robot_views",
+        render_resolution={"width": width, "height": height},
+        camera_prim_paths=[
+            ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
+            "/World/RoboclawsSmokeCameraRig/Camera",
+        ],
+        render_product_paths=[
+            *(_camera_render_product_paths(head_camera) if head_camera is not None else []),
+            *_camera_render_product_paths(scene_camera),
+        ],
+        isaac_lab_isp_active=False,
+    )
     saved: dict[str, str] = {}
     segmentation_views: list[dict[str, Any]] = []
     total_render_steps = 0
@@ -2087,8 +2209,10 @@ def _capture_isaac_lab_camera_views(
             "render_resolution": {"width": width, "height": height},
             "lighting_profile": lighting_profile,
             "lighting_diagnostics": lighting_diagnostics,
+            "native_render_diagnostics": native_render_diagnostics,
             "views": camera_diagnostics,
         },
+        "native_render_diagnostics": native_render_diagnostics,
         "lighting_profile": lighting_profile,
         "lighting_diagnostics": lighting_diagnostics,
         "color_profile": color_profile,
@@ -2153,6 +2277,15 @@ def _capture_scene_camera_request_with_existing_sim(
         )
     )
     sim.reset()
+    native_render_diagnostics = _isaac_native_render_diagnostics(
+        renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        capture_method="isaac_lab_camera_rgb_scene_probe",
+        view_kind="scene_camera_request",
+        render_resolution={"width": width, "height": height},
+        camera_prim_paths=["/World/RoboclawsSceneRequestCameraRig/Camera"],
+        render_product_paths=_camera_render_product_paths(camera),
+        isaac_lab_isp_active=False,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: dict[str, str] = {}
     shapes: dict[str, list[int]] = {}
@@ -2210,6 +2343,7 @@ def _capture_scene_camera_request_with_existing_sim(
         "color_profile": color_profile,
         "color_management": color_diagnostics,
         "lighting_diagnostics": lighting_diagnostics,
+        "native_render_diagnostics": native_render_diagnostics,
         "lens": camera_request.get("lens") or {},
         "derived_lens": {
             "focal_length_mm": focal_length,
@@ -2311,6 +2445,15 @@ def _capture_isaac_lab_scene_camera_views(
         )
     )
     sim.reset()
+    native_render_diagnostics = _isaac_native_render_diagnostics(
+        renderer_mode=REAL_SMOKE_RENDERER_MODE,
+        capture_method="isaac_lab_camera_rgb_scene_probe",
+        view_kind="scene_camera_views",
+        render_resolution={"width": width, "height": height},
+        camera_prim_paths=["/World/RoboclawsSceneProbeCameraRig/Camera"],
+        render_product_paths=_camera_render_product_paths(camera),
+        isaac_lab_isp_active=False,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     saved: dict[str, str] = {}
     shapes: dict[str, list[int]] = {}
@@ -2368,6 +2511,7 @@ def _capture_isaac_lab_scene_camera_views(
         "color_profile": color_profile,
         "color_management": color_diagnostics,
         "lighting_diagnostics": lighting_diagnostics,
+        "native_render_diagnostics": native_render_diagnostics,
         "lens": camera_request.get("lens") or {},
         "derived_lens": {
             "focal_length_mm": focal_length,
@@ -3925,6 +4069,7 @@ def rendering_diagnostics(
     real_smoke: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if real_smoke is not None:
+        native_render_diagnostics = _dict(real_smoke.get("native_render_diagnostics"))
         return {
             "status": "real_rendering_proven",
             "renderer_mode": str(real_smoke.get("renderer_mode") or REAL_SMOKE_RENDERER_MODE),
@@ -3934,6 +4079,11 @@ def rendering_diagnostics(
             "capture_method": str(real_smoke.get("capture_method") or REAL_SMOKE_CAPTURE_METHOD),
             "render_steps": int(real_smoke.get("render_steps") or 0),
             "image_path": str(real_smoke["image_path"]),
+            "native_render_diagnostics": native_render_diagnostics
+            or _isaac_native_render_diagnostics_unavailable(
+                runtime_mode="real",
+                reason="real runtime smoke did not return native render diagnostics",
+            ),
             "reason": (
                 "The worker launched Isaac Lab, loaded a generated Phase A USD "
                 "stage, and saved an RGB camera frame from the Isaac renderer."
@@ -3946,6 +4096,10 @@ def rendering_diagnostics(
             "real_rendering_proven": False,
             "placeholder_visuals": True,
             "visual_artifact_provenance": "placeholder_protocol_image",
+            "native_render_diagnostics": _isaac_native_render_diagnostics_unavailable(
+                runtime_mode="real",
+                reason="real Isaac app launch and camera capture have not produced diagnostics",
+            ),
             "reason": (
                 "The worker imports Isaac Lab in real mode, but real Isaac app "
                 "launch, scene loading, and camera capture are not implemented "
@@ -3958,8 +4112,215 @@ def rendering_diagnostics(
         "real_rendering_proven": False,
         "placeholder_visuals": True,
         "visual_artifact_provenance": "fake_protocol_placeholder_image",
+        "native_render_diagnostics": _isaac_native_render_diagnostics_unavailable(
+            runtime_mode="fake",
+            reason="CI fake mode does not launch Isaac Kit or mutate renderer settings",
+        ),
         "reason": "CI-safe fake mode writes deterministic placeholder images only.",
     }
+
+
+def _isaac_native_render_diagnostics_unavailable(
+    *,
+    runtime_mode: str,
+    reason: str,
+) -> dict[str, Any]:
+    groups = {
+        group: {
+            key: {
+                "status": "not_available",
+                "value": None,
+                "setting_path": "",
+                "candidate_paths": list(paths),
+            }
+            for key, paths in fields.items()
+        }
+        for group, fields in ISAAC_NATIVE_RENDER_SETTING_PATHS.items()
+    }
+    return {
+        "schema": ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA,
+        "status": "fake_protocol" if runtime_mode == "fake" else "settings_unavailable",
+        "source": "fake_protocol" if runtime_mode == "fake" else "isaac_kit_settings_unavailable",
+        "renderer_mode": "fake_isaac_protocol"
+        if runtime_mode == "fake"
+        else "isaac_runtime_unvalidated",
+        "capture_method": "not_attempted",
+        "view_kind": "not_captured",
+        "settings_api_available": False,
+        "available_setting_count": 0,
+        "missing_setting_count": _native_setting_candidate_count(),
+        "groups": groups,
+        "tone_mapping": groups["tone_mapping"],
+        "camera_exposure": groups["camera_exposure"],
+        "ocio": groups["ocio"],
+        "color_correction": groups["color_correction"],
+        "color_grading": groups["color_grading"],
+        "renderer": groups["renderer"],
+        "camera_prim_paths": [],
+        "render_product_paths": [],
+        "render_resolution": {},
+        "isaac_lab_isp_active": False,
+        "settings_mutation_attempted": False,
+        "default_render_settings_changed": False,
+        "post_render_comparison_profile": {
+            "applied": False,
+            "source": "not_a_native_renderer_setting",
+        },
+        "reason": reason,
+    }
+
+
+def _native_setting_candidate_count() -> int:
+    return sum(
+        len(fields)
+        for fields in ISAAC_NATIVE_RENDER_SETTING_PATHS.values()
+        if isinstance(fields, dict)
+    )
+
+
+def _isaac_native_render_diagnostics(
+    *,
+    renderer_mode: str,
+    capture_method: str,
+    view_kind: str,
+    render_resolution: dict[str, Any],
+    camera_prim_paths: list[str],
+    render_product_paths: list[str] | None = None,
+    isaac_lab_isp_active: bool = False,
+) -> dict[str, Any]:
+    settings = _isaac_settings_interface()
+    groups: dict[str, Any] = {}
+    available_count = 0
+    missing_count = 0
+    for group_name, fields in ISAAC_NATIVE_RENDER_SETTING_PATHS.items():
+        group: dict[str, Any] = {}
+        for field_name, candidate_paths in fields.items():
+            row = _isaac_setting_value(settings, candidate_paths)
+            group[field_name] = row
+            if row["status"] == "available":
+                available_count += 1
+            else:
+                missing_count += 1
+        groups[group_name] = group
+    status = "captured" if settings is not None else "settings_api_unavailable"
+    reason = (
+        "Native Isaac renderer/camera settings were read from carb.settings. "
+        "No renderer defaults were changed by this diagnostics capture."
+        if settings is not None
+        else (
+            "Isaac Kit settings API was not available to this worker; diagnostics "
+            "record the requested native axes without changing renderer defaults."
+        )
+    )
+    return {
+        "schema": ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA,
+        "status": status,
+        "source": "carb.settings" if settings is not None else "isaac_kit_settings_unavailable",
+        "renderer_mode": renderer_mode,
+        "capture_method": capture_method,
+        "view_kind": view_kind,
+        "settings_api_available": settings is not None,
+        "available_setting_count": available_count,
+        "missing_setting_count": missing_count,
+        "groups": groups,
+        "tone_mapping": groups["tone_mapping"],
+        "camera_exposure": groups["camera_exposure"],
+        "ocio": groups["ocio"],
+        "color_correction": groups["color_correction"],
+        "color_grading": groups["color_grading"],
+        "renderer": groups["renderer"],
+        "camera_prim_paths": _dedupe([path for path in camera_prim_paths if path]),
+        "render_product_paths": _dedupe(render_product_paths or []),
+        "render_resolution": dict(render_resolution),
+        "isaac_lab_isp_active": bool(isaac_lab_isp_active),
+        "settings_mutation_attempted": False,
+        "default_render_settings_changed": False,
+        "post_render_comparison_profile": {
+            "applied": False,
+            "source": "not_a_native_renderer_setting",
+        },
+        "reason": reason,
+    }
+
+
+def _isaac_settings_interface() -> Any | None:
+    try:
+        import carb.settings  # type: ignore[import-untyped]
+
+        return carb.settings.get_settings()
+    except Exception:
+        return None
+
+
+def _isaac_setting_value(settings: Any | None, candidate_paths: tuple[str, ...]) -> dict[str, Any]:
+    paths = list(candidate_paths)
+    if settings is None:
+        return {
+            "status": "not_available",
+            "value": None,
+            "setting_path": "",
+            "candidate_paths": paths,
+        }
+    for path in candidate_paths:
+        try:
+            value = settings.get(path)
+        except Exception:
+            continue
+        if value is None:
+            continue
+        return {
+            "status": "available",
+            "value": _json_safe_setting_value(value),
+            "setting_path": path,
+            "candidate_paths": paths,
+        }
+    return {
+        "status": "not_available",
+        "value": None,
+        "setting_path": "",
+        "candidate_paths": paths,
+    }
+
+
+def _json_safe_setting_value(value: Any) -> Any:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, list | tuple):
+        return [_json_safe_setting_value(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe_setting_value(item) for key, item in value.items()}
+    return str(value)
+
+
+def _camera_render_product_paths(camera: Any) -> list[str]:
+    paths: list[str] = []
+    for attr_name in (
+        "render_product_path",
+        "render_product_paths",
+        "_render_product_path",
+        "_render_product_paths",
+    ):
+        value = getattr(camera, attr_name, None)
+        paths.extend(_render_product_paths_from_value(value))
+    data = getattr(camera, "data", None)
+    if data is not None:
+        for attr_name in ("render_product_path", "render_product_paths"):
+            paths.extend(_render_product_paths_from_value(getattr(data, attr_name, None)))
+    return _dedupe(paths)
+
+
+def _render_product_paths_from_value(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, Path):
+        return [str(value)]
+    if isinstance(value, dict):
+        return [str(item) for item in value.values() if isinstance(item, (str, Path)) and str(item)]
+    if isinstance(value, list | tuple | set):
+        return [str(item) for item in value if isinstance(item, (str, Path)) and str(item)]
+    return []
 
 
 def scene_load_diagnostics(
@@ -5693,6 +6054,7 @@ def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str,
             output_path=str(args.output_path),
             visual_artifact_provenance=REAL_SMOKE_CAPTURE_METHOD,
             placeholder_visuals=False,
+            native_render_diagnostics=_native_render_diagnostics_from_state(state),
             snapshot_provenance={
                 "source": "isaac_runtime_rgb_capture",
                 "source_path": str(source_path),
@@ -5722,6 +6084,7 @@ def write_snapshot(args: argparse.Namespace, state: dict[str, Any]) -> dict[str,
         output_path=str(args.output_path),
         visual_artifact_provenance=state["runtime"]["visual_artifact_provenance"],
         placeholder_visuals=True,
+        native_render_diagnostics=_native_render_diagnostics_from_state(state),
         snapshot_provenance={
             "source": "placeholder_protocol_image",
             "output_path": str(args.output_path),
@@ -5823,6 +6186,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         lighting_profile=_dict(state.get("robot_view_lighting_profile")),
         lighting_diagnostics=_dict(state.get("robot_view_lighting_diagnostics")),
         camera_diagnostics=_dict(state.get("robot_view_camera_diagnostics")),
+        native_render_diagnostics=_native_render_diagnostics_from_state(state),
         focus=focus,
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
@@ -5889,6 +6253,7 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         lighting_diagnostics=capture.get("lighting_diagnostics") or {},
         color_profile=capture.get("color_profile") or {},
         color_management=capture.get("color_management") or {},
+        native_render_diagnostics=capture.get("native_render_diagnostics") or {},
         lens=capture.get("lens") or {},
         derived_lens=capture.get("derived_lens") or {},
         view_variant=view_variant,
@@ -6198,10 +6563,12 @@ def _real_semantic_pose_robot_view_images(
         "lighting_diagnostics": _dict(capture.get("lighting_diagnostics")),
         "color_profile": _dict(capture.get("color_profile")),
         "color_management": _dict(capture.get("color_management")),
+        "native_render_diagnostics": _dict(capture.get("native_render_diagnostics")),
     }
     state["robot_view_color_profile"] = _dict(capture.get("color_profile"))
     state["robot_view_color_management"] = _dict(capture.get("color_management"))
     state["robot_view_camera_diagnostics"] = _dict(capture.get("camera_diagnostics"))
+    state["native_render_diagnostics"] = _dict(capture.get("native_render_diagnostics"))
     state["robot_view_lighting_profile"] = _dict(capture.get("lighting_profile"))
     state["robot_view_lighting_diagnostics"] = _dict(capture.get("lighting_diagnostics"))
     state.pop("canonical_robot_view_camera_control_request", None)
@@ -6352,6 +6719,26 @@ def _real_robot_view_images(state: dict[str, Any]) -> dict[str, str]:
     if _has_required_robot_view_images(images):
         return images
     return {}
+
+
+def _native_render_diagnostics_from_state(state: dict[str, Any]) -> dict[str, Any]:
+    diagnostics = _dict(state.get("native_render_diagnostics"))
+    if diagnostics:
+        return diagnostics
+    diagnostics = _dict(
+        _dict(state.get("robot_view_camera_diagnostics")).get("native_render_diagnostics")
+    )
+    if diagnostics:
+        return diagnostics
+    diagnostics = _dict(
+        _dict(_dict(state.get("runtime")).get("rendering")).get("native_render_diagnostics")
+    )
+    if diagnostics:
+        return diagnostics
+    return _isaac_native_render_diagnostics_unavailable(
+        runtime_mode=str(_dict(state.get("runtime")).get("runtime_mode") or "fake"),
+        reason="worker state did not contain native render diagnostics",
+    )
 
 
 def _real_smoke_robot_view_images(real_smoke: dict[str, Any] | None) -> dict[str, str]:

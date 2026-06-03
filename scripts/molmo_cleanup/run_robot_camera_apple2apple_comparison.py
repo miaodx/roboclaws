@@ -38,6 +38,7 @@ ISAAC_LANE_ID = "isaaclab-rby1m-usd"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
 OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
 OBJECT_VISUAL_STATE_CATEGORIES = {"box"}
+ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -780,6 +781,11 @@ def _attach_state_artifact_summaries(
         isaac_lane["scene_binding_summary"] = _scene_binding_summary(
             _dict(isaac_state.get("scene_binding_diagnostics"))
         )
+        native_render = _native_isaac_render_diagnostics_from_state(isaac_state)
+        if native_render:
+            isaac_lane["native_render_diagnostics"] = _compact_native_isaac_render_diagnostics(
+                native_render
+            )
     artifacts = manifest.setdefault("artifacts", {})
     if isinstance(artifacts, dict):
         artifacts["mujoco_state"] = _relpath(output_dir / "mujoco_state.json", output_dir)
@@ -852,6 +858,14 @@ def _attach_render_contract_diagnostics(
     )
     manifest["render_domain_checks"] = domain_checks
     manifest.setdefault("summary", {})["render_domain_checks"] = domain_checks
+    native_render_diagnostics = _native_isaac_render_diagnostics_summary(
+        isaac_state=isaac_state,
+        locations=successful_locations,
+    )
+    manifest["native_isaac_render_diagnostics"] = native_render_diagnostics
+    manifest.setdefault("summary", {})["native_isaac_render_diagnostics"] = (
+        _compact_native_isaac_render_diagnostics(native_render_diagnostics)
+    )
     object_audit = _object_parity_audit(
         mujoco_state=mujoco_state,
         isaac_state=isaac_state,
@@ -867,6 +881,7 @@ def _attach_render_contract_diagnostics(
         object_audit=object_audit,
         render_domain_checks=domain_checks,
         residual_triage=_dict(manifest.get("summary")).get("residual_triage"),
+        native_render_diagnostics=native_render_diagnostics,
     )
     manifest["object_render_parity_diagnostics"] = gate_diagnostics
     manifest.setdefault("summary", {})["object_render_parity_diagnostics"] = (
@@ -886,6 +901,159 @@ def _scene_binding_summary(scene_binding_diagnostics: dict[str, Any]) -> dict[st
         "selected_target_receptacle_bound_count": scene_binding_diagnostics.get(
             "selected_target_receptacle_bound_count"
         ),
+    }
+
+
+def _native_isaac_render_diagnostics_from_state(isaac_state: dict[str, Any]) -> dict[str, Any]:
+    candidates = [
+        _dict(isaac_state.get("native_render_diagnostics")),
+        _dict(
+            _dict(isaac_state.get("robot_view_camera_diagnostics")).get("native_render_diagnostics")
+        ),
+        _dict(
+            _dict(_dict(isaac_state.get("runtime")).get("rendering")).get(
+                "native_render_diagnostics"
+            )
+        ),
+        _dict(_dict(isaac_state.get("real_runtime_smoke")).get("native_render_diagnostics")),
+    ]
+    for candidate in candidates:
+        if candidate.get("schema") == ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA:
+            return candidate
+    for candidate in candidates:
+        if candidate:
+            return candidate
+    return {}
+
+
+def _native_isaac_render_diagnostics_summary(
+    *,
+    isaac_state: dict[str, Any],
+    locations: list[dict[str, Any]],
+) -> dict[str, Any]:
+    state_diagnostics = _native_isaac_render_diagnostics_from_state(isaac_state)
+    location_diagnostics = [
+        _dict(
+            _dict(_dict(item.get("camera_diagnostics")).get("isaac")).get(
+                "native_render_diagnostics"
+            )
+        )
+        for item in locations
+        if isinstance(item, dict)
+    ]
+    location_diagnostics = [
+        item
+        for item in location_diagnostics
+        if item.get("schema") == ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA
+    ]
+    primary = state_diagnostics or (location_diagnostics[0] if location_diagnostics else {})
+    if not primary:
+        status = "missing_native_diagnostics"
+        next_action = (
+            "Record Isaac native RTX/camera settings before treating brightness residuals "
+            "as renderer-domain evidence."
+        )
+    elif primary.get("status") == "fake_protocol":
+        status = "fake_protocol_schema_present"
+        next_action = (
+            "CI fake mode proves the diagnostics schema only; run a local Isaac capture "
+            "to read real native RTX/camera settings."
+        )
+    elif primary.get("settings_api_available") is False:
+        status = "native_settings_api_unavailable"
+        next_action = (
+            "The worker did not read Kit settings in this capture. Confirm Isaac exposes "
+            "carb.settings before promoting a native exposure/tone preset."
+        )
+    else:
+        status = "native_settings_recorded"
+        next_action = (
+            "Native Isaac settings are recorded. Compare held-out FPV and chase residuals "
+            "before changing any default exposure or tone setting."
+        )
+    return {
+        "schema": "robot_camera_native_isaac_render_diagnostics_v1",
+        "status": status,
+        "native_settings_recorded": status == "native_settings_recorded",
+        "primary": primary,
+        "location_diagnostic_count": len(location_diagnostics),
+        "location_status_counts": _status_counts(
+            item.get("status") for item in location_diagnostics
+        ),
+        "renderer_mode": primary.get("renderer_mode"),
+        "capture_method": primary.get("capture_method"),
+        "view_kind": primary.get("view_kind"),
+        "settings_api_available": primary.get("settings_api_available"),
+        "available_setting_count": primary.get("available_setting_count"),
+        "missing_setting_count": primary.get("missing_setting_count"),
+        "tone_mapping": _compact_native_setting_group(_dict(primary.get("tone_mapping"))),
+        "camera_exposure": _compact_native_setting_group(_dict(primary.get("camera_exposure"))),
+        "ocio": _compact_native_setting_group(_dict(primary.get("ocio"))),
+        "color_correction": _compact_native_setting_group(_dict(primary.get("color_correction"))),
+        "color_grading": _compact_native_setting_group(_dict(primary.get("color_grading"))),
+        "renderer": _compact_native_setting_group(_dict(primary.get("renderer"))),
+        "camera_prim_paths": primary.get("camera_prim_paths") or [],
+        "render_product_paths": primary.get("render_product_paths") or [],
+        "render_resolution": primary.get("render_resolution") or {},
+        "isaac_lab_isp_active": primary.get("isaac_lab_isp_active"),
+        "settings_mutation_attempted": primary.get("settings_mutation_attempted") is True,
+        "default_render_settings_changed": primary.get("default_render_settings_changed") is True,
+        "post_render_comparison_profile": primary.get("post_render_comparison_profile") or {},
+        "recommended_next_action": next_action,
+        "interpretation": (
+            "These rows are native Isaac/RTX and camera diagnostics read from the Isaac "
+            "capture path. They are separate from Roboclaws report-side RGB gain or "
+            "color-profile comparison controls and do not change cleanup render defaults."
+        ),
+    }
+
+
+def _compact_native_setting_group(group: dict[str, Any]) -> dict[str, Any]:
+    compact: dict[str, Any] = {}
+    for key, raw in group.items():
+        row = _dict(raw)
+        compact[str(key)] = {
+            "status": row.get("status"),
+            "value": row.get("value"),
+            "setting_path": row.get("setting_path"),
+        }
+    return compact
+
+
+def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
+    primary = _dict(diagnostics.get("primary")) or diagnostics
+    return {
+        "schema": diagnostics.get("schema") or primary.get("schema"),
+        "status": diagnostics.get("status") or primary.get("status"),
+        "native_settings_recorded": diagnostics.get("native_settings_recorded"),
+        "renderer_mode": diagnostics.get("renderer_mode") or primary.get("renderer_mode"),
+        "capture_method": diagnostics.get("capture_method") or primary.get("capture_method"),
+        "view_kind": diagnostics.get("view_kind") or primary.get("view_kind"),
+        "settings_api_available": diagnostics.get("settings_api_available")
+        if "settings_api_available" in diagnostics
+        else primary.get("settings_api_available"),
+        "available_setting_count": diagnostics.get("available_setting_count")
+        if "available_setting_count" in diagnostics
+        else primary.get("available_setting_count"),
+        "missing_setting_count": diagnostics.get("missing_setting_count")
+        if "missing_setting_count" in diagnostics
+        else primary.get("missing_setting_count"),
+        "camera_prim_paths": diagnostics.get("camera_prim_paths")
+        or primary.get("camera_prim_paths")
+        or [],
+        "render_product_paths": diagnostics.get("render_product_paths")
+        or primary.get("render_product_paths")
+        or [],
+        "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active")
+        if "isaac_lab_isp_active" in diagnostics
+        else primary.get("isaac_lab_isp_active"),
+        "default_render_settings_changed": diagnostics.get("default_render_settings_changed")
+        if "default_render_settings_changed" in diagnostics
+        else primary.get("default_render_settings_changed"),
+        "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile")
+        or primary.get("post_render_comparison_profile")
+        or {},
+        "recommended_next_action": diagnostics.get("recommended_next_action"),
     }
 
 
@@ -1019,6 +1187,7 @@ def _object_render_parity_diagnostics(
     object_audit: dict[str, Any],
     render_domain_checks: dict[str, Any],
     residual_triage: dict[str, Any] | None,
+    native_render_diagnostics: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     items = _list_dicts(object_audit.get("items"))
     item_records = [_object_gate_record(item) for item in items]
@@ -1030,6 +1199,7 @@ def _object_render_parity_diagnostics(
         comparable_records=comparable,
         render_domain_checks=render_domain_checks,
         residual_triage=residual_triage or {},
+        native_render_diagnostics=native_render_diagnostics or {},
     )
     object_gate_status = (
         "no_object_records"
@@ -1096,6 +1266,7 @@ def _compact_object_render_parity_diagnostics(diagnostics: dict[str, Any]) -> di
         "render_gate_status": render_gate.get("status"),
         "render_gate_residual_status": render_gate.get("residual_status"),
         "render_gate_render_domain_status": render_gate.get("render_domain_status"),
+        "render_gate_native_isaac_status": render_gate.get("native_isaac_status"),
         "recommended_next_action": diagnostics.get("recommended_next_action"),
     }
 
@@ -1193,9 +1364,11 @@ def _render_gate_diagnostics(
     comparable_records: list[dict[str, Any]],
     render_domain_checks: dict[str, Any],
     residual_triage: dict[str, Any],
+    native_render_diagnostics: dict[str, Any],
 ) -> dict[str, Any]:
     residual_status = str(residual_triage.get("status") or "")
     render_domain_status = str(render_domain_checks.get("status") or "")
+    native_status = str(native_render_diagnostics.get("status") or "")
     if not comparable_records:
         status = "blocked_by_object_gate"
         next_action = "No comparable object rows are available for render-domain residual claims."
@@ -1222,6 +1395,12 @@ def _render_gate_diagnostics(
         "comparable_object_count": len(comparable_records),
         "render_domain_status": render_domain_status,
         "residual_status": residual_status,
+        "native_isaac_status": native_status,
+        "native_isaac_render_diagnostics": _compact_native_isaac_render_diagnostics(
+            native_render_diagnostics
+        )
+        if native_render_diagnostics
+        else {},
         "residual_triage": residual_triage,
         "render_domain_check_status_counts": render_domain_checks.get("check_status_counts") or {},
         "recommended_next_action": next_action,
@@ -3768,11 +3947,83 @@ def _render_report(manifest: dict[str, Any]) -> str:
         + "</p><pre>"
         + html.escape(json.dumps(manifest.get("summary", {}), indent=2, sort_keys=True))
         + "</pre>"
+        + _render_native_isaac_render_diagnostics(manifest)
         + _render_object_render_parity_diagnostics(manifest)
         + _render_object_parity_audit(manifest)
         + "</header>"
         + "".join(rows)
         + "</body></html>"
+    )
+
+
+def _render_native_isaac_render_diagnostics(manifest: dict[str, Any]) -> str:
+    diagnostics = _dict(manifest.get("native_isaac_render_diagnostics")) or _dict(
+        _dict(manifest.get("summary")).get("native_isaac_render_diagnostics")
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for group_name in (
+        "tone_mapping",
+        "camera_exposure",
+        "ocio",
+        "color_correction",
+        "color_grading",
+        "renderer",
+    ):
+        group = _dict(diagnostics.get(group_name))
+        for field_name, raw in group.items():
+            row = _dict(raw)
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(group_name)}</td>"
+                f"<td>{html.escape(str(field_name))}</td>"
+                f"<td>{html.escape(str(row.get('status') or ''))}</td>"
+                f"<td>{html.escape(str(row.get('value')))}</td>"
+                f"<td>{html.escape(str(row.get('setting_path') or ''))}</td>"
+                "</tr>"
+            )
+    table = (
+        "<table><thead><tr><th>Group</th><th>Setting</th><th>Status</th>"
+        "<th>Value</th><th>Path</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        if rows
+        else "<p>No native setting rows were recorded.</p>"
+    )
+    return (
+        "<h2>Native Isaac Render Diagnostics</h2>"
+        "<p>Status: <code>"
+        + html.escape(str(diagnostics.get("status") or ""))
+        + "</code>; renderer <code>"
+        + html.escape(str(diagnostics.get("renderer_mode") or ""))
+        + "</code>; capture <code>"
+        + html.escape(str(diagnostics.get("capture_method") or ""))
+        + "</code>. Settings API available: <code>"
+        + html.escape(str(diagnostics.get("settings_api_available")))
+        + "</code>. Default render settings changed: <code>"
+        + html.escape(str(diagnostics.get("default_render_settings_changed")))
+        + "</code>.</p><p>"
+        + html.escape(str(diagnostics.get("interpretation") or ""))
+        + "</p><p>"
+        + html.escape(str(diagnostics.get("recommended_next_action") or ""))
+        + "</p><pre>"
+        + html.escape(
+            json.dumps(
+                {
+                    "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
+                    "render_product_paths": diagnostics.get("render_product_paths") or [],
+                    "render_resolution": diagnostics.get("render_resolution") or {},
+                    "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
+                    "post_render_comparison_profile": diagnostics.get(
+                        "post_render_comparison_profile"
+                    )
+                    or {},
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        + "</pre>"
+        + table
     )
 
 
