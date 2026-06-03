@@ -270,6 +270,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "object_parity_status": object_parity.get("status"),
         "object_parity_high_priority_gap_count": object_parity.get("high_priority_gap_count"),
         "object_parity_item_count": object_parity.get("item_count"),
+        "object_visual_parity_audit": _compact_object_visual_parity_audit(object_parity),
         "object_render_gate_status": object_render.get("status"),
         "object_gate_status": object_render.get("object_gate_status"),
         "object_gate_failure_count": object_render.get("object_gate_failure_count"),
@@ -289,6 +290,27 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
             "dropped_unbound_target_count": target_selection.get("dropped_unbound_target_count"),
         },
         "render_domain_checks": _render_checks_by_id(render_checks),
+    }
+
+
+def _compact_object_visual_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
+    if not audit:
+        return {}
+    return {
+        "schema": audit.get("schema"),
+        "status": audit.get("status"),
+        "item_count": audit.get("item_count"),
+        "object_count": audit.get("object_count"),
+        "receptacle_count": audit.get("receptacle_count"),
+        "high_priority_gap_count": audit.get("high_priority_gap_count"),
+        "binding_status_counts": audit.get("binding_status_counts") or {},
+        "category_status_counts": audit.get("category_status_counts") or {},
+        "pose_status_counts": audit.get("pose_status_counts") or {},
+        "support_status_counts": audit.get("support_status_counts") or {},
+        "state_status_counts": audit.get("state_status_counts") or {},
+        "render_contract_status_counts": audit.get("render_contract_status_counts") or {},
+        "category_status_summary": _list_dicts(audit.get("category_status_summary")),
+        "recommended_next_action": audit.get("recommended_next_action"),
     }
 
 
@@ -2217,6 +2239,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
     report_side = _dict(manifest.get("report_side_visual_parity"))
     default_rendering = _dict(manifest.get("default_rendering_visual_parity"))
     visual_samples = _render_visual_samples(_list_dicts(manifest.get("visual_samples")))
+    object_audit_rows = _render_object_visual_parity_audit_rows(manifest)
     four_check_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
@@ -2333,9 +2356,47 @@ def _render_report(manifest: dict[str, Any]) -> str:
   <table><thead>{baseline_header}</thead><tbody>{baseline_rows}</tbody></table>
   <h2>Probes</h2>
   <table><thead>{probe_header}</thead><tbody>{probe_rows}</tbody></table>
+  <h2>Object Visual Parity Audit</h2>
+  {object_audit_rows}
 </body>
 </html>
 """
+
+
+def _render_object_visual_parity_audit_rows(manifest: dict[str, Any]) -> str:
+    rows = []
+    sources = [("baseline", item) for item in _list_dicts(manifest.get("baselines"))]
+    sources.extend(("probe", item) for item in _list_dicts(manifest.get("probes")))
+    for source_kind, summary in sources:
+        audit = _dict(summary.get("object_visual_parity_audit"))
+        for category in _list_dicts(audit.get("category_status_summary")):
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(source_kind)}</td>"
+                f"<td>{html.escape(str(summary.get('label') or summary.get('path') or ''))}</td>"
+                f"<td>{html.escape(str(summary.get('scene_signature') or ''))}</td>"
+                f"<td>{html.escape(str(audit.get('status') or ''))}</td>"
+                f"<td>{html.escape(str(category.get('category') or ''))}</td>"
+                f"<td>{html.escape(str(category.get('item_count') or 0))}</td>"
+                + _json_counts_cell(category, "category_status_counts")
+                + _json_counts_cell(category, "object_gate_status_counts")
+                + _json_counts_cell(category, "rgb_view_evidence_status_counts")
+                + _json_counts_cell(category, "render_contract_status_counts")
+                + "</tr>"
+            )
+    if not rows:
+        return "<p class='muted'>No object visual parity category summaries were recorded.</p>"
+    return (
+        "<table><thead><tr><th>Source</th><th>Manifest</th><th>Scene</th>"
+        "<th>Audit Status</th><th>Category</th><th>Items</th><th>Category Status</th>"
+        "<th>Object Gate</th><th>RGB Evidence</th><th>Render</th></tr></thead><tbody>"
+        + "\n".join(rows)
+        + "</tbody></table>"
+    )
+
+
+def _json_counts_cell(item: dict[str, Any], key: str) -> str:
+    return "<td>" + html.escape(json.dumps(item.get(key) or {}, sort_keys=True)) + "</td>"
 
 
 def _render_visual_samples(samples: list[dict[str, Any]]) -> str:

@@ -467,9 +467,33 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
         chase=51.4,
         location_count=4,
         object_visual_parity_audit={
+            "schema": "robot_camera_object_parity_audit_v1",
             "status": "object_parity_gaps_detected",
             "item_count": 29,
+            "object_count": 20,
+            "receptacle_count": 9,
             "high_priority_gap_count": 6,
+            "category_status_summary": [
+                {
+                    "category": "box",
+                    "item_count": 2,
+                    "category_status_counts": {
+                        "category_delta": 1,
+                        "matched_category": 1,
+                    },
+                    "object_gate_status_counts": {
+                        "object_gate_failed": 1,
+                        "object_gate_passed": 1,
+                    },
+                    "rgb_view_evidence_status_counts": {
+                        "nonblank_in_both_backends": 2,
+                    },
+                    "render_contract_status_counts": {
+                        "material_texture_delta": 1,
+                        "render_contract_aligned": 1,
+                    },
+                }
+            ],
         },
         object_render_parity_diagnostics={
             "status": "object_gate_failures_detected",
@@ -493,6 +517,15 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
     baseline_summary = manifest["baselines"][0]
     assert baseline_summary["object_parity_status"] == "object_parity_gaps_detected"
     assert baseline_summary["object_parity_high_priority_gap_count"] == 6
+    audit = baseline_summary["object_visual_parity_audit"]
+    assert audit["schema"] == "robot_camera_object_parity_audit_v1"
+    assert audit["category_status_summary"][0]["category_status_counts"] == {
+        "category_delta": 1,
+        "matched_category": 1,
+    }
+    assert audit["category_status_summary"][0]["rgb_view_evidence_status_counts"] == {
+        "nonblank_in_both_backends": 2,
+    }
     assert baseline_summary["object_render_gate_status"] == "object_gate_failures_detected"
     assert baseline_summary["object_gate_failure_count"] == 6
     assert baseline_summary["render_gate_status"] == "render_domain_residual"
@@ -500,7 +533,12 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
     assert "object_parity_gaps_detected" in report_html
     assert "<th>Object Gaps</th>" in report_html
     assert "<th>Object/Render Gate</th>" in report_html
+    assert "<h2>Object Visual Parity Audit</h2>" in report_html
+    assert "<th>Category Status</th>" in report_html
+    assert "<th>RGB Evidence</th>" in report_html
     assert "object_gate_failures_detected" in report_html
+    assert "category_delta" in report_html
+    assert "nonblank_in_both_backends" in report_html
 
 
 def test_visual_parity_summary_carries_native_isaac_render_diagnostics(
