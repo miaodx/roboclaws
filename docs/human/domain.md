@@ -48,6 +48,27 @@ A static operator-prepared map package containing navigation geometry, frame
 metadata, fixture semantics, and inspection waypoints.
 _Avoid_: Live SLAM result, hidden target map
 
+**Runtime Metric Map**:
+A public run artifact that enriches the Metric Map with observed-object priors,
+public semantic anchors, map-update candidates, and provenance without mutating
+the source navigation map.
+_Avoid_: Private target map, source map rewrite
+
+**Actionable Semantic Map Snapshot**:
+The canonical downstream semantic-map artifact. Online `semantic-map-build`
+Runtime Metric Map output and offline Agibot `navigation_memory.json`
+conversion both produce this shape: source map reference, runtime map payload,
+public anchors, materialized inspection waypoints, materialized fixture or
+receptacle candidates, actionability status, and evidence.
+_Avoid_: Agibot-only cleanup input, private scoring artifact
+
+**Public Semantic Anchor**:
+A public semantic place, fixture, room area, landmark, or observed prior with
+provenance and actionability status. Static fixtures and receptacles may become
+tool-consumable targets; movable-object priors remain `needs_confirm` until
+current-run evidence observes them again.
+_Avoid_: global object inventory, scorer target
+
 **Inspection Waypoint**:
 A public Metric Map pose where the Cleanup Agent can observe part of a room
 during a cleanup sweep.
@@ -133,8 +154,15 @@ _Avoid_: assuming object assets imply usable cached grasps
   perception data.
 - A **Prebuilt Robot Map Bundle** may back the public **Metric Map** and
   fixture semantics before runtime observations begin.
+- A **Runtime Metric Map** may be wrapped as an **Actionable Semantic Map
+  Snapshot** for downstream cleanup or open household tasks.
+- Offline Agibot `navigation_memory.json` conversion produces an
+  **Actionable Semantic Map Snapshot** at the map-artifact boundary; cleanup
+  should consume the canonical snapshot, not a special Agibot-only branch.
 - Small movable objects should be discovered through **Observed Object
   Handles**, not pre-run global object IDs.
+- Prior movable objects in an **Actionable Semantic Map Snapshot** are
+  non-actionable until current-run evidence confirms them.
 - Reports must separate **Agent View** from **Private Evaluation**.
 - `api_semantic` cleanup artifacts can be useful evidence, but they must not
   satisfy **Planner-Backed Manipulation Proof**.

@@ -10,6 +10,7 @@ from roboclaws.household.profiles import (
     SEMANTIC_REPORT,
     SMOKE_PROFILE,
     WORLD_LABELS_PROFILE,
+    WORLD_LABELS_SANITIZED_PROFILE,
     cleanup_profile,
     cleanup_profile_metadata,
     cleanup_profile_metadata_for_run,
@@ -19,7 +20,9 @@ from roboclaws.household.profiles import (
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     RAW_FPV_ONLY_MODE,
+    SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY,
     VISIBLE_OBJECT_DETECTIONS_MODE,
+    WORLD_LABELS_DETECTION_POLICY,
 )
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 
@@ -28,6 +31,7 @@ def test_cleanup_profile_registry_contains_public_profiles_only() -> None:
     assert cleanup_profile_names() == (
         SMOKE_PROFILE,
         WORLD_LABELS_PROFILE,
+        WORLD_LABELS_SANITIZED_PROFILE,
         CAMERA_RAW_PROFILE,
         CAMERA_LABELS_PROFILE,
     )
@@ -42,6 +46,12 @@ def test_cleanup_profile_registry_contains_public_profiles_only() -> None:
     [
         (SMOKE_PROFILE, "world_labels", VISIBLE_OBJECT_DETECTIONS_MODE, "semantic_report"),
         (WORLD_LABELS_PROFILE, "world_labels", VISIBLE_OBJECT_DETECTIONS_MODE, ROBOT_VIEW_REPORT),
+        (
+            WORLD_LABELS_SANITIZED_PROFILE,
+            "sanitized_world_labels",
+            VISIBLE_OBJECT_DETECTIONS_MODE,
+            ROBOT_VIEW_REPORT,
+        ),
         (CAMERA_RAW_PROFILE, "raw_camera", RAW_FPV_ONLY_MODE, ROBOT_VIEW_REPORT),
         (CAMERA_LABELS_PROFILE, "camera_labels", CAMERA_MODEL_POLICY_MODE, ROBOT_VIEW_REPORT),
     ],
@@ -60,12 +70,25 @@ def test_cleanup_profile_expands_to_contract_metadata(
     assert metadata["report"] == report
 
 
+def test_world_labels_sanitized_profile_is_no_destination_detector_ablation() -> None:
+    metadata = cleanup_profile_metadata(WORLD_LABELS_SANITIZED_PROFILE)
+
+    validate_cleanup_profile_metadata(metadata, expected_profile=WORLD_LABELS_SANITIZED_PROFILE)
+    assert metadata["backend"] == MOLMOSPACES_SUBPROCESS_BACKEND
+    assert metadata["agent_input"] == "sanitized_world_labels"
+    assert metadata["perception_mode"] == VISIBLE_OBJECT_DETECTIONS_MODE
+    assert metadata["detection_exposure_policy"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+    assert "destination" in metadata["summary"].lower()
+    assert "withheld" in metadata["model_input_note"].lower()
+
+
 def test_world_labels_lane_is_not_image_reasoning_or_map_mode() -> None:
     metadata = cleanup_profile_metadata(WORLD_LABELS_PROFILE)
 
     assert metadata["backend"] == MOLMOSPACES_SUBPROCESS_BACKEND
     assert metadata["agent_input"] == "world_labels"
     assert metadata["input_provenance"] == "simulator_state"
+    assert metadata["detection_exposure_policy"] == WORLD_LABELS_DETECTION_POLICY
     assert "input lane" in metadata["summary"].lower()
     assert "not model input for this lane" in metadata["model_input_note"]
     assert "map_mode" in metadata["model_input_note"]

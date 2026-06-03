@@ -15,6 +15,8 @@ from roboclaws.household.realworld_contract import (
     REALWORLD_CONTRACT,
     RICH_MAP_MODE,
     RUNTIME_METRIC_MAP_SCHEMA,
+    SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY,
+    SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE,
     SIMULATED_CAMERA_MODEL_PROVENANCE,
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
     VISUAL_GROUNDING_CATEGORY_HINTS,
@@ -76,6 +78,76 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
     _assert_no_forbidden_keys(metric_map)
     _assert_no_forbidden_keys(fixture_hints)
     _assert_no_forbidden_keys(observation)
+
+
+def test_world_labels_sanitized_observations_omit_destination_oracle_fields() -> None:
+    rich_contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    rich_observation = _first_non_empty_observation(rich_contract)
+    rich_detection = rich_observation["visible_object_detections"][0]
+
+    sanitized_contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+    )
+    sanitized_observation = _first_non_empty_observation(sanitized_contract)
+    detection = sanitized_observation["visible_object_detections"][0]
+
+    assert "candidate_fixture_id" in rich_detection
+    assert "recommended_tool" in rich_detection
+    assert sanitized_observation["perception_source"] == (
+        SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    )
+    assert sanitized_observation["detection_exposure_policy"] == (
+        SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+    )
+    assert detection["object_id"].startswith("observed_")
+    assert detection["category"]
+    assert detection["image_region"]["type"] == "bbox"
+    assert detection["source_observation_id"]
+    assert detection["producer_type"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    assert detection["support_estimate"]
+    assert "cleanup_recommended" not in detection
+    assert detection["destination_policy_status"] == "policy_required"
+    assert detection["destination_policy"]["private_truth_included"] is False
+    assert detection["destination_policy"]["preferred_fixture_categories"]
+    assert "candidate_fixture_id" not in detection["destination_policy"]
+    assert "candidate_fixture_id" not in detection
+    assert "recommended_tool" not in detection
+    _assert_no_forbidden_keys(sanitized_observation)
+
+
+def test_world_labels_sanitized_destination_policy_is_public_category_guidance() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+    )
+
+    policies_by_category = {}
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+        for detection in observation["visible_object_detections"]:
+            policies_by_category.setdefault(
+                str(detection["category"]).lower(),
+                detection["destination_policy"],
+            )
+
+    food_policy = policies_by_category["food"]
+    dish_policy = policies_by_category["dish"]
+    book_policy = policies_by_category["book"]
+
+    assert food_policy["source"] == "public_category_fixture_affordance"
+    assert food_policy["preferred_fixture_categories"] == ["fridge", "refrigerator"]
+    assert food_policy["placement_tool"] == "place_inside"
+    assert food_policy["placement_tool_by_fixture_category"] == {
+        "fridge": "place_inside",
+        "refrigerator": "place_inside",
+    }
+    assert food_policy["private_truth_included"] is False
+    assert dish_policy["preferred_fixture_categories"] == ["sink", "countertop"]
+    assert dish_policy["placement_tool"] == "place"
+    assert book_policy["placement_tool_by_fixture_category"]["shelvingunit"] == "place_inside"
+    assert book_policy["placement_tool_by_fixture_category"]["desk"] == "place"
 
 
 def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> None:
@@ -600,6 +672,39 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
     _assert_no_forbidden_keys(runtime_map)
 
 
+def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_destination() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+    )
+
+    _first_non_empty_observation(contract)
+    agent_view = contract.agent_view_payload()
+    runtime_map = agent_view["runtime_metric_map"]
+    observed = runtime_map["observed_objects"][0]
+    worklist_item = agent_view["cleanup_worklist"]["objects"][0]
+
+    assert agent_view["detection_exposure_policy"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
+    assert observed["producer_type"] == SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    assert observed["source_observation_id"]
+    assert observed["image_region"]["type"] == "bbox"
+    assert observed["grounding_status"] == "resolved"
+    assert observed["actionability"] == "pending"
+    assert observed["candidate_fixture_id"] == ""
+    assert observed["candidate_source"] == "policy_required_destination_selection"
+    assert observed["destination_policy_status"] == "policy_required"
+    assert observed["destination_policy"]["preferred_fixture_categories"]
+    assert observed["destination_policy"]["private_truth_included"] is False
+    assert "cleanup_recommended" not in worklist_item
+    assert worklist_item["candidate_fixture_id"] == ""
+    assert worklist_item["destination_policy_status"] == "policy_required"
+    assert worklist_item["destination_policy"] == observed["destination_policy"]
+    assert runtime_map["producer_summary"]["producer_types"][
+        SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+    ] >= 1
+    _assert_no_forbidden_keys(runtime_map)
+
+
 def test_runtime_metric_map_snapshot_priors_require_current_confirmation() -> None:
     sweep_contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -899,6 +1004,73 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
     assert recommended["object_id"] in done["pending_observed_handles"]
     assert done["pending_cleanup_candidates"][0]["candidate_fixture_id"]
     assert "target_receptacle_id" not in str(done)
+    _assert_no_forbidden_keys(done)
+
+
+def test_world_labels_sanitized_done_rejects_held_policy_required_object() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    detection = _first_detection_by_category(contract, "food")
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        if waypoint["visited"]:
+            continue
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    done = contract.done("finished while holding")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    assert done["required_tool"] == "navigate_to_receptacle"
+    pending = next(
+        item
+        for item in done["pending_cleanup_candidates"]
+        if item["object_id"] == detection["object_id"]
+    )
+    assert pending["object_id"] == detection["object_id"]
+    assert pending["state"] == "held"
+    assert pending["candidate_fixture_id"] == ""
+    assert pending["destination_policy"]["preferred_fixture_categories"] == [
+        "fridge",
+        "refrigerator",
+    ]
+    assert any(
+        option["candidate_fixture_category"] == "fridge"
+        and option["recommended_tool"] == "place_inside"
+        and option["candidate_fixture_id"].startswith("anchor_fixture_")
+        for option in pending["destination_options"]
+    )
+    _assert_no_forbidden_keys(done)
+
+
+def test_world_labels_sanitized_done_rejects_policy_required_pending_objects() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        cleanup_profile="world-labels-sanitized",
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    observation = _first_non_empty_observation(contract)
+    detection = observation["visible_object_detections"][0]
+
+    done = contract.done("finished without cleaning sanitized detections")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    assert done["required_tool"] == "navigate_to_object"
+    assert detection["object_id"] in done["pending_observed_handles"]
+    pending = next(
+        item
+        for item in done["pending_cleanup_candidates"]
+        if item["object_id"] == detection["object_id"]
+    )
+    assert pending["destination_policy_status"] == "policy_required"
+    assert pending["candidate_fixture_id"] == ""
     _assert_no_forbidden_keys(done)
 
 

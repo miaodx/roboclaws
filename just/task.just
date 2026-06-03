@@ -15,7 +15,7 @@
 #   minimal - cheaper semantic evidence for non-Molmo agent iteration
 #
 # Household cleanup input/evidence lanes:
-#   smoke | world-labels | camera-raw | camera-labels
+#   smoke | world-labels | world-labels-sanitized | camera-raw | camera-labels
 
 set working-directory := '..'
 set positional-arguments

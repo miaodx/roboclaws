@@ -146,10 +146,10 @@ run task driver mode="" *overrides:
     if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
       profile="${mode:-$(get profile world-labels)}"
       case "$profile" in
-        smoke|world-labels|camera-raw|camera-labels)
+        smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)
           ;;
         *)
-          echo "error: unsupported household cleanup lane '$profile' (expected smoke|world-labels|camera-raw|camera-labels)" >&2
+          echo "error: unsupported household cleanup lane '$profile' (expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)" >&2
           exit 1
           ;;
       esac
@@ -334,9 +334,15 @@ run task driver mode="" *overrides:
         if [[ "$backend" == "agibot_molmospaces_sim" && ! -v "kv[seeds]" && ! -v "kv[seed]" ]]; then
           seeds="7"
         fi
-        if [[ "$task" == "semantic-map-build" && "$driver" == "codex" && "$backend" != "agibot_gdk" ]]; then
-          echo "error: semantic-map-build codex currently requires backend=agibot_gdk" >&2
-          exit 1
+        if [[ "$task" == "semantic-map-build" && "$driver" == "codex" ]]; then
+          case "$backend" in
+            agibot_gdk|auto|molmospaces_subprocess|isaaclab_subprocess)
+              ;;
+            *)
+              echo "error: semantic-map-build codex unsupported backend '$backend' (expected molmospaces_subprocess|isaaclab_subprocess|agibot_gdk)" >&2
+              exit 1
+              ;;
+          esac
         fi
         if [[ "$backend" == "agibot_molmospaces_sim" ]]; then
           if [[ "$driver" != "direct" ]]; then
@@ -379,6 +385,7 @@ run task driver mode="" *overrides:
             --flow prehardware
             --task-name "$task"
             --profile "$profile"
+            --task-prompt "$prompt"
             --rehearsal-mode "$rehearsal_mode"
             --cleanup-object-count "$cleanup_object_count")
           if [[ "$profile" == "camera-labels" ]]; then
@@ -662,7 +669,7 @@ run task driver mode="" *overrides:
           "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \
           "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend" \
           "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path" \
-          "$min_generated_mess_count" "$generated_mess_object_ids"
+          "$min_generated_mess_count" "$generated_mess_object_ids" "$task"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

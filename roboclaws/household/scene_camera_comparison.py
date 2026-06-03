@@ -282,6 +282,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     )
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
     manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
@@ -302,6 +303,8 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     if not isinstance(manifest.get("visual_diagnostics"), dict):
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    if not isinstance(manifest.get("native_isaac_render_diagnostics"), dict):
+        manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
     if not isinstance(manifest.get("render_domain_source_diagnostics"), dict):
         manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     if not isinstance(manifest.get("render_domain_view_triage"), dict):
@@ -476,6 +479,7 @@ def _capture_isaac_lane(
             "lighting_diagnostics": result.get("lighting_diagnostics") or {},
             "color_profile": result.get("color_profile") or {},
             "color_management": result.get("color_management") or {},
+            "native_render_diagnostics": result.get("native_render_diagnostics") or {},
             "lens": result.get("lens") or {},
             "derived_lens": result.get("derived_lens") or {},
             "render_steps": result.get("render_steps"),
@@ -2220,6 +2224,118 @@ def _render_domain_calibration(view_results: list[dict[str, Any]]) -> dict[str, 
     }
 
 
+def _native_isaac_render_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    lane = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
+    diagnostics = (
+        lane.get("native_render_diagnostics")
+        if isinstance(lane.get("native_render_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return {
+            "schema": "scene_camera_native_isaac_render_diagnostics_v1",
+            "status": "missing_native_diagnostics",
+            "settings_api_available": None,
+            "native_settings_recorded": False,
+            "default_render_settings_changed": None,
+            "post_render_comparison_profile": {
+                "applied": False,
+                "source": "not_a_native_renderer_setting",
+            },
+            "recommended_next_action": (
+                "Run scene-camera capture against an Isaac worker that returns native "
+                "RTX/camera diagnostics before tuning brightness or exposure."
+            ),
+        }
+    settings_api_available = diagnostics.get("settings_api_available")
+    if settings_api_available is True:
+        status = "native_settings_recorded"
+        next_action = (
+            "Native Isaac settings are recorded for scene-camera capture. Use held-out "
+            "FPV and scene-camera comparisons before changing exposure or tone defaults."
+        )
+    elif diagnostics.get("status") == "fake_protocol":
+        status = "fake_protocol_schema_present"
+        next_action = (
+            "CI fake mode proves the schema only; run local Isaac scene-camera capture "
+            "to read native RTX/camera settings."
+        )
+    else:
+        status = "native_settings_api_unavailable"
+        next_action = (
+            "Scene-camera capture did not read Kit settings. Confirm carb.settings is "
+            "available before promoting a native exposure or tone preset."
+        )
+    return {
+        "schema": "scene_camera_native_isaac_render_diagnostics_v1",
+        "status": status,
+        "native_settings_recorded": status == "native_settings_recorded",
+        "source_schema": diagnostics.get("schema"),
+        "source_status": diagnostics.get("status"),
+        "renderer_mode": diagnostics.get("renderer_mode"),
+        "capture_method": diagnostics.get("capture_method"),
+        "view_kind": diagnostics.get("view_kind"),
+        "settings_api_available": settings_api_available,
+        "available_setting_count": diagnostics.get("available_setting_count"),
+        "missing_setting_count": diagnostics.get("missing_setting_count"),
+        "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
+        "render_product_paths": diagnostics.get("render_product_paths") or [],
+        "render_resolution": diagnostics.get("render_resolution") or {},
+        "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
+        "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
+        "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile")
+        or {
+            "applied": False,
+            "source": "not_a_native_renderer_setting",
+        },
+        "tone_mapping": _native_setting_group_summary(
+            diagnostics.get("tone_mapping")
+            if isinstance(diagnostics.get("tone_mapping"), dict)
+            else {}
+        ),
+        "camera_exposure": _native_setting_group_summary(
+            diagnostics.get("camera_exposure")
+            if isinstance(diagnostics.get("camera_exposure"), dict)
+            else {}
+        ),
+        "ocio": _native_setting_group_summary(
+            diagnostics.get("ocio") if isinstance(diagnostics.get("ocio"), dict) else {}
+        ),
+        "color_correction": _native_setting_group_summary(
+            diagnostics.get("color_correction")
+            if isinstance(diagnostics.get("color_correction"), dict)
+            else {}
+        ),
+        "color_grading": _native_setting_group_summary(
+            diagnostics.get("color_grading")
+            if isinstance(diagnostics.get("color_grading"), dict)
+            else {}
+        ),
+        "renderer": _native_setting_group_summary(
+            diagnostics.get("renderer") if isinstance(diagnostics.get("renderer"), dict) else {}
+        ),
+        "interpretation": (
+            "These rows are native Isaac/RTX and camera diagnostics returned by the "
+            "Isaac scene-camera capture path. They are separate from report-side "
+            "color-profile replay or RGB/view-gain comparison controls."
+        ),
+        "recommended_next_action": next_action,
+    }
+
+
+def _native_setting_group_summary(group: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    for key, raw in group.items():
+        row = raw if isinstance(raw, dict) else {}
+        summary[str(key)] = {
+            "status": row.get("status"),
+            "value": row.get("value"),
+            "setting_path": row.get("setting_path"),
+        }
+    return summary
+
+
 def _backend_swap_geometry_contract(manifest: dict[str, Any]) -> dict[str, Any]:
     camera = (
         manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
@@ -3607,6 +3723,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _transform_section(manifest),
             _projection_diagnostics_section(manifest),
             _visual_diagnostics_section(manifest),
+            _native_isaac_render_diagnostics_section(manifest),
             _render_domain_source_section(manifest),
             _render_domain_view_triage_section(manifest),
             _render_domain_contract_probe_section(manifest),
@@ -4477,6 +4594,69 @@ def _render_domain_source_section(manifest: dict[str, Any]) -> str:
 """
 
 
+def _native_isaac_render_diagnostics_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("native_isaac_render_diagnostics")
+        if isinstance(manifest.get("native_isaac_render_diagnostics"), dict)
+        else _native_isaac_render_diagnostics(manifest)
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for group_name in (
+        "tone_mapping",
+        "camera_exposure",
+        "ocio",
+        "color_correction",
+        "color_grading",
+        "renderer",
+    ):
+        group = diagnostics.get(group_name) if isinstance(diagnostics.get(group_name), dict) else {}
+        for field_name, raw in group.items():
+            row = raw if isinstance(raw, dict) else {}
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(group_name)}</td>"
+                f"<td>{html.escape(str(field_name))}</td>"
+                f"<td>{html.escape(str(row.get('status') or ''))}</td>"
+                f"<td>{html.escape(str(row.get('value')))}</td>"
+                f"<td>{html.escape(str(row.get('setting_path') or ''))}</td>"
+                "</tr>"
+            )
+    setting_table = (
+        '<div class="table-wrap"><table><thead><tr><th>Group</th><th>Setting</th>'
+        "<th>Status</th><th>Value</th><th>Path</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
+        if rows
+        else '<p class="note">No native setting rows were recorded.</p>'
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"settings_api_available={diagnostics.get('settings_api_available')}; "
+        f"default_render_settings_changed={diagnostics.get('default_render_settings_changed')}; "
+        f"renderer={diagnostics.get('renderer_mode')}; "
+        f"capture={diagnostics.get('capture_method')}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    context = {
+        "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
+        "render_product_paths": diagnostics.get("render_product_paths") or [],
+        "render_resolution": diagnostics.get("render_resolution") or {},
+        "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
+        "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
+    }
+    return f"""
+<section class="panel">
+  <h2>Native Isaac Render Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <pre>{html.escape(json.dumps(context, indent=2, sort_keys=True))}</pre>
+  {setting_table}
+</section>
+"""
+
+
 def _render_domain_view_triage_section(manifest: dict[str, Any]) -> str:
     triage = (
         manifest.get("render_domain_view_triage")
@@ -4624,6 +4804,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(_lighting_profile_id(lane)))}</td>"
             f"<td>{html.escape(str(_lighting_diagnostics_text(lane)))}</td>"
             f"<td>{html.escape(str(_color_profile_id(lane)))}</td>"
+            f"<td>{html.escape(str(_native_render_status(lane)))}</td>"
             "</tr>"
         )
     headers = "".join(
@@ -4641,6 +4822,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             "Lighting",
             "Lighting diagnostics",
             "Color",
+            "Native render",
         )
     )
     return f"""
@@ -4668,6 +4850,17 @@ def _lighting_profile_id(lane: dict[str, Any]) -> str:
 def _color_profile_id(lane: dict[str, Any]) -> str:
     color = lane.get("color_profile") if isinstance(lane.get("color_profile"), dict) else {}
     return str(color.get("profile_id") or "")
+
+
+def _native_render_status(lane: dict[str, Any]) -> str:
+    diagnostics = (
+        lane.get("native_render_diagnostics")
+        if isinstance(lane.get("native_render_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    return str(diagnostics.get("status") or "")
 
 
 def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:

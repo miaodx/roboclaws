@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
+from roboclaws.agents.prompts.household_cleanup import (
+    render_kickoff_prompt,
+    render_semantic_map_build_prompt,
+)
 from roboclaws.devtools.commands import CommandError, resolve_task_run
 from roboclaws.launch import resolve_task_launch
 
@@ -326,6 +329,19 @@ def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
     ]
 
 
+def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> None:
+    route = trace_task_run("household-cleanup", "direct", "world-labels-sanitized")
+
+    assert route[:6] == [
+        "just",
+        "molmo::cleanup",
+        "direct",
+        "world-labels-sanitized",
+        "7",
+        "output/household/household-cleanup/direct-world-labels-sanitized",
+    ]
+
+
 @pytest.mark.parametrize(
     ("args", "expected"),
     (
@@ -433,6 +449,27 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     assert "target=just agent::run household-cleanup codex camera-labels" in plan_trace
 
 
+def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
+    plan = resolve_task_launch(("household-cleanup", "codex", "world-labels-sanitized"))
+
+    assert plan.mode == "world-labels-sanitized"
+    assert plan.profile == "world-labels-sanitized"
+    assert plan.supported_profiles == (
+        "smoke",
+        "world-labels",
+        "world-labels-sanitized",
+        "camera-raw",
+        "camera-labels",
+    )
+    assert plan.argv == (
+        "just",
+        "agent::run",
+        "household-cleanup",
+        "codex",
+        "world-labels-sanitized",
+    )
+
+
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
     route = trace_task_run("ai2thor-nav", "openclaw")
 
@@ -477,7 +514,18 @@ def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
         "7",
         "output/custom-map",
     ]
-    assert route[15:] == ["on", "", "auto", "minimal", "procthor-10k-val", "0", "", "auto"]
+    assert route[15:] == [
+        "on",
+        "",
+        "auto",
+        "minimal",
+        "procthor-10k-val",
+        "0",
+        "",
+        "auto",
+        "",
+        "semantic-map-build",
+    ]
 
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
@@ -548,6 +596,8 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "0",
         "",
         "auto",
+        "",
+        "household-cleanup",
     ]
 
 
@@ -625,10 +675,41 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
     assert "molmo::cleanup" not in route
 
 
-def test_semantic_map_build_codex_requires_agibot_backend() -> None:
-    stderr = assert_task_run_fails("semantic-map-build", "codex", "camera-labels")
+def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "codex",
+        "world-labels",
+        "backend=molmospaces_subprocess",
+    )
 
-    assert "semantic-map-build codex currently requires backend=agibot_gdk" in stderr
+    assert route[:7] == [
+        "just",
+        "molmo::cleanup",
+        "codex-live",
+        "world-labels",
+        "7",
+        "output/household/semantic-map-build/codex-report",
+        "帮我建立这个房间的语义地图",
+    ]
+    assert route[15] == "on"
+    assert route[17] == "molmospaces_subprocess"
+    assert route[18] == "minimal"
+    assert route[-1] == "semantic-map-build"
+
+
+def test_semantic_map_build_codex_routes_isaac_backend_to_live_runner() -> None:
+    route = trace_task_run(
+        "semantic-map-build",
+        "codex",
+        "world-labels",
+        "backend=isaaclab_subprocess",
+    )
+
+    assert route[:4] == ["just", "molmo::cleanup", "codex-live", "world-labels"]
+    assert route[15] == "on"
+    assert route[17] == "isaaclab_subprocess"
+    assert route[-1] == "semantic-map-build"
 
 
 def test_household_cleanup_routes_agibot_backend_to_default_cleanup_pilot_cli() -> None:
@@ -847,7 +928,9 @@ def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
 def test_molmo_semantic_sweep_strips_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert 'if [[ "$semantic_sweep_enabled" == "true" ]]; then' in text
+    assert 'if [[ "$semantic_sweep_enabled" == "true" && "$driver" == "codex-live" ]]; then' in text
+    assert "checker_semantic_args=(--require-runtime-metric-map)" in text
+    assert 'elif [[ "$semantic_sweep_enabled" == "true" ]]; then' in text
     assert "--min-semantic-accepted-count|--min-model-declared-actions" in text
     assert "filtered_checker_visual_args" in text
     assert 'checker_visual_args=("${filtered_checker_visual_args[@]}")' in text
@@ -973,6 +1056,40 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
+
+
+def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
+    prompt = render_kickoff_prompt("world-labels-sanitized")
+
+    assert "perfect structured detections without cleanup destination oracle fields" in prompt
+    assert "do not wait for or rely on cleanup_recommended" in prompt
+    assert "destination_policy_status is policy_required" in prompt
+    assert "destination_policy.preferred_fixture_categories" in prompt
+    assert "destination_policy.placement_tool_by_fixture_category" in prompt
+    assert "instead of skipping the object" in prompt
+    assert "first complete an anchor discovery sweep" in prompt
+    assert "before the first pick" in prompt
+    assert "do not re-clean observed handles" in prompt
+    assert "call done as the authoritative closeout probe" in prompt
+    assert "pending_cleanup_candidates" in prompt
+    assert "If done reports a held candidate" in prompt
+    assert "open_receptacle has succeeded while holding an object" in prompt
+    assert "the next cleanup tool must be place_inside" in prompt
+    assert "runtime_metric_map.public_semantic_anchors" in prompt
+    assert "tool recovery hints" in prompt
+    assert "exact waypoint checklist" in prompt
+    assert "metric_map.inspection_waypoints" in prompt
+
+
+def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:
+    prompt = render_semantic_map_build_prompt("camera-labels", "帮我建立这个房间的语义地图")
+
+    assert "This run is semantic-map-build, not household-cleanup" in prompt
+    assert "User task: 帮我建立这个房间的语义地图" in prompt
+    assert "Do not pick, place, place_inside" in prompt
+    assert "sweep every inspection waypoint" in prompt
+    assert "declare_visual_candidates" in prompt
+    assert "runtime_metric_map.json" in prompt
 
 
 def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
@@ -1538,6 +1655,20 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     assert "is already in use before server start" in runner_text
     assert re.search(r'^status path=""', molmo_text, re.MULTILINE)
     assert "scripts/molmo_cleanup/summarize_live_run.py" in molmo_text
+
+
+def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checker() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
+    server_args_match = re.search(r"server_args=\(\n(?P<body>.*?)\n\s+\)", molmo_text, re.DOTALL)
+
+    assert server_args_match is not None
+    assert '--task-name "$task_name"' in server_args_match.group("body")
+    assert '--server-arg=--task-name' not in molmo_text
+    assert '--task-name "$task_name"' in molmo_text
+    assert '"--expect-task-name",' in runner_text
+    assert 'task_name = getattr(self.args, "task_name", "household-cleanup")' in runner_text
+    assert 'task_name == "household-cleanup"' in runner_text
 
 
 def test_lower_level_just_modules_do_not_call_task_or_agent_facades() -> None:

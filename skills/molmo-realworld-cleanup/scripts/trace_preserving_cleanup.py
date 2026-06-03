@@ -8,14 +8,14 @@ import json
 from collections.abc import Callable
 from typing import Any
 
-from roboclaws.molmo_cleanup.cleanup_routine import (
+from roboclaws.household.cleanup_routine import (
     PUBLIC_ATOMIC_TOOLS,
     ROUTINE_NAME,
     fixture_requires_open,
     normalize_placement_tool,
     routine_plan,
 )
-from roboclaws.molmo_cleanup.cleanup_routine import (
+from roboclaws.household.cleanup_routine import (
     run_cleanup_routine as _run_canonical_cleanup_routine,
 )
 

@@ -79,6 +79,8 @@ Reports for non-Molmo tasks:
 Household cleanup input/evidence lanes:
 
 - `world-labels` by default.
+- `world-labels-sanitized` for structured detections without destination/tool
+  oracle hints.
 - `robot_views=off` for local timing work that keeps the `world-labels` input
   contract while disabling per-tool robot-view capture.
 - `smoke` for cheap synthetic contract iteration.

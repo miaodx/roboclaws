@@ -45,6 +45,7 @@ from roboclaws.household.subprocess_backend import (
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
+from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
@@ -61,6 +62,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--policy", default="codex_agent")
+    parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
     parser.add_argument(
         "--backend",
@@ -222,7 +224,8 @@ def _is_loopback_url(url: str) -> bool:
 def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
     if path is None or str(path) == "":
         return None
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return runtime_metric_map_from_prior_artifact(payload)
 
 
 def run_molmo_realworld_cleanup_agent_server(
@@ -232,6 +235,7 @@ def run_molmo_realworld_cleanup_agent_server(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
     policy: str = "codex_agent",
+    task_name: str = "household-cleanup",
     task_prompt: str = DEFAULT_REALWORLD_TASK,
     backend: str = SYNTHETIC_BACKEND,
     generated_mess_count: int = 10,
@@ -344,6 +348,7 @@ def run_molmo_realworld_cleanup_agent_server(
             host=host,
             port=port,
             policy=policy,
+            task_name=task_name,
             task_prompt=task_prompt,
             fixture_hint_mode="room_only",
             perception_mode=perception_mode,
@@ -411,6 +416,7 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             policy=args.policy,
+            task_name=args.task_name,
             task_prompt=args.task,
             backend=args.backend,
             generated_mess_count=args.generated_mess_count,

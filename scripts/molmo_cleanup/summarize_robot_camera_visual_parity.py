@@ -165,6 +165,10 @@ def build_summary(
         "raw_fpv_input_lane": _raw_fpv_input_lane_check(raw_fpv_runs),
         "calibration_scene": calibration,
         "default_rendering_path": _default_rendering_path_check(prepared_usd_summaries),
+        "native_isaac_render_diagnostics": _native_isaac_render_diagnostics_check(
+            baselines,
+            probes,
+        ),
     }
     status = _overall_status(checks)
     four_check_audit = _four_check_audit(checks)
@@ -226,7 +230,12 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     target_selection = _dict(summary.get("target_selection") or payload.get("target_selection"))
     render_checks = _dict(summary.get("render_domain_checks"))
     render = _dict(summary.get("render_contract_diagnostics"))
-    object_parity = _dict(summary.get("object_parity_audit") or payload.get("object_parity_audit"))
+    object_parity = _best_object_parity_audit(
+        summary.get("object_visual_parity_audit"),
+        summary.get("object_parity_audit"),
+        payload.get("object_visual_parity_audit"),
+        payload.get("object_parity_audit"),
+    )
     object_render = _dict(
         summary.get("object_render_parity_diagnostics")
         or payload.get("object_render_parity_diagnostics")
@@ -265,6 +274,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "object_parity_status": object_parity.get("status"),
         "object_parity_high_priority_gap_count": object_parity.get("high_priority_gap_count"),
         "object_parity_item_count": object_parity.get("item_count"),
+        "object_visual_parity_audit": _compact_object_visual_parity_audit(object_parity),
         "object_render_gate_status": object_render.get("status"),
         "object_gate_status": object_render.get("object_gate_status"),
         "object_gate_failure_count": object_render.get("object_gate_failure_count"),
@@ -287,6 +297,93 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     }
 
 
+def _compact_object_visual_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
+    if not audit:
+        return {}
+    category_summary = _list_dicts(audit.get("category_status_summary"))
+    if not category_summary:
+        category_summary = _object_category_status_summary_from_items(
+            _list_dicts(audit.get("items"))
+        )
+    return {
+        "schema": audit.get("schema"),
+        "status": audit.get("status"),
+        "item_count": audit.get("item_count"),
+        "object_count": audit.get("object_count"),
+        "receptacle_count": audit.get("receptacle_count"),
+        "high_priority_gap_count": audit.get("high_priority_gap_count"),
+        "binding_status_counts": audit.get("binding_status_counts") or {},
+        "category_status_counts": audit.get("category_status_counts") or {},
+        "pose_status_counts": audit.get("pose_status_counts") or {},
+        "support_status_counts": audit.get("support_status_counts") or {},
+        "state_status_counts": audit.get("state_status_counts") or {},
+        "render_contract_status_counts": audit.get("render_contract_status_counts") or {},
+        "category_status_summary": category_summary,
+        "recommended_next_action": audit.get("recommended_next_action"),
+    }
+
+
+def _best_object_parity_audit(*candidates: Any) -> dict[str, Any]:
+    audits = [_dict(candidate) for candidate in candidates if _dict(candidate)]
+    if not audits:
+        return {}
+    return max(audits, key=_object_parity_audit_completeness_score)
+
+
+def _object_parity_audit_completeness_score(audit: dict[str, Any]) -> tuple[int, int, int]:
+    return (
+        len(_list_dicts(audit.get("category_status_summary"))),
+        len(_list_dicts(audit.get("items"))),
+        len(_list_dicts(audit.get("high_priority_items"))),
+    )
+
+
+def _object_category_status_summary_from_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        mujoco = _dict(item.get("mujoco"))
+        isaac = _dict(item.get("isaac"))
+        category = (
+            _object_category_key(mujoco.get("category"))
+            or _object_category_key(isaac.get("category"))
+            or _object_category_key(isaac.get("usd_category"))
+            or "unknown"
+        )
+        grouped.setdefault(category, []).append(item)
+    rows = []
+    for category, category_items in sorted(grouped.items()):
+        rows.append(
+            {
+                "category": category,
+                "item_count": len(category_items),
+                "kind_counts": _status_counts(item.get("kind") for item in category_items),
+                "binding_status_counts": _status_counts(
+                    item.get("binding_status") for item in category_items
+                ),
+                "category_status_counts": _status_counts(
+                    item.get("category_status") for item in category_items
+                ),
+                "pose_status_counts": _status_counts(
+                    item.get("pose_status") for item in category_items
+                ),
+                "support_status_counts": _status_counts(
+                    item.get("support_status") for item in category_items
+                ),
+                "state_status_counts": _status_counts(
+                    item.get("state_status") for item in category_items
+                ),
+                "rgb_view_evidence_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
+                ),
+                "render_contract_status_counts": _status_counts(
+                    _dict(item.get("render_contract_delta")).get("status")
+                    for item in category_items
+                ),
+            }
+        )
+    return rows
+
+
 def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
     if not diagnostics:
         return {}
@@ -303,6 +400,61 @@ def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dic
         "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
         "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
         "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
+    }
+
+
+def _native_isaac_render_diagnostics_check(
+    baselines: list[dict[str, Any]],
+    probes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    rows = []
+    for source_kind, items in (("baseline", baselines), ("probe", probes)):
+        for item in items:
+            diagnostics = _dict(item.get("native_isaac_render_diagnostics"))
+            status = item.get("native_isaac_render_status")
+            rows.append(
+                {
+                    "source": source_kind,
+                    "label": item.get("label") or source_kind,
+                    "path": item.get("path"),
+                    "status": status or "missing_native_diagnostics",
+                    "settings_api_available": item.get("native_isaac_settings_api_available"),
+                    "default_render_settings_changed": item.get(
+                        "native_isaac_default_render_settings_changed"
+                    ),
+                    "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
+                    "render_product_paths": diagnostics.get("render_product_paths") or [],
+                    "post_render_comparison_profile_source": _dict(
+                        diagnostics.get("post_render_comparison_profile")
+                    ).get("source"),
+                }
+            )
+    missing = [row for row in rows if row.get("status") != "native_settings_recorded"]
+    return {
+        "status": (
+            "native_isaac_render_diagnostics_recorded"
+            if rows and not missing
+            else "native_isaac_render_diagnostics_missing"
+        ),
+        "source_count": len(rows),
+        "recorded_count": len(rows) - len(missing),
+        "missing_count": len(missing),
+        "rows": rows,
+        "blockers": [
+            {
+                "reason": "missing_native_isaac_render_diagnostics",
+                "source": row.get("source"),
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "status": row.get("status"),
+            }
+            for row in missing
+        ],
+        "interpretation": (
+            "Native Isaac renderer diagnostics must be recorded separately from "
+            "report-side RGB/tone compensation before exposure or tone settings can be "
+            "treated as audited default-rendering evidence."
+        ),
     }
 
 
@@ -1475,9 +1627,10 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
         "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
         "corpus_coverage": "broad_corpus_ready",
         "calibration_scene": "calibration_scene_evidence_loaded",
+        "native_isaac_render_diagnostics": "native_isaac_render_diagnostics_recorded",
     }
     foundational_checks_pass = all(
-        checks[key].get("status") == status for key, status in required_pass.items()
+        _dict(checks.get(key)).get("status") == status for key, status in required_pass.items()
     )
     calibration_default_ready = (
         checks.get("calibration_scene", {}).get("default_rendering_ready") is True
@@ -1564,6 +1717,7 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
         "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
         "corpus_coverage": "broad_corpus_ready",
         "calibration_scene": "calibration_scene_evidence_loaded",
+        "native_isaac_render_diagnostics": "native_isaac_render_diagnostics_recorded",
     }
     render_required_statuses = {
         "render_domain_probe_matrix": "render_domain_delta_resolved",
@@ -2117,6 +2271,15 @@ def _seed_from_scene_signature(scene_signature: str) -> int | None:
         return None
 
 
+def _object_category_key(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").lower() if ch.isalnum())
+
+
+def _status_counts(values: Any) -> dict[str, int]:
+    collected = [str(value) for value in values if value]
+    return {name: collected.count(name) for name in sorted(set(collected))}
+
+
 def _render_checks_by_id(render_domain_checks: dict[str, Any]) -> dict[str, dict[str, Any]]:
     checks = {}
     for item in render_domain_checks.get("checks") or []:
@@ -2212,6 +2375,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
     report_side = _dict(manifest.get("report_side_visual_parity"))
     default_rendering = _dict(manifest.get("default_rendering_visual_parity"))
     visual_samples = _render_visual_samples(_list_dicts(manifest.get("visual_samples")))
+    object_audit_rows = _render_object_visual_parity_audit_rows(manifest)
     four_check_rows = "\n".join(
         "<tr>"
         f"<td>{html.escape(str(item.get('check_id') or ''))}</td>"
@@ -2328,9 +2492,50 @@ def _render_report(manifest: dict[str, Any]) -> str:
   <table><thead>{baseline_header}</thead><tbody>{baseline_rows}</tbody></table>
   <h2>Probes</h2>
   <table><thead>{probe_header}</thead><tbody>{probe_rows}</tbody></table>
+  <h2>Object Visual Parity Audit</h2>
+  {object_audit_rows}
 </body>
 </html>
 """
+
+
+def _render_object_visual_parity_audit_rows(manifest: dict[str, Any]) -> str:
+    rows = []
+    sources = [("baseline", item) for item in _list_dicts(manifest.get("baselines"))]
+    sources.extend(("probe", item) for item in _list_dicts(manifest.get("probes")))
+    for source_kind, summary in sources:
+        audit = _dict(summary.get("object_visual_parity_audit"))
+        for category in _list_dicts(audit.get("category_status_summary")):
+            rows.append(
+                "<tr>"
+                f"<td>{html.escape(source_kind)}</td>"
+                f"<td>{html.escape(str(summary.get('label') or summary.get('path') or ''))}</td>"
+                f"<td>{html.escape(str(summary.get('scene_signature') or ''))}</td>"
+                f"<td>{html.escape(str(audit.get('status') or ''))}</td>"
+                f"<td>{html.escape(str(category.get('category') or ''))}</td>"
+                f"<td>{html.escape(str(category.get('item_count') or 0))}</td>"
+                + _json_counts_cell(category, "binding_status_counts")
+                + _json_counts_cell(category, "category_status_counts")
+                + _json_counts_cell(category, "state_status_counts")
+                + _json_counts_cell(category, "object_gate_status_counts")
+                + _json_counts_cell(category, "rgb_view_evidence_status_counts")
+                + _json_counts_cell(category, "render_contract_status_counts")
+                + "</tr>"
+            )
+    if not rows:
+        return "<p class='muted'>No object visual parity category summaries were recorded.</p>"
+    return (
+        "<table><thead><tr><th>Source</th><th>Manifest</th><th>Scene</th>"
+        "<th>Audit Status</th><th>Category</th><th>Items</th><th>Binding</th>"
+        "<th>Category Status</th><th>State</th><th>Object Gate</th>"
+        "<th>RGB Evidence</th><th>Render</th></tr></thead><tbody>"
+        + "\n".join(rows)
+        + "</tbody></table>"
+    )
+
+
+def _json_counts_cell(item: dict[str, Any], key: str) -> str:
+    return "<td>" + html.escape(json.dumps(item.get(key) or {}, sort_keys=True)) + "</td>"
 
 
 def _render_visual_samples(samples: list[dict[str, Any]]) -> str:

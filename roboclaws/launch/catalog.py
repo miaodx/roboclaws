@@ -121,7 +121,7 @@ def _resolve_evidence_mode(task: str, raw_mode: str) -> tuple[str, str | None, s
         if profile not in spec.supported_profiles:
             raise LaunchError(
                 f"unsupported household cleanup lane '{raw_mode}'",
-                "expected smoke|world-labels|camera-raw|camera-labels",
+                "expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels",
             )
         return profile, profile, None
 
