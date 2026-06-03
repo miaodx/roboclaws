@@ -1006,6 +1006,11 @@ def Xform "World"
     native_summary = manifest["summary"]["native_isaac_render_diagnostics"]
     native_detail = manifest["native_isaac_render_diagnostics"]
     render_gate = manifest["object_render_parity_diagnostics"]["render_gate"]
+    assert manifest["object_visual_parity_audit"] == manifest["object_parity_audit"]
+    assert (
+        manifest["summary"]["object_visual_parity_audit"]
+        == (manifest["summary"]["object_parity_audit"])
+    )
     assert native_summary["status"] == "native_settings_recorded"
     assert native_summary["settings_api_available"] is True
     assert native_detail["tone_mapping"]["operator"]["value"] == "aces"
@@ -1495,7 +1500,7 @@ def Xform "World"
             "purpose": "unit test",
             "summary": {},
             "object_render_parity_diagnostics": diagnostics,
-            "object_parity_audit": audit,
+            "object_visual_parity_audit": audit,
             "locations": [],
         }
     )

@@ -874,7 +874,11 @@ def _attach_render_contract_diagnostics(
         scene_binding_diagnostics=scene_binding_diagnostics,
     )
     manifest["object_parity_audit"] = object_audit
+    manifest["object_visual_parity_audit"] = object_audit
     manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
+        object_audit
+    )
+    manifest.setdefault("summary", {})["object_visual_parity_audit"] = _compact_object_parity_audit(
         object_audit
     )
     gate_diagnostics = _object_render_parity_diagnostics(
@@ -4080,8 +4084,12 @@ def _render_object_render_parity_diagnostics(manifest: dict[str, Any]) -> str:
 
 
 def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
-    audit = _dict(manifest.get("object_parity_audit")) or _dict(
-        _dict(manifest.get("summary")).get("object_parity_audit")
+    summary = _dict(manifest.get("summary"))
+    audit = (
+        _dict(manifest.get("object_visual_parity_audit"))
+        or _dict(manifest.get("object_parity_audit"))
+        or _dict(summary.get("object_visual_parity_audit"))
+        or _dict(summary.get("object_parity_audit"))
     )
     if not audit:
         return ""

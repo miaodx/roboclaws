@@ -226,7 +226,12 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
     target_selection = _dict(summary.get("target_selection") or payload.get("target_selection"))
     render_checks = _dict(summary.get("render_domain_checks"))
     render = _dict(summary.get("render_contract_diagnostics"))
-    object_parity = _dict(summary.get("object_parity_audit") or payload.get("object_parity_audit"))
+    object_parity = _dict(
+        summary.get("object_visual_parity_audit")
+        or summary.get("object_parity_audit")
+        or payload.get("object_visual_parity_audit")
+        or payload.get("object_parity_audit")
+    )
     object_render = _dict(
         summary.get("object_render_parity_diagnostics")
         or payload.get("object_render_parity_diagnostics")

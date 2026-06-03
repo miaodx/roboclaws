@@ -466,7 +466,7 @@ def test_visual_parity_summary_surfaces_object_parity_audit(
         fpv=26.5,
         chase=51.4,
         location_count=4,
-        object_parity_audit={
+        object_visual_parity_audit={
             "status": "object_parity_gaps_detected",
             "item_count": 29,
             "high_priority_gap_count": 6,
@@ -1161,6 +1161,7 @@ def _write_robot_camera_manifest(
     pose_status: str = "fpv_world_pose_aligned",
     locations: list[dict] | None = None,
     object_parity_audit: dict | None = None,
+    object_visual_parity_audit: dict | None = None,
     object_render_parity_diagnostics: dict | None = None,
     native_isaac_render_diagnostics: dict | None = None,
 ) -> Path:
@@ -1205,6 +1206,7 @@ def _write_robot_camera_manifest(
                 "dropped_unbound_target_count": 0,
             },
             "object_parity_audit": object_parity_audit or {},
+            "object_visual_parity_audit": object_visual_parity_audit or {},
             "object_render_parity_diagnostics": object_render_parity_diagnostics or {},
             "native_isaac_render_diagnostics": native_isaac_render_diagnostics or {},
         },
