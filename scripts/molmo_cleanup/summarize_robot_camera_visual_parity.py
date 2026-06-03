@@ -165,6 +165,10 @@ def build_summary(
         "raw_fpv_input_lane": _raw_fpv_input_lane_check(raw_fpv_runs),
         "calibration_scene": calibration,
         "default_rendering_path": _default_rendering_path_check(prepared_usd_summaries),
+        "native_isaac_render_diagnostics": _native_isaac_render_diagnostics_check(
+            baselines,
+            probes,
+        ),
     }
     status = _overall_status(checks)
     four_check_audit = _four_check_audit(checks)
@@ -396,6 +400,61 @@ def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dic
         "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
         "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
         "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
+    }
+
+
+def _native_isaac_render_diagnostics_check(
+    baselines: list[dict[str, Any]],
+    probes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    rows = []
+    for source_kind, items in (("baseline", baselines), ("probe", probes)):
+        for item in items:
+            diagnostics = _dict(item.get("native_isaac_render_diagnostics"))
+            status = item.get("native_isaac_render_status")
+            rows.append(
+                {
+                    "source": source_kind,
+                    "label": item.get("label") or source_kind,
+                    "path": item.get("path"),
+                    "status": status or "missing_native_diagnostics",
+                    "settings_api_available": item.get("native_isaac_settings_api_available"),
+                    "default_render_settings_changed": item.get(
+                        "native_isaac_default_render_settings_changed"
+                    ),
+                    "camera_prim_paths": diagnostics.get("camera_prim_paths") or [],
+                    "render_product_paths": diagnostics.get("render_product_paths") or [],
+                    "post_render_comparison_profile_source": _dict(
+                        diagnostics.get("post_render_comparison_profile")
+                    ).get("source"),
+                }
+            )
+    missing = [row for row in rows if row.get("status") != "native_settings_recorded"]
+    return {
+        "status": (
+            "native_isaac_render_diagnostics_recorded"
+            if rows and not missing
+            else "native_isaac_render_diagnostics_missing"
+        ),
+        "source_count": len(rows),
+        "recorded_count": len(rows) - len(missing),
+        "missing_count": len(missing),
+        "rows": rows,
+        "blockers": [
+            {
+                "reason": "missing_native_isaac_render_diagnostics",
+                "source": row.get("source"),
+                "label": row.get("label"),
+                "path": row.get("path"),
+                "status": row.get("status"),
+            }
+            for row in missing
+        ],
+        "interpretation": (
+            "Native Isaac renderer diagnostics must be recorded separately from "
+            "report-side RGB/tone compensation before exposure or tone settings can be "
+            "treated as audited default-rendering evidence."
+        ),
     }
 
 
@@ -1568,9 +1627,10 @@ def _overall_status(checks: dict[str, dict[str, Any]]) -> str:
         "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
         "corpus_coverage": "broad_corpus_ready",
         "calibration_scene": "calibration_scene_evidence_loaded",
+        "native_isaac_render_diagnostics": "native_isaac_render_diagnostics_recorded",
     }
     foundational_checks_pass = all(
-        checks[key].get("status") == status for key, status in required_pass.items()
+        _dict(checks.get(key)).get("status") == status for key, status in required_pass.items()
     )
     calibration_default_ready = (
         checks.get("calibration_scene", {}).get("default_rendering_ready") is True
@@ -1657,6 +1717,7 @@ def _default_rendering_visual_parity(checks: dict[str, dict[str, Any]]) -> dict[
         "raw_fpv_input_lane": RAW_FPV_PASS_STATUS,
         "corpus_coverage": "broad_corpus_ready",
         "calibration_scene": "calibration_scene_evidence_loaded",
+        "native_isaac_render_diagnostics": "native_isaac_render_diagnostics_recorded",
     }
     render_required_statuses = {
         "render_domain_probe_matrix": "render_domain_delta_resolved",

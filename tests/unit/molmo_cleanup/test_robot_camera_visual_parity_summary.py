@@ -673,6 +673,49 @@ def test_visual_parity_summary_carries_native_isaac_render_diagnostics(
     assert manifest["default_rendering_visual_parity"]["ready"] is False
 
 
+def test_visual_parity_summary_blocks_default_rendering_without_native_diagnostics(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_native_render_required",
+    )
+    checks = {
+        "head_camera_contract": {"status": "head_camera_geometry_aligned"},
+        "raw_fpv_input_lane": {"status": "raw_fpv_agent_input_uses_head_camera"},
+        "corpus_coverage": {"status": "broad_corpus_ready"},
+        "calibration_scene": {
+            "status": "calibration_scene_evidence_loaded",
+            "default_rendering_ready": True,
+        },
+        "native_isaac_render_diagnostics": {
+            "status": "native_isaac_render_diagnostics_missing",
+        },
+        "render_domain_probe_matrix": {"status": "render_domain_delta_active"},
+        "prepared_scale_square_default_gate": {"status": "comparison_only_not_default"},
+        "combined_material_light_default_gate": {"status": "combined_material_light_default_ready"},
+        "default_rendering_path": {"status": "default_rendering_path_uses_combined_material_light"},
+        "view_specific_prepared_scale_square_tone_gate": {
+            "status": "view_specific_report_comparison_gate_ready",
+            "formal_comparison_gate_ready": True,
+        },
+        "rgb_tone_cross_validation": {
+            "status": "comparison_only_rgb_tone_positive",
+            "comparison_only": True,
+        },
+    }
+
+    assert summary._overall_status(checks) == "active"
+    default_rendering = summary._default_rendering_visual_parity(checks)
+    assert default_rendering["status"] == "not_ready"
+    assert any(
+        blocker.get("check_id") == "native_isaac_render_diagnostics"
+        for blocker in default_rendering["blockers"]
+    )
+    report_side = summary._report_side_visual_parity(checks)
+    assert report_side["status"] == "report_side_visual_parity_ready"
+
+
 def test_visual_parity_summary_keeps_prepared_scale_square_comparison_only_on_chase_regression(
     tmp_path: Path,
 ) -> None:
@@ -1109,6 +1152,7 @@ def test_visual_parity_summary_pass_requires_resolved_render_domain_and_default_
             "status": "calibration_scene_evidence_loaded",
             "default_rendering_ready": True,
         },
+        "native_isaac_render_diagnostics": {"status": "native_isaac_render_diagnostics_recorded"},
         "render_domain_probe_matrix": {"status": "render_domain_delta_resolved"},
         "prepared_scale_square_default_gate": {"status": "prepared_scale_square_default_ready"},
         "view_specific_prepared_scale_square_tone_gate": {
@@ -1146,6 +1190,7 @@ def test_visual_parity_summary_marks_combined_material_light_promotion_candidate
             "status": "calibration_scene_evidence_loaded",
             "default_rendering_ready": True,
         },
+        "native_isaac_render_diagnostics": {"status": "native_isaac_render_diagnostics_recorded"},
         "render_domain_probe_matrix": {"status": "render_domain_delta_active"},
         "prepared_scale_square_default_gate": {"status": "comparison_only_not_default"},
         "combined_material_light_default_gate": {"status": "combined_material_light_default_ready"},
@@ -1196,6 +1241,7 @@ def test_visual_parity_summary_passes_after_combined_material_light_path_is_prom
             "status": "calibration_scene_evidence_loaded",
             "default_rendering_ready": True,
         },
+        "native_isaac_render_diagnostics": {"status": "native_isaac_render_diagnostics_recorded"},
         "render_domain_probe_matrix": {"status": "render_domain_delta_active"},
         "prepared_scale_square_default_gate": {"status": "comparison_only_not_default"},
         "combined_material_light_default_gate": {"status": "combined_material_light_default_ready"},
