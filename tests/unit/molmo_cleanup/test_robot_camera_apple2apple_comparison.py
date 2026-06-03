@@ -1445,12 +1445,33 @@ def Xform "World"
         },
         "scene_binding_diagnostics": {},
     }
+    for image_relpath, color in {
+        "mujoco/fpv.png": (120, 120, 120),
+        "mujoco/chase.png": (80, 90, 100),
+        "isaac/fpv.png": (60, 60, 60),
+        "isaac/chase.png": (90, 70, 50),
+    }.items():
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(image_path)
+    locations = [
+        {
+            "status": "success",
+            "target": {"kind": "object", "target_id": "box_1"},
+            "views": {
+                "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+            },
+        }
+    ]
     audit = run_camera._object_parity_audit(
         mujoco_state=mujoco_state,
         isaac_state=isaac_state,
         mujoco_contract=run_camera._mujoco_render_contract_from_xml(str(mujoco_xml)),
         isaac_contract=run_camera._isaac_render_contract_from_usda(str(isaac_usd)),
         scene_binding_diagnostics={},
+        locations=locations,
+        output_dir=tmp_path,
     )
 
     assert audit["schema"] == "robot_camera_object_parity_audit_v1"
@@ -1462,14 +1483,20 @@ def Xform "World"
     assert items["box_1"]["state_status"] == "visual_state_unverified"
     assert items["box_1"]["support_status"] == "support_available_in_isaac_only"
     assert items["box_1"]["render_contract_delta"]["status"] == "material_or_texture_name_delta"
+    assert items["box_1"]["rgb_view_evidence"]["status"] == "selected_views_nonblank"
+    assert items["box_1"]["rgb_view_evidence"]["view_status_counts"] == {"nonblank_rgb": 4}
     assert items["box_1"]["isaac"]["asset_id"] == "Box_10"
     assert items["bowl_1"]["category_status"] == "category_delta"
+    assert items["bowl_1"]["rgb_view_evidence"]["status"] == "not_captured_in_selected_views"
     assert items["table_1"]["state_status"] == "state_not_rendered_to_usd"
     high_priority_ids = {item["target_id"] for item in audit["high_priority_items"]}
     assert {"box_1", "bowl_1", "table_1"} <= high_priority_ids
     category_summary = {item["category"]: item for item in audit["category_status_summary"]}
     assert category_summary["box"]["item_count"] == 1
     assert category_summary["box"]["object_gate_classification_counts"] == {"visual_state_delta": 1}
+    assert category_summary["box"]["rgb_view_evidence_status_counts"] == {
+        "selected_views_nonblank": 1
+    }
     assert category_summary["bowl"]["object_gate_classification_counts"] == {"not_comparable": 1}
     assert category_summary["diningtable"]["object_gate_classification_counts"] == {
         "visual_state_delta": 1
@@ -1516,6 +1543,7 @@ def Xform "World"
     assert "visual_state_delta" in report_html
     assert "Category Status Summary" in report_html
     assert "diningtable" in report_html
+    assert "selected_views_nonblank" in report_html
     assert "prepared_usd_visual_physics_freeze" in report_html
 
 

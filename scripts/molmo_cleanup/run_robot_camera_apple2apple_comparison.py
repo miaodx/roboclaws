@@ -893,6 +893,8 @@ def _attach_render_contract_diagnostics(
         mujoco_contract=mujoco_contract,
         isaac_contract=isaac_contract,
         scene_binding_diagnostics=scene_binding_diagnostics,
+        locations=successful_locations,
+        output_dir=output_dir,
     )
     manifest["object_parity_audit"] = object_audit
     manifest["object_visual_parity_audit"] = object_audit
@@ -1089,6 +1091,8 @@ def _object_parity_audit(
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     scene_binding_diagnostics: dict[str, Any],
+    locations: list[dict[str, Any]] | None = None,
+    output_dir: Path | None = None,
 ) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     object_ids = sorted(
@@ -1111,6 +1115,8 @@ def _object_parity_audit(
                 mujoco_contract=mujoco_contract,
                 isaac_contract=isaac_contract,
                 scene_binding_diagnostics=scene_binding_diagnostics,
+                locations=locations or [],
+                output_dir=output_dir,
             )
         )
     for target_id in receptacle_ids:
@@ -1123,6 +1129,8 @@ def _object_parity_audit(
                 mujoco_contract=mujoco_contract,
                 isaac_contract=isaac_contract,
                 scene_binding_diagnostics=scene_binding_diagnostics,
+                locations=locations or [],
+                output_dir=output_dir,
             )
         )
     high_priority_statuses = {
@@ -1250,6 +1258,9 @@ def _object_category_status_summary(items: list[dict[str, Any]]) -> list[dict[st
                 "state_status_counts": _status_counts(
                     item.get("state_status") for item in category_items
                 ),
+                "rgb_view_evidence_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
+                ),
                 "render_contract_status_counts": _status_counts(
                     _dict(item.get("render_contract_delta")).get("status")
                     for item in category_items
@@ -1355,6 +1366,7 @@ def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
     object_gate_status = "comparable" if classification == "comparable" else "not_comparable"
     render_delta = _dict(item.get("render_contract_delta"))
     visual_state = _dict(item.get("visual_state_contract"))
+    rgb_evidence = _dict(item.get("rgb_view_evidence"))
     return {
         "kind": item.get("kind"),
         "target_id": item.get("target_id"),
@@ -1368,6 +1380,7 @@ def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
         "state_status": item.get("state_status"),
         "render_contract_status": render_delta.get("status"),
         "visual_state_status": visual_state.get("status"),
+        "rgb_view_evidence_status": rgb_evidence.get("status"),
         "pose_delta_m": item.get("pose_delta_m"),
         "mujoco_category": _dict(item.get("mujoco")).get("category"),
         "isaac_category": _dict(item.get("isaac")).get("category")
@@ -1493,6 +1506,8 @@ def _object_parity_item(
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     scene_binding_diagnostics: dict[str, Any],
+    locations: list[dict[str, Any]],
+    output_dir: Path | None,
 ) -> dict[str, Any]:
     mujoco_entry = _mujoco_state_entry(mujoco_state, kind, target_id)
     isaac_entry = _isaac_index_entry(isaac_state, kind, target_id)
@@ -1561,6 +1576,12 @@ def _object_parity_item(
             isaac_state=isaac_state,
             isaac_contract=isaac_contract,
             usd_prim_path=usd_prim_path,
+        ),
+        "rgb_view_evidence": _object_rgb_view_evidence(
+            kind=kind,
+            target_id=target_id,
+            locations=locations,
+            output_dir=output_dir,
         ),
         "render_contract_delta": _compact_render_contract_delta(render_delta),
         "render_contract": {
@@ -1666,6 +1687,93 @@ def _object_support_status(mujoco_entry: dict[str, Any], isaac_entry: dict[str, 
     if mujoco_parent == isaac_parent:
         return "support_metadata_aligned"
     return "support_metadata_delta"
+
+
+def _object_rgb_view_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    locations: list[dict[str, Any]],
+    output_dir: Path | None,
+) -> dict[str, Any]:
+    selected = None
+    for item in locations:
+        if not isinstance(item, dict):
+            continue
+        target = _dict(item.get("target"))
+        same_kind = str(target.get("kind") or "") == kind
+        same_target = str(target.get("target_id") or "") == target_id
+        if same_kind and same_target:
+            selected = item
+            break
+    if selected is None:
+        return {
+            "status": "not_captured_in_selected_views",
+            "selected_target": False,
+            "view_status_counts": {},
+        }
+    views = []
+    for backend_id in ("mujoco", "isaac"):
+        backend_views = _dict(_dict(selected.get("views")).get(backend_id))
+        for view_key in ("fpv", "chase"):
+            image_path = str(backend_views.get(view_key) or "")
+            evidence = _image_nonblank_evidence(image_path=image_path, output_dir=output_dir)
+            views.append(
+                {
+                    "backend": backend_id,
+                    "view": view_key,
+                    "image_path": image_path,
+                    **evidence,
+                }
+            )
+    status_counts = _status_counts(item.get("status") for item in views)
+    if views and all(item.get("status") == "nonblank_rgb" for item in views):
+        status = "selected_views_nonblank"
+    elif any(item.get("status") == "blank_rgb" for item in views):
+        status = "selected_views_blank_rgb"
+    elif any(str(item.get("status") or "").startswith("missing") for item in views):
+        status = "selected_views_missing_image"
+    else:
+        status = "selected_views_unverified"
+    return {
+        "schema": "robot_camera_object_rgb_view_evidence_v1",
+        "status": status,
+        "selected_target": True,
+        "view_status_counts": status_counts,
+        "views": views,
+        "interpretation": (
+            "Selected target FPV/chase image evidence checks whether the rendered RGB "
+            "views are present and nonblank. It is not object segmentation and does not "
+            "prove per-pixel object coverage without bbox/segmentation evidence."
+        ),
+    }
+
+
+def _image_nonblank_evidence(*, image_path: str, output_dir: Path | None) -> dict[str, Any]:
+    if not image_path:
+        return {"status": "missing_image_path"}
+    path = Path(image_path)
+    if not path.is_absolute() and output_dir is not None:
+        path = output_dir / path
+    if not path.exists():
+        return {"status": "missing_image_file"}
+    try:
+        with Image.open(path) as raw:
+            metrics = _image_visual_metrics(raw.convert("RGB"))
+    except OSError as exc:
+        return {"status": "unreadable_image", "error": str(exc)}
+    nonblank = (
+        metrics.get("mean_luminance", 0.0) > 1.0
+        or metrics.get("edge_mean", 0.0) > 0.1
+        or metrics.get("overexposed_fraction", 0.0) > 0.0
+    )
+    return {
+        "status": "nonblank_rgb" if nonblank else "blank_rgb",
+        "mean_luminance": metrics.get("mean_luminance"),
+        "edge_mean": metrics.get("edge_mean"),
+        "overexposed_fraction": metrics.get("overexposed_fraction"),
+        "underexposed_fraction": metrics.get("underexposed_fraction"),
+    }
 
 
 def _object_state_status(
@@ -4187,13 +4295,14 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             + counts_cell(item, "object_gate_classification_counts")
             + counts_cell(item, "binding_status_counts")
             + counts_cell(item, "state_status_counts")
+            + counts_cell(item, "rgb_view_evidence_status_counts")
             + counts_cell(item, "render_contract_status_counts")
             + "</tr>"
         )
     category_table = (
         "<h3>Category Status Summary</h3><table><thead><tr>"
         "<th>Category</th><th>Items</th><th>Kinds</th><th>Object Gate</th>"
-        "<th>Classes</th><th>Binding</th><th>State</th><th>Render</th>"
+        "<th>Classes</th><th>Binding</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
         "</tr></thead><tbody>" + "".join(category_rows) + "</tbody></table>"
         if category_rows
         else "<p>No category/status summary rows were recorded.</p>"
@@ -4204,6 +4313,7 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             continue
         render_delta = _dict(item.get("render_contract_delta"))
         visual_state = _dict(item.get("visual_state_contract"))
+        rgb_evidence = _dict(item.get("rgb_view_evidence"))
         mujoco = _dict(item.get("mujoco"))
         isaac = _dict(item.get("isaac"))
         rows.append(
@@ -4215,6 +4325,7 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('pose_status') or ''))}</td>"
             f"<td>{html.escape(str(item.get('support_status') or ''))}</td>"
             f"<td>{html.escape(str(item.get('state_status') or ''))}</td>"
+            f"<td>{html.escape(str(rgb_evidence.get('status') or ''))}</td>"
             f"<td>{html.escape(str(render_delta.get('status') or ''))}</td>"
             f"<td>{html.escape(str(visual_state.get('protected_by') or ''))}</td>"
             f"<td>{html.escape(str(visual_state.get('evidence_artifact') or ''))}</td>"
@@ -4226,7 +4337,7 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
     table = (
         "<table><thead><tr>"
         "<th>Kind</th><th>Target</th><th>Binding</th><th>Category</th>"
-        "<th>Pose</th><th>Support</th><th>State</th><th>Render</th>"
+        "<th>Pose</th><th>Support</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
         "<th>Protected By</th><th>Evidence</th>"
         "<th>MuJoCo Cat</th><th>Isaac Cat</th><th>Isaac Asset</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
