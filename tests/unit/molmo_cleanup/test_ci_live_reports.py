@@ -538,7 +538,7 @@ def test_live_codex_raw_continuation_prompt_blocks_label_declarations() -> None:
     assert "mcp__roboclaws__" in continuation
 
 
-def test_live_codex_sanitized_continuation_prompt_prioritizes_closeout() -> None:
+def test_live_codex_sanitized_continuation_prompt_uses_contract_first_recovery() -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
 
     continuation = run_codex._codex_continuation_prompt(
@@ -551,181 +551,21 @@ def test_live_codex_sanitized_continuation_prompt_prioritizes_closeout() -> None
     assert "do not inspect, navigate to, or pick another handle from the same stale area" in (
         continuation
     )
-    assert "If all inspection_waypoints are observed and held_object_id is empty" in continuation
-    assert "call done as the authoritative closeout probe" in continuation
+    assert "Choose destinations only from public anchors" in continuation
+    assert "destination_policy" in continuation
+    assert "destination_options" in continuation
+    assert "If no matching public destination is available yet" in continuation
+    assert "continue the waypoint sweep rather than inventing fixture ids" in continuation
+    assert "Treat public tool responses as authoritative" in continuation
     assert "pending_cleanup_candidates" in continuation
-    assert "destination_options.candidate_fixture_id" in continuation
-    assert "If held_object_id is non-empty" in continuation
-    assert "do not call done again until you navigate" in continuation
-    assert "finish the anchor discovery sweep before the first pick" in continuation
+    assert "required_tool" in continuation
+    assert "finish the anchor discovery sweep before the first pick" not in continuation
+    assert "Last trace state:" not in continuation
+    assert "Last done response rejected closeout" not in continuation
+    assert "Last metric_map state says held_object_id" not in continuation
     assert "visible_object_detections are observation evidence, not a mandatory work queue" in (
         continuation
     )
-
-
-def test_live_codex_sanitized_continuation_uses_latest_done_held_hint(tmp_path: Path) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    trace_path = tmp_path / "trace.jsonl"
-    trace_path.write_text(
-        "\n".join(
-            [
-                json.dumps(
-                    {
-                        "event": "response",
-                        "tool": "done",
-                        "ts": 10.0,
-                        "response": {
-                            "ok": False,
-                            "error_reason": "pending_cleanup_candidates",
-                            "pending_cleanup_candidates": [
-                                {
-                                    "object_id": "observed_001",
-                                    "state": "held",
-                                    "destination_options": [
-                                        {
-                                            "candidate_fixture_id": "anchor_fixture_002",
-                                            "recommended_tool": "place_inside",
-                                        }
-                                    ],
-                                }
-                            ],
-                        },
-                    }
-                )
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    continuation = run_codex._codex_continuation_prompt(
-        turn_index=9,
-        profile="world-labels-sanitized",
-        run_dir=tmp_path,
-    )
-
-    assert "Last done response rejected closeout because you are holding observed_001" in (
-        continuation
-    )
-    assert "Do not call done again until it is placed" in continuation
-    assert "navigate_to_receptacle(fixture_id=anchor_fixture_002)" in continuation
-    assert "place_inside(fixture_id=anchor_fixture_002)" in continuation
-
-
-def test_live_codex_sanitized_continuation_uses_latest_open_hint(tmp_path: Path) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    trace_path = tmp_path / "trace.jsonl"
-    trace_path.write_text(
-        "\n".join(
-            [
-                json.dumps(
-                    {
-                        "event": "response",
-                        "tool": "place_inside",
-                        "ts": 12.0,
-                        "response": {"ok": True, "fixture_id": "anchor_fixture_002"},
-                    }
-                ),
-                json.dumps(
-                    {
-                        "event": "response",
-                        "tool": "open_receptacle",
-                        "ts": 20.0,
-                        "response": {
-                            "ok": True,
-                            "object_id": "observed_001",
-                            "fixture_id": "anchor_fixture_002",
-                        },
-                    }
-                ),
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    continuation = run_codex._codex_continuation_prompt(
-        turn_index=14,
-        profile="world-labels-sanitized",
-        run_dir=tmp_path,
-    )
-
-    assert "Last trace state: open_receptacle already succeeded for anchor_fixture_002" in (
-        continuation
-    )
-    assert "Do not call done, metric_map, observe, or navigate again first" in continuation
-    assert "place_inside(fixture_id=anchor_fixture_002)" in continuation
-
-
-def test_live_codex_sanitized_open_hint_ignores_stale_open(tmp_path: Path) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    trace_path = tmp_path / "trace.jsonl"
-    trace_path.write_text(
-        "\n".join(
-            [
-                json.dumps(
-                    {
-                        "event": "response",
-                        "tool": "open_receptacle",
-                        "ts": 10.0,
-                        "response": {
-                            "ok": True,
-                            "object_id": "observed_001",
-                            "fixture_id": "anchor_fixture_002",
-                        },
-                    }
-                ),
-                json.dumps(
-                    {
-                        "event": "response",
-                        "tool": "place_inside",
-                        "ts": 20.0,
-                        "response": {"ok": True, "fixture_id": "anchor_fixture_002"},
-                    }
-                ),
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    continuation = run_codex._codex_continuation_prompt(
-        turn_index=10,
-        profile="world-labels-sanitized",
-        run_dir=tmp_path,
-    )
-
-    assert "Last trace state: open_receptacle already succeeded" not in continuation
-
-
-def test_live_codex_sanitized_continuation_uses_metric_map_held_hint(tmp_path: Path) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    trace_path = tmp_path / "trace.jsonl"
-    trace_path.write_text(
-        json.dumps(
-            {
-                "event": "response",
-                "tool": "metric_map",
-                "ts": 10.0,
-                "response": {
-                    "ok": True,
-                    "runtime_metric_map": {
-                        "cleanup_worklist_summary": {
-                            "held_object_id": "observed_003",
-                        }
-                    },
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    continuation = run_codex._codex_continuation_prompt(
-        turn_index=4,
-        profile="world-labels-sanitized",
-        run_dir=tmp_path,
-    )
-
-    assert "Last metric_map state says held_object_id is observed_003" in continuation
-    assert "Stop waypoint sweeping while holding it" in continuation
-    assert "Call done now as a public recovery probe" in continuation
 
 
 def test_live_codex_final_continuation_prompt_prioritizes_required_sweep() -> None:
@@ -741,13 +581,13 @@ def test_live_codex_final_continuation_prompt_prioritizes_required_sweep() -> No
     assert "Do not start a new optional cleanup chain from visible_object_detections" in (
         continuation
     )
-    assert "do not call done first" in continuation
-    assert "call navigate_to_waypoint for the required waypoint" in continuation
-    assert "then call observe in the same turn" in continuation
-    assert "Only after every inspection waypoint has an observe response" in continuation
-    assert "handle only those exact pending candidates" in continuation
-    assert "If you are holding an object, do not call done again" in continuation
-    assert "destination_options.recommended_tool" in continuation
+    assert "Follow public required_tool" in continuation
+    assert "unvisited_waypoint_ids" in continuation
+    assert "next_waypoint_id" in continuation
+    assert "pending_cleanup_candidates" in continuation
+    assert "Only call done after every inspection waypoint has an observe response" in continuation
+    assert "handle only those exact pending candidates" not in continuation
+    assert "destination_options.recommended_tool" not in continuation
 
 
 def test_live_codex_sanitized_lane_gets_larger_default_turn_budget() -> None:

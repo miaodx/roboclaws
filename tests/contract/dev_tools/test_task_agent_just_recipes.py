@@ -1067,18 +1067,18 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
     assert "destination_policy.preferred_fixture_categories" in prompt
     assert "destination_policy.placement_tool_by_fixture_category" in prompt
     assert "instead of skipping the object" in prompt
-    assert "first complete an anchor discovery sweep" in prompt
-    assert "before the first pick" in prompt
+    assert "If no matching public anchor or destination_options entry is available yet" in prompt
+    assert "continue the waypoint sweep rather than inventing fixture ids" in prompt
     assert "do not re-clean observed handles" in prompt
-    assert "call done as the authoritative closeout probe" in prompt
+    assert "Treat public tool responses as authoritative" in prompt
     assert "pending_cleanup_candidates" in prompt
-    assert "If done reports a held candidate" in prompt
-    assert "open_receptacle has succeeded while holding an object" in prompt
-    assert "the next cleanup tool must be place_inside" in prompt
+    assert "candidate_fixture_id or destination_options" in prompt
+    assert "required_tool" in prompt
     assert "runtime_metric_map.public_semantic_anchors" in prompt
     assert "tool recovery hints" in prompt
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
+    assert "first complete an anchor discovery sweep" not in prompt
 
 
 def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:

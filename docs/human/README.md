@@ -12,6 +12,7 @@ AI agents should also read these docs when they need human-facing context.
 - [UT and CI design](ut_ci_design.md)
 - [Agent/task command taxonomy](agent-task-command-taxonomy.md)
 - [Skill-first MCP architecture](mcp-skills-and-semantic-profiles.md)
+- [Architecture hygiene review](architecture-hygiene-review.md)
 - [Technical design](technical-design.md)
 - [MolmoSpaces settings](molmospaces-settings.md)
 - [MolmoSpaces visual grounding results](molmospaces-visual-grounding-results.md)
