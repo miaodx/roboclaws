@@ -39,6 +39,32 @@ def test_build_harness_has_expected_rows(tmp_path: Path) -> None:
     assert all(row["requires_runtime_map_prior"] for row in prior_rows)
 
 
+def test_prior_camera_rows_get_larger_codex_continuation_budget(tmp_path: Path) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="output/prior/runtime_metric_map.json",
+        visual_grounding_timeout_s="auto",
+    )
+
+    rows = {row["row_id"]: row for row in harness["rows"]}
+    assert rows["dino-prior-camera-labels-grounding-dino"]["env"] == {
+        "ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"
+    }
+    assert rows["dino-prior-camera-raw"]["env"] == {
+        "ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"
+    }
+    assert rows["direct-camera-labels-grounding-dino"]["env"] == {}
+    assert rows["dino-prior-world-labels"]["env"] == {}
+    assert (
+        "ROBOCLAWS_CODEX_MAX_CONTINUATIONS=14"
+        in rows["dino-prior-camera-labels-grounding-dino"]["rerun_command"]
+    )
+
+
 def test_replace_runtime_map_prior_updates_prior_rows_only(tmp_path: Path) -> None:
     harness = harness8.build_harness(
         output_dir=tmp_path,
@@ -149,6 +175,49 @@ def test_execute_row_with_retries_marks_exhausted_rate_limit(
     assert row["behavior_status"] == "infra_failure"
     assert row["retry_count"] == 1
     assert len(row["attempts"]) == 2
+
+
+def test_execute_row_applies_row_and_operator_codex_continuation_env(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_dir = tmp_path / "dino-prior-camera-labels-grounding-dino" / "0604_1030" / "seed-7"
+    run_dir.mkdir(parents=True)
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    captured_envs: list[dict[str, str]] = []
+
+    class Completed:
+        returncode = 0
+
+    def fake_run(_command, *, env, check):
+        captured_envs.append(dict(env))
+        return Completed()
+
+    monkeypatch.setattr(harness8.subprocess, "run", fake_run)
+    monkeypatch.setattr(harness8, "_latest_seed_dir", lambda *_args, **_kwargs: run_dir)
+
+    row = {
+        "row_id": "dino-prior-camera-labels-grounding-dino",
+        "grid_role": "cleanup",
+        "command": ["just", "task::run", "household-cleanup", "codex", "camera-labels"],
+        "output_dir": str(tmp_path / "dino-prior-camera-labels-grounding-dino"),
+        "env": {"ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"},
+    }
+    status = harness8._execute_row(
+        row,
+        Namespace(
+            just_bin="just",
+            seed=7,
+            live_wait_timeout_s=1,
+            live_wait_poll_s=0.1,
+            codex_max_continuations=16,
+        ),
+    )
+
+    assert status == 0
+    assert captured_envs[0]["ROBOCLAWS_CODEX_MAX_CONTINUATIONS"] == "16"
 
 
 def test_visual_grounding_connection_error_is_infra_failure(tmp_path: Path) -> None:

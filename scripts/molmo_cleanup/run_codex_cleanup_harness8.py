@@ -79,6 +79,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--rate-limit-retry-sleep-s", type=float, default=60.0)
+    parser.add_argument(
+        "--codex-max-continuations",
+        type=int,
+        default=0,
+        help=(
+            "Override ROBOCLAWS_CODEX_MAX_CONTINUATIONS for cleanup rows. "
+            "When unset, prior camera rows receive a larger budget because they "
+            "must both consume prior-map state and sweep/ground RAW_FPV evidence."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -314,8 +324,23 @@ def _row_payload(
         "run_result_path": "",
         "metrics": {},
     }
+    continuation_budget = _row_codex_max_continuations(
+        map_mode=map_mode,
+        lane_id=lane_id,
+    )
+    if continuation_budget:
+        row["env"]["ROBOCLAWS_CODEX_MAX_CONTINUATIONS"] = str(continuation_budget)
     row["rerun_command"] = row_rerun_command(row)
     return row
+
+
+def _row_codex_max_continuations(*, map_mode: str, lane_id: str) -> int:
+    if map_mode == PRIOR_MAP_MODE and lane_id in {
+        "camera-labels-grounding-dino",
+        "camera-raw",
+    }:
+        return 14
+    return 0
 
 
 def _execute_harness(harness: dict[str, Any], args: argparse.Namespace) -> int:
@@ -439,7 +464,13 @@ def _execute_row_with_retries(row: dict[str, Any], args: argparse.Namespace) -> 
 def _execute_row(row: dict[str, Any], args: argparse.Namespace) -> int:
     command = _command_for_row(row, just_bin=args.just_bin)
     print("+ " + row_rerun_command({**row, "command": command}))
-    status = subprocess.run(command, env=os.environ.copy(), check=False).returncode
+    env = os.environ.copy()
+    row_env = row.get("env") if isinstance(row.get("env"), dict) else {}
+    env.update({str(key): str(value) for key, value in row_env.items()})
+    requested_continuations = int(getattr(args, "codex_max_continuations", 0) or 0)
+    if requested_continuations > 0 and str(row.get("grid_role") or "") == "cleanup":
+        env["ROBOCLAWS_CODEX_MAX_CONTINUATIONS"] = str(requested_continuations)
+    status = subprocess.run(command, env=env, check=False).returncode
     run_dir = _latest_seed_dir(Path(row["output_dir"]), seed=args.seed)
     if run_dir is not None:
         row["run_dir"] = str(run_dir)

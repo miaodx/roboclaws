@@ -955,6 +955,7 @@ codex-harness8 mode="dry-run" *overrides:
     visual_grounding_timeout_s="auto"
     rate_limit_retries="1"
     rate_limit_retry_sleep_s="60"
+    codex_max_continuations="0"
 
     mode="${mode#mode=}"
     for override in {{overrides}}; do
@@ -968,7 +969,7 @@ codex-harness8 mode="dry-run" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|rate_limit_retries|rate_limit_retry_sleep_s)
+        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|rate_limit_retries|rate_limit_retry_sleep_s|codex_max_continuations)
           ;;
         visual_grounding_timeout)
           key="visual_grounding_timeout_s"
@@ -991,6 +992,7 @@ codex-harness8 mode="dry-run" *overrides:
       --visual-grounding-timeout-s "$visual_grounding_timeout_s"
       --rate-limit-retries "$rate_limit_retries"
       --rate-limit-retry-sleep-s "$rate_limit_retry_sleep_s"
+      --codex-max-continuations "$codex_max_continuations"
     )
     if [[ -n "$row" ]]; then
       IFS=',' read -r -a selected_rows <<< "$row"
