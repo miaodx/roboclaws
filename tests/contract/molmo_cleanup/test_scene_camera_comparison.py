@@ -36,6 +36,7 @@ from roboclaws.household.scene_camera_comparison import (
     _render_domain_contract_probe,
     _render_domain_source_diagnostics,
     _render_domain_view_triage,
+    _renderer_version,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
@@ -1161,6 +1162,10 @@ def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> N
     ]
     assert GENESIS_LANE_ID in html
     assert "genesis.png" in html
+
+
+def test_scene_camera_renderer_version_includes_genesis_runtime() -> None:
+    assert _renderer_version({"genesis_version": "1.0.0"}) == "1.0.0"
 
 
 def test_scene_camera_comparison_manifest_is_json_serializable() -> None:

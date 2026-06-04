@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from roboclaws.household.genesis_backend import GenesisSubprocessBackend
+from scripts.genesis_cleanup.genesis_backend_worker import _extract_render_only_visual_mesh
 
 
 def test_genesis_backend_reports_missing_runtime(tmp_path: Path) -> None:
@@ -96,3 +97,36 @@ def test_genesis_fake_worker_protocol_echoes_runtime_and_camera_views(tmp_path: 
     assert result["runtime"]["renderer_mode"] == "fake_genesis_protocol"
     assert result["visual_artifact_provenance"] == "fake_protocol_placeholder_image"
     assert (tmp_path / "views" / "room_01.png").is_file()
+
+
+def test_genesis_render_only_visual_mesh_extractor_uses_usd_geometry(tmp_path: Path) -> None:
+    pytest.importorskip("pxr")
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text(
+        """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Mesh "Triangle"
+    {
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    result = _extract_render_only_visual_mesh(scene_usd, tmp_path / "mesh.obj")
+
+    assert result["source_usd"] == str(scene_usd)
+    assert result["source_mesh_count"] == 1
+    assert result["vertex_count"] == 3
+    assert result["triangle_count"] == 1
+    assert (tmp_path / "mesh.obj").read_text(encoding="utf-8").count("\nf ") == 1

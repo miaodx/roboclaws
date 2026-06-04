@@ -10,6 +10,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
@@ -122,7 +124,6 @@ def _write_real_camera_views(
         return _error("camera_views", "local_scene_usd_required", scene_usd=str(scene_usd))
     try:
         import genesis as gs
-        import numpy as np
     except Exception as exc:
         return _error(
             "camera_views",
@@ -145,6 +146,13 @@ def _write_real_camera_views(
     images: dict[str, str] = {}
     shapes: dict[str, list[int]] = {}
     views: list[dict[str, Any]] = []
+    scene_load: dict[str, Any] = {
+        "status": "success",
+        "scene_usd": str(scene_usd),
+        "usd_stage_loaded": True,
+        "runtime_mode": "real",
+        "genesis_import_mode": "native_usd_stage",
+    }
 
     try:
         if not getattr(gs, "_initialized", False):
@@ -160,7 +168,38 @@ def _write_real_camera_views(
             show_viewer=False,
             show_FPS=False,
         )
-        scene.add_stage(morph=gs.morphs.USD(file=str(scene_usd)))
+        try:
+            scene.add_stage(morph=gs.morphs.USD(file=str(scene_usd)))
+        except Exception as exc:
+            visual_mesh = _extract_render_only_visual_mesh(
+                scene_usd,
+                args.output_dir / "prepared_usd_visual_mesh.obj",
+            )
+            scene.add_entity(
+                morph=gs.morphs.Mesh(
+                    file=str(visual_mesh["mesh_path"]),
+                    fixed=True,
+                    collision=False,
+                    visualization=True,
+                    decimate=False,
+                    convexify=False,
+                )
+            )
+            scene_load = {
+                "status": "success",
+                "scene_usd": str(scene_usd),
+                "usd_stage_loaded": True,
+                "runtime_mode": "real",
+                "genesis_import_mode": "prepared_usd_visual_mesh",
+                "native_usd_stage_error": str(exc),
+                "render_only_visual_mesh": visual_mesh,
+                "claim_boundary": (
+                    "Genesis native USD stage import could not parse the prepared scene "
+                    "as a physics graph, so this render-only lane extracts final USD Mesh "
+                    "geometry into a temporary visual OBJ and renders it with Genesis cameras. "
+                    "This is scene-camera evidence only, not cleanup or physics support."
+                ),
+            }
         cameras = []
         for view in request.get("views") or []:
             if not isinstance(view, dict):
@@ -224,12 +263,7 @@ def _write_real_camera_views(
         "images": images,
         "shapes": shapes,
         "views": views,
-        "scene_load": {
-            "status": "success",
-            "scene_usd": str(scene_usd),
-            "usd_stage_loaded": True,
-            "runtime_mode": "real",
-        },
+        "scene_load": scene_load,
     }
 
 
@@ -327,6 +361,75 @@ def _runtime_metadata(
     if numpy is not None:
         metadata["numpy_version"] = str(getattr(numpy, "__version__", "unknown"))
     return metadata
+
+
+def _extract_render_only_visual_mesh(scene_usd: Path, output_path: Path) -> dict[str, Any]:
+    try:
+        from pxr import Usd, UsdGeom
+    except Exception as exc:
+        raise RuntimeError(
+            f"pxr USD bindings unavailable for render-only mesh extraction: {exc}"
+        ) from exc
+    stage = Usd.Stage.Open(str(scene_usd))
+    if stage is None:
+        raise RuntimeError(
+            f"failed to open prepared USD for render-only mesh extraction: {scene_usd}"
+        )
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    vertices: list[tuple[float, float, float]] = []
+    faces: list[tuple[int, int, int]] = []
+    mesh_count = 0
+    triangle_count = 0
+    for prim in stage.Traverse():
+        if not prim.IsA(UsdGeom.Mesh):
+            continue
+        mesh = UsdGeom.Mesh(prim)
+        points = mesh.GetPointsAttr().Get()
+        if not points:
+            continue
+        face_counts = list(mesh.GetFaceVertexCountsAttr().Get() or [])
+        face_indices = list(mesh.GetFaceVertexIndicesAttr().Get() or [])
+        if not face_counts or not face_indices:
+            continue
+        transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
+            Usd.TimeCode.Default()
+        )
+        base_index = len(vertices)
+        for point in points:
+            world = transform.Transform(point)
+            vertices.append((float(world[0]), float(world[1]), float(world[2])))
+        cursor = 0
+        for face_count in face_counts:
+            polygon = face_indices[cursor : cursor + int(face_count)]
+            cursor += int(face_count)
+            if len(polygon) < 3:
+                continue
+            for index in range(1, len(polygon) - 1):
+                faces.append(
+                    (
+                        base_index + int(polygon[0]) + 1,
+                        base_index + int(polygon[index]) + 1,
+                        base_index + int(polygon[index + 1]) + 1,
+                    )
+                )
+                triangle_count += 1
+        mesh_count += 1
+    if not vertices or not faces:
+        raise RuntimeError("prepared USD contains no renderable UsdGeom.Mesh geometry")
+    with output_path.open("w", encoding="utf-8") as file:
+        file.write("# render-only visual mesh extracted from prepared USD\n")
+        for vertex in vertices:
+            file.write(f"v {vertex[0]:.6f} {vertex[1]:.6f} {vertex[2]:.6f}\n")
+        for face in faces:
+            file.write(f"f {face[0]} {face[1]} {face[2]}\n")
+    return {
+        "mesh_path": str(output_path),
+        "source_usd": str(scene_usd),
+        "source_mesh_count": mesh_count,
+        "vertex_count": len(vertices),
+        "triangle_count": triangle_count,
+        "format": "obj",
+    }
 
 
 def _error(tool: str, reason: str, **extra: Any) -> dict[str, Any]:

@@ -4929,7 +4929,12 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
 
 
 def _renderer_version(runtime: dict[str, Any]) -> str:
-    return str(runtime.get("mujoco_version") or runtime.get("isaac_lab_version") or "")
+    return str(
+        runtime.get("mujoco_version")
+        or runtime.get("isaac_lab_version")
+        or runtime.get("genesis_version")
+        or ""
+    )
 
 
 def _lighting_profile_id(lane: dict[str, Any]) -> str:

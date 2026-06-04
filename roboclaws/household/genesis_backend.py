@@ -116,6 +116,12 @@ class GenesisSubprocessBackend:
                 f"Genesis subprocess worker timed out ({command}, {timeout_s:g}s)"
             ) from exc
         if completed.returncode != 0:
+            failure = _parse_worker_failure(completed.stdout)
+            if failure:
+                raise RuntimeError(
+                    "Genesis subprocess worker failed "
+                    f"({command}, exit {completed.returncode}): {failure}"
+                )
             raise RuntimeError(
                 "Genesis subprocess worker failed "
                 f"({command}, exit {completed.returncode}): {completed.stderr.strip()}"
@@ -144,3 +150,16 @@ def _genesis_worker_timeout_s(command: str) -> float:
     if override:
         return float(override)
     return GENESIS_WORKER_TIMEOUTS_S.get(command, DEFAULT_GENESIS_WORKER_TIMEOUT_S)
+
+
+def _parse_worker_failure(stdout: str) -> str:
+    try:
+        result = _parse_last_json_object(stdout)
+    except Exception:
+        return ""
+    error = result.get("error") if isinstance(result.get("error"), dict) else {}
+    reason = str(error.get("reason") or "")
+    message = str(error.get("message") or "")
+    if reason and message:
+        return f"{reason}: {message}"
+    return message or reason
