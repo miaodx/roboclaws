@@ -521,14 +521,23 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     observation = json.loads(observation_blocks[0])
     raw = observation["raw_fpv_observation"]
 
+    assert observation["schema"] == "raw_fpv_mcp_observe_state_v1"
     assert observation["perception_mode"] == RAW_FPV_ONLY_MODE
     assert observation["visible_object_detections"] == []
     assert "inline_on_navigate" in observation["instruction"]
     assert "navigate_to_visual_candidate" in observation["instruction"]
     assert "declare_visual_candidates" not in observation["instruction"]
     assert raw["image_artifacts"]["fpv"].endswith(".png")
-    assert raw["camera_control_contract"]["schema"] == "robot_view_camera_control_contract_v1"
-    assert raw["camera_control_contract"]["same_pose_api"] is False
+    assert "camera_control_contract" not in raw
+    assert raw["camera_control_summary"] == {
+        "schema": "robot_view_camera_control_contract_summary_v1",
+        "contract_schema": "robot_view_camera_control_contract_v1",
+        "status": "backend_local_robot_camera",
+        "camera_model": "backend_local_robot_view",
+        "same_pose_api": False,
+        "agent_facing_fpv_source": "test_fake_fpv",
+        "canonical_camera_control": False,
+    }
     assert raw["camera_offset"] == {"yaw_delta_deg": 15.0, "pitch_delta_deg": -5.0}
     assert backend.robot_view_camera_offsets[-1] == {
         "yaw_delta_deg": 15.0,

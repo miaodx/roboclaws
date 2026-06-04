@@ -603,7 +603,7 @@ class RealWorldMolmoCleanupMCPServer:
         resolved = _resolve_artifact_path(self.run_dir, str(fpv_path))
         if not resolved.is_file():
             return response
-        state_text = json.dumps(response, sort_keys=True)
+        state_text = json.dumps(_compact_raw_fpv_mcp_observe_state(response), sort_keys=True)
         return [state_text, MCPImage(data=resolved.read_bytes(), format="png")]
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
@@ -932,6 +932,64 @@ def _compact_camera_model_candidate(item: dict[str, Any]) -> dict[str, Any]:
             ("fixture_id", "relation", "confidence", "source", "perception_source"),
         )
     return compact
+
+
+def _compact_raw_fpv_mcp_observe_state(response: dict[str, Any]) -> dict[str, Any]:
+    raw = response.get("raw_fpv_observation") if isinstance(response, dict) else {}
+    raw = raw if isinstance(raw, dict) else {}
+    return {
+        "schema": "raw_fpv_mcp_observe_state_v1",
+        "ok": response.get("ok"),
+        "tool": response.get("tool"),
+        "status": response.get("status"),
+        "contract": response.get("contract"),
+        "perception_mode": response.get("perception_mode"),
+        "waypoint_id": response.get("waypoint_id") or raw.get("waypoint_id"),
+        "current_room_id": response.get("current_room_id") or raw.get("room_id"),
+        "held_object_id": response.get("held_object_id") or raw.get("held_object_id"),
+        "visible_object_detections": response.get("visible_object_detections") or [],
+        "raw_fpv_observation": _compact_raw_fpv_observation(raw),
+        "instruction": response.get("instruction"),
+    }
+
+
+def _compact_raw_fpv_observation(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "observation_id": raw.get("observation_id"),
+        "waypoint_id": raw.get("waypoint_id"),
+        "room_id": raw.get("room_id"),
+        "held_object_id": raw.get("held_object_id"),
+        "perception_mode": raw.get("perception_mode"),
+        "structured_detections_available": raw.get("structured_detections_available"),
+        "camera_offset": raw.get("camera_offset"),
+        "image_artifacts": raw.get("image_artifacts") or {},
+        "artifact_status": raw.get("artifact_status"),
+        "robot_view_label": raw.get("robot_view_label"),
+        "public_contract_note": raw.get("public_contract_note"),
+        "camera_control_summary": _compact_camera_control_contract(
+            raw.get("camera_control_contract")
+        ),
+    }
+
+
+def _compact_camera_control_contract(contract: Any) -> dict[str, Any]:
+    if not isinstance(contract, dict):
+        return {
+            "schema": "robot_view_camera_control_contract_summary_v1",
+            "status": "missing_camera_control_contract",
+            "same_pose_api": False,
+        }
+    agent_facing_fpv = contract.get("agent_facing_fpv")
+    agent_facing_fpv = agent_facing_fpv if isinstance(agent_facing_fpv, dict) else {}
+    return {
+        "schema": "robot_view_camera_control_contract_summary_v1",
+        "contract_schema": contract.get("schema"),
+        "status": contract.get("status"),
+        "camera_model": contract.get("camera_model"),
+        "same_pose_api": contract.get("same_pose_api") is True,
+        "agent_facing_fpv_source": agent_facing_fpv.get("source"),
+        "canonical_camera_control": agent_facing_fpv.get("canonical_camera_control") is True,
+    }
 
 
 def _select_keys(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
