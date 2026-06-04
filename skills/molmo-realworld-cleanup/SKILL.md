@@ -52,11 +52,12 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    its returned `candidate_fixture_id` and `recommended_tool` for placement if
    present.
    Maintain a count of successful grounded cleanup actions. In `camera-raw`
-   acceptance runs, do not call `done` before at least seven grounded visual
+   acceptance runs, use the target cleanup count from the kickoff prompt or
+   public run configuration; do not call `done` before that many grounded visual
    candidates have been successfully cleaned. If grounding stays unresolved and
-   the success count is still below seven, continue sweeping or reobserve from
-   another public waypoint; retry at most once with a broader category or clearer
-   verbal region before moving on.
+   the success count is still below that target, continue sweeping or reobserve
+   from another public waypoint; retry at most once with a broader category or
+   clearer verbal region before moving on.
    After a successful pick/place for an observed handle, do not act on that same
    handle again. If a later raw-FPV declaration resolves to an already-handled
    object, continue the waypoint sweep and observe for other objects instead of

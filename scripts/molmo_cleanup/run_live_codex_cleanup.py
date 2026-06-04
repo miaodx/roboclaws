@@ -437,11 +437,24 @@ class LiveCodexCleanupRunner:
                 _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
+            raw_fpv_required_cleanup_count = str(int(self.args.min_generated_mess_count))
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
-            _append_missing_checker_value(checker_args, "--min-model-declared-observations", "7")
-            _append_missing_checker_value(checker_args, "--min-model-declared-actions", "7")
+            _append_missing_checker_value(
+                checker_args,
+                "--min-model-declared-observations",
+                raw_fpv_required_cleanup_count,
+            )
+            _append_missing_checker_value(
+                checker_args,
+                "--min-model-declared-actions",
+                raw_fpv_required_cleanup_count,
+            )
             if task_name == "household-cleanup":
-                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "7")
+                _append_missing_checker_value(
+                    checker_args,
+                    "--min-semantic-accepted-count",
+                    raw_fpv_required_cleanup_count,
+                )
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         checker_args.append(str(run_result))
 
