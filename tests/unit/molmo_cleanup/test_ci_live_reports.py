@@ -531,6 +531,10 @@ def test_live_codex_raw_continuation_prompt_blocks_label_declarations() -> None:
     assert "copied from fixture_hints" not in continuation
     assert "omit target_fixture_id" in continuation
     assert "candidate_fixture_id/recommended_tool" in continuation
+    assert "required_next_tool=pick" in continuation
+    assert "immediately call pick with that object_id" in continuation
+    assert "then navigate_to_receptacle with that candidate_fixture_id" in continuation
+    assert "do not continue the sweep" in continuation
     assert "Prefer image_region type verbal_region" in continuation
     assert "image_region={type:verbal_region,value:front of desk}" in continuation
     assert "Never send bbox_normalized" in continuation
@@ -614,6 +618,85 @@ def test_live_codex_sanitized_lane_gets_larger_default_turn_budget() -> None:
         )
         == 21
     )
+
+
+def test_live_codex_turn_idle_timeout_uses_env_default(monkeypatch) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+
+    monkeypatch.delenv("ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S", raising=False)
+    assert run_codex._codex_turn_idle_timeout_s(None) == 300.0
+    assert run_codex._codex_turn_idle_timeout_s(12.5) == 12.5
+
+    monkeypatch.setenv("ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S", "7")
+    assert run_codex._codex_turn_idle_timeout_s(None) == 7.0
+
+    monkeypatch.setenv("ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S", "bad")
+    assert run_codex._codex_turn_idle_timeout_s(None) == 300.0
+
+
+def test_live_codex_idle_turn_starts_continuation(tmp_path: Path, monkeypatch) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    agent_dir = tmp_path / "agent"
+    agent_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        codex_bin="codex",
+        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
+        codex_max_continuations=1,
+        codex_turn_idle_timeout_s=3.0,
+        kickoff_prompt="clean",
+        codex_model_arg=[],
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="camera-raw",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    runner.server_proc = SimpleNamespace(poll=lambda: None)
+    calls: list[tuple[list[str], float | None]] = []
+
+    def fake_prepare_agent_workspace(**_kwargs):
+        return agent_dir, agent_dir
+
+    def fake_subprocess_run(*_args, **_kwargs):
+        return SimpleNamespace(returncode=0)
+
+    def fake_run_and_tee(command, *, stdout_path, stderr_path, idle_timeout_s=None, **_kwargs):
+        calls.append((command, idle_timeout_s))
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+        if len(calls) == 1:
+            stdout_path.write_text(
+                '{"type":"error","message":"stream disconnected before completion: '
+                'idle timeout waiting for SSE"}\n',
+                encoding="utf-8",
+            )
+            stderr_path.write_text(
+                "codex turn idle timeout after 3s; terminating process group for continuation\n",
+                encoding="utf-8",
+            )
+            return run_codex.CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS
+        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
+        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
+    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+
+    runner._run_codex()
+
+    assert len(calls) == 2
+    assert calls[0][1] == 3.0
+    assert calls[1][1] == 3.0
+    assert "Continue the same active cleanup MCP session" in calls[1][0][-1]
+    assert runner.live_timing["codex_recoverable_errors"] == [
+        {"turn": 1, "type": "codex_turn_idle_timeout"}
+    ]
 
 
 def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
