@@ -1446,6 +1446,7 @@ def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
     picked = contract.pick(candidate["object_id"])
 
     assert candidate["grounding_status"] == "unresolved"
+    assert "No public actionable object matched" in candidate["recovery_hint"]
     assert picked["ok"] is False
     assert picked["error_reason"] == "visual_candidate_not_resolved"
     worklist_item = next(
@@ -1458,6 +1459,33 @@ def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
     assert candidate["private_truth_included"] is False
     _assert_no_forbidden_keys(declared)
     _assert_no_forbidden_keys(picked)
+
+
+def test_realworld_navigate_to_unresolved_visual_candidate_says_continue_sweep() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="imaginary widget",
+        target_fixture_id="sink_01",
+        evidence_note="ambiguous tiny object in the far corner",
+        image_region={"type": "verbal_region", "value": "far corner"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "visual_candidate_not_resolved"
+    assert response["required_next_tool"] == "observe"
+    assert "No public actionable object matched" in response["recovery_hint"]
+    assert "instead of looping" in response["recovery_hint"]
+    _assert_no_forbidden_keys(response)
 
 
 def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:

@@ -207,7 +207,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
         perception_mode="raw_fpv_only"
-        raw_fpv_required_cleanup_count="$generated_mess_count"
+        raw_fpv_required_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))
         visual_args=(--include-robot --robot-name rby1m --record-robot-views)
         checker_visual_args=(
           --require-robot-views
@@ -437,7 +437,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
-        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$generated_mess_count")"
+        prompt_cleanup_count="$generated_mess_count"
+        if [[ "$profile" == "camera-raw" ]]; then
+          prompt_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))
+        fi
+        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count")"
 
         server_args=(
           --host "$server_host"

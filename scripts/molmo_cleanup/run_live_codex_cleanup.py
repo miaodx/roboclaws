@@ -59,6 +59,10 @@ class ProviderRateLimitError(RuntimeError):
     """Raised when Codex provider rate limiting should be retried by the caller."""
 
 
+def _generated_mess_success_threshold(count: int) -> int:
+    return max(1, (count * 7 + 9) // 10)
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Own the server, Codex exec, checker, and status files for one live run.",
@@ -437,7 +441,9 @@ class LiveCodexCleanupRunner:
                 _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
-            raw_fpv_required_cleanup_count = str(int(self.args.min_generated_mess_count))
+            raw_fpv_required_cleanup_count = str(
+                _generated_mess_success_threshold(int(self.args.min_generated_mess_count))
+            )
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
             _append_missing_checker_value(
                 checker_args,

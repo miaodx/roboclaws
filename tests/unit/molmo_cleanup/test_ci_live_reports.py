@@ -1097,6 +1097,42 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
     assert command.count("--min-sweep-coverage") == 1
 
 
+def test_live_codex_camera_raw_checker_defaults_to_generated_mess_success_threshold(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        task="帮我收拾这个房间",
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="camera-raw",
+        min_generated_mess_count="5",
+        checker_visual_arg=[],
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    captured: dict[str, list[str]] = {}
+
+    def fake_run_and_tee(command, **_kwargs):
+        captured["command"] = command
+        return 0
+
+    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
+
+    runner._check_result()
+
+    command = captured["command"]
+    assert command[command.index("--min-model-declared-observations") + 1] == "4"
+    assert command[command.index("--min-model-declared-actions") + 1] == "4"
+    assert command[command.index("--min-semantic-accepted-count") + 1] == "4"
+    assert command[command.index("--min-sweep-coverage") + 1] == "1.0"
+
+
 def test_live_codex_semantic_map_build_checker_uses_map_task_identity(
     tmp_path: Path, monkeypatch
 ) -> None:

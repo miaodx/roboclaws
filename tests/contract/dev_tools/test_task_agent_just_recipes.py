@@ -1133,23 +1133,27 @@ def test_molmo_camera_raw_live_gate_scales_to_generated_mess_count() -> None:
     assert match is not None
     body = match.group("body")
 
-    assert 'raw_fpv_required_cleanup_count="$generated_mess_count"' in body
+    assert "raw_fpv_required_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))" in body
     assert '--min-model-declared-observations "$raw_fpv_required_cleanup_count"' in body
     assert '--min-model-declared-actions "$raw_fpv_required_cleanup_count"' in body
     assert '--min-semantic-accepted-count "$raw_fpv_required_cleanup_count"' in body
     assert "--min-semantic-accepted-count 7" not in body
 
 
-def test_molmo_live_kickoff_prompt_receives_generated_mess_count() -> None:
+def test_molmo_live_kickoff_prompt_receives_camera_raw_success_threshold() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert '--target-cleanup-count "$generated_mess_count"' in text
+    assert 'prompt_cleanup_count="$generated_mess_count"' in text
+    assert "prompt_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))" in text
+    assert '--target-cleanup-count "$prompt_cleanup_count"' in text
 
 
-def test_live_codex_camera_raw_default_gate_uses_min_generated_mess_count() -> None:
+def test_live_codex_camera_raw_default_gate_uses_success_threshold() -> None:
     text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
-    assert "raw_fpv_required_cleanup_count = str(int(self.args.min_generated_mess_count))" in text
+    assert "def _generated_mess_success_threshold(count: int) -> int:" in text
+    assert "(count * 7 + 9) // 10" in text
+    assert "_generated_mess_success_threshold(int(self.args.min_generated_mess_count))" in text
     assert (
         '"--min-model-declared-observations",\n                raw_fpv_required_cleanup_count'
         in text

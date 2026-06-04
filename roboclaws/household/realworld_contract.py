@@ -1046,9 +1046,12 @@ class RealWorldCleanupContract:
                 object_id=handle,
                 grounding_status=declaration.get("grounding_status", "unresolved"),
                 grounding_confidence=declaration.get("grounding_confidence", 0.0),
+                required_next_tool="observe",
                 recovery_hint=declaration.get(
                     "recovery_hint",
-                    "Declare a tighter image_region or include a source_fixture_id.",
+                    "If one retry with a tighter image_region still does not resolve, "
+                    "treat this visible item as non-actionable public clutter and "
+                    "continue to another waypoint.",
                 ),
             )
         navigation = self.navigate_to_object(handle)
@@ -3335,7 +3338,11 @@ class RealWorldCleanupContract:
             recovery_hint = (
                 "Provide a tighter bbox/point or source_fixture_id before picking."
                 if status == "ambiguous"
-                else "Reobserve from another waypoint or declare a clearer category/source fixture."
+                else (
+                    "No public actionable object matched this declaration. Retry at most once "
+                    "with a tighter image_region or clearer category, then continue the "
+                    "waypoint sweep instead of looping on this visible item."
+                )
             )
             grounding_status = status
             actionability_status = "needs_clarification"
