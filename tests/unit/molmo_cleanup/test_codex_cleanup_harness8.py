@@ -151,6 +151,56 @@ def test_execute_row_with_retries_marks_exhausted_rate_limit(
     assert len(row["attempts"]) == 2
 
 
+def test_visual_grounding_connection_error_is_infra_failure(tmp_path: Path) -> None:
+    run_dir = tmp_path / "seed-7"
+    run_dir.mkdir()
+    (run_dir / "report.html").write_text("<html></html>", encoding="utf-8")
+    (run_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "completion_status": "failed",
+                "score": {"status": "failed", "restored_count": 0, "total_targets": 10},
+                "sweep_coverage_rate": 1.0,
+                "disturbance_count": 0,
+                "trace": [
+                    {
+                        "visual_grounding_pipeline": {
+                            "pipeline_id": "grounding-dino",
+                            "status": "failed",
+                            "failure_reason": "connection_error",
+                            "failure_message": "<urlopen error [Errno 111] Connection refused>",
+                            "candidate_count": 0,
+                        }
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    row = harness8._cleanup_row(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        map_mode=harness8.PRIOR_MAP_MODE,
+        lane={
+            "lane_id": "camera-labels-grounding-dino",
+            "label": "Grounding DINO camera labels",
+            "profile": "camera-labels",
+            "visual_grounding": "grounding-dino",
+        },
+        runtime_map_prior="output/prior/runtime_metric_map.json",
+        visual_grounding_timeout_s="auto",
+    )
+    harness8._refresh_row_from_evidence(row, status=1, run_dir=run_dir)
+
+    assert row["status"] == "infra_failed"
+    assert row["behavior_status"] == "infra_failure"
+    assert "grounding-dino visual grounding infra failure" in row["reason"]
+
+
 def test_prior_setup_rate_limit_blocks_prior_rows(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:

@@ -41,6 +41,11 @@ RATE_LIMIT_PATTERNS = (
     "ratelimit",
     "exceeded retry limit",
 )
+VISUAL_GROUNDING_INFRA_FAILURE_REASONS = {
+    "connection_error",
+    "timeout",
+    "service_unavailable",
+}
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -488,6 +493,7 @@ def _refresh_row_status(row: dict[str, Any], status: int) -> None:
     metrics = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
     completion_status = str(metrics.get("completion_status") or "")
     score_status = str(metrics.get("score_status") or "")
+    visual_grounding_infra_failure = _visual_grounding_infra_failure(metrics)
     row["strict_exit_status"] = status
     if _is_setup_row(row):
         if row.get("runtime_map_path"):
@@ -520,6 +526,10 @@ def _refresh_row_status(row: dict[str, Any], status: int) -> None:
             f"strict cleanup checker exited with status {status}; "
             "run_result.json reports cleanup success"
         )
+    elif visual_grounding_infra_failure:
+        row["status"] = "infra_failed"
+        row["behavior_status"] = "infra_failure"
+        row["reason"] = visual_grounding_infra_failure
     else:
         row["status"] = "failed"
         row["behavior_status"] = completion_status or score_status or "failed"
@@ -568,6 +578,7 @@ def _run_result_metrics(path: Path) -> dict[str, Any]:
         if isinstance(data.get("agent_diagnostics"), dict)
         else {}
     )
+    visual_grounding_failures = _visual_grounding_failures(data)
     return {
         "completion_status": data.get("completion_status") or score.get("completion_status") or "",
         "score_status": score.get("status") or "",
@@ -589,6 +600,7 @@ def _run_result_metrics(path: Path) -> dict[str, Any]:
         else score.get("disturbance_count"),
         "tool_call_count": runtime.get("tool_call_count"),
         "total_elapsed_s": runtime.get("total_elapsed_s"),
+        "visual_grounding_failures": visual_grounding_failures,
         "report_path": str(path.parent / "report.html"),
     }
 
@@ -608,8 +620,48 @@ def _setup_result_metrics(path: Path) -> dict[str, Any]:
         "disturbance_count": data.get("disturbance_count"),
         "runtime_semantic_anchor_count": len(runtime_map.get("public_semantic_anchors") or []),
         "visual_grounding_pipeline_id": data.get("visual_grounding_pipeline_id") or "",
+        "visual_grounding_failures": _visual_grounding_failures(data),
         "report_path": str(path.parent / "report.html"),
     }
+
+
+def _visual_grounding_failures(data: Any) -> list[dict[str, Any]]:
+    failures: list[dict[str, Any]] = []
+    stack: list[Any] = [data]
+    while stack:
+        current = stack.pop()
+        if isinstance(current, dict):
+            pipeline = current.get("visual_grounding_pipeline")
+            if isinstance(pipeline, dict) and str(pipeline.get("status") or "") == "failed":
+                failures.append(
+                    {
+                        "pipeline_id": pipeline.get("pipeline_id") or "",
+                        "status": pipeline.get("status") or "",
+                        "failure_reason": pipeline.get("failure_reason") or "",
+                        "failure_message": pipeline.get("failure_message") or "",
+                        "candidate_count": pipeline.get("candidate_count"),
+                    }
+                )
+            stack.extend(current.values())
+        elif isinstance(current, list):
+            stack.extend(current)
+    return failures
+
+
+def _visual_grounding_infra_failure(metrics: dict[str, Any]) -> str:
+    failures = metrics.get("visual_grounding_failures")
+    if not isinstance(failures, list):
+        return ""
+    for failure in failures:
+        if not isinstance(failure, dict):
+            continue
+        reason = str(failure.get("failure_reason") or "")
+        if reason not in VISUAL_GROUNDING_INFRA_FAILURE_REASONS:
+            continue
+        pipeline = str(failure.get("pipeline_id") or "visual_grounding")
+        message = str(failure.get("failure_message") or reason)
+        return f"{pipeline} visual grounding infra failure: {reason}; {message}"
+    return ""
 
 
 def _semantic_accepted_count(score: dict[str, Any], advisory_counts: dict[str, Any]) -> int | None:

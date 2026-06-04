@@ -110,5 +110,7 @@ health. A `strict_checker_failed` row with `behavior_status=success` is still
 useful evidence; inspect the checker reason before treating it as cleanup
 behavior regression.
 
-A `rate_limited` row with `behavior_status=infra_failure` is not cleanup
-behavior evidence. Rerun it before comparing direct vs DINO-prior behavior.
+A row with `behavior_status=infra_failure` is not cleanup behavior evidence.
+`rate_limited` means Codex provider exhaustion; `infra_failed` means an external
+dependency such as the Grounding DINO sidecar failed or timed out. Rerun it
+before comparing direct vs DINO-prior behavior.

@@ -146,9 +146,11 @@ run. Treat these as regression triggers:
 - large wall-time increases not explained by provider rate limits or sidecar
   latency.
 
-Rows with `status=rate_limited` and `behavior_status=infra_failure` did not
-produce behavioral evidence after the configured retry budget. Rerun those rows
-before drawing cleanup-regression conclusions.
+Rows with `behavior_status=infra_failure` did not produce clean behavioral
+evidence. `status=rate_limited` means the Codex provider exhausted the configured
+retry budget. `status=infra_failed` means an external dependency such as the
+Grounding DINO sidecar failed or timed out. Rerun those rows after the provider
+or sidecar is healthy before drawing cleanup-regression conclusions.
 
 Exact/private restore is useful evidence, but it is not the primary objective
 for sanitized public-policy cleanup. Use semantic accepted, sweep coverage, and
