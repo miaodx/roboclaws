@@ -1155,9 +1155,14 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert request["api_name"] == "roboclaws.camera_control.render_views"
     assert request["camera_model"] == "canonical_eye_target_camera_v1"
     assert request["render_resolution"] == {"width": 320, "height": 240}
-    assert request["lighting_profile"]["profile_id"] == "scene_probe_existing_usd_lights_v1"
-    assert request["lighting_profile"]["isaac_dome_intensity"] == 0.0
+    assert request["lighting_profile"]["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
+    assert request["lighting_profile"]["isaac_dome_intensity"] == pytest.approx(60.0)
     assert request["lighting_profile"]["isaac_key_intensity"] == 0.0
+    assert request["lighting_profile"]["mujoco_headlight_ambient"] == pytest.approx(
+        [0.35, 0.35, 0.35]
+    )
+    assert request["lighting_profile"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert request["lighting_profile"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
     assert request["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert request["color_profile"]["highlight_knee"] == pytest.approx(225.0)
     assert request["color_profile"]["backend_luminance_gain"]["molmospaces-mujoco"] == (
@@ -1286,6 +1291,41 @@ def test_camera_color_profile_prefers_backend_view_rgb_gain() -> None:
     assert diagnostics["backend_rgb_gain"]["source"] == "unit-view-rgb"
 
 
+def test_camera_color_profile_applies_backend_tone_adjustment() -> None:
+    from roboclaws.household.color_management import apply_camera_color_profile
+
+    frame = np.full((2, 2, 3), 64, dtype=np.uint8)
+
+    adjusted, diagnostics = apply_camera_color_profile(
+        frame,
+        np=np,
+        profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "highlight_knee": 225.0,
+            "highlight_compression": 0.5,
+            "gamma": 1.0,
+            "backend_tone_adjustment": {
+                "genesis-prepared-usd": {
+                    "shadow_lift": 16.0,
+                    "shadow_floor": 128.0,
+                    "gamma": 1.0,
+                    "saturation": 1.0,
+                    "gain": 1.25,
+                }
+            },
+            "backend_tone_adjustment_source": "unit-tone",
+        },
+        backend="genesis-prepared-usd",
+    )
+
+    assert int(adjusted[0, 0, 0]) == 90
+    assert diagnostics["backend_tone_adjustment"]["status"] == "applied"
+    assert diagnostics["backend_tone_adjustment"]["adjustment"]["shadow_lift"] == (
+        pytest.approx(16.0)
+    )
+    assert diagnostics["backend_tone_adjustment"]["source"] == "unit-tone"
+
+
 def test_worker_robot_pose_near_receptacle_uses_shared_pose_resolver() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()
@@ -1382,6 +1422,33 @@ def test_worker_robot_views_uses_robot_head_camera_for_fpv(
         "robot_0/camera_follower"
     )
     assert Path(result["views"]["fpv"]).is_file()
+
+
+def test_worker_grows_mujoco_offscreen_buffer_for_high_res_render() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+
+    class GlobalSettings:
+        offwidth = 1280
+        offheight = 720
+
+    class Vis:
+        global_ = GlobalSettings()
+
+    class Model:
+        vis = Vis()
+
+    model = Model()
+
+    worker._ensure_offscreen_framebuffer(model, width=1620, height=1080)
+
+    assert model.vis.global_.offwidth == 1620
+    assert model.vis.global_.offheight == 1080
+
+    worker._ensure_offscreen_framebuffer(model, width=540, height=360)
+
+    assert model.vis.global_.offwidth == 1620
+    assert model.vis.global_.offheight == 1080
 
 
 def test_worker_robot_views_keeps_backend_local_fallback_without_pose(

@@ -41,6 +41,112 @@ def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     assert diff["residual"]["rgb_gain_oracle"]["mean_abs_rgb_after_gain"] == 0.0
 
 
+def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_capture_quality",
+    )
+    output_dir = tmp_path / "comparison"
+    mujoco_fpv = output_dir / "mujoco" / "robot_views" / "0001_target.fpv.png"
+    mujoco_chase = output_dir / "mujoco" / "robot_views" / "0001_target.chase.png"
+    isaac_fpv = output_dir / "isaac" / "robot_views" / "0001_target.fpv.png"
+    isaac_chase = output_dir / "isaac" / "robot_views" / "0001_target.chase.png"
+    for path, color in (
+        (mujoco_fpv, (100, 110, 120)),
+        (mujoco_chase, (120, 110, 100)),
+        (isaac_fpv, (80, 90, 100)),
+        (isaac_chase, (100, 90, 80)),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(path)
+
+    args = type(
+        "Args",
+        (),
+        {
+            "render_width": 12,
+            "render_height": 8,
+            "saved_report_width": 6,
+            "saved_report_height": 4,
+            "metric_width": 3,
+            "metric_height": 2,
+            "downsample_filter": "nearest",
+            "render_settle_frames": 16,
+            "isaac_aa_op": 2,
+            "isaac_tonemap_op": 5,
+            "isaac_exposure_bias": -1.0,
+            "isaac_colorcorr_gain": (0.9, 0.8, 0.7),
+        },
+    )()
+    capture_quality = run_camera._capture_quality_probe_config(args)
+    mujoco_views = {
+        "views": {"fpv": str(mujoco_fpv), "chase": str(mujoco_chase)},
+        "camera_control_contract": {},
+        "camera_diagnostics": {},
+        "view_provenance": {},
+    }
+    isaac_views = {
+        "views": {"fpv": str(isaac_fpv), "chase": str(isaac_chase)},
+        "camera_control_contract": {},
+        "camera_diagnostics": {},
+        "view_provenance": {},
+    }
+
+    run_camera._prepare_saved_report_images(
+        mujoco_views,
+        isaac_views,
+        capture_quality=capture_quality,
+    )
+    location = run_camera._location_result(
+        label="0001_target",
+        target={"kind": "object", "target_id": "target"},
+        robot_pose={},
+        mujoco_views=mujoco_views,
+        isaac_views=isaac_views,
+        output_dir=output_dir,
+        capture_quality=capture_quality,
+    )
+
+    assert capture_quality["render_resolution_requested"] == {"width": 12, "height": 8}
+    assert capture_quality["render_resolution_saved"] == {"width": 6, "height": 4}
+    assert capture_quality["metric_resolution"] == {"width": 3, "height": 2}
+    assert capture_quality["render_settle_frames"] == 16
+    assert capture_quality["anti_aliasing"]["status"] == "requested"
+    assert capture_quality["anti_aliasing"]["requested_value"] == 2
+    assert capture_quality["tonemap_operator"]["status"] == "requested"
+    assert capture_quality["tonemap_operator"]["requested_value"] == 5
+    assert capture_quality["exposure_bias"]["status"] == "requested"
+    assert capture_quality["exposure_bias"]["requested_value"] == -1.0
+    assert capture_quality["colorcorr_gain"]["status"] == "requested"
+    assert capture_quality["colorcorr_gain"]["requested_value"] == (0.9, 0.8, 0.7)
+    assert run_camera._render_settle_args(capture_quality) == [
+        "--isaac-aa-op",
+        "2",
+        "--isaac-tonemap-op",
+        "5",
+        "--isaac-exposure-bias",
+        "-1.0",
+        "--isaac-colorcorr-gain",
+        "0.9,0.8,0.7",
+        "--render-settle-frames",
+        "16",
+    ]
+    assert location["views"]["mujoco"]["fpv"].endswith(".saved_6x4.png")
+    assert location["raw_render_views"]["mujoco"]["fpv"].endswith("0001_target.fpv.png")
+    assert location["metric_views"]["fpv"]["mujoco"].endswith(".metric_fpv_3x2.png")
+    assert location["image_diffs"]["fpv"]["size"] == [3, 2]
+    assert location["image_diffs"]["fpv"]["capture_quality_probe"]["downsample_filter"] == (
+        "nearest"
+    )
+    for backend in ("mujoco", "isaac"):
+        saved_path = output_dir / location["views"][backend]["fpv"]
+        metric_path = output_dir / location["metric_views"]["fpv"][backend]
+        assert Image.open(saved_path).size == (6, 4)
+        assert Image.open(metric_path).size == (3, 2)
+
+
 def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(
     tmp_path: Path,
     monkeypatch,
@@ -830,6 +936,132 @@ def Xform "World"
     assert location["fpv_mean_abs_rgb"] == 48.0
 
 
+def test_robot_camera_render_contract_diagnostics_can_skip_object_parity_audit(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_skip_object_audit",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset>
+    <texture name="tex_bed" type="2d" file="textures/bed.png"/>
+    <material name="mat_bed" texture="tex_bed" rgba="1 1 1 1"/>
+  </asset>
+  <worldbody>
+    <light name="mujoco_light"/>
+    <body name="bed_1">
+      <geom name="bed_1_visual_0" mesh="bed_mesh" material="mat_bed"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Scope "Looks"
+  {
+    def Material "mat_bed"
+    {
+      def Shader "PreviewSurface"
+      {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </World/Looks/mat_bed/DiffuseTexture.outputs:rgb>
+        float inputs:roughness = 0.5
+      }
+      def Shader "DiffuseTexture"
+      {
+        asset inputs:file = @/tmp/textures/bed.png@
+        token inputs:sourceColorSpace = "auto"
+      }
+    }
+  }
+  def Xform "bed_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/Looks/mat_bed>
+    }
+  }
+  def DistantLight "key" {}
+}
+""",
+        encoding="utf-8",
+    )
+    manifest = {
+        "scene": {"scene_usd_path": str(isaac_usd)},
+        "locations": [
+            {
+                "status": "success",
+                "target": {"kind": "receptacle", "target_id": "bed_1"},
+                "image_diffs": {
+                    "fpv": {
+                        "mean_abs_rgb": 30.0,
+                        "residual": {
+                            "residual_class": "low_residual",
+                            "edge_abs_diff": 1.0,
+                            "rgb_gain_oracle": {"mean_abs_rgb_after_gain": 24.0},
+                        },
+                    },
+                    "chase": {
+                        "mean_abs_rgb": 44.0,
+                        "residual": {"residual_class": "geometry_or_texture_edge_residual"},
+                    },
+                },
+            }
+        ],
+        "summary": {"residual_triage": {"status": "render_domain_geometry_or_texture_residual"}},
+    }
+    mujoco_state = {"scene_xml": str(mujoco_xml), "robot_xml": "robot.xml"}
+    isaac_state = {
+        "scene_usd": str(isaac_usd),
+        "scene_binding_diagnostics": {
+            "receptacle_bindings": {
+                "bed_1": {
+                    "status": "bound",
+                    "public_id": "bed_1",
+                    "kind": "receptacle",
+                    "usd_prim_path": "/World/bed_1",
+                }
+            }
+        },
+        "native_render_diagnostics": {
+            "schema": "isaac_native_render_diagnostics_v1",
+            "status": "native_settings_recorded",
+            "settings_api_available": True,
+            "default_render_settings_changed": False,
+        },
+    }
+    (tmp_path / "mujoco_state.json").write_text(json.dumps(mujoco_state), encoding="utf-8")
+    (tmp_path / "isaac_state.json").write_text(json.dumps(isaac_state), encoding="utf-8")
+
+    run_camera._attach_render_contract_diagnostics(
+        manifest,
+        output_dir=tmp_path,
+        skip_object_parity_audit=True,
+    )
+
+    assert manifest["summary"]["render_contract_diagnostics"]["status"]
+    assert manifest["summary"]["render_domain_checks"]["schema"] == (
+        "robot_camera_render_domain_checks_v1"
+    )
+    assert manifest["summary"]["native_isaac_render_diagnostics"]["status"] == (
+        "native_settings_recorded"
+    )
+    assert manifest["object_parity_audit"]["status"] == "skipped_for_capture_quality_probe"
+    assert manifest["summary"]["object_parity_audit"]["skip_reason"]
+    gate = manifest["object_render_parity_diagnostics"]
+    assert gate["status"] == "skipped_for_capture_quality_probe"
+    assert gate["object_gate"]["status"] == "skipped_for_capture_quality_probe"
+    assert manifest["summary"]["object_render_parity_diagnostics"]["skip_reason"]
+
+
 def test_robot_camera_light_shadow_check_summarizes_worse_prior_probe(tmp_path: Path) -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -1554,6 +1786,125 @@ def Xform "World"
     assert location["target_contract_delta"]["status"] == "missing_object_binding_evidence"
 
 
+def test_robot_camera_render_contract_uses_isaac_index_when_binding_summary_lacks_target(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_contract_index_fallback",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset>
+    <texture name="tex_box" type="2d" file="textures/box.png"/>
+    <material name="mat_box" texture="tex_box" rgba="1 1 1 1"/>
+  </asset>
+  <worldbody>
+    <body name="box_1">
+      <geom name="box_1_visual_0" mesh="box_mesh" material="mat_box"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Scope "Looks"
+  {
+    def Material "mat_box"
+    {
+      def Shader "PreviewSurface"
+      {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </World/Looks/mat_box/DiffuseTexture.outputs:rgb>
+      }
+      def Shader "DiffuseTexture"
+      {
+        asset inputs:file = @/tmp/textures/box.png@
+      }
+    }
+  }
+  def Xform "box_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/Looks/mat_box>
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest = {
+        "locations": [
+            {
+                "status": "success",
+                "target": {"kind": "object", "target_id": "box_1"},
+                "image_diffs": {
+                    "fpv": {
+                        "mean_abs_rgb": 12.0,
+                        "residual": {"residual_class": "low_residual"},
+                    },
+                    "chase": {"residual": {"residual_class": "low_residual"}},
+                },
+            }
+        ],
+        "summary": {},
+    }
+    (tmp_path / "mujoco_state.json").write_text(
+        json.dumps({"scene_xml": str(mujoco_xml)}),
+        encoding="utf-8",
+    )
+    (tmp_path / "isaac_state.json").write_text(
+        json.dumps(
+            {
+                "scene_usd": str(isaac_usd),
+                "object_index": {
+                    "box_1": {
+                        "usd_prim_path": "/World/box_1",
+                        "category": "Box",
+                        "geometry_status": "renderable",
+                        "has_renderable_geometry": True,
+                        "valid_stage_prim": True,
+                    }
+                },
+                "scene_binding_diagnostics": {
+                    "object_bindings": {
+                        "bowl_1": {
+                            "status": "bound",
+                            "public_id": "bowl_1",
+                            "kind": "object",
+                            "usd_prim_path": "/World/bowl_1",
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
+
+    summary = manifest["summary"]["render_contract_diagnostics"]
+    location = manifest["locations"][0]["render_contract_diagnostics"]
+    texture_check = {
+        item["check_id"]: item for item in manifest["summary"]["render_domain_checks"]["checks"]
+    }["texture_colorspace_material_response"]
+    assert summary["target_contract_delta_counts"] == {"material_texture_names_match": 1}
+    assert summary["high_priority_target_delta_count"] == 0
+    assert location["target_usd_path_source"] == "isaac_state_index"
+    assert location["target_usd_binding"] == {}
+    assert location["target_usd_path_fallback"]["usd_prim_path"] == "/World/box_1"
+    assert location["isaac_target_contract"]["material_binding_count"] == 1
+    assert location["target_contract_delta"]["status"] == "material_texture_names_match"
+    assert texture_check["status"] == "texture_basenames_match_paths_or_colorspace_unverified"
+
+
 def test_robot_camera_isaac_render_contract_reports_visual_physics(
     tmp_path: Path,
 ) -> None:
@@ -1603,6 +1954,53 @@ def Xform "World"
     assert view["physics_joint_count"] == 1
     assert view["physics_api_schema_prim_count"] == 1
     assert view["physics_property_prim_count"] == 1
+
+
+def test_robot_camera_isaac_render_contract_reads_prepared_endpoint_summary(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_prepared_endpoint_summary",
+    )
+    isaac_usd = tmp_path / "scene_semantic.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+    def Xform "box_1"
+    {
+        def Mesh "mesh"
+        {
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "summary.json").write_text(
+        json.dumps(
+            {
+                "status": "ready",
+                "mujoco_visual_joint_endpoint_pose_status": (
+                    "mujoco_visual_joint_endpoint_pose_applied"
+                ),
+                "mujoco_visual_joint_endpoint_pose_corrected_count": 4,
+                "mujoco_visual_joint_endpoint_pose_missing_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    contract = run_camera._isaac_render_contract_from_usda(str(isaac_usd))
+    view = run_camera._isaac_view_render_contract(contract, usd_prim_path="/World/box_1")
+
+    assert contract["prepared_summary_status"] == "ready"
+    assert (
+        contract["mujoco_visual_joint_endpoint_pose_status"]
+        == "mujoco_visual_joint_endpoint_pose_applied"
+    )
+    assert view["mujoco_visual_joint_endpoint_pose_corrected_count"] == 4
 
 
 def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Path) -> None:
@@ -1938,10 +2336,10 @@ def test_robot_camera_object_parity_audit_uses_isaac_semantic_pose_position(tmp_
     assert item["isaac"]["position_source"] == "isaac_support_placement_resolver"
 
 
-def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
+def test_robot_camera_box_visual_state_requires_endpoint_bake_evidence() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_box_visual_state_frozen",
+        "run_robot_camera_apple2apple_comparison_box_visual_state_endpoint_unverified",
     )
 
     contract = run_camera._object_visual_state_contract(
@@ -1980,15 +2378,60 @@ def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
         usd_prim_path="/World/box_1",
     )
 
-    assert contract["status"] == "visual_state_static_ref_baked"
+    assert contract["status"] == "visual_state_ref_endpoint_unverified_in_isaac"
     assert contract["mujoco"]["status"] == "mujoco_ref_endpoint_articulation"
     assert contract["mujoco"]["endpoint_joint_count"] == 2
     assert contract["isaac"]["status"] == "isaac_visual_physics_frozen"
     assert run_camera.OBJECT_VISUAL_STATE_CATEGORIES == {"box"}
     assert contract["protected_by"] == "prepared_usd_visual_physics_freeze"
     assert contract["registry"]["status"] == "active_category_contract"
-    assert contract["evidence_artifact"].endswith(
-        "0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html"
+    assert "does not prove" in contract["reason"]
+
+
+def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_box_visual_state_frozen",
+    )
+
+    contract = run_camera._object_visual_state_contract(
+        target_id="box_1",
+        kind="object",
+        mujoco_entry={"category": "Box"},
+        isaac_entry={"category": "Box"},
+        mujoco_state={
+            "joint_states": {
+                "box_1": [
+                    {
+                        "joint_name": "box_1_box10flapinner1joint0",
+                        "joint_type": "hinge",
+                        "qpos": 2.91219,
+                        "ref": 2.91219,
+                        "range": [0.0, 2.91219],
+                    }
+                ]
+            }
+        },
+        isaac_state={},
+        isaac_contract={
+            "status": "parsed",
+            "material_bindings": {},
+            "physics_joint_paths": [],
+            "physics_api_schema_prim_paths": [],
+            "physics_property_prim_paths": [],
+            "mujoco_visual_joint_endpoint_pose_status": (
+                "mujoco_visual_joint_endpoint_pose_applied"
+            ),
+            "mujoco_visual_joint_endpoint_pose_corrected_count": 1,
+            "mujoco_visual_joint_endpoint_pose_missing_count": 0,
+        },
+        usd_prim_path="/World/box_1",
+    )
+
+    assert contract["status"] == "visual_state_static_ref_baked"
+    assert (
+        contract["isaac"]["mujoco_visual_joint_endpoint_pose_status"]
+        == "mujoco_visual_joint_endpoint_pose_applied"
     )
     assert "selected object-centered RGB evidence is still required" in contract["reason"]
 
@@ -2306,6 +2749,118 @@ def test_robot_camera_rgb_evidence_flags_target_region_visual_delta(
     assert evidence["target_coverage_status"] == "selected_object_centered_coverage"
     assert evidence["target_visual_state_status"] == "selected_object_visual_state_delta"
     assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 80.0
+
+
+def test_robot_camera_rgb_evidence_allows_moderate_render_residual_for_visual_state(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_rgb_region_render_residual",
+    )
+    image_specs = {
+        "mujoco/fpv.png": (100, 100, 100),
+        "isaac/fpv.png": (62, 62, 62),
+        "mujoco/chase.png": (80, 90, 100),
+        "isaac/chase.png": (80, 90, 100),
+    }
+    for image_relpath, color in image_specs.items():
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(image_path)
+
+    evidence = run_camera._object_rgb_view_evidence(
+        kind="object",
+        target_id="box_1",
+        locations=[
+            {
+                "target": {"kind": "object", "target_id": "box_1"},
+                "robot_pose": {
+                    "target_object_id": "box_1",
+                    "target_position": [1.0, 2.0, 0.8],
+                    "pose_request": {
+                        "target_object_id": "box_1",
+                        "target_position": [1.0, 2.0, 0.8],
+                    },
+                },
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "contracts": {
+                    "mujoco": {
+                        "focus": {
+                            "object_id": "box_1",
+                            "focus_mode": "object_closeup",
+                            "fpv_visibility": {"boxes": [{"bbox": [1, 1, 10, 7]}]},
+                        }
+                    },
+                    "isaac": {"focus": {"object_id": "box_1", "focus_mode": "object_closeup"}},
+                },
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert evidence["target_visual_state_status"] == "selected_object_visual_state_aligned"
+    assert evidence["target_visual_state_alignment_mode"] == "moderate_render_residual"
+    assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 38.0
+
+
+def test_robot_camera_rgb_evidence_rejects_open_box_scale_region_delta(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_rgb_region_open_box_delta",
+    )
+    image_specs = {
+        "mujoco/fpv.png": (100, 100, 100),
+        "isaac/fpv.png": (52, 52, 52),
+        "mujoco/chase.png": (80, 90, 100),
+        "isaac/chase.png": (80, 90, 100),
+    }
+    for image_relpath, color in image_specs.items():
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(image_path)
+
+    evidence = run_camera._object_rgb_view_evidence(
+        kind="object",
+        target_id="box_1",
+        locations=[
+            {
+                "target": {"kind": "object", "target_id": "box_1"},
+                "robot_pose": {
+                    "target_object_id": "box_1",
+                    "target_position": [1.0, 2.0, 0.8],
+                    "pose_request": {
+                        "target_object_id": "box_1",
+                        "target_position": [1.0, 2.0, 0.8],
+                    },
+                },
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "contracts": {
+                    "mujoco": {
+                        "focus": {
+                            "object_id": "box_1",
+                            "focus_mode": "object_closeup",
+                            "fpv_visibility": {"boxes": [{"bbox": [1, 1, 10, 7]}]},
+                        }
+                    },
+                    "isaac": {"focus": {"object_id": "box_1", "focus_mode": "object_closeup"}},
+                },
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert evidence["target_visual_state_status"] == "selected_object_visual_state_delta"
+    assert evidence["target_visual_state_alignment_mode"] == "raw_rgb_delta"
+    assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 48.0
 
 
 def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None:

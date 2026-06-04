@@ -5,13 +5,18 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from roboclaws.household.genesis_backend import GenesisSubprocessBackend
 from scripts.genesis_cleanup.genesis_backend_worker import (
+    GENESIS_COLOR_PROFILE_RGB_GAIN,
+    GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT,
+    GENESIS_COLOR_PROFILE_VIEW_TONE_ADJUSTMENT,
     GENESIS_RENDER_LIGHTING_PROFILE,
     _extract_materialized_usd_visual_asset,
     _extract_render_only_visual_mesh,
     _genesis_color_profile,
+    _genesis_lighting_profile,
     _genesis_scene,
 )
 
@@ -144,7 +149,7 @@ def test_genesis_materialized_visual_asset_preserves_texture_material(
     pytest.importorskip("pxr")
     texture_dir = tmp_path / "textures"
     texture_dir.mkdir()
-    (texture_dir / "floor.png").write_bytes(b"not a real png but enough for asset copy")
+    Image.new("RGB", (2, 2), (200, 200, 200)).save(texture_dir / "floor.png")
     scene_usd = tmp_path / "scene.usda"
     scene_usd.write_text(
         """#usda 1.0
@@ -214,12 +219,16 @@ def Xform "World"
     assert result["material_count"] == 1
     assert result["textured_material_count"] == 1
     assert result["texture_count"] == 1
+    assert result["baked_texture_count"] == 1
     assert result["triangle_count"] == 1
     assert result["textured_triangle_count"] == 1
     assert "vt " in obj_text
     assert "usemtl Material_01" in obj_text
-    assert "map_Kd textures/floor.png" in mtl_text
-    assert (tmp_path / "visual_asset" / "textures" / "floor.png").is_file()
+    assert "Kd 1.000000 1.000000 1.000000" in mtl_text
+    assert "map_Kd textures/floor_baked_" in mtl_text
+    baked_texture = next((tmp_path / "visual_asset" / "textures").glob("floor_baked_*.png"))
+    assert baked_texture.is_file()
+    assert Image.open(baked_texture).convert("RGB").getpixel((0, 0)) == (120, 100, 80)
 
 
 def test_genesis_scene_applies_visual_lighting_options() -> None:
@@ -271,9 +280,46 @@ def test_genesis_scene_applies_visual_lighting_options() -> None:
                 "dir": (-1.0, -1.0, -1.0),
                 "color": (1.0, 1.0, 1.0),
                 "intensity": 3.0,
-            }
+            },
+            {
+                "type": "directional",
+                "dir": (1.0, 1.0, -0.6),
+                "color": (1.0, 0.96, 0.9),
+                "intensity": 0.8,
+            },
+            {
+                "type": "directional",
+                "dir": (0.0, -1.0, -0.35),
+                "color": (0.9, 0.95, 1.0),
+                "intensity": 0.45,
+            },
         ],
     }
+
+
+def test_genesis_lighting_profile_uses_request_environment_fill() -> None:
+    profile = _genesis_lighting_profile(
+        {
+            "profile_id": "scene_probe_mujoco_headlight_fill_v1",
+            "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
+            "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
+            "genesis_ambient_light": [0.37, 0.37, 0.37],
+            "genesis_background_color": [0.04, 0.08, 0.12],
+            "genesis_shadow": False,
+            "genesis_directional_lights": [
+                {"dir": [-1.0, -1.0, -1.0], "color": [1.0, 1.0, 1.0], "intensity": 3.0},
+                {"dir": [1.0, 1.0, -0.6], "color": [1.0, 0.96, 0.9], "intensity": 0.8},
+            ],
+        }
+    )
+
+    assert profile["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
+    assert profile["ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
+    assert profile["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
+    assert profile["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert profile["shadow"] is False
+    assert len(profile["lights"]) == 2
+    assert profile["lights"][1]["intensity"] == pytest.approx(0.8)
 
 
 def test_genesis_color_profile_adds_explicit_luminance_calibration() -> None:
@@ -287,7 +333,22 @@ def test_genesis_color_profile_adds_explicit_luminance_calibration() -> None:
 
     assert profile["backend_luminance_gain"]["molmospaces-mujoco"] == 1.0
     assert profile["backend_luminance_gain"]["genesis-prepared-usd"] == pytest.approx(0.94)
+    assert profile["backend_rgb_gain"]["genesis-prepared-usd"] == pytest.approx(
+        GENESIS_COLOR_PROFILE_RGB_GAIN
+    )
+    assert profile["backend_tone_adjustment"]["genesis-prepared-usd"] == pytest.approx(
+        GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT
+    )
+    assert profile["backend_view_tone_adjustment"]["genesis-prepared-usd"][
+        "room_01_room_2"
+    ] == pytest.approx(GENESIS_COLOR_PROFILE_VIEW_TONE_ADJUSTMENT["room_01_room_2"])
     assert "existing-source" in profile["backend_luminance_gain_source"]
     assert "Genesis materialized USD visual probe 2026-06-04" in profile[
         "backend_luminance_gain_source"
+    ]
+    assert "Genesis materialized USD visual probe 2026-06-04" in profile[
+        "backend_rgb_gain_source"
+    ]
+    assert "Genesis baked-texture visual probe 2026-06-04" in profile[
+        "backend_tone_adjustment_source"
     ]

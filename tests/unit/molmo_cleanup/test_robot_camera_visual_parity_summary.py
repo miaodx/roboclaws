@@ -859,6 +859,409 @@ def test_visual_parity_summary_ranks_render_difference_probe_batch(
     assert "rejected" in report_html
 
 
+def test_visual_parity_summary_ranks_capture_quality_downsample_against_metric_baseline(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_capture_quality",
+    )
+    native = {
+        "schema": "robot_camera_native_isaac_render_diagnostics_v1",
+        "status": "native_settings_recorded",
+        "settings_api_available": True,
+        "default_render_settings_changed": False,
+        "capture_quality_settings": {
+            "render_settle_frames": 16,
+            "anti_aliasing": {
+                "status": "available",
+                "value": 3,
+                "setting_path": "/rtx/post/aa/op",
+            },
+            "denoise": {"status": "not_available", "value": None},
+            "taa": {"status": "not_available", "value": None},
+            "samples_per_pixel": {"status": "not_available", "value": None},
+            "texture_filtering": {"status": "not_available", "value": None},
+        },
+    }
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    direct_baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_1080" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=55.5,
+        location_count=4,
+        render_width=1080,
+        render_height=720,
+        capture_quality_probe={
+            "status": "direct_high_res_baseline",
+            "render_resolution_requested": {"width": 1080, "height": 720},
+            "render_resolution_saved": {"width": 1080, "height": 720},
+            "metric_resolution": {"width": 1080, "height": 720},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+        },
+    )
+    direct = _write_robot_camera_manifest(
+        tmp_path / "hires_1080_direct" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=32.0,
+        chase=55.0,
+        location_count=4,
+        render_width=1080,
+        render_height=720,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 1080, "height": 720},
+            "render_resolution_saved": {"width": 1080, "height": 720},
+            "metric_resolution": {"width": 1080, "height": 720},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+        },
+        native_isaac_render_diagnostics=native,
+    )
+    downsample = _write_robot_camera_manifest(
+        tmp_path / "hires_1080_downsample540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=59.0,
+        location_count=4,
+        render_width=1080,
+        render_height=720,
+        saved_report_width=540,
+        saved_report_height=360,
+        metric_width=540,
+        metric_height=360,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 1080, "height": 720},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "downsampled_from_render_capture",
+            "metric_image_mode": "downsampled_from_render_capture",
+            "downsample_filter": "lanczos",
+            "render_settle_frames": 16,
+        },
+        native_isaac_render_diagnostics=native,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline, direct_baseline],
+        probe_specs=[
+            f"hires_1080_direct={direct}",
+            f"hires_1080_downsample540={downsample}",
+        ],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["hires_1080_direct"]["policy_classification"] == "capture_quality_probe"
+    assert rows["hires_1080_direct"]["baseline_path"] == str(direct_baseline)
+    assert rows["hires_1080_direct"]["fpv_mean_abs_rgb_delta_vs_baseline"] == -6.0
+    assert rows["hires_1080_direct"]["metric_resolution"] == {"width": 1080, "height": 720}
+    assert rows["hires_1080_downsample540"]["probe_kind"] == "capture_quality"
+    assert rows["hires_1080_downsample540"]["policy_classification"] == ("capture_quality_probe")
+    assert rows["hires_1080_downsample540"]["baseline_path"] == str(baseline)
+    assert rows["hires_1080_downsample540"]["fpv_mean_abs_rgb_delta_vs_baseline"] == -4.0
+    assert rows["hires_1080_downsample540"]["chase_mean_abs_rgb_delta_vs_baseline"] == -1.0
+    assert rows["hires_1080_downsample540"]["render_resolution_requested"] == {
+        "width": 1080,
+        "height": 720,
+    }
+    assert rows["hires_1080_downsample540"]["metric_resolution"] == {
+        "width": 540,
+        "height": 360,
+    }
+    assert rows["hires_1080_downsample540"]["metric_image_mode"] == (
+        "downsampled_from_render_capture"
+    )
+    assert rows["hires_1080_downsample540"]["render_settle_frames"] == 16
+    assert (
+        rows["hires_1080_downsample540"]["capture_quality_settings"]["anti_aliasing"]["status"]
+        == "available"
+    )
+    assert manifest["render_difference_probe_batch"]["policy_classification_counts"] == {
+        "capture_quality_probe": 2,
+    }
+    report_html = (tmp_path / "summary" / "report.html").read_text(encoding="utf-8")
+    assert "<h2>Capture Quality Probe Metadata</h2>" in report_html
+    assert "hires_1080_downsample540" in report_html
+    assert "1080x720" in report_html
+    assert "540x360" in report_html
+    assert "capture_quality_probe" in report_html
+
+
+def test_visual_parity_summary_does_not_treat_native_quality_metadata_as_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_native_quality_metadata",
+    )
+    native = {
+        "schema": "robot_camera_native_isaac_render_diagnostics_v1",
+        "status": "native_settings_recorded",
+        "settings_api_available": True,
+        "default_render_settings_changed": False,
+        "capture_quality_settings": {
+            "anti_aliasing": {
+                "status": "available",
+                "value": 3,
+                "setting_path": "/rtx/post/aa/op",
+            },
+            "denoise": {"status": "not_available", "value": None},
+            "taa": {"status": "not_available", "value": None},
+            "samples_per_pixel": {"status": "not_available", "value": None},
+            "texture_filtering": {"status": "not_available", "value": None},
+        },
+    }
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "aa_metadata_only" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=59.5,
+        location_count=4,
+        native_isaac_render_diagnostics=native,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"aa_metadata_only={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["aa_metadata_only"]["policy_classification"] == "native_default_candidate"
+    assert rows["aa_metadata_only"]["probe_kind"] != "capture_quality"
+    assert rows["aa_metadata_only"]["metric_image_mode"] == "direct_capture"
+    assert rows["aa_metadata_only"]["render_resolution_requested"] == {
+        "width": 540,
+        "height": 360,
+    }
+    assert manifest["render_difference_probe_batch"]["policy_classification_counts"] == {
+        "native_default_candidate": 1,
+    }
+
+
+def test_visual_parity_summary_treats_requested_aa_as_capture_quality_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_requested_aa",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "aa_op2_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=37.9,
+        chase=60.1,
+        location_count=4,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 540, "height": 360},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+            "anti_aliasing": {
+                "name": "anti_aliasing",
+                "status": "requested",
+                "value": 2,
+                "requested_value": 2,
+                "setting_path": "/rtx/post/aa/op",
+                "default_render_settings_changed": True,
+            },
+        },
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"aa_op2_540={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["aa_op2_540"]["probe_kind"] == "capture_quality"
+    assert rows["aa_op2_540"]["policy_classification"] == "capture_quality_probe"
+    assert rows["aa_op2_540"]["capture_quality_settings"]["anti_aliasing"]["status"] == (
+        "requested"
+    )
+
+
+def test_visual_parity_summary_treats_requested_tonemap_as_capture_quality_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_requested_tonemap",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "tonemap_op5_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=60.2,
+        location_count=4,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 540, "height": 360},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+            "tonemap_operator": {
+                "name": "tonemap_operator",
+                "status": "requested",
+                "value": 5,
+                "requested_value": 5,
+                "setting_path": "/rtx/post/tonemap/op",
+                "default_render_settings_changed": True,
+            },
+        },
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"tonemap_op5_540={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["tonemap_op5_540"]["probe_kind"] == "capture_quality"
+    assert rows["tonemap_op5_540"]["policy_classification"] == "capture_quality_probe"
+    assert rows["tonemap_op5_540"]["capture_quality_settings"]["tonemap_operator"]["status"] == (
+        "requested"
+    )
+
+
+def test_visual_parity_summary_treats_requested_colorcorr_as_capture_quality_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_requested_colorcorr",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "colorcorr_gain_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=60.2,
+        location_count=4,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 540, "height": 360},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+            "colorcorr_gain": {
+                "name": "colorcorr_gain",
+                "status": "requested",
+                "value": [1.08, 1.06, 1.1],
+                "requested_value": [1.08, 1.06, 1.1],
+                "setting_path": "/rtx/post/colorcorr/gain",
+                "default_render_settings_changed": True,
+            },
+        },
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"colorcorr_gain_540={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["colorcorr_gain_540"]["probe_kind"] == "capture_quality"
+    assert rows["colorcorr_gain_540"]["policy_classification"] == "capture_quality_probe"
+    assert (
+        rows["colorcorr_gain_540"]["capture_quality_settings"]["colorcorr_gain"]["status"]
+        == "requested"
+    )
+
+
 def test_visual_parity_summary_blocks_default_rendering_without_native_diagnostics(
     tmp_path: Path,
 ) -> None:
@@ -1511,6 +1914,13 @@ def _write_robot_camera_manifest(
     top_level_object_visual_parity_audit: dict | None = None,
     object_render_parity_diagnostics: dict | None = None,
     native_isaac_render_diagnostics: dict | None = None,
+    render_width: int = 540,
+    render_height: int = 360,
+    saved_report_width: int | None = None,
+    saved_report_height: int | None = None,
+    metric_width: int | None = None,
+    metric_height: int | None = None,
+    capture_quality_probe: dict | None = None,
 ) -> Path:
     path.parent.mkdir(parents=True)
     default_locations = [_visual_location(path.parent)] if locations is None else locations
@@ -1522,8 +1932,8 @@ def _write_robot_camera_manifest(
             "scene_index": scene_index,
             "seed": seed,
             "generated_mess_count": generated_mess_count,
-            "render_width": 540,
-            "render_height": 360,
+            "render_width": render_width,
+            "render_height": render_height,
             "scene_usd_path": f"scene_{scene_index}.usda",
         },
         "summary": {
@@ -1559,6 +1969,22 @@ def _write_robot_camera_manifest(
         },
         "locations": default_locations,
     }
+    if saved_report_width is not None:
+        payload["scene"]["saved_report_width"] = saved_report_width
+    if saved_report_height is not None:
+        payload["scene"]["saved_report_height"] = saved_report_height
+    if metric_width is not None:
+        payload["scene"]["metric_width"] = metric_width
+    if metric_height is not None:
+        payload["scene"]["metric_height"] = metric_height
+    if capture_quality_probe is not None:
+        payload["capture_quality_probe"] = {
+            "schema": "robot_camera_capture_quality_probe_v1",
+            "status": "unit_fixture",
+            "policy_classification": "capture_quality_probe",
+            "default_renderer_promotion": False,
+            **capture_quality_probe,
+        }
     if top_level_object_visual_parity_audit is not None:
         payload["object_visual_parity_audit"] = top_level_object_visual_parity_audit
     path.write_text(json.dumps(payload), encoding="utf-8")

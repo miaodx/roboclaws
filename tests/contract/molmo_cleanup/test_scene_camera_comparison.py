@@ -12,6 +12,8 @@ from PIL import Image
 from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
+    DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    scene_probe_camera_control_request,
 )
 from roboclaws.household.scene_camera_comparison import (
     GENESIS_LANE_ID,
@@ -40,6 +42,7 @@ from roboclaws.household.scene_camera_comparison import (
     _renderer_version,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
+    _room_wall_light_diagnostics,
     _scene_frame_transform_from_capture,
     comparison_successful,
     render_scene_camera_comparison_report,
@@ -72,6 +75,20 @@ def _require_official_render_sources() -> None:
 def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (64, 48), color=color).save(path)
+
+
+def _write_wall_proxy_image(
+    path: Path,
+    *,
+    base: tuple[int, int, int],
+    wall_proxy: tuple[int, int, int],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (100, 100), color=base)
+    for x in range(30, 70):
+        for y in range(8, 42):
+            image.putpixel((x, y), wall_proxy)
+    image.save(path)
 
 
 def _visual_metric_pair(
@@ -240,12 +257,7 @@ def _manifest() -> dict[str, object]:
                 "vertical_fov_deg": 45.0,
                 "focal_length_mm": 24.0,
             },
-            "lighting_profile": {
-                "profile_id": "scene_probe_existing_usd_lights_v1",
-                "isaac_dome_intensity": 0.0,
-                "isaac_key_intensity": 0.0,
-                "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
-            },
+            "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
             "color_profile": {
                 "profile_id": "display_srgb_soft_highlight_v1",
                 "highlight_knee": 225.0,
@@ -500,7 +512,7 @@ def _manifest() -> dict[str, object]:
                 "visual_artifact_provenance": "mujoco_camera_control_canonical_eye_target",
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
-                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
                 "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "images": {
                     "room_01_room_2": {
@@ -550,12 +562,15 @@ def _manifest() -> dict[str, object]:
                 ),
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
-                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
                 "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "lighting_diagnostics": {
-                    "status": "using_existing_stage_lights",
+                    "status": "added_capture_lights",
                     "existing_light_count": 2,
-                    "added_light_count": 0,
+                    "added_light_count": 1,
+                    "added_light_paths": ["/RoboclawsSmokeDomeLight"],
+                    "requested_dome_intensity": 60.0,
+                    "requested_key_intensity": 0.0,
                 },
                 "native_render_diagnostics": _native_isaac_diagnostics(),
                 "images": {
@@ -633,9 +648,13 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert manifest["artifacts"]["contact_sheet"] == "contact_sheet.png"  # type: ignore[index]
     assert manifest["contact_sheet"]["view_count"] == 3  # type: ignore[index]
     assert "Render-only scene identity probe" in html
+    assert "Standalone Image Review" in html
     assert "Contact Sheet" in html
+    assert html.index("Standalone Image Review") < html.index("Contact Sheet")
     assert "contact_sheet.png" in html
     assert 'data-image-src="contact_sheet.png"' in html
+    assert 'data-image-src="molmospaces/camera_views/room_01_room_2.png"' in html
+    assert 'data-image-src="isaaclab/camera_views/view_02_sink.png"' in html
     assert 'id="image-modal"' in html
     assert "does not execute household cleanup" in html
     assert "pick, place, or scoring" in html
@@ -647,6 +666,12 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Target Vs USD Bounds Diagnostics" in html
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
+    assert "Room Wall Light Diagnostics" in html
+    assert "upper_center_wall_proxy" in html
+    assert "tone lum=" in html
+    assert "wall-proxy lum=" in html
+    assert "baseline tone reference" in html
+    assert "vs baseline lum_delta=" in html
     assert "Candidate Visual Acceptance" in html
     assert "Native Isaac Render Diagnostics" in html
     assert "Render Domain Source Diagnostics" in html
@@ -676,8 +701,11 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "display_srgb_soft_highlight_v1" in html
     assert "canonical_eye_target_camera_v1" in html
     assert "backend eye=" in html
-    assert "scene_probe_existing_usd_lights_v1" in html
-    assert "using_existing_stage_lights" in html
+    assert "scene_probe_mujoco_headlight_fill_v1" in html
+    assert "added_capture_lights" in html
+    assert _manifest()["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"][
+        "added_light_paths"
+    ] == ["/RoboclawsSmokeDomeLight"]
     assert "Candidate color calibrations" in html
     assert "best=" in html
     assert MOLMOSPACES_LANE_ID in html
@@ -897,6 +925,32 @@ def test_scene_camera_render_domain_calibration_flags_view_dependent_delta() -> 
     assert calibration["status"] == "view_dependent_render_domain_delta"
     assert calibration["mean_abs_calibrated_luminance_residual"] > 12.0
     assert "material" in calibration["recommended_next_action"]
+
+
+def test_scene_camera_room_wall_light_diagnostics_flag_wall_specific_delta(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest()
+    _write_wall_proxy_image(
+        tmp_path / "molmospaces/camera_views/room_01_room_2.png",
+        base=(120, 120, 120),
+        wall_proxy=(170, 170, 170),
+    )
+    _write_wall_proxy_image(
+        tmp_path / "isaaclab/camera_views/room_01_room_2.png",
+        base=(120, 120, 120),
+        wall_proxy=(70, 70, 70),
+    )
+
+    diagnostics = _room_wall_light_diagnostics(manifest, output_dir=tmp_path)
+
+    assert diagnostics["status"] == "wall_light_or_shadow_delta"
+    assert diagnostics["wall_specific_pair_count"] == 1
+    assert diagnostics["pairs"][0]["classification"] == (
+        "candidate_wall_proxy_darker_than_baseline"
+    )
+    assert diagnostics["pairs"][0]["wall_luminance_delta"] == pytest.approx(-100.0)
+    assert "wall material albedo" in diagnostics["recommended_next_action"]
 
 
 def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() -> None:
@@ -1277,6 +1331,49 @@ def test_scene_camera_comparison_default_color_profile_contract() -> None:
         "isaaclab-prepared-usd"
     ] == pytest.approx(0.7161647108631373)
     assert "0530_0009" in DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain_source"]
+
+
+def test_scene_camera_comparison_default_lighting_profile_contract() -> None:
+    profile = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
+
+    assert profile["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
+    assert profile["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
+    assert profile["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
+    assert profile["isaac_key_intensity"] == pytest.approx(0.0)
+    assert profile["isaac_key_rotation_deg"] == pytest.approx([-45.0, 0.0, 35.0])
+    assert profile["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
+    assert profile["genesis_shadow"] is False
+    assert len(profile["genesis_directional_lights"]) == 3
+
+
+def test_scene_camera_color_profile_normalizes_backend_tone_adjustment() -> None:
+    request = scene_probe_camera_control_request(
+        [{"view_id": "room_01"}],
+        width=64,
+        height=48,
+        color_profile={
+            "backend_tone_adjustment": {
+                "genesis-prepared-usd": {
+                    "shadow_lift": 8,
+                    "shadow_floor": 135,
+                    "gamma": 1.1,
+                    "saturation": 1.0,
+                    "gain": 1.2,
+                }
+            },
+            "backend_tone_adjustment_source": "unit-tone",
+        },
+    )
+
+    assert request["color_profile"]["backend_tone_adjustment"]["genesis-prepared-usd"] == {
+        "shadow_lift": pytest.approx(8.0),
+        "shadow_floor": pytest.approx(135.0),
+        "gamma": pytest.approx(1.1),
+        "saturation": pytest.approx(1.0),
+        "gain": pytest.approx(1.2),
+    }
+    assert request["color_profile"]["backend_tone_adjustment_source"] == "unit-tone"
 
 
 def test_isaac_view_specs_record_support_pose_for_transform_but_not_camera_target(
