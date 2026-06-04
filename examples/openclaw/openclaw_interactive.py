@@ -20,8 +20,6 @@ CLI flags (all optional)::
 
     --provider {mimo,kimi,nvidia}   Gateway provider          (default: mimo)
     --model TEXT                    Model ID                  (default: provider default)
-    --image-model TEXT              Bridge model for text-only mains
-    --observe-mode TEXT             'text-bridge' for split-model setups
     --plugin                        Anthropic/plugin API path
     --clean                         Wipe Gateway config volume first
     --skip-bootstrap                Reuse an already-running Gateway
@@ -51,7 +49,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
-from roboclaws.mcp.text_bridge import observe_runtime_config
 from roboclaws.openclaw.reset_server import ResetServer
 
 log = logging.getLogger("openclaw-interactive")
@@ -81,12 +78,6 @@ class Args:
 
     model: str | None = None
     """Gateway model ID (e.g. mimo_openai/mimo-v2.5). Uses provider default if omitted."""
-
-    image_model: str | None = None
-    """Bridge model for text-only main models (e.g. mimo_openai/mimo-v2.5-pro)."""
-
-    observe_mode: str | None = None
-    """Observe delivery mode. Use 'text-bridge' for split-model setups."""
 
     allow_privileged_tools: bool = False
     """Expose AI2-THOR demo helpers such as scene_objects and goto."""
@@ -180,7 +171,7 @@ def _print_banner(
     agent_name: str,
     token: str,
     output_dir: Path,
-    runtime_config: dict[str, str | None],
+    model_name: str | None = None,
     tail_hint: str = _DEFAULT_TAIL_HINT,
     viewer_hint: str = _DEFAULT_VIEWER_HINT,
     public_url: str | None = None,
@@ -198,11 +189,7 @@ def _print_banner(
             print(f"    Appliance auth URL: {tokenized_url}")
     print(f"    Token : {token}")
     print(f"    Agent : {agent_name}")
-    print(f"    Model : {runtime_config['model_name'] or '<gateway default>'}")
-    print(f"    Image : {runtime_config['image_model'] or '<main-model>'}")
-    print(f"    Observe: {runtime_config['observe_mode']} -> {runtime_config['observe_delivery']}")
-    if runtime_config["vision_bridge_model"]:
-        print(f"    Bridge: {runtime_config['vision_bridge_model']}")
+    print(f"    Model : {model_name or '<gateway default>'}")
     print()
     print("  Tips:")
     print("    - An AI2-THOR Unity window should be open on your desktop —")
@@ -272,8 +259,6 @@ def main(argv: list[str] | None = None) -> int:
             key: value
             for key, value in {
                 "MODEL": args.model,
-                "IMAGE_MODEL": args.image_model,
-                "ROBOCLAWS_OBSERVE_MODE": args.observe_mode,
             }.items()
             if value
         }
@@ -282,12 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         bootstrap_env["KIMI_PROVIDER_MODE"] = "plugin"
         bootstrap_env["MIMO_PROVIDER_MODE"] = "anthropic"
 
-    runtime_config = observe_runtime_config(
-        model_name=args.model or os.environ.get("MODEL"),
-        image_model=args.image_model or os.environ.get("IMAGE_MODEL"),
-        observe_mode=args.observe_mode or os.environ.get("ROBOCLAWS_OBSERVE_MODE"),
-        vision_bridge_model=os.environ.get("ROBOCLAWS_VISION_BRIDGE_MODEL"),
-    )
+    model_name = args.model or os.environ.get("MODEL")
 
     def _handle_signal(signum: int, _frame: object) -> None:
         log.info("received signal %s; shutting down", signum)
@@ -335,10 +315,7 @@ def main(argv: list[str] | None = None) -> int:
             host="0.0.0.0",
             port=18788,
             snapshots_dir=agent_snapshots_dir,
-            model_name=runtime_config["model_name"],
-            image_model=runtime_config["image_model"],
-            observe_mode=runtime_config["observe_mode"],
-            vision_bridge_model=runtime_config["vision_bridge_model"],
+            model_name=model_name,
             allow_privileged_tools=args.allow_privileged_tools,
         )
         mcp_server.run_in_thread()
@@ -359,11 +336,7 @@ def main(argv: list[str] | None = None) -> int:
             scene=args.scene,
             agent_id=args.agent_id,
             skip_bootstrap=args.skip_bootstrap,
-            model=runtime_config["model_name"],
-            image_model=runtime_config["image_model"],
-            observe_mode=runtime_config["observe_mode"],
-            observe_delivery=runtime_config["observe_delivery"],
-            vision_bridge_model=runtime_config["vision_bridge_model"],
+            model=model_name,
         )
         log.info(
             "MCP server listening on %s:%s → Gateway reaches it via "
@@ -396,7 +369,7 @@ def main(argv: list[str] | None = None) -> int:
             agent_name=f"agent-{args.agent_id}",
             token=token,
             output_dir=output_dir,
-            runtime_config=runtime_config,
+            model_name=model_name,
             tail_hint=_env_hint("ROBOCLAWS_TAIL_HINT", _DEFAULT_TAIL_HINT),
             viewer_hint=_env_hint("ROBOCLAWS_VIEWER_HINT", _DEFAULT_VIEWER_HINT),
             public_url=_env_hint("ROBOCLAWS_PUBLIC_URL", ""),

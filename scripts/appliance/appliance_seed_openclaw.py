@@ -25,7 +25,6 @@ sys.path.insert(0, str(_REPO_ROOT))
 from openclaw_plugin_allowlist import ALLOWED as OPENCLAW_PLUGIN_ALLOW  # noqa: E402
 
 from roboclaws.core.provider_catalog import (  # noqa: E402
-    model_supports_images,
     openclaw_model_id,
 )
 
@@ -140,10 +139,7 @@ def _provider_config(env: dict[str, str]) -> ProviderConfig:
         if mode != "openai":
             raise SystemExit("The appliance currently supports MIMO_PROVIDER_MODE=openai")
         model = env.get("MODEL", openclaw_model_id("mimo-v2.5"))
-        image_model = env.get("IMAGE_MODEL", "")
-        if not image_model and not model_supports_images(model):
-            image_model = openclaw_model_id("mimo-v2.5")
-        image_model = image_model or model
+        image_model = env.get("IMAGE_MODEL", model)
         return ProviderConfig(
             provider_id="mimo",
             custom_provider_id="mimo_openai",
@@ -161,14 +157,6 @@ def _provider_config(env: dict[str, str]) -> ProviderConfig:
                         "id": "mimo-v2.5",
                         "name": "MiMo V2.5 (vision+tools)",
                         "input": ["text", "image"],
-                        "reasoning": False,
-                        "contextWindow": 1048576,
-                        "maxTokens": 32768,
-                    },
-                    {
-                        "id": "mimo-v2.5-pro",
-                        "name": "MiMo V2.5 Pro (text+tools)",
-                        "input": ["text"],
                         "reasoning": False,
                         "contextWindow": 1048576,
                         "maxTokens": 32768,

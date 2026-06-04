@@ -33,11 +33,10 @@
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
 #                                                     nvidia | mimo | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
-#   IMAGE_MODEL  Vision model used by the Gateway's  (default: same as MODEL;
-#                generic `image` tool path and the    set this explicitly when
-#                roboclaws Phase-2.8 observe bridge)  the main model is text-only
-#                                                     or you want deterministic
-#                                                     image/bridge routing)
+#   IMAGE_MODEL  Vision model for the Gateway's      (default: same as MODEL;
+#                generic `image` tool path             set this explicitly when
+#                                                       you want deterministic
+#                                                       image routing)
 #   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 180)
 #   TIMEOUT_SECONDS  Per-turn wall-clock cap         (default: 7200 = 2h;
@@ -334,18 +333,9 @@ JSON
         MIMO_PROVIDER_MODE="${MIMO_PROVIDER_MODE:-openai}"
         case "$MIMO_PROVIDER_MODE" in
             openai)
-                # OpenAI-compatible endpoint. Two image-processing modes:
-                #   direct vision  — main model is image-capable (mimo-v2.5).
-                #   IMAGE_MODEL    — main model is text-only (mimo-v2.5-pro);
-                #                    IMAGE_MODEL auto-set to mimo_openai/mimo-v2.5 so the
-                #                    Gateway's image tool has a vision-capable model.
+                # OpenAI-compatible endpoint; mimo-v2.5 is image-capable
+                # (direct vision), so no image-delegation model is needed.
                 MODEL="${MODEL:-mimo_openai/mimo-v2.5}"
-                # When the caller picked a text-only MiMo model, auto-delegate images to v2.5.
-                case "$MODEL" in
-                    *mimo-v2.5-pro*)
-                        IMAGE_MODEL="${IMAGE_MODEL:-mimo_openai/mimo-v2.5}"
-                        ;;
-                esac
                 PROVIDER_ID_OVERRIDE="mimo_openai"
                 PROVIDER_BASE_URL=""
                 EXTRA_MODELS_JSON="[]"
@@ -356,7 +346,6 @@ JSON
   "auth": "api-key",
   "api": "openai-completions",
   "models": [
-    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (text+tools)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768},
     {"id":"mimo-v2.5","name":"MiMo V2.5 (vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
   ]
 }
@@ -364,8 +353,8 @@ JSON
 )
                 ;;
             anthropic)
-                # Anthropic-compatible endpoint — text + tool-calls; no vision.
-                MODEL="${MODEL:-mimo_anthropic/mimo-v2.5-pro}"
+                # Anthropic-compatible endpoint — mimo-v2.5 vision + tool-calls.
+                MODEL="${MODEL:-mimo_anthropic/mimo-v2.5}"
                 PROVIDER_ID_OVERRIDE="mimo_anthropic"
                 PROVIDER_BASE_URL=""
                 EXTRA_MODELS_JSON="[]"
@@ -377,7 +366,6 @@ JSON
   "api": "anthropic-messages",
   "headers": {"anthropic-version": "2023-06-01"},
   "models": [
-    {"id":"mimo-v2.5-pro","name":"MiMo V2.5 Pro (anthropic)","input":["text"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768},
     {"id":"mimo-v2.5","name":"MiMo V2.5 (anthropic vision+tools)","input":["text","image"],"reasoning":false,"contextWindow":1048576,"maxTokens":32768}
   ]
 }

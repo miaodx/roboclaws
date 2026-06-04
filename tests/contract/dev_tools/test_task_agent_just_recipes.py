@@ -1286,7 +1286,7 @@ def test_coding_agent_claude_profile_builds_scoped_env() -> None:
 
     assert result.stdout.splitlines() == [
         "model:--model",
-        "model:mimo-v2.5-pro",
+        "model:mimo-v2.5",
         "env:ANTHROPIC_API_KEY=fake-mimo-key",
         "env:ANTHROPIC_BASE_URL=https://token-plan-cn.xiaomimimo.com/anthropic",
         "env:CLAUDE_CODE_SIMPLE=1",

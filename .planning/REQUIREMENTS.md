@@ -123,18 +123,14 @@ from SPEC docs + 1 continuation requirement surfaced by intel).
       Live-probe gate: container → host MCP streamable-http probe + agent
       verifies `observe` returns multimodal images (spike baseline 2026-04-21).
 
-- [ ] **A-07** (REQ-split-model-navigation): Enable text-only reasoning models
-      (mimo-v2.5-pro, mimo-v2.5) to drive autonomous OpenClaw navigation by
-      intercepting image-bearing `roboclaws__observe` tool results at the MCP
-      server layer, converting them to text descriptions via a vision model
-      (mimo-v2-omni as IMAGE_MODEL), and returning only text to the main model.
-      The agent's tool surface (`observe`/`move`/`done`) is unchanged; the
-      intercept is transparent. Bonus: probe whether OpenClaw's `messaging`
-      profile or an `alsoAllow` mechanism can expose the generic `image` tool
-      alongside `roboclaws__*` without the exec/curl drift risk. Live-probe
-      gate: a complete navigation run with mimo-v2.5-pro as main model + omni
-      as vision intermediary, recorded and confirmed working.
-      Planned in GSD Phase 2.8 under `.planning/phases/02.8-split-model-vision/`.
+- [⛔] **A-07** (REQ-split-model-navigation): CANCELLED 2026-06-04. Originally:
+      enable text-only reasoning models to drive autonomous OpenClaw navigation
+      by intercepting image-bearing `roboclaws__observe` results at the MCP
+      server layer and converting them to text via a vision model. Cancelled
+      because the repo standardized on the vision-capable `mimo-v2.5` as the
+      single supported MiMo route; the text-only main-model premise and the
+      shipped text-bridge foundation were removed in the same change. Reopen
+      only if a text-only main-model requirement returns.
 
 - [x] **A-08** (REQ-refactor-regression-safety): Add refactor-safety harnesses
       that freeze the critical direct-VLM / territory / coverage / OpenClaw
@@ -207,7 +203,7 @@ Which phases cover which requirements. Status reflects shipped state at
 | A-04 | Phase 2.4 | Complete / superseded by `map-v2+chase` decision lock |
 | A-05 | (deferred — formerly Phase 2.5 "ship winning view"; awaits a new phase) | Deferred |
 | A-06 | Phase 2.6 (autonomous-nav, MCP tool surface; Phase 2.5 superseded 2026-04-21) | Complete (shipped 2026-04-21) |
-| A-07 | Phase 2.8 | Planned |
+| A-07 | Phase 2.8 | Cancelled 2026-06-04 (standardized on vision-capable `mimo-v2.5`) |
 | A-08 | Phase 4 | Complete |
 | A-09 | Phase 136 | Complete |
 

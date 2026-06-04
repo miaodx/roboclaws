@@ -96,12 +96,6 @@ from roboclaws.core.views import (
     render_navigation_prompt_bundle,
 )
 from roboclaws.mcp.profiles import AI2THOR_NAVIGATION_PROFILE, contract_profile
-from roboclaws.mcp.text_bridge import (
-    VisionBridge,
-    normalize_observe_mode,
-    resolve_bridge_model,
-    resolve_observe_delivery,
-)
 
 __all__ = ["make_roboclaws_mcp", "RoboclawsMCPServer"]
 
@@ -244,10 +238,6 @@ class RoboclawsMCPServer:
         port: int = _DEFAULT_PORT,
         snapshots_dir: Path | None = None,
         model_name: str | None = None,
-        image_model: str | None = None,
-        observe_mode: str | None = None,
-        vision_bridge_model: str | None = None,
-        vision_bridge: Any | None = None,
         allow_privileged_tools: bool = False,
     ) -> None:
         self.engine = engine
@@ -258,13 +248,6 @@ class RoboclawsMCPServer:
         self.host = host
         self.port = int(port)
         self.model_name = model_name or os.environ.get("MODEL")
-        self.image_model = image_model or os.environ.get("IMAGE_MODEL")
-        self.observe_mode = normalize_observe_mode(observe_mode)
-        self.vision_bridge_model = resolve_bridge_model(
-            bridge_model=vision_bridge_model,
-            image_model=self.image_model,
-        )
-        self._vision_bridge = vision_bridge
         self.contract_profile = contract_profile(AI2THOR_NAVIGATION_PROFILE)
         self.allow_privileged_tools = allow_privileged_tools
         # Directory the host writes snapshot PNGs to. Bootstrap bind-mounts
@@ -535,10 +518,6 @@ class RoboclawsMCPServer:
             self._moves_since_observe = 0
 
         human_message = self._pop_human_message()
-        observe_delivery = resolve_observe_delivery(
-            self.model_name,
-            observe_mode=self.observe_mode,
-        )
         source_image_labels = list(prompt_bundle.image_labels)
 
         base_state_payload: dict[str, Any] = {
@@ -556,17 +535,7 @@ class RoboclawsMCPServer:
         visible_objects = self._visible_object_summaries(state)
         if visible_objects:
             base_state_payload["visible_objects"] = visible_objects
-        bridge_result = None
         delivered_image_labels = source_image_labels
-        if observe_delivery == "text-bridge":
-            bridge_result = self._get_vision_bridge().describe(
-                images=prompt_bundle.prompt_images,
-                image_labels=source_image_labels,
-                state=base_state_payload,
-                view_variant=_VIEW_VARIANT,
-            )
-            delivered_image_labels = ["vision_bridge"]
-        bridge_model = bridge_result.bridge_model if bridge_result is not None else None
 
         # Keep JPEG-b64 frame fields identical to sim_server.py so the existing
         # renderer keeps working; this carries the frozen key-set forward.
@@ -575,24 +544,17 @@ class RoboclawsMCPServer:
             prompt_bundle=prompt_bundle,
             seen_by_agent=True,
             human_message=human_message,
-            observe_delivery=observe_delivery,
-            bridge_model=bridge_model,
         )
         self._write_trace(tool="observe", event=FRAME_CAPTURE_EVENT, **frame_payload)
 
         state_payload = dict(base_state_payload)
-        state_payload["observe_delivery"] = observe_delivery
-        state_payload["bridge_model"] = bridge_model
         state_payload["image_labels"] = delivered_image_labels
         state_text = json.dumps(state_payload)
         result: list[Any] = [state_text]
-        if bridge_result is not None:
-            result.append(bridge_result.description)
-        else:
-            result.extend(
-                MCPImage(data=_encode_frame_png(frame), format="png")
-                for frame in prompt_bundle.prompt_images
-            )
+        result.extend(
+            MCPImage(data=_encode_frame_png(frame), format="png")
+            for frame in prompt_bundle.prompt_images
+        )
         snapshot_paths = self._maybe_write_labeled_snapshot(label, prompt_bundle)
         if snapshot_paths is not None:
             result.append(_format_media_hint(snapshot_paths))
@@ -602,10 +564,6 @@ class RoboclawsMCPServer:
             "state": self._state_payload(state),
             "human_message": human_message,
             **self._view_metadata(delivered_image_labels),
-            "observe_delivery": observe_delivery,
-            "bridge_model": bridge_model,
-            "bridge_latency_s": bridge_result.latency_s if bridge_result is not None else None,
-            "bridge_error": bridge_result.error if bridge_result is not None else None,
         }
         if label:
             response_payload["label"] = label
@@ -687,14 +645,11 @@ class RoboclawsMCPServer:
             prompt_bundle=prompt_bundle,
             seen_by_agent=False,
             human_message=human_message,
-            observe_delivery="archived",
         )
         self._write_trace(tool="observe_archived", event=FRAME_CAPTURE_EVENT, **frame_payload)
 
         # Match observe's state richness so an agent reading both responses
-        # can pick fields uniformly. Omit observe_delivery / bridge_model —
-        # they describe how images were rendered, and there are no images
-        # in this response.
+        # can pick fields uniformly.
         full_state: dict[str, Any] = {
             "agent_id": state.agent_id,
             "position": state.position,
@@ -1228,8 +1183,6 @@ class RoboclawsMCPServer:
         human_message: str | None = None,
         move_direction: str | None = None,
         move_reason: str | None = None,
-        observe_delivery: str | None = None,
-        bridge_model: str | None = None,
     ) -> dict[str, Any]:
         view_metadata = self._view_metadata(prompt_bundle.image_labels)
         return build_frame_capture_payload(
@@ -1245,8 +1198,6 @@ class RoboclawsMCPServer:
             human_message=human_message,
             move_direction=move_direction,
             move_reason=move_reason,
-            observe_delivery=observe_delivery,
-            bridge_model=bridge_model,
         )
 
     def _state_payload(self, state: AgentState) -> dict[str, Any]:
@@ -1300,14 +1251,6 @@ class RoboclawsMCPServer:
                 return None
             return self._human_queue.popleft()
 
-    def _get_vision_bridge(self) -> Any:
-        if self._vision_bridge is None:
-            self._vision_bridge = VisionBridge(
-                bridge_model=self.vision_bridge_model,
-                image_model=self.image_model,
-            )
-        return self._vision_bridge
-
     def _write_tool_request(self, tool: str, request: dict[str, Any] | None = None) -> None:
         self._write_trace(tool=tool, event="request", request=request or {})
 
@@ -1357,10 +1300,6 @@ def make_roboclaws_mcp(
     port: int = _DEFAULT_PORT,
     snapshots_dir: Path | None = None,
     model_name: str | None = None,
-    image_model: str | None = None,
-    observe_mode: str | None = None,
-    vision_bridge_model: str | None = None,
-    vision_bridge: Any | None = None,
     allow_privileged_tools: bool = False,
 ) -> RoboclawsMCPServer:
     """Build a RoboclawsMCPServer bound to `engine` + `agent_id`.
@@ -1385,9 +1324,5 @@ def make_roboclaws_mcp(
         port=port,
         snapshots_dir=snapshots_dir,
         model_name=model_name,
-        image_model=image_model,
-        observe_mode=observe_mode,
-        vision_bridge_model=vision_bridge_model,
-        vision_bridge=vision_bridge,
         allow_privileged_tools=allow_privileged_tools,
     )

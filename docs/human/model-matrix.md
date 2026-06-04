@@ -10,8 +10,7 @@ Why this file exists: on 2026-04-23 a MiMo chat run crashed because
 `contextWindow: 32768` was declared for `mimo-v2-omni` while the vendor
 publishes 256K. The Gateway's memory-flush threshold is
 `contextWindow - 24000`, so a wrong number turns a headroom cushion into
-an on-turn-one trigger. See
-`.planning/phases/02.8-split-model-vision/02.8-CONTEXT.md` and the retro
+an on-turn-one trigger. See the retro
 in `docs/retrospectives/` for the full incident write-up.
 
 Last full audit: 2026-04-23 (bootstrap `fd2b878`).
@@ -47,9 +46,7 @@ cosmetic one**.
 | `kimi/k2p5`                       | `anthropic_kimi/k2p5`  | 262 144      | 32 768           | 256K — Moonshot K2.5 release                     | 238 144         | OK — live-probed end-to-end                      |
 | `kimi/k2.6`                       | `anthropic_kimi/k2.6`  | 262 144      | 32 768           | 256K — Moonshot K2.6 release                     | 238 144         | OK — live-probed end-to-end                      |
 | `nvidia/nemotron-nano-12b-v2-vl`  | `nvidia/…`             | 131 072      | 4 096            | 128K — NVIDIA NIM model card                     | 107 072         | OK — CI-verified                                 |
-| `mimo-v2.5-pro` *(openai)*        | `mimo_openai/…`        | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 | `mimo-v2.5` *(openai)*            | `mimo_openai/…`        | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
-| `mimo-v2.5-pro` *(anthropic)*     | `mimo_anthropic/…`     | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 | `mimo-v2.5` *(anthropic)*         | `mimo_anthropic/…`     | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 
 > A flush threshold below ~20 k is effectively "trip on the first `observe`
@@ -68,8 +65,8 @@ cosmetic one**.
 > (`https://api.llm.mioffice.cn/anthropic`, `xiaomi/mimo-v2.5`). Both accepted
 > a PNG image and described image contents. The native MiMo OpenAI-compatible
 > route (`mimo-v2.5`, chat) and native MiMo Anthropic-compatible route
-> (`mimo-v2.5`) also accepted image blocks. Keep `mimo-v2.5-pro` text-only
-> until it is separately probed.
+> (`mimo-v2.5`) also accepted image blocks. `mimo-v2.5` is the single supported
+> MiMo route and is vision-capable.
 
 ## Historical MiMo incident row
 
@@ -116,9 +113,9 @@ mimo-v2.5-tts-voiceclone
 mimo-v2.5-tts-voicedesign
 ```
 
-`mimo-v2-pro` ≠ `mimo-v2.5-pro`. Do not add new active v2-line routes; the
-current full-modal route is `mimo-v2.5` and the current text-only coding route
-is `mimo-v2.5-pro`.
+`mimo-v2-pro` ≠ `mimo-v2.5-pro`. Do not add new active v2-line routes, and do
+not re-add the text-only `mimo-v2.5-pro` route — the single supported MiMo
+route is the vision-capable `mimo-v2.5`.
 
 ## Vendor links (authoritative)
 

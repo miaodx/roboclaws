@@ -347,7 +347,7 @@ def test_openclaw_autonomous_suite_extracts_structured_summary(
                     "wallclock_s": 12.5,
                     "transcript_source": "terminal-body",
                     "view_variant": "map-v2+chase",
-                    "model": "mimo_openai/mimo-v2.5-pro",
+                    "model": "mimo_openai/mimo-v2.5",
                 }
             ),
             encoding="utf-8",

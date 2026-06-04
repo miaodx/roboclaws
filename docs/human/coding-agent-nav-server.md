@@ -65,10 +65,6 @@ The `code::cc` and `code::codex` launchers also pass the selected coding-agent
 model to the MCP server as `MODEL`. That lets `observe(auto)` use the model
 capability catalog:
 
-- `mimo-v2.5-pro` is text-only. It should use
-  `observe_archived` for photo evidence or a configured vision bridge for
-  ordinary navigation observations. `scene_objects` and `goto` are available
-  only when the server is started with privileged helpers enabled.
 - `mimo-v2.5` is the MiMo image-capable route and can receive raw `observe`
   images.
 - `kimi-k2.6` is image-capable, but the Claude Code Kimi coding endpoint has

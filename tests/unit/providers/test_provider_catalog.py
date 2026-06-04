@@ -10,7 +10,6 @@ from roboclaws.core.provider_catalog import (
     resolve_model,
 )
 from roboclaws.core.vlm import KimiProvider, MimoProvider, NvidiaProvider, create_provider
-from roboclaws.mcp.text_bridge import resolve_observe_delivery
 
 
 def test_resolve_model_records_alias_env_and_capabilities() -> None:
@@ -29,8 +28,8 @@ def test_provider_catalog_exposes_aliases_without_duplicate_source() -> None:
 
     assert aliases["nvidia"] == "meta/llama-4-maverick-17b-128e-instruct"
     assert aliases["mimo"] == "mimo-v2.5"
-    assert aliases["mimo-v2.5-pro"] == "mimo-v2.5-pro"
     assert aliases["mimo-v2.5"] == "mimo-v2.5"
+    assert "mimo-v2.5-" + "pro" not in aliases
     assert "mimo-" + "omni" not in aliases
     assert "mimo-v2-" + "omni" not in aliases
 
@@ -53,13 +52,11 @@ def test_provider_factory_routes_through_catalog(monkeypatch) -> None:
         assert isinstance(create_provider("mimo"), MimoProvider)
 
 
-def test_text_bridge_uses_catalog_image_capabilities() -> None:
-    assert model_supports_images("mimo_openai/mimo-v2.5-pro") is False
+def test_catalog_reports_all_real_models_image_capable() -> None:
+    # mimo-v2.5 has native vision; every non-mock catalog model is image-capable.
     assert model_supports_images("mimo_openai/mimo-v2.5") is True
-    assert (
-        resolve_observe_delivery("mimo_openai/mimo-v2.5-pro", observe_mode="auto") == "text-bridge"
-    )
-    assert resolve_observe_delivery("mimo_openai/mimo-v2.5", observe_mode="auto") == "images"
+    assert model_supports_images("mimo_anthropic/mimo-v2.5") is True
+    assert model_supports_images("anthropic_kimi/k2p5") is True
 
 
 def test_catalog_returns_openclaw_model_identifier() -> None:

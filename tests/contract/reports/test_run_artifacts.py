@@ -61,7 +61,6 @@ def test_run_artifact_contract_links_replay_trace_snapshots_and_summary() -> Non
         image_labels=["fpv", "map_v2", "chase"],
         baseline_overhead="raw-map-b64",
         chase="chase-b64",
-        observe_delivery="archived",
     )
     trace_events = [
         build_trace_event(
@@ -99,10 +98,6 @@ def test_run_artifact_contract_links_replay_trace_snapshots_and_summary() -> Non
         final_message="goal reached",
         view_variant="map-v2+chase",
         model="mock",
-        image_model="mock-image",
-        observe_mode="auto",
-        observe_delivery="images",
-        vision_bridge_model=None,
         bridge_metrics={"prompt_chars": 10},
         sim_server_metrics=build_snapshot_metrics(
             runtime_s=5.5,

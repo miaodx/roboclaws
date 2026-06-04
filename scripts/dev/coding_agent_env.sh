@@ -73,7 +73,7 @@ roboclaws_code_agent_profile_default_model() {
       printf 'xiaomi/mimo-v2.5\n'
       ;;
     mimo-anthropic)
-      printf 'mimo-v2.5-pro\n'
+      printf 'mimo-v2.5\n'
       ;;
     *)
       echo "error: unknown coding-agent provider profile: ${provider}" >&2
@@ -212,30 +212,12 @@ roboclaws_code_agent_model_args() {
   fi
 }
 
-roboclaws_code_agent_model_supports_images() {
-  local model="${1:-}"
-  model="${model##*/}"
-  case "$model" in
-    mimo-v2.5-pro)
-      return 1
-      ;;
-    *)
-      return 0
-      ;;
-  esac
-}
-
 roboclaws_code_agent_prepare_mcp_env() {
   local model="${1:-}"
   local provider="${2:-}"
 
   if [[ -n "$model" ]]; then
     export MODEL="$model"
-  fi
-
-  if [[ -n "$model" ]] && ! roboclaws_code_agent_model_supports_images "$model"; then
-    echo "==> model capability guard: ${model} is text-only; MCP observe(auto) will not inline raw images" >&2
-    echo "    Use observe_archived for photo evidence, or configure IMAGE_MODEL/ROBOCLAWS_VISION_BRIDGE_MODEL for text-bridge observations." >&2
   fi
 
   if [[ "$provider" == "kimi-anthropic" ]]; then

@@ -274,7 +274,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 - ⛔ **Phase 2.5 (Autonomous loop v1 — curl/exec tool contract)** - SUPERSEDED 2026-04-21 by Phase 2.6 after spike proved the curl-in-exec contract is structurally wrong (see `docs/retrospectives/openclaw-kimi-provider-debug-2026-04-21.md` + spike findings)
 - ✅ **v1.2 Autonomous OpenClaw Loop** - Phase 2.6 (MCP tool surface — shipped 2026-04-21)
 - 📋 **v1.3 Autonomous Transcript Visibility** - Phase 2.7 (planned 2026-04-22; compare streaming vs terminal-body capture, prefer streaming if supported)
-- 📋 **v1.4 Split-model navigation** - Phase 2.8 (text reasoning model + separate vision model for autonomous navigation)
+- ⛔ **v1.4 Split-model navigation** - Phase 2.8 (CANCELLED 2026-06-04 — standardized on vision-capable `mimo-v2.5`; text-only split-model path + text-bridge removed)
 - ✅ **v1.5 Refactor Regression Safety** - Phase 4 (completed 2026-04-23; deterministic fixtures + capture/analyze harnesses + first local probe evidence in `04-LOCAL-PROBE-RESULTS.md`)
 - ✅ **v1.6 Iterative Codebase Simplification** - Phase 5 (completed 2026-04-23; 18 target files simplified, global pytest+ruff green, net -203 lines across targets)
 - ✅ **v1.7 MolmoSpaces cleanup pilot** - Phase 6 (completed 2026-05-07; api-semantic cleanup contracts, scorer, direct MCP/demo artifacts; real planner-backed manipulation deferred)
@@ -375,7 +375,7 @@ territory/coverage, and OpenClaw paths. Phase 3 remains deferred indefinitely.
 
 Historical execution files through Phase 136 live under
 `.planning/milestones/v1.98-phases/`. `.planning/phases/` is reserved for the
-current planned follow-ups, Phase 2.7 and Phase 2.8.
+current planned follow-up, Phase 2.7. (Phase 2.8 was cancelled 2026-06-04.)
 
 **Phase Numbering:**
 - Integer phases (1, 2, 3, 4): Planned milestone work
@@ -391,7 +391,7 @@ current planned follow-ups, Phase 2.7 and Phase 2.8.
 - [⛔] **Phase 2.5: Autonomous OpenClaw loop (v1 — curl/exec contract)** - SUPERSEDED 2026-04-21 by Phase 2.6. Plans drafted but never executed; contract was "agent curls our HTTP server from the exec tool," spike proved Gateway's exec allowlist + generic image tool fight this architecture. Kept as a lesson — do not resurrect.
 - [x] **Phase 2.6: Autonomous OpenClaw loop (v2 — MCP tool surface)** - Same goal as 2.5 (single-agent nav + human steer), correct architecture: `observe`/`move`/`done` as first-class MCP tools over streamable-http; agent runs under `profile: minimal` (no exec, no curl, no generic `image`); spike-proven 2026-04-21; **shipped 2026-04-21** — see `docs/retrospectives/phase-2.6.md`
 - [ ] **Phase 2.7: Autonomous OpenClaw intermediate-message capture** - Add mid-run assistant transcript visibility to the shipped MCP loop. Compare streaming vs terminal-body capture first, prefer streaming if the real Gateway surface supports it, then persist the chosen path into `trace.jsonl`, `run_result.json`, and `report.html`.
-- [ ] **Phase 2.8: Split-model navigation** - Enable text-only reasoning models (mimo-v2.5-pro, mimo-v2.5) to drive autonomous navigation by intercepting image-bearing MCP tool results and converting them to text descriptions via a vision model (mimo-v2-omni) before the main model sees them. Also explore whether OpenClaw's tool-profile system can expose the `image` tool alongside `roboclaws__*` without exec/curl drift.
+- [⛔] **Phase 2.8: Split-model navigation** - CANCELLED 2026-06-04. Premise was routing image-bearing `observe` results through a vision model so a *text-only* main model (then `mimo-v2.5-pro`) could navigate. The repo has since standardized on vision-capable `mimo-v2.5` as the single supported MiMo route, so the text-only split-model path and its text-bridge foundation were removed. Do not resurrect without a text-only model requirement.
 - [x] **Phase 4: Refactor regression harnesses for VLM, territory/coverage, and OpenClaw** - Deterministic fixtures + capture/analyze harnesses that make large refactors safer across the direct-VLM and OpenClaw paths. Completed 2026-04-23 with real local evidence in `04-LOCAL-PROBE-RESULTS.md`.
 - [x] **Phase 5: Iterative codebase simplification** - Run /simplify iteratively over major source files (transport.py, mcp_server.py, bridge.py, reporter.py, and others) to reduce complexity, remove dead code, and improve readability. Final worktree verification passed on 2026-04-23 with a net -203 targeted-line reduction.
 - [x] **Phase 6: MolmoSpaces api-semantic cleanup pilot** - Direct coding-agent cleanup demo over a fake/MolmoSpaces-shaped backend, private scorer, provenance-labeled artifacts, and harness gate. Completed 2026-05-07; cleanup-loop primitives remain `api_semantic` even after the later Phase 25 standalone Franka proof.
@@ -690,25 +690,22 @@ Plans:
 - [ ] 02.7-04: Local-dev validation + write-up — confirm live behavior and document the chosen path
 **UI hint**: yes
 
-#### 📋 v1.4 Split-model navigation (Phase 2.8) — Planned
+#### ⛔ v1.4 Split-model navigation (Phase 2.8) — Cancelled 2026-06-04
 
-### Phase 2.8: Split-model navigation
-**Goal**: Enable text-only reasoning models (e.g. mimo-v2.5-pro, mimo-v2.5) to navigate autonomously in OpenClaw by intercepting image-bearing `roboclaws__observe` tool results at the MCP server layer, converting them to text descriptions via a vision model (mimo-v2-omni), and forwarding only text to the text-only main model. Bonus path: probe whether OpenClaw's tool-profile system can expose the generic `image` tool alongside `roboclaws__*` without the exec/curl drift risk seen in Phase 2.5.
-**Depends on**: Phase 2.6 (shipped MCP tool loop + `profile: minimal`). Phase 2.8 is additive; it does not reopen the push-model or exec/curl contracts.
-**Requirements**: A-07
-**Success Criteria** (what must be TRUE):
-  1. An autonomous navigation run completes successfully with a text-only main model (mimo-v2.5-pro or mimo-v2.5) as `MODEL` and mimo-v2-omni as the vision intermediary — the agent calls `roboclaws__observe`, receives a text description of the scene, and uses it to choose `roboclaws__move` actions without ever receiving raw image bytes.
-  2. The MCP server (or a thin wrapper) performs the vision→text conversion transparently: the agent's tool surface is unchanged (`observe`/`move`/`done`), but observe now returns text when the caller is a text-only model.
-  3. `make mimo-pro chat` and `make mimo chat` produce working interactive sessions where navigation is demonstrably driven by the text description path.
-  4. `docs/openclaw-local.md` is updated to document the split-model configuration with a verified-on probe entry.
-  5. (Stretch) Probe whether `profile: coding` with a constrained prompt or a custom `alsoAllow` profile can expose `image` without exec/curl drift — write-up included regardless of outcome.
-**Plans**: TBD
-
-Plans:
-- [ ] 02.8-01: Capability spike — profile probe (`messaging` / `alsoAllow`) + MCP intercept design decision
-- [ ] 02.8-02: MCP vision-bridge — implement image→text intercept in `roboclaws__observe`
-- [ ] 02.8-03: Makefile + bootstrap wiring — `make mimo-pro chat` / `make mimo chat` end-to-end
-- [ ] 02.8-04: Local-dev validation + doc update
+### Phase 2.8: Split-model navigation — CANCELLED
+**Cancellation reason**: The premise was enabling a *text-only* main model
+(then `mimo-v2.5-pro`) to navigate by routing image-bearing `roboclaws__observe`
+results through a vision model and forwarding only text. On 2026-06-04 the repo
+standardized on the vision-capable `mimo-v2.5` as the single supported MiMo
+route, removing the only text-only model the phase depended on. The shipped
+text-bridge foundation (`roboclaws/mcp/text_bridge.py`, observe-mode plumbing)
+was removed in the same change. Reopen only if a text-only main-model
+requirement returns.
+**Original goal (for historical context)**: Enable text-only reasoning models to
+navigate autonomously in OpenClaw by intercepting image-bearing `roboclaws__observe`
+tool results at the MCP server layer and converting them to text via a vision model.
+**Requirements**: A-07 (cancelled)
+**Plans**: none executed.
 **UI hint**: no
 
 #### ✅ v1.6 Iterative Codebase Simplification (Phase 5) — Completed
@@ -832,7 +829,7 @@ Active/planned chain: 1 → 1.5 → 2 → 2.1 → 2.2 → 2.3 → 2.4 → 2.6 �
 | 2.5. Autonomous OpenClaw loop (v1 curl/exec) | v1.2 | 0/8 | Superseded by 2.6 | 2026-04-21 |
 | 2.6. Autonomous OpenClaw loop (v2 MCP) | v1.2 | 7/7 | Complete | 2026-04-21 |
 | 2.7. Autonomous OpenClaw intermediate-message capture | v1.3 | 0/4 | Planned | - |
-| 2.8. Split-model navigation | v1.4 | 0/TBD | Planned | - |
+| 2.8. Split-model navigation | v1.4 | 0/0 | Cancelled | - |
 | 4. Refactor regression harnesses for VLM, territory/coverage, and OpenClaw | v1.5 | 4/4 | Complete | 2026-04-23 |
 | 5. Iterative codebase simplification | v1.6 | 9/9 | Complete | 2026-04-23 |
 | 6. MolmoSpaces api-semantic cleanup pilot | v1.7 | 4/4 | Complete | 2026-05-07 |

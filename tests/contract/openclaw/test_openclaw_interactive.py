@@ -69,8 +69,6 @@ def test_parse_args_defaults() -> None:
     # New defaults
     assert args.provider == "mimo"
     assert args.model is None
-    assert args.image_model is None
-    assert args.observe_mode is None
     assert args.plugin is False
     assert args.clean is False
     assert args.volume == "openclaw-gateway-config"
@@ -89,17 +87,11 @@ def test_parse_args_provider_and_model_flags() -> None:
             "--provider",
             "kimi",
             "--model",
-            "mimo_openai/mimo-v2.5-pro",
-            "--image-model",
             "mimo_openai/mimo-v2.5",
-            "--observe-mode",
-            "text-bridge",
         ]
     )
     assert args.provider == "kimi"
-    assert args.model == "mimo_openai/mimo-v2.5-pro"
-    assert args.image_model == "mimo_openai/mimo-v2.5"
-    assert args.observe_mode == "text-bridge"
+    assert args.model == "mimo_openai/mimo-v2.5"
 
 
 def test_parse_args_plugin_flag() -> None:
@@ -275,9 +267,7 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
         patch.dict(
             "os.environ",
             {
-                "MODEL": "mimo_openai/mimo-v2.5-pro",
-                "IMAGE_MODEL": "mimo_openai/mimo-v2.5",
-                "ROBOCLAWS_OBSERVE_MODE": "text-bridge",
+                "MODEL": "mimo_openai/mimo-v2.5",
             },
             clear=False,
         ),
@@ -305,9 +295,7 @@ def test_main_bootstraps_and_prints_banner_with_token(_patched_main_deps, capsys
     assert "http://127.0.0.1:18789" in out
     assert "tok-fresh" in out
     assert "agent-0" in out
-    assert "mimo-v2.5-pro" in out
     assert "mimo-v2.5" in out
-    assert "text-bridge" in out
     assert "just chat::tail" in out
     assert "just chat::view" in out
 
@@ -351,7 +339,7 @@ def test_main_banner_uses_appliance_public_hints(_patched_main_deps, capsys) -> 
 
 
 def test_main_provider_and_model_flags_reach_bootstrap(_patched_main_deps) -> None:
-    """--provider / --model / --image-model / --observe-mode flow into bootstrap env."""
+    """--provider / --model flow into bootstrap env."""
     ctx = _patched_main_deps
 
     def _fake_run(*args, **kwargs):
@@ -367,10 +355,6 @@ def test_main_provider_and_model_flags_reach_bootstrap(_patched_main_deps) -> No
                 "kimi",
                 "--model",
                 "some-model",
-                "--image-model",
-                "some-bridge",
-                "--observe-mode",
-                "text-bridge",
                 "--output-dir",
                 str(ctx.tmp_path / "flags"),
             ]
@@ -385,8 +369,6 @@ def test_main_provider_and_model_flags_reach_bootstrap(_patched_main_deps) -> No
     env = bootstrap_call.kwargs["env"]
     assert env["PROVIDER"] == "kimi"
     assert env["MODEL"] == "some-model"
-    assert env["IMAGE_MODEL"] == "some-bridge"
-    assert env["ROBOCLAWS_OBSERVE_MODE"] == "text-bridge"
 
 
 def test_main_plugin_flag_sets_provider_mode_vars(_patched_main_deps) -> None:

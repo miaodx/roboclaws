@@ -1,6 +1,6 @@
 # Interactive chat — operator drives the agent from the Gateway Control UI.
 #
-# `just chat::run` is the canonical entrypoint (provider/model/image-model/flags
+# `just chat::run` is the canonical entrypoint (provider/model/flags
 # all controlled by arguments). Use the arguments directly or override defaults.
 #
 # Companion observers (run in a second terminal while chat is live):
@@ -24,7 +24,7 @@ chat_xvfb_screen := env_var_or_default("CHAT_XVFB_SCREEN", "1280x1024x24")
 default:
     @just --list chat
 
-run provider="mimo" model="" image_model="" observe_mode="" plugin="false" clean="false" reuse="false" xvfb="false" xvfb_args="":
+run provider="mimo" model="" plugin="false" clean="false" reuse="false" xvfb="false" xvfb_args="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -33,12 +33,6 @@ run provider="mimo" model="" image_model="" observe_mode="" plugin="false" clean
     run_args=("--provider" "{{provider}}")
     if [[ -n "{{model}}" ]]; then
       run_args+=("--model" "{{model}}")
-    fi
-    if [[ -n "{{image_model}}" ]]; then
-      run_args+=("--image-model" "{{image_model}}")
-    fi
-    if [[ -n "{{observe_mode}}" ]]; then
-      run_args+=("--observe-mode" "{{observe_mode}}")
     fi
     if [[ "{{plugin}}" == "true" ]]; then
       run_args+=("--plugin")
