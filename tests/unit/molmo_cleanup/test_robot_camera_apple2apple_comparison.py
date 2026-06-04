@@ -1650,6 +1650,125 @@ def Xform "World"
     assert location["target_contract_delta"]["status"] == "missing_object_binding_evidence"
 
 
+def test_robot_camera_render_contract_uses_isaac_index_when_binding_summary_lacks_target(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_render_contract_index_fallback",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset>
+    <texture name="tex_box" type="2d" file="textures/box.png"/>
+    <material name="mat_box" texture="tex_box" rgba="1 1 1 1"/>
+  </asset>
+  <worldbody>
+    <body name="box_1">
+      <geom name="box_1_visual_0" mesh="box_mesh" material="mat_box"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Scope "Looks"
+  {
+    def Material "mat_box"
+    {
+      def Shader "PreviewSurface"
+      {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </World/Looks/mat_box/DiffuseTexture.outputs:rgb>
+      }
+      def Shader "DiffuseTexture"
+      {
+        asset inputs:file = @/tmp/textures/box.png@
+      }
+    }
+  }
+  def Xform "box_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/Looks/mat_box>
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest = {
+        "locations": [
+            {
+                "status": "success",
+                "target": {"kind": "object", "target_id": "box_1"},
+                "image_diffs": {
+                    "fpv": {
+                        "mean_abs_rgb": 12.0,
+                        "residual": {"residual_class": "low_residual"},
+                    },
+                    "chase": {"residual": {"residual_class": "low_residual"}},
+                },
+            }
+        ],
+        "summary": {},
+    }
+    (tmp_path / "mujoco_state.json").write_text(
+        json.dumps({"scene_xml": str(mujoco_xml)}),
+        encoding="utf-8",
+    )
+    (tmp_path / "isaac_state.json").write_text(
+        json.dumps(
+            {
+                "scene_usd": str(isaac_usd),
+                "object_index": {
+                    "box_1": {
+                        "usd_prim_path": "/World/box_1",
+                        "category": "Box",
+                        "geometry_status": "renderable",
+                        "has_renderable_geometry": True,
+                        "valid_stage_prim": True,
+                    }
+                },
+                "scene_binding_diagnostics": {
+                    "object_bindings": {
+                        "bowl_1": {
+                            "status": "bound",
+                            "public_id": "bowl_1",
+                            "kind": "object",
+                            "usd_prim_path": "/World/bowl_1",
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    run_camera._attach_render_contract_diagnostics(manifest, output_dir=tmp_path)
+
+    summary = manifest["summary"]["render_contract_diagnostics"]
+    location = manifest["locations"][0]["render_contract_diagnostics"]
+    texture_check = {
+        item["check_id"]: item for item in manifest["summary"]["render_domain_checks"]["checks"]
+    }["texture_colorspace_material_response"]
+    assert summary["target_contract_delta_counts"] == {"material_texture_names_match": 1}
+    assert summary["high_priority_target_delta_count"] == 0
+    assert location["target_usd_path_source"] == "isaac_state_index"
+    assert location["target_usd_binding"] == {}
+    assert location["target_usd_path_fallback"]["usd_prim_path"] == "/World/box_1"
+    assert location["isaac_target_contract"]["material_binding_count"] == 1
+    assert location["target_contract_delta"]["status"] == "material_texture_names_match"
+    assert texture_check["status"] == "texture_basenames_match_paths_or_colorspace_unverified"
+
+
 def test_robot_camera_isaac_render_contract_reports_visual_physics(
     tmp_path: Path,
 ) -> None:

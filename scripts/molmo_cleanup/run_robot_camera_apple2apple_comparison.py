@@ -1585,6 +1585,7 @@ def _attach_render_contract_diagnostics(
             mujoco_contract=mujoco_contract,
             isaac_contract=isaac_contract,
             scene_binding_diagnostics=scene_binding_diagnostics,
+            isaac_state=isaac_state,
         )
         item["render_contract_diagnostics"] = diagnostics
         per_location.append(diagnostics)
@@ -2434,6 +2435,14 @@ def _isaac_effective_index_entry(
     if pose.get("placement_resolution_source"):
         effective["placement_resolution_source"] = str(pose.get("placement_resolution_source"))
     return effective
+
+
+def _isaac_index_usd_prim_path(entry: dict[str, Any]) -> str:
+    return str(
+        entry.get("usd_prim_path")
+        or _dict(_dict(entry.get("usd_world_bounds")).get("prim")).get("path")
+        or ""
+    )
 
 
 def _isaac_index_position(entry: dict[str, Any]) -> tuple[float, float, float] | None:
@@ -3294,11 +3303,23 @@ def _location_render_contract_diagnostics(
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     scene_binding_diagnostics: dict[str, Any],
+    isaac_state: dict[str, Any],
 ) -> dict[str, Any]:
     target = _dict(item.get("target"))
     target_id = str(target.get("target_id") or "")
+    target_kind = str(target.get("kind") or "object")
     target_binding = _target_usd_binding(scene_binding_diagnostics, target)
-    usd_prim_path = str(target_binding.get("usd_prim_path") or "")
+    target_binding_usd_path = str(target_binding.get("usd_prim_path") or "")
+    fallback_entry = _isaac_effective_index_entry(isaac_state, target_kind, target_id)
+    fallback_usd_path = _isaac_index_usd_prim_path(fallback_entry)
+    usd_prim_path = target_binding_usd_path or fallback_usd_path
+    usd_path_source = (
+        "scene_binding_diagnostics"
+        if target_binding_usd_path
+        else "isaac_state_index"
+        if fallback_usd_path
+        else "missing"
+    )
     mujoco_target = _mujoco_view_render_contract(mujoco_contract, anchor_id=target_id)
     isaac_target = _isaac_view_render_contract(isaac_contract, usd_prim_path=usd_prim_path)
     target_delta = _view_render_contract_delta(
@@ -3313,6 +3334,13 @@ def _location_render_contract_diagnostics(
         "schema": "robot_camera_location_render_contract_diagnostics_v1",
         "target": target,
         "target_usd_binding": _compact_target_binding(target_binding),
+        "target_usd_path_source": usd_path_source,
+        "target_usd_path_fallback": _compact_isaac_index_entry(
+            fallback_entry,
+            usd_prim_path=fallback_usd_path,
+        )
+        if not target_binding_usd_path and fallback_usd_path
+        else {},
         "fpv_mean_abs_rgb": _float_or_none(fpv_diff.get("mean_abs_rgb")),
         "fpv_residual_class": fpv_residual.get("residual_class"),
         "fpv_edge_abs_diff": _float_or_none(fpv_residual.get("edge_abs_diff")),
