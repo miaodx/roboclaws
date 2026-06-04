@@ -76,8 +76,8 @@ run task driver mode="" *overrides:
         generated_mess_count|\
         cleanup_object_count|\
         cleanup_routine|record_robot_views|robot_views|\
-        host|image_model|max_moves|max_wall_seconds|min_generated_mess_count|\
-        map_bundle|map_mode|mode|model|observe_mode|output_dir|personality_probe|photo_max_moves|\
+        host|max_moves|max_wall_seconds|min_generated_mess_count|\
+        map_bundle|map_mode|mode|model|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
         profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\

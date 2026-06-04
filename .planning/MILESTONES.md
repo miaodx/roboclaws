@@ -13,7 +13,8 @@ active phase work.
 **Phase directories archived:** 136 directories, covering completed/superseded
 execution history through Phase 136.
 
-**Phase directories left active/planned:** Phase 2.7 and Phase 2.8.
+**Phase directories left active/planned:** Phase 2.7. (Phase 2.8 cancelled
+2026-06-04 — standardized on vision-capable `mimo-v2.5`.)
 
 **Historical pre-GSD plans archived:** 137 files moved from `docs/plans/` to
 `docs/retrospectives/plans/`.

@@ -32,14 +32,6 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         profile="world-labels",
     ),
     MolmoLiveModelEntry(
-        name="mimo-v2.5-pro",
-        label="MiMo v2.5 Pro",
-        provider_profile="mimo-anthropic",
-        model="mimo-v2.5-pro",
-        secret_env="MIMO_TP_KEY",
-        profile="world-labels",
-    ),
-    MolmoLiveModelEntry(
         name="mimo-v2.5",
         label="MiMo v2.5",
         provider_profile="mimo-anthropic",

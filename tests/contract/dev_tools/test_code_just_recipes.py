@@ -202,7 +202,7 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
 
 
 def test_code_agent_mcp_server_receives_selected_model_for_observe_auto() -> None:
-    """Direct MCP runs must know the model so text-only profiles avoid raw images."""
+    """Direct MCP runs must know the selected model so the server binds MODEL correctly."""
     code_text = CODE_JUST.read_text(encoding="utf-8")
     env_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
 
@@ -216,9 +216,6 @@ def test_code_agent_mcp_server_receives_selected_model_for_observe_auto() -> Non
     assert ('roboclaws_code_agent_prepare_mcp_env "$claude_model" "$claude_provider"') in code_text
     assert ('roboclaws_code_agent_prepare_mcp_env "$codex_model" "$codex_provider"') in code_text
     assert 'export MODEL="$model"' in env_text
-    assert "mimo-v2.5-pro" in env_text
-    assert "mimo-v2.5|mimo-v2.5-pro" not in env_text
-    assert "MCP observe(auto) will not inline raw images" in env_text
 
 
 def test_photo_coding_agent_routes_use_photo_skill_only() -> None:

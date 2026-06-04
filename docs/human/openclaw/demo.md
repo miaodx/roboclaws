@@ -82,8 +82,8 @@ TOKEN=$(PROVIDER=mimo MODEL=mimo_openai/mimo-v2.5 AGENTS=2 ./scripts/openclaw/op
 ```
 
 `openclaw_demo.py` sends images directly in the chat-completions turn, so the
-main model still needs image support here. Text-only MiMo variants such as
-`mimo-v2.5-pro` belong in the autonomous MCP path, not this demo path.
+main model needs image support here. The supported MiMo route `mimo-v2.5` is
+vision-capable and works in this demo path.
 
 ### 2. Run the Demo
 

@@ -42,7 +42,6 @@ def _load_module(path: Path, name: str):
 def test_ci_live_model_entries_match_provider_profiles() -> None:
     assert [entry.name for entry in MODEL_ENTRIES] == [
         "kimi-k2.6",
-        "mimo-v2.5-pro",
         "mimo-v2.5",
         "kimi-k2.6-camera-raw",
         "mimo-v2.5-camera-raw",
@@ -52,12 +51,6 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
         for entry in MODEL_ENTRIES
     } == {
         "kimi-k2.6": ("kimi-anthropic", "kimi-k2.6", "KIMI_API_KEY", "world-labels"),
-        "mimo-v2.5-pro": (
-            "mimo-anthropic",
-            "mimo-v2.5-pro",
-            "MIMO_TP_KEY",
-            "world-labels",
-        ),
         "mimo-v2.5": (
             "mimo-anthropic",
             "mimo-v2.5",
@@ -1034,7 +1027,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         }
     )
     skipped = base_status(
-        entry_by_name("mimo-v2.5-pro"),
+        entry_by_name("mimo-v2.5"),
         seed=7,
         generated_mess_count=5,
         profile="world-labels",
@@ -1055,7 +1048,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         }
     )
     write_status(status_path_for_entry(live_root, "kimi-k2.6"), success)
-    write_status(status_path_for_entry(live_root, "mimo-v2.5-pro"), skipped)
+    write_status(status_path_for_entry(live_root, "mimo-v2.5"), skipped)
     write_status(status_path_for_entry(live_root, "kimi-k2.6-camera-raw"), camera_raw)
     write_manifest(live_root)
     live_index = write_live_index(live_root)
@@ -1075,7 +1068,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     assert "molmo/live/kimi-k2.6-camera-raw/seed-7/report.html" in html
     assert "Kimi K2.6 RAW_FPV" in html
     assert "camera-raw" in html
-    assert "MiMo v2.5 Pro" in html
+    assert "MiMo v2.5" in html
     assert "missing required secret/env MIMO_TP_KEY" in html
 
 

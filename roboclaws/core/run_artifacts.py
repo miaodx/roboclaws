@@ -157,8 +157,6 @@ def build_frame_capture_payload(
     human_message: str | None = None,
     move_direction: str | None = None,
     move_reason: str | None = None,
-    observe_delivery: str | None = None,
-    bridge_model: str | None = None,
 ) -> dict[str, Any]:
     """Return the common frame_capture payload used by MCP traces and reports."""
     payload: dict[str, Any] = {
@@ -183,10 +181,6 @@ def build_frame_capture_payload(
         payload["move_direction"] = str(move_direction)
     if move_reason is not None:
         payload["move_reason"] = str(move_reason)
-    if observe_delivery is not None:
-        payload["observe_delivery"] = str(observe_delivery)
-    if bridge_model is not None:
-        payload["bridge_model"] = str(bridge_model)
     return payload
 
 
@@ -245,10 +239,6 @@ def build_run_result(
     final_message: str | None,
     view_variant: str,
     model: str | None,
-    image_model: str | None,
-    observe_mode: str | None,
-    observe_delivery: str | None,
-    vision_bridge_model: str | None,
     bridge_metrics: dict[str, Any] | None,
     sim_server_metrics: dict[str, Any] | None,
     transcript_source: str | None,
@@ -262,10 +252,6 @@ def build_run_result(
         "final_message": final_message,
         "view_variant": str(view_variant),
         "model": model,
-        "image_model": image_model,
-        "observe_mode": observe_mode,
-        "observe_delivery": observe_delivery,
-        "vision_bridge_model": vision_bridge_model,
         "bridge_metrics": jsonify(bridge_metrics or {}),
         "sim_server_metrics": jsonify(sim_server_metrics or {}),
         "transcript_source": transcript_source,

@@ -27,15 +27,10 @@ privileged helper surface enabled.
 
 ## Model Sanity Check
 
-Before the first raw `roboclaws__observe`, check whether the current model is
-vision-capable enough for inline image tool results.
+The supported MiMo route, `mimo-v2.5` (across `mimo_openai/` and
+`mimo_anthropic/` profiles), is vision-capable and can receive inline image
+tool results from raw `roboclaws__observe`.
 
-- Known text-only MiMo models include `mimo-v2.5-pro` across `mimo_openai/`
-  and `mimo_anthropic/` profiles. For those, do not call raw
-  `roboclaws__observe`. Use `roboclaws__scene_objects`, `roboclaws__goto`, and
-  `roboclaws__observe_archived` only. If the operator asks for visual framing
-  judgment rather than artifact capture, stop and say a vision-capable model
-  such as `mimo-v2.5` is required.
 - Kimi K2.6 is image-capable, but the Claude Code Kimi coding profile can return
   a generic upstream server error when a long skill-reading context is followed
   by multiple inline PNG image blocks from `roboclaws__observe`. For batch photo

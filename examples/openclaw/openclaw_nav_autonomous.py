@@ -20,7 +20,6 @@ from roboclaws.core.engine import MultiAgentEngine
 from roboclaws.core.navigation_lifecycle import NavigationRunLifecycle
 from roboclaws.core.run_artifacts import build_run_result
 from roboclaws.mcp.server import RoboclawsMCPServer, make_roboclaws_mcp
-from roboclaws.mcp.text_bridge import observe_runtime_config
 from roboclaws.openclaw.bridge import OpenClawBridge, OpenClawUnavailable, RunResult
 
 log = logging.getLogger("openclaw-nav-autonomous")
@@ -64,10 +63,8 @@ def _kickoff_prompt(max_moves: int) -> str:
         "roboclaws__observe before any other action.\n"
         f"Budget: up to {max_moves} physical moves plus the wall-clock set by the "
         "caller; pace yourself against both.\n"
-        "Use observe.state.observe_delivery, view_variant, image_labels, and "
-        "bridge_model to interpret the observe result; when "
-        "observe_delivery=text-bridge the second content block is navigation text, "
-        "not raw images.\n"
+        "Use observe.state.view_variant and image_labels to interpret the observe "
+        "result; the image content blocks are the raw camera views.\n"
         "Loop observe -> think -> move until you are stuck, the budget is nearly "
         "exhausted, or you have a concrete reason to stop; then call "
         "roboclaws__done with a short reason.\n"
@@ -253,12 +250,7 @@ def run_autonomous_navigation(
     run_result: RunResult | None = None
     diagnostics_files: dict[str, str] = {}
     gateway_container = os.environ.get("OPENCLAW_GATEWAY_CONTAINER", _DEFAULT_GATEWAY_CONTAINER)
-    runtime_config = observe_runtime_config(
-        model_name=os.environ.get("MODEL"),
-        image_model=os.environ.get("IMAGE_MODEL"),
-        observe_mode=os.environ.get("ROBOCLAWS_OBSERVE_MODE"),
-        vision_bridge_model=os.environ.get("ROBOCLAWS_VISION_BRIDGE_MODEL"),
-    )
+    model_name = os.environ.get("MODEL")
 
     try:
         log.info("starting MultiAgentEngine(scene=%s, agent_count=1)", scene)
@@ -270,10 +262,7 @@ def run_autonomous_navigation(
             run_dir=lifecycle.output_dir,
             host=lifecycle.host,
             port=lifecycle.port,
-            model_name=runtime_config["model_name"],
-            image_model=runtime_config["image_model"],
-            observe_mode=runtime_config["observe_mode"],
-            vision_bridge_model=runtime_config["vision_bridge_model"],
+            model_name=model_name,
             allow_privileged_tools=allow_privileged_tools,
         )
         mcp_server.run_in_thread()
@@ -284,11 +273,7 @@ def run_autonomous_navigation(
             max_moves=max_moves,
             wall_budget_s=wall_budget,
             skip_bootstrap=skip_bootstrap,
-            model=runtime_config["model_name"],
-            image_model=runtime_config["image_model"],
-            observe_mode=runtime_config["observe_mode"],
-            observe_delivery=runtime_config["observe_delivery"],
-            vision_bridge_model=runtime_config["vision_bridge_model"],
+            model=model_name,
         )
         log.info(
             "Roboclaws MCP server listening on %s:%s "
@@ -398,11 +383,7 @@ def run_autonomous_navigation(
                 wallclock_s=run_result.wallclock_s,
                 final_message=run_result.final_message,
                 view_variant="map-v2+chase",
-                model=runtime_config["model_name"],
-                image_model=runtime_config["image_model"],
-                observe_mode=runtime_config["observe_mode"],
-                observe_delivery=runtime_config["observe_delivery"],
-                vision_bridge_model=runtime_config["vision_bridge_model"],
+                model=model_name,
                 bridge_metrics=bridge_metrics,
                 # Key kept verbatim for report/schema compat; backing data is MCP metrics.
                 sim_server_metrics=sim_server_metrics,

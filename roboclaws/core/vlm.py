@@ -23,8 +23,6 @@ _COST_PER_M: dict[str, dict[str, float]] = {
     "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": {"input": 0.0, "output": 0.0},
     # MiMo token-plan pricing TBD — set to 0 until confirmed.
     # mimo-v2.5: vision + tool-calls (probed 2026-05-28)
-    # mimo-v2.5-pro: text + tool-calls only until separately probed
-    "mimo-v2.5-pro": {"input": 0.0, "output": 0.0},
     "mimo-v2.5": {"input": 0.0, "output": 0.0},
 }
 

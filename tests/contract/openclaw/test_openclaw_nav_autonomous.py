@@ -118,10 +118,8 @@ def test_kickoff_prompt_is_mcp_era_and_short() -> None:
     assert "50" in prompt, "max_moves budget must be interpolated into prompt"
     # Preserve the human_message ack behavior (D-10, plan must-have).
     assert "human_message" in prompt
-    assert "observe_delivery" in prompt
     assert "view_variant" in prompt
     assert "image_labels" in prompt
-    assert "bridge_model" in prompt
     # Delegate to the skill, don't duplicate it.
     assert "SKILL.md" in prompt or "skill" in prompt.lower()
 
@@ -184,9 +182,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         patch.dict(
             "os.environ",
             {
-                "MODEL": "mimo_openai/mimo-v2.5-pro",
-                "IMAGE_MODEL": "mimo_openai/mimo-v2.5",
-                "ROBOCLAWS_OBSERVE_MODE": "text-bridge",
+                "MODEL": "mimo_openai/mimo-v2.5",
             },
             clear=False,
         ),
@@ -239,9 +235,7 @@ def test_run_autonomous_navigation_offline_happy_path(tmp_path: Path) -> None:
         "example must override host to 0.0.0.0 on Linux (spike 02.6-06); "
         "127.0.0.1 is unreachable from Docker's default bridge on 6.x kernels"
     )
-    assert mcp_kwargs.get("model_name") == "mimo_openai/mimo-v2.5-pro"
-    assert mcp_kwargs.get("image_model") == "mimo_openai/mimo-v2.5"
-    assert mcp_kwargs.get("observe_mode") == "text-bridge"
+    assert mcp_kwargs.get("model_name") == "mimo_openai/mimo-v2.5"
     assert mcp_kwargs.get("allow_privileged_tools") is False
     fake_server.run_in_thread.assert_called_once()
     assert fake_server.write_trace_event.call_count == 2
