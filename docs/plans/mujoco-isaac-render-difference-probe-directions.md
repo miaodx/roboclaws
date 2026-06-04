@@ -1,5 +1,5 @@
 ---
-status: PARK
+status: ACTIVE_SUBPHASE
 plan_scope: mujoco-isaac-render-difference-probe-directions
 created: 2026-06-04
 last_updated: 2026-06-04
@@ -12,11 +12,25 @@ accepted_severities:
 
 ## Status
 
-PARK
+ACTIVE_SUBPHASE
 
 This is a focused direction file for the visible MuJoCo/Isaac render differences
-after FPV camera parity improved. It is not an execution phase yet. Use it to
-pick the next bounded local-GPU probe before changing default renderer settings.
+after FPV camera parity improved. The 2026-06-04 bounded worker sub-phase makes
+the existing robot-camera visual-parity summary executable enough to stop on a
+ranked probe batch. It is still not a default-renderer promotion phase.
+
+The accepted sub-phase scope is:
+
+- derive candidate rows from existing `--probe-manifest label=path` summary
+  inputs instead of adding a new renderer framework;
+- emit `render_difference_probe_batch` in `visual_parity_summary.json`;
+- render the same ranked table in `report.html`;
+- classify rows as `native_default_candidate`, `report_side_only`, or
+  `rejected`;
+- keep L4 MuJoCo/Isaac GPU rendering as the local evidence step.
+
+Hard-stop decisions found: none. The plan remains scoped to report/probe
+contract execution and does not promote renderer defaults.
 
 ## Target
 
@@ -207,6 +221,32 @@ Stop after the first probe batch produces a ranked table with:
 Promote nothing by default until at least one candidate improves held-out FPV
 and does not regress chase above the agreed tolerance.
 
+Implemented local artifact path:
+
+```bash
+.venv/bin/python scripts/molmo_cleanup/summarize_robot_camera_visual_parity.py \
+  --output-dir output/molmo/robot-camera-apple2apple/<batch-summary> \
+  --baseline-manifest output/molmo/robot-camera-apple2apple/<baseline>/comparison_manifest.json \
+  --probe-manifest native_tone_exposure=<probe-dir>/comparison_manifest.json \
+  --probe-manifest distantlight_rotx25=<probe-dir>/comparison_manifest.json \
+  --probe-manifest material_fabric=<probe-dir>/comparison_manifest.json
+```
+
+The generated `visual_parity_summary.json` contains
+`render_difference_probe_batch.ranked_rows[]` with FPV delta, chase delta,
+residual class distribution, native settings used, report-side profile metadata,
+and candidate status. The HTML report has a matching "Render Difference Probe
+Batch" table for review.
+
+Verified local artifact:
+
+- `output/molmo/robot-camera-apple2apple/0604_render_difference_probe_batch_summary/visual_parity_summary.json`
+- `output/molmo/robot-camera-apple2apple/0604_render_difference_probe_batch_summary/report.html`
+- Summary status: `active`
+- Probe batch status: `ranked_probe_batch_available`
+- Ranked rows: 10
+- Candidate status counts: `native_default_candidate=7`, `rejected=3`
+
 ## Parked Cross-Seam Ideas
 
 - Broader five-scene, three-seed corpus for final default-rendering promotion.
@@ -214,4 +254,3 @@ and does not regress chase above the agreed tolerance.
 - A separate report UX pass for side-by-side zoom/pixel inspection.
 - Real cleanup-task reruns using RAW_FPV after a native renderer candidate is
   selected.
-

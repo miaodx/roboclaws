@@ -136,6 +136,10 @@ def build_summary(
         _prepared_usd_summary(path) for path in prepared_usd_summary_paths or []
     ]
     render_domain_probe_matrix = _render_domain_probe_matrix_check(baselines, probes)
+    render_difference_probe_batch = _render_difference_probe_batch(
+        render_domain_probe_matrix,
+        probes,
+    )
     checks = {
         "head_camera_contract": _head_camera_contract_check(baselines),
         "corpus_coverage": _corpus_coverage_check(
@@ -207,6 +211,7 @@ def build_summary(
         },
         "four_check_audit": four_check_audit,
         "visual_samples": visual_samples,
+        "render_difference_probe_batch": render_difference_probe_batch,
         "checks": checks,
         "baselines": baselines,
         "probes": probes,
@@ -293,6 +298,9 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
             "selected_count": target_selection.get("selected_count"),
             "dropped_unbound_target_count": target_selection.get("dropped_unbound_target_count"),
         },
+        "residual_class_distribution": _residual_class_distribution(
+            _list_dicts(payload.get("locations"))
+        ),
         "render_domain_checks": _render_checks_by_id(render_checks),
     }
 
@@ -399,6 +407,12 @@ def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dic
         "render_product_paths": diagnostics.get("render_product_paths") or [],
         "isaac_lab_isp_active": diagnostics.get("isaac_lab_isp_active"),
         "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
+        "tone_mapping": diagnostics.get("tone_mapping") or {},
+        "camera_exposure": diagnostics.get("camera_exposure") or {},
+        "ocio": diagnostics.get("ocio") or {},
+        "color_correction": diagnostics.get("color_correction") or {},
+        "color_grading": diagnostics.get("color_grading") or {},
+        "renderer": diagnostics.get("renderer") or {},
         "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
     }
 
@@ -777,6 +791,186 @@ def _render_domain_probe_matrix_check(
             "Light/shadow, texture, and PreviewSurface probes are comparison-only. Simple "
             "switches should not be promoted when they are neutral or worse for FPV."
         ),
+    }
+
+
+def _render_difference_probe_batch(
+    render_domain_probe_matrix: dict[str, Any],
+    probes: list[dict[str, Any]],
+    *,
+    chase_regression_tolerance: float = 1.0,
+) -> dict[str, Any]:
+    probe_by_path = {str(probe.get("path") or ""): probe for probe in probes}
+    rows: list[dict[str, Any]] = []
+    matrix = _dict(render_domain_probe_matrix.get("probe_matrix"))
+    for probe_kind, kind_rows in sorted(matrix.items()):
+        for matrix_row in _list_dicts(kind_rows):
+            probe = probe_by_path.get(str(matrix_row.get("path") or ""), {})
+            rows.append(
+                _render_difference_probe_row(
+                    matrix_row,
+                    probe,
+                    probe_kind=probe_kind,
+                    chase_regression_tolerance=chase_regression_tolerance,
+                )
+            )
+    rows.sort(key=_render_difference_probe_sort_key)
+    for index, row in enumerate(rows, start=1):
+        row["rank"] = index
+    return {
+        "schema": "robot_camera_render_difference_probe_batch_v1",
+        "status": "ranked_probe_batch_available" if rows else "no_probe_batch",
+        "row_count": len(rows),
+        "ranked_rows": rows,
+        "policy_classification_counts": _status_counts(
+            row.get("policy_classification") for row in rows
+        ),
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "interpretation": (
+            "This is the stop-condition table for MuJoCo/Isaac render-difference probes. "
+            "Rows are ranked by candidate status and FPV delta while preserving the "
+            "report-side versus native-render distinction."
+        ),
+    }
+
+
+def _render_difference_probe_row(
+    matrix_row: dict[str, Any],
+    probe: dict[str, Any],
+    *,
+    probe_kind: str,
+    chase_regression_tolerance: float,
+) -> dict[str, Any]:
+    fpv_delta = _float_or_none(matrix_row.get("fpv_delta"))
+    chase_delta = _float_or_none(matrix_row.get("chase_delta"))
+    chase_regression = chase_delta is not None and chase_delta > float(chase_regression_tolerance)
+    report_side_only = _is_report_side_probe(matrix_row, probe)
+    native_settings = _native_settings_used_summary(
+        _dict(probe.get("native_isaac_render_diagnostics"))
+    )
+    policy_classification = _probe_policy_classification(
+        matrix_row,
+        native_settings=native_settings,
+        report_side_only=report_side_only,
+        chase_regression=chase_regression,
+    )
+    return {
+        "rank": 0,
+        "label": matrix_row.get("label"),
+        "path": matrix_row.get("path"),
+        "probe_kind": probe_kind,
+        "scene_signature": matrix_row.get("scene_signature"),
+        "comparable": matrix_row.get("comparable"),
+        "fpv_mean_abs_rgb_delta_vs_baseline": fpv_delta,
+        "chase_mean_abs_rgb_delta_vs_baseline": chase_delta,
+        "fpv_improved": matrix_row.get("fpv_improved"),
+        "fpv_worse": matrix_row.get("fpv_worse"),
+        "chase_regression": chase_regression,
+        "chase_regression_tolerance": chase_regression_tolerance,
+        "residual_class_distribution": probe.get("residual_class_distribution") or {},
+        "native_settings_used": native_settings,
+        "report_side_comparison_profile": _report_side_comparison_profile(matrix_row, probe),
+        "policy_classification": policy_classification,
+        "classification_reason": _probe_policy_classification_reason(
+            matrix_row,
+            native_settings=native_settings,
+            report_side_only=report_side_only,
+            chase_regression=chase_regression,
+        ),
+    }
+
+
+def _render_difference_probe_sort_key(row: dict[str, Any]) -> tuple[int, float, float, str]:
+    policy_rank = {
+        "native_default_candidate": 0,
+        "report_side_only": 1,
+        "rejected": 2,
+    }.get(str(row.get("policy_classification") or ""), 3)
+    fpv_delta = _float_or_none(row.get("fpv_mean_abs_rgb_delta_vs_baseline"))
+    chase_delta = _float_or_none(row.get("chase_mean_abs_rgb_delta_vs_baseline"))
+    return (
+        policy_rank,
+        fpv_delta if fpv_delta is not None else 999999.0,
+        chase_delta if chase_delta is not None else 999999.0,
+        str(row.get("label") or ""),
+    )
+
+
+def _probe_policy_classification(
+    row: dict[str, Any],
+    *,
+    native_settings: dict[str, Any],
+    report_side_only: bool,
+    chase_regression: bool,
+) -> str:
+    if not row.get("comparable") or row.get("fpv_worse") or chase_regression:
+        return "rejected"
+    if report_side_only:
+        return "report_side_only"
+    if row.get("fpv_improved") and native_settings.get("recorded"):
+        return "native_default_candidate"
+    return "rejected"
+
+
+def _probe_policy_classification_reason(
+    row: dict[str, Any],
+    *,
+    native_settings: dict[str, Any],
+    report_side_only: bool,
+    chase_regression: bool,
+) -> str:
+    if not row.get("comparable"):
+        return "probe did not have a comparable matching baseline"
+    if row.get("fpv_worse"):
+        return "FPV mean-abs-RGB regressed versus baseline"
+    if chase_regression:
+        return "auxiliary chase mean-abs-RGB regressed above tolerance"
+    if report_side_only:
+        return "probe uses report-side RGB/view compensation, not native renderer settings"
+    if row.get("fpv_improved") and native_settings.get("recorded"):
+        return "native settings were recorded and FPV improved without chase regression"
+    if not native_settings.get("recorded"):
+        return "native Isaac render settings were not recorded"
+    return "FPV did not improve enough to justify promotion"
+
+
+def _is_report_side_probe(row: dict[str, Any], probe: dict[str, Any]) -> bool:
+    rgb_gain_source = _dict(row.get("rgb_gain_source"))
+    if rgb_gain_source.get("backend_rgb_gain") or rgb_gain_source.get("backend_view_rgb_gain"):
+        return True
+    diagnostics = _dict(probe.get("native_isaac_render_diagnostics"))
+    profile = _dict(diagnostics.get("post_render_comparison_profile"))
+    return profile.get("applied") is True
+
+
+def _report_side_comparison_profile(
+    row: dict[str, Any],
+    probe: dict[str, Any],
+) -> dict[str, Any]:
+    rgb_gain_source = _dict(row.get("rgb_gain_source"))
+    diagnostics = _dict(probe.get("native_isaac_render_diagnostics"))
+    return {
+        "backend_rgb_gain": rgb_gain_source.get("backend_rgb_gain") or {},
+        "backend_view_rgb_gain": rgb_gain_source.get("backend_view_rgb_gain") or {},
+        "rgb_gain_source": rgb_gain_source.get("source") or "",
+        "view_rgb_gain_source": rgb_gain_source.get("view_source") or "",
+        "post_render_comparison_profile": _dict(diagnostics.get("post_render_comparison_profile")),
+    }
+
+
+def _native_settings_used_summary(diagnostics: dict[str, Any]) -> dict[str, Any]:
+    if not diagnostics:
+        return {"recorded": False, "status": "missing_native_diagnostics"}
+    return {
+        "recorded": diagnostics.get("status") == "native_settings_recorded",
+        "status": diagnostics.get("status"),
+        "default_render_settings_changed": diagnostics.get("default_render_settings_changed"),
+        "renderer_mode": diagnostics.get("renderer_mode"),
+        "settings_api_available": diagnostics.get("settings_api_available"),
+        "tone_mapping": diagnostics.get("tone_mapping") or {},
+        "camera_exposure": diagnostics.get("camera_exposure") or {},
+        "color_correction": diagnostics.get("color_correction") or {},
+        "renderer": diagnostics.get("renderer") or {},
     }
 
 
@@ -1890,7 +2084,17 @@ def _infer_probe_kind(summary: dict[str, Any]) -> str:
     evidence = f"{label} {path_text}"
     if _rgb_gain_source(Path(str(summary.get("path") or ""))).get("backend_rgb_gain"):
         return "tone_color"
-    if "rgb_gain" in evidence or "val0_rgb" in evidence or "self_rgb" in evidence:
+    if (
+        "rgb_gain" in evidence
+        or "val0_rgb" in evidence
+        or "self_rgb" in evidence
+        or "tone" in evidence
+        or "exposure" in evidence
+        or "filmiso" in evidence
+        or "shutter" in evidence
+        or "fnumber" in evidence
+        or "white_point" in evidence
+    ):
         return "tone_color"
     if (
         "pillow" in evidence
@@ -1907,9 +2111,25 @@ def _infer_probe_kind(summary: dict[str, Any]) -> str:
         or "no_shadow" in evidence
         or "light_shadow" in evidence
         or "lighting" in evidence
+        or "distantlight" in evidence
+        or "distant_light" in evidence
+        or "rotx" in evidence
     ):
         return "light_shadow"
     return "unknown"
+
+
+def _residual_class_distribution(locations: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    return {
+        view: _status_counts(
+            _dict(_dict(_dict(location.get("image_diffs")).get(view)).get("residual")).get(
+                "residual_class"
+            )
+            for location in locations
+            if location.get("status", "success") == "success"
+        )
+        for view in ("fpv", "chase")
+    }
 
 
 def _delta_vs_baseline(
@@ -2375,6 +2595,9 @@ def _render_report(manifest: dict[str, Any]) -> str:
     report_side = _dict(manifest.get("report_side_visual_parity"))
     default_rendering = _dict(manifest.get("default_rendering_visual_parity"))
     visual_samples = _render_visual_samples(_list_dicts(manifest.get("visual_samples")))
+    render_difference_probe_batch = _render_render_difference_probe_batch(
+        _dict(manifest.get("render_difference_probe_batch"))
+    )
     object_audit_rows = _render_object_visual_parity_audit_rows(manifest)
     four_check_rows = "\n".join(
         "<tr>"
@@ -2486,6 +2709,8 @@ def _render_report(manifest: dict[str, Any]) -> str:
   </table>
   <h2>Visual Samples</h2>
   {visual_samples}
+  <h2>Render Difference Probe Batch</h2>
+  {render_difference_probe_batch}
   <h2>Checks</h2>
   <table><thead><tr><th>Check</th><th>Status</th><th>Interpretation</th></tr></thead><tbody>{rows}</tbody></table>
   <h2>Baselines</h2>
@@ -2532,6 +2757,44 @@ def _render_object_visual_parity_audit_rows(manifest: dict[str, Any]) -> str:
         + "\n".join(rows)
         + "</tbody></table>"
     )
+
+
+def _render_render_difference_probe_batch(batch: dict[str, Any]) -> str:
+    rows = []
+    for row in _list_dicts(batch.get("ranked_rows")):
+        native = _dict(row.get("native_settings_used"))
+        residual_classes = html.escape(
+            json.dumps(row.get("residual_class_distribution") or {}, sort_keys=True)
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{_html_value(row.get('rank'))}</td>"
+            f"<td>{_html_value(row.get('label'))}</td>"
+            f"<td>{_html_value(row.get('probe_kind'))}</td>"
+            f"<td>{_html_value(row.get('fpv_mean_abs_rgb_delta_vs_baseline'))}</td>"
+            f"<td>{_html_value(row.get('chase_mean_abs_rgb_delta_vs_baseline'))}</td>"
+            f"<td>{_html_value(row.get('policy_classification'))}</td>"
+            f"<td>{_html_value(row.get('classification_reason'))}</td>"
+            f"<td>{residual_classes}</td>"
+            f"<td>{_html_value(native.get('status'))}<br>"
+            f"<code>changed={_html_value(native.get('default_render_settings_changed'))}</code>"
+            "</td>"
+            "</tr>"
+        )
+    if not rows:
+        return "<p class='muted'>No render-difference probe manifests were provided.</p>"
+    return (
+        "<p class='muted'>" + html.escape(str(batch.get("interpretation") or "")) + "</p>"
+        "<table><thead><tr><th>Rank</th><th>Label</th><th>Kind</th>"
+        "<th>FPV Delta</th><th>Chase Delta</th><th>Candidate Status</th>"
+        "<th>Reason</th><th>Residual Classes</th><th>Native Settings</th></tr></thead><tbody>"
+        + "\n".join(rows)
+        + "</tbody></table>"
+    )
+
+
+def _html_value(value: Any) -> str:
+    return html.escape("" if value is None else str(value))
 
 
 def _json_counts_cell(item: dict[str, Any], key: str) -> str:
