@@ -1121,10 +1121,15 @@ def _probe_policy_classification_reason(
     if report_side_only:
         return "probe uses report-side RGB/view compensation, not native renderer settings"
     if _is_capture_quality_probe(capture_quality):
+        if int(capture_quality.get("render_settle_frames") or 0) > 0:
+            return (
+                "probe is a render-settle capture-quality row with direct same-size metrics; "
+                "use it to test capture timing/convergence without promoting renderer defaults"
+            )
         if capture_quality.get("metric_image_mode") == "direct_capture":
             return (
-                "probe is a direct high-resolution capture-quality row; compare only against "
-                "same-size baselines and do not promote renderer defaults"
+                "probe is a direct capture-quality row; compare only against same-size "
+                "baselines and do not promote renderer defaults"
             )
         return (
             "probe is a capture-quality row with explicit downsampled same-size metrics; "
