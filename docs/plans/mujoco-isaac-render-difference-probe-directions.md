@@ -136,6 +136,18 @@ contract execution and does not promote renderer defaults.
   and do not expand it without a new non-global, target-specific hypothesis.
   Summary:
   `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_native_colorcorr_gain_summary/report.html`.
+- The DistantLight angle micro-grid is rejected on the latest-code val_0
+  four-location held-out slice. `rotateX=15` completed a real rerun and
+  changed FPV/chase versus baseline by `+0.4188` / `-0.0292`, so it failed FPV.
+  `rotateX=30` initially exposed a worker interface regression
+  (`camera_yaw_offset_deg` / `camera_pitch_offset_deg` not accepted by the
+  MuJoCo robot-view worker path); after fixing that execution blocker, a fresh
+  real MuJoCo+Isaac rerun completed 4/4 locations and changed FPV/chase by
+  `-0.0465` / `+0.2345`, still below the FPV improvement threshold and with a
+  chase regression. Both rows keep the same residual class distribution. Close
+  the light-angle axis for this slice unless a new mechanism targets material
+  or shadow response directly. Summary:
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_light_angle_probe_summary/report.html`.
 
 ## Target
 
@@ -229,6 +241,9 @@ Rules:
 
 - Do not promote simple DomeLight removal or broad shadow enabling without new
   held-out evidence.
+- The latest val_0 `rotateX=15/30` micro-grid is already closed as rejected;
+  do not continue angle-only probes without a new, target-specific light/shadow
+  mechanism.
 - Keep light probes separate from native tone/exposure probes first, then test
   one combined best candidate only after each axis has an individual result.
 
