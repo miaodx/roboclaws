@@ -2987,14 +2987,27 @@ def _object_visual_state_contract(
     if (
         mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
         and isaac_articulation.get("status") == "isaac_visual_physics_frozen"
+        and isaac_articulation.get("mujoco_visual_joint_endpoint_pose_status")
+        == "mujoco_visual_joint_endpoint_pose_applied"
     ):
         status = "visual_state_static_ref_baked"
         reason = (
             "MuJoCo renders this object at articulated visual joint endpoints, and the "
-            "prepared Isaac report USD freezes the already-baked visual xforms so PhysX "
-            "will not mutate those joints during camera capture. This is necessary "
-            "physics-control evidence, but selected object-centered RGB evidence is still "
-            "required before the object gate may claim visual parity."
+            "prepared Isaac report USD records MuJoCo endpoint pose baking before freezing "
+            "physics state, so PhysX will not mutate those baked joints during camera "
+            "capture. This is necessary physics-control evidence, but selected "
+            "object-centered RGB evidence is still required before the object gate may "
+            "claim visual parity."
+        )
+    elif (
+        mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
+        and isaac_articulation.get("status") == "isaac_visual_physics_frozen"
+    ):
+        status = "visual_state_ref_endpoint_unverified_in_isaac"
+        reason = (
+            "MuJoCo renders this object at articulated visual joint endpoints, and the "
+            "Isaac USD has frozen physics state, but the prepared-scene summary does not "
+            "prove that the MuJoCo endpoint pose was baked before physics was stripped."
         )
     elif (
         mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
@@ -3192,6 +3205,16 @@ def _isaac_usd_articulation_contract(
         "physics_api_schema_prim_paths": view_contract.get("physics_api_schema_prim_paths") or [],
         "physics_property_prim_paths": view_contract.get("physics_property_prim_paths") or [],
         "visual_physics_status": view_contract.get("visual_physics_status"),
+        "prepared_summary_status": view_contract.get("prepared_summary_status"),
+        "mujoco_visual_joint_endpoint_pose_status": view_contract.get(
+            "mujoco_visual_joint_endpoint_pose_status"
+        ),
+        "mujoco_visual_joint_endpoint_pose_corrected_count": view_contract.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": view_contract.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
     }
 
 

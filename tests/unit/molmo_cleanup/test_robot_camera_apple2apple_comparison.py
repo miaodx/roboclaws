@@ -1820,6 +1820,53 @@ def Xform "World"
     assert view["physics_property_prim_count"] == 1
 
 
+def test_robot_camera_isaac_render_contract_reads_prepared_endpoint_summary(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_prepared_endpoint_summary",
+    )
+    isaac_usd = tmp_path / "scene_semantic.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+    def Xform "box_1"
+    {
+        def Mesh "mesh"
+        {
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "summary.json").write_text(
+        json.dumps(
+            {
+                "status": "ready",
+                "mujoco_visual_joint_endpoint_pose_status": (
+                    "mujoco_visual_joint_endpoint_pose_applied"
+                ),
+                "mujoco_visual_joint_endpoint_pose_corrected_count": 4,
+                "mujoco_visual_joint_endpoint_pose_missing_count": 0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    contract = run_camera._isaac_render_contract_from_usda(str(isaac_usd))
+    view = run_camera._isaac_view_render_contract(contract, usd_prim_path="/World/box_1")
+
+    assert contract["prepared_summary_status"] == "ready"
+    assert (
+        contract["mujoco_visual_joint_endpoint_pose_status"]
+        == "mujoco_visual_joint_endpoint_pose_applied"
+    )
+    assert view["mujoco_visual_joint_endpoint_pose_corrected_count"] == 4
+
+
 def test_robot_camera_object_parity_audit_covers_unselected_objects(tmp_path: Path) -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -2153,10 +2200,10 @@ def test_robot_camera_object_parity_audit_uses_isaac_semantic_pose_position(tmp_
     assert item["isaac"]["position_source"] == "isaac_support_placement_resolver"
 
 
-def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
+def test_robot_camera_box_visual_state_requires_endpoint_bake_evidence() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
-        "run_robot_camera_apple2apple_comparison_box_visual_state_frozen",
+        "run_robot_camera_apple2apple_comparison_box_visual_state_endpoint_unverified",
     )
 
     contract = run_camera._object_visual_state_contract(
@@ -2195,15 +2242,60 @@ def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
         usd_prim_path="/World/box_1",
     )
 
-    assert contract["status"] == "visual_state_static_ref_baked"
+    assert contract["status"] == "visual_state_ref_endpoint_unverified_in_isaac"
     assert contract["mujoco"]["status"] == "mujoco_ref_endpoint_articulation"
     assert contract["mujoco"]["endpoint_joint_count"] == 2
     assert contract["isaac"]["status"] == "isaac_visual_physics_frozen"
     assert run_camera.OBJECT_VISUAL_STATE_CATEGORIES == {"box"}
     assert contract["protected_by"] == "prepared_usd_visual_physics_freeze"
     assert contract["registry"]["status"] == "active_category_contract"
-    assert contract["evidence_artifact"].endswith(
-        "0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html"
+    assert "does not prove" in contract["reason"]
+
+
+def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_box_visual_state_frozen",
+    )
+
+    contract = run_camera._object_visual_state_contract(
+        target_id="box_1",
+        kind="object",
+        mujoco_entry={"category": "Box"},
+        isaac_entry={"category": "Box"},
+        mujoco_state={
+            "joint_states": {
+                "box_1": [
+                    {
+                        "joint_name": "box_1_box10flapinner1joint0",
+                        "joint_type": "hinge",
+                        "qpos": 2.91219,
+                        "ref": 2.91219,
+                        "range": [0.0, 2.91219],
+                    }
+                ]
+            }
+        },
+        isaac_state={},
+        isaac_contract={
+            "status": "parsed",
+            "material_bindings": {},
+            "physics_joint_paths": [],
+            "physics_api_schema_prim_paths": [],
+            "physics_property_prim_paths": [],
+            "mujoco_visual_joint_endpoint_pose_status": (
+                "mujoco_visual_joint_endpoint_pose_applied"
+            ),
+            "mujoco_visual_joint_endpoint_pose_corrected_count": 1,
+            "mujoco_visual_joint_endpoint_pose_missing_count": 0,
+        },
+        usd_prim_path="/World/box_1",
+    )
+
+    assert contract["status"] == "visual_state_static_ref_baked"
+    assert (
+        contract["isaac"]["mujoco_visual_joint_endpoint_pose_status"]
+        == "mujoco_visual_joint_endpoint_pose_applied"
     )
     assert "selected object-centered RGB evidence is still required" in contract["reason"]
 

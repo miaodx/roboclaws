@@ -3336,6 +3336,7 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         ):
             shadow_disabled.append(prim_path)
     lights = _usda_light_contracts(text)
+    prepared_summary = _prepared_scene_summary(path)
     return {
         "status": "parsed",
         "path": str(path),
@@ -3347,8 +3348,29 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         "material_bindings": material_bindings,
         "lights": lights,
         "shadow_disabled_prims": shadow_disabled,
+        "prepared_summary_status": prepared_summary.get("status"),
+        "mujoco_visual_joint_endpoint_pose_status": prepared_summary.get(
+            "mujoco_visual_joint_endpoint_pose_status"
+        ),
+        "mujoco_visual_joint_endpoint_pose_corrected_count": prepared_summary.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": prepared_summary.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
         **physics_contract,
     }
+
+
+def _prepared_scene_summary(path: Path) -> dict[str, Any]:
+    summary_path = path.parent / "summary.json"
+    if not summary_path.is_file():
+        return {}
+    try:
+        payload = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _usda_visual_physics_contract(prim_blocks: dict[str, str]) -> dict[str, Any]:
@@ -3666,6 +3688,16 @@ def _isaac_view_render_contract(
         "physics_joint_paths": physics_joint_paths[:8],
         "physics_api_schema_prim_paths": physics_api_schema_prim_paths[:8],
         "physics_property_prim_paths": physics_property_prim_paths[:8],
+        "prepared_summary_status": isaac.get("prepared_summary_status"),
+        "mujoco_visual_joint_endpoint_pose_status": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_status"
+        ),
+        "mujoco_visual_joint_endpoint_pose_corrected_count": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
     }
 
 
