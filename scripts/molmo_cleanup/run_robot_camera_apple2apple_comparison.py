@@ -161,6 +161,15 @@ def main(argv: list[str] | None = None) -> int:
             "The worker records the previous value and restores it after capture."
         ),
     )
+    parser.add_argument(
+        "--isaac-exposure-bias",
+        type=float,
+        help=(
+            "Optional Isaac /rtx/post/tonemap/exposureBias value for an opt-in native "
+            "exposure probe. The worker records the previous value and restores it after "
+            "capture."
+        ),
+    )
     parser.add_argument("--location-count", type=int, default=4)
     parser.add_argument(
         "--isaac-robot-view-color-profile-path",
@@ -710,6 +719,11 @@ def _capture_quality_probe_config(args: argparse.Namespace) -> dict[str, Any]:
             value=getattr(args, "isaac_tonemap_op", None),
             setting_path="/rtx/post/tonemap/op",
         ),
+        "exposure_bias": _quality_setting_request(
+            "exposure_bias",
+            value=getattr(args, "isaac_exposure_bias", None),
+            setting_path="/rtx/post/tonemap/exposureBias",
+        ),
         "denoise": _quality_setting_not_available("denoise"),
         "taa": _quality_setting_not_available("taa"),
         "texture_filtering": _quality_setting_not_available("texture_filtering"),
@@ -753,6 +767,7 @@ def _ensure_capture_quality_probe_manifest(manifest: dict[str, Any]) -> dict[str
         "samples_per_pixel": _quality_setting_not_available("samples_per_pixel"),
         "anti_aliasing": _quality_setting_not_available("anti_aliasing"),
         "tonemap_operator": _quality_setting_not_available("tonemap_operator"),
+        "exposure_bias": _quality_setting_not_available("exposure_bias"),
         "denoise": _quality_setting_not_available("denoise"),
         "taa": _quality_setting_not_available("taa"),
         "texture_filtering": _quality_setting_not_available("texture_filtering"),
@@ -784,9 +799,9 @@ def _quality_setting_request(
     return {
         "name": name,
         "status": "requested",
-        "value": int(value),
+        "value": value,
         "setting_path": setting_path,
-        "requested_value": int(value),
+        "requested_value": value,
         "default_render_settings_changed": True,
     }
 
@@ -829,6 +844,9 @@ def _render_settle_args(capture_quality: dict[str, Any]) -> list[str]:
     tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
     if tonemap_operator.get("status") == "requested" and tonemap_operator.get("value") is not None:
         args.extend(["--isaac-tonemap-op", str(int(tonemap_operator["value"]))])
+    exposure_bias = _dict(capture_quality.get("exposure_bias"))
+    if exposure_bias.get("status") == "requested" and exposure_bias.get("value") is not None:
+        args.extend(["--isaac-exposure-bias", str(float(exposure_bias["value"]))])
     if render_settle_frames <= 0:
         return args
     args.extend(["--render-settle-frames", str(render_settle_frames)])

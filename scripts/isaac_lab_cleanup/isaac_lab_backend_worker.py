@@ -336,6 +336,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "The worker records the previous value and restores it after capture."
         ),
     )
+    robot_views.add_argument(
+        "--isaac-exposure-bias",
+        type=float,
+        help=(
+            "Optional Isaac /rtx/post/tonemap/exposureBias value for an opt-in native "
+            "exposure probe. The worker records the previous value and restores it after "
+            "capture."
+        ),
+    )
 
     camera_views = subparsers.add_parser("camera_views")
     camera_views.add_argument("--output-dir", type=Path, required=True)
@@ -734,6 +743,7 @@ def capture_semantic_pose_robot_views(
     render_settle_frames: int = 0,
     isaac_aa_op: int | None = None,
     isaac_tonemap_op: int | None = None,
+    isaac_exposure_bias: float | None = None,
 ) -> dict[str, Any]:
     _require_isaac_import()
     from isaaclab.app import AppLauncher
@@ -755,6 +765,7 @@ def capture_semantic_pose_robot_views(
         render_settle_frames=render_settle_frames,
         isaac_aa_op=isaac_aa_op,
         isaac_tonemap_op=isaac_tonemap_op,
+        isaac_exposure_bias=isaac_exposure_bias,
     )
     capture["simulation_app_reuse_token"] = simulation_app
     return capture
@@ -2065,6 +2076,7 @@ def _capture_isaac_lab_camera_views(
     render_settle_frames: int = 0,
     isaac_aa_op: int | None = None,
     isaac_tonemap_op: int | None = None,
+    isaac_exposure_bias: float | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -2176,6 +2188,7 @@ def _capture_isaac_lab_camera_views(
         settings=settings,
         isaac_aa_op=isaac_aa_op,
         isaac_tonemap_op=isaac_tonemap_op,
+        isaac_exposure_bias=isaac_exposure_bias,
     )
     native_render_diagnostics = _isaac_native_render_diagnostics(
         renderer_mode=REAL_SMOKE_RENDERER_MODE,
@@ -4584,6 +4597,7 @@ def _apply_isaac_capture_quality_overrides(
     settings: Any | None,
     isaac_aa_op: int | None,
     isaac_tonemap_op: int | None = None,
+    isaac_exposure_bias: float | None = None,
 ) -> dict[str, Any]:
     mutation: dict[str, Any] = {
         "schema": "isaac_capture_quality_settings_mutation_v1",
@@ -4591,7 +4605,7 @@ def _apply_isaac_capture_quality_overrides(
         "default_render_settings_changed": False,
         "settings": {},
     }
-    if isaac_aa_op is None and isaac_tonemap_op is None:
+    if isaac_aa_op is None and isaac_tonemap_op is None and isaac_exposure_bias is None:
         mutation["status"] = "not_requested"
         return mutation
     mutation["settings_mutation_attempted"] = True
@@ -4619,6 +4633,18 @@ def _apply_isaac_capture_quality_overrides(
                 ),
                 "default_render_settings_changed": False,
             }
+        if isaac_exposure_bias is not None:
+            mutation["settings"]["exposure_bias"] = {
+                "name": "exposure_bias",
+                "status": "not_available",
+                "value": None,
+                "requested_value": float(isaac_exposure_bias),
+                "setting_path": "",
+                "candidate_paths": list(
+                    ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["exposure_bias"]
+                ),
+                "default_render_settings_changed": False,
+            }
         return mutation
     if isaac_aa_op is not None:
         row = _set_isaac_setting(
@@ -4636,6 +4662,14 @@ def _apply_isaac_capture_quality_overrides(
             name="tonemap_operator",
         )
         mutation["settings"]["tonemap_operator"] = row
+    if isaac_exposure_bias is not None:
+        row = _set_isaac_setting(
+            settings,
+            ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["exposure_bias"],
+            float(isaac_exposure_bias),
+            name="exposure_bias",
+        )
+        mutation["settings"]["exposure_bias"] = row
     statuses = [
         str(row.get("status") or "")
         for row in _dict(mutation.get("settings")).values()
@@ -6686,6 +6720,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         render_settle_frames=max(0, int(args.render_settle_frames or 0)),
         isaac_aa_op=args.isaac_aa_op,
         isaac_tonemap_op=args.isaac_tonemap_op,
+        isaac_exposure_bias=args.isaac_exposure_bias,
         focus_object_id=args.focus_object_id,
         focus_receptacle_id=args.focus_receptacle_id,
     )
@@ -7077,6 +7112,7 @@ def _real_semantic_pose_robot_view_images(
     render_settle_frames: int = 0,
     isaac_aa_op: int | None = None,
     isaac_tonemap_op: int | None = None,
+    isaac_exposure_bias: float | None = None,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
@@ -7100,6 +7136,8 @@ def _real_semantic_pose_robot_view_images(
             capture_kwargs["isaac_aa_op"] = isaac_aa_op
         if isaac_tonemap_op is not None:
             capture_kwargs["isaac_tonemap_op"] = isaac_tonemap_op
+        if isaac_exposure_bias is not None:
+            capture_kwargs["isaac_exposure_bias"] = isaac_exposure_bias
         color_profile_override = _dict(state.get("robot_view_color_profile_override"))
         if color_profile_override:
             capture_kwargs["color_profile_override"] = color_profile_override

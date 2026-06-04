@@ -38,6 +38,48 @@ The accepted sub-phase scope is:
 Hard-stop decisions found: none. The plan remains scoped to report/probe
 contract execution and does not promote renderer defaults.
 
+2026-06-04 continuation evidence:
+
+- The current best primary baseline remains
+  `output/molmo/robot-camera-apple2apple/0604_val1_seed6_2mess_4loc_body_pose_fix_latest_gate_6b7c282c/report.html`
+  with FPV/chase mean-abs-RGB `25.4550` / `41.7204`.
+- Alarm-clock material probes are rejected as default candidates:
+  `sourceColorSpace=raw` was noise-level and `roughness=1.0` changed FPV
+  `25.4550 -> 25.4441` while regressing chase `41.7204 -> 41.7532`.
+- High-resolution 1080->540 downsample is not a default candidate on the
+  primary slice: FPV regressed `25.4550 -> 25.6557` even though chase improved
+  `41.7204 -> 37.3285`. Keep direct high-resolution images as report-review
+  evidence only unless later same-size metrics improve FPV too.
+- `render_settle_frames=16` is the strongest capture-quality candidate so far:
+  primary slice improves FPV/chase `25.4550` / `41.7204` to `24.9437` /
+  `34.7722`; a comparable val_0 four-location skip-audit held-out run improves
+  `32.8863` / `37.6759` to `32.7532` / `37.4365`. Do not promote it as a
+  default yet because per-target rows still regress (`atomizer` and
+  `baseballbat` chase on primary, one bed FPV on val_0). Treat it as a
+  capture-quality candidate, not a solved visual-parity fix.
+- Capture-quality comparison runs may use `--skip-object-parity-audit` to avoid
+  val_0 full-scene object-audit/report postprocessing dominating the probe. A
+  skip-audit artifact is valid for image-metric ranking only; rerun without the
+  flag before making object-level parity claims.
+- `render_settle_frames=32` on the same latest-code primary slice is not better
+  than `settle_16_540`: it improves baseline FPV/chase to `24.7595` / `34.9813`,
+  but `settle16` remains slightly better on chase (`34.7722`) and has the same
+  residual-class distribution. Keep `settle16` as the preferred
+  capture-timing candidate.
+- A DistantLight `rotateX=+25` probe is not a valid new primary-slice axis
+  because the current prepared body-pose USD already has `xformOp:rotateX = 25`.
+  The non-no-op `DistantLight.inputs:intensity=750` single-axis probe improved
+  average FPV `25.4550 -> 24.7753` and chase `41.7204 -> 40.9913`, but regressed
+  box/alarm-clock FPV residual classification (`1 -> 2`
+  geometry/texture-edge FPV residuals) and remains far worse than `settle16` for
+  chase. Reject this light-intensity direction for the current slice.
+- A native exposure probe now has explicit CLI support via
+  `--isaac-exposure-bias`, with set/restore evidence recorded by the Isaac
+  worker. The primary `exposure_bias=-1` run is effectively noise-level and
+  slightly regresses FPV (`25.4550 -> 25.4658`) while leaving chase unchanged
+  (`41.7204 -> 41.7163`), so do not expand an exposure grid unless a new
+  targeted reason appears.
+
 ## Target
 
 Robot-camera apple-to-apple visual parity for MolmoSpaces MuJoCo versus Isaac
