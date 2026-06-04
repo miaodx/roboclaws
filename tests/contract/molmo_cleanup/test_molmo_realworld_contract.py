@@ -1488,6 +1488,34 @@ def test_realworld_navigate_to_unresolved_visual_candidate_says_continue_sweep()
     _assert_no_forbidden_keys(response)
 
 
+def test_realworld_unresolved_visual_candidates_do_not_count_as_model_declared_actions() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="imaginary widget",
+        target_fixture_id="sink_01",
+        evidence_note="ambiguous tiny object in the far corner",
+        image_region={"type": "verbal_region", "value": "far corner"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+    evidence = contract.model_declared_observations_payload()
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "visual_candidate_not_resolved"
+    assert evidence["observation_count"] == 1
+    assert evidence["acted_count"] == 0
+    assert evidence["observations"][0]["grounding_status"] == "unresolved"
+    assert evidence["observations"][0]["acted_on"] is False
+
+
 def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),

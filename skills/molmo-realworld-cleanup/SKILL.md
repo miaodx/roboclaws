@@ -40,9 +40,11 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    returns a public `candidate_fixture_id`; do not invent fixture ids from empty
    fixture hints. Do not pre-register raw-FPV candidates with
    `roboclaws__declare_visual_candidates`; that producer-registration path is
-   for `camera-labels`. Prefer broad cleanup categories when uncertain (`food`,
-   `dish`, `book`, `linen`, `toy`, `electronics`, `pillow`) instead of
-   over-specific guesses that are likely to miss the public grounding resolver.
+   for `camera-labels`. Prefer the exact visual class when the image makes it
+   clear (`plate`, `cup`, `potato`, `remotecontrol`, `book`, `pillow`); use
+   broad cleanup categories when uncertain (`food`, `dish`, `book`, `linen`,
+   `toy`, `electronics`, `pillow`) instead of over-specific guesses that are
+   likely to miss the public grounding resolver.
    Use an `image_region` schema the tool accepts, such as
    `{"type":"bbox","value":[x,y,width,height]}` or
    `{"type":"verbal_region","value":"front of desk"}`; do not send a bare

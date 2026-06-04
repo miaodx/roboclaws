@@ -1106,6 +1106,9 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
     assert "trace-preserving RAW_FPV skill lane" in prompt
+    assert "Use the exact visual class when the image makes it clear" in prompt
+    assert "Use broader cleanup categories" in prompt
+    assert "only when the exact object class is uncertain" in prompt
     assert "Prefer image_region={type:verbal_region,value:front of desk}" in prompt
     assert "image_region={type:bbox,value:[x,y,width,height]} only when" in prompt
     assert "Never send bbox_normalized" in prompt
@@ -1133,27 +1136,27 @@ def test_molmo_camera_raw_live_gate_scales_to_generated_mess_count() -> None:
     assert match is not None
     body = match.group("body")
 
-    assert "raw_fpv_required_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))" in body
+    assert 'raw_fpv_required_cleanup_count="$generated_mess_count"' in body
     assert '--min-model-declared-observations "$raw_fpv_required_cleanup_count"' in body
     assert '--min-model-declared-actions "$raw_fpv_required_cleanup_count"' in body
     assert '--min-semantic-accepted-count "$raw_fpv_required_cleanup_count"' in body
-    assert "--min-semantic-accepted-count 7" not in body
+    assert "(generated_mess_count * 7 + 9) / 10" not in body
 
 
-def test_molmo_live_kickoff_prompt_receives_camera_raw_success_threshold() -> None:
+def test_molmo_live_kickoff_prompt_receives_generated_mess_count_for_camera_raw() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     assert 'prompt_cleanup_count="$generated_mess_count"' in text
-    assert "prompt_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))" in text
+    assert "prompt_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))" not in text
     assert '--target-cleanup-count "$prompt_cleanup_count"' in text
 
 
-def test_live_codex_camera_raw_default_gate_uses_success_threshold() -> None:
+def test_live_codex_camera_raw_default_gate_uses_generated_mess_count() -> None:
     text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
-    assert "def _generated_mess_success_threshold(count: int) -> int:" in text
-    assert "(count * 7 + 9) // 10" in text
-    assert "_generated_mess_success_threshold(int(self.args.min_generated_mess_count))" in text
+    assert "def _raw_fpv_required_cleanup_count(generated_mess_count: int) -> int:" in text
+    assert "_raw_fpv_required_cleanup_count(int(self.args.min_generated_mess_count))" in text
+    assert "(count * 7 + 9) // 10" not in text
     assert (
         '"--min-model-declared-observations",\n                raw_fpv_required_cleanup_count'
         in text

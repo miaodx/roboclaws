@@ -1984,6 +1984,35 @@ def test_checker_rejects_raw_fpv_model_declared_semantic_shortfall(tmp_path: Pat
         )
 
 
+def test_checker_rejects_raw_fpv_model_declared_action_shortfall(tmp_path: Path) -> None:
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = smoke.run_smoke(
+        output_dir=tmp_path,
+        seed=7,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    evidence = result["model_declared_observation_evidence"]
+    evidence["acted_count"] = 3
+    for index, item in enumerate(evidence["observations"]):
+        item["acted_on"] = index < 3
+    result["model_declared_observations"] = evidence["observations"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_model_declared_observations=True,
+            min_model_declared_observations=5,
+            min_model_declared_actions=5,
+            min_semantic_accepted_count=5,
+        )
+
+
 def test_checker_rejects_duplicate_post_place_visual_navigation(tmp_path: Path) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     trace_path = tmp_path / "trace.jsonl"

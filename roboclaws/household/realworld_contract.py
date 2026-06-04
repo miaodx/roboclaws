@@ -2469,7 +2469,7 @@ class RealWorldCleanupContract:
         acted_handles = {
             handle
             for handle, lifecycle in self._object_lifecycle.items()
-            if lifecycle.get("state") not in {None, "pending"}
+            if lifecycle.get("state") in {"navigating_to_object", "held", "placed", "placed_closed"}
         }
         for item in observations:
             item["acted_on"] = str(item.get("object_id") or "") in acted_handles

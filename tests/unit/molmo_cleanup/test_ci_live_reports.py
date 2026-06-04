@@ -1097,7 +1097,7 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
     assert command.count("--min-sweep-coverage") == 1
 
 
-def test_live_codex_camera_raw_checker_defaults_to_generated_mess_success_threshold(
+def test_live_codex_camera_raw_checker_defaults_to_generated_mess_count(
     tmp_path: Path, monkeypatch
 ) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
@@ -1127,9 +1127,10 @@ def test_live_codex_camera_raw_checker_defaults_to_generated_mess_success_thresh
     runner._check_result()
 
     command = captured["command"]
-    assert command[command.index("--min-model-declared-observations") + 1] == "4"
-    assert command[command.index("--min-model-declared-actions") + 1] == "4"
-    assert command[command.index("--min-semantic-accepted-count") + 1] == "4"
+    assert "--require-clean-agent-run" in command
+    assert command[command.index("--min-model-declared-observations") + 1] == "5"
+    assert command[command.index("--min-model-declared-actions") + 1] == "5"
+    assert command[command.index("--min-semantic-accepted-count") + 1] == "5"
     assert command[command.index("--min-sweep-coverage") + 1] == "1.0"
 
 
@@ -1169,6 +1170,63 @@ def test_live_codex_semantic_map_build_checker_uses_map_task_identity(
     assert "--require-clean-agent-run" not in command
     assert "--min-semantic-accepted-count" not in command
     assert command[-1] == str(run_dir / "run_result.json")
+
+
+def test_live_claude_camera_raw_checker_requires_all_generated_mess_actions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "runner.lock",
+        claude_bin="claude",
+        claude_provider_summary="test provider",
+        kickoff_prompt="clean the room",
+        backend="molmospaces_subprocess",
+        policy="claude_agent",
+        task="帮我收拾这个房间",
+        min_generated_mess_count="5",
+        profile="camera-raw",
+        server_arg=[],
+        claude_model_arg=["--model", "kimi-k2.6"],
+        claude_env=[],
+        checker_visual_arg=[
+            "--require-raw-fpv-observations",
+            "--require-model-declared-observations",
+            "--min-model-declared-observations",
+            "5",
+            "--min-model-declared-actions",
+            "5",
+            "--min-semantic-accepted-count",
+            "5",
+            "--min-sweep-coverage",
+            "1.0",
+        ],
+    )
+    runner = run_claude.LiveClaudeCleanupRunner(args)
+    captured: dict[str, list[str]] = {}
+
+    def fake_run_and_tee(command, **_kwargs):
+        captured["command"] = command
+        return 0
+
+    monkeypatch.setattr(run_claude, "_run_and_tee", fake_run_and_tee)
+
+    runner._check_result()
+
+    command = captured["command"]
+    assert "--require-clean-agent-run" in command
+    assert command[command.index("--min-model-declared-observations") + 1] == "5"
+    assert command[command.index("--min-model-declared-actions") + 1] == "5"
+    assert command[command.index("--min-semantic-accepted-count") + 1] == "5"
 
 
 def test_live_claude_tee_keeps_artifact_when_console_is_nonblocking() -> None:
