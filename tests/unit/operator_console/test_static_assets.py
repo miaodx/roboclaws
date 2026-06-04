@@ -27,6 +27,9 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "field_groups" in app
     assert "NEEDS PREFLIGHT" in app
     assert "NEEDS OPERATOR GATES" in app
+    assert "PORT IN USE" in app
+    assert "/api/readiness" in app
+    assert "refreshSelectedRouteReadiness" in app
 
 
 def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:

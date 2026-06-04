@@ -6,6 +6,7 @@ const state = {
   activeRouteId: "",
   activeState: null,
   pollTimer: null,
+  readinessTimer: null,
   activeView: "overview",
 };
 
@@ -70,6 +71,7 @@ function bindEvents() {
   });
   [
     els.contextInput,
+    els.portInput,
     els.isaacPreflightGate,
     els.localizationGate,
     els.enablementGate,
@@ -77,8 +79,10 @@ function bindEvents() {
   ].forEach((input) => {
     input.addEventListener("input", renderSelection);
     input.addEventListener("input", renderRoutes);
+    input.addEventListener("input", scheduleReadinessRefresh);
     input.addEventListener("change", renderSelection);
     input.addEventListener("change", renderRoutes);
+    input.addEventListener("change", refreshSelectedRouteReadiness);
   });
   els.startButton.addEventListener("click", confirmLaunch);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
@@ -133,6 +137,7 @@ function renderRoutes() {
       state.selectedRoute = route;
       renderRoutes();
       renderSelection();
+      refreshSelectedRouteReadiness();
     });
     els.routeList.appendChild(button);
   }
@@ -187,6 +192,7 @@ function routeStatusDisplay(route, readiness) {
   }
   const kind = readiness.blocker_kind || "";
   if (kind === "locked") return { label: "LOCKED", className: "blocked" };
+  if (kind === "mcp_port_in_use") return { label: "PORT IN USE", className: "blocked" };
   if (kind === "needs_provider") return { label: "NEEDS PROVIDER", className: "needs_action" };
   if (kind === "needs_isaac_preflight") {
     return { label: "NEEDS PREFLIGHT", className: "needs_action" };
@@ -273,6 +279,36 @@ function applyLocalGateEvidence(gate) {
 function firstBlockingGateKind(gates) {
   const gate = gates.find((item) => item.status !== "ready");
   return gate ? gate.kind || "" : "";
+}
+
+function scheduleReadinessRefresh() {
+  if (state.readinessTimer) {
+    clearTimeout(state.readinessTimer);
+  }
+  state.readinessTimer = setTimeout(refreshSelectedRouteReadiness, 250);
+}
+
+async function refreshSelectedRouteReadiness() {
+  const route = state.selectedRoute;
+  if (!route || !route.enabled) {
+    return;
+  }
+  const params = new URLSearchParams({
+    route_id: route.id,
+    host: "127.0.0.1",
+    port: els.portInput.value || "18788",
+  });
+  if (els.contextInput.value) {
+    params.set("context_json", els.contextInput.value);
+  }
+  const readiness = await fetchJson(`/api/readiness?${params.toString()}`);
+  if (readiness.error) {
+    els.startHelp.textContent = readiness.error;
+    return;
+  }
+  state.readiness[route.id] = readiness;
+  renderRoutes();
+  renderSelection();
 }
 
 function confirmLaunch() {

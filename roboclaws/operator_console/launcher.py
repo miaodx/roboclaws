@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import time
 from dataclasses import dataclass
@@ -14,6 +15,9 @@ from roboclaws.launch.catalog import resolve_task_launch
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleRoute, accepted_isaac_preflight, get_route
+
+DEFAULT_MCP_HOST = "127.0.0.1"
+DEFAULT_MCP_PORT = 18788
 
 
 class ConsoleLaunchError(ValueError):
@@ -225,6 +229,17 @@ def route_readiness(
             if not ok:
                 message = "Isaac preflight has not passed. Run the preflight gate before launch."
                 kind = "needs_isaac_preflight"
+        elif gate.kind == "mcp_port_free":
+            host = _override_host(override_map)
+            port = _override_port(override_map)
+            ok = _tcp_port_free(host, port)
+            evidence = f"{host}:{port}"
+            if not ok:
+                message = (
+                    f"MCP port {host}:{port} is already accepting connections. "
+                    "Pick another port or stop the existing server."
+                )
+                kind = "mcp_port_in_use"
         elif gate.kind == "request_field":
             ok = bool(override_map.get(gate.id))
             if not ok:
@@ -312,6 +327,8 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
             raise ConsoleLaunchError(f"unsupported route parameter: {key}")
         if "\x00" in value:
             raise ConsoleLaunchError(f"invalid NUL byte in route parameter: {key}")
+        if key == "port":
+            _parse_port(value)
     for key in route.required_overrides:
         if key not in allowed:
             raise ConsoleLaunchError(f"route registry uses unsupported parameter: {key}")
@@ -328,6 +345,34 @@ def _clean_dotenv_value(value: str) -> str:
     if len(clean) >= 2 and clean[0] == clean[-1] and clean[0] in {"'", '"'}:
         clean = clean[1:-1]
     return clean
+
+
+def _override_host(overrides: dict[str, str]) -> str:
+    host = str(overrides.get("host") or DEFAULT_MCP_HOST).strip()
+    return host or DEFAULT_MCP_HOST
+
+
+def _override_port(overrides: dict[str, str]) -> int:
+    return _parse_port(str(overrides.get("port") or DEFAULT_MCP_PORT))
+
+
+def _parse_port(value: str) -> int:
+    try:
+        port = int(str(value).strip())
+    except ValueError as exc:
+        raise ConsoleLaunchError(f"invalid MCP port: {value}") from exc
+    if not 1 <= port <= 65535:
+        raise ConsoleLaunchError(f"invalid MCP port: {value}")
+    return port
+
+
+def _tcp_port_free(host: str, port: int) -> bool:
+    probe_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    try:
+        with socket.create_connection((probe_host, port), timeout=0.2):
+            return False
+    except OSError:
+        return True
 
 
 def _new_run_id(route: ConsoleRoute) -> str:

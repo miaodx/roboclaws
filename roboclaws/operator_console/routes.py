@@ -85,6 +85,12 @@ PROVIDER_KEY_GATE = RouteGate(
     kind="provider_key",
     help_text="Load a repo-local coding-agent provider route before launch.",
 )
+MCP_PORT_FREE_GATE = RouteGate(
+    id="mcp_port_free",
+    label="MCP port available",
+    kind="mcp_port_free",
+    help_text="The runner will start its MCP server on this host and port.",
+)
 ISAAC_PREFLIGHT_GATE = RouteGate(
     id="isaac_preflight",
     label="Isaac preflight accepted",
@@ -138,7 +144,7 @@ def _cleanup_route(
         checker_id="cleanup_report",
         task_prompt_default="帮我收拾这个房间",
         default_overrides=("seed=7", f"generated_mess_count={default_mess_count}"),
-        gates=gates,
+        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, *gates),
         resource_kind=resource_kind,
         driver_label="Claude Code" if driver == "claude" else "Codex",
     )
@@ -158,7 +164,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         checker_id="cleanup_report",
         task_prompt_default="帮我收拾这个房间",
         default_overrides=("seed=7", "generated_mess_count=5"),
-        gates=(PROVIDER_KEY_GATE,),
+        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
         driver_label="Codex",
     ),
     _cleanup_route(
@@ -168,7 +174,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         backend="molmospaces_subprocess",
         lock_name="molmospaces_mujoco",
         default_mess_count=5,
-        gates=(PROVIDER_KEY_GATE,),
+        gates=(),
     ),
     _cleanup_route(
         route_id="codex-isaac-cleanup",
@@ -177,7 +183,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         backend="isaaclab_subprocess",
         lock_name="isaac_gpu",
         default_mess_count=1,
-        gates=(PROVIDER_KEY_GATE, ISAAC_PREFLIGHT_GATE),
+        gates=(ISAAC_PREFLIGHT_GATE,),
         resource_kind="gpu",
     ),
     _cleanup_route(
@@ -187,7 +193,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         backend="isaaclab_subprocess",
         lock_name="isaac_gpu",
         default_mess_count=1,
-        gates=(PROVIDER_KEY_GATE, ISAAC_PREFLIGHT_GATE),
+        gates=(ISAAC_PREFLIGHT_GATE,),
         resource_kind="gpu",
     ),
     ConsoleRoute(
@@ -206,6 +212,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         default_overrides=("visual_grounding=grounding-dino",),
         gates=(
             PROVIDER_KEY_GATE,
+            MCP_PORT_FREE_GATE,
             AGIBOT_CONTEXT_GATE,
             AGIBOT_LOCALIZATION_GATE,
             AGIBOT_ENABLEMENT_GATE,
@@ -228,7 +235,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         checker_id="runtime_metric_map",
         task_prompt_default="帮我建立这个房间的语义地图",
         default_overrides=("seed=7", "generated_mess_count=5"),
-        gates=(PROVIDER_KEY_GATE,),
+        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
         driver_label="Codex",
     ),
     ConsoleRoute(
@@ -244,7 +251,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         checker_id="runtime_metric_map",
         task_prompt_default="帮我建立这个房间的语义地图",
         default_overrides=("seed=7", "generated_mess_count=1"),
-        gates=(PROVIDER_KEY_GATE, ISAAC_PREFLIGHT_GATE),
+        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, ISAAC_PREFLIGHT_GATE),
         resource_kind="gpu",
         driver_label="Codex",
     ),

@@ -73,6 +73,7 @@ def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:
     agibot = get_route("codex-agibot-g2-map-build").to_payload()
 
     assert mujoco["field_groups"] == ["common"]
+    assert any(gate["id"] == "mcp_port_free" for gate in mujoco["gates"])
     assert "overview" in mujoco["view_modes"]
     assert "map" in mujoco["view_modes"]
     assert "grounding" not in mujoco["view_modes"]

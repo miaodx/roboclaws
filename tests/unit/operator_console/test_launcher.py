@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from pathlib import Path
 from unittest.mock import patch
 
@@ -112,6 +113,31 @@ def test_provider_gate_auto_loads_repo_dotenv(tmp_path: Path, monkeypatch) -> No
 
     assert readiness["can_start"] is True
     assert load_repo_dotenv(tmp_path, {})["XM_LLM_API_KEY"] == "from-dotenv"
+
+
+def test_mcp_port_gate_rejects_port_that_is_already_accepting_connections(
+    tmp_path: Path,
+) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        port = listener.getsockname()[1]
+
+        readiness = route_readiness(
+            tmp_path,
+            route,
+            overrides={"host": "127.0.0.1", "port": str(port)},
+            env={"XM_LLM_API_KEY": "key"},
+        )
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "mcp_port_in_use"
+    assert f"127.0.0.1:{port}" in readiness["blocker"]
+    assert any(
+        gate["id"] == "mcp_port_free" and gate["status"] == "needs_action"
+        for gate in readiness["gates"]
+    )
 
 
 def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:

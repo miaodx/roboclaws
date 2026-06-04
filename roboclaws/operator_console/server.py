@@ -46,6 +46,18 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     },
                 }
             )
+        if parsed.path == "/api/readiness":
+            try:
+                query = parse_qs(parsed.query)
+                route = get_route(str(query.get("route_id", [""])[0]))
+                overrides = {
+                    key: str(query[key][0])
+                    for key in ("host", "port", "context_json")
+                    if query.get(key, [""])[0]
+                }
+                return self._json(route_readiness(self.repo_root, route, overrides=overrides))
+            except (ConsoleLaunchError, KeyError, ValueError) as exc:
+                return self._json({"error": str(exc)}, status=400)
         if parsed.path.startswith("/api/runs/"):
             run_id = unquote(parsed.path.removeprefix("/api/runs/"))
             if run_id.endswith("/pause"):
