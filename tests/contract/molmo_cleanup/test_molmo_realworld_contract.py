@@ -1680,6 +1680,41 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
     _assert_no_forbidden_keys(response)
 
 
+def test_minimal_raw_fpv_visual_candidate_requires_public_destination() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["waypoint_id"] == "generated_exploration_001"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="book",
+        evidence_note="book visible on nearby surface",
+        image_region={"type": "verbal_region", "value": "center"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "visual_candidate_not_actionable"
+    assert response["object_id"].startswith("observed_")
+    assert response["cleanup_recommended"] is False
+    assert response["candidate_fixture_id"] == ""
+    assert response["recommended_tool"] == ""
+    assert response["required_next_tool"] == "observe"
+    assert "Do not pick it" in response["recovery_hint"]
+    assert contract.pick(response["object_id"])["ok"] is False
+    _assert_no_forbidden_keys(response)
+
+
 def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navigation() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),

@@ -1054,6 +1054,30 @@ class RealWorldCleanupContract:
                     "continue to another waypoint.",
                 ),
             )
+        detection = self._detections_by_handle.get(handle, {})
+        candidate_fixture_id = self._public_fixture_reference_id(
+            str(detection.get("candidate_fixture_id") or "")
+        )
+        cleanup_recommended = bool(detection.get("cleanup_recommended", False))
+        recommended_tool = str(detection.get("recommended_tool") or "")
+        if not candidate_fixture_id or not recommended_tool:
+            return self._error(
+                "navigate_to_visual_candidate",
+                "visual_candidate_not_actionable",
+                model_declared_observation=self._public_fixture_reference_payload(declaration),
+                object_id=handle,
+                candidate_fixture_id=candidate_fixture_id,
+                candidate_fixture_category=detection.get("candidate_fixture_category", ""),
+                cleanup_recommended=cleanup_recommended,
+                recommended_tool=recommended_tool,
+                grounding_status=declaration.get("grounding_status", "resolved"),
+                required_next_tool="observe",
+                recovery_hint=(
+                    "This grounded object has no public cleanup destination from the current "
+                    "map context. Do not pick it; continue the waypoint sweep and observe for "
+                    "other cleanup objects."
+                ),
+            )
         navigation = self.navigate_to_object(handle)
         if not navigation.get("ok"):
             return self._error(
@@ -1078,8 +1102,8 @@ class RealWorldCleanupContract:
                 str(detection.get("candidate_fixture_id") or "")
             ),
             candidate_fixture_category=detection.get("candidate_fixture_category", ""),
-            cleanup_recommended=bool(detection.get("cleanup_recommended", False)),
-            recommended_tool=detection.get("recommended_tool", ""),
+            cleanup_recommended=cleanup_recommended,
+            recommended_tool=recommended_tool,
             declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
             required_next_tool="pick",
         )
