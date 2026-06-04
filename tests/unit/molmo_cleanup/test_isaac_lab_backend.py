@@ -573,6 +573,20 @@ def test_isaac_rby1m_head_camera_lens_matches_mujoco_vertical_fov() -> None:
     assert metadata["vertical_fov_deg"] == pytest.approx(45.0)
 
 
+def test_isaac_rby1m_chase_camera_matches_mujoco_follower_pitch() -> None:
+    eye, target = isaac_lab_backend_worker._robot_relative_chase_eye_target(
+        {"x": 0.0, "y": 0.0, "z": 0.0, "yaw_deg": 0.0}
+    )
+    forward = tuple(target[index] - eye[index] for index in range(3))
+    horizontal_distance = math.hypot(forward[0], forward[1])
+    vertical_drop = -forward[2]
+
+    assert eye == pytest.approx(isaac_lab_backend_worker.RBY1M_CHASE_CAMERA_OFFSET_M)
+    assert target == pytest.approx(isaac_lab_backend_worker.RBY1M_CHASE_CAMERA_TARGET_OFFSET_M)
+    assert horizontal_distance == pytest.approx(vertical_drop)
+    assert math.degrees(math.atan2(vertical_drop, horizontal_distance)) == pytest.approx(45.0)
+
+
 def test_isaac_scene_camera_capture_applies_color_profile(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
