@@ -28,6 +28,7 @@ from roboclaws.household.camera_control import (
     normalize_camera_control_request,
     write_camera_control_request,
 )
+from roboclaws.household.genesis_backend import GenesisSubprocessBackend
 from roboclaws.household.isaac_lab_backend import IsaacLabSubprocessBackend
 from roboclaws.household.renderer_comparison import _dimensions_from_shape, _relpath
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
@@ -35,6 +36,7 @@ from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 SCENE_CAMERA_COMPARISON_SCHEMA = "molmospaces_isaac_scene_camera_comparison_v1"
 MOLMOSPACES_LANE_ID = "molmospaces-mujoco"
 ISAAC_LANE_ID = "isaaclab-prepared-usd"
+GENESIS_LANE_ID = "genesis-prepared-usd"
 DEFAULT_RENDER_WIDTH = 960
 DEFAULT_RENDER_HEIGHT = 640
 CANONICAL_POSE_PARITY_THRESHOLD_M = 0.08
@@ -148,6 +150,8 @@ class SceneCameraComparisonConfig:
     scene_index: int = 1
     molmospaces_python: Path = Path(".venv/bin/python")
     isaac_python: Path = Path(".venv-isaaclab/bin/python")
+    genesis_enabled: bool = False
+    genesis_python: Path = Path(".venv-genesis/bin/python")
     render_width: int = DEFAULT_RENDER_WIDTH
     render_height: int = DEFAULT_RENDER_HEIGHT
 
@@ -170,6 +174,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
             "scene_usd_path": str(config.scene_usd_path),
             "render_width": config.render_width,
             "render_height": config.render_height,
+            "genesis_enabled": config.genesis_enabled,
         },
         "camera_control": {
             "api_name": CAMERA_CONTROL_API_NAME,
@@ -188,16 +193,29 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
             "request_artifact": "camera_control_request.json",
         },
         "frame_mapping_note": (
-            "The canonical camera frame is the MolmoSpaces scene frame. The Isaac lane renders "
-            "the same explicit eye/target/up request for both room-level and object-anchor "
-            "views. The report also records USD-bounds residuals for matched anchors. If "
-            "residuals are high, the artifact is evidence of a target-definition or scene "
-            "geometry mismatch rather than proof of full backend-swappable visual parity."
+            "The canonical camera frame is the MolmoSpaces scene frame. Prepared-USD candidate "
+            "lanes render the same explicit eye/target/up request for both room-level and "
+            "object-anchor views. The report also records USD-bounds residuals for matched "
+            "anchors. If residuals are high, the artifact is evidence of a target-definition "
+            "or scene geometry mismatch rather than proof of full backend-swappable visual "
+            "parity."
         ),
         "official_molmospaces_source": _official_molmospaces_source(),
         "room_camera_views": [],
         "anchors": [],
         "view_specs": {},
+        "lane_registry": {
+            "baseline": MOLMOSPACES_LANE_ID,
+            "candidates": [ISAAC_LANE_ID]
+            + ([GENESIS_LANE_ID] if config.genesis_enabled else []),
+            "diagnostic_baseline": MOLMOSPACES_LANE_ID,
+            "pairwise_diagnostic_candidate": ISAAC_LANE_ID,
+            "candidate_diagnostic_note": (
+                "This first Genesis slice adds lane visibility and runtime evidence. Existing "
+                "geometry, projection, and color diagnostics remain calibrated for the "
+                "MuJoCo-to-Isaac pair until real Genesis local evidence is accepted."
+            ),
+        },
         "lanes": {},
         "artifacts": {
             "comparison_manifest": "comparison_manifest.json",
@@ -261,6 +279,12 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         camera_request_path=camera_request_path,
         lane_dir=output_dir / "isaaclab",
     )
+    if config.genesis_enabled:
+        manifest["lanes"][GENESIS_LANE_ID] = _capture_genesis_lane(
+            config,
+            camera_request_path=camera_request_path,
+            lane_dir=output_dir / "genesis",
+        )
     manifest["camera_pose_contract"] = _camera_pose_contract_from_capture(
         canonical_views=canonical_views,
         molmospaces_lane=molmo,
@@ -333,6 +357,28 @@ def failed_lane_summaries(manifest: dict[str, Any]) -> list[str]:
         failure = lane.get("failure") if isinstance(lane.get("failure"), dict) else {}
         summaries.append(f"{lane_id}: {failure.get('message') or lane.get('status')}")
     return summaries
+
+
+def _lane_order(manifest: dict[str, Any]) -> list[str]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    registry = (
+        manifest.get("lane_registry") if isinstance(manifest.get("lane_registry"), dict) else {}
+    )
+    ordered: list[str] = []
+    baseline = registry.get("baseline")
+    if isinstance(baseline, str):
+        ordered.append(baseline)
+    candidates = registry.get("candidates") if isinstance(registry.get("candidates"), list) else []
+    for lane_id in candidates:
+        if isinstance(lane_id, str) and lane_id not in ordered:
+            ordered.append(lane_id)
+    for fallback in (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID):
+        if fallback in lanes and fallback not in ordered:
+            ordered.append(fallback)
+    for lane_id in lanes:
+        if isinstance(lane_id, str) and lane_id not in ordered:
+            ordered.append(lane_id)
+    return ordered
 
 
 def _official_molmospaces_source() -> dict[str, Any]:
@@ -490,6 +536,52 @@ def _capture_isaac_lane(
         }
     except Exception as exc:
         return _lane_failure(config.isaac_python, exc)
+
+
+def _capture_genesis_lane(
+    config: SceneCameraComparisonConfig,
+    *,
+    camera_request_path: Path,
+    lane_dir: Path,
+) -> dict[str, Any]:
+    try:
+        lane_dir.mkdir(parents=True, exist_ok=True)
+        backend = GenesisSubprocessBackend(
+            run_dir=lane_dir,
+            python_executable=config.genesis_python,
+            scene_usd_path=config.scene_usd_path,
+            runtime_mode="real",
+        )
+        result = backend.render_camera_control_request(
+            lane_dir / "camera_views",
+            request_path=camera_request_path,
+        )
+        if result.get("ok") is not True:
+            raise RuntimeError(f"Genesis camera view capture failed: {result}")
+        scene_load = result.get("scene_load") if isinstance(result.get("scene_load"), dict) else {}
+        runtime = result.get("runtime") if isinstance(result.get("runtime"), dict) else {}
+        return {
+            "status": "success",
+            "python_executable": str(config.genesis_python),
+            "runtime": {**dict(backend.runtime), **runtime},
+            "scene_usd": backend.scene_usd,
+            "scene_load": scene_load or backend.scene_load,
+            "view_variant": result.get("view_variant"),
+            "visual_artifact_provenance": result.get("visual_artifact_provenance"),
+            "camera_control_api": result.get("camera_control_api"),
+            "camera_request_schema": result.get("camera_request_schema"),
+            "calibration_status": result.get("calibration_status"),
+            "lighting_profile": result.get("lighting_profile") or {},
+            "lighting_diagnostics": result.get("lighting_diagnostics") or {},
+            "color_profile": result.get("color_profile") or {},
+            "color_management": result.get("color_management") or {},
+            "lens": result.get("lens") or {},
+            "images": _image_entries(output_dir=config.output_dir, result=result),
+            "views": result.get("views") or [],
+            "camera_control_request": _relpath(camera_request_path, config.output_dir),
+        }
+    except Exception as exc:
+        return _lane_failure(config.genesis_python, exc)
 
 
 def _scene_anchors(state: dict[str, Any], *, limit: int) -> list[dict[str, Any]]:
@@ -1599,7 +1691,7 @@ def _write_contact_sheet(manifest: dict[str, Any], *, output_dir: Path) -> Path 
     label_height = 44
     gap = 12
     margin = 16
-    lanes = (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID)
+    lanes = tuple(_lane_order(manifest))
     sheet_width = margin * 2 + len(lanes) * tile_width + (len(lanes) - 1) * gap
     sheet_height = margin * 2 + len(entries) * (tile_height + label_height + gap) - gap
     sheet = Image.new("RGB", (sheet_width, sheet_height), (238, 242, 246))
@@ -1663,7 +1755,7 @@ def _contact_sheet_entries(manifest: dict[str, Any], *, output_dir: Path) -> lis
     for view in views:
         view_id = str(view.get("view_id") or "")
         images: dict[str, Path] = {}
-        for lane_id in (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID):
+        for lane_id in _lane_order(manifest):
             lane = (manifest.get("lanes") or {}).get(lane_id)
             if not isinstance(lane, dict):
                 continue
@@ -4928,14 +5020,17 @@ def _view_sections(manifest: dict[str, Any], *, output_dir: Path) -> str:
         category = html.escape(str(view.get("category") or "view"))
         anchor_id = html.escape(str(view.get("anchor_id") or ""))
         basis = html.escape(str(view.get("camera_basis") or ""))
+        figures = "\n".join(
+            _figure(manifest, lane_id, view_id, output_dir=output_dir)
+            for lane_id in _lane_order(manifest)
+        )
         blocks.append(
             f"""
 <section class="panel">
   <h2>{room} {category}</h2>
   <p class="note">{anchor_id} {basis}</p>
   <div class="comparison-grid">
-    {_figure(manifest, MOLMOSPACES_LANE_ID, view_id, output_dir=output_dir)}
-    {_figure(manifest, ISAAC_LANE_ID, view_id, output_dir=output_dir)}
+    {figures}
   </div>
 </section>
 """
@@ -5093,7 +5188,10 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Render the same MolmoSpaces scene anchors through MuJoCo and Isaac."
+        description=(
+            "Render the same MolmoSpaces scene anchors through MuJoCo, Isaac, "
+            "and optional Genesis candidate lanes."
+        )
     )
     parser.add_argument("--output-dir", type=Path, default=default_output_dir())
     parser.add_argument("--scene-usd-path", type=Path, required=True)
@@ -5103,6 +5201,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scene-index", type=int, default=1)
     parser.add_argument("--molmospaces-python", type=Path, default=Path(".venv/bin/python"))
     parser.add_argument("--isaac-python", type=Path, default=Path(".venv-isaaclab/bin/python"))
+    parser.add_argument(
+        "--genesis",
+        choices=("on", "off"),
+        default="off",
+        help="Enable the optional Genesis prepared-USD scene-camera lane.",
+    )
+    parser.add_argument("--genesis-python", type=Path, default=Path(".venv-genesis/bin/python"))
     parser.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
     parser.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
     args = parser.parse_args(argv)
@@ -5119,6 +5224,8 @@ def main(argv: list[str] | None = None) -> int:
             scene_index=args.scene_index,
             molmospaces_python=args.molmospaces_python,
             isaac_python=args.isaac_python,
+            genesis_enabled=args.genesis == "on",
+            genesis_python=args.genesis_python,
             render_width=args.render_width,
             render_height=args.render_height,
         )

@@ -1114,7 +1114,7 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
       --render-height "$render_height"
 
 # Render-only scene identity probe: same MolmoSpaces scene anchors through MuJoCo and Isaac.
-scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/scene_semantic.usda" render_width="960" render_height="640":
+scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/scene_semantic.usda" render_width="960" render_height="640" genesis="off":
     #!/usr/bin/env bash
     set -euo pipefail
     seed="{{seed}}"
@@ -1125,6 +1125,18 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     scene_usd_path="{{scene_usd_path}}"
     render_width="{{render_width}}"
     render_height="{{render_height}}"
+    genesis="{{genesis}}"
+    raw_args=(
+      "$seed"
+      "$generated_mess_count"
+      "$output_dir"
+      "$scene_source"
+      "$scene_index"
+      "$scene_usd_path"
+      "$render_width"
+      "$render_height"
+      "$genesis"
+    )
     seed="${seed#seed=}"
     generated_mess_count="${generated_mess_count#generated_mess_count=}"
     output_dir="${output_dir#output_dir=}"
@@ -1133,9 +1145,33 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     scene_usd_path="${scene_usd_path#scene_usd_path=}"
     render_width="${render_width#render_width=}"
     render_height="${render_height#render_height=}"
+    genesis="${genesis#genesis=}"
+    for override in "${raw_args[@]}"; do
+      case "$override" in
+        seed=*) seed="${override#seed=}" ;;
+        generated_mess_count=*) generated_mess_count="${override#generated_mess_count=}" ;;
+        output_dir=*) output_dir="${override#output_dir=}" ;;
+        scene_source=*) scene_source="${override#scene_source=}" ;;
+        scene_index=*) scene_index="${override#scene_index=}" ;;
+        scene_usd_path=*) scene_usd_path="${override#scene_usd_path=}" ;;
+        render_width=*) render_width="${override#render_width=}" ;;
+        render_height=*) render_height="${override#render_height=}" ;;
+        genesis=*) genesis="${override#genesis=}" ;;
+      esac
+    done
+    if [[ "$seed" == *=* && "${seed%%=*}" != "seed" ]]; then seed="7"; fi
+    if [[ "$generated_mess_count" == *=* && "${generated_mess_count%%=*}" != "generated_mess_count" ]]; then generated_mess_count="1"; fi
+    if [[ "$output_dir" == *=* && "${output_dir%%=*}" != "output_dir" ]]; then output_dir="output/molmo/scene-camera-comparison"; fi
+    if [[ "$scene_source" == *=* && "${scene_source%%=*}" != "scene_source" ]]; then scene_source="procthor-10k-val"; fi
+    if [[ "$scene_index" == *=* && "${scene_index%%=*}" != "scene_index" ]]; then scene_index="1"; fi
+    if [[ "$scene_usd_path" == *=* && "${scene_usd_path%%=*}" != "scene_usd_path" ]]; then scene_usd_path="output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/scene_semantic.usda"; fi
+    if [[ "$render_width" == *=* && "${render_width%%=*}" != "render_width" ]]; then render_width="960"; fi
+    if [[ "$render_height" == *=* && "${render_height%%=*}" != "render_height" ]]; then render_height="640"; fi
+    if [[ "$genesis" == *=* && "${genesis%%=*}" != "genesis" ]]; then genesis="off"; fi
 
     molmospaces_python="${ROBOCLAWS_MOLMOSPACES_PYTHON:-.venv/bin/python}"
     isaac_python="${ROBOCLAWS_ISAACLAB_PYTHON:-.venv-isaaclab/bin/python}"
+    genesis_python="${ROBOCLAWS_GENESIS_PYTHON:-.venv-genesis/bin/python}"
     if [[ ! -x "$molmospaces_python" ]]; then
       echo "error: missing MolmoSpaces runtime: ${molmospaces_python}" >&2
       echo "       run: uv sync --extra dev --extra molmospaces" >&2
@@ -1144,6 +1180,11 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     if [[ ! -x "$isaac_python" ]]; then
       echo "error: missing Isaac Lab runtime: ${isaac_python}" >&2
       echo "       create .venv-isaaclab/ or set ROBOCLAWS_ISAACLAB_PYTHON" >&2
+      exit 1
+    fi
+    if [[ "$genesis" == "on" && ! -x "$genesis_python" ]]; then
+      echo "error: missing Genesis runtime: ${genesis_python}" >&2
+      echo "       create .venv-genesis/ or set ROBOCLAWS_GENESIS_PYTHON" >&2
       exit 1
     fi
     if [[ ! -f "$scene_usd_path" ]]; then
@@ -1164,5 +1205,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
       --scene-index "$scene_index" \
       --molmospaces-python "$molmospaces_python" \
       --isaac-python "$isaac_python" \
+      --genesis "$genesis" \
+      --genesis-python "$genesis_python" \
       --render-width "$render_width" \
       --render-height "$render_height"
