@@ -41,6 +41,88 @@ def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     assert diff["residual"]["rgb_gain_oracle"]["mean_abs_rgb_after_gain"] == 0.0
 
 
+def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_capture_quality",
+    )
+    output_dir = tmp_path / "comparison"
+    mujoco_fpv = output_dir / "mujoco" / "robot_views" / "0001_target.fpv.png"
+    mujoco_chase = output_dir / "mujoco" / "robot_views" / "0001_target.chase.png"
+    isaac_fpv = output_dir / "isaac" / "robot_views" / "0001_target.fpv.png"
+    isaac_chase = output_dir / "isaac" / "robot_views" / "0001_target.chase.png"
+    for path, color in (
+        (mujoco_fpv, (100, 110, 120)),
+        (mujoco_chase, (120, 110, 100)),
+        (isaac_fpv, (80, 90, 100)),
+        (isaac_chase, (100, 90, 80)),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(path)
+
+    args = type(
+        "Args",
+        (),
+        {
+            "render_width": 12,
+            "render_height": 8,
+            "saved_report_width": 6,
+            "saved_report_height": 4,
+            "metric_width": 3,
+            "metric_height": 2,
+            "downsample_filter": "nearest",
+            "render_settle_frames": 16,
+        },
+    )()
+    capture_quality = run_camera._capture_quality_probe_config(args)
+    mujoco_views = {
+        "views": {"fpv": str(mujoco_fpv), "chase": str(mujoco_chase)},
+        "camera_control_contract": {},
+        "camera_diagnostics": {},
+        "view_provenance": {},
+    }
+    isaac_views = {
+        "views": {"fpv": str(isaac_fpv), "chase": str(isaac_chase)},
+        "camera_control_contract": {},
+        "camera_diagnostics": {},
+        "view_provenance": {},
+    }
+
+    run_camera._prepare_saved_report_images(
+        mujoco_views,
+        isaac_views,
+        capture_quality=capture_quality,
+    )
+    location = run_camera._location_result(
+        label="0001_target",
+        target={"kind": "object", "target_id": "target"},
+        robot_pose={},
+        mujoco_views=mujoco_views,
+        isaac_views=isaac_views,
+        output_dir=output_dir,
+        capture_quality=capture_quality,
+    )
+
+    assert capture_quality["render_resolution_requested"] == {"width": 12, "height": 8}
+    assert capture_quality["render_resolution_saved"] == {"width": 6, "height": 4}
+    assert capture_quality["metric_resolution"] == {"width": 3, "height": 2}
+    assert capture_quality["render_settle_frames"] == 16
+    assert location["views"]["mujoco"]["fpv"].endswith(".saved_6x4.png")
+    assert location["raw_render_views"]["mujoco"]["fpv"].endswith("0001_target.fpv.png")
+    assert location["metric_views"]["fpv"]["mujoco"].endswith(".metric_fpv_3x2.png")
+    assert location["image_diffs"]["fpv"]["size"] == [3, 2]
+    assert location["image_diffs"]["fpv"]["capture_quality_probe"]["downsample_filter"] == (
+        "nearest"
+    )
+    for backend in ("mujoco", "isaac"):
+        saved_path = output_dir / location["views"][backend]["fpv"]
+        metric_path = output_dir / location["metric_views"]["fpv"][backend]
+        assert Image.open(saved_path).size == (6, 4)
+        assert Image.open(metric_path).size == (3, 2)
+
+
 def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(
     tmp_path: Path,
     monkeypatch,

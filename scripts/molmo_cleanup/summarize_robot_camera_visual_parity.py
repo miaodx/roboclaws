@@ -249,6 +249,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         summary.get("native_isaac_render_diagnostics")
         or payload.get("native_isaac_render_diagnostics")
     )
+    capture_quality = _capture_quality_probe_summary(payload)
     fpv_lens = _dict(camera.get("fpv_lens_delta_summary"))
     fpv_pose = _dict(camera.get("fpv_world_pose_delta_summary"))
     return {
@@ -266,6 +267,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
             "scene_usd_path": scene.get("scene_usd_path"),
         },
         "scene_signature": _scene_signature(scene),
+        "metric_scene_signature": _metric_scene_signature(scene, capture_quality),
         "location_count": summary.get("location_count"),
         "successful_location_count": summary.get("successful_location_count"),
         "fpv_mean_abs_rgb_avg": summary.get("fpv_mean_abs_rgb_avg"),
@@ -293,6 +295,7 @@ def _robot_camera_manifest_summary(path: Path) -> dict[str, Any]:
         "native_isaac_render_diagnostics": _compact_native_isaac_render_diagnostics(
             native_isaac_render
         ),
+        "capture_quality_probe": capture_quality,
         "target_selection": {
             "status": target_selection.get("status"),
             "selected_count": target_selection.get("selected_count"),
@@ -395,6 +398,7 @@ def _object_category_status_summary_from_items(items: list[dict[str, Any]]) -> l
 def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dict[str, Any]:
     if not diagnostics:
         return {}
+    capture_quality = _dict(diagnostics.get("capture_quality_settings"))
     return {
         "schema": diagnostics.get("schema"),
         "status": diagnostics.get("status"),
@@ -413,8 +417,154 @@ def _compact_native_isaac_render_diagnostics(diagnostics: dict[str, Any]) -> dic
         "color_correction": diagnostics.get("color_correction") or {},
         "color_grading": diagnostics.get("color_grading") or {},
         "renderer": diagnostics.get("renderer") or {},
+        "capture_quality_settings": capture_quality,
         "post_render_comparison_profile": diagnostics.get("post_render_comparison_profile") or {},
     }
+
+
+def _capture_quality_probe_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    scene = _dict(payload.get("scene"))
+    summary = _dict(payload.get("summary"))
+    native_source = _dict(summary.get("native_isaac_render_diagnostics")) or _dict(
+        payload.get("native_isaac_render_diagnostics")
+    )
+    native = _dict(_dict(native_source).get("primary")) or native_source
+    native_capture_quality = _dict(native.get("capture_quality_settings"))
+    explicit = _dict(payload.get("capture_quality_probe"))
+    render_resolution = _dict(explicit.get("render_resolution_requested")) or {
+        "width": scene.get("render_width"),
+        "height": scene.get("render_height"),
+    }
+    saved_resolution = _dict(explicit.get("render_resolution_saved")) or {
+        "width": scene.get("saved_report_width") or scene.get("render_width"),
+        "height": scene.get("saved_report_height") or scene.get("render_height"),
+    }
+    metric_resolution = _dict(explicit.get("metric_resolution")) or {
+        "width": scene.get("metric_width") or saved_resolution.get("width"),
+        "height": scene.get("metric_height") or saved_resolution.get("height"),
+    }
+    render_resolution = _clean_resolution(render_resolution)
+    saved_resolution = _clean_resolution(saved_resolution) or render_resolution
+    metric_resolution = _clean_resolution(metric_resolution) or saved_resolution
+    saved_mode = str(explicit.get("saved_image_mode") or "")
+    if not saved_mode:
+        saved_mode = (
+            "direct_capture"
+            if saved_resolution == render_resolution
+            else "downsampled_from_render_capture"
+        )
+    metric_mode = str(explicit.get("metric_image_mode") or "")
+    if not metric_mode:
+        metric_mode = (
+            "direct_capture"
+            if metric_resolution == render_resolution
+            else "downsampled_from_render_capture"
+        )
+    render_settle_frames = (
+        explicit.get("render_settle_frames")
+        if "render_settle_frames" in explicit
+        else native_capture_quality.get("render_settle_frames")
+    )
+    return {
+        "schema": explicit.get("schema") or "robot_camera_capture_quality_probe_v1",
+        "status": explicit.get("status") or "inferred_from_manifest",
+        "render_resolution_requested": render_resolution,
+        "render_resolution_saved": saved_resolution,
+        "metric_resolution": metric_resolution,
+        "saved_image_mode": saved_mode,
+        "metric_image_mode": metric_mode,
+        "direct_capture_metrics": metric_mode == "direct_capture",
+        "downsampled_metrics": metric_mode != "direct_capture",
+        "downsample_filter": explicit.get("downsample_filter") or "",
+        "render_settle_frames": int(render_settle_frames or 0),
+        "samples_per_pixel": _quality_setting_row(
+            explicit,
+            native_capture_quality,
+            "samples_per_pixel",
+        ),
+        "anti_aliasing": _quality_setting_row(explicit, native_capture_quality, "anti_aliasing"),
+        "denoise": _quality_setting_row(explicit, native_capture_quality, "denoise"),
+        "taa": _quality_setting_row(explicit, native_capture_quality, "taa"),
+        "texture_filtering": _quality_setting_row(
+            explicit,
+            native_capture_quality,
+            "texture_filtering",
+        ),
+        "policy_classification": explicit.get("policy_classification")
+        or "capture_quality_probe",
+        "default_renderer_promotion": explicit.get("default_renderer_promotion") is True,
+    }
+
+
+def _quality_setting_row(
+    explicit: dict[str, Any],
+    native_capture_quality: dict[str, Any],
+    name: str,
+) -> dict[str, Any]:
+    row = _dict(explicit.get(name)) or _dict(native_capture_quality.get(name))
+    if row:
+        return row
+    return {
+        "name": name,
+        "status": "not_available",
+        "value": None,
+        "setting_path": "",
+        "default_render_settings_changed": False,
+    }
+
+
+def _capture_quality_settings_summary(
+    capture_quality: dict[str, Any],
+    native_diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    native_capture_quality = _dict(native_diagnostics.get("capture_quality_settings"))
+    return {
+        "render_settle_frames": capture_quality.get("render_settle_frames"),
+        "samples_per_pixel": _quality_setting_row(
+            capture_quality,
+            native_capture_quality,
+            "samples_per_pixel",
+        ),
+        "anti_aliasing": _quality_setting_row(
+            capture_quality,
+            native_capture_quality,
+            "anti_aliasing",
+        ),
+        "denoise": _quality_setting_row(capture_quality, native_capture_quality, "denoise"),
+        "taa": _quality_setting_row(capture_quality, native_capture_quality, "taa"),
+        "texture_filtering": _quality_setting_row(
+            capture_quality,
+            native_capture_quality,
+            "texture_filtering",
+        ),
+    }
+
+
+def _is_capture_quality_probe(capture_quality: dict[str, Any]) -> bool:
+    if not capture_quality:
+        return False
+    if capture_quality.get("status") == "capture_quality_probe_configured":
+        return True
+    return (
+        capture_quality.get("metric_image_mode") != "direct_capture"
+        or capture_quality.get("saved_image_mode") != "direct_capture"
+        or int(capture_quality.get("render_settle_frames") or 0) > 0
+        or any(
+            _dict(capture_quality.get(key)).get("status") not in {None, "", "not_available"}
+            for key in ("samples_per_pixel", "anti_aliasing", "denoise", "taa", "texture_filtering")
+        )
+    )
+
+
+def _clean_resolution(value: dict[str, Any]) -> dict[str, int]:
+    try:
+        width = int(value.get("width"))
+        height = int(value.get("height"))
+    except (TypeError, ValueError):
+        return {}
+    if width <= 0 or height <= 0:
+        return {}
+    return {"width": width, "height": height}
 
 
 def _native_isaac_render_diagnostics_check(
@@ -743,10 +893,22 @@ def _render_domain_probe_matrix_check(
     probes: list[dict[str, Any]],
 ) -> dict[str, Any]:
     baseline_by_scene = {str(item.get("scene_signature")): item for item in baselines}
+    baseline_by_metric_scene = {
+        str(item.get("metric_scene_signature") or item.get("scene_signature")): item
+        for item in baselines
+    }
     matrix: dict[str, list[dict[str, Any]]] = {}
     for probe in probes:
         kind = str(probe.get("probe_kind") or "unknown")
-        baseline = baseline_by_scene.get(str(probe.get("scene_signature")))
+        probe_signature = str(probe.get("scene_signature"))
+        if _dict(probe.get("capture_quality_probe")).get("metric_image_mode") == (
+            "downsampled_from_render_capture"
+        ):
+            baseline = baseline_by_metric_scene.get(
+                str(probe.get("metric_scene_signature") or probe_signature)
+            )
+        else:
+            baseline = baseline_by_scene.get(probe_signature)
         delta = _delta_vs_baseline(baseline, probe)
         paired_view_diagnostics = (
             _paired_view_delta_diagnostics(
@@ -761,6 +923,12 @@ def _render_domain_probe_matrix_check(
                 "label": probe.get("label"),
                 "path": probe.get("path"),
                 "scene_signature": probe.get("scene_signature"),
+                "metric_scene_signature": probe.get("metric_scene_signature"),
+                "baseline_path": baseline.get("path") if baseline else None,
+                "baseline_scene_signature": baseline.get("scene_signature") if baseline else None,
+                "baseline_metric_scene_signature": baseline.get("metric_scene_signature")
+                if baseline
+                else None,
                 "fpv_delta": delta.get("fpv_delta"),
                 "chase_delta": delta.get("chase_delta"),
                 "fpv_improved": delta.get("fpv_improved"),
@@ -768,6 +936,7 @@ def _render_domain_probe_matrix_check(
                 "comparable": delta.get("comparable"),
                 "paired_view_diagnostics": paired_view_diagnostics,
                 "rgb_gain_source": probe.get("rgb_gain_source"),
+                "capture_quality_probe": probe.get("capture_quality_probe"),
             }
         )
     status_by_kind = {
@@ -845,6 +1014,7 @@ def _render_difference_probe_row(
     chase_delta = _float_or_none(matrix_row.get("chase_delta"))
     chase_regression = chase_delta is not None and chase_delta > float(chase_regression_tolerance)
     report_side_only = _is_report_side_probe(matrix_row, probe)
+    capture_quality = _dict(probe.get("capture_quality_probe"))
     native_settings = _native_settings_used_summary(
         _dict(probe.get("native_isaac_render_diagnostics"))
     )
@@ -852,6 +1022,7 @@ def _render_difference_probe_row(
         matrix_row,
         native_settings=native_settings,
         report_side_only=report_side_only,
+        capture_quality=capture_quality,
         chase_regression=chase_regression,
     )
     return {
@@ -860,6 +1031,10 @@ def _render_difference_probe_row(
         "path": matrix_row.get("path"),
         "probe_kind": probe_kind,
         "scene_signature": matrix_row.get("scene_signature"),
+        "metric_scene_signature": matrix_row.get("metric_scene_signature"),
+        "baseline_path": matrix_row.get("baseline_path"),
+        "baseline_scene_signature": matrix_row.get("baseline_scene_signature"),
+        "baseline_metric_scene_signature": matrix_row.get("baseline_metric_scene_signature"),
         "comparable": matrix_row.get("comparable"),
         "fpv_mean_abs_rgb_delta_vs_baseline": fpv_delta,
         "chase_mean_abs_rgb_delta_vs_baseline": chase_delta,
@@ -868,6 +1043,18 @@ def _render_difference_probe_row(
         "chase_regression": chase_regression,
         "chase_regression_tolerance": chase_regression_tolerance,
         "residual_class_distribution": probe.get("residual_class_distribution") or {},
+        "capture_quality_probe": capture_quality,
+        "render_resolution_requested": capture_quality.get("render_resolution_requested") or {},
+        "render_resolution_saved": capture_quality.get("render_resolution_saved") or {},
+        "metric_resolution": capture_quality.get("metric_resolution") or {},
+        "saved_image_mode": capture_quality.get("saved_image_mode") or "",
+        "metric_image_mode": capture_quality.get("metric_image_mode") or "",
+        "downsample_filter": capture_quality.get("downsample_filter") or "",
+        "render_settle_frames": capture_quality.get("render_settle_frames"),
+        "capture_quality_settings": _capture_quality_settings_summary(
+            capture_quality,
+            _dict(probe.get("native_isaac_render_diagnostics")),
+        ),
         "native_settings_used": native_settings,
         "report_side_comparison_profile": _report_side_comparison_profile(matrix_row, probe),
         "policy_classification": policy_classification,
@@ -875,6 +1062,7 @@ def _render_difference_probe_row(
             matrix_row,
             native_settings=native_settings,
             report_side_only=report_side_only,
+            capture_quality=capture_quality,
             chase_regression=chase_regression,
         ),
     }
@@ -883,8 +1071,9 @@ def _render_difference_probe_row(
 def _render_difference_probe_sort_key(row: dict[str, Any]) -> tuple[int, float, float, str]:
     policy_rank = {
         "native_default_candidate": 0,
-        "report_side_only": 1,
-        "rejected": 2,
+        "capture_quality_probe": 1,
+        "report_side_only": 2,
+        "rejected": 3,
     }.get(str(row.get("policy_classification") or ""), 3)
     fpv_delta = _float_or_none(row.get("fpv_mean_abs_rgb_delta_vs_baseline"))
     chase_delta = _float_or_none(row.get("chase_mean_abs_rgb_delta_vs_baseline"))
@@ -901,12 +1090,15 @@ def _probe_policy_classification(
     *,
     native_settings: dict[str, Any],
     report_side_only: bool,
+    capture_quality: dict[str, Any],
     chase_regression: bool,
 ) -> str:
     if not row.get("comparable") or row.get("fpv_worse") or chase_regression:
         return "rejected"
     if report_side_only:
         return "report_side_only"
+    if _is_capture_quality_probe(capture_quality):
+        return "capture_quality_probe"
     if row.get("fpv_improved") and native_settings.get("recorded"):
         return "native_default_candidate"
     return "rejected"
@@ -917,6 +1109,7 @@ def _probe_policy_classification_reason(
     *,
     native_settings: dict[str, Any],
     report_side_only: bool,
+    capture_quality: dict[str, Any],
     chase_regression: bool,
 ) -> str:
     if not row.get("comparable"):
@@ -927,6 +1120,16 @@ def _probe_policy_classification_reason(
         return "auxiliary chase mean-abs-RGB regressed above tolerance"
     if report_side_only:
         return "probe uses report-side RGB/view compensation, not native renderer settings"
+    if _is_capture_quality_probe(capture_quality):
+        if capture_quality.get("metric_image_mode") == "direct_capture":
+            return (
+                "probe is a direct high-resolution capture-quality row; compare only against "
+                "same-size baselines and do not promote renderer defaults"
+            )
+        return (
+            "probe is a capture-quality row with explicit downsampled same-size metrics; "
+            "use it to separate capture quality from policy/input defaults"
+        )
     if row.get("fpv_improved") and native_settings.get("recorded"):
         return "native settings were recorded and FPV improved without chase regression"
     if not native_settings.get("recorded"):
@@ -2082,6 +2285,19 @@ def _infer_probe_kind(summary: dict[str, Any]) -> str:
     label = str(summary.get("label") or "").lower()
     path_text = str(summary.get("path") or "").lower()
     evidence = f"{label} {path_text}"
+    if _is_capture_quality_probe(_dict(summary.get("capture_quality_probe"))) or any(
+        token in evidence
+        for token in (
+            "hires",
+            "downsample",
+            "capture_quality",
+            "settle",
+            "samples_hi",
+            "denoise",
+            "taa",
+        )
+    ):
+        return "capture_quality"
     if _rgb_gain_source(Path(str(summary.get("path") or ""))).get("backend_rgb_gain"):
         return "tone_color"
     if (
@@ -2481,6 +2697,24 @@ def _scene_signature(scene: dict[str, Any]) -> str:
     )
 
 
+def _metric_scene_signature(
+    scene: dict[str, Any],
+    capture_quality: dict[str, Any],
+) -> str:
+    metric = _dict(capture_quality.get("metric_resolution"))
+    return "|".join(
+        str(value)
+        for value in (
+            scene.get("scene_source"),
+            scene.get("scene_index"),
+            scene.get("seed"),
+            scene.get("generated_mess_count"),
+            metric.get("width") or scene.get("render_width"),
+            metric.get("height") or scene.get("render_height"),
+        )
+    )
+
+
 def _seed_from_scene_signature(scene_signature: str) -> int | None:
     parts = scene_signature.split("|")
     if len(parts) < 3:
@@ -2598,6 +2832,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
     render_difference_probe_batch = _render_render_difference_probe_batch(
         _dict(manifest.get("render_difference_probe_batch"))
     )
+    capture_quality_summary = _render_capture_quality_summary(manifest)
     object_audit_rows = _render_object_visual_parity_audit_rows(manifest)
     four_check_rows = "\n".join(
         "<tr>"
@@ -2621,6 +2856,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
         "<tr>"
         f"<td>{html.escape(str(item.get('path') or ''))}</td>"
         f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
+        f"<td>{html.escape(_capture_quality_cell(item))}</td>"
         f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
         f"<td>{html.escape(str(item.get('chase_mean_abs_rgb_avg') or ''))}</td>"
         f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
@@ -2637,6 +2873,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
         f"<td>{html.escape(str(item.get('label') or ''))}</td>"
         f"<td>{html.escape(str(item.get('probe_kind') or ''))}</td>"
         f"<td>{html.escape(str(item.get('scene_signature') or ''))}</td>"
+        f"<td>{html.escape(_capture_quality_cell(item))}</td>"
         f"<td>{html.escape(str(item.get('fpv_mean_abs_rgb_avg') or ''))}</td>"
         f"<td>{html.escape(str(item.get('object_parity_status') or ''))}</td>"
         f"<td>{html.escape(str(item.get('object_parity_high_priority_gap_count') or ''))}</td>"
@@ -2648,12 +2885,12 @@ def _render_report(manifest: dict[str, Any]) -> str:
         if isinstance(item, dict)
     )
     baseline_header = (
-        "<tr><th>Manifest</th><th>Scene</th><th>FPV</th><th>Chase</th>"
+        "<tr><th>Manifest</th><th>Scene</th><th>Capture Quality</th><th>FPV</th><th>Chase</th>"
         "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
         "<th>Gate Failures</th><th>Render Gate</th></tr>"
     )
     probe_header = (
-        "<tr><th>Label</th><th>Kind</th><th>Scene</th><th>FPV</th>"
+        "<tr><th>Label</th><th>Kind</th><th>Scene</th><th>Capture Quality</th><th>FPV</th>"
         "<th>Object Parity</th><th>Object Gaps</th><th>Object/Render Gate</th>"
         "<th>Gate Failures</th><th>Render Gate</th></tr>"
     )
@@ -2757,6 +2994,8 @@ def _render_report(manifest: dict[str, Any]) -> str:
   </table>
   <h2>Visual Samples</h2>
   {visual_samples}
+  <h2>Capture Quality Probe Metadata</h2>
+  {capture_quality_summary}
   <h2>Render Difference Probe Batch</h2>
   {render_difference_probe_batch}
   <h2>Checks</h2>
@@ -2870,6 +3109,50 @@ def _render_object_visual_parity_audit_rows(manifest: dict[str, Any]) -> str:
     )
 
 
+def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
+    sources = [("baseline", item) for item in _list_dicts(manifest.get("baselines"))]
+    sources.extend(("probe", item) for item in _list_dicts(manifest.get("probes")))
+    rows = []
+    for source_kind, item in sources:
+        capture_quality = _dict(item.get("capture_quality_probe"))
+        if not capture_quality:
+            continue
+        anti_aliasing = _dict(capture_quality.get("anti_aliasing"))
+        denoise = _dict(capture_quality.get("denoise"))
+        taa = _dict(capture_quality.get("taa"))
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(source_kind)}</td>"
+            f"<td>{html.escape(str(item.get('label') or item.get('path') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('probe_kind') or 'baseline'))}</td>"
+            f"<td>{html.escape(_resolution_label(capture_quality.get('render_resolution_requested')))}</td>"
+            f"<td>{html.escape(_resolution_label(capture_quality.get('render_resolution_saved')))}</td>"
+            f"<td>{html.escape(_resolution_label(capture_quality.get('metric_resolution')))}</td>"
+            f"<td>{html.escape(str(capture_quality.get('saved_image_mode') or ''))}</td>"
+            f"<td>{html.escape(str(capture_quality.get('metric_image_mode') or ''))}</td>"
+            f"<td>{html.escape(str(capture_quality.get('downsample_filter') or ''))}</td>"
+            f"<td>{html.escape(str(capture_quality.get('render_settle_frames') or 0))}</td>"
+            f"<td>{html.escape(str(anti_aliasing.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(denoise.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(taa.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(capture_quality.get('policy_classification') or ''))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return "<p class='muted'>No capture-quality probe metadata was recorded.</p>"
+    return (
+        "<p class='muted'>Direct high-resolution review images and downsampled "
+        "same-size metrics are tracked separately here. These rows do not promote "
+        "native renderer defaults.</p>"
+        "<table><thead><tr><th>Source</th><th>Manifest</th><th>Kind</th>"
+        "<th>Render Size</th><th>Saved Size</th><th>Metric Size</th>"
+        "<th>Saved Mode</th><th>Metric Mode</th><th>Filter</th><th>Settle</th>"
+        "<th>AA</th><th>Denoise</th><th>TAA</th><th>Policy</th></tr></thead><tbody>"
+        + "\n".join(rows)
+        + "</tbody></table>"
+    )
+
+
 def _render_render_difference_probe_batch(batch: dict[str, Any]) -> str:
     rows = []
     for row in _list_dicts(batch.get("ranked_rows")):
@@ -2884,11 +3167,19 @@ def _render_render_difference_probe_batch(batch: dict[str, Any]) -> str:
             f"<td>{_html_value(row.get('probe_kind'))}</td>"
             f"<td>{_html_value(row.get('fpv_mean_abs_rgb_delta_vs_baseline'))}</td>"
             f"<td>{_html_value(row.get('chase_mean_abs_rgb_delta_vs_baseline'))}</td>"
+            f"<td>{_html_value(_resolution_label(row.get('render_resolution_requested')))}</td>"
+            f"<td>{_html_value(_resolution_label(row.get('render_resolution_saved')))}</td>"
+            f"<td>{_html_value(_resolution_label(row.get('metric_resolution')))}</td>"
+            f"<td>{_html_value(row.get('metric_image_mode'))}<br>"
+            f"<code>filter={_html_value(row.get('downsample_filter'))}</code></td>"
+            f"<td>{_html_value(row.get('render_settle_frames'))}</td>"
             f"<td>{_html_value(row.get('policy_classification'))}</td>"
             f"<td>{_html_value(row.get('classification_reason'))}</td>"
             f"<td>{residual_classes}</td>"
             f"<td>{_html_value(native.get('status'))}<br>"
             f"<code>changed={_html_value(native.get('default_render_settings_changed'))}</code>"
+            f"<br><code>aa={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('anti_aliasing')).get('status'))}</code>"
+            f"<br><code>denoise={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('denoise')).get('status'))}</code>"
             "</td>"
             "</tr>"
         )
@@ -2897,11 +3188,36 @@ def _render_render_difference_probe_batch(batch: dict[str, Any]) -> str:
     return (
         "<p class='muted'>" + html.escape(str(batch.get("interpretation") or "")) + "</p>"
         "<table><thead><tr><th>Rank</th><th>Label</th><th>Kind</th>"
-        "<th>FPV Delta</th><th>Chase Delta</th><th>Candidate Status</th>"
+        "<th>FPV Delta</th><th>Chase Delta</th><th>Render Size</th>"
+        "<th>Saved Size</th><th>Metric Size</th><th>Metric Mode</th>"
+        "<th>Settle</th><th>Candidate Status</th>"
         "<th>Reason</th><th>Residual Classes</th><th>Native Settings</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
     )
+
+
+def _capture_quality_cell(item: dict[str, Any]) -> str:
+    capture_quality = _dict(item.get("capture_quality_probe"))
+    if not capture_quality:
+        return ""
+    parts = [
+        f"render={_resolution_label(capture_quality.get('render_resolution_requested'))}",
+        f"saved={_resolution_label(capture_quality.get('render_resolution_saved'))}",
+        f"metric={_resolution_label(capture_quality.get('metric_resolution'))}",
+        f"metric_mode={capture_quality.get('metric_image_mode') or ''}",
+        f"settle={capture_quality.get('render_settle_frames')}",
+    ]
+    if capture_quality.get("downsample_filter"):
+        parts.append(f"filter={capture_quality.get('downsample_filter')}")
+    return "; ".join(parts)
+
+
+def _resolution_label(value: Any) -> str:
+    resolution = _dict(value)
+    width = resolution.get("width")
+    height = resolution.get("height")
+    return f"{width}x{height}" if width and height else ""
 
 
 def _html_value(value: Any) -> str:

@@ -285,6 +285,7 @@ class IsaacLabSubprocessBackend:
         label: str,
         width: int,
         height: int,
+        render_settle_frames: int = 0,
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
     ) -> dict[str, Any]:
@@ -298,6 +299,8 @@ class IsaacLabSubprocessBackend:
             "--render-height",
             str(height),
         ]
+        if render_settle_frames:
+            args.extend(["--render-settle-frames", str(max(0, int(render_settle_frames)))])
         if focus_object_id is not None:
             args.extend(["--focus-object-id", focus_object_id])
         if focus_receptacle_id is not None:

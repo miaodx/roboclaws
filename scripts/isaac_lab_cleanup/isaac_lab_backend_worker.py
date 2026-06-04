@@ -216,6 +216,13 @@ ISAAC_NATIVE_RENDER_SETTING_PATHS = {
         "anti_aliasing": ("/rtx/post/aa/op",),
     },
 }
+ISAAC_CAPTURE_QUALITY_SETTING_FIELDS = {
+    "samples_per_pixel": (),
+    "anti_aliasing": ISAAC_NATIVE_RENDER_SETTING_PATHS["renderer"]["anti_aliasing"],
+    "denoise": (),
+    "taa": (),
+    "texture_filtering": (),
+}
 ISAAC_RBY1M_ROBOT_USD_PATH = Path("output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda")
 ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH = Path(
     "output/isaaclab/robots/rby1m/rby1m_holobase_isaac.import_summary.json"
@@ -304,6 +311,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     robot_views.add_argument("--focus-receptacle-id")
     robot_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
     robot_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
+    robot_views.add_argument(
+        "--render-settle-frames",
+        type=int,
+        default=0,
+        help=(
+            "Extra Isaac render frames to advance after the first nonblank RGB tensor before "
+            "saving robot-view images. This is an opt-in capture-quality probe control."
+        ),
+    )
 
     camera_views = subparsers.add_parser("camera_views")
     camera_views.add_argument("--output-dir", type=Path, required=True)
@@ -699,6 +715,7 @@ def capture_semantic_pose_robot_views(
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
     color_profile_override: dict[str, Any] | None = None,
+    render_settle_frames: int = 0,
 ) -> dict[str, Any]:
     _require_isaac_import()
     from isaaclab.app import AppLauncher
@@ -717,6 +734,7 @@ def capture_semantic_pose_robot_views(
         robot_import=_dict(state.get("robot_import")),
         semantic_pose_state=_dict(state.get("semantic_pose_state")),
         color_profile_override=color_profile_override,
+        render_settle_frames=render_settle_frames,
     )
     capture["simulation_app_reuse_token"] = simulation_app
     return capture
@@ -2024,6 +2042,7 @@ def _capture_isaac_lab_camera_views(
     scene_index_diagnostics: dict[str, Any] | None = None,
     semantic_pose_state: dict[str, Any] | None = None,
     color_profile_override: dict[str, Any] | None = None,
+    render_settle_frames: int = 0,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -2129,6 +2148,7 @@ def _capture_isaac_lab_camera_views(
         semantic_pose_state=semantic_pose_state,
     )
     sim.reset()
+    render_settle_frames = max(0, int(render_settle_frames))
     native_render_diagnostics = _isaac_native_render_diagnostics(
         renderer_mode=REAL_SMOKE_RENDERER_MODE,
         capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
@@ -2143,6 +2163,10 @@ def _capture_isaac_lab_camera_views(
             *_camera_render_product_paths(scene_camera),
         ],
         isaac_lab_isp_active=False,
+        capture_quality_settings=_capture_quality_settings(
+            render_settle_frames=render_settle_frames,
+            settings=_isaac_settings_interface(),
+        ),
     )
     saved: dict[str, str] = {}
     segmentation_views: list[dict[str, Any]] = []
@@ -2196,6 +2220,13 @@ def _capture_isaac_lab_camera_views(
             rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
             if rgb_image is not None and _image_has_variance(rgb_image, np=np):
                 break
+        for _ in range(render_settle_frames):
+            sim.step()
+            total_render_steps += 1
+            camera.update(dt=sim.get_physics_dt())
+            settled_rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+            if settled_rgb_image is not None:
+                rgb_image = settled_rgb_image
         if rgb_image is None:
             raise RuntimeError(f"Isaac Lab camera did not produce an RGB tensor for {view_name}")
         if not _image_has_variance(rgb_image, np=np):
@@ -2232,6 +2263,7 @@ def _capture_isaac_lab_camera_views(
             "schema": "isaac_robot_view_camera_diagnostics_v1",
             "backend": ISAACLAB_SUBPROCESS_BACKEND,
             "render_resolution": {"width": width, "height": height},
+            "render_settle_frames": render_settle_frames,
             "lighting_profile": lighting_profile,
             "lighting_diagnostics": lighting_diagnostics,
             "native_render_diagnostics": native_render_diagnostics,
@@ -4296,6 +4328,10 @@ def _isaac_native_render_diagnostics_unavailable(
         "camera_prim_paths": [],
         "render_product_paths": [],
         "render_resolution": {},
+        "capture_quality_settings": _capture_quality_settings_unavailable(
+            render_settle_frames=0,
+            reason=reason,
+        ),
         "isaac_lab_isp_active": False,
         "settings_mutation_attempted": False,
         "default_render_settings_changed": False,
@@ -4315,6 +4351,80 @@ def _native_setting_candidate_count() -> int:
     )
 
 
+def _capture_quality_settings_unavailable(
+    *,
+    render_settle_frames: int,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "schema": "isaac_capture_quality_settings_v1",
+        "render_settle_frames": max(0, int(render_settle_frames)),
+        "samples_per_pixel": {
+            "status": "not_available",
+            "value": None,
+            "setting_path": "",
+            "candidate_paths": [],
+        },
+        "anti_aliasing": {
+            "status": "not_available",
+            "value": None,
+            "setting_path": "",
+            "candidate_paths": list(ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"]),
+        },
+        "denoise": {
+            "status": "not_available",
+            "value": None,
+            "setting_path": "",
+            "candidate_paths": [],
+        },
+        "taa": {
+            "status": "not_available",
+            "value": None,
+            "setting_path": "",
+            "candidate_paths": [],
+        },
+        "texture_filtering": {
+            "status": "not_available",
+            "value": None,
+            "setting_path": "",
+            "candidate_paths": [],
+        },
+        "settings_mutation_attempted": False,
+        "default_render_settings_changed": False,
+        "reason": reason,
+    }
+
+
+def _capture_quality_settings(
+    *,
+    render_settle_frames: int,
+    settings: Any | None,
+) -> dict[str, Any]:
+    rows = {
+        key: _isaac_setting_value(settings, paths)
+        if paths
+        else {
+            "status": "not_available",
+            "value": None,
+            "setting_path": "",
+            "candidate_paths": [],
+        }
+        for key, paths in ISAAC_CAPTURE_QUALITY_SETTING_FIELDS.items()
+    }
+    return {
+        "schema": "isaac_capture_quality_settings_v1",
+        "render_settle_frames": max(0, int(render_settle_frames)),
+        **rows,
+        "settings_mutation_attempted": False,
+        "default_render_settings_changed": False,
+        "reason": (
+            "Capture-quality probe metadata is recorded without mutating native renderer "
+            "defaults. Unsupported sampling, denoise, TAA, or texture filtering knobs are "
+            "reported as not_available."
+        ),
+    }
+
+
 def _isaac_native_render_diagnostics(
     *,
     renderer_mode: str,
@@ -4324,6 +4434,7 @@ def _isaac_native_render_diagnostics(
     camera_prim_paths: list[str],
     render_product_paths: list[str] | None = None,
     isaac_lab_isp_active: bool = False,
+    capture_quality_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     settings = _isaac_settings_interface()
     groups: dict[str, Any] = {}
@@ -4369,6 +4480,11 @@ def _isaac_native_render_diagnostics(
         "camera_prim_paths": _dedupe([path for path in camera_prim_paths if path]),
         "render_product_paths": _dedupe(render_product_paths or []),
         "render_resolution": dict(render_resolution),
+        "capture_quality_settings": capture_quality_settings
+        or _capture_quality_settings(
+            render_settle_frames=0,
+            settings=settings,
+        ),
         "isaac_lab_isp_active": bool(isaac_lab_isp_active),
         "settings_mutation_attempted": False,
         "default_render_settings_changed": False,
@@ -6320,6 +6436,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         views,
         width=args.render_width,
         height=args.render_height,
+        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
         focus_object_id=args.focus_object_id,
         focus_receptacle_id=args.focus_receptacle_id,
     )
@@ -6397,6 +6514,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         views={key: str(path) for key, path in views.items()},
         shapes=shapes,
         render_resolution={"width": args.render_width, "height": args.render_height},
+        render_settle_frames=max(0, int(args.render_settle_frames or 0)),
     )
 
 
@@ -6707,6 +6825,7 @@ def _real_semantic_pose_robot_view_images(
     *,
     width: int,
     height: int,
+    render_settle_frames: int = 0,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
@@ -6724,6 +6843,8 @@ def _real_semantic_pose_robot_view_images(
             "focus_object_id": focus_object_id,
             "focus_receptacle_id": focus_receptacle_id,
         }
+        if render_settle_frames:
+            capture_kwargs["render_settle_frames"] = render_settle_frames
         color_profile_override = _dict(state.get("robot_view_color_profile_override"))
         if color_profile_override:
             capture_kwargs["color_profile_override"] = color_profile_override
@@ -6775,6 +6896,7 @@ def _real_semantic_pose_robot_view_images(
         "scene_usd": scene_usd,
         "rendered_to_usd": True,
         "render_steps": int(capture.get("render_steps") or 0),
+        "render_settle_frames": int(capture.get("render_settle_frames") or 0),
         "canonical_camera_control": False,
         "robot_mounted_head_camera": mounted_head_camera,
         "head_camera_equivalent": not mounted_head_camera,
