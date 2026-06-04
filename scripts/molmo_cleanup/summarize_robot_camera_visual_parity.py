@@ -543,16 +543,16 @@ def _capture_quality_settings_summary(
 def _is_capture_quality_probe(capture_quality: dict[str, Any]) -> bool:
     if not capture_quality:
         return False
-    if capture_quality.get("status") == "capture_quality_probe_configured":
-        return True
+    render_resolution = _dict(capture_quality.get("render_resolution_requested"))
+    render_size = (
+        int(render_resolution.get("width") or 0),
+        int(render_resolution.get("height") or 0),
+    )
     return (
         capture_quality.get("metric_image_mode") != "direct_capture"
         or capture_quality.get("saved_image_mode") != "direct_capture"
         or int(capture_quality.get("render_settle_frames") or 0) > 0
-        or any(
-            _dict(capture_quality.get(key)).get("status") not in {None, "", "not_available"}
-            for key in ("samples_per_pixel", "anti_aliasing", "denoise", "taa", "texture_filtering")
-        )
+        or render_size not in {(0, 0), (540, 360)}
     )
 
 

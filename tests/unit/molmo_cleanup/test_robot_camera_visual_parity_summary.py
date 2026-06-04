@@ -1012,6 +1012,73 @@ def test_visual_parity_summary_ranks_capture_quality_downsample_against_metric_b
     assert "capture_quality_probe" in report_html
 
 
+def test_visual_parity_summary_does_not_treat_native_quality_metadata_as_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_native_quality_metadata",
+    )
+    native = {
+        "schema": "robot_camera_native_isaac_render_diagnostics_v1",
+        "status": "native_settings_recorded",
+        "settings_api_available": True,
+        "default_render_settings_changed": False,
+        "capture_quality_settings": {
+            "anti_aliasing": {
+                "status": "available",
+                "value": 3,
+                "setting_path": "/rtx/post/aa/op",
+            },
+            "denoise": {"status": "not_available", "value": None},
+            "taa": {"status": "not_available", "value": None},
+            "samples_per_pixel": {"status": "not_available", "value": None},
+            "texture_filtering": {"status": "not_available", "value": None},
+        },
+    }
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "aa_metadata_only" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=59.5,
+        location_count=4,
+        native_isaac_render_diagnostics=native,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"aa_metadata_only={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["aa_metadata_only"]["policy_classification"] == "native_default_candidate"
+    assert rows["aa_metadata_only"]["probe_kind"] != "capture_quality"
+    assert rows["aa_metadata_only"]["metric_image_mode"] == "direct_capture"
+    assert rows["aa_metadata_only"]["render_resolution_requested"] == {
+        "width": 540,
+        "height": 360,
+    }
+    assert manifest["render_difference_probe_batch"]["policy_classification_counts"] == {
+        "native_default_candidate": 1,
+    }
+
+
 def test_visual_parity_summary_blocks_default_rendering_without_native_diagnostics(
     tmp_path: Path,
 ) -> None:
