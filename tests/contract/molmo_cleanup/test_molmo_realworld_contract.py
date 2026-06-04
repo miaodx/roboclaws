@@ -1689,6 +1689,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     assert first["ok"] is True
     assert retry_before_place["ok"] is True
     assert retry_before_place["object_id"] == handle
+    declared_before_place = contract.model_declared_observations_payload()["observation_count"]
     assert contract.pick(handle)["ok"] is True
     assert contract.navigate_to_receptacle("fridge_01")["ok"] is True
     assert contract.open_receptacle("fridge_01")["ok"] is True
@@ -1715,6 +1716,9 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     assert duplicate["object_id"] == handle
     assert duplicate["required_next_tool"] == "observe"
     assert duplicate["model_declared_observation"]["actionability_status"] == "already_handled"
+    assert contract.model_declared_observations_payload()["observation_count"] == (
+        declared_before_place
+    )
     assert contract._current_object_handle == current_handle_before
     assert contract._held_handle == held_handle_before
     assert contract._object_lifecycle[handle] == lifecycle_before

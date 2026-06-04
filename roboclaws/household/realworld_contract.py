@@ -3073,7 +3073,6 @@ class RealWorldCleanupContract:
         declaration = self._declaration_from_resolution(normalized, match)
         handle = str(declaration["object_id"])
         if match["status"] == "already_handled":
-            self._model_declared_observations.append(declaration)
             return dict(declaration)
         if match["status"] == "resolved":
             obj = match["objects"][0]

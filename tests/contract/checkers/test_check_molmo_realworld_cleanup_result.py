@@ -1917,24 +1917,25 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
 
 
 def test_checker_can_require_raw_fpv_model_declared_success_gate(tmp_path: Path) -> None:
-    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(
+    result = smoke.run_smoke(
         output_dir=tmp_path,
         seed=7,
-        perception_mode="raw_fpv_only",
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
-    result["mess_restoration_rate"] = 0.5
-    result["cleanup_status"] = "partial_success"
-    result["score"]["restored_count"] = 3
 
     checker._assert_result(
         result,
         tmp_path,
         expect_task=None,
         expect_backend="api_semantic_synthetic",
+        expect_policy="realworld_contract_smoke_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
         min_generated_mess_count=5,
+        require_agent_driven=True,
+        require_clean_agent_run=True,
         require_model_declared_observations=True,
         min_model_declared_observations=5,
         min_model_declared_actions=5,
@@ -1943,15 +1944,31 @@ def test_checker_can_require_raw_fpv_model_declared_success_gate(tmp_path: Path)
 
 
 def test_checker_rejects_raw_fpv_model_declared_semantic_shortfall(tmp_path: Path) -> None:
-    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(
+    result = smoke.run_smoke(
         output_dir=tmp_path,
         seed=7,
-        perception_mode="raw_fpv_only",
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
     )
-    result["score"]["semantic_acceptability"]["accepted_count"] = 4
+    result["score"]["semantic_acceptability"] = {
+        "accepted_count": 4,
+        "total_targets": 5,
+        "accepted_levels": ["acceptable", "preferred"],
+        "counts": {
+            "preferred": 2,
+            "acceptable": 2,
+            "questionable": 1,
+            "wrong": 0,
+            "unknown": 0,
+        },
+        "status": "success",
+        "accepted_object_ids": ["mug_01", "book_01", "apple_01", "towel_01"],
+        "questionable_object_ids": ["toy_car_01"],
+        "wrong_object_ids": [],
+        "unknown_object_ids": [],
+    }
 
     with pytest.raises(AssertionError):
         checker._assert_result(
