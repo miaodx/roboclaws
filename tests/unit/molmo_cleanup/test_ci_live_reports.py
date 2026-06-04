@@ -288,6 +288,8 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
         }
     }
     assert "--strict-mcp-config" in command
+    assert "--bare" in command
+    assert "--no-session-persistence" in command
     assert "--dangerously-skip-permissions" in command
     assert (tmp_path / "run" / "claude-version.txt").read_text(encoding="utf-8") == (
         "2.1.143 (Claude Code)\n"

@@ -249,6 +249,8 @@ class LiveClaudeCleanupRunner:
                 else str(mcp_config_path.resolve())
             ),
             "--strict-mcp-config",
+            "--bare",
+            "--no-session-persistence",
             *self.args.claude_model_arg,
             *FULL_PERMISSION_ARGS,
             self.args.kickoff_prompt,
