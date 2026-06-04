@@ -778,7 +778,16 @@ class RealWorldMolmoCleanupMCPServer:
         self._tool_event_counts[f"{tool}:response"] = (
             self._tool_event_counts.get(f"{tool}:response", 0) + 1
         )
-        self._write_trace(tool=tool, event="response", response=response)
+        trace_response = response
+        if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
+            trace_response = dict(response)
+            trace_response["agent_facing_compact_state"] = (
+                _compact_raw_fpv_mcp_observe_state(
+                    response,
+                    cleanup_worklist=self.contract.cleanup_worklist_payload(),
+                )
+            )
+        self._write_trace(tool=tool, event="response", response=trace_response)
 
     def _write_trace(self, *, tool: str, event: str, **payload: Any) -> None:
         trace_event = {

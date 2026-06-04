@@ -607,6 +607,52 @@ def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(
     assert len(image_block.data) > 0
 
 
+def test_realworld_mcp_raw_fpv_trace_records_agent_facing_compact_state(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _FakeVisualBackend(scenario)
+    base_contract = CleanupBackendSession(scenario, backend=backend)
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=base_contract,
+        port=0,
+        record_robot_views=True,
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        server.call_tool(
+            "navigate_to_waypoint",
+            waypoint_id=metric_map["inspection_waypoints"][0]["waypoint_id"],
+        )
+        observation_blocks = server._mcp_observe_response()
+    finally:
+        server.close()
+
+    observation_state = json.loads(observation_blocks[0])
+    trace_events = [
+        json.loads(line)
+        for line in (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    trace_observe = next(
+        event
+        for event in trace_events
+        if event["tool"] == "observe" and event["event"] == "response"
+    )
+    compact_state = trace_observe["response"]["agent_facing_compact_state"]
+
+    assert compact_state["schema"] == "raw_fpv_mcp_observe_state_v1"
+    assert compact_state["cleanup_worklist_summary"] == observation_state[
+        "cleanup_worklist_summary"
+    ]
+    assert compact_state["raw_fpv_observation"]["observation_id"] == observation_state[
+        "raw_fpv_observation"
+    ]["observation_id"]
+    assert "camera_control_contract" not in compact_state["raw_fpv_observation"]
+
+
 def test_realworld_mcp_raw_fpv_artifact_filters_private_camera_contract_keys(
     tmp_path: Path,
 ) -> None:
