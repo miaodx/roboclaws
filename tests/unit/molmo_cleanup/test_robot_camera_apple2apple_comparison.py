@@ -926,6 +926,132 @@ def Xform "World"
     assert location["fpv_mean_abs_rgb"] == 48.0
 
 
+def test_robot_camera_render_contract_diagnostics_can_skip_object_parity_audit(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_skip_object_audit",
+    )
+    mujoco_xml = tmp_path / "scene.xml"
+    mujoco_xml.write_text(
+        """<mujoco>
+  <asset>
+    <texture name="tex_bed" type="2d" file="textures/bed.png"/>
+    <material name="mat_bed" texture="tex_bed" rgba="1 1 1 1"/>
+  </asset>
+  <worldbody>
+    <light name="mujoco_light"/>
+    <body name="bed_1">
+      <geom name="bed_1_visual_0" mesh="bed_mesh" material="mat_bed"/>
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    isaac_usd = tmp_path / "scene.usda"
+    isaac_usd.write_text(
+        """#usda 1.0
+def Xform "World"
+{
+  def Scope "Looks"
+  {
+    def Material "mat_bed"
+    {
+      def Shader "PreviewSurface"
+      {
+        uniform token info:id = "UsdPreviewSurface"
+        color3f inputs:diffuseColor.connect = </World/Looks/mat_bed/DiffuseTexture.outputs:rgb>
+        float inputs:roughness = 0.5
+      }
+      def Shader "DiffuseTexture"
+      {
+        asset inputs:file = @/tmp/textures/bed.png@
+        token inputs:sourceColorSpace = "auto"
+      }
+    }
+  }
+  def Xform "bed_1"
+  {
+    def Mesh "mesh"
+    {
+      rel material:binding = </World/Looks/mat_bed>
+    }
+  }
+  def DistantLight "key" {}
+}
+""",
+        encoding="utf-8",
+    )
+    manifest = {
+        "scene": {"scene_usd_path": str(isaac_usd)},
+        "locations": [
+            {
+                "status": "success",
+                "target": {"kind": "receptacle", "target_id": "bed_1"},
+                "image_diffs": {
+                    "fpv": {
+                        "mean_abs_rgb": 30.0,
+                        "residual": {
+                            "residual_class": "low_residual",
+                            "edge_abs_diff": 1.0,
+                            "rgb_gain_oracle": {"mean_abs_rgb_after_gain": 24.0},
+                        },
+                    },
+                    "chase": {
+                        "mean_abs_rgb": 44.0,
+                        "residual": {"residual_class": "geometry_or_texture_edge_residual"},
+                    },
+                },
+            }
+        ],
+        "summary": {"residual_triage": {"status": "render_domain_geometry_or_texture_residual"}},
+    }
+    mujoco_state = {"scene_xml": str(mujoco_xml), "robot_xml": "robot.xml"}
+    isaac_state = {
+        "scene_usd": str(isaac_usd),
+        "scene_binding_diagnostics": {
+            "receptacle_bindings": {
+                "bed_1": {
+                    "status": "bound",
+                    "public_id": "bed_1",
+                    "kind": "receptacle",
+                    "usd_prim_path": "/World/bed_1",
+                }
+            }
+        },
+        "native_render_diagnostics": {
+            "schema": "isaac_native_render_diagnostics_v1",
+            "status": "native_settings_recorded",
+            "settings_api_available": True,
+            "default_render_settings_changed": False,
+        },
+    }
+    (tmp_path / "mujoco_state.json").write_text(json.dumps(mujoco_state), encoding="utf-8")
+    (tmp_path / "isaac_state.json").write_text(json.dumps(isaac_state), encoding="utf-8")
+
+    run_camera._attach_render_contract_diagnostics(
+        manifest,
+        output_dir=tmp_path,
+        skip_object_parity_audit=True,
+    )
+
+    assert manifest["summary"]["render_contract_diagnostics"]["status"]
+    assert manifest["summary"]["render_domain_checks"]["schema"] == (
+        "robot_camera_render_domain_checks_v1"
+    )
+    assert manifest["summary"]["native_isaac_render_diagnostics"]["status"] == (
+        "native_settings_recorded"
+    )
+    assert manifest["object_parity_audit"]["status"] == "skipped_for_capture_quality_probe"
+    assert manifest["summary"]["object_parity_audit"]["skip_reason"]
+    gate = manifest["object_render_parity_diagnostics"]
+    assert gate["status"] == "skipped_for_capture_quality_probe"
+    assert gate["object_gate"]["status"] == "skipped_for_capture_quality_probe"
+    assert manifest["summary"]["object_render_parity_diagnostics"]["skip_reason"]
+
+
 def test_robot_camera_light_shadow_check_summarizes_worse_prior_probe(tmp_path: Path) -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,

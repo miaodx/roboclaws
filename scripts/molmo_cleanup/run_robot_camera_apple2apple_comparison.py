@@ -211,6 +211,15 @@ def main(argv: list[str] | None = None) -> int:
             "re-rendering MuJoCo or Isaac views."
         ),
     )
+    parser.add_argument(
+        "--skip-object-parity-audit",
+        action="store_true",
+        help=(
+            "Skip the full-scene object parity audit and Object/Render Gate. This is "
+            "only for bounded capture-quality probes where image diffs and native render "
+            "metadata are the decision evidence."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.refresh_report_only:
@@ -219,6 +228,7 @@ def main(argv: list[str] | None = None) -> int:
             light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
             material_response_probe_manifest_paths=args.material_response_probe_manifest,
             tone_color_probe_manifest_paths=args.tone_color_probe_manifest,
+            skip_object_parity_audit=bool(args.skip_object_parity_audit),
         )
     else:
         if args.scene_usd_path is None:
@@ -558,6 +568,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
         material_response_probe_manifest_paths=args.material_response_probe_manifest,
         tone_color_probe_manifest_paths=args.tone_color_probe_manifest,
+        skip_object_parity_audit=bool(args.skip_object_parity_audit),
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -568,6 +579,7 @@ def refresh_report_only(
     light_shadow_probe_manifest_paths: list[Path] | None = None,
     material_response_probe_manifest_paths: list[Path] | None = None,
     tone_color_probe_manifest_paths: list[Path] | None = None,
+    skip_object_parity_audit: bool = False,
 ) -> dict[str, Any]:
     manifest_path = output_dir / "comparison_manifest.json"
     if not manifest_path.is_file():
@@ -599,6 +611,7 @@ def refresh_report_only(
         light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
         material_response_probe_manifest_paths=material_response_probe_manifest_paths,
         tone_color_probe_manifest_paths=tone_color_probe_manifest_paths,
+        skip_object_parity_audit=skip_object_parity_audit,
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -1552,6 +1565,7 @@ def _attach_render_contract_diagnostics(
     light_shadow_probe_manifest_paths: list[Path] | None = None,
     material_response_probe_manifest_paths: list[Path] | None = None,
     tone_color_probe_manifest_paths: list[Path] | None = None,
+    skip_object_parity_audit: bool = False,
 ) -> None:
     mujoco_state = _read_json(output_dir / "mujoco_state.json")
     isaac_state = _read_json(output_dir / "isaac_state.json")
@@ -1620,6 +1634,26 @@ def _attach_render_contract_diagnostics(
     manifest.setdefault("summary", {})["native_isaac_render_diagnostics"] = (
         _compact_native_isaac_render_diagnostics(native_render_diagnostics)
     )
+    if skip_object_parity_audit:
+        skipped_audit = _skipped_object_parity_audit()
+        skipped_gate = _skipped_object_render_parity_diagnostics(
+            render_domain_checks=domain_checks,
+            residual_triage=_dict(manifest.get("summary")).get("residual_triage"),
+            native_render_diagnostics=native_render_diagnostics,
+        )
+        manifest["object_parity_audit"] = skipped_audit
+        manifest["object_visual_parity_audit"] = skipped_audit
+        manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
+            skipped_audit
+        )
+        manifest.setdefault("summary", {})["object_visual_parity_audit"] = (
+            _compact_object_parity_audit(skipped_audit)
+        )
+        manifest["object_render_parity_diagnostics"] = skipped_gate
+        manifest.setdefault("summary", {})["object_render_parity_diagnostics"] = (
+            _compact_object_render_parity_diagnostics(skipped_gate)
+        )
+        return
     object_audit = _object_parity_audit(
         mujoco_state=mujoco_state,
         isaac_state=isaac_state,
@@ -1934,6 +1968,7 @@ def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": audit.get("schema"),
         "status": audit.get("status"),
+        "skip_reason": audit.get("skip_reason"),
         "item_count": audit.get("item_count"),
         "object_count": audit.get("object_count"),
         "receptacle_count": audit.get("receptacle_count"),
@@ -1947,6 +1982,40 @@ def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
         "category_status_summary": audit.get("category_status_summary"),
         "high_priority_items": audit.get("high_priority_items"),
         "recommended_next_action": audit.get("recommended_next_action"),
+    }
+
+
+def _skipped_object_parity_audit() -> dict[str, Any]:
+    return {
+        "schema": "robot_camera_object_parity_audit_v1",
+        "status": "skipped_for_capture_quality_probe",
+        "skip_reason": (
+            "The full-scene object parity audit was explicitly skipped for a bounded "
+            "capture-quality probe. Use image diffs, render contract diagnostics, and "
+            "native Isaac render diagnostics for this run; rerun without "
+            "--skip-object-parity-audit before making object-level parity claims."
+        ),
+        "item_count": 0,
+        "object_count": 0,
+        "receptacle_count": 0,
+        "high_priority_gap_count": 0,
+        "binding_status_counts": {},
+        "category_status_counts": {},
+        "pose_status_counts": {},
+        "support_status_counts": {},
+        "state_status_counts": {},
+        "render_contract_status_counts": {},
+        "category_status_summary": [],
+        "high_priority_items": [],
+        "items": [],
+        "recommended_next_action": (
+            "Use this artifact only for capture-quality ranking. Rerun without the skip "
+            "flag for object/render gate evidence."
+        ),
+        "interpretation": (
+            "Capture-quality probes can skip the expensive full-scene audit so local "
+            "render evidence remains fast and comparable."
+        ),
     }
 
 
@@ -2086,6 +2155,7 @@ def _compact_object_render_parity_diagnostics(diagnostics: dict[str, Any]) -> di
     return {
         "schema": diagnostics.get("schema"),
         "status": diagnostics.get("status"),
+        "skip_reason": diagnostics.get("skip_reason"),
         "object_gate_status": object_gate.get("status"),
         "object_gate_item_count": object_gate.get("item_count"),
         "object_gate_comparable_count": object_gate.get("comparable_count"),
@@ -2097,6 +2167,47 @@ def _compact_object_render_parity_diagnostics(diagnostics: dict[str, Any]) -> di
         "render_gate_render_domain_status": render_gate.get("render_domain_status"),
         "render_gate_native_isaac_status": render_gate.get("native_isaac_status"),
         "recommended_next_action": diagnostics.get("recommended_next_action"),
+    }
+
+
+def _skipped_object_render_parity_diagnostics(
+    *,
+    render_domain_checks: dict[str, Any],
+    residual_triage: dict[str, Any] | None,
+    native_render_diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    render_gate = _render_gate_diagnostics(
+        comparable_records=[],
+        render_domain_checks=render_domain_checks,
+        residual_triage=residual_triage or {},
+        native_render_diagnostics=native_render_diagnostics or {},
+    )
+    return {
+        "schema": "robot_camera_object_render_parity_diagnostics_v1",
+        "status": "skipped_for_capture_quality_probe",
+        "skip_reason": (
+            "The Object Gate was explicitly skipped with --skip-object-parity-audit. "
+            "This run can rank capture-quality candidates, but it is not object-level "
+            "parity evidence."
+        ),
+        "object_gate": {
+            "status": "skipped_for_capture_quality_probe",
+            "item_count": 0,
+            "comparable_count": 0,
+            "failure_count": 0,
+            "status_counts": {},
+            "classification_counts": {},
+            "failure_records": [],
+            "comparable_records": [],
+        },
+        "render_gate": render_gate,
+        "recommended_next_action": (
+            "Compare FPV/chase image metrics for the capture-quality candidate. Rerun "
+            "without --skip-object-parity-audit before treating object rows as comparable."
+        ),
+        "interpretation": (
+            "The Object Gate is intentionally absent in this capture-quality probe."
+        ),
     }
 
 
