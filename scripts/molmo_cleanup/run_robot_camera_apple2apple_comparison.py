@@ -41,6 +41,8 @@ MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
 OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
+PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD = 35.0
+PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD = 0.5
 OBJECT_VISUAL_STATE_REGISTRY = {
     "box": {
         "schema": "robot_camera_object_visual_state_registry_entry_v1",
@@ -63,6 +65,18 @@ OBJECT_VISUAL_STATE_REGISTRY = {
     }
 }
 OBJECT_VISUAL_STATE_CATEGORIES = set(OBJECT_VISUAL_STATE_REGISTRY)
+VISUAL_PHYSICS_PROTECTION = {
+    "schema": "robot_camera_visual_physics_protection_policy_v1",
+    "protected_by": "prepared_usd_visual_physics_freeze",
+    "policy": (
+        "Objects with MuJoCo articulated visual joints or preserved Isaac physics are "
+        "visual-physics-sensitive. Stripping PhysX or USD physics is necessary to keep "
+        "Isaac from mutating them, but it is not sufficient proof that the frozen visual "
+        "pose matches MuJoCo. A protected object must have selected nonblank RGB evidence "
+        "from an object-centered robot pose/focus contract before the Object Gate may "
+        "classify it as comparable."
+    ),
+}
 ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
 
 
@@ -385,7 +399,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                         "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
                         "--state-path",
                         str(mujoco_state_path),
-                        "navigate_to_object",
+                        "frame_comparison_object",
                         "--object-id",
                         target["target_id"],
                     ],
@@ -414,6 +428,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.render_width),
                     "--render-height",
                     str(args.render_height),
+                    *_focus_args(target),
                 ],
                 cwd=Path.cwd(),
             )
@@ -432,6 +447,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.render_width),
                     "--render-height",
                     str(args.render_height),
+                    *_focus_args(target),
                 ],
                 cwd=Path.cwd(),
             )
@@ -768,6 +784,7 @@ def _select_comparison_targets(
     isaac_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     candidates = _comparison_targets(state, limit=max(1, limit * 4))
+    priority_targets = _visual_physics_sensitive_target_ids(state)
     binding_ids = _bound_comparison_target_ids(
         scene_binding_diagnostics or {},
         isaac_state=isaac_state or {},
@@ -779,7 +796,8 @@ def _select_comparison_targets(
             if str(item.get("target_id") or "")
             in binding_ids.get(str(item.get("kind") or ""), set())
         ]
-        selected = bound_candidates[:limit]
+        ordered_candidates = _prioritize_comparison_targets(bound_candidates, priority_targets)
+        selected = ordered_candidates[:limit]
         dropped = [
             item
             for item in candidates
@@ -788,9 +806,14 @@ def _select_comparison_targets(
         ]
         status = "isaac_bound_targets_selected"
     else:
-        selected = candidates[:limit]
+        ordered_candidates = _prioritize_comparison_targets(candidates, priority_targets)
+        selected = ordered_candidates[:limit]
         dropped = []
         status = "unfiltered_no_isaac_binding_diagnostics"
+    selected_ids = {str(item.get("target_id") or "") for item in selected}
+    priority_selected = [
+        item for item in selected if str(item.get("target_id") or "") in priority_targets
+    ]
     return {
         "schema": "robot_camera_comparison_target_selection_v1",
         "status": status,
@@ -799,25 +822,72 @@ def _select_comparison_targets(
         "isaac_bound_candidate_count": len(bound_candidates) if any(binding_ids.values()) else 0,
         "selected_count": len(selected),
         "selected_targets": selected,
+        "visual_physics_sensitive_target_count": len(priority_targets),
+        "visual_physics_sensitive_selected_count": len(priority_selected),
+        "visual_physics_sensitive_selected_targets": priority_selected,
+        "visual_physics_sensitive_not_selected_targets": [
+            item
+            for item in ordered_candidates
+            if str(item.get("target_id") or "") in priority_targets
+            and str(item.get("target_id") or "") not in selected_ids
+        ][:10],
         "dropped_unbound_target_count": len(dropped),
         "dropped_unbound_targets": dropped[:10],
         "not_selected_bound_target_count": max(
             0,
-            (len(bound_candidates) if any(binding_ids.values()) else len(candidates))
-            - len(selected),
+            len(ordered_candidates) - len(selected),
         ),
-        "not_selected_bound_targets": (
-            bound_candidates[len(selected) : len(selected) + 10]
-            if any(binding_ids.values())
-            else candidates[len(selected) : len(selected) + 10]
-        ),
+        "not_selected_bound_targets": (ordered_candidates[len(selected) : len(selected) + 10]),
         "interpretation": (
             "Robot-camera apple-to-apple image parity renders a bounded subset of targets "
             "that both backends can bind to USD/MJCF render contracts. Objects outside "
             "this selected image subset are still covered by object_parity_audit when "
-            "state/index evidence is available."
+            "state/index evidence is available, but visual-physics-sensitive objects are "
+            "prioritized because physics-freeze metadata alone does not prove the frozen "
+            "visual pose matches MuJoCo."
         ),
     }
+
+
+def _prioritize_comparison_targets(
+    candidates: list[dict[str, Any]],
+    priority_target_ids: set[str],
+) -> list[dict[str, Any]]:
+    if not priority_target_ids:
+        return list(candidates)
+    return sorted(
+        candidates,
+        key=lambda item: (
+            0 if str(item.get("target_id") or "") in priority_target_ids else 1,
+            0 if str(item.get("kind") or "") == "object" else 1,
+        ),
+    )
+
+
+def _visual_physics_sensitive_target_ids(state: dict[str, Any]) -> set[str]:
+    target_ids: set[str] = set()
+    explicit = _dict(state.get("joint_states"))
+    for target_id, raw_entries in explicit.items():
+        entries: list[dict[str, Any]] = []
+        if isinstance(raw_entries, list):
+            entries = [_dict(item) for item in raw_entries if isinstance(item, dict)]
+        elif isinstance(raw_entries, dict):
+            entries = [_dict(item) for item in raw_entries.values() if isinstance(item, dict)]
+        if any(_mujoco_joint_is_visual_articulation(joint) for joint in entries):
+            target_ids.add(str(target_id))
+    for target_id in _dict(state.get("objects")):
+        category = _object_category_key(_dict(state["objects"].get(target_id)).get("category"))
+        if not category:
+            category = _object_category_key(str(target_id).split("_", 1)[0])
+        if category in OBJECT_VISUAL_STATE_CATEGORIES:
+            target_ids.add(str(target_id))
+    return target_ids
+
+
+def _mujoco_joint_is_visual_articulation(joint: dict[str, Any]) -> bool:
+    joint_type = str(joint.get("joint_type") or joint.get("type") or "").lower()
+    joint_name = str(joint.get("joint_name") or "").lower()
+    return joint_type in {"hinge", "3", "mjjnt_hinge"} or "flap" in joint_name
 
 
 def _bound_comparison_target_ids(
@@ -902,6 +972,17 @@ def _patch_isaac_robot_pose(
     else:
         state.pop("robot_view_color_profile_override", None)
     _write_json(state_path, state)
+
+
+def _focus_args(target: dict[str, Any]) -> list[str]:
+    target_id = str(target.get("target_id") or "")
+    if not target_id:
+        return []
+    if str(target.get("kind") or "") == "object":
+        return ["--focus-object-id", target_id]
+    if str(target.get("kind") or "") == "receptacle":
+        return ["--focus-receptacle-id", target_id]
+    return []
 
 
 def _lane_init_summary(init_result: dict[str, Any]) -> dict[str, Any]:
@@ -1518,6 +1599,14 @@ def _object_category_status_summary(items: list[dict[str, Any]]) -> list[dict[st
                 "rgb_view_evidence_status_counts": _status_counts(
                     _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
                 ),
+                "target_coverage_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("target_coverage_status")
+                    for item in category_items
+                ),
+                "target_visual_state_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("target_visual_state_status")
+                    for item in category_items
+                ),
                 "render_contract_status_counts": _status_counts(
                     _dict(item.get("render_contract_delta")).get("status")
                     for item in category_items
@@ -1638,6 +1727,8 @@ def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
         "render_contract_status": render_delta.get("status"),
         "visual_state_status": visual_state.get("status"),
         "rgb_view_evidence_status": rgb_evidence.get("status"),
+        "target_coverage_status": rgb_evidence.get("target_coverage_status"),
+        "target_visual_state_status": rgb_evidence.get("target_visual_state_status"),
         "pose_delta_m": item.get("pose_delta_m"),
         "mujoco_category": _dict(item.get("mujoco")).get("category"),
         "isaac_category": _dict(item.get("isaac")).get("category")
@@ -1659,6 +1750,12 @@ def _object_gate_classification(item: dict[str, Any], statuses: set[str]) -> str
         return "pose_delta"
     if str(item.get("support_status") or "") == "support_metadata_delta":
         return "pose_delta"
+    if _visual_physics_protected_without_selected_rgb(item):
+        return "visual_state_needs_rgb_evidence"
+    if _visual_physics_protected_without_target_coverage(item):
+        return "visual_state_needs_target_coverage"
+    if _visual_physics_protected_with_target_visual_delta(item):
+        return "visual_state_delta"
     if str(item.get("state_status") or "") in {
         "state_delta",
         "state_not_rendered_to_usd",
@@ -1676,7 +1773,51 @@ def _object_gate_classification(item: dict[str, Any], statuses: set[str]) -> str
     return "comparable"
 
 
+def _visual_physics_protected_without_selected_rgb(item: dict[str, Any]) -> bool:
+    visual_state = _dict(item.get("visual_state_contract"))
+    protected_by = str(visual_state.get("protected_by") or "")
+    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
+        return False
+    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
+        return False
+    rgb_status = str(_dict(item.get("rgb_view_evidence")).get("status") or "")
+    return rgb_status != "selected_views_nonblank"
+
+
+def _visual_physics_protected_without_target_coverage(item: dict[str, Any]) -> bool:
+    visual_state = _dict(item.get("visual_state_contract"))
+    protected_by = str(visual_state.get("protected_by") or "")
+    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
+        return False
+    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
+        return False
+    coverage_status = str(_dict(item.get("rgb_view_evidence")).get("target_coverage_status") or "")
+    return coverage_status != "selected_object_centered_coverage"
+
+
+def _visual_physics_protected_with_target_visual_delta(item: dict[str, Any]) -> bool:
+    visual_state = _dict(item.get("visual_state_contract"))
+    protected_by = str(visual_state.get("protected_by") or "")
+    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
+        return False
+    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
+        return False
+    target_visual_status = str(
+        _dict(item.get("rgb_view_evidence")).get("target_visual_state_status") or ""
+    )
+    return target_visual_status != "selected_object_visual_state_aligned"
+
+
 def _object_gate_blocking_status(item: dict[str, Any], statuses: set[str]) -> str:
+    if _visual_physics_protected_without_selected_rgb(item):
+        return "visual_state_requires_selected_rgb_evidence"
+    if _visual_physics_protected_without_target_coverage(item):
+        return "visual_state_requires_selected_target_coverage"
+    if _visual_physics_protected_with_target_visual_delta(item):
+        return str(
+            _dict(item.get("rgb_view_evidence")).get("target_visual_state_status")
+            or "selected_object_visual_state_delta"
+        )
     for value in (
         item.get("binding_status"),
         item.get("category_status"),
@@ -2003,6 +2144,7 @@ def _object_rgb_view_evidence(
         return {
             "status": "not_captured_in_selected_views",
             "selected_target": False,
+            "target_coverage_status": "not_captured_in_selected_views",
             "view_status_counts": {},
         }
     views = []
@@ -2028,17 +2170,298 @@ def _object_rgb_view_evidence(
         status = "selected_views_missing_image"
     else:
         status = "selected_views_unverified"
+    target_coverage = _selected_target_coverage_evidence(
+        kind=kind,
+        target_id=target_id,
+        location=selected,
+    )
+    visual_state_evidence = _selected_target_visual_state_evidence(
+        kind=kind,
+        target_id=target_id,
+        location=selected,
+        output_dir=output_dir,
+    )
     return {
         "schema": "robot_camera_object_rgb_view_evidence_v1",
         "status": status,
         "selected_target": True,
+        **target_coverage,
+        **visual_state_evidence,
         "view_status_counts": status_counts,
         "views": views,
         "interpretation": (
             "Selected target FPV/chase image evidence checks whether the rendered RGB "
-            "views are present and nonblank. It is not object segmentation and does not "
-            "prove per-pixel object coverage without bbox/segmentation evidence."
+            "views are present and nonblank. Target coverage checks whether the selected "
+            "location's robot pose and focus contracts are centered on the same object or "
+            "receptacle. It is not per-pixel shape parity without segmentation/bbox evidence."
         ),
+    }
+
+
+def _selected_target_visual_state_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    location: dict[str, Any],
+    output_dir: Path | None,
+) -> dict[str, Any]:
+    if kind != "object":
+        return {"target_visual_state_status": "not_applicable"}
+    bbox = _selected_target_mujoco_fpv_bbox(location, target_id=target_id)
+    if bbox is None:
+        return {
+            "target_visual_state_status": "missing_target_bbox",
+            "target_visual_state_bbox_source": "mujoco_fpv_visibility",
+        }
+    views = _dict(location.get("views"))
+    mujoco_fpv = str(_dict(views.get("mujoco")).get("fpv") or "")
+    isaac_fpv = str(_dict(views.get("isaac")).get("fpv") or "")
+    crop_delta = _image_crop_delta(
+        left_image_path=mujoco_fpv,
+        right_image_path=isaac_fpv,
+        bbox=bbox,
+        output_dir=output_dir,
+    )
+    if str(crop_delta.get("status") or "") != "computed":
+        return {
+            "target_visual_state_status": "target_region_unverified",
+            "target_visual_state_bbox": bbox,
+            "target_visual_state_delta": crop_delta,
+        }
+    mean_abs = float(crop_delta.get("mean_abs_rgb") or 0.0)
+    gt40 = float(crop_delta.get("diff_gt_40_fraction") or 0.0)
+    if (
+        mean_abs <= PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD
+        and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
+    ):
+        status = "selected_object_visual_state_aligned"
+    else:
+        status = "selected_object_visual_state_delta"
+    return {
+        "target_visual_state_status": status,
+        "target_visual_state_bbox": bbox,
+        "target_visual_state_delta": crop_delta,
+        "target_visual_state_thresholds": {
+            "mean_abs_rgb_max": PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD,
+            "diff_gt_40_fraction_max": PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD,
+        },
+    }
+
+
+def _selected_target_mujoco_fpv_bbox(
+    location: dict[str, Any],
+    *,
+    target_id: str,
+) -> list[int] | None:
+    focus = _dict(_dict(_dict(location.get("contracts")).get("mujoco")).get("focus"))
+    if str(focus.get("object_id") or "") != target_id:
+        return None
+    visibility = _dict(focus.get("fpv_visibility"))
+    for raw_box in visibility.get("boxes") or []:
+        box = _dict(raw_box)
+        bbox = box.get("bbox")
+        if isinstance(bbox, list) and len(bbox) == 4:
+            try:
+                return [int(value) for value in bbox]
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _image_crop_delta(
+    *,
+    left_image_path: str,
+    right_image_path: str,
+    bbox: list[int],
+    output_dir: Path | None,
+) -> dict[str, Any]:
+    left_path = _resolve_output_path(left_image_path, output_dir)
+    right_path = _resolve_output_path(right_image_path, output_dir)
+    if left_path is None or right_path is None:
+        return {"status": "missing_image_path"}
+    if not left_path.exists() or not right_path.exists():
+        return {
+            "status": "missing_image_file",
+            "left_exists": left_path.exists(),
+            "right_exists": right_path.exists(),
+        }
+    try:
+        with Image.open(left_path) as left_raw, Image.open(right_path) as right_raw:
+            left = left_raw.convert("RGB")
+            right = right_raw.convert("RGB")
+            if right.size != left.size:
+                right = right.resize(left.size)
+            safe_bbox = _safe_image_bbox(bbox, left.size)
+            if safe_bbox is None:
+                return {"status": "invalid_bbox", "bbox": bbox, "image_size": list(left.size)}
+            left_crop = left.crop(tuple(safe_bbox))
+            right_crop = right.crop(tuple(safe_bbox))
+            diff = ImageChops.difference(left_crop, right_crop)
+            stat = ImageStat.Stat(diff)
+            mean_abs = sum(stat.mean) / len(stat.mean)
+            rms = sum(value * value for value in stat.rms) ** 0.5 / len(stat.rms)
+            pixel_count = max(left_crop.size[0] * left_crop.size[1], 1)
+            nonzero = 0
+            diff_gt_40 = 0
+            diff_gt_80 = 0
+            for pixel in diff.getdata():
+                if pixel != (0, 0, 0):
+                    nonzero += 1
+                mean_pixel_delta = sum(pixel) / 3.0
+                if mean_pixel_delta > 40.0:
+                    diff_gt_40 += 1
+                if mean_pixel_delta > 80.0:
+                    diff_gt_80 += 1
+            return {
+                "status": "computed",
+                "bbox": safe_bbox,
+                "crop_size": list(left_crop.size),
+                "mean_abs_rgb": round(float(mean_abs), 4),
+                "rms_rgb": round(float(rms), 4),
+                "nonzero_fraction": round(nonzero / pixel_count, 6),
+                "diff_gt_40_fraction": round(diff_gt_40 / pixel_count, 6),
+                "diff_gt_80_fraction": round(diff_gt_80 / pixel_count, 6),
+            }
+    except Exception as exc:
+        return {
+            "status": "unreadable_image",
+            "error": type(exc).__name__,
+            "reason": str(exc),
+        }
+
+
+def _resolve_output_path(image_path: str, output_dir: Path | None) -> Path | None:
+    if not image_path:
+        return None
+    path = Path(image_path)
+    if not path.is_absolute() and output_dir is not None:
+        path = output_dir / path
+    return path
+
+
+def _safe_image_bbox(bbox: list[int], size: tuple[int, int]) -> list[int] | None:
+    if len(bbox) != 4:
+        return None
+    width, height = size
+    left = max(0, min(int(bbox[0]), width))
+    top = max(0, min(int(bbox[1]), height))
+    right = max(0, min(int(bbox[2]), width))
+    bottom = max(0, min(int(bbox[3]), height))
+    if right <= left or bottom <= top:
+        return None
+    return [left, top, right, bottom]
+
+
+def _selected_target_coverage_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    location: dict[str, Any],
+) -> dict[str, Any]:
+    robot_pose = _dict(location.get("robot_pose"))
+    pose_request = _dict(robot_pose.get("pose_request"))
+    pose_target_object_id = str(
+        robot_pose.get("target_object_id") or pose_request.get("target_object_id") or ""
+    )
+    pose_target_receptacle_id = str(
+        robot_pose.get("target_receptacle_id") or pose_request.get("target_receptacle_id") or ""
+    )
+    focus_evidence = _selected_target_focus_evidence(
+        kind=kind, target_id=target_id, location=location
+    )
+    pose_status = "missing_robot_pose_target"
+    if kind == "object":
+        pose_status = (
+            "object_centered_pose"
+            if pose_target_object_id == target_id
+            else "support_or_receptacle_centered_pose"
+            if pose_target_receptacle_id
+            else "missing_object_centered_pose"
+        )
+    elif kind == "receptacle":
+        pose_status = (
+            "receptacle_centered_pose"
+            if pose_target_receptacle_id == target_id
+            else "missing_receptacle_centered_pose"
+        )
+    focus_status = str(focus_evidence.get("focus_status") or "")
+    if (
+        kind == "object"
+        and pose_status == "object_centered_pose"
+        and focus_status
+        in {
+            "selected_object_focus",
+            "missing_focus_contract",
+        }
+    ):
+        coverage_status = "selected_object_centered_coverage"
+    elif (
+        kind == "receptacle"
+        and pose_status == "receptacle_centered_pose"
+        and focus_status
+        in {
+            "selected_receptacle_focus",
+            "missing_focus_contract",
+        }
+    ):
+        coverage_status = "selected_receptacle_centered_coverage"
+    else:
+        coverage_status = "selected_target_coverage_gap"
+    return {
+        "target_coverage_status": coverage_status,
+        "robot_pose_target_status": pose_status,
+        "robot_pose_target_object_id": pose_target_object_id,
+        "robot_pose_target_receptacle_id": pose_target_receptacle_id,
+        "robot_pose_target_position": robot_pose.get("target_position")
+        or pose_request.get("target_position"),
+        **focus_evidence,
+    }
+
+
+def _selected_target_focus_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    location: dict[str, Any],
+) -> dict[str, Any]:
+    focus_rows = []
+    for backend_id in ("mujoco", "isaac"):
+        focus = _dict(
+            _dict(_dict(location.get("contracts")).get(backend_id)).get("focus")
+        ) or _dict(_dict(_dict(location.get("provenance")).get(backend_id)).get("focus"))
+        if not focus:
+            continue
+        focus_rows.append(
+            {
+                "backend": backend_id,
+                "object_id": focus.get("object_id"),
+                "receptacle_id": focus.get("receptacle_id"),
+                "focus_mode": focus.get("focus_mode"),
+                "source": focus.get("source") or focus.get("provenance"),
+                "fpv_visibility_status": _dict(focus.get("fpv_visibility")).get("status"),
+                "visibility_status": _dict(focus.get("visibility")).get("status"),
+            }
+        )
+    if not focus_rows:
+        return {
+            "focus_status": "missing_focus_contract",
+            "focus_contracts": [],
+        }
+    if kind == "object":
+        status = (
+            "selected_object_focus"
+            if all(str(row.get("object_id") or "") == target_id for row in focus_rows)
+            else "selected_focus_mismatch"
+        )
+    else:
+        status = (
+            "selected_receptacle_focus"
+            if all(str(row.get("receptacle_id") or "") == target_id for row in focus_rows)
+            else "selected_focus_mismatch"
+        )
+    return {
+        "focus_status": status,
+        "focus_contracts": focus_rows,
     }
 
 
@@ -2088,23 +2511,23 @@ def _object_state_status(
         or isaac_entry.get("usd_category")
     )
     if kind != "receptacle" and not articulation:
-        if category in OBJECT_VISUAL_STATE_CATEGORIES:
-            visual_contract = _object_visual_state_contract(
-                target_id=target_id,
-                kind=kind,
-                mujoco_entry=mujoco_entry,
-                isaac_entry=isaac_entry,
-                mujoco_state=mujoco_state,
-                isaac_state=isaac_state,
-                isaac_contract=isaac_contract,
-                usd_prim_path=usd_prim_path,
-            )
-            status = str(visual_contract.get("status") or "")
-            if status in {
-                "visual_state_static_ref_baked",
-                "visual_state_articulation_physics_preserved",
-            }:
-                return status
+        visual_contract = _object_visual_state_contract(
+            target_id=target_id,
+            kind=kind,
+            mujoco_entry=mujoco_entry,
+            isaac_entry=isaac_entry,
+            mujoco_state=mujoco_state,
+            isaac_state=isaac_state,
+            isaac_contract=isaac_contract,
+            usd_prim_path=usd_prim_path,
+        )
+        status = str(visual_contract.get("status") or "")
+        if status in {
+            "visual_state_static_ref_baked",
+            "visual_state_articulation_physics_preserved",
+        }:
+            return status
+        if category in OBJECT_VISUAL_STATE_CATEGORIES or status != "not_applicable":
             return "visual_state_unverified"
         return "not_applicable"
     mujoco_open = target_id in {
@@ -2135,7 +2558,7 @@ def _object_visual_state_contract(
         or isaac_entry.get("category")
         or isaac_entry.get("usd_category")
     )
-    if kind != "object" or category not in OBJECT_VISUAL_STATE_CATEGORIES:
+    if kind != "object":
         return {"status": "not_applicable"}
     registry_entry = dict(OBJECT_VISUAL_STATE_REGISTRY.get(category) or {})
     mujoco_articulation = _mujoco_ref_endpoint_articulation_contract(
@@ -2152,9 +2575,11 @@ def _object_visual_state_contract(
     ):
         status = "visual_state_static_ref_baked"
         reason = (
-            "MuJoCo renders this THOR box at MJCF ref/range endpoint flap joints, and "
-            "the prepared Isaac report USD freezes the already-baked visual xforms so "
-            "PhysX will not re-open the flaps during camera capture."
+            "MuJoCo renders this object at articulated visual joint endpoints, and the "
+            "prepared Isaac report USD freezes the already-baked visual xforms so PhysX "
+            "will not mutate those joints during camera capture. This is necessary "
+            "physics-control evidence, but selected object-centered RGB evidence is still "
+            "required before the object gate may claim visual parity."
         )
     elif (
         mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
@@ -2162,16 +2587,17 @@ def _object_visual_state_contract(
     ):
         status = "visual_state_articulation_physics_preserved"
         reason = (
-            "MuJoCo flap qpos is at MJCF ref/range endpoints, but the Isaac USD still "
-            "contains physics joints or rigid-body APIs under the same object. Isaac "
-            "camera capture can re-solve those joints, which explains an open-box "
-            "visual even when pose, material, and texture names match."
+            "MuJoCo articulated visual qpos is at MJCF ref/range endpoints, but the "
+            "Isaac USD still contains physics joints or rigid-body APIs under the same "
+            "object. Isaac camera capture can re-solve those joints, which can change "
+            "the rendered visual state even when pose, material, and texture names match."
         )
     elif mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation":
         status = "visual_state_ref_endpoint_unverified_in_isaac"
         reason = (
-            "MuJoCo flap qpos is at MJCF ref/range endpoints, but this report lacks "
-            "enough Isaac USD physics-freeze evidence to prove visual-state parity."
+            "MuJoCo articulated visual qpos is at MJCF ref/range endpoints, but this "
+            "report lacks enough Isaac USD physics-freeze evidence to control the "
+            "rendered visual state."
         )
     else:
         status = "visual_state_unverified"
@@ -2185,8 +2611,10 @@ def _object_visual_state_contract(
         "target_id": target_id,
         "category": category,
         "registry": registry_entry,
-        "protected_by": registry_entry.get("protected_by"),
+        "protected_by": registry_entry.get("protected_by")
+        or VISUAL_PHYSICS_PROTECTION["protected_by"],
         "evidence_artifact": registry_entry.get("evidence_artifact"),
+        "policy": registry_entry.get("policy") or VISUAL_PHYSICS_PROTECTION["policy"],
         "mujoco": mujoco_articulation,
         "isaac": isaac_articulation,
         "reason": reason,
@@ -4666,13 +5094,16 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             + counts_cell(item, "binding_status_counts")
             + counts_cell(item, "state_status_counts")
             + counts_cell(item, "rgb_view_evidence_status_counts")
+            + counts_cell(item, "target_coverage_status_counts")
+            + counts_cell(item, "target_visual_state_status_counts")
             + counts_cell(item, "render_contract_status_counts")
             + "</tr>"
         )
     category_table = (
         "<h3>Category Status Summary</h3><table><thead><tr>"
         "<th>Category</th><th>Items</th><th>Kinds</th><th>Object Gate</th>"
-        "<th>Classes</th><th>Binding</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
+        "<th>Classes</th><th>Binding</th><th>State</th><th>RGB Evidence</th>"
+        "<th>Target Coverage</th><th>Target Visual State</th><th>Render</th>"
         "</tr></thead><tbody>" + "".join(category_rows) + "</tbody></table>"
         if category_rows
         else "<p>No category/status summary rows were recorded.</p>"
@@ -4696,6 +5127,8 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('support_status') or ''))}</td>"
             f"<td>{html.escape(str(item.get('state_status') or ''))}</td>"
             f"<td>{html.escape(str(rgb_evidence.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(rgb_evidence.get('target_coverage_status') or ''))}</td>"
+            f"<td>{html.escape(str(rgb_evidence.get('target_visual_state_status') or ''))}</td>"
             f"<td>{html.escape(str(render_delta.get('status') or ''))}</td>"
             f"<td>{html.escape(str(visual_state.get('protected_by') or ''))}</td>"
             f"<td>{html.escape(str(visual_state.get('evidence_artifact') or ''))}</td>"
@@ -4707,7 +5140,8 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
     table = (
         "<table><thead><tr>"
         "<th>Kind</th><th>Target</th><th>Binding</th><th>Category</th>"
-        "<th>Pose</th><th>Support</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
+        "<th>Pose</th><th>Support</th><th>State</th><th>RGB Evidence</th>"
+        "<th>Target Coverage</th><th>Target Visual State</th><th>Render</th>"
         "<th>Protected By</th><th>Evidence</th>"
         "<th>MuJoCo Cat</th><th>Isaac Cat</th><th>Isaac Asset</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"

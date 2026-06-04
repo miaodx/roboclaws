@@ -137,6 +137,74 @@ def test_subprocess_backend_worker_payload_parses_cli_style_args() -> None:
     }
 
 
+def test_worker_frame_comparison_object_uses_object_target_pose(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker_module()
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "robot_included": True,
+                "qpos": [0.0, 0.0, 0.0],
+                "objects": {
+                    "box_1": {
+                        "object_id": "box_1",
+                        "body_name": "box_1",
+                        "category": "Box",
+                        "position": [1.0, 2.0, 0.8],
+                    }
+                },
+                "receptacles": {},
+                "robot_trajectory": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    sentinel_model = object()
+    sentinel_data = SimpleNamespace(qpos=[0.0, 0.0, 0.0])
+
+    monkeypatch.setattr(
+        worker, "_load_model_data_for_state", lambda state: (sentinel_model, sentinel_data)
+    )
+    monkeypatch.setattr(worker, "_apply_qpos", lambda data, qpos: None)
+    monkeypatch.setattr(worker.mujoco, "mj_forward", lambda model, data: None)
+    monkeypatch.setattr(worker, "_refresh_object_positions", lambda model, data, state: None)
+
+    def fake_robot_pose_near_object(state, obj, *, source_receptacle_id=None):
+        assert source_receptacle_id is None
+        assert obj["object_id"] == "box_1"
+        return {
+            "x": 0.5,
+            "y": 1.5,
+            "theta": 0.25,
+            "target_object_id": "box_1",
+            "target_position": obj["position"],
+            "pose_request": {
+                "target_object_id": "box_1",
+                "target_position": obj["position"],
+            },
+        }
+
+    monkeypatch.setattr(worker, "_robot_pose_near_object", fake_robot_pose_near_object)
+    monkeypatch.setattr(worker, "_set_robot_pose", lambda model, data, pose: None)
+
+    result = worker.run_state_command(
+        state_path,
+        "frame_comparison_object",
+        {"object_id": "box_1"},
+    )
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert result["ok"] is True
+    assert result["tool"] == "frame_comparison_object"
+    assert result["robot_pose"]["target_object_id"] == "box_1"
+    assert result["robot_pose"]["pose_source"] == "roboclaws_comparison_object_pose"
+    assert state["robot_pose"]["target_object_id"] == "box_1"
+    assert state["robot_trajectory"][-1]["target_object_id"] == "box_1"
+
+
 def test_worker_model_data_cache_reuses_loaded_scene(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

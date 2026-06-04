@@ -263,6 +263,9 @@ def main(argv: list[str] | None = None) -> None:
     navigate_receptacle = subparsers.add_parser("navigate_to_receptacle")
     navigate_receptacle.add_argument("--receptacle-id", required=True)
 
+    frame_comparison_object_parser = subparsers.add_parser("frame_comparison_object")
+    frame_comparison_object_parser.add_argument("--object-id", required=True)
+
     pick = subparsers.add_parser("pick")
     pick.add_argument("--object-id", required=True)
 
@@ -343,6 +346,9 @@ def main(argv: list[str] | None = None) -> None:
             _write_state(args.state_path, state)
         elif args.command == "navigate_to_receptacle":
             result = navigate_to_receptacle(state, args.receptacle_id)
+            _write_state(args.state_path, state)
+        elif args.command == "frame_comparison_object":
+            result = frame_comparison_object(state, args.object_id)
             _write_state(args.state_path, state)
         elif args.command == "pick":
             result = pick_object(state, args.object_id)
@@ -450,6 +456,9 @@ def run_state_command(
         _write_state(state_path, state)
     elif command == "navigate_to_receptacle":
         result = navigate_to_receptacle(state, str(kwargs["receptacle_id"]))
+        _write_state(state_path, state)
+    elif command == "frame_comparison_object":
+        result = frame_comparison_object(state, str(kwargs["object_id"]))
         _write_state(state_path, state)
     elif command == "pick":
         result = pick_object(state, str(kwargs["object_id"]))
@@ -1003,6 +1012,40 @@ def navigate_to_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
         robot_pose=robot_pose,
         robot_control_provenance=state.get("robot_control_provenance"),
         qpos_changed=qpos_changed,
+        backend=BACKEND,
+    )
+
+
+def frame_comparison_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
+    _count(state, "frame_comparison_object")
+    if object_id not in state["objects"]:
+        return _error("frame_comparison_object", "stale_reference", object_id=object_id)
+    if not state.get("robot_included"):
+        return _error("frame_comparison_object", "robot_not_included")
+    model, data = _load_model_data_for_state(state)
+    _apply_qpos(data, state["qpos"])
+    mujoco.mj_forward(model, data)
+    _refresh_object_positions(model, data, state)
+    robot_pose = _robot_pose_near_object(
+        state,
+        state["objects"][object_id],
+        source_receptacle_id=None,
+    )
+    robot_pose["pose_source"] = "roboclaws_comparison_object_pose"
+    _set_robot_pose(model, data, robot_pose)
+    mujoco.mj_forward(model, data)
+    state["qpos"] = [float(value) for value in data.qpos]
+    state["robot_pose"] = robot_pose
+    state.setdefault("robot_trajectory", []).append(robot_pose)
+    return _ok(
+        "frame_comparison_object",
+        primitive_provenance=API_SEMANTIC_PROVENANCE,
+        object_id=object_id,
+        state_mutation="robot_base_qpos",
+        robot_name=state.get("robot_name"),
+        robot_pose=robot_pose,
+        robot_control_provenance=state.get("robot_control_provenance"),
+        qpos_changed=True,
         backend=BACKEND,
     )
 

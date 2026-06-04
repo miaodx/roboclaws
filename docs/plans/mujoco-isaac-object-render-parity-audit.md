@@ -48,15 +48,18 @@ Deferred decisions:
 ## Problem
 
 The current MuJoCo/Isaac apple-to-apple evidence has closed the most visible
-camera and box regressions:
+camera-contract regressions and narrowed the box regression:
 
 - FPV is aligned to the real robot-mounted head camera in both backends.
 - Chase camera is auxiliary report evidence and now follows the same
   robot-relative rear/high contract.
 - The prepared Isaac USD default path uses the combined material/light parity
   preset.
-- The user-flagged box open/closed mismatch is fixed by freezing visual
-  physics after USD flattening and labeling.
+- The user-flagged box open/closed mismatch is no longer allowed to pass from
+  USD/PhysX freeze metadata alone. Prepared USD visual-physics freeze prevents
+  Isaac from re-solving the flaps, but the Object Gate now also requires
+  object-centered target-region RGB evidence and currently reports a remaining
+  `selected_object_visual_state_delta` for the audited box.
 
 The remaining risk is broader than that one box. We need an auditable answer to
 whether other large or small objects can be missing, rendered differently,
@@ -105,6 +108,10 @@ The box fix has two layers:
 - **Category-contract layer:** the apple-to-apple report currently records an
   explicit `visual_state_contract` for `box`, because that is the category with
   concrete user-visible evidence.
+- **Target-evidence layer:** selected visual-physics-sensitive objects must be
+  rendered from an object-centered robot pose/focus contract, and the focused
+  target region must not show a visual-state delta before the Object Gate can
+  call the object comparable.
 
 This is not a one-off per-object-id patch, but the explicit state contract is
 currently box-focused. Other categories should be added only after the corpus
@@ -165,7 +172,10 @@ Output:
 Acceptance:
 
 - Baseline artifacts are named in the first implementation PR or closeout note.
-- Existing FPV head-camera and box visual-state checks still pass.
+- Existing FPV head-camera checks still pass.
+- Existing box visual-state checks distinguish control evidence
+  (`visual_state_static_ref_baked`) from final visual parity; a protected box
+  with an object-centered target-region delta must fail the Object Gate.
 
 ### Phase 1: Object Parity Corpus Audit
 
@@ -206,7 +216,9 @@ Acceptance:
   comparable in both backends.
 - Missing or unrenderable objects are visible as audit failures, not silently
   folded into color residuals.
-- Current box evidence remains `visual_state_static_ref_baked`.
+- Current box evidence records both `visual_state_static_ref_baked` and
+  target-region visual-state evidence; it must not pass the Object Gate when
+  the focused object crop still differs.
 
 ### Phase 2: Category-Level Visual State Registry
 

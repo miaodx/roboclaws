@@ -725,22 +725,29 @@ matches the probe behavior: FPV/chase are `26.5103` / `71.5521`, with
 `fpv_lens_aligned` and `fpv_world_pose_aligned`, versus the earlier rotx25
 probe `26.5081` / `71.5982`.
 
-- 2026-06-03 box visual-state parity check closed the user-flagged
-  closed-in-MuJoCo/open-in-Isaac gap for
-  `box_7c54a26cba93093ca8aceb6fbac82646_1_0_2`. The default prepared
-  `val_1_combined_material_light_default_path` USD now freezes visual physics
-  after flattening and labeling: summary reports
+- 2026-06-04 box visual-state parity follow-up tightened the user-flagged
+  closed-in-MuJoCo/open-in-Isaac gate for
+  `box_7c54a26cba93093ca8aceb6fbac82646_1_0_2`. The prepared USD visual-physics
+  freeze remains necessary control evidence, not a standalone parity claim. The
+  default prepared `val_1_combined_material_light_default_path` USD freezes
+  visual physics after flattening and labeling: summary reports
   `visual_physics_status=frozen_static_visual_usd`,
   `visual_physics_joint_removed_count=43`,
   `visual_physics_api_schema_removed_count=1566`, and
-  `visual_physics_property_removed_count=1241`. The regenerated robot-camera
-  apple-to-apple report at
-  `output/molmo/robot-camera-apple2apple/0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html`
-  embeds MuJoCo/Isaac FPV and chase image pairs and records
-  `state_status=visual_state_static_ref_baked` for that box. MuJoCo evidence
-  has 4/4 flap joints at MJCF ref/range endpoints; Isaac evidence has zero
-  physics joints, physics API schema prims, or physics properties under the box,
-  so PhysX cannot re-open the flaps during report capture.
+  `visual_physics_property_removed_count=1241`, so PhysX cannot re-open the
+  flaps during report capture. The current robot-camera apple-to-apple report
+  at
+  `output/molmo/robot-camera-apple2apple/0604_visual_physics_object_pose_gate2_val1_seed6_2mess_4loc/report.html`
+  now prioritizes visual-physics-sensitive objects, frames selected objects from
+  their own MuJoCo pose rather than their support receptacle, and requires
+  object-centered target-region evidence before the Object Gate can call a
+  protected object comparable. That report records
+  `target_coverage_status=selected_object_centered_coverage` for the box, but
+  blocks parity with
+  `target_visual_state_status=selected_object_visual_state_delta`
+  (`mean_abs_rgb=47.4852` on the MuJoCo focused-object FPV crop). The current
+  state is therefore: PhysX/USD mutation is controlled, but the visible box
+  state still differs and remains an Object Gate failure.
 - The same 0603 report keeps the robot-view camera contract aligned:
   `fpv_lens_aligned`, `fpv_world_pose_aligned`, FPV pose delta max `0.005m`,
   and `fpv_residual_low` across all 4 FPV views with FPV mean-abs-RGB
