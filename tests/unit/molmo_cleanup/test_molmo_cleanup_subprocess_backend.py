@@ -1286,6 +1286,41 @@ def test_camera_color_profile_prefers_backend_view_rgb_gain() -> None:
     assert diagnostics["backend_rgb_gain"]["source"] == "unit-view-rgb"
 
 
+def test_camera_color_profile_applies_backend_tone_adjustment() -> None:
+    from roboclaws.household.color_management import apply_camera_color_profile
+
+    frame = np.full((2, 2, 3), 64, dtype=np.uint8)
+
+    adjusted, diagnostics = apply_camera_color_profile(
+        frame,
+        np=np,
+        profile={
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "highlight_knee": 225.0,
+            "highlight_compression": 0.5,
+            "gamma": 1.0,
+            "backend_tone_adjustment": {
+                "genesis-prepared-usd": {
+                    "shadow_lift": 16.0,
+                    "shadow_floor": 128.0,
+                    "gamma": 1.0,
+                    "saturation": 1.0,
+                    "gain": 1.25,
+                }
+            },
+            "backend_tone_adjustment_source": "unit-tone",
+        },
+        backend="genesis-prepared-usd",
+    )
+
+    assert int(adjusted[0, 0, 0]) == 90
+    assert diagnostics["backend_tone_adjustment"]["status"] == "applied"
+    assert diagnostics["backend_tone_adjustment"]["adjustment"]["shadow_lift"] == (
+        pytest.approx(16.0)
+    )
+    assert diagnostics["backend_tone_adjustment"]["source"] == "unit-tone"
+
+
 def test_worker_robot_pose_near_receptacle_uses_shared_pose_resolver() -> None:
     pytest.importorskip("mujoco")
     worker = _load_worker_module()

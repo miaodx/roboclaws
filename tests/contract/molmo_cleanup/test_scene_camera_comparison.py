@@ -12,6 +12,7 @@ from PIL import Image
 from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
+    scene_probe_camera_control_request,
 )
 from roboclaws.household.scene_camera_comparison import (
     GENESIS_LANE_ID,
@@ -1328,6 +1329,35 @@ def test_scene_camera_comparison_default_color_profile_contract() -> None:
         "isaaclab-prepared-usd"
     ] == pytest.approx(0.7161647108631373)
     assert "0530_0009" in DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain_source"]
+
+
+def test_scene_camera_color_profile_normalizes_backend_tone_adjustment() -> None:
+    request = scene_probe_camera_control_request(
+        [{"view_id": "room_01"}],
+        width=64,
+        height=48,
+        color_profile={
+            "backend_tone_adjustment": {
+                "genesis-prepared-usd": {
+                    "shadow_lift": 8,
+                    "shadow_floor": 135,
+                    "gamma": 1.1,
+                    "saturation": 1.0,
+                    "gain": 1.2,
+                }
+            },
+            "backend_tone_adjustment_source": "unit-tone",
+        },
+    )
+
+    assert request["color_profile"]["backend_tone_adjustment"]["genesis-prepared-usd"] == {
+        "shadow_lift": pytest.approx(8.0),
+        "shadow_floor": pytest.approx(135.0),
+        "gamma": pytest.approx(1.1),
+        "saturation": pytest.approx(1.0),
+        "gain": pytest.approx(1.2),
+    }
+    assert request["color_profile"]["backend_tone_adjustment_source"] == "unit-tone"
 
 
 def test_isaac_view_specs_record_support_pose_for_transform_but_not_camera_target(

@@ -272,6 +272,11 @@ DONE
   insufficient.
 - [x] P2: Keep candidate color/luminance calibration explicit; do not hide tone
   mismatch behind generic renderer-difference language.
+- [x] P1: Calibrate the Genesis renderer/color output itself so the real Genesis
+  lane images are visually good enough, not merely diagnosed in the report.
+- [x] P1: Rerun the real Genesis comparison after calibration and accept only if
+  the report artifact shows Genesis room/object views are materially reviewable
+  without the obvious dark/cold style gap called out by the human review.
 
 ### Parked Cross-Seam / Future Ideas
 
@@ -363,6 +368,31 @@ import mode.
   `python -m py_compile scripts/genesis_cleanup/genesis_backend_worker.py roboclaws/household/scene_camera_comparison.py`;
   `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_genesis_backend.py tests/contract/molmo_cleanup/test_scene_camera_comparison.py`
   with 45 tests, 2 skipped.
+- 2026-06-04: Reopened again after correcting the success gate. The report
+  slice made the gap inspectable, but it did not solve renderer-side
+  color/light parity. The active success condition is now: a fresh real Genesis
+  comparison artifact where Genesis visual output itself is good enough for
+  review.
+- 2026-06-04: Completed the renderer-side visual-fidelity fix. Genesis prepared
+  USD visual extraction now bakes USD texture `scale`/`bias` color into copied
+  texture maps for the OBJ/MTL package, keeping textured material colors from
+  washing out in Genesis. The Genesis lane also records explicit RGB, tone, and
+  room-view tone calibration in the shared camera color-management diagnostics.
+  Final accepted artifact:
+  `output/molmo/scene-camera-comparison/genesis-materialized-proof/0604_baked_texture_tone_roomfix/0604_1716/`.
+  Evidence: real Genesis 1.0.0 runtime from `.venv-genesis`; import mode
+  `prepared_usd_visual_asset_package`; extracted asset metadata records 153
+  source meshes, 98 materials, 53 textured materials, 50 textures, 28 baked
+  texture materials, 43,647 triangles, and 25,349 textured triangles.
+  Candidate visual diagnostics are `computed` with `degraded_candidates=[]`.
+  Genesis mean pixel delta is `34.348903446930514`, max per-view mean pixel
+  delta is `48.68020073804976`, and room/wall diagnostics report
+  `wall_proxy_luminance_reviewable` with both Genesis room-view wall pairs
+  classified `wall_proxy_luminance_matched`. Static report QA found
+  `Standalone Image Review` before `Contact Sheet`, 19 clickable image buttons,
+  and 6 Genesis standalone image buttons. Visual QA inspected `contact_sheet.png`
+  and accepted the remaining differences as renderer style rather than the
+  earlier dark/cold/washed-out failure.
 
 ## Risks
 

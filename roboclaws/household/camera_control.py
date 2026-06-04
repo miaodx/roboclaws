@@ -47,6 +47,8 @@ DEFAULT_SCENE_PROBE_COLOR_PROFILE = {
     "backend_view_luminance_gain": {},
     "backend_rgb_gain": {},
     "backend_view_rgb_gain": {},
+    "backend_tone_adjustment": {},
+    "backend_view_tone_adjustment": {},
 }
 
 
@@ -326,6 +328,28 @@ def _color_profile(value: Any) -> dict[str, Any]:
         profile["backend_view_rgb_gain"] = backend_view_rgb_gain
     if raw.get("backend_view_rgb_gain_source"):
         profile["backend_view_rgb_gain_source"] = str(raw["backend_view_rgb_gain_source"])
+    backend_tone_adjustment = _tone_adjustment_mapping(
+        raw.get(
+            "backend_tone_adjustment",
+            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_tone_adjustment"),
+        )
+    )
+    if backend_tone_adjustment:
+        profile["backend_tone_adjustment"] = backend_tone_adjustment
+    if raw.get("backend_tone_adjustment_source"):
+        profile["backend_tone_adjustment_source"] = str(raw["backend_tone_adjustment_source"])
+    backend_view_tone_adjustment = _nested_tone_adjustment_mapping(
+        raw.get(
+            "backend_view_tone_adjustment",
+            DEFAULT_SCENE_PROBE_COLOR_PROFILE.get("backend_view_tone_adjustment"),
+        )
+    )
+    if backend_view_tone_adjustment:
+        profile["backend_view_tone_adjustment"] = backend_view_tone_adjustment
+    if raw.get("backend_view_tone_adjustment_source"):
+        profile["backend_view_tone_adjustment_source"] = str(
+            raw["backend_view_tone_adjustment_source"]
+        )
     return profile
 
 
@@ -374,6 +398,28 @@ def _nested_rgb_gain_mapping(value: Any) -> dict[str, dict[str, list[float]]]:
     return parsed
 
 
+def _tone_adjustment_mapping(value: Any) -> dict[str, dict[str, float]]:
+    if not isinstance(value, dict):
+        return {}
+    parsed: dict[str, dict[str, float]] = {}
+    for key, raw_item in value.items():
+        item = _tone_adjustment(raw_item)
+        if item:
+            parsed[str(key)] = item
+    return parsed
+
+
+def _nested_tone_adjustment_mapping(value: Any) -> dict[str, dict[str, dict[str, float]]]:
+    if not isinstance(value, dict):
+        return {}
+    parsed: dict[str, dict[str, dict[str, float]]] = {}
+    for key, raw_item in value.items():
+        item = _tone_adjustment_mapping(raw_item)
+        if item:
+            parsed[str(key)] = item
+    return parsed
+
+
 def _rgb_gain(value: Any) -> list[float] | None:
     if not isinstance(value, (list, tuple)) or len(value) < 3:
         return None
@@ -381,6 +427,27 @@ def _rgb_gain(value: Any) -> list[float] | None:
         return [float(value[0]), float(value[1]), float(value[2])]
     except (TypeError, ValueError):
         return None
+
+
+def _tone_adjustment(value: Any) -> dict[str, float] | None:
+    if not isinstance(value, dict):
+        return None
+    parsed: dict[str, float] = {}
+    for key in ("shadow_lift", "shadow_floor", "gamma", "saturation", "gain"):
+        if key not in value:
+            continue
+        try:
+            parsed[key] = float(value[key])
+        except (TypeError, ValueError):
+            return None
+    if not parsed:
+        return None
+    parsed.setdefault("shadow_lift", 0.0)
+    parsed.setdefault("shadow_floor", 135.0)
+    parsed.setdefault("gamma", 1.0)
+    parsed.setdefault("saturation", 1.0)
+    parsed.setdefault("gain", 1.0)
+    return parsed
 
 
 def _vec3(value: Any, *, default: list[float]) -> list[float]:
