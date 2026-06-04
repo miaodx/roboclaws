@@ -45,6 +45,58 @@ def _contract(
     return RealWorldCleanupContract(session, **kwargs)
 
 
+class _PoseRecordingBackend:
+    def __init__(self, scenario: CleanupScenario) -> None:
+        self.scenario = scenario
+        self._locations = scenario.object_locations()
+        self.current_receptacle_id = ""
+        self.navigation_targets: list[str] = []
+        self.view_poses: list[dict[str, object]] = []
+        self.robot_view_camera_offsets: list[dict[str, float]] = []
+
+    def object_locations(self) -> dict[str, str]:
+        return dict(self._locations)
+
+    def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, object]:
+        self.current_receptacle_id = receptacle_id
+        self.navigation_targets.append(receptacle_id)
+        return {"ok": True, "tool": "navigate_to_receptacle", "status": "ok"}
+
+    def write_robot_views(
+        self,
+        output_dir: Path,
+        *,
+        label: str,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
+    ) -> dict[str, object]:
+        del focus_object_id, focus_receptacle_id
+        self.robot_view_camera_offsets.append(
+            {
+                "yaw_delta_deg": camera_yaw_offset_deg,
+                "pitch_delta_deg": camera_pitch_offset_deg,
+            }
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        current = self.current_receptacle_id or "unknown"
+        views = {}
+        for key in ("fpv", "chase", "map", "verify"):
+            path = output_dir / f"{label}.{current}.{key}.png"
+            path.write_bytes(b"fake png")
+            views[key] = str(path)
+        pose = {"receptacle_id": current}
+        self.view_poses.append(pose)
+        return {
+            "ok": True,
+            "robot_pose": pose,
+            "robot_trajectory": [pose],
+            "view_variant": "test-fpv-map-chase-verify",
+            "views": views,
+        }
+
+
 def test_realworld_contract_defaults_to_minimal_map_mode() -> None:
     contract = RealWorldCleanupContract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
 
@@ -1303,6 +1355,69 @@ def test_realworld_raw_fpv_camera_adjustment_is_bounded_and_resets() -> None:
         "yaw_delta_deg": 0.0,
         "pitch_delta_deg": 0.0,
     }
+
+
+def test_minimal_raw_fpv_waypoint_navigation_moves_backend_before_capture(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _PoseRecordingBackend(scenario)
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(scenario, backend=backend),
+        perception_mode=RAW_FPV_ONLY_MODE,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    waypoints = contract.metric_map()["inspection_waypoints"]
+    first_waypoint = waypoints[0]
+    second_waypoint = next(
+        waypoint
+        for waypoint in waypoints[1:]
+        if contract._private_waypoint_for_public_waypoint(waypoint).get("fixture_ids")  # noqa: SLF001
+        != contract._private_waypoint_for_public_waypoint(first_waypoint).get("fixture_ids")  # noqa: SLF001
+    )
+    first_fixture_id = contract._private_waypoint_for_public_waypoint(first_waypoint)[  # noqa: SLF001
+        "fixture_ids"
+    ][0]
+    second_fixture_id = contract._private_waypoint_for_public_waypoint(second_waypoint)[  # noqa: SLF001
+        "fixture_ids"
+    ][0]
+
+    first_nav = contract.navigate_to_waypoint(str(first_waypoint["waypoint_id"]))
+    first_observation = contract.observe()
+    first_raw = first_observation["raw_fpv_observation"]
+    first_views = backend.write_robot_views(
+        tmp_path,
+        label=str(first_raw["observation_id"]),
+    )["views"]
+    first_artifact = contract.attach_raw_fpv_observation_artifact(
+        first_raw["observation_id"],
+        views=first_views,
+    )
+
+    second_nav = contract.navigate_to_waypoint(str(second_waypoint["waypoint_id"]))
+    second_observation = contract.observe()
+    second_raw = second_observation["raw_fpv_observation"]
+    second_views = backend.write_robot_views(
+        tmp_path,
+        label=str(second_raw["observation_id"]),
+    )["views"]
+    second_artifact = contract.attach_raw_fpv_observation_artifact(
+        second_raw["observation_id"],
+        views=second_views,
+    )
+
+    assert first_nav["waypoint_id"] == first_waypoint["waypoint_id"]
+    assert second_nav["waypoint_id"] == second_waypoint["waypoint_id"]
+    assert backend.navigation_targets[:2] == [first_fixture_id, second_fixture_id]
+    assert backend.view_poses[0] == {"receptacle_id": first_fixture_id}
+    assert backend.view_poses[1] == {"receptacle_id": second_fixture_id}
+    assert first_artifact is not None
+    assert second_artifact is not None
+    assert first_artifact["image_artifacts"]["fpv"] != second_artifact["image_artifacts"]["fpv"]
+    assert first_views["verify"] != second_views["verify"]
+    assert first_views["map"] != second_views["map"]
+    assert first_fixture_id in first_artifact["image_artifacts"]["fpv"]
+    assert second_fixture_id in second_artifact["image_artifacts"]["fpv"]
 
 
 def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:

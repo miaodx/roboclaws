@@ -79,6 +79,7 @@ from roboclaws.household.semantic_cleanup_loop import (
 from roboclaws.household.semantic_timeline import (
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
+    camera_offsets_from_raw_fpv_observation,
     primitive_provenance_counts,
     record_robot_view_step,
     robot_view_camera_control_summary,
@@ -1235,6 +1236,7 @@ def _attach_raw_fpv_robot_view(
         index=view_index_ref[0],
         label_suffix=observation_id,
         action=f"observe {observation_id}",
+        **camera_offsets_from_raw_fpv_observation(raw),
     )
     step = robot_view_steps[-1]
     attached = contract.attach_raw_fpv_observation_artifact(

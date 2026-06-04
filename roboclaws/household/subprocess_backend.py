@@ -150,12 +150,18 @@ class MolmoSpacesSubprocessBackend:
         label: str,
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
     ) -> dict[str, Any]:
         args = ["--output-dir", str(output_dir), "--label", label]
         if focus_object_id is not None:
             args.extend(["--focus-object-id", focus_object_id])
         if focus_receptacle_id is not None:
             args.extend(["--focus-receptacle-id", focus_receptacle_id])
+        if camera_yaw_offset_deg:
+            args.extend(["--camera-yaw-offset-deg", str(camera_yaw_offset_deg)])
+        if camera_pitch_offset_deg:
+            args.extend(["--camera-pitch-offset-deg", str(camera_pitch_offset_deg)])
         return self._run_worker("robot_views", *args)
 
     def write_robot_views_with_resolution(
@@ -167,6 +173,8 @@ class MolmoSpacesSubprocessBackend:
         height: int,
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
     ) -> dict[str, Any]:
         args = [
             "--output-dir",
@@ -182,7 +190,18 @@ class MolmoSpacesSubprocessBackend:
             args.extend(["--focus-object-id", focus_object_id])
         if focus_receptacle_id is not None:
             args.extend(["--focus-receptacle-id", focus_receptacle_id])
+        if camera_yaw_offset_deg:
+            args.extend(["--camera-yaw-offset-deg", str(camera_yaw_offset_deg)])
+        if camera_pitch_offset_deg:
+            args.extend(["--camera-pitch-offset-deg", str(camera_pitch_offset_deg)])
         return self._run_worker("robot_views", *args)
+
+    def navigate_to_waypoint(self, *, waypoint: dict[str, Any]) -> dict[str, Any]:
+        return self._run_worker(
+            "navigate_to_waypoint",
+            "--waypoint-json",
+            json.dumps(waypoint, sort_keys=True),
+        )
 
     def write_camera_views_with_resolution(
         self,

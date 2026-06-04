@@ -247,6 +247,8 @@ def main(argv: list[str] | None = None) -> None:
     robot_views.add_argument("--label", required=True)
     robot_views.add_argument("--focus-object-id")
     robot_views.add_argument("--focus-receptacle-id")
+    robot_views.add_argument("--camera-yaw-offset-deg", type=float, default=0.0)
+    robot_views.add_argument("--camera-pitch-offset-deg", type=float, default=0.0)
     robot_views.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
     robot_views.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
 
@@ -259,6 +261,9 @@ def main(argv: list[str] | None = None) -> None:
 
     navigate_object = subparsers.add_parser("navigate_to_object")
     navigate_object.add_argument("--object-id", required=True)
+
+    navigate_waypoint = subparsers.add_parser("navigate_to_waypoint")
+    navigate_waypoint.add_argument("--waypoint-json", required=True)
 
     navigate_receptacle = subparsers.add_parser("navigate_to_receptacle")
     navigate_receptacle.add_argument("--receptacle-id", required=True)
@@ -324,6 +329,8 @@ def main(argv: list[str] | None = None) -> None:
                 args.label,
                 focus_object_id=args.focus_object_id,
                 focus_receptacle_id=args.focus_receptacle_id,
+                camera_yaw_offset_deg=args.camera_yaw_offset_deg,
+                camera_pitch_offset_deg=args.camera_pitch_offset_deg,
                 width=args.render_width,
                 height=args.render_height,
             )
@@ -343,6 +350,12 @@ def main(argv: list[str] | None = None) -> None:
             )
         elif args.command == "navigate_to_object":
             result = navigate_to_object(state, args.object_id)
+            _write_state(args.state_path, state)
+        elif args.command == "navigate_to_waypoint":
+            result = navigate_to_waypoint(
+                state,
+                _json_object_from_text(args.waypoint_json),
+            )
             _write_state(args.state_path, state)
         elif args.command == "navigate_to_receptacle":
             result = navigate_to_receptacle(state, args.receptacle_id)
@@ -435,6 +448,8 @@ def run_state_command(
             str(kwargs["label"]),
             focus_object_id=_optional_str(kwargs.get("focus_object_id")),
             focus_receptacle_id=_optional_str(kwargs.get("focus_receptacle_id")),
+            camera_yaw_offset_deg=_float_or_zero(kwargs.get("camera_yaw_offset_deg")),
+            camera_pitch_offset_deg=_float_or_zero(kwargs.get("camera_pitch_offset_deg")),
             width=_positive_int(kwargs.get("render_width"), DEFAULT_RENDER_WIDTH),
             height=_positive_int(kwargs.get("render_height"), DEFAULT_RENDER_HEIGHT),
         )
@@ -453,6 +468,12 @@ def run_state_command(
         )
     elif command == "navigate_to_object":
         result = navigate_to_object(state, str(kwargs["object_id"]))
+        _write_state(state_path, state)
+    elif command == "navigate_to_waypoint":
+        result = navigate_to_waypoint(
+            state,
+            _json_object_from_text(str(kwargs["waypoint_json"])),
+        )
         _write_state(state_path, state)
     elif command == "navigate_to_receptacle":
         result = navigate_to_receptacle(state, str(kwargs["receptacle_id"]))
@@ -687,6 +708,8 @@ def write_robot_views(
     *,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
+    camera_yaw_offset_deg: float = 0.0,
+    camera_pitch_offset_deg: float = 0.0,
     width: int = DEFAULT_RENDER_WIDTH,
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> dict[str, Any]:
@@ -700,6 +723,12 @@ def write_robot_views(
         return _error("robot_views", "stale_reference", receptacle_id=focus_receptacle_id)
     model, data = _load_model_data_for_state(state)
     _apply_qpos(data, state["qpos"])
+    camera_adjustment = _apply_robot_view_camera_offset(
+        model,
+        data,
+        yaw_offset_deg=camera_yaw_offset_deg,
+        pitch_offset_deg=camera_pitch_offset_deg,
+    )
     mujoco.mj_forward(model, data)
     _refresh_object_positions(model, data, state)
 
@@ -719,6 +748,7 @@ def write_robot_views(
         "schema": "mujoco_robot_view_camera_diagnostics_v1",
         "backend": BACKEND,
         "render_resolution": {"width": width, "height": height},
+        "camera_adjustment": camera_adjustment,
         "views": {
             "fpv": _fixed_camera_diagnostics(model, data, "robot_0/head_camera"),
             "chase": _fixed_camera_diagnostics(model, data, "robot_0/camera_follower"),
@@ -787,6 +817,8 @@ def write_robot_views(
         color_profile=color_profile,
         color_management=color_management,
     )
+    camera_control_contract["camera_adjustment"] = camera_adjustment
+    camera_control_contract["agent_facing_fpv"]["camera_adjustment"] = camera_adjustment
     Image.fromarray(fpv).save(fpv_path)
     Image.fromarray(chase).save(chase_path)
     verify_image = Image.fromarray(verify)
@@ -804,6 +836,7 @@ def write_robot_views(
         view_provenance=state.get("robot_view_provenance", {}),
         camera_control_contract=camera_control_contract,
         camera_diagnostics=camera_diagnostics,
+        camera_adjustment=camera_adjustment,
         color_profile=color_profile,
         color_management=color_management,
         focus=focus,
@@ -822,6 +855,42 @@ def write_robot_views(
         },
         render_resolution={"width": width, "height": height},
     )
+
+
+def _robot_view_camera_adjustment(
+    *,
+    camera_yaw_offset_deg: float = 0.0,
+    camera_pitch_offset_deg: float = 0.0,
+    applied_joints: list[str] | None = None,
+    unavailable_reason: str | None = None,
+) -> dict[str, Any]:
+    yaw = round(float(camera_yaw_offset_deg), 3)
+    pitch = round(float(camera_pitch_offset_deg), 3)
+    requested = bool(yaw or pitch)
+    applied_joints = list(applied_joints or [])
+    applied = requested and bool(applied_joints) and unavailable_reason is None
+    if not requested:
+        apply_status = "not_requested"
+    elif applied:
+        apply_status = "robot_head_joints_render_only"
+    elif unavailable_reason:
+        apply_status = "unavailable"
+    else:
+        apply_status = "no_matching_mujoco_head_joints"
+    return {
+        "schema": "robot_view_camera_adjustment_v1",
+        "yaw_delta_deg": yaw,
+        "pitch_delta_deg": pitch,
+        "requested": requested,
+        "applied": applied,
+        "apply_status": apply_status,
+        "applied_joints": applied_joints,
+        "unavailable_reason": unavailable_reason,
+        "evidence_note": (
+            "Camera offset requests are applied to robot head joints for this render "
+            "without persisting the adjusted qpos to worker state."
+        ),
+    }
 
 
 def write_camera_views(
@@ -1008,6 +1077,47 @@ def navigate_to_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
         previous_receptacle_id=previous,
         location_id=source_receptacle_id,
         state_mutation=state_mutation,
+        robot_name=state.get("robot_name"),
+        robot_pose=robot_pose,
+        robot_control_provenance=state.get("robot_control_provenance"),
+        qpos_changed=qpos_changed,
+        backend=BACKEND,
+    )
+
+
+def navigate_to_waypoint(state: dict[str, Any], waypoint: dict[str, Any]) -> dict[str, Any]:
+    _count(state, "navigate_to_waypoint")
+    waypoint_id = str(waypoint.get("waypoint_id") or "")
+    room_id = str(waypoint.get("room_id") or "")
+    previous = state.get("current_waypoint_id")
+    state["current_waypoint_id"] = waypoint_id
+    robot_pose = None
+    held_object_pose = None
+    qpos_changed = False
+    state_mutation = "agent_pose_semantic"
+    if state.get("robot_included"):
+        model, data = _load_model_data_for_state(state)
+        _apply_qpos(data, state["qpos"])
+        mujoco.mj_forward(model, data)
+        target = _waypoint_target_position(state, waypoint)
+        robot_pose = _robot_pose_for_waypoint(state, waypoint, target)
+        _set_robot_pose(model, data, robot_pose)
+        state["robot_pose"] = robot_pose
+        state.setdefault("robot_trajectory", []).append(robot_pose)
+        held_object_pose = _sync_held_object_to_robot_pose(model, data, state)
+        mujoco.mj_forward(model, data)
+        _refresh_object_positions(model, data, state)
+        state["qpos"] = [float(value) for value in data.qpos]
+        qpos_changed = True
+        state_mutation = _robot_pose_state_mutation(held_object_pose is not None)
+    return _ok(
+        "navigate_to_waypoint",
+        primitive_provenance=API_SEMANTIC_PROVENANCE,
+        waypoint_id=waypoint_id,
+        room_id=room_id,
+        previous_waypoint_id=previous,
+        state_mutation=state_mutation,
+        held_object_pose=held_object_pose,
         robot_name=state.get("robot_name"),
         robot_pose=robot_pose,
         robot_control_provenance=state.get("robot_control_provenance"),
@@ -2396,6 +2506,59 @@ def _set_robot_pose(
         _set_joint_qpos(model, data, "robot_0/head_1", float(pose.get("head_pitch", 0.0)))
 
 
+def _apply_robot_view_camera_offset(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    *,
+    yaw_offset_deg: float = 0.0,
+    pitch_offset_deg: float = 0.0,
+) -> dict[str, Any]:
+    applied_joints: list[str] = []
+    unavailable_reason = None
+    if yaw_offset_deg:
+        try:
+            if _add_joint_qpos_if_present(
+                model,
+                data,
+                "robot_0/head_0",
+                math.radians(float(yaw_offset_deg)),
+            ):
+                applied_joints.append("robot_0/head_0")
+        except TypeError as exc:
+            unavailable_reason = f"{type(exc).__name__}: {exc}"
+    if pitch_offset_deg:
+        try:
+            if _add_joint_qpos_if_present(
+                model,
+                data,
+                "robot_0/head_1",
+                math.radians(float(pitch_offset_deg)),
+            ):
+                applied_joints.append("robot_0/head_1")
+        except TypeError as exc:
+            unavailable_reason = f"{type(exc).__name__}: {exc}"
+    return _robot_view_camera_adjustment(
+        camera_yaw_offset_deg=yaw_offset_deg,
+        camera_pitch_offset_deg=pitch_offset_deg,
+        applied_joints=applied_joints,
+        unavailable_reason=unavailable_reason,
+    )
+
+
+def _add_joint_qpos_if_present(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    joint_name: str,
+    delta: float,
+) -> bool:
+    joint_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
+    if joint_id < 0:
+        return False
+    qposadr = int(model.jnt_qposadr[joint_id])
+    data.qpos[qposadr] = float(data.qpos[qposadr]) + float(delta)
+    return True
+
+
 def _set_joint_qpos(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -2569,6 +2732,90 @@ def _robot_pose_near_object(
         }
     )
     return pose
+
+
+def _robot_pose_for_waypoint(
+    state: dict[str, Any],
+    waypoint: dict[str, Any],
+    target: list[float],
+) -> dict[str, float]:
+    room_id = str(waypoint.get("room_id") or "")
+    room_outline = _room_outline_for_id(state, room_id)
+    scene_focus = _room_outline_center_xy(room_outline) or _scene_center(
+        list(state["receptacles"].values())
+    )
+    theta = math.atan2(float(scene_focus[1]) - target[1], float(scene_focus[0]) - target[0])
+    head_target = [float(scene_focus[0]), float(scene_focus[1]), 1.2]
+    robot_room_id = _room_for_point(state, target) or room_id
+    return {
+        "x": round(target[0], 6),
+        "y": round(target[1], 6),
+        "z": 0.0,
+        "theta": round(float(theta), 6),
+        "theta_source": "waypoint_room_outline_focus_yaw",
+        "head_yaw": 0.0,
+        "head_yaw_source": "base_yaw_handles_waypoint_focus",
+        "head_pitch": _robot_head_pitch_for_target(head_target, [target[0], target[1]]),
+        "head_pitch_source": "room_center_framing_head_pitch",
+        "target_waypoint_id": str(waypoint.get("waypoint_id") or ""),
+        "target_room_id": room_id,
+        "robot_room_id": robot_room_id,
+        "same_room_as_target": robot_room_id == room_id,
+        "room_plausibility": "same_room" if robot_room_id == room_id else "room_mismatch",
+        "pose_source": "waypoint_room_outline_projection",
+        "target_position": [round(target[0], 6), round(target[1], 6), round(target[2], 6)],
+        "pose_request": {
+            "schema": "cleanup_waypoint_pose_request_v1",
+            "waypoint_id": str(waypoint.get("waypoint_id") or ""),
+            "room_id": room_id,
+            "waypoint_xy": [float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0))],
+            "source_room_bounds": waypoint.get("source_room_bounds") or {},
+            "room_outline": room_outline or {},
+            "resolver": "roboclaws.cleanup_robot_pose.waypoint_room_projection_v1",
+        },
+    }
+
+
+def _waypoint_target_position(
+    state: dict[str, Any],
+    waypoint: dict[str, Any],
+) -> list[float]:
+    room_id = str(waypoint.get("room_id") or "")
+    outline = _room_outline_for_id(state, room_id)
+    if outline is None:
+        return [float(waypoint.get("x", 0.0)), float(waypoint.get("y", 0.0)), 0.0]
+    center = outline.get("center") or [0.0, 0.0]
+    half_extents = outline.get("half_extents") or [1.0, 1.0]
+    bounds = waypoint.get("source_room_bounds") or {}
+    source_min_x = _float_or_zero(bounds.get("min_x"))
+    source_max_x = _float_or_zero(bounds.get("max_x"))
+    source_min_y = _float_or_zero(bounds.get("min_y"))
+    source_max_y = _float_or_zero(bounds.get("max_y"))
+    source_width = source_max_x - source_min_x
+    source_height = source_max_y - source_min_y
+    if source_width <= 0.001 or source_height <= 0.001:
+        nx = 0.5
+        ny = 0.5
+    else:
+        nx = (float(waypoint.get("x", 0.0)) - source_min_x) / source_width
+        ny = (float(waypoint.get("y", 0.0)) - source_min_y) / source_height
+    nx = min(max(nx, 0.08), 0.92)
+    ny = min(max(ny, 0.08), 0.92)
+    margin = 0.35
+    half_x = max(float(half_extents[0]) - margin, 0.1)
+    half_y = max(float(half_extents[1]) - margin, 0.1)
+    x = float(center[0]) + (nx - 0.5) * 2.0 * half_x
+    y = float(center[1]) + (ny - 0.5) * 2.0 * half_y
+    return [round(x, 6), round(y, 6), 0.0]
+
+
+def _room_outline_center_xy(outline: dict[str, Any] | None) -> tuple[float, float] | None:
+    if outline is None:
+        return None
+    center = outline.get("center")
+    if not isinstance(center, list | tuple) or len(center) < 2:
+        return None
+    return (float(center[0]), float(center[1]))
 
 
 def _robot_pose_near_position(
@@ -3531,7 +3778,7 @@ def _room_outline_for_id(
     if room_id is None:
         return None
     for outline in state.get("room_outlines", []):
-        if outline.get("room_id") == room_id:
+        if str(outline.get("room_id") or "") == str(room_id):
             return outline
     return None
 
@@ -3698,6 +3945,20 @@ def _positive_int(value: Any, default: int) -> int:
     except (TypeError, ValueError):
         return default
     return parsed if parsed > 0 else default
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _json_object_from_text(text: str) -> dict[str, Any]:
+    payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise ValueError("expected JSON object")
+    return payload
 
 
 def _render_dimensions(width: int, height: int) -> tuple[int, int]:

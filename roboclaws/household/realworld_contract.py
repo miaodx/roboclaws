@@ -707,16 +707,21 @@ class RealWorldCleanupContract:
             )
         self._current_waypoint_id = waypoint_id
         self._reset_camera_adjustment()
-        fixture_id = _first_fixture_for_waypoint(waypoint)
-        navigation = None
-        if fixture_id is not None:
-            navigation = self.contract.navigate_to_receptacle(fixture_id)
+        navigation_waypoint = self._private_waypoint_for_public_waypoint(waypoint)
+        navigation_waypoint = self._backend_navigation_waypoint(navigation_waypoint)
+        navigation = self.contract.navigate_to_waypoint(navigation_waypoint)
         return self._ok(
             "navigate_to_waypoint",
             navigation_backend=SIM_COSTMAP_PLANNER,
             primitive_provenance=API_SEMANTIC_PROVENANCE,
             route_validation=route.as_dict(),
             goal_pose={"frame_id": "map", **self._waypoint_pose(waypoint)},
+            backend_goal_pose={
+                "frame_id": "map",
+                **self._waypoint_pose(navigation_waypoint),
+                "room_id": str(navigation_waypoint.get("room_id") or waypoint["room_id"]),
+                "waypoint_id": str(navigation_waypoint.get("waypoint_id") or waypoint_id),
+            },
             pose_source="inspection_waypoint",
             staleness_s=0.0,
             pose_confidence=1.0,
@@ -725,6 +730,7 @@ class RealWorldCleanupContract:
             waypoint_id=waypoint_id,
             room_id=waypoint["room_id"],
             coverage_estimate=waypoint["coverage_estimate"],
+            backend_pose_mutation=navigation,
             navigation_status=(navigation or {}).get("status", "ok"),
         )
 
@@ -3831,6 +3837,21 @@ class RealWorldCleanupContract:
             or waypoint
         )
 
+    def _backend_navigation_waypoint(self, waypoint: dict[str, Any]) -> dict[str, Any]:
+        navigation_waypoint = dict(waypoint)
+        room = next(
+            (
+                item
+                for item in self._rooms
+                if str(item.get("room_id") or "") == str(waypoint.get("room_id") or "")
+            ),
+            None,
+        )
+        bounds = _room_polygon_bounds(room) if room is not None else None
+        if bounds is not None:
+            navigation_waypoint["source_room_bounds"] = bounds
+        return navigation_waypoint
+
     def _handle_for_object(self, object_id: str) -> str:
         existing = self._observed_handles_by_object_id.get(object_id)
         if existing is not None:
@@ -4721,6 +4742,27 @@ def _room_outline_metadata(outline: dict[str, Any] | None) -> dict[str, Any]:
             "provenance": str(outline.get("provenance") or "scene_room_outline"),
             "usd_prim_path": str(outline.get("usd_prim_path") or ""),
         }
+    }
+
+
+def _room_polygon_bounds(room: dict[str, Any] | None) -> dict[str, float] | None:
+    if room is None:
+        return None
+    polygon = room.get("polygon") or []
+    xs = [float(point.get("x", 0.0)) for point in polygon if isinstance(point, dict)]
+    ys = [float(point.get("y", 0.0)) for point in polygon if isinstance(point, dict)]
+    if not xs or not ys:
+        center = room.get("map_center") or {}
+        if "x" not in center or "y" not in center:
+            return None
+        x = float(center.get("x", 0.0))
+        y = float(center.get("y", 0.0))
+        return {"min_x": x - 1.0, "max_x": x + 1.0, "min_y": y - 1.0, "max_y": y + 1.0}
+    return {
+        "min_x": round(min(xs), 6),
+        "max_x": round(max(xs), 6),
+        "min_y": round(min(ys), 6),
+        "max_y": round(max(ys), 6),
     }
 
 

@@ -53,6 +53,7 @@ from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
+    camera_offsets_from_raw_fpv_observation,
     cleanup_plan_from_semantic_substeps,
     primitive_provenance_counts,
     record_robot_view_step,
@@ -568,6 +569,7 @@ class RealWorldMolmoCleanupMCPServer:
         step = self._record_robot_view(
             f"observe {observation_id}",
             label_suffix=observation_id,
+            **camera_offsets_from_raw_fpv_observation(raw),
         )
         if step is None:
             return response
@@ -714,6 +716,8 @@ class RealWorldMolmoCleanupMCPServer:
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
         semantic_phase: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
     ) -> dict[str, Any] | None:
         if not self.record_robot_views:
             return None
@@ -733,6 +737,8 @@ class RealWorldMolmoCleanupMCPServer:
                 focus_object_id=focus_object_id,
                 focus_receptacle_id=self._internal_fixture_id(focus_receptacle_id),
                 semantic_phase=semantic_phase,
+                camera_yaw_offset_deg=camera_yaw_offset_deg,
+                camera_pitch_offset_deg=camera_pitch_offset_deg,
             )
         except Exception as exc:
             self.write_runtime_event(

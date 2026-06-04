@@ -384,6 +384,10 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
 
 
 class _FakeVisualBackend(ApiSemanticCleanupBackend):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.robot_view_camera_offsets: list[dict[str, float]] = []
+
     def write_robot_views(
         self,
         output_dir: Path,
@@ -391,7 +395,15 @@ class _FakeVisualBackend(ApiSemanticCleanupBackend):
         label: str,
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
     ) -> dict[str, Any]:
+        self.robot_view_camera_offsets.append(
+            {
+                "yaw_delta_deg": camera_yaw_offset_deg,
+                "pitch_delta_deg": camera_pitch_offset_deg,
+            }
+        )
         output_dir.mkdir(parents=True, exist_ok=True)
         views = {}
         for key in ("fpv", "chase", "map", "verify"):
@@ -499,6 +511,7 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
             "navigate_to_waypoint",
             waypoint_id=metric_map["inspection_waypoints"][0]["waypoint_id"],
         )
+        server.call_tool("adjust_camera", yaw_delta_deg=15, pitch_delta_deg=-5)
         observation_blocks = server._mcp_observe_response()
     finally:
         server.close()
@@ -516,6 +529,11 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert raw["image_artifacts"]["fpv"].endswith(".png")
     assert raw["camera_control_contract"]["schema"] == "robot_view_camera_control_contract_v1"
     assert raw["camera_control_contract"]["same_pose_api"] is False
+    assert raw["camera_offset"] == {"yaw_delta_deg": 15.0, "pitch_delta_deg": -5.0}
+    assert backend.robot_view_camera_offsets[-1] == {
+        "yaw_delta_deg": 15.0,
+        "pitch_delta_deg": -5.0,
+    }
     assert (tmp_path / raw["image_artifacts"]["fpv"]).is_file()
     image_block = observation_blocks[1]
     assert hasattr(image_block, "data")
