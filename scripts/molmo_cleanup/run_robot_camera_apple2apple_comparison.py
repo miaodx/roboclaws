@@ -43,6 +43,7 @@ ROBOT_VIEW_KEYS = ("fpv", "chase")
 OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
 PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD = 35.0
 PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD = 0.5
+PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD = 40.0
 OBJECT_VISUAL_STATE_REGISTRY = {
     "box": {
         "schema": "robot_camera_object_visual_state_registry_entry_v1",
@@ -2235,15 +2236,27 @@ def _selected_target_visual_state_evidence(
         and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
     ):
         status = "selected_object_visual_state_aligned"
+        alignment_mode = "strict_raw_rgb"
+    elif (
+        mean_abs <= PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD
+        and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
+    ):
+        status = "selected_object_visual_state_aligned"
+        alignment_mode = "moderate_render_residual"
     else:
         status = "selected_object_visual_state_delta"
+        alignment_mode = "raw_rgb_delta"
     return {
         "target_visual_state_status": status,
+        "target_visual_state_alignment_mode": alignment_mode,
         "target_visual_state_bbox": bbox,
         "target_visual_state_delta": crop_delta,
         "target_visual_state_thresholds": {
             "mean_abs_rgb_max": PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD,
             "diff_gt_40_fraction_max": PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD,
+            "render_residual_mean_abs_rgb_max": (
+                PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD
+            ),
         },
     }
 

@@ -2308,6 +2308,118 @@ def test_robot_camera_rgb_evidence_flags_target_region_visual_delta(
     assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 80.0
 
 
+def test_robot_camera_rgb_evidence_allows_moderate_render_residual_for_visual_state(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_rgb_region_render_residual",
+    )
+    image_specs = {
+        "mujoco/fpv.png": (100, 100, 100),
+        "isaac/fpv.png": (62, 62, 62),
+        "mujoco/chase.png": (80, 90, 100),
+        "isaac/chase.png": (80, 90, 100),
+    }
+    for image_relpath, color in image_specs.items():
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(image_path)
+
+    evidence = run_camera._object_rgb_view_evidence(
+        kind="object",
+        target_id="box_1",
+        locations=[
+            {
+                "target": {"kind": "object", "target_id": "box_1"},
+                "robot_pose": {
+                    "target_object_id": "box_1",
+                    "target_position": [1.0, 2.0, 0.8],
+                    "pose_request": {
+                        "target_object_id": "box_1",
+                        "target_position": [1.0, 2.0, 0.8],
+                    },
+                },
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "contracts": {
+                    "mujoco": {
+                        "focus": {
+                            "object_id": "box_1",
+                            "focus_mode": "object_closeup",
+                            "fpv_visibility": {"boxes": [{"bbox": [1, 1, 10, 7]}]},
+                        }
+                    },
+                    "isaac": {"focus": {"object_id": "box_1", "focus_mode": "object_closeup"}},
+                },
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert evidence["target_visual_state_status"] == "selected_object_visual_state_aligned"
+    assert evidence["target_visual_state_alignment_mode"] == "moderate_render_residual"
+    assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 38.0
+
+
+def test_robot_camera_rgb_evidence_rejects_open_box_scale_region_delta(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_rgb_region_open_box_delta",
+    )
+    image_specs = {
+        "mujoco/fpv.png": (100, 100, 100),
+        "isaac/fpv.png": (52, 52, 52),
+        "mujoco/chase.png": (80, 90, 100),
+        "isaac/chase.png": (80, 90, 100),
+    }
+    for image_relpath, color in image_specs.items():
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(image_path)
+
+    evidence = run_camera._object_rgb_view_evidence(
+        kind="object",
+        target_id="box_1",
+        locations=[
+            {
+                "target": {"kind": "object", "target_id": "box_1"},
+                "robot_pose": {
+                    "target_object_id": "box_1",
+                    "target_position": [1.0, 2.0, 0.8],
+                    "pose_request": {
+                        "target_object_id": "box_1",
+                        "target_position": [1.0, 2.0, 0.8],
+                    },
+                },
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "contracts": {
+                    "mujoco": {
+                        "focus": {
+                            "object_id": "box_1",
+                            "focus_mode": "object_closeup",
+                            "fpv_visibility": {"boxes": [{"bbox": [1, 1, 10, 7]}]},
+                        }
+                    },
+                    "isaac": {"focus": {"object_id": "box_1", "focus_mode": "object_closeup"}},
+                },
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert evidence["target_visual_state_status"] == "selected_object_visual_state_delta"
+    assert evidence["target_visual_state_alignment_mode"] == "raw_rgb_delta"
+    assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 48.0
+
+
 def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
