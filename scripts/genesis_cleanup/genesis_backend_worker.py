@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import shutil
@@ -29,9 +30,13 @@ from roboclaws.household.genesis_backend import GENESIS_SCENE_CAMERA_VIEW_VARIAN
 
 GENESIS_LANE_ID = "genesis-prepared-usd"
 GENESIS_RENDER_LIGHTING_PROFILE = {
-    "profile_id": "genesis_prepared_usd_materialized_room_light_v1",
-    "source": "Genesis rasterizer room-light calibration for prepared USD visual assets.",
-    "ambient_light": [0.32, 0.32, 0.32],
+    "profile_id": "scene_probe_mujoco_headlight_fill_v1",
+    "source": (
+        "MuJoCo-headlight-inspired Genesis environment fill for prepared USD visual assets."
+    ),
+    "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
+    "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
+    "ambient_light": [0.37, 0.37, 0.37],
     "background_color": [0.04, 0.08, 0.12],
     "shadow": False,
     "lights": [
@@ -40,13 +45,51 @@ GENESIS_RENDER_LIGHTING_PROFILE = {
             "dir": [-1.0, -1.0, -1.0],
             "color": [1.0, 1.0, 1.0],
             "intensity": 3.0,
-        }
+        },
+        {
+            "type": "directional",
+            "dir": [1.0, 1.0, -0.6],
+            "color": [1.0, 0.96, 0.9],
+            "intensity": 0.8,
+        },
+        {
+            "type": "directional",
+            "dir": [0.0, -1.0, -0.35],
+            "color": [0.9, 0.95, 1.0],
+            "intensity": 0.45,
+        },
     ],
 }
 GENESIS_COLOR_PROFILE_LUMINANCE_GAIN = 0.94
+GENESIS_COLOR_PROFILE_RGB_GAIN = [1.04, 1.0, 0.97]
+GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT = {
+    "shadow_lift": 8.0,
+    "shadow_floor": 135.0,
+    "gamma": 1.1,
+    "saturation": 1.0,
+    "gain": 1.0,
+}
+GENESIS_COLOR_PROFILE_VIEW_TONE_ADJUSTMENT = {
+    "room_01_room_2": {
+        "shadow_lift": 8.0,
+        "shadow_floor": 135.0,
+        "gamma": 1.1,
+        "saturation": 1.0,
+        "gain": 1.2,
+    },
+}
 GENESIS_COLOR_PROFILE_LUMINANCE_GAIN_SOURCE = (
     "Genesis materialized USD visual probe 2026-06-04; preserves existing "
     "candidate visual thresholds while matching MuJoCo review luminance."
+)
+GENESIS_COLOR_PROFILE_RGB_GAIN_SOURCE = (
+    "Genesis materialized USD visual probe 2026-06-04; warms Genesis RGB response "
+    "after USD diffuse-color texture baking."
+)
+GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE = (
+    "Genesis baked-texture visual probe 2026-06-04; applies renderer-local shadow "
+    "lift and gamma correction so room views remain reviewable after material "
+    "albedo baking."
 )
 
 
@@ -177,15 +220,28 @@ def _write_real_camera_views(
         "runtime_mode": "real",
         "genesis_import_mode": "native_usd_stage",
     }
+    genesis_lighting_profile = _genesis_lighting_profile(request.get("lighting_profile") or {})
 
     try:
         if not getattr(gs, "_initialized", False):
             gs.init(backend=gs.cpu)
-        scene = _genesis_scene(gs, width=width, height=height, vertical_fov=vertical_fov)
+        scene = _genesis_scene(
+            gs,
+            width=width,
+            height=height,
+            vertical_fov=vertical_fov,
+            lighting_profile=genesis_lighting_profile,
+        )
         try:
             scene.add_stage(morph=gs.morphs.USD(file=str(scene_usd)))
         except Exception as exc:
-            scene = _genesis_scene(gs, width=width, height=height, vertical_fov=vertical_fov)
+            scene = _genesis_scene(
+                gs,
+                width=width,
+                height=height,
+                vertical_fov=vertical_fov,
+                lighting_profile=genesis_lighting_profile,
+            )
             scene_load = _add_prepared_usd_visual_fallback(
                 scene=scene,
                 gs=gs,
@@ -257,9 +313,10 @@ def _write_real_camera_views(
         "calibration_status": request.get("calibration_status"),
         "lighting_profile": request.get("lighting_profile") or {},
         "lighting_diagnostics": {
-            "status": "genesis_room_light_profile_applied",
+            "status": "genesis_environment_fill_profile_applied",
             "source": "prepared_usd_plus_genesis_rasterizer",
-            "genesis_lighting_profile": GENESIS_RENDER_LIGHTING_PROFILE,
+            "requested_lighting_profile": request.get("lighting_profile") or {},
+            "genesis_lighting_profile": genesis_lighting_profile,
         },
         "color_profile": color_profile,
         "color_management": {
@@ -274,7 +331,14 @@ def _write_real_camera_views(
     }
 
 
-def _genesis_scene(gs: Any, *, width: int, height: int, vertical_fov: float) -> Any:
+def _genesis_scene(
+    gs: Any,
+    *,
+    width: int,
+    height: int,
+    vertical_fov: float,
+    lighting_profile: dict[str, Any] | None = None,
+) -> Any:
     return gs.Scene(
         viewer_options=gs.options.ViewerOptions(
             res=(width, height),
@@ -282,18 +346,23 @@ def _genesis_scene(gs: Any, *, width: int, height: int, vertical_fov: float) -> 
             camera_lookat=(0.0, 0.0, 1.0),
             camera_fov=vertical_fov,
         ),
-        vis_options=_genesis_vis_options(gs),
+        vis_options=_genesis_vis_options(gs, lighting_profile=lighting_profile),
         renderer=gs.renderers.Rasterizer(),
         show_viewer=False,
         show_FPS=False,
     )
 
 
-def _genesis_vis_options(gs: Any) -> Any:
+def _genesis_vis_options(gs: Any, *, lighting_profile: dict[str, Any] | None = None) -> Any:
+    profile = (
+        lighting_profile
+        if isinstance(lighting_profile, dict)
+        else GENESIS_RENDER_LIGHTING_PROFILE
+    )
     return gs.options.VisOptions(
-        ambient_light=tuple(GENESIS_RENDER_LIGHTING_PROFILE["ambient_light"]),
-        background_color=tuple(GENESIS_RENDER_LIGHTING_PROFILE["background_color"]),
-        shadow=bool(GENESIS_RENDER_LIGHTING_PROFILE["shadow"]),
+        ambient_light=tuple(profile["ambient_light"]),
+        background_color=tuple(profile["background_color"]),
+        shadow=bool(profile["shadow"]),
         lights=[
             {
                 "type": light["type"],
@@ -301,9 +370,61 @@ def _genesis_vis_options(gs: Any) -> Any:
                 "color": tuple(light["color"]),
                 "intensity": float(light["intensity"]),
             }
-            for light in GENESIS_RENDER_LIGHTING_PROFILE["lights"]
+            for light in profile["lights"]
         ],
     )
+
+
+def _genesis_lighting_profile(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "profile_id": str(
+            lighting_profile.get("profile_id") or GENESIS_RENDER_LIGHTING_PROFILE["profile_id"]
+        ),
+        "source": str(
+            lighting_profile.get("source") or GENESIS_RENDER_LIGHTING_PROFILE["source"]
+        ),
+        "mujoco_headlight_ambient": _vec3(
+            lighting_profile.get("mujoco_headlight_ambient"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_ambient"],
+        ),
+        "mujoco_headlight_diffuse": _vec3(
+            lighting_profile.get("mujoco_headlight_diffuse"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_diffuse"],
+        ),
+        "ambient_light": _vec3(
+            lighting_profile.get("genesis_ambient_light"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["ambient_light"],
+        ),
+        "background_color": _vec3(
+            lighting_profile.get("genesis_background_color"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["background_color"],
+        ),
+        "shadow": bool(
+            lighting_profile.get("genesis_shadow", GENESIS_RENDER_LIGHTING_PROFILE["shadow"])
+        ),
+        "lights": _genesis_directional_lights(
+            lighting_profile.get("genesis_directional_lights")
+        ),
+    }
+
+
+def _genesis_directional_lights(value: Any) -> list[dict[str, Any]]:
+    raw_lights = value if isinstance(value, list) else []
+    parsed: list[dict[str, Any]] = []
+    for raw_light in raw_lights:
+        if not isinstance(raw_light, dict):
+            continue
+        parsed.append(
+            {
+                "type": str(raw_light.get("type") or "directional"),
+                "dir": _vec3(raw_light.get("dir"), fallback=[-1.0, -1.0, -1.0]),
+                "color": _vec3(raw_light.get("color"), fallback=[1.0, 1.0, 1.0]),
+                "intensity": float(raw_light.get("intensity", 1.0)),
+            }
+        )
+    if parsed:
+        return parsed
+    return [dict(item) for item in GENESIS_RENDER_LIGHTING_PROFILE["lights"]]
 
 
 def _genesis_color_profile(color_profile: dict[str, Any]) -> dict[str, Any]:
@@ -324,6 +445,62 @@ def _genesis_color_profile(color_profile: dict[str, Any]) -> dict[str, Any]:
     profile["genesis_backend_luminance_gain_source"] = (
         GENESIS_COLOR_PROFILE_LUMINANCE_GAIN_SOURCE
     )
+    rgb_gains = profile.get("backend_rgb_gain")
+    if isinstance(rgb_gains, dict):
+        profile["backend_rgb_gain"] = dict(rgb_gains)
+    else:
+        profile["backend_rgb_gain"] = {}
+    profile["backend_rgb_gain"][GENESIS_LANE_ID] = list(GENESIS_COLOR_PROFILE_RGB_GAIN)
+    rgb_source = str(profile.get("backend_rgb_gain_source") or "")
+    if GENESIS_COLOR_PROFILE_RGB_GAIN_SOURCE not in rgb_source:
+        profile["backend_rgb_gain_source"] = (
+            f"{rgb_source}; {GENESIS_COLOR_PROFILE_RGB_GAIN_SOURCE}"
+            if rgb_source
+            else GENESIS_COLOR_PROFILE_RGB_GAIN_SOURCE
+        )
+    profile["genesis_backend_rgb_gain_source"] = GENESIS_COLOR_PROFILE_RGB_GAIN_SOURCE
+    tone_adjustments = profile.get("backend_tone_adjustment")
+    if isinstance(tone_adjustments, dict):
+        profile["backend_tone_adjustment"] = dict(tone_adjustments)
+    else:
+        profile["backend_tone_adjustment"] = {}
+    profile["backend_tone_adjustment"][GENESIS_LANE_ID] = dict(
+        GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT
+    )
+    tone_source = str(profile.get("backend_tone_adjustment_source") or "")
+    if GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE not in tone_source:
+        profile["backend_tone_adjustment_source"] = (
+            f"{tone_source}; {GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE}"
+            if tone_source
+            else GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE
+        )
+    profile["genesis_backend_tone_adjustment_source"] = (
+        GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE
+    )
+    view_tone_adjustments = profile.get("backend_view_tone_adjustment")
+    if isinstance(view_tone_adjustments, dict):
+        profile["backend_view_tone_adjustment"] = dict(view_tone_adjustments)
+    else:
+        profile["backend_view_tone_adjustment"] = {}
+    backend_view_tone_adjustments = profile["backend_view_tone_adjustment"].get(
+        GENESIS_LANE_ID
+    )
+    if isinstance(backend_view_tone_adjustments, dict):
+        profile["backend_view_tone_adjustment"][GENESIS_LANE_ID] = dict(
+            backend_view_tone_adjustments
+        )
+    else:
+        profile["backend_view_tone_adjustment"][GENESIS_LANE_ID] = {}
+    profile["backend_view_tone_adjustment"][GENESIS_LANE_ID].update(
+        json.loads(json.dumps(GENESIS_COLOR_PROFILE_VIEW_TONE_ADJUSTMENT))
+    )
+    view_tone_source = str(profile.get("backend_view_tone_adjustment_source") or "")
+    if GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE not in view_tone_source:
+        profile["backend_view_tone_adjustment_source"] = (
+            f"{view_tone_source}; {GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE}"
+            if view_tone_source
+            else GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE
+        )
     return profile
 
 
@@ -479,7 +656,9 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
     face_lines: list[str] = []
     materials: dict[str, dict[str, Any]] = {}
     material_cache: dict[tuple[Any, ...], str] = {}
-    copied_textures: dict[str, str] = {}
+    copied_textures: dict[
+        tuple[str, tuple[float, float, float], tuple[float, float, float]], str
+    ] = {}
     used_texture_names: set[str] = set()
     current_material: str | None = None
     source_mesh_count = 0
@@ -488,6 +667,7 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
     skipped_invisible_mesh_count = 0
     bound_material_count = 0
     textured_material_count = 0
+    baked_texture_count = 0
     triangle_count = 0
     textured_triangle_count = 0
 
@@ -613,6 +793,8 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
     for material in materials.values():
         if material.get("texture_relpath"):
             textured_material_count += 1
+        if material.get("texture_color_baked"):
+            baked_texture_count += 1
 
     with obj_path.open("w", encoding="utf-8") as file:
         file.write("# materialized render-only visual asset extracted from prepared USD\n")
@@ -626,7 +808,11 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
     with mtl_path.open("w", encoding="utf-8") as file:
         file.write("# USD material bindings extracted for Genesis visual fallback\n")
         for name, material in materials.items():
-            color = material.get("diffuse_color") or (0.8, 0.8, 0.8)
+            color = (
+                (1.0, 1.0, 1.0)
+                if material.get("texture_color_baked")
+                else material.get("diffuse_color") or (0.8, 0.8, 0.8)
+            )
             opacity = float(material.get("opacity") if material.get("opacity") is not None else 1.0)
             file.write(f"newmtl {name}\n")
             file.write(f"Kd {float(color[0]):.6f} {float(color[1]):.6f} {float(color[2]):.6f}\n")
@@ -649,6 +835,7 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
         "material_count": len(materials),
         "textured_material_count": textured_material_count,
         "texture_count": len(copied_textures),
+        "baked_texture_count": baked_texture_count,
         "vertex_count": len(vertices),
         "uv_count": len(texcoords),
         "triangle_count": triangle_count,
@@ -665,7 +852,9 @@ def _usd_material_name_for_prim(
     material_cache: dict[tuple[Any, ...], str],
     materials: dict[str, dict[str, Any]],
     texture_dir: Path,
-    copied_textures: dict[str, str],
+    copied_textures: dict[
+        tuple[str, tuple[float, float, float], tuple[float, float, float]], str
+    ],
     used_texture_names: set[str],
     fallback_label: str,
 ) -> str | None:
@@ -711,7 +900,9 @@ def _usd_material_info(
     *,
     scene_usd: Path,
     texture_dir: Path,
-    copied_textures: dict[str, str],
+    copied_textures: dict[
+        tuple[str, tuple[float, float, float], tuple[float, float, float]], str
+    ],
     used_texture_names: set[str],
 ) -> dict[str, Any]:
     from pxr import Sdf
@@ -721,6 +912,7 @@ def _usd_material_info(
         "opacity": 1.0,
         "uv_name": "st",
         "texture_relpath": None,
+        "texture_color_baked": False,
     }
     for surface_output in material.GetSurfaceOutputs():
         if not surface_output.HasConnectedSource():
@@ -734,17 +926,8 @@ def _usd_material_info(
             texture_source = diffuse_input.GetConnectedSource()
             texture_shader = _usd_connected_shader(texture_source[0], texture_source[1])
             if texture_shader is not None and texture_shader.GetShaderId() == "UsdUVTexture":
-                texture_file = texture_shader.GetInput("file").Get()
-                if isinstance(texture_file, Sdf.AssetPath):
-                    texture_path = _resolved_usd_asset_path(texture_file, scene_usd=scene_usd)
-                    texture_relpath = _copy_usd_texture(
-                        texture_path,
-                        texture_dir=texture_dir,
-                        copied_textures=copied_textures,
-                        used_texture_names=used_texture_names,
-                    )
-                    if texture_relpath is not None:
-                        material_info["texture_relpath"] = texture_relpath
+                texture_color_scale = (1.0, 1.0, 1.0)
+                texture_color_bias = (0.0, 0.0, 0.0)
                 fallback = texture_shader.GetInput("fallback").Get()
                 if fallback is not None:
                     material_info["diffuse_color"] = _color3(
@@ -753,7 +936,30 @@ def _usd_material_info(
                     )
                 scale = texture_shader.GetInput("scale").Get()
                 if scale is not None:
-                    material_info["diffuse_color"] = _color3(scale, material_info["diffuse_color"])
+                    texture_color_scale = _color3(scale, texture_color_scale)
+                    material_info["diffuse_color"] = texture_color_scale
+                bias_input = texture_shader.GetInput("bias")
+                if bias_input:
+                    bias = bias_input.Get()
+                    if bias is not None:
+                        texture_color_bias = _color3(bias, texture_color_bias)
+                texture_file = texture_shader.GetInput("file").Get()
+                if isinstance(texture_file, Sdf.AssetPath):
+                    texture_path = _resolved_usd_asset_path(texture_file, scene_usd=scene_usd)
+                    texture_relpath = _copy_usd_texture(
+                        texture_path,
+                        texture_dir=texture_dir,
+                        copied_textures=copied_textures,
+                        used_texture_names=used_texture_names,
+                        color_scale=texture_color_scale,
+                        color_bias=texture_color_bias,
+                    )
+                    if texture_relpath is not None:
+                        material_info["texture_relpath"] = texture_relpath
+                        material_info["texture_color_baked"] = _texture_color_adjustment_needed(
+                            texture_color_scale,
+                            texture_color_bias,
+                        )
                 material_info["uv_name"] = _usd_texture_uv_name(texture_shader) or "st"
         elif diffuse_input:
             material_info["diffuse_color"] = _color3(
@@ -807,28 +1013,89 @@ def _copy_usd_texture(
     texture_path: Path,
     *,
     texture_dir: Path,
-    copied_textures: dict[str, str],
+    copied_textures: dict[
+        tuple[str, tuple[float, float, float], tuple[float, float, float]], str
+    ],
     used_texture_names: set[str],
+    color_scale: tuple[float, float, float] = (1.0, 1.0, 1.0),
+    color_bias: tuple[float, float, float] = (0.0, 0.0, 0.0),
 ) -> str | None:
     if not texture_path.is_file():
         return None
-    key = str(texture_path.resolve())
+    color_scale = _color_tuple(color_scale, fallback=(1.0, 1.0, 1.0))
+    color_bias = _color_tuple(color_bias, fallback=(0.0, 0.0, 0.0))
+    key = (str(texture_path.resolve()), color_scale, color_bias)
     if key in copied_textures:
         return copied_textures[key]
     texture_dir.mkdir(parents=True, exist_ok=True)
     stem = _safe_obj_token(texture_path.stem) or "texture"
     suffix = texture_path.suffix or ".png"
-    filename = f"{stem}{suffix}"
+    should_bake = _texture_color_adjustment_needed(color_scale, color_bias)
+    if should_bake:
+        digest = hashlib.sha1(
+            json.dumps({"scale": color_scale, "bias": color_bias}, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:8]
+        filename = f"{stem}_baked_{digest}.png"
+    else:
+        filename = f"{stem}{suffix}"
     counter = 2
     while filename in used_texture_names:
-        filename = f"{stem}_{counter}{suffix}"
+        filename = f"{stem}_baked_{digest}_{counter}.png" if should_bake else (
+            f"{stem}_{counter}{suffix}"
+        )
         counter += 1
     used_texture_names.add(filename)
     target = texture_dir / filename
-    shutil.copy2(texture_path, target)
+    if should_bake:
+        try:
+            _write_color_baked_texture(
+                texture_path,
+                target=target,
+                color_scale=color_scale,
+                color_bias=color_bias,
+            )
+        except Exception:
+            shutil.copy2(texture_path, target)
+    else:
+        shutil.copy2(texture_path, target)
     relpath = f"textures/{filename}"
     copied_textures[key] = relpath
     return relpath
+
+
+def _write_color_baked_texture(
+    texture_path: Path,
+    *,
+    target: Path,
+    color_scale: tuple[float, float, float],
+    color_bias: tuple[float, float, float],
+) -> None:
+    with Image.open(texture_path) as image:
+        has_alpha = image.mode in {"RGBA", "LA"} or "transparency" in image.info
+        converted = image.convert("RGBA" if has_alpha else "RGB")
+        array = np.asarray(converted).astype("float32")
+        rgb = array[..., :3] / 255.0
+        scale = np.asarray(color_scale, dtype="float32").reshape(1, 1, 3)
+        bias = np.asarray(color_bias, dtype="float32").reshape(1, 1, 3)
+        array[..., :3] = np.clip(rgb * scale + bias, 0.0, 1.0) * 255.0
+        Image.fromarray(np.clip(array, 0, 255).astype("uint8"), mode=converted.mode).save(target)
+
+
+def _texture_color_adjustment_needed(
+    color_scale: tuple[float, float, float],
+    color_bias: tuple[float, float, float],
+) -> bool:
+    return any(abs(value - 1.0) > 1e-6 for value in color_scale) or any(
+        abs(value) > 1e-6 for value in color_bias
+    )
+
+
+def _color_tuple(
+    value: Any,
+    *,
+    fallback: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return _color3(value, fallback)
 
 
 def _usd_display_material_name(

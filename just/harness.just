@@ -1033,6 +1033,7 @@ molmo-isaac-prepared-cleanup-smoke *overrides:
     output_dir="output/isaaclab/prepared-cleanup-smoke"
     stamp=""
     scene_usd_path=""
+    mujoco_scene_xml_path=""
     prepared_scene_usd_path=""
     summary_path=""
     cleanup_stamp="cleanup"
@@ -1059,7 +1060,7 @@ molmo-isaac-prepared-cleanup-smoke *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        runtime_python|output_dir|stamp|scene_usd_path|prepared_scene_usd_path|\
+        runtime_python|output_dir|stamp|scene_usd_path|mujoco_scene_xml_path|prepared_scene_usd_path|\
         summary_path|cleanup_stamp|seed|task|prompt|scene_source|scene_index|\
         generated_mess_count|map_bundle|robot_name|label_containers|\
         require_prepare_ready|require_segmentation_evidence|\
@@ -1097,6 +1098,9 @@ molmo-isaac-prepared-cleanup-smoke *overrides:
       --scene-usd-path "$scene_usd_path" \
       --output-usd-path "$prepared_scene_usd_path" \
       --summary-output "$summary_path")
+    if [[ -n "$mujoco_scene_xml_path" ]]; then
+      prep_cmd+=(--mujoco-scene-xml-path "$mujoco_scene_xml_path")
+    fi
     if [[ "$label_containers" == "true" ]]; then
       prep_cmd+=(--label-containers)
     else

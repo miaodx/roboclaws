@@ -43,6 +43,7 @@ ROBOT_VIEW_KEYS = ("fpv", "chase")
 OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
 PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD = 35.0
 PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD = 0.5
+PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD = 40.0
 OBJECT_VISUAL_STATE_REGISTRY = {
     "box": {
         "schema": "robot_camera_object_visual_state_registry_entry_v1",
@@ -103,6 +104,81 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--render-width", type=int, default=540)
     parser.add_argument("--render-height", type=int, default=360)
+    parser.add_argument(
+        "--saved-report-width",
+        type=int,
+        help=(
+            "Optional saved report-image width. Use with --saved-report-height to downsample "
+            "high-resolution renders for the report without changing renderer defaults."
+        ),
+    )
+    parser.add_argument(
+        "--saved-report-height",
+        type=int,
+        help="Optional saved report-image height. Requires --saved-report-width.",
+    )
+    parser.add_argument(
+        "--metric-width",
+        type=int,
+        help=(
+            "Optional metric-comparison width. Use with --metric-height to compute "
+            "same-size downsampled metrics from high-resolution captures."
+        ),
+    )
+    parser.add_argument(
+        "--metric-height",
+        type=int,
+        help="Optional metric-comparison height. Requires --metric-width.",
+    )
+    parser.add_argument(
+        "--downsample-filter",
+        choices=("nearest", "bilinear", "bicubic", "lanczos"),
+        default="lanczos",
+        help="PIL filter used for explicit saved-image or metric downsampling.",
+    )
+    parser.add_argument(
+        "--render-settle-frames",
+        type=int,
+        default=0,
+        help=(
+            "Extra Isaac render frames to advance after first nonblank RGB before saving. "
+            "This is an opt-in capture-quality probe control."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-aa-op",
+        type=int,
+        help=(
+            "Optional Isaac /rtx/post/aa/op value for an opt-in capture-quality probe. "
+            "The worker records the previous value and restores it after capture."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-tonemap-op",
+        type=int,
+        help=(
+            "Optional Isaac /rtx/post/tonemap/op value for an opt-in native tone probe. "
+            "The worker records the previous value and restores it after capture."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-exposure-bias",
+        type=float,
+        help=(
+            "Optional Isaac /rtx/post/tonemap/exposureBias value for an opt-in native "
+            "exposure probe. The worker records the previous value and restores it after "
+            "capture."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-colorcorr-gain",
+        type=_parse_rgb_gain,
+        help=(
+            "Optional Isaac /rtx/post/colorcorr gain as R,G,B for an opt-in native color "
+            "correction probe. The worker enables color correction, records previous values, "
+            "and restores them after capture."
+        ),
+    )
     parser.add_argument("--location-count", type=int, default=4)
     parser.add_argument(
         "--isaac-robot-view-color-profile-path",
@@ -153,6 +229,15 @@ def main(argv: list[str] | None = None) -> int:
             "re-rendering MuJoCo or Isaac views."
         ),
     )
+    parser.add_argument(
+        "--skip-object-parity-audit",
+        action="store_true",
+        help=(
+            "Skip the full-scene object parity audit and Object/Render Gate. This is "
+            "only for bounded capture-quality probes where image diffs and native render "
+            "metadata are the decision evidence."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.refresh_report_only:
@@ -161,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
             material_response_probe_manifest_paths=args.material_response_probe_manifest,
             tone_color_probe_manifest_paths=args.tone_color_probe_manifest,
+            skip_object_parity_audit=bool(args.skip_object_parity_audit),
         )
     else:
         if args.scene_usd_path is None:
@@ -182,6 +268,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     mujoco_run_dir = output_dir / "mujoco"
     isaac_run_dir = output_dir / "isaac"
     isaac_robot_view_color_profile = _load_optional_json(args.isaac_robot_view_color_profile_path)
+    capture_quality = _capture_quality_probe_config(args)
 
     manifest: dict[str, Any] = {
         "schema": SCHEMA,
@@ -199,7 +286,12 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
             "generated_mess_count": args.generated_mess_count,
             "render_width": args.render_width,
             "render_height": args.render_height,
+            "saved_report_width": capture_quality["render_resolution_saved"]["width"],
+            "saved_report_height": capture_quality["render_resolution_saved"]["height"],
+            "metric_width": capture_quality["metric_resolution"]["width"],
+            "metric_height": capture_quality["metric_resolution"]["height"],
         },
+        "capture_quality_probe": capture_quality,
         "camera_contract": _robot_camera_contract(),
         "lanes": {},
         "locations": [],
@@ -447,9 +539,15 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.render_width),
                     "--render-height",
                     str(args.render_height),
+                    *_render_settle_args(capture_quality),
                     *_focus_args(target),
                 ],
                 cwd=Path.cwd(),
+            )
+            _prepare_saved_report_images(
+                mujoco_views,
+                isaac_views,
+                capture_quality=capture_quality,
             )
             locations.append(
                 _location_result(
@@ -459,6 +557,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     mujoco_views=mujoco_views,
                     isaac_views=isaac_views,
                     output_dir=output_dir,
+                    capture_quality=capture_quality,
                 )
             )
         except Exception as exc:
@@ -479,6 +578,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     )
     _refresh_location_camera_contract_diagnostics(locations)
     manifest["summary"] = _summary(locations)
+    manifest["summary"]["capture_quality_probe"] = capture_quality
     manifest["summary"]["target_selection"] = target_selection
     _attach_render_contract_diagnostics(
         manifest,
@@ -486,6 +586,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         light_shadow_probe_manifest_paths=args.light_shadow_probe_manifest,
         material_response_probe_manifest_paths=args.material_response_probe_manifest,
         tone_color_probe_manifest_paths=args.tone_color_probe_manifest,
+        skip_object_parity_audit=bool(args.skip_object_parity_audit),
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -496,6 +597,7 @@ def refresh_report_only(
     light_shadow_probe_manifest_paths: list[Path] | None = None,
     material_response_probe_manifest_paths: list[Path] | None = None,
     tone_color_probe_manifest_paths: list[Path] | None = None,
+    skip_object_parity_audit: bool = False,
 ) -> dict[str, Any]:
     manifest_path = output_dir / "comparison_manifest.json"
     if not manifest_path.is_file():
@@ -517,7 +619,9 @@ def refresh_report_only(
     manifest["target_selection"] = target_selection
     locations = list(manifest.get("locations") or [])
     _refresh_location_camera_contract_diagnostics(locations)
+    capture_quality = _ensure_capture_quality_probe_manifest(manifest)
     manifest["summary"] = _summary(locations)
+    manifest["summary"]["capture_quality_probe"] = capture_quality
     manifest["summary"]["target_selection"] = target_selection
     _attach_render_contract_diagnostics(
         manifest,
@@ -525,6 +629,7 @@ def refresh_report_only(
         light_shadow_probe_manifest_paths=light_shadow_probe_manifest_paths,
         material_response_probe_manifest_paths=material_response_probe_manifest_paths,
         tone_color_probe_manifest_paths=tone_color_probe_manifest_paths,
+        skip_object_parity_audit=skip_object_parity_audit,
     )
     _write_outputs(manifest, output_dir)
     return manifest
@@ -566,6 +671,256 @@ def _parse_last_json_object(text: str) -> dict[str, Any]:
         if isinstance(value, dict):
             return value
     raise RuntimeError(f"worker output did not end with a JSON object: {text[-1000:]}")
+
+
+def _capture_quality_probe_config(args: argparse.Namespace) -> dict[str, Any]:
+    render_resolution = _resolution_dict(args.render_width, args.render_height)
+    saved_resolution = _paired_dimension(
+        args,
+        "saved_report_width",
+        "saved_report_height",
+        default_width=args.render_width,
+        default_height=args.render_height,
+    )
+    metric_resolution = _paired_dimension(
+        args,
+        "metric_width",
+        "metric_height",
+        default_width=saved_resolution["width"],
+        default_height=saved_resolution["height"],
+    )
+    render_settle_frames = max(0, int(getattr(args, "render_settle_frames", 0) or 0))
+    saved_mode = (
+        "direct_capture"
+        if saved_resolution == render_resolution
+        else "downsampled_from_render_capture"
+    )
+    metric_mode = (
+        "direct_capture"
+        if metric_resolution == render_resolution
+        else "downsampled_from_render_capture"
+    )
+    downsample_filter = str(getattr(args, "downsample_filter", "lanczos") or "lanczos")
+    return {
+        "schema": "robot_camera_capture_quality_probe_v1",
+        "status": "capture_quality_probe_configured",
+        "render_resolution_requested": render_resolution,
+        "render_resolution_saved": saved_resolution,
+        "metric_resolution": metric_resolution,
+        "saved_image_mode": saved_mode,
+        "metric_image_mode": metric_mode,
+        "direct_capture_metrics": metric_mode == "direct_capture",
+        "downsampled_metrics": metric_mode != "direct_capture",
+        "downsample_filter": (
+            downsample_filter
+            if saved_mode != "direct_capture" or metric_mode != "direct_capture"
+            else ""
+        ),
+        "render_settle_frames": render_settle_frames,
+        "samples_per_pixel": _quality_setting_not_available("samples_per_pixel"),
+        "anti_aliasing": _quality_setting_request(
+            "anti_aliasing",
+            value=getattr(args, "isaac_aa_op", None),
+            setting_path="/rtx/post/aa/op",
+        ),
+        "tonemap_operator": _quality_setting_request(
+            "tonemap_operator",
+            value=getattr(args, "isaac_tonemap_op", None),
+            setting_path="/rtx/post/tonemap/op",
+        ),
+        "exposure_bias": _quality_setting_request(
+            "exposure_bias",
+            value=getattr(args, "isaac_exposure_bias", None),
+            setting_path="/rtx/post/tonemap/exposureBias",
+        ),
+        "colorcorr_gain": _quality_setting_request(
+            "colorcorr_gain",
+            value=getattr(args, "isaac_colorcorr_gain", None),
+            setting_path="/rtx/post/colorcorr/gain",
+        ),
+        "denoise": _quality_setting_not_available("denoise"),
+        "taa": _quality_setting_not_available("taa"),
+        "texture_filtering": _quality_setting_not_available("texture_filtering"),
+        "policy_classification": "capture_quality_probe",
+        "default_renderer_promotion": False,
+        "interpretation": (
+            "This records capture-quality probe metadata only. Direct high-resolution "
+            "review images and downsampled apple-to-apple metrics are kept separate, and "
+            "no native renderer default is promoted by this manifest."
+        ),
+    }
+
+
+def _ensure_capture_quality_probe_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    existing = _dict(manifest.get("capture_quality_probe"))
+    if existing:
+        return existing
+    scene = _dict(manifest.get("scene"))
+    width = int(scene.get("render_width") or 540)
+    height = int(scene.get("render_height") or 360)
+    saved_width = int(scene.get("saved_report_width") or width)
+    saved_height = int(scene.get("saved_report_height") or height)
+    metric_width = int(scene.get("metric_width") or saved_width)
+    metric_height = int(scene.get("metric_height") or saved_height)
+    probe = {
+        "schema": "robot_camera_capture_quality_probe_v1",
+        "status": "inferred_legacy_manifest",
+        "render_resolution_requested": _resolution_dict(width, height),
+        "render_resolution_saved": _resolution_dict(saved_width, saved_height),
+        "metric_resolution": _resolution_dict(metric_width, metric_height),
+        "saved_image_mode": "direct_capture"
+        if (saved_width, saved_height) == (width, height)
+        else "downsampled_from_render_capture",
+        "metric_image_mode": "direct_capture"
+        if (metric_width, metric_height) == (width, height)
+        else "downsampled_from_render_capture",
+        "direct_capture_metrics": (metric_width, metric_height) == (width, height),
+        "downsampled_metrics": (metric_width, metric_height) != (width, height),
+        "downsample_filter": "",
+        "render_settle_frames": 0,
+        "samples_per_pixel": _quality_setting_not_available("samples_per_pixel"),
+        "anti_aliasing": _quality_setting_not_available("anti_aliasing"),
+        "tonemap_operator": _quality_setting_not_available("tonemap_operator"),
+        "exposure_bias": _quality_setting_not_available("exposure_bias"),
+        "denoise": _quality_setting_not_available("denoise"),
+        "taa": _quality_setting_not_available("taa"),
+        "texture_filtering": _quality_setting_not_available("texture_filtering"),
+        "policy_classification": "capture_quality_probe",
+        "default_renderer_promotion": False,
+    }
+    manifest["capture_quality_probe"] = probe
+    return probe
+
+
+def _quality_setting_not_available(name: str) -> dict[str, Any]:
+    return {
+        "name": name,
+        "status": "not_available",
+        "value": None,
+        "setting_path": "",
+        "default_render_settings_changed": False,
+    }
+
+
+def _quality_setting_request(
+    name: str,
+    *,
+    value: Any,
+    setting_path: str,
+) -> dict[str, Any]:
+    if value is None:
+        return _quality_setting_not_available(name)
+    return {
+        "name": name,
+        "status": "requested",
+        "value": value,
+        "setting_path": setting_path,
+        "requested_value": value,
+        "default_render_settings_changed": True,
+    }
+
+
+def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
+    parts = [part.strip() for part in str(value).split(",")]
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError("RGB gain must be three comma-separated floats")
+    try:
+        gain = tuple(float(part) for part in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("RGB gain must contain only floats") from exc
+    if any(item <= 0.0 for item in gain):
+        raise argparse.ArgumentTypeError("RGB gain values must be positive")
+    return gain  # type: ignore[return-value]
+
+
+def _paired_dimension(
+    args: argparse.Namespace,
+    width_attr: str,
+    height_attr: str,
+    *,
+    default_width: int,
+    default_height: int,
+) -> dict[str, int]:
+    width = getattr(args, width_attr, None)
+    height = getattr(args, height_attr, None)
+    if (width is None) != (height is None):
+        raise ValueError(
+            f"--{width_attr.replace('_', '-')} and --{height_attr.replace('_', '-')} "
+            "must be set together"
+        )
+    if width is None:
+        width = default_width
+        height = default_height
+    return _resolution_dict(width, height)
+
+
+def _resolution_dict(width: Any, height: Any) -> dict[str, int]:
+    width_int = int(width)
+    height_int = int(height)
+    if width_int <= 0 or height_int <= 0:
+        raise ValueError(f"resolution must be positive, got {width_int}x{height_int}")
+    return {"width": width_int, "height": height_int}
+
+
+def _render_settle_args(capture_quality: dict[str, Any]) -> list[str]:
+    args: list[str] = []
+    render_settle_frames = max(0, int(capture_quality.get("render_settle_frames") or 0))
+    anti_aliasing = _dict(capture_quality.get("anti_aliasing"))
+    if anti_aliasing.get("status") == "requested" and anti_aliasing.get("value") is not None:
+        args.extend(["--isaac-aa-op", str(int(anti_aliasing["value"]))])
+    tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
+    if tonemap_operator.get("status") == "requested" and tonemap_operator.get("value") is not None:
+        args.extend(["--isaac-tonemap-op", str(int(tonemap_operator["value"]))])
+    exposure_bias = _dict(capture_quality.get("exposure_bias"))
+    if exposure_bias.get("status") == "requested" and exposure_bias.get("value") is not None:
+        args.extend(["--isaac-exposure-bias", str(float(exposure_bias["value"]))])
+    colorcorr_gain = _dict(capture_quality.get("colorcorr_gain"))
+    if colorcorr_gain.get("status") == "requested" and colorcorr_gain.get("value") is not None:
+        values = colorcorr_gain["value"]
+        if isinstance(values, (list, tuple)) and len(values) == 3:
+            args.extend(
+                [
+                    "--isaac-colorcorr-gain",
+                    ",".join(f"{float(value):.6g}" for value in values),
+                ]
+            )
+    if render_settle_frames <= 0:
+        return args
+    args.extend(["--render-settle-frames", str(render_settle_frames)])
+    return args
+
+
+def _prepare_saved_report_images(
+    mujoco_views: dict[str, Any],
+    isaac_views: dict[str, Any],
+    *,
+    capture_quality: dict[str, Any],
+) -> None:
+    for result in (mujoco_views, isaac_views):
+        raw_views = {
+            key: str(path)
+            for key, path in _dict(result.get("views")).items()
+            if key in ROBOT_VIEW_KEYS and path
+        }
+        result["raw_render_views"] = dict(raw_views)
+        if capture_quality.get("saved_image_mode") == "direct_capture":
+            result["saved_report_views"] = dict(raw_views)
+            continue
+        saved: dict[str, str] = {}
+        for view_key, raw_path in raw_views.items():
+            saved_path = _derived_image_path(
+                Path(raw_path),
+                suffix=f"saved_{_resolution_suffix(capture_quality['render_resolution_saved'])}",
+            )
+            _resize_image(
+                Path(raw_path),
+                saved_path,
+                resolution=_dict(capture_quality.get("render_resolution_saved")),
+                filter_name=str(capture_quality.get("downsample_filter") or "lanczos"),
+            )
+            saved[view_key] = str(saved_path)
+        result["views"] = {**_dict(result.get("views")), **saved}
+        result["saved_report_views"] = saved
 
 
 def _canonical_generated_mess_manifest_from_state(
@@ -1004,17 +1359,47 @@ def _location_result(
     mujoco_views: dict[str, Any],
     isaac_views: dict[str, Any],
     output_dir: Path,
+    capture_quality: dict[str, Any],
 ) -> dict[str, Any]:
     comparisons: dict[str, Any] = {}
+    metric_artifacts: dict[str, Any] = {}
     for view_key in ROBOT_VIEW_KEYS:
-        mujoco_path = Path(str(mujoco_views["views"][view_key]))
-        isaac_path = Path(str(isaac_views["views"][view_key]))
-        comparisons[view_key] = _image_diff(mujoco_path, isaac_path)
+        mujoco_path = Path(
+            str(
+                _dict(mujoco_views.get("raw_render_views")).get(view_key)
+                or mujoco_views["views"][view_key]
+            )
+        )
+        isaac_path = Path(
+            str(
+                _dict(isaac_views.get("raw_render_views")).get(view_key)
+                or isaac_views["views"][view_key]
+            )
+        )
+        metric_paths = _metric_image_paths(
+            mujoco_path,
+            isaac_path,
+            view_key=view_key,
+            capture_quality=capture_quality,
+        )
+        metric_artifacts[view_key] = {
+            "mujoco": _relpath(metric_paths["mujoco"], output_dir),
+            "isaac": _relpath(metric_paths["isaac"], output_dir),
+            "mode": capture_quality.get("metric_image_mode"),
+            "resolution": capture_quality.get("metric_resolution"),
+            "downsample_filter": capture_quality.get("downsample_filter"),
+        }
+        comparisons[view_key] = _image_diff(
+            metric_paths["mujoco"],
+            metric_paths["isaac"],
+            capture_quality=capture_quality,
+        )
     return {
         "label": label,
         "status": "success",
         "target": target,
         "robot_pose": robot_pose,
+        "capture_quality_probe": capture_quality,
         "views": {
             "mujoco": {
                 key: _relpath(Path(str(path)), output_dir)
@@ -1027,6 +1412,19 @@ def _location_result(
                 if key in {"fpv", "chase", "map", "verify"}
             },
         },
+        "raw_render_views": {
+            "mujoco": {
+                key: _relpath(Path(str(path)), output_dir)
+                for key, path in _dict(mujoco_views.get("raw_render_views")).items()
+                if key in ROBOT_VIEW_KEYS
+            },
+            "isaac": {
+                key: _relpath(Path(str(path)), output_dir)
+                for key, path in _dict(isaac_views.get("raw_render_views")).items()
+                if key in ROBOT_VIEW_KEYS
+            },
+        },
+        "metric_views": metric_artifacts,
         "contracts": {
             "mujoco": mujoco_views.get("camera_control_contract", {}),
             "isaac": isaac_views.get("camera_control_contract", {}),
@@ -1056,7 +1454,70 @@ def _location_result(
     }
 
 
-def _image_diff(left_path: Path, right_path: Path) -> dict[str, Any]:
+def _metric_image_paths(
+    mujoco_path: Path,
+    isaac_path: Path,
+    *,
+    view_key: str,
+    capture_quality: dict[str, Any],
+) -> dict[str, Path]:
+    if capture_quality.get("metric_image_mode") == "direct_capture":
+        return {"mujoco": mujoco_path, "isaac": isaac_path}
+    suffix = f"metric_{view_key}_{_resolution_suffix(capture_quality['metric_resolution'])}"
+    metric_mujoco = _derived_image_path(mujoco_path, suffix=suffix)
+    metric_isaac = _derived_image_path(isaac_path, suffix=suffix)
+    _resize_image(
+        mujoco_path,
+        metric_mujoco,
+        resolution=_dict(capture_quality.get("metric_resolution")),
+        filter_name=str(capture_quality.get("downsample_filter") or "lanczos"),
+    )
+    _resize_image(
+        isaac_path,
+        metric_isaac,
+        resolution=_dict(capture_quality.get("metric_resolution")),
+        filter_name=str(capture_quality.get("downsample_filter") or "lanczos"),
+    )
+    return {"mujoco": metric_mujoco, "isaac": metric_isaac}
+
+
+def _derived_image_path(path: Path, *, suffix: str) -> Path:
+    return path.with_name(f"{path.stem}.{suffix}{path.suffix}")
+
+
+def _resolution_suffix(resolution: dict[str, Any]) -> str:
+    return f"{int(resolution['width'])}x{int(resolution['height'])}"
+
+
+def _resize_image(
+    source_path: Path,
+    target_path: Path,
+    *,
+    resolution: dict[str, Any],
+    filter_name: str,
+) -> None:
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    size = (int(resolution["width"]), int(resolution["height"]))
+    with Image.open(source_path) as source:
+        source.convert("RGB").resize(size, _pil_resample_filter(filter_name)).save(target_path)
+
+
+def _pil_resample_filter(filter_name: str) -> int:
+    filters = {
+        "nearest": Image.Resampling.NEAREST,
+        "bilinear": Image.Resampling.BILINEAR,
+        "bicubic": Image.Resampling.BICUBIC,
+        "lanczos": Image.Resampling.LANCZOS,
+    }
+    return int(filters.get(filter_name, Image.Resampling.LANCZOS))
+
+
+def _image_diff(
+    left_path: Path,
+    right_path: Path,
+    *,
+    capture_quality: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     with Image.open(left_path) as left_raw, Image.open(right_path) as right_raw:
         left = left_raw.convert("RGB")
         right = right_raw.convert("RGB")
@@ -1091,6 +1552,7 @@ def _image_diff(left_path: Path, right_path: Path) -> dict[str, Any]:
             "diff_gt_40_fraction": round(diff_gt_40 / pixel_count, 6),
             "diff_gt_80_fraction": round(diff_gt_80 / pixel_count, 6),
             "residual": residual,
+            "capture_quality_probe": _dict(capture_quality),
         }
 
 
@@ -1158,6 +1620,7 @@ def _attach_render_contract_diagnostics(
     light_shadow_probe_manifest_paths: list[Path] | None = None,
     material_response_probe_manifest_paths: list[Path] | None = None,
     tone_color_probe_manifest_paths: list[Path] | None = None,
+    skip_object_parity_audit: bool = False,
 ) -> None:
     mujoco_state = _read_json(output_dir / "mujoco_state.json")
     isaac_state = _read_json(output_dir / "isaac_state.json")
@@ -1191,6 +1654,7 @@ def _attach_render_contract_diagnostics(
             mujoco_contract=mujoco_contract,
             isaac_contract=isaac_contract,
             scene_binding_diagnostics=scene_binding_diagnostics,
+            isaac_state=isaac_state,
         )
         item["render_contract_diagnostics"] = diagnostics
         per_location.append(diagnostics)
@@ -1225,6 +1689,26 @@ def _attach_render_contract_diagnostics(
     manifest.setdefault("summary", {})["native_isaac_render_diagnostics"] = (
         _compact_native_isaac_render_diagnostics(native_render_diagnostics)
     )
+    if skip_object_parity_audit:
+        skipped_audit = _skipped_object_parity_audit()
+        skipped_gate = _skipped_object_render_parity_diagnostics(
+            render_domain_checks=domain_checks,
+            residual_triage=_dict(manifest.get("summary")).get("residual_triage"),
+            native_render_diagnostics=native_render_diagnostics,
+        )
+        manifest["object_parity_audit"] = skipped_audit
+        manifest["object_visual_parity_audit"] = skipped_audit
+        manifest.setdefault("summary", {})["object_parity_audit"] = _compact_object_parity_audit(
+            skipped_audit
+        )
+        manifest.setdefault("summary", {})["object_visual_parity_audit"] = (
+            _compact_object_parity_audit(skipped_audit)
+        )
+        manifest["object_render_parity_diagnostics"] = skipped_gate
+        manifest.setdefault("summary", {})["object_render_parity_diagnostics"] = (
+            _compact_object_render_parity_diagnostics(skipped_gate)
+        )
+        return
     object_audit = _object_parity_audit(
         mujoco_state=mujoco_state,
         isaac_state=isaac_state,
@@ -1539,6 +2023,7 @@ def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema": audit.get("schema"),
         "status": audit.get("status"),
+        "skip_reason": audit.get("skip_reason"),
         "item_count": audit.get("item_count"),
         "object_count": audit.get("object_count"),
         "receptacle_count": audit.get("receptacle_count"),
@@ -1552,6 +2037,40 @@ def _compact_object_parity_audit(audit: dict[str, Any]) -> dict[str, Any]:
         "category_status_summary": audit.get("category_status_summary"),
         "high_priority_items": audit.get("high_priority_items"),
         "recommended_next_action": audit.get("recommended_next_action"),
+    }
+
+
+def _skipped_object_parity_audit() -> dict[str, Any]:
+    return {
+        "schema": "robot_camera_object_parity_audit_v1",
+        "status": "skipped_for_capture_quality_probe",
+        "skip_reason": (
+            "The full-scene object parity audit was explicitly skipped for a bounded "
+            "capture-quality probe. Use image diffs, render contract diagnostics, and "
+            "native Isaac render diagnostics for this run; rerun without "
+            "--skip-object-parity-audit before making object-level parity claims."
+        ),
+        "item_count": 0,
+        "object_count": 0,
+        "receptacle_count": 0,
+        "high_priority_gap_count": 0,
+        "binding_status_counts": {},
+        "category_status_counts": {},
+        "pose_status_counts": {},
+        "support_status_counts": {},
+        "state_status_counts": {},
+        "render_contract_status_counts": {},
+        "category_status_summary": [],
+        "high_priority_items": [],
+        "items": [],
+        "recommended_next_action": (
+            "Use this artifact only for capture-quality ranking. Rerun without the skip "
+            "flag for object/render gate evidence."
+        ),
+        "interpretation": (
+            "Capture-quality probes can skip the expensive full-scene audit so local "
+            "render evidence remains fast and comparable."
+        ),
     }
 
 
@@ -1691,6 +2210,7 @@ def _compact_object_render_parity_diagnostics(diagnostics: dict[str, Any]) -> di
     return {
         "schema": diagnostics.get("schema"),
         "status": diagnostics.get("status"),
+        "skip_reason": diagnostics.get("skip_reason"),
         "object_gate_status": object_gate.get("status"),
         "object_gate_item_count": object_gate.get("item_count"),
         "object_gate_comparable_count": object_gate.get("comparable_count"),
@@ -1702,6 +2222,47 @@ def _compact_object_render_parity_diagnostics(diagnostics: dict[str, Any]) -> di
         "render_gate_render_domain_status": render_gate.get("render_domain_status"),
         "render_gate_native_isaac_status": render_gate.get("native_isaac_status"),
         "recommended_next_action": diagnostics.get("recommended_next_action"),
+    }
+
+
+def _skipped_object_render_parity_diagnostics(
+    *,
+    render_domain_checks: dict[str, Any],
+    residual_triage: dict[str, Any] | None,
+    native_render_diagnostics: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    render_gate = _render_gate_diagnostics(
+        comparable_records=[],
+        render_domain_checks=render_domain_checks,
+        residual_triage=residual_triage or {},
+        native_render_diagnostics=native_render_diagnostics or {},
+    )
+    return {
+        "schema": "robot_camera_object_render_parity_diagnostics_v1",
+        "status": "skipped_for_capture_quality_probe",
+        "skip_reason": (
+            "The Object Gate was explicitly skipped with --skip-object-parity-audit. "
+            "This run can rank capture-quality candidates, but it is not object-level "
+            "parity evidence."
+        ),
+        "object_gate": {
+            "status": "skipped_for_capture_quality_probe",
+            "item_count": 0,
+            "comparable_count": 0,
+            "failure_count": 0,
+            "status_counts": {},
+            "classification_counts": {},
+            "failure_records": [],
+            "comparable_records": [],
+        },
+        "render_gate": render_gate,
+        "recommended_next_action": (
+            "Compare FPV/chase image metrics for the capture-quality candidate. Rerun "
+            "without --skip-object-parity-audit before treating object rows as comparable."
+        ),
+        "interpretation": (
+            "The Object Gate is intentionally absent in this capture-quality probe."
+        ),
     }
 
 
@@ -2042,6 +2603,14 @@ def _isaac_effective_index_entry(
     return effective
 
 
+def _isaac_index_usd_prim_path(entry: dict[str, Any]) -> str:
+    return str(
+        entry.get("usd_prim_path")
+        or _dict(_dict(entry.get("usd_world_bounds")).get("prim")).get("path")
+        or ""
+    )
+
+
 def _isaac_index_position(entry: dict[str, Any]) -> tuple[float, float, float] | None:
     position = _vec3_or_none(entry.get("position"))
     if position is not None:
@@ -2235,15 +2804,27 @@ def _selected_target_visual_state_evidence(
         and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
     ):
         status = "selected_object_visual_state_aligned"
+        alignment_mode = "strict_raw_rgb"
+    elif (
+        mean_abs <= PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD
+        and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
+    ):
+        status = "selected_object_visual_state_aligned"
+        alignment_mode = "moderate_render_residual"
     else:
         status = "selected_object_visual_state_delta"
+        alignment_mode = "raw_rgb_delta"
     return {
         "target_visual_state_status": status,
+        "target_visual_state_alignment_mode": alignment_mode,
         "target_visual_state_bbox": bbox,
         "target_visual_state_delta": crop_delta,
         "target_visual_state_thresholds": {
             "mean_abs_rgb_max": PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD,
             "diff_gt_40_fraction_max": PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD,
+            "render_residual_mean_abs_rgb_max": (
+                PROTECTED_TARGET_REGION_RENDER_RESIDUAL_MEAN_ABS_RGB_THRESHOLD
+            ),
         },
     }
 
@@ -2572,14 +3153,27 @@ def _object_visual_state_contract(
     if (
         mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
         and isaac_articulation.get("status") == "isaac_visual_physics_frozen"
+        and isaac_articulation.get("mujoco_visual_joint_endpoint_pose_status")
+        == "mujoco_visual_joint_endpoint_pose_applied"
     ):
         status = "visual_state_static_ref_baked"
         reason = (
             "MuJoCo renders this object at articulated visual joint endpoints, and the "
-            "prepared Isaac report USD freezes the already-baked visual xforms so PhysX "
-            "will not mutate those joints during camera capture. This is necessary "
-            "physics-control evidence, but selected object-centered RGB evidence is still "
-            "required before the object gate may claim visual parity."
+            "prepared Isaac report USD records MuJoCo endpoint pose baking before freezing "
+            "physics state, so PhysX will not mutate those baked joints during camera "
+            "capture. This is necessary physics-control evidence, but selected "
+            "object-centered RGB evidence is still required before the object gate may "
+            "claim visual parity."
+        )
+    elif (
+        mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
+        and isaac_articulation.get("status") == "isaac_visual_physics_frozen"
+    ):
+        status = "visual_state_ref_endpoint_unverified_in_isaac"
+        reason = (
+            "MuJoCo renders this object at articulated visual joint endpoints, and the "
+            "Isaac USD has frozen physics state, but the prepared-scene summary does not "
+            "prove that the MuJoCo endpoint pose was baked before physics was stripped."
         )
     elif (
         mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
@@ -2777,6 +3371,16 @@ def _isaac_usd_articulation_contract(
         "physics_api_schema_prim_paths": view_contract.get("physics_api_schema_prim_paths") or [],
         "physics_property_prim_paths": view_contract.get("physics_property_prim_paths") or [],
         "visual_physics_status": view_contract.get("visual_physics_status"),
+        "prepared_summary_status": view_contract.get("prepared_summary_status"),
+        "mujoco_visual_joint_endpoint_pose_status": view_contract.get(
+            "mujoco_visual_joint_endpoint_pose_status"
+        ),
+        "mujoco_visual_joint_endpoint_pose_corrected_count": view_contract.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": view_contract.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
     }
 
 
@@ -2888,11 +3492,23 @@ def _location_render_contract_diagnostics(
     mujoco_contract: dict[str, Any],
     isaac_contract: dict[str, Any],
     scene_binding_diagnostics: dict[str, Any],
+    isaac_state: dict[str, Any],
 ) -> dict[str, Any]:
     target = _dict(item.get("target"))
     target_id = str(target.get("target_id") or "")
+    target_kind = str(target.get("kind") or "object")
     target_binding = _target_usd_binding(scene_binding_diagnostics, target)
-    usd_prim_path = str(target_binding.get("usd_prim_path") or "")
+    target_binding_usd_path = str(target_binding.get("usd_prim_path") or "")
+    fallback_entry = _isaac_effective_index_entry(isaac_state, target_kind, target_id)
+    fallback_usd_path = _isaac_index_usd_prim_path(fallback_entry)
+    usd_prim_path = target_binding_usd_path or fallback_usd_path
+    usd_path_source = (
+        "scene_binding_diagnostics"
+        if target_binding_usd_path
+        else "isaac_state_index"
+        if fallback_usd_path
+        else "missing"
+    )
     mujoco_target = _mujoco_view_render_contract(mujoco_contract, anchor_id=target_id)
     isaac_target = _isaac_view_render_contract(isaac_contract, usd_prim_path=usd_prim_path)
     target_delta = _view_render_contract_delta(
@@ -2907,6 +3523,13 @@ def _location_render_contract_diagnostics(
         "schema": "robot_camera_location_render_contract_diagnostics_v1",
         "target": target,
         "target_usd_binding": _compact_target_binding(target_binding),
+        "target_usd_path_source": usd_path_source,
+        "target_usd_path_fallback": _compact_isaac_index_entry(
+            fallback_entry,
+            usd_prim_path=fallback_usd_path,
+        )
+        if not target_binding_usd_path and fallback_usd_path
+        else {},
         "fpv_mean_abs_rgb": _float_or_none(fpv_diff.get("mean_abs_rgb")),
         "fpv_residual_class": fpv_residual.get("residual_class"),
         "fpv_edge_abs_diff": _float_or_none(fpv_residual.get("edge_abs_diff")),
@@ -4888,6 +5511,7 @@ def _render_report(manifest: dict[str, Any]) -> str:
         + ("<p><a href='#locations'>Jump to image comparisons</a></p>" if rows else "")
         + _render_json_details("Run summary JSON", manifest.get("summary", {}))
         + _render_generated_mess_manifest(manifest)
+        + _render_capture_quality_probe(manifest)
         + diagnostic_sections
         + "</header>"
         + "".join(rows)
@@ -4941,6 +5565,58 @@ def _render_generated_mess_manifest(manifest: dict[str, Any]) -> str:
     if not mess_generation:
         return ""
     return _render_json_details("Canonical Generated Mess Manifest", mess_generation)
+
+
+def _render_capture_quality_probe(manifest: dict[str, Any]) -> str:
+    capture_quality = _dict(manifest.get("capture_quality_probe")) or _dict(
+        _dict(manifest.get("summary")).get("capture_quality_probe")
+    )
+    if not capture_quality:
+        return ""
+    rows = []
+    for label, value in (
+        ("render requested", capture_quality.get("render_resolution_requested")),
+        ("saved report", capture_quality.get("render_resolution_saved")),
+        ("metric", capture_quality.get("metric_resolution")),
+        ("saved image mode", capture_quality.get("saved_image_mode")),
+        ("metric image mode", capture_quality.get("metric_image_mode")),
+        ("downsample filter", capture_quality.get("downsample_filter")),
+        ("render settle frames", capture_quality.get("render_settle_frames")),
+        ("samples/AA", _quality_status_label(capture_quality, "anti_aliasing")),
+        ("tone op", _quality_status_label(capture_quality, "tonemap_operator")),
+        ("denoise", _quality_status_label(capture_quality, "denoise")),
+        ("TAA", _quality_status_label(capture_quality, "taa")),
+        ("policy", capture_quality.get("policy_classification")),
+    ):
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(label)}</td>"
+            f"<td>{html.escape(_capture_quality_value(value))}</td>"
+            "</tr>"
+        )
+    return _render_details_html(
+        "Capture Quality Probe",
+        "<h2>Capture Quality Probe</h2>"
+        "<p>Direct high-resolution report images and same-size metric images are "
+        "tracked separately. These fields do not promote a native renderer default.</p>"
+        "<table><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+        + _render_json_details("Capture quality JSON", capture_quality),
+    )
+
+
+def _quality_status_label(capture_quality: dict[str, Any], key: str) -> str:
+    row = _dict(capture_quality.get(key))
+    status = str(row.get("status") or "")
+    value = row.get("value")
+    return f"{status}: {value}" if value is not None else status
+
+
+def _capture_quality_value(value: Any) -> str:
+    if isinstance(value, dict) and {"width", "height"} <= set(value):
+        return f"{value['width']}x{value['height']}"
+    return str(value if value is not None else "")
 
 
 def _render_native_isaac_render_diagnostics(manifest: dict[str, Any]) -> str:

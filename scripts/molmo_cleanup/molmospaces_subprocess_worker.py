@@ -2625,6 +2625,7 @@ def _render_fixed_camera(
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
     width, height = _render_dimensions(width, height)
+    _ensure_offscreen_framebuffer(model, width=width, height=height)
     renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera_name)
     frame = _normalize_renderer_frame(renderer.render())
@@ -2741,6 +2742,7 @@ def _render_free_camera(
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
     width, height = _render_dimensions(width, height)
+    _ensure_offscreen_framebuffer(model, width=width, height=height)
     renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera)
     frame = _normalize_renderer_frame(renderer.render())
@@ -3221,6 +3223,7 @@ def _render_segmentation(
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
     width, height = _render_dimensions(width, height)
+    _ensure_offscreen_framebuffer(model, width=width, height=height)
     renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera)
     renderer.render()
@@ -3324,11 +3327,28 @@ def _render_color_frame(
     height: int = DEFAULT_RENDER_HEIGHT,
 ) -> Any:
     width, height = _render_dimensions(width, height)
+    _ensure_offscreen_framebuffer(model, width=width, height=height)
     renderer = mujoco.Renderer(model, height=height, width=width, max_geom=20000)
     renderer.update_scene(data, camera=camera)
     frame = _normalize_renderer_frame(renderer.render())
     renderer.close()
     return frame
+
+
+def _ensure_offscreen_framebuffer(
+    model: mujoco.MjModel,
+    *,
+    width: int,
+    height: int,
+) -> None:
+    """Grow MuJoCo's offscreen buffer so requested high-res renders are valid."""
+    global_settings = getattr(getattr(model, "vis", None), "global_", None)
+    if global_settings is None:
+        return
+    if int(getattr(global_settings, "offwidth", 0) or 0) < int(width):
+        global_settings.offwidth = int(width)
+    if int(getattr(global_settings, "offheight", 0) or 0) < int(height):
+        global_settings.offheight = int(height)
 
 
 def _subtree_geom_ids(model: mujoco.MjModel, body_name: str) -> list[int]:
