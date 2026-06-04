@@ -29,8 +29,10 @@ from roboclaws.household.camera_control import (
 )
 from roboclaws.household.color_management import apply_camera_color_profile
 from roboclaws.household.generated_mess import (
+    GENERATED_MESS_MANIFEST_SCHEMA,
     generated_mess_success_threshold,
     select_generated_mess_targets,
+    targets_from_generated_mess_manifest,
 )
 from roboclaws.household.robot_view_camera_control import (
     robot_mounted_head_camera_control_contract,
@@ -225,6 +227,11 @@ def main(argv: list[str] | None = None) -> None:
         action="append",
         help="Private run-control object id to include in the generated mess set. Repeatable.",
     )
+    init.add_argument(
+        "--generated-mess-manifest-path",
+        type=Path,
+        help="Private backend-neutral generated mess manifest to apply during init.",
+    )
 
     subparsers.add_parser("observe")
     subparsers.add_parser("locations")
@@ -255,6 +262,9 @@ def main(argv: list[str] | None = None) -> None:
 
     navigate_receptacle = subparsers.add_parser("navigate_to_receptacle")
     navigate_receptacle.add_argument("--receptacle-id", required=True)
+
+    frame_comparison_object_parser = subparsers.add_parser("frame_comparison_object")
+    frame_comparison_object_parser.add_argument("--object-id", required=True)
 
     pick = subparsers.add_parser("pick")
     pick.add_argument("--object-id", required=True)
@@ -290,6 +300,7 @@ def main(argv: list[str] | None = None) -> None:
             robot_name=args.robot_name,
             generated_mess_count=args.generated_mess_count,
             generated_mess_object_ids=tuple(args.generated_mess_object_id or ()),
+            generated_mess_manifest_path=args.generated_mess_manifest_path,
         )
     else:
         state = _read_state(args.state_path)
@@ -335,6 +346,9 @@ def main(argv: list[str] | None = None) -> None:
             _write_state(args.state_path, state)
         elif args.command == "navigate_to_receptacle":
             result = navigate_to_receptacle(state, args.receptacle_id)
+            _write_state(args.state_path, state)
+        elif args.command == "frame_comparison_object":
+            result = frame_comparison_object(state, args.object_id)
             _write_state(args.state_path, state)
         elif args.command == "pick":
             result = pick_object(state, args.object_id)
@@ -443,6 +457,9 @@ def run_state_command(
     elif command == "navigate_to_receptacle":
         result = navigate_to_receptacle(state, str(kwargs["receptacle_id"]))
         _write_state(state_path, state)
+    elif command == "frame_comparison_object":
+        result = frame_comparison_object(state, str(kwargs["object_id"]))
+        _write_state(state_path, state)
     elif command == "pick":
         result = pick_object(state, str(kwargs["object_id"]))
         _write_state(state_path, state)
@@ -465,6 +482,20 @@ def run_state_command(
     return result
 
 
+def _load_generated_mess_manifest(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    manifest = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict):
+        raise ValueError(f"generated mess manifest must be a JSON object: {path}")
+    if manifest.get("schema") != GENERATED_MESS_MANIFEST_SCHEMA:
+        raise ValueError(
+            "generated mess manifest schema mismatch: "
+            f"{manifest.get('schema')} != {GENERATED_MESS_MANIFEST_SCHEMA}"
+        )
+    return manifest
+
+
 def init_state(
     *,
     state_path: Path,
@@ -475,6 +506,7 @@ def init_state(
     robot_name: str = "rby1m",
     generated_mess_count: int = 5,
     generated_mess_object_ids: tuple[str, ...] = (),
+    generated_mess_manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     from molmo_spaces.molmo_spaces_constants import get_robot_path, get_scenes_root
     from molmo_spaces.utils.lazy_loading_utils import install_scene_from_source_index
@@ -501,13 +533,22 @@ def init_state(
     objects = _collect_dynamic_objects(model, data, metadata)
     if generated_mess_count < 1:
         raise ValueError("generated_mess_count must be >= 1")
-    targets = select_generated_mess_targets(
-        objects,
-        receptacles,
-        target_count=generated_mess_count,
-        seed=seed,
-        object_ids=generated_mess_object_ids or None,
-    )
+    generated_mess_manifest = _load_generated_mess_manifest(generated_mess_manifest_path)
+    if generated_mess_manifest:
+        targets = targets_from_generated_mess_manifest(
+            objects,
+            receptacles,
+            generated_mess_manifest,
+            target_count=generated_mess_count,
+        )
+    else:
+        targets = select_generated_mess_targets(
+            objects,
+            receptacles,
+            target_count=generated_mess_count,
+            seed=seed,
+            object_ids=generated_mess_object_ids or None,
+        )
     if len(targets) < generated_mess_count:
         raise RuntimeError(
             f"expected at least {generated_mess_count} cleanup targets, found {len(targets)}"
@@ -538,6 +579,7 @@ def init_state(
         "objects": {item["object_id"]: item for item in objects},
         "receptacles": {item["receptacle_id"]: item for item in receptacles},
         "selected_object_ids": [target["object_id"] for target in targets],
+        "generated_mess_manifest": generated_mess_manifest,
         "requested_generated_mess_count": generated_mess_count,
         "generated_mess_count": len(targets),
         "qpos": [float(value) for value in data.qpos],
@@ -552,7 +594,7 @@ def init_state(
     _refresh_object_positions(model, data, state)
     state["room_outlines"] = _collect_room_outlines(model, data, state)
     if include_robot:
-        initial_receptacle = state["receptacles"][_first_wrong_receptacle(state, targets[0])]
+        initial_receptacle = state["receptacles"][_target_start_receptacle_id(state, targets[0])]
         robot_pose = _robot_pose_near_receptacle(state, initial_receptacle)
         _set_robot_pose(model, data, robot_pose)
         state["robot_pose"] = robot_pose
@@ -567,7 +609,7 @@ def init_state(
             "verify": "public_sim_state_report_focus_camera",
         }
     state["qpos"] = [float(value) for value in data.qpos]
-    state["current_receptacle_id"] = _first_wrong_receptacle(state, targets[0])
+    state["current_receptacle_id"] = _target_start_receptacle_id(state, targets[0])
     state["private_manifest"] = {
         "scenario_id": f"molmospaces-procthor-val-{scene_index}-{seed}",
         "success_threshold": generated_mess_success_threshold(len(targets)),
@@ -586,6 +628,7 @@ def init_state(
         backend=BACKEND,
         scenario=state["scenario_public"],
         private_manifest=state["private_manifest"],
+        generated_mess_manifest=state.get("generated_mess_manifest") or None,
         requested_generated_mess_count=state["requested_generated_mess_count"],
         generated_mess_count=state["generated_mess_count"],
         scene_xml=state["scene_xml"],
@@ -973,6 +1016,40 @@ def navigate_to_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
     )
 
 
+def frame_comparison_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
+    _count(state, "frame_comparison_object")
+    if object_id not in state["objects"]:
+        return _error("frame_comparison_object", "stale_reference", object_id=object_id)
+    if not state.get("robot_included"):
+        return _error("frame_comparison_object", "robot_not_included")
+    model, data = _load_model_data_for_state(state)
+    _apply_qpos(data, state["qpos"])
+    mujoco.mj_forward(model, data)
+    _refresh_object_positions(model, data, state)
+    robot_pose = _robot_pose_near_object(
+        state,
+        state["objects"][object_id],
+        source_receptacle_id=None,
+    )
+    robot_pose["pose_source"] = "roboclaws_comparison_object_pose"
+    _set_robot_pose(model, data, robot_pose)
+    mujoco.mj_forward(model, data)
+    state["qpos"] = [float(value) for value in data.qpos]
+    state["robot_pose"] = robot_pose
+    state.setdefault("robot_trajectory", []).append(robot_pose)
+    return _ok(
+        "frame_comparison_object",
+        primitive_provenance=API_SEMANTIC_PROVENANCE,
+        object_id=object_id,
+        state_mutation="robot_base_qpos",
+        robot_name=state.get("robot_name"),
+        robot_pose=robot_pose,
+        robot_control_provenance=state.get("robot_control_provenance"),
+        qpos_changed=True,
+        backend=BACKEND,
+    )
+
+
 def pick_object(state: dict[str, Any], object_id: str) -> dict[str, Any]:
     _count(state, "pick")
     if object_id not in state["objects"]:
@@ -1307,7 +1384,11 @@ def _seed_misplaced_objects(
     state: dict[str, Any],
     targets: list[dict[str, Any]],
 ) -> None:
-    target_receptacle_ids = {target["target_receptacle_id"] for target in targets}
+    manifest_targets = _manifest_target_by_object_id(state)
+    target_receptacle_ids = {
+        _target_receptacle_id(target, manifest_targets.get(str(target["object_id"])))
+        for target in targets
+    }
     wrong_pool = [
         item
         for item in state["receptacles"].values()
@@ -1323,14 +1404,13 @@ def _seed_misplaced_objects(
     if not wrong_pool:
         wrong_pool = list(state["receptacles"].values())
     for index, target in enumerate(targets):
-        wrong = wrong_pool[index % len(wrong_pool)]
-        if wrong["receptacle_id"] == target["target_receptacle_id"]:
-            wrong = wrong_pool[(index + 1) % len(wrong_pool)]
-        state["objects"][target["object_id"]]["target_receptacle_id"] = target[
-            "target_receptacle_id"
-        ]
+        manifest_target = manifest_targets.get(str(target["object_id"]))
+        target_receptacle_id = _target_receptacle_id(target, manifest_target)
+        placement_index = _target_placement_index(index, manifest_target)
+        wrong = _target_start_receptacle(state, target, wrong_pool, index, manifest_target)
+        state["objects"][target["object_id"]]["target_receptacle_id"] = target_receptacle_id
         state["objects"][target["object_id"]]["seeded_start_receptacle_id"] = wrong["receptacle_id"]
-        relation = "inside" if _receptacle_prefers_inside(wrong) else "on"
+        relation = _target_relation(wrong, manifest_target)
         state["objects"][target["object_id"]]["contained_in"] = (
             wrong["receptacle_id"] if relation == "inside" else None
         )
@@ -1341,7 +1421,7 @@ def _seed_misplaced_objects(
             state=state,
             object_id=target["object_id"],
             receptacle_id=wrong["receptacle_id"],
-            index=index,
+            index=placement_index,
             relation=relation,
         )
         placement_position = placement_resolution["position"]
@@ -1359,11 +1439,96 @@ def _seed_misplaced_objects(
             receptacle_id=wrong["receptacle_id"],
             relation=relation,
             requested_position=placement_position,
-            source="mess_seed",
+            source="canonical_mess_manifest" if manifest_target else "mess_seed",
+            placement_index=placement_index,
             placement_resolution=placement_resolution,
         )
         state.setdefault("mess_placement_diagnostics", []).append(diagnostic)
     mujoco.mj_forward(model, data)
+
+
+def _manifest_target_by_object_id(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    manifest = state.get("generated_mess_manifest")
+    if not isinstance(manifest, dict):
+        return {}
+    targets: dict[str, dict[str, Any]] = {}
+    for raw_target in manifest.get("targets", []):
+        if not isinstance(raw_target, dict):
+            continue
+        object_id = str(raw_target.get("object_id") or "")
+        if object_id:
+            targets[object_id] = dict(raw_target)
+    return targets
+
+
+def _target_receptacle_id(
+    target: dict[str, Any],
+    manifest_target: dict[str, Any] | None,
+) -> str:
+    if manifest_target:
+        valid_ids = [
+            str(item)
+            for item in (
+                manifest_target.get("valid_receptacle_ids")
+                or [manifest_target.get("target_receptacle_id")]
+            )
+            if str(item)
+        ]
+        if valid_ids:
+            return valid_ids[0]
+    return str(target["target_receptacle_id"])
+
+
+def _target_start_receptacle(
+    state: dict[str, Any],
+    target: dict[str, Any],
+    wrong_pool: list[dict[str, Any]],
+    index: int,
+    manifest_target: dict[str, Any] | None,
+) -> dict[str, Any]:
+    if manifest_target:
+        start_receptacle_id = str(manifest_target.get("start_receptacle_id") or "")
+        if start_receptacle_id:
+            receptacle = state["receptacles"].get(start_receptacle_id)
+            if receptacle is None:
+                raise ValueError(
+                    "generated mess manifest start receptacle id is unavailable: "
+                    f"{target['object_id']} -> {start_receptacle_id}"
+                )
+            return receptacle
+    wrong = wrong_pool[index % len(wrong_pool)]
+    if wrong["receptacle_id"] == target["target_receptacle_id"]:
+        wrong = wrong_pool[(index + 1) % len(wrong_pool)]
+    return wrong
+
+
+def _target_start_receptacle_id(state: dict[str, Any], target: dict[str, Any]) -> str:
+    manifest_target = _manifest_target_by_object_id(state).get(str(target["object_id"]))
+    if manifest_target:
+        start_receptacle_id = str(manifest_target.get("start_receptacle_id") or "")
+        if start_receptacle_id:
+            return start_receptacle_id
+    return _first_wrong_receptacle(state, target)
+
+
+def _target_relation(
+    receptacle: dict[str, Any],
+    manifest_target: dict[str, Any] | None,
+) -> str:
+    if manifest_target:
+        relation = str(manifest_target.get("relation") or "")
+        if relation in {"on", "inside"}:
+            return relation
+    return "inside" if _receptacle_prefers_inside(receptacle) else "on"
+
+
+def _target_placement_index(index: int, manifest_target: dict[str, Any] | None) -> int:
+    if not manifest_target:
+        return index
+    try:
+        return int(manifest_target.get("placement_index"))
+    except (TypeError, ValueError):
+        return index
 
 
 def _public_scenario(state: dict[str, Any]) -> dict[str, Any]:
@@ -2069,6 +2234,7 @@ def _placement_diagnostic(
     relation: str,
     requested_position: list[float],
     source: str,
+    placement_index: int | None = None,
     placement_resolution: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     obj = state["objects"][object_id]
@@ -2092,6 +2258,7 @@ def _placement_diagnostic(
         "receptacle_category": receptacle.get("category"),
         "receptacle_body_name": receptacle.get("body_name"),
         "relation": relation,
+        "placement_index": placement_index,
         "requested_position": [round(float(value), 6) for value in requested_position],
         "object_position": [round(float(value), 6) for value in object_position],
         "receptacle_position": [round(float(value), 6) for value in receptacle_position],

@@ -1,0 +1,187 @@
+"""Stdlib HTTP server for the standalone agent operator console."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import mimetypes
+import os
+from functools import partial
+from http import HTTPStatus
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
+
+from roboclaws.operator_console.launcher import (
+    ConsoleLaunchError,
+    LaunchRequest,
+    route_readiness,
+    start_console_run,
+    stop_console_run,
+)
+from roboclaws.operator_console.paths import OUTPUT_ROOT_ENV, console_output_root
+from roboclaws.operator_console.routes import get_route, list_console_routes
+from roboclaws.operator_console.state import derive_operator_state, redacted_artifact_text
+
+PAUSE_UNAVAILABLE_REASON = "Pause is unavailable for this route. Use Stop or Emergency Stop."
+
+
+class ConsoleRequestHandler(SimpleHTTPRequestHandler):
+    """Serve static assets plus JSON APIs."""
+
+    def __init__(self, *args: object, root: Path, **kwargs: object) -> None:
+        self.repo_root = root.resolve()
+        static_root = Path(__file__).resolve().parent / "static"
+        super().__init__(*args, directory=str(static_root), **kwargs)
+
+    def do_GET(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path == "/api/routes":
+            return self._json(
+                {
+                    "routes": [route.to_payload() for route in list_console_routes()],
+                    "readiness": {
+                        route.id: route_readiness(self.repo_root, route)
+                        for route in list_console_routes(include_disabled=False)
+                    },
+                }
+            )
+        if parsed.path == "/api/readiness":
+            try:
+                query = parse_qs(parsed.query)
+                route = get_route(str(query.get("route_id", [""])[0]))
+                overrides = {
+                    key: str(query[key][0])
+                    for key in ("host", "port", "context_json")
+                    if query.get(key, [""])[0]
+                }
+                return self._json(route_readiness(self.repo_root, route, overrides=overrides))
+            except (ConsoleLaunchError, KeyError, ValueError) as exc:
+                return self._json({"error": str(exc)}, status=400)
+        if parsed.path.startswith("/api/runs/"):
+            run_id = unquote(parsed.path.removeprefix("/api/runs/"))
+            if run_id.endswith("/pause"):
+                run_id = run_id.removesuffix("/pause")
+                return self._json(
+                    {
+                        "run_id": run_id,
+                        "paused": False,
+                        "reason": PAUSE_UNAVAILABLE_REASON,
+                    }
+                )
+            route_id = parse_qs(parsed.query).get("route", [""])[0]
+            route = get_route(route_id) if route_id else None
+            run_dir = console_output_root(self.repo_root) / "runs" / run_id
+            return self._json(derive_operator_state(self.repo_root, run_dir, route))
+        if parsed.path.startswith("/api/raw/"):
+            rel = Path(unquote(parsed.path.removeprefix("/api/raw/")))
+            path = (self.repo_root / rel).resolve()
+            if not _is_relative_to(path, self.repo_root) or not path.exists():
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            return self._text(redacted_artifact_text(path))
+        if parsed.path.startswith("/artifacts/"):
+            rel = Path(unquote(parsed.path.removeprefix("/artifacts/")))
+            path = (self.repo_root / rel).resolve()
+            if not _is_relative_to(path, self.repo_root) or not path.exists():
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            return self._file(path)
+        return super().do_GET()
+
+    def do_POST(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        try:
+            payload = self._read_payload()
+            if parsed.path == "/api/runs":
+                request = LaunchRequest(
+                    route_id=str(payload.get("route_id") or ""),
+                    prompt=str(payload.get("prompt") or ""),
+                    overrides=dict(payload.get("overrides") or {}),
+                    gates=dict(payload.get("gates") or {}),
+                )
+                return self._json(start_console_run(self.repo_root, request), status=201)
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/pause"):
+                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/pause")
+                return self._json(
+                    {
+                        "run_id": run_id,
+                        "paused": False,
+                        "reason": PAUSE_UNAVAILABLE_REASON,
+                    }
+                )
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/stop"):
+                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/stop")
+                return self._json(stop_console_run(self.repo_root, run_id))
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/emergency-stop"):
+                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/emergency-stop")
+                return self._json(stop_console_run(self.repo_root, run_id, emergency=True))
+        except (ConsoleLaunchError, KeyError, ValueError) as exc:
+            return self._json({"error": str(exc)}, status=400)
+        return self.send_error(HTTPStatus.NOT_FOUND)
+
+    def _read_payload(self) -> dict[str, object]:
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0:
+            return {}
+        data = self.rfile.read(length)
+        payload = json.loads(data.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("expected JSON object")
+        return payload
+
+    def _json(self, payload: object, *, status: int = 200) -> None:
+        data = json.dumps(payload, indent=2, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _text(self, text: str, *, status: int = 200) -> None:
+        data = text.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _file(self, path: Path) -> None:
+        data = path.read_bytes()
+        self.send_response(200)
+        self.send_header(
+            "Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        )
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+def run_server(root: Path, host: str, port: int) -> None:
+    handler = partial(ConsoleRequestHandler, root=root)
+    server = ThreadingHTTPServer((host, port), handler)
+    url_host = "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+    print(f"Agent Operator Console: http://{url_host}:{port}")
+    try:
+        server.serve_forever()
+    finally:
+        server.server_close()
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Run the standalone agent operator console.")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--repo-root", type=Path, default=Path.cwd())
+    parser.add_argument("--output-root", type=Path, default=None)
+    args = parser.parse_args(argv)
+    if args.output_root is not None:
+        os.environ[OUTPUT_ROOT_ENV] = str(args.output_root)
+    run_server(args.repo_root.resolve(), args.host, args.port)
+    return 0
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        return False
+    return True

@@ -276,6 +276,13 @@ agent declares a candidate only when trying to act on it, through
 `navigate_to_visual_candidate`. Do not add a separate pre-registration knob to
 normal raw-FPV runs unless future harness evidence shows a clear win.
 
+In minimal-map runs, the cleanup agent must omit `target_fixture_id` when
+calling `navigate_to_visual_candidate`; authored fixture hints are intentionally
+hidden. The tool resolves public grounding and returns `candidate_fixture_id`
+and `recommended_tool` for the follow-up pick/place chain. In explicit rich
+legacy/debug runs only, a target fixture may come from non-empty
+`fixture_hints`.
+
 Explicit registration still belongs to producer-style perception flows:
 `camera-labels` uses `declare_visual_candidates` after an observation, then the
 cleanup policy chooses among the resulting `observed_*` handles.

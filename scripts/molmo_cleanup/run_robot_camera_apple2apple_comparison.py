@@ -19,6 +19,10 @@ if __package__ in {None, ""}:
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
+from roboclaws.household.generated_mess import (
+    build_generated_mess_manifest,
+    generated_mess_manifest_object_ids,
+)
 from roboclaws.household.renderer_comparison import _relpath
 from roboclaws.household.scene_camera_comparison import (
     _isaac_render_contract_from_usda,
@@ -37,6 +41,8 @@ MUJOCO_LANE_ID = "molmospaces-mujoco-rby1m"
 ISAAC_LANE_ID = "isaaclab-rby1m-usd"
 ROBOT_VIEW_KEYS = ("fpv", "chase")
 OBJECT_PARITY_POSE_THRESHOLD_M = 0.05
+PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD = 35.0
+PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD = 0.5
 OBJECT_VISUAL_STATE_REGISTRY = {
     "box": {
         "schema": "robot_camera_object_visual_state_registry_entry_v1",
@@ -59,6 +65,18 @@ OBJECT_VISUAL_STATE_REGISTRY = {
     }
 }
 OBJECT_VISUAL_STATE_CATEGORIES = set(OBJECT_VISUAL_STATE_REGISTRY)
+VISUAL_PHYSICS_PROTECTION = {
+    "schema": "robot_camera_visual_physics_protection_policy_v1",
+    "protected_by": "prepared_usd_visual_physics_freeze",
+    "policy": (
+        "Objects with MuJoCo articulated visual joints or preserved Isaac physics are "
+        "visual-physics-sensitive. Stripping PhysX or USD physics is necessary to keep "
+        "Isaac from mutating them, but it is not sufficient proof that the frozen visual "
+        "pose matches MuJoCo. A protected object must have selected nonblank RGB evidence "
+        "from an object-centered robot pose/focus contract before the Object Gate may "
+        "classify it as comparable."
+    ),
+}
 ISAAC_NATIVE_RENDER_DIAGNOSTICS_SCHEMA = "isaac_native_render_diagnostics_v1"
 
 
@@ -157,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
 def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    canonical_scene_state_path = output_dir / "canonical_scene_state.json"
+    generated_mess_manifest_path = output_dir / "generated_mess_manifest.json"
     mujoco_state_path = output_dir / "mujoco_state.json"
     isaac_state_path = output_dir / "isaac_state.json"
     mujoco_run_dir = output_dir / "mujoco"
@@ -186,10 +206,48 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
         "artifacts": {
             "manifest": "comparison_manifest.json",
             "report": "report.html",
+            "generated_mess_manifest": "generated_mess_manifest.json",
         },
     }
 
+    canonical_mess_manifest: dict[str, Any] = {}
     try:
+        _run_json(
+            [
+                str(args.mujoco_python),
+                "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
+                "--state-path",
+                str(canonical_scene_state_path),
+                "init",
+                "--seed",
+                str(args.seed),
+                "--scene-source",
+                args.scene_source,
+                "--scene-index",
+                str(args.scene_index),
+                "--generated-mess-count",
+                str(args.generated_mess_count),
+            ],
+            cwd=Path.cwd(),
+        )
+        canonical_mess_manifest = _canonical_generated_mess_manifest_from_state(
+            _read_json(canonical_scene_state_path),
+            args=args,
+        )
+        if int(canonical_mess_manifest.get("generated_mess_count") or 0) < int(
+            args.generated_mess_count
+        ):
+            raise RuntimeError(
+                "canonical generated mess manifest did not contain enough targets "
+                f"({canonical_mess_manifest.get('generated_mess_count')} < "
+                f"{args.generated_mess_count})"
+            )
+        _write_json(generated_mess_manifest_path, canonical_mess_manifest)
+        manifest["mess_generation"] = _mess_generation_summary(
+            canonical_mess_manifest,
+            output_dir=output_dir,
+            manifest_path=generated_mess_manifest_path,
+        )
         mujoco_init = _run_json(
             [
                 str(args.mujoco_python),
@@ -205,40 +263,61 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                 str(args.scene_index),
                 "--generated-mess-count",
                 str(args.generated_mess_count),
+                "--generated-mess-manifest-path",
+                str(generated_mess_manifest_path),
                 "--include-robot",
                 "--robot-name",
                 "rby1m",
             ],
             cwd=Path.cwd(),
         )
+        isaac_init_command = [
+            str(args.isaac_python),
+            "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
+            "--state-path",
+            str(isaac_state_path),
+            "init",
+            "--run-dir",
+            str(isaac_run_dir),
+            "--seed",
+            str(args.seed),
+            "--scene-source",
+            args.scene_source,
+            "--scene-index",
+            str(args.scene_index),
+            "--generated-mess-count",
+            str(args.generated_mess_count),
+            "--generated-mess-manifest-path",
+            str(generated_mess_manifest_path),
+            "--runtime-mode",
+            "real",
+            "--include-robot",
+            "--robot-name",
+            "rby1m",
+            "--scene-usd-path",
+            str(args.scene_usd_path),
+        ]
         isaac_init = _run_json(
-            [
-                str(args.isaac_python),
-                "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-                "--state-path",
-                str(isaac_state_path),
-                "init",
-                "--run-dir",
-                str(isaac_run_dir),
-                "--seed",
-                str(args.seed),
-                "--scene-source",
-                args.scene_source,
-                "--scene-index",
-                str(args.scene_index),
-                "--generated-mess-count",
-                str(args.generated_mess_count),
-                "--runtime-mode",
-                "real",
-                "--include-robot",
-                "--robot-name",
-                "rby1m",
-                "--scene-usd-path",
-                str(args.scene_usd_path),
-            ],
+            isaac_init_command,
             cwd=Path.cwd(),
+        )
+        _validate_generated_mess_init(
+            lane_id=MUJOCO_LANE_ID,
+            init_result=mujoco_init,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_init(
+            lane_id=ISAAC_LANE_ID,
+            init_result=isaac_init,
+            canonical_manifest=canonical_mess_manifest,
         )
     except Exception as exc:
+        if canonical_mess_manifest and "mess_generation" not in manifest:
+            manifest["mess_generation"] = _mess_generation_summary(
+                canonical_mess_manifest,
+                output_dir=output_dir,
+                manifest_path=generated_mess_manifest_path,
+            )
         manifest["status"] = "blocked"
         manifest["blocker"] = str(exc)
         _write_outputs(manifest, output_dir)
@@ -250,6 +329,32 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
 
     mujoco_state = _read_json(mujoco_state_path)
     isaac_state = _read_json(isaac_state_path)
+    try:
+        _validate_generated_mess_state_locations(
+            lane_id=MUJOCO_LANE_ID,
+            state=mujoco_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_state_locations(
+            lane_id=ISAAC_LANE_ID,
+            state=isaac_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_placement_diagnostics(
+            lane_id=MUJOCO_LANE_ID,
+            state=mujoco_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+        _validate_generated_mess_placement_diagnostics(
+            lane_id=ISAAC_LANE_ID,
+            state=isaac_state,
+            canonical_manifest=canonical_mess_manifest,
+        )
+    except Exception as exc:
+        manifest["status"] = "blocked"
+        manifest["blocker"] = str(exc)
+        _write_outputs(manifest, output_dir)
+        return manifest
     _attach_state_artifact_summaries(
         manifest,
         output_dir=output_dir,
@@ -294,7 +399,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                         "scripts/molmo_cleanup/molmospaces_subprocess_worker.py",
                         "--state-path",
                         str(mujoco_state_path),
-                        "navigate_to_object",
+                        "frame_comparison_object",
                         "--object-id",
                         target["target_id"],
                     ],
@@ -323,6 +428,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.render_width),
                     "--render-height",
                     str(args.render_height),
+                    *_focus_args(target),
                 ],
                 cwd=Path.cwd(),
             )
@@ -341,6 +447,7 @@ def run_comparison(args: argparse.Namespace) -> dict[str, Any]:
                     str(args.render_width),
                     "--render-height",
                     str(args.render_height),
+                    *_focus_args(target),
                 ],
                 cwd=Path.cwd(),
             )
@@ -461,6 +568,172 @@ def _parse_last_json_object(text: str) -> dict[str, Any]:
     raise RuntimeError(f"worker output did not end with a JSON object: {text[-1000:]}")
 
 
+def _canonical_generated_mess_manifest_from_state(
+    state: dict[str, Any],
+    *,
+    args: argparse.Namespace,
+) -> dict[str, Any]:
+    objects = [_dict(item) for item in _dict(state.get("objects")).values()]
+    receptacles = [_dict(item) for item in _dict(state.get("receptacles")).values()]
+    if not objects:
+        raise RuntimeError("canonical scene state did not expose any generated-mess objects")
+    if not receptacles:
+        raise RuntimeError("canonical scene state did not expose any generated-mess receptacles")
+    return build_generated_mess_manifest(
+        objects,
+        receptacles,
+        target_count=int(args.generated_mess_count),
+        seed=int(args.seed),
+        scene_source=str(args.scene_source),
+        scene_index=int(args.scene_index),
+        scene_metadata_source="molmospaces_scene_metadata",
+    )
+
+
+def _mess_generation_summary(
+    canonical_manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    manifest_path: Path,
+) -> dict[str, Any]:
+    target_summaries = []
+    for target in canonical_manifest.get("targets", []):
+        item = _dict(target)
+        target_summaries.append(
+            {
+                "object_id": item.get("object_id"),
+                "target_receptacle_id": item.get("target_receptacle_id"),
+                "valid_receptacle_ids": item.get("valid_receptacle_ids") or [],
+                "start_receptacle_id": item.get("start_receptacle_id"),
+                "relation": item.get("relation"),
+                "placement_index": item.get("placement_index"),
+            }
+        )
+    return {
+        "schema": "robot_camera_apple2apple_mess_generation_v1",
+        "status": "canonical_generated_mess_manifest",
+        "manifest_schema": canonical_manifest.get("schema"),
+        "provenance": canonical_manifest.get("provenance"),
+        "object_id_source": "backend_neutral_generated_mess_manifest",
+        "artifact": _relpath(manifest_path, output_dir),
+        "seed": _dict(canonical_manifest.get("selection")).get("seed"),
+        "requested_generated_mess_count": canonical_manifest.get("requested_generated_mess_count"),
+        "generated_mess_count": canonical_manifest.get("generated_mess_count"),
+        "canonical_generated_mess_object_ids": generated_mess_manifest_object_ids(
+            canonical_manifest
+        ),
+        "targets": target_summaries,
+    }
+
+
+def _validate_generated_mess_init(
+    *,
+    lane_id: str,
+    init_result: dict[str, Any],
+    canonical_manifest: dict[str, Any],
+) -> None:
+    expected = _private_manifest_target_pairs(canonical_manifest)
+    actual = _private_manifest_target_pairs(_dict(init_result.get("private_manifest")))
+    if actual != expected:
+        raise RuntimeError(
+            f"{lane_id} generated mess targets did not match canonical manifest: "
+            f"{actual} != {expected}"
+        )
+
+
+def _validate_generated_mess_state_locations(
+    *,
+    lane_id: str,
+    state: dict[str, Any],
+    canonical_manifest: dict[str, Any],
+) -> None:
+    locations = _state_location_map(state)
+    expected = {
+        str(_dict(target).get("object_id") or ""): str(
+            _dict(target).get("start_receptacle_id") or ""
+        )
+        for target in canonical_manifest.get("targets", [])
+        if str(_dict(target).get("object_id") or "")
+    }
+    actual = {object_id: locations.get(object_id, "") for object_id in expected}
+    if actual != expected:
+        raise RuntimeError(
+            f"{lane_id} generated mess start locations did not match canonical manifest: "
+            f"{actual} != {expected}"
+        )
+
+
+def _validate_generated_mess_placement_diagnostics(
+    *,
+    lane_id: str,
+    state: dict[str, Any],
+    canonical_manifest: dict[str, Any],
+) -> None:
+    expected = _placement_contract_by_object(canonical_manifest.get("targets", []))
+    actual = _placement_contract_by_object(
+        item
+        for item in state.get("mess_placement_diagnostics", [])
+        if _dict(item).get("diagnostic_source") == "canonical_mess_manifest"
+    )
+    missing = sorted(set(expected) - set(actual))
+    if missing:
+        raise RuntimeError(
+            f"{lane_id} generated mess placement diagnostics missing canonical targets: {missing}"
+        )
+    mismatches = {
+        object_id: {"actual": actual[object_id], "expected": expected[object_id]}
+        for object_id in sorted(expected)
+        if actual.get(object_id) != expected[object_id]
+    }
+    if mismatches:
+        raise RuntimeError(
+            f"{lane_id} generated mess placement diagnostics did not match canonical "
+            f"manifest: {mismatches}"
+        )
+
+
+def _placement_contract_by_object(items: Any) -> dict[str, dict[str, Any]]:
+    contracts: dict[str, dict[str, Any]] = {}
+    for raw_item in items:
+        item = _dict(raw_item)
+        object_id = str(item.get("object_id") or "")
+        if not object_id:
+            continue
+        contracts[object_id] = {
+            "receptacle_id": str(
+                item.get("start_receptacle_id") or item.get("receptacle_id") or ""
+            ),
+            "relation": str(item.get("relation") or ""),
+            "placement_index": item.get("placement_index"),
+        }
+    return contracts
+
+
+def _private_manifest_target_pairs(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "object_id": str(_dict(target).get("object_id") or ""),
+            "valid_receptacle_ids": [
+                str(item) for item in _dict(target).get("valid_receptacle_ids", []) if str(item)
+            ],
+        }
+        for target in manifest.get("targets", [])
+        if str(_dict(target).get("object_id") or "")
+    ]
+
+
+def _state_location_map(state: dict[str, Any]) -> dict[str, str]:
+    if isinstance(state.get("locations"), dict):
+        return {str(key): str(value) for key, value in _dict(state.get("locations")).items()}
+    locations: dict[str, str] = {}
+    for object_id, raw_obj in _dict(state.get("objects")).items():
+        obj = _dict(raw_obj)
+        locations[str(object_id)] = str(
+            obj.get("contained_in") or obj.get("seeded_start_receptacle_id") or ""
+        )
+    return locations
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -511,6 +784,7 @@ def _select_comparison_targets(
     isaac_state: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     candidates = _comparison_targets(state, limit=max(1, limit * 4))
+    priority_targets = _visual_physics_sensitive_target_ids(state)
     binding_ids = _bound_comparison_target_ids(
         scene_binding_diagnostics or {},
         isaac_state=isaac_state or {},
@@ -522,7 +796,8 @@ def _select_comparison_targets(
             if str(item.get("target_id") or "")
             in binding_ids.get(str(item.get("kind") or ""), set())
         ]
-        selected = bound_candidates[:limit]
+        ordered_candidates = _prioritize_comparison_targets(bound_candidates, priority_targets)
+        selected = ordered_candidates[:limit]
         dropped = [
             item
             for item in candidates
@@ -531,9 +806,14 @@ def _select_comparison_targets(
         ]
         status = "isaac_bound_targets_selected"
     else:
-        selected = candidates[:limit]
+        ordered_candidates = _prioritize_comparison_targets(candidates, priority_targets)
+        selected = ordered_candidates[:limit]
         dropped = []
         status = "unfiltered_no_isaac_binding_diagnostics"
+    selected_ids = {str(item.get("target_id") or "") for item in selected}
+    priority_selected = [
+        item for item in selected if str(item.get("target_id") or "") in priority_targets
+    ]
     return {
         "schema": "robot_camera_comparison_target_selection_v1",
         "status": status,
@@ -542,25 +822,72 @@ def _select_comparison_targets(
         "isaac_bound_candidate_count": len(bound_candidates) if any(binding_ids.values()) else 0,
         "selected_count": len(selected),
         "selected_targets": selected,
+        "visual_physics_sensitive_target_count": len(priority_targets),
+        "visual_physics_sensitive_selected_count": len(priority_selected),
+        "visual_physics_sensitive_selected_targets": priority_selected,
+        "visual_physics_sensitive_not_selected_targets": [
+            item
+            for item in ordered_candidates
+            if str(item.get("target_id") or "") in priority_targets
+            and str(item.get("target_id") or "") not in selected_ids
+        ][:10],
         "dropped_unbound_target_count": len(dropped),
         "dropped_unbound_targets": dropped[:10],
         "not_selected_bound_target_count": max(
             0,
-            (len(bound_candidates) if any(binding_ids.values()) else len(candidates))
-            - len(selected),
+            len(ordered_candidates) - len(selected),
         ),
-        "not_selected_bound_targets": (
-            bound_candidates[len(selected) : len(selected) + 10]
-            if any(binding_ids.values())
-            else candidates[len(selected) : len(selected) + 10]
-        ),
+        "not_selected_bound_targets": (ordered_candidates[len(selected) : len(selected) + 10]),
         "interpretation": (
             "Robot-camera apple-to-apple image parity renders a bounded subset of targets "
             "that both backends can bind to USD/MJCF render contracts. Objects outside "
             "this selected image subset are still covered by object_parity_audit when "
-            "state/index evidence is available."
+            "state/index evidence is available, but visual-physics-sensitive objects are "
+            "prioritized because physics-freeze metadata alone does not prove the frozen "
+            "visual pose matches MuJoCo."
         ),
     }
+
+
+def _prioritize_comparison_targets(
+    candidates: list[dict[str, Any]],
+    priority_target_ids: set[str],
+) -> list[dict[str, Any]]:
+    if not priority_target_ids:
+        return list(candidates)
+    return sorted(
+        candidates,
+        key=lambda item: (
+            0 if str(item.get("target_id") or "") in priority_target_ids else 1,
+            0 if str(item.get("kind") or "") == "object" else 1,
+        ),
+    )
+
+
+def _visual_physics_sensitive_target_ids(state: dict[str, Any]) -> set[str]:
+    target_ids: set[str] = set()
+    explicit = _dict(state.get("joint_states"))
+    for target_id, raw_entries in explicit.items():
+        entries: list[dict[str, Any]] = []
+        if isinstance(raw_entries, list):
+            entries = [_dict(item) for item in raw_entries if isinstance(item, dict)]
+        elif isinstance(raw_entries, dict):
+            entries = [_dict(item) for item in raw_entries.values() if isinstance(item, dict)]
+        if any(_mujoco_joint_is_visual_articulation(joint) for joint in entries):
+            target_ids.add(str(target_id))
+    for target_id in _dict(state.get("objects")):
+        category = _object_category_key(_dict(state["objects"].get(target_id)).get("category"))
+        if not category:
+            category = _object_category_key(str(target_id).split("_", 1)[0])
+        if category in OBJECT_VISUAL_STATE_CATEGORIES:
+            target_ids.add(str(target_id))
+    return target_ids
+
+
+def _mujoco_joint_is_visual_articulation(joint: dict[str, Any]) -> bool:
+    joint_type = str(joint.get("joint_type") or joint.get("type") or "").lower()
+    joint_name = str(joint.get("joint_name") or "").lower()
+    return joint_type in {"hinge", "3", "mjjnt_hinge"} or "flap" in joint_name
 
 
 def _bound_comparison_target_ids(
@@ -645,6 +972,17 @@ def _patch_isaac_robot_pose(
     else:
         state.pop("robot_view_color_profile_override", None)
     _write_json(state_path, state)
+
+
+def _focus_args(target: dict[str, Any]) -> list[str]:
+    target_id = str(target.get("target_id") or "")
+    if not target_id:
+        return []
+    if str(target.get("kind") or "") == "object":
+        return ["--focus-object-id", target_id]
+    if str(target.get("kind") or "") == "receptacle":
+        return ["--focus-receptacle-id", target_id]
+    return []
 
 
 def _lane_init_summary(init_result: dict[str, Any]) -> dict[str, Any]:
@@ -1261,6 +1599,14 @@ def _object_category_status_summary(items: list[dict[str, Any]]) -> list[dict[st
                 "rgb_view_evidence_status_counts": _status_counts(
                     _dict(item.get("rgb_view_evidence")).get("status") for item in category_items
                 ),
+                "target_coverage_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("target_coverage_status")
+                    for item in category_items
+                ),
+                "target_visual_state_status_counts": _status_counts(
+                    _dict(item.get("rgb_view_evidence")).get("target_visual_state_status")
+                    for item in category_items
+                ),
                 "render_contract_status_counts": _status_counts(
                     _dict(item.get("render_contract_delta")).get("status")
                     for item in category_items
@@ -1381,6 +1727,8 @@ def _object_gate_record(item: dict[str, Any]) -> dict[str, Any]:
         "render_contract_status": render_delta.get("status"),
         "visual_state_status": visual_state.get("status"),
         "rgb_view_evidence_status": rgb_evidence.get("status"),
+        "target_coverage_status": rgb_evidence.get("target_coverage_status"),
+        "target_visual_state_status": rgb_evidence.get("target_visual_state_status"),
         "pose_delta_m": item.get("pose_delta_m"),
         "mujoco_category": _dict(item.get("mujoco")).get("category"),
         "isaac_category": _dict(item.get("isaac")).get("category")
@@ -1402,6 +1750,12 @@ def _object_gate_classification(item: dict[str, Any], statuses: set[str]) -> str
         return "pose_delta"
     if str(item.get("support_status") or "") == "support_metadata_delta":
         return "pose_delta"
+    if _visual_physics_protected_without_selected_rgb(item):
+        return "visual_state_needs_rgb_evidence"
+    if _visual_physics_protected_without_target_coverage(item):
+        return "visual_state_needs_target_coverage"
+    if _visual_physics_protected_with_target_visual_delta(item):
+        return "visual_state_delta"
     if str(item.get("state_status") or "") in {
         "state_delta",
         "state_not_rendered_to_usd",
@@ -1419,7 +1773,51 @@ def _object_gate_classification(item: dict[str, Any], statuses: set[str]) -> str
     return "comparable"
 
 
+def _visual_physics_protected_without_selected_rgb(item: dict[str, Any]) -> bool:
+    visual_state = _dict(item.get("visual_state_contract"))
+    protected_by = str(visual_state.get("protected_by") or "")
+    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
+        return False
+    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
+        return False
+    rgb_status = str(_dict(item.get("rgb_view_evidence")).get("status") or "")
+    return rgb_status != "selected_views_nonblank"
+
+
+def _visual_physics_protected_without_target_coverage(item: dict[str, Any]) -> bool:
+    visual_state = _dict(item.get("visual_state_contract"))
+    protected_by = str(visual_state.get("protected_by") or "")
+    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
+        return False
+    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
+        return False
+    coverage_status = str(_dict(item.get("rgb_view_evidence")).get("target_coverage_status") or "")
+    return coverage_status != "selected_object_centered_coverage"
+
+
+def _visual_physics_protected_with_target_visual_delta(item: dict[str, Any]) -> bool:
+    visual_state = _dict(item.get("visual_state_contract"))
+    protected_by = str(visual_state.get("protected_by") or "")
+    if protected_by != VISUAL_PHYSICS_PROTECTION["protected_by"]:
+        return False
+    if str(visual_state.get("status") or "") != "visual_state_static_ref_baked":
+        return False
+    target_visual_status = str(
+        _dict(item.get("rgb_view_evidence")).get("target_visual_state_status") or ""
+    )
+    return target_visual_status != "selected_object_visual_state_aligned"
+
+
 def _object_gate_blocking_status(item: dict[str, Any], statuses: set[str]) -> str:
+    if _visual_physics_protected_without_selected_rgb(item):
+        return "visual_state_requires_selected_rgb_evidence"
+    if _visual_physics_protected_without_target_coverage(item):
+        return "visual_state_requires_selected_target_coverage"
+    if _visual_physics_protected_with_target_visual_delta(item):
+        return str(
+            _dict(item.get("rgb_view_evidence")).get("target_visual_state_status")
+            or "selected_object_visual_state_delta"
+        )
     for value in (
         item.get("binding_status"),
         item.get("category_status"),
@@ -1510,7 +1908,7 @@ def _object_parity_item(
     output_dir: Path | None,
 ) -> dict[str, Any]:
     mujoco_entry = _mujoco_state_entry(mujoco_state, kind, target_id)
-    isaac_entry = _isaac_index_entry(isaac_state, kind, target_id)
+    isaac_entry = _isaac_effective_index_entry(isaac_state, kind, target_id)
     target = {"kind": kind, "target_id": target_id}
     binding = _target_usd_binding(scene_binding_diagnostics, target)
     usd_prim_path = str(
@@ -1611,12 +2009,48 @@ def _isaac_index_entry(state: dict[str, Any], kind: str, target_id: str) -> dict
     return _dict(_dict(state.get(group)).get(target_id))
 
 
+def _isaac_effective_index_entry(
+    state: dict[str, Any],
+    kind: str,
+    target_id: str,
+) -> dict[str, Any]:
+    entry = _isaac_index_entry(state, kind, target_id)
+    if kind != "object":
+        return entry
+    pose = _dict(_dict(_dict(state.get("semantic_pose_state")).get("object_poses")).get(target_id))
+    if not pose:
+        return entry
+    effective = dict(entry)
+    position = _vec3_or_none(pose.get("position"))
+    if position is not None:
+        effective["position"] = [round(float(value), 6) for value in position]
+        effective["position_source"] = str(pose.get("position_source") or "semantic_pose_state")
+        effective["semantic_pose_position_applied"] = (
+            _dict(_dict(state.get("semantic_pose_state")).get("semantic_pose_view_capture")).get(
+                "rendered_to_usd"
+            )
+            is True
+        ) or _dict(state.get("semantic_pose_view_capture")).get("rendered_to_usd") is True
+    if pose.get("support_receptacle_id"):
+        effective["support_receptacle_id"] = str(pose.get("support_receptacle_id"))
+    if pose.get("support_usd_prim_path"):
+        effective["support_usd_prim_path"] = str(pose.get("support_usd_prim_path"))
+    if pose.get("placement_support_status"):
+        effective["placement_support_status"] = str(pose.get("placement_support_status"))
+    if pose.get("placement_resolution_source"):
+        effective["placement_resolution_source"] = str(pose.get("placement_resolution_source"))
+    return effective
+
+
 def _isaac_index_position(entry: dict[str, Any]) -> tuple[float, float, float] | None:
+    position = _vec3_or_none(entry.get("position"))
+    if position is not None:
+        return position
     bounds = _dict(entry.get("usd_world_bounds"))
     center = _vec3_or_none(bounds.get("center"))
     if center is not None:
         return center
-    return _vec3_or_none(entry.get("position"))
+    return None
 
 
 def _object_binding_status(
@@ -1710,6 +2144,7 @@ def _object_rgb_view_evidence(
         return {
             "status": "not_captured_in_selected_views",
             "selected_target": False,
+            "target_coverage_status": "not_captured_in_selected_views",
             "view_status_counts": {},
         }
     views = []
@@ -1735,17 +2170,298 @@ def _object_rgb_view_evidence(
         status = "selected_views_missing_image"
     else:
         status = "selected_views_unverified"
+    target_coverage = _selected_target_coverage_evidence(
+        kind=kind,
+        target_id=target_id,
+        location=selected,
+    )
+    visual_state_evidence = _selected_target_visual_state_evidence(
+        kind=kind,
+        target_id=target_id,
+        location=selected,
+        output_dir=output_dir,
+    )
     return {
         "schema": "robot_camera_object_rgb_view_evidence_v1",
         "status": status,
         "selected_target": True,
+        **target_coverage,
+        **visual_state_evidence,
         "view_status_counts": status_counts,
         "views": views,
         "interpretation": (
             "Selected target FPV/chase image evidence checks whether the rendered RGB "
-            "views are present and nonblank. It is not object segmentation and does not "
-            "prove per-pixel object coverage without bbox/segmentation evidence."
+            "views are present and nonblank. Target coverage checks whether the selected "
+            "location's robot pose and focus contracts are centered on the same object or "
+            "receptacle. It is not per-pixel shape parity without segmentation/bbox evidence."
         ),
+    }
+
+
+def _selected_target_visual_state_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    location: dict[str, Any],
+    output_dir: Path | None,
+) -> dict[str, Any]:
+    if kind != "object":
+        return {"target_visual_state_status": "not_applicable"}
+    bbox = _selected_target_mujoco_fpv_bbox(location, target_id=target_id)
+    if bbox is None:
+        return {
+            "target_visual_state_status": "missing_target_bbox",
+            "target_visual_state_bbox_source": "mujoco_fpv_visibility",
+        }
+    views = _dict(location.get("views"))
+    mujoco_fpv = str(_dict(views.get("mujoco")).get("fpv") or "")
+    isaac_fpv = str(_dict(views.get("isaac")).get("fpv") or "")
+    crop_delta = _image_crop_delta(
+        left_image_path=mujoco_fpv,
+        right_image_path=isaac_fpv,
+        bbox=bbox,
+        output_dir=output_dir,
+    )
+    if str(crop_delta.get("status") or "") != "computed":
+        return {
+            "target_visual_state_status": "target_region_unverified",
+            "target_visual_state_bbox": bbox,
+            "target_visual_state_delta": crop_delta,
+        }
+    mean_abs = float(crop_delta.get("mean_abs_rgb") or 0.0)
+    gt40 = float(crop_delta.get("diff_gt_40_fraction") or 0.0)
+    if (
+        mean_abs <= PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD
+        and gt40 <= PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD
+    ):
+        status = "selected_object_visual_state_aligned"
+    else:
+        status = "selected_object_visual_state_delta"
+    return {
+        "target_visual_state_status": status,
+        "target_visual_state_bbox": bbox,
+        "target_visual_state_delta": crop_delta,
+        "target_visual_state_thresholds": {
+            "mean_abs_rgb_max": PROTECTED_TARGET_REGION_MEAN_ABS_RGB_THRESHOLD,
+            "diff_gt_40_fraction_max": PROTECTED_TARGET_REGION_GT40_FRACTION_THRESHOLD,
+        },
+    }
+
+
+def _selected_target_mujoco_fpv_bbox(
+    location: dict[str, Any],
+    *,
+    target_id: str,
+) -> list[int] | None:
+    focus = _dict(_dict(_dict(location.get("contracts")).get("mujoco")).get("focus"))
+    if str(focus.get("object_id") or "") != target_id:
+        return None
+    visibility = _dict(focus.get("fpv_visibility"))
+    for raw_box in visibility.get("boxes") or []:
+        box = _dict(raw_box)
+        bbox = box.get("bbox")
+        if isinstance(bbox, list) and len(bbox) == 4:
+            try:
+                return [int(value) for value in bbox]
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
+def _image_crop_delta(
+    *,
+    left_image_path: str,
+    right_image_path: str,
+    bbox: list[int],
+    output_dir: Path | None,
+) -> dict[str, Any]:
+    left_path = _resolve_output_path(left_image_path, output_dir)
+    right_path = _resolve_output_path(right_image_path, output_dir)
+    if left_path is None or right_path is None:
+        return {"status": "missing_image_path"}
+    if not left_path.exists() or not right_path.exists():
+        return {
+            "status": "missing_image_file",
+            "left_exists": left_path.exists(),
+            "right_exists": right_path.exists(),
+        }
+    try:
+        with Image.open(left_path) as left_raw, Image.open(right_path) as right_raw:
+            left = left_raw.convert("RGB")
+            right = right_raw.convert("RGB")
+            if right.size != left.size:
+                right = right.resize(left.size)
+            safe_bbox = _safe_image_bbox(bbox, left.size)
+            if safe_bbox is None:
+                return {"status": "invalid_bbox", "bbox": bbox, "image_size": list(left.size)}
+            left_crop = left.crop(tuple(safe_bbox))
+            right_crop = right.crop(tuple(safe_bbox))
+            diff = ImageChops.difference(left_crop, right_crop)
+            stat = ImageStat.Stat(diff)
+            mean_abs = sum(stat.mean) / len(stat.mean)
+            rms = sum(value * value for value in stat.rms) ** 0.5 / len(stat.rms)
+            pixel_count = max(left_crop.size[0] * left_crop.size[1], 1)
+            nonzero = 0
+            diff_gt_40 = 0
+            diff_gt_80 = 0
+            for pixel in diff.getdata():
+                if pixel != (0, 0, 0):
+                    nonzero += 1
+                mean_pixel_delta = sum(pixel) / 3.0
+                if mean_pixel_delta > 40.0:
+                    diff_gt_40 += 1
+                if mean_pixel_delta > 80.0:
+                    diff_gt_80 += 1
+            return {
+                "status": "computed",
+                "bbox": safe_bbox,
+                "crop_size": list(left_crop.size),
+                "mean_abs_rgb": round(float(mean_abs), 4),
+                "rms_rgb": round(float(rms), 4),
+                "nonzero_fraction": round(nonzero / pixel_count, 6),
+                "diff_gt_40_fraction": round(diff_gt_40 / pixel_count, 6),
+                "diff_gt_80_fraction": round(diff_gt_80 / pixel_count, 6),
+            }
+    except Exception as exc:
+        return {
+            "status": "unreadable_image",
+            "error": type(exc).__name__,
+            "reason": str(exc),
+        }
+
+
+def _resolve_output_path(image_path: str, output_dir: Path | None) -> Path | None:
+    if not image_path:
+        return None
+    path = Path(image_path)
+    if not path.is_absolute() and output_dir is not None:
+        path = output_dir / path
+    return path
+
+
+def _safe_image_bbox(bbox: list[int], size: tuple[int, int]) -> list[int] | None:
+    if len(bbox) != 4:
+        return None
+    width, height = size
+    left = max(0, min(int(bbox[0]), width))
+    top = max(0, min(int(bbox[1]), height))
+    right = max(0, min(int(bbox[2]), width))
+    bottom = max(0, min(int(bbox[3]), height))
+    if right <= left or bottom <= top:
+        return None
+    return [left, top, right, bottom]
+
+
+def _selected_target_coverage_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    location: dict[str, Any],
+) -> dict[str, Any]:
+    robot_pose = _dict(location.get("robot_pose"))
+    pose_request = _dict(robot_pose.get("pose_request"))
+    pose_target_object_id = str(
+        robot_pose.get("target_object_id") or pose_request.get("target_object_id") or ""
+    )
+    pose_target_receptacle_id = str(
+        robot_pose.get("target_receptacle_id") or pose_request.get("target_receptacle_id") or ""
+    )
+    focus_evidence = _selected_target_focus_evidence(
+        kind=kind, target_id=target_id, location=location
+    )
+    pose_status = "missing_robot_pose_target"
+    if kind == "object":
+        pose_status = (
+            "object_centered_pose"
+            if pose_target_object_id == target_id
+            else "support_or_receptacle_centered_pose"
+            if pose_target_receptacle_id
+            else "missing_object_centered_pose"
+        )
+    elif kind == "receptacle":
+        pose_status = (
+            "receptacle_centered_pose"
+            if pose_target_receptacle_id == target_id
+            else "missing_receptacle_centered_pose"
+        )
+    focus_status = str(focus_evidence.get("focus_status") or "")
+    if (
+        kind == "object"
+        and pose_status == "object_centered_pose"
+        and focus_status
+        in {
+            "selected_object_focus",
+            "missing_focus_contract",
+        }
+    ):
+        coverage_status = "selected_object_centered_coverage"
+    elif (
+        kind == "receptacle"
+        and pose_status == "receptacle_centered_pose"
+        and focus_status
+        in {
+            "selected_receptacle_focus",
+            "missing_focus_contract",
+        }
+    ):
+        coverage_status = "selected_receptacle_centered_coverage"
+    else:
+        coverage_status = "selected_target_coverage_gap"
+    return {
+        "target_coverage_status": coverage_status,
+        "robot_pose_target_status": pose_status,
+        "robot_pose_target_object_id": pose_target_object_id,
+        "robot_pose_target_receptacle_id": pose_target_receptacle_id,
+        "robot_pose_target_position": robot_pose.get("target_position")
+        or pose_request.get("target_position"),
+        **focus_evidence,
+    }
+
+
+def _selected_target_focus_evidence(
+    *,
+    kind: str,
+    target_id: str,
+    location: dict[str, Any],
+) -> dict[str, Any]:
+    focus_rows = []
+    for backend_id in ("mujoco", "isaac"):
+        focus = _dict(
+            _dict(_dict(location.get("contracts")).get(backend_id)).get("focus")
+        ) or _dict(_dict(_dict(location.get("provenance")).get(backend_id)).get("focus"))
+        if not focus:
+            continue
+        focus_rows.append(
+            {
+                "backend": backend_id,
+                "object_id": focus.get("object_id"),
+                "receptacle_id": focus.get("receptacle_id"),
+                "focus_mode": focus.get("focus_mode"),
+                "source": focus.get("source") or focus.get("provenance"),
+                "fpv_visibility_status": _dict(focus.get("fpv_visibility")).get("status"),
+                "visibility_status": _dict(focus.get("visibility")).get("status"),
+            }
+        )
+    if not focus_rows:
+        return {
+            "focus_status": "missing_focus_contract",
+            "focus_contracts": [],
+        }
+    if kind == "object":
+        status = (
+            "selected_object_focus"
+            if all(str(row.get("object_id") or "") == target_id for row in focus_rows)
+            else "selected_focus_mismatch"
+        )
+    else:
+        status = (
+            "selected_receptacle_focus"
+            if all(str(row.get("receptacle_id") or "") == target_id for row in focus_rows)
+            else "selected_focus_mismatch"
+        )
+    return {
+        "focus_status": status,
+        "focus_contracts": focus_rows,
     }
 
 
@@ -1795,23 +2511,23 @@ def _object_state_status(
         or isaac_entry.get("usd_category")
     )
     if kind != "receptacle" and not articulation:
-        if category in OBJECT_VISUAL_STATE_CATEGORIES:
-            visual_contract = _object_visual_state_contract(
-                target_id=target_id,
-                kind=kind,
-                mujoco_entry=mujoco_entry,
-                isaac_entry=isaac_entry,
-                mujoco_state=mujoco_state,
-                isaac_state=isaac_state,
-                isaac_contract=isaac_contract,
-                usd_prim_path=usd_prim_path,
-            )
-            status = str(visual_contract.get("status") or "")
-            if status in {
-                "visual_state_static_ref_baked",
-                "visual_state_articulation_physics_preserved",
-            }:
-                return status
+        visual_contract = _object_visual_state_contract(
+            target_id=target_id,
+            kind=kind,
+            mujoco_entry=mujoco_entry,
+            isaac_entry=isaac_entry,
+            mujoco_state=mujoco_state,
+            isaac_state=isaac_state,
+            isaac_contract=isaac_contract,
+            usd_prim_path=usd_prim_path,
+        )
+        status = str(visual_contract.get("status") or "")
+        if status in {
+            "visual_state_static_ref_baked",
+            "visual_state_articulation_physics_preserved",
+        }:
+            return status
+        if category in OBJECT_VISUAL_STATE_CATEGORIES or status != "not_applicable":
             return "visual_state_unverified"
         return "not_applicable"
     mujoco_open = target_id in {
@@ -1842,7 +2558,7 @@ def _object_visual_state_contract(
         or isaac_entry.get("category")
         or isaac_entry.get("usd_category")
     )
-    if kind != "object" or category not in OBJECT_VISUAL_STATE_CATEGORIES:
+    if kind != "object":
         return {"status": "not_applicable"}
     registry_entry = dict(OBJECT_VISUAL_STATE_REGISTRY.get(category) or {})
     mujoco_articulation = _mujoco_ref_endpoint_articulation_contract(
@@ -1859,9 +2575,11 @@ def _object_visual_state_contract(
     ):
         status = "visual_state_static_ref_baked"
         reason = (
-            "MuJoCo renders this THOR box at MJCF ref/range endpoint flap joints, and "
-            "the prepared Isaac report USD freezes the already-baked visual xforms so "
-            "PhysX will not re-open the flaps during camera capture."
+            "MuJoCo renders this object at articulated visual joint endpoints, and the "
+            "prepared Isaac report USD freezes the already-baked visual xforms so PhysX "
+            "will not mutate those joints during camera capture. This is necessary "
+            "physics-control evidence, but selected object-centered RGB evidence is still "
+            "required before the object gate may claim visual parity."
         )
     elif (
         mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation"
@@ -1869,16 +2587,17 @@ def _object_visual_state_contract(
     ):
         status = "visual_state_articulation_physics_preserved"
         reason = (
-            "MuJoCo flap qpos is at MJCF ref/range endpoints, but the Isaac USD still "
-            "contains physics joints or rigid-body APIs under the same object. Isaac "
-            "camera capture can re-solve those joints, which explains an open-box "
-            "visual even when pose, material, and texture names match."
+            "MuJoCo articulated visual qpos is at MJCF ref/range endpoints, but the "
+            "Isaac USD still contains physics joints or rigid-body APIs under the same "
+            "object. Isaac camera capture can re-solve those joints, which can change "
+            "the rendered visual state even when pose, material, and texture names match."
         )
     elif mujoco_articulation.get("status") == "mujoco_ref_endpoint_articulation":
         status = "visual_state_ref_endpoint_unverified_in_isaac"
         reason = (
-            "MuJoCo flap qpos is at MJCF ref/range endpoints, but this report lacks "
-            "enough Isaac USD physics-freeze evidence to prove visual-state parity."
+            "MuJoCo articulated visual qpos is at MJCF ref/range endpoints, but this "
+            "report lacks enough Isaac USD physics-freeze evidence to control the "
+            "rendered visual state."
         )
     else:
         status = "visual_state_unverified"
@@ -1892,8 +2611,10 @@ def _object_visual_state_contract(
         "target_id": target_id,
         "category": category,
         "registry": registry_entry,
-        "protected_by": registry_entry.get("protected_by"),
+        "protected_by": registry_entry.get("protected_by")
+        or VISUAL_PHYSICS_PROTECTION["protected_by"],
         "evidence_artifact": registry_entry.get("evidence_artifact"),
+        "policy": registry_entry.get("policy") or VISUAL_PHYSICS_PROTECTION["policy"],
         "mujoco": mujoco_articulation,
         "isaac": isaac_articulation,
         "reason": reason,
@@ -2106,6 +2827,11 @@ def _compact_isaac_index_entry(entry: dict[str, Any], *, usd_prim_path: str) -> 
         "renderable_descendant_count",
         "missing_referenced_asset_count",
         "valid_stage_prim",
+        "position",
+        "position_source",
+        "semantic_pose_position_applied",
+        "support_receptacle_id",
+        "placement_support_status",
     )
     compact = {key: entry.get(key) for key in keys if key in entry}
     if usd_prim_path:
@@ -4057,21 +4783,37 @@ def _render_report(manifest: dict[str, Any]) -> str:
             "h1{margin:0 0 8px;font-size:24px}",
             "h2{font-size:18px;margin:0 0 10px}",
             "h2 span{font-weight:400;color:#5f6368}",
+            ".quick-summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px}",
+            ".chip{font-size:12px;background:#f4f1e8;border:1px solid #d9d7ce;"
+            "border-radius:4px;padding:4px 7px;color:#3c4043}",
+            "a{color:#174ea6}",
             ".pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}",
             ".pair{border-top:1px solid #ece8dd;padding-top:10px}",
             "figure{margin:0 0 8px}",
             "img{display:block;width:100%;height:auto;border:1px solid #ddd;background:#111}",
             "figcaption,p{font-size:13px;color:#5f6368;margin:6px 0}",
             "pre{font-size:12px;background:#f4f1e8;padding:10px;overflow:auto}",
+            "details{border:1px solid #e3dfd4;background:#fbfaf6;margin:10px 0}",
+            "summary{cursor:pointer;font-weight:600;padding:10px 12px;color:#3c4043}",
+            "details[open] summary{border-bottom:1px solid #e3dfd4}",
+            "details pre{margin:0;border:0}",
+            ".details-body{padding:0 12px 12px}",
+            ".location-meta{margin-top:12px}",
+            "table{border-collapse:collapse;width:100%;font-size:12px;margin:10px 0;"
+            "display:block;overflow:auto}",
+            "th,td{border:1px solid #e0ddd4;padding:6px;text-align:left;vertical-align:top}",
             ".bad{color:#9b1c1c}",
             "@media(max-width:800px){.pairs{grid-template-columns:1fr}}",
         ]
     )
     rows = []
-    for item in manifest.get("locations") or []:
+    for row_index, item in enumerate(manifest.get("locations") or []):
+        section_id = " id='locations'" if row_index == 0 else ""
         if item.get("status") != "success":
             rows.append(
-                "<section class='location'><h2>"
+                "<section class='location'"
+                + section_id
+                + "><h2>"
                 + html.escape(str(item.get("label")))
                 + "</h2><p class='bad'>"
                 + html.escape(str(item.get("blocker")))
@@ -4100,49 +4842,105 @@ def _render_report(manifest: dict[str, Any]) -> str:
                 + "</p></div>"
             )
         rows.append(
-            "<section class='location'><h2>"
+            "<section class='location'"
+            + section_id
+            + "><h2>"
             + html.escape(str(item["label"]))
             + " <span>"
             + html.escape(str(item["target"]))
             + "</span></h2>"
-            + "<pre>"
-            + html.escape(json.dumps(item["robot_pose"], indent=2, sort_keys=True))
-            + "</pre><pre>"
-            + html.escape(
-                json.dumps(
-                    item.get("camera_contract_diagnostics", {}),
-                    indent=2,
-                    sort_keys=True,
-                )
-            )
-            + "</pre><pre>"
-            + html.escape(
-                json.dumps(
-                    item.get("render_contract_diagnostics", {}),
-                    indent=2,
-                    sort_keys=True,
-                )
-            )
-            + "</pre><div class='pairs'>"
+            + "<div class='pairs'>"
             + "".join(pairs)
+            + "</div><div class='location-meta'>"
+            + _render_json_details("Robot pose JSON", item["robot_pose"])
+            + _render_json_details(
+                "Camera contract diagnostics JSON",
+                item.get("camera_contract_diagnostics", {}),
+            )
+            + _render_json_details(
+                "Render contract diagnostics JSON",
+                item.get("render_contract_diagnostics", {}),
+            )
             + "</div></section>"
         )
+    diagnostic_sections = (
+        _render_details_html(
+            "Native Isaac Render Diagnostics",
+            _render_native_isaac_render_diagnostics(manifest),
+        )
+        + _render_details_html(
+            "Object/Render Gate",
+            _render_object_render_parity_diagnostics(manifest),
+        )
+        + _render_details_html(
+            "Object Parity Audit",
+            _render_object_parity_audit(manifest),
+        )
+    )
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<title>RBY1M Robot Camera Apple2Apple</title>"
         "<style>" + style + "</style></head><body><header><h1>RBY1M Robot Camera Apple2Apple</h1>"
         "<p>"
         + html.escape(str(manifest.get("purpose")))
-        + "</p><pre>"
-        + html.escape(json.dumps(manifest.get("summary", {}), indent=2, sort_keys=True))
-        + "</pre>"
-        + _render_native_isaac_render_diagnostics(manifest)
-        + _render_object_render_parity_diagnostics(manifest)
-        + _render_object_parity_audit(manifest)
+        + "</p>"
+        + _render_quick_summary(manifest)
+        + ("<p><a href='#locations'>Jump to image comparisons</a></p>" if rows else "")
+        + _render_json_details("Run summary JSON", manifest.get("summary", {}))
+        + _render_generated_mess_manifest(manifest)
+        + diagnostic_sections
         + "</header>"
         + "".join(rows)
         + "</body></html>"
     )
+
+
+def _render_quick_summary(manifest: dict[str, Any]) -> str:
+    summary = _dict(manifest.get("summary"))
+    mess_generation = _dict(manifest.get("mess_generation"))
+    values = [
+        ("status", manifest.get("status")),
+        ("locations", summary.get("successful_location_count") or summary.get("location_count")),
+        ("fpv mean abs RGB", summary.get("fpv_mean_abs_rgb_avg")),
+        ("chase mean abs RGB", summary.get("chase_mean_abs_rgb_avg")),
+        ("mess", mess_generation.get("generated_mess_count")),
+        ("mess status", mess_generation.get("status")),
+    ]
+    chips = [
+        "<span class='chip'>" + html.escape(label) + ": " + html.escape(str(value)) + "</span>"
+        for label, value in values
+        if value not in (None, "")
+    ]
+    return "<div class='quick-summary'>" + "".join(chips) + "</div>" if chips else ""
+
+
+def _render_details_html(title: str, body: str) -> str:
+    if not body:
+        return ""
+    return (
+        "<details class='report-details'><summary>"
+        + html.escape(title)
+        + "</summary><div class='details-body'>"
+        + body
+        + "</div></details>"
+    )
+
+
+def _render_json_details(title: str, payload: Any) -> str:
+    return (
+        "<details class='json-details'><summary>"
+        + html.escape(title)
+        + "</summary><pre>"
+        + html.escape(json.dumps(payload, indent=2, sort_keys=True))
+        + "</pre></details>"
+    )
+
+
+def _render_generated_mess_manifest(manifest: dict[str, Any]) -> str:
+    mess_generation = _dict(manifest.get("mess_generation"))
+    if not mess_generation:
+        return ""
+    return _render_json_details("Canonical Generated Mess Manifest", mess_generation)
 
 
 def _render_native_isaac_render_diagnostics(manifest: dict[str, Any]) -> str:
@@ -4296,13 +5094,16 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             + counts_cell(item, "binding_status_counts")
             + counts_cell(item, "state_status_counts")
             + counts_cell(item, "rgb_view_evidence_status_counts")
+            + counts_cell(item, "target_coverage_status_counts")
+            + counts_cell(item, "target_visual_state_status_counts")
             + counts_cell(item, "render_contract_status_counts")
             + "</tr>"
         )
     category_table = (
         "<h3>Category Status Summary</h3><table><thead><tr>"
         "<th>Category</th><th>Items</th><th>Kinds</th><th>Object Gate</th>"
-        "<th>Classes</th><th>Binding</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
+        "<th>Classes</th><th>Binding</th><th>State</th><th>RGB Evidence</th>"
+        "<th>Target Coverage</th><th>Target Visual State</th><th>Render</th>"
         "</tr></thead><tbody>" + "".join(category_rows) + "</tbody></table>"
         if category_rows
         else "<p>No category/status summary rows were recorded.</p>"
@@ -4326,6 +5127,8 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('support_status') or ''))}</td>"
             f"<td>{html.escape(str(item.get('state_status') or ''))}</td>"
             f"<td>{html.escape(str(rgb_evidence.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(rgb_evidence.get('target_coverage_status') or ''))}</td>"
+            f"<td>{html.escape(str(rgb_evidence.get('target_visual_state_status') or ''))}</td>"
             f"<td>{html.escape(str(render_delta.get('status') or ''))}</td>"
             f"<td>{html.escape(str(visual_state.get('protected_by') or ''))}</td>"
             f"<td>{html.escape(str(visual_state.get('evidence_artifact') or ''))}</td>"
@@ -4337,7 +5140,8 @@ def _render_object_parity_audit(manifest: dict[str, Any]) -> str:
     table = (
         "<table><thead><tr>"
         "<th>Kind</th><th>Target</th><th>Binding</th><th>Category</th>"
-        "<th>Pose</th><th>Support</th><th>State</th><th>RGB Evidence</th><th>Render</th>"
+        "<th>Pose</th><th>Support</th><th>State</th><th>RGB Evidence</th>"
+        "<th>Target Coverage</th><th>Target Visual State</th><th>Render</th>"
         "<th>Protected By</th><th>Evidence</th>"
         "<th>MuJoCo Cat</th><th>Isaac Cat</th><th>Isaac Asset</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"

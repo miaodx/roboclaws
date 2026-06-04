@@ -41,6 +41,311 @@ def test_robot_camera_image_diff_reports_color_residual(tmp_path: Path) -> None:
     assert diff["residual"]["rgb_gain_oracle"]["mean_abs_rgb_after_gain"] == 0.0
 
 
+def test_robot_camera_comparison_uses_canonical_generated_mess_manifest(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_canonical_mess",
+    )
+    commands: list[list[str]] = []
+    output_dir = tmp_path / "comparison"
+    canonical_state_path = output_dir / "canonical_scene_state.json"
+    isaac_state_path = output_dir / "isaac_state.json"
+
+    def fake_run_json(command: list[str], *, cwd: Path) -> dict:
+        commands.append(command)
+        if command[1].endswith("molmospaces_subprocess_worker.py") and "init" in command:
+            state_path = Path(command[command.index("--state-path") + 1])
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            if "--generated-mess-manifest-path" in command:
+                manifest_path = Path(command[command.index("--generated-mess-manifest-path") + 1])
+                generated_mess_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                state_path.write_text(
+                    json.dumps(
+                        {
+                            "receptacles": {
+                                "fridge_1": {"receptacle_id": "fridge_1", "category": "Fridge"},
+                                "sink_1": {"receptacle_id": "sink_1", "category": "Sink"},
+                                "sofa_1": {"receptacle_id": "sofa_1", "category": "Sofa"},
+                            },
+                            "objects": {
+                                "apple_1": {
+                                    "object_id": "apple_1",
+                                    "category": "Apple",
+                                    "seeded_start_receptacle_id": "sofa_1",
+                                },
+                                "plate_1": {
+                                    "object_id": "plate_1",
+                                    "category": "Plate",
+                                    "seeded_start_receptacle_id": "sofa_1",
+                                },
+                            },
+                            "generated_mess_manifest": generated_mess_manifest,
+                            "private_manifest": {
+                                "targets": [
+                                    {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                                    {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                                ]
+                            },
+                        }
+                    ),
+                    encoding="utf-8",
+                )
+                return {
+                    "backend": "molmospaces_subprocess",
+                    "ok": True,
+                    "private_manifest": {
+                        "targets": [
+                            {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                            {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                        ]
+                    },
+                    "generated_mess_manifest": generated_mess_manifest,
+                }
+            canonical_state_path.write_text(
+                json.dumps(
+                    {
+                        "receptacles": {
+                            "fridge_1": {"receptacle_id": "fridge_1", "category": "Fridge"},
+                            "sink_1": {"receptacle_id": "sink_1", "category": "Sink"},
+                            "sofa_1": {"receptacle_id": "sofa_1", "category": "Sofa"},
+                        },
+                        "objects": {
+                            "apple_1": {"object_id": "apple_1", "category": "Apple"},
+                            "plate_1": {"object_id": "plate_1", "category": "Plate"},
+                        },
+                        "private_manifest": {
+                            "targets": [
+                                {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                                {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                            ]
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {
+                "backend": "molmospaces_subprocess",
+                "ok": True,
+                "private_manifest": {
+                    "targets": [
+                        {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                        {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                    ]
+                },
+            }
+        if command[1].endswith("isaac_lab_backend_worker.py") and "init" in command:
+            assert "--generated-mess-manifest-path" in command
+            manifest_path = Path(command[command.index("--generated-mess-manifest-path") + 1])
+            generated_mess_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            isaac_state_path.write_text(
+                json.dumps(
+                    {
+                        "locations": {"apple_1": "sofa_1", "plate_1": "sofa_1"},
+                        "scene_binding_diagnostics": {},
+                        "receptacle_index": {},
+                        "object_index": {},
+                        "generated_mess_manifest": generated_mess_manifest,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return {
+                "backend": "isaaclab_subprocess",
+                "ok": True,
+                "private_manifest": {
+                    "targets": [
+                        {"object_id": "apple_1", "valid_receptacle_ids": ["fridge_1"]},
+                        {"object_id": "plate_1", "valid_receptacle_ids": ["sink_1"]},
+                    ]
+                },
+                "generated_mess_manifest": generated_mess_manifest,
+            }
+        raise AssertionError(f"unexpected command: {command}")
+
+    monkeypatch.setattr(run_camera, "_run_json", fake_run_json)
+    monkeypatch.setattr(
+        run_camera,
+        "_select_comparison_targets",
+        lambda *args, **kwargs: {"selected_targets": [], "status": "unit_no_targets"},
+    )
+
+    args = type(
+        "Args",
+        (),
+        {
+            "output_dir": output_dir,
+            "mujoco_python": Path("python"),
+            "isaac_python": Path("isaac-python"),
+            "seed": 6,
+            "scene_source": "procthor-10k-val",
+            "scene_index": 0,
+            "generated_mess_count": 2,
+            "render_width": 540,
+            "render_height": 360,
+            "location_count": 1,
+            "scene_usd_path": tmp_path / "scene.usda",
+            "isaac_robot_view_color_profile_path": None,
+        },
+    )()
+    args.scene_usd_path.write_text("#usda 1.0\n", encoding="utf-8")
+
+    manifest = run_camera.run_comparison(args)
+
+    mujoco_init_command = commands[1]
+    isaac_init_command = commands[2]
+    assert manifest["status"] == "blocked"
+    assert manifest["mess_generation"]["status"] == "canonical_generated_mess_manifest"
+    assert manifest["mess_generation"]["canonical_generated_mess_object_ids"] == [
+        "plate_1",
+        "apple_1",
+    ]
+    assert "--generated-mess-manifest-path" in mujoco_init_command
+    assert "--generated-mess-manifest-path" in isaac_init_command
+    assert "--generated-mess-object-id" not in isaac_init_command
+    manifest_path = output_dir / "generated_mess_manifest.json"
+    generated_mess_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert [target["start_receptacle_id"] for target in generated_mess_manifest["targets"]] == [
+        "sofa_1",
+        "sofa_1",
+    ]
+
+
+def test_robot_camera_report_renders_canonical_generated_mess_manifest() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_report_canonical_mess",
+    )
+
+    report_html = run_camera._render_report(
+        {
+            "purpose": "unit",
+            "summary": {},
+            "mess_generation": {
+                "schema": "robot_camera_apple2apple_mess_generation_v1",
+                "status": "canonical_generated_mess_manifest",
+                "artifact": "generated_mess_manifest.json",
+                "canonical_generated_mess_object_ids": ["plate_1", "apple_1"],
+                "targets": [
+                    {
+                        "object_id": "plate_1",
+                        "target_receptacle_id": "sink_1",
+                        "start_receptacle_id": "sofa_1",
+                        "relation": "on",
+                        "placement_index": 0,
+                    }
+                ],
+            },
+            "locations": [],
+        }
+    )
+
+    assert "Canonical Generated Mess Manifest" in report_html
+    assert "<details class='json-details'><summary>Canonical Generated Mess Manifest</summary>" in (
+        report_html
+    )
+    assert "canonical_generated_mess_manifest" in report_html
+    assert "generated_mess_manifest.json" in report_html
+    assert "start_receptacle_id" in report_html
+    assert "plate_1" in report_html
+
+
+def test_robot_camera_report_puts_images_before_location_json() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_report_images_first",
+    )
+
+    report_html = run_camera._render_report(
+        {
+            "purpose": "unit",
+            "status": "success",
+            "summary": {
+                "successful_location_count": 1,
+                "fpv_mean_abs_rgb_avg": 1.2,
+                "chase_mean_abs_rgb_avg": 3.4,
+            },
+            "locations": [
+                {
+                    "status": "success",
+                    "label": "0001",
+                    "target": "desk_1",
+                    "robot_pose": {"position": [0, 0, 0]},
+                    "camera_contract_diagnostics": {"status": "ok"},
+                    "render_contract_diagnostics": {"status": "ok"},
+                    "views": {
+                        "mujoco": {"fpv": "mujoco.fpv.png", "chase": "mujoco.chase.png"},
+                        "isaac": {"fpv": "isaac.fpv.png", "chase": "isaac.chase.png"},
+                    },
+                    "image_diffs": {
+                        "fpv": {
+                            "mean_abs_rgb": 1.0,
+                            "nonzero_fraction": 0.1,
+                            "residual": {"residual_class": "low_residual"},
+                        },
+                        "chase": {
+                            "mean_abs_rgb": 2.0,
+                            "nonzero_fraction": 0.2,
+                            "residual": {"residual_class": "geometry_or_texture_edge_residual"},
+                        },
+                    },
+                }
+            ],
+        }
+    )
+
+    assert "Jump to image comparisons" in report_html
+    assert "<div class='quick-summary'>" in report_html
+    assert "<details class='json-details'><summary>Run summary JSON</summary>" in report_html
+    location_start = report_html.index("id='locations'")
+    image_grid = report_html.index("<div class='pairs'>", location_start)
+    location_json = report_html.index("Robot pose JSON", location_start)
+    assert image_grid < location_json
+
+
+def test_robot_camera_blocks_on_canonical_placement_diagnostic_mismatch() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_placement_mismatch",
+    )
+    canonical_manifest = {
+        "targets": [
+            {
+                "object_id": "plate_1",
+                "start_receptacle_id": "sofa_1",
+                "relation": "on",
+                "placement_index": 0,
+            }
+        ]
+    }
+    state = {
+        "mess_placement_diagnostics": [
+            {
+                "diagnostic_source": "canonical_mess_manifest",
+                "object_id": "plate_1",
+                "receptacle_id": "desk_1",
+                "relation": "on",
+                "placement_index": 0,
+            }
+        ]
+    }
+
+    try:
+        run_camera._validate_generated_mess_placement_diagnostics(
+            lane_id=run_camera.MUJOCO_LANE_ID,
+            state=state,
+            canonical_manifest=canonical_manifest,
+        )
+    except RuntimeError as exc:
+        assert "placement diagnostics did not match canonical manifest" in str(exc)
+        assert "desk_1" in str(exc)
+        assert "sofa_1" in str(exc)
+    else:  # pragma: no cover - assertion branch.
+        raise AssertionError("expected placement diagnostic mismatch to block")
+
+
 def test_robot_camera_residual_triage_prioritizes_geometry_edges() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -1122,13 +1427,34 @@ def test_robot_camera_comparison_target_selection_uses_isaac_scene_index() -> No
 
     assert selection["status"] == "isaac_bound_targets_selected"
     assert selection["isaac_bound_candidate_count"] == 4
-    assert [item["target_id"] for item in selection["selected_targets"]] == ["bed_1", "table_1"]
+    assert [item["target_id"] for item in selection["selected_targets"]] == ["box_1", "bowl_1"]
+    assert selection["visual_physics_sensitive_target_count"] == 1
+    assert selection["visual_physics_sensitive_selected_count"] == 1
+    assert selection["visual_physics_sensitive_selected_targets"] == [
+        {"kind": "object", "target_id": "box_1"}
+    ]
     assert selection["not_selected_bound_target_count"] == 2
     assert [item["target_id"] for item in selection["not_selected_bound_targets"]] == [
-        "bowl_1",
-        "box_1",
+        "bed_1",
+        "table_1",
     ]
     assert selection["dropped_unbound_target_count"] == 0
+
+
+def test_robot_camera_focus_args_match_selected_target_kind() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_focus_args",
+    )
+
+    assert run_camera._focus_args({"kind": "object", "target_id": "box_1"}) == [
+        "--focus-object-id",
+        "box_1",
+    ]
+    assert run_camera._focus_args({"kind": "receptacle", "target_id": "bed_1"}) == [
+        "--focus-receptacle-id",
+        "bed_1",
+    ]
 
 
 def test_robot_camera_comparison_target_selection_preserves_legacy_order_without_bindings() -> None:
@@ -1547,6 +1873,71 @@ def Xform "World"
     assert "prepared_usd_visual_physics_freeze" in report_html
 
 
+def test_robot_camera_object_parity_audit_uses_isaac_semantic_pose_position(tmp_path: Path) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_object_parity_semantic_pose",
+    )
+    mujoco_state = {
+        "objects": {
+            "teddy_1": {
+                "object_id": "teddy_1",
+                "category": "TeddyBear",
+                "position": [1.0, 2.0, 0.8],
+            }
+        },
+        "receptacles": {},
+    }
+    isaac_state = {
+        "object_index": {
+            "teddy_1": {
+                "asset_id": "Teddy_Bear_1",
+                "category": "TeddyBear",
+                "parent": "bed_1",
+                "usd_prim_path": "/World/teddy_1",
+                "geometry_status": "renderable",
+                "has_renderable_geometry": True,
+                "valid_stage_prim": True,
+                "usd_world_bounds": {
+                    "center": [8.0, 9.0, 1.2],
+                    "size": [0.5, 0.4, 0.5],
+                },
+            }
+        },
+        "receptacle_index": {},
+        "semantic_pose_state": {
+            "object_poses": {
+                "teddy_1": {
+                    "object_id": "teddy_1",
+                    "position": [1.02, 2.0, 0.82],
+                    "position_source": "isaac_support_placement_resolver",
+                    "support_receptacle_id": "desk_1",
+                    "placement_support_status": "degraded_elevated",
+                }
+            },
+            "semantic_pose_view_capture": {
+                "rendered_to_usd": True,
+            },
+        },
+    }
+
+    audit = run_camera._object_parity_audit(
+        mujoco_state=mujoco_state,
+        isaac_state=isaac_state,
+        mujoco_contract={},
+        isaac_contract={},
+        scene_binding_diagnostics={},
+        locations=[],
+        output_dir=tmp_path,
+    )
+
+    item = {item["target_id"]: item for item in audit["items"]}["teddy_1"]
+    assert item["pose_status"] == "pose_aligned"
+    assert item["pose_delta_m"] == 0.028284
+    assert item["isaac"]["position"] == [1.02, 2.0, 0.82]
+    assert item["isaac"]["position_source"] == "isaac_support_placement_resolver"
+
+
 def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
     run_camera = _load_module(
         RUN_CAMERA_COMPARISON_PATH,
@@ -1599,7 +1990,322 @@ def test_robot_camera_box_visual_state_reports_frozen_ref_baked_usd() -> None:
     assert contract["evidence_artifact"].endswith(
         "0603_val1_seed8_2mess_4loc_default_combined_chasefix/report.html"
     )
-    assert "PhysX will not re-open" in contract["reason"]
+    assert "selected object-centered RGB evidence is still required" in contract["reason"]
+
+
+def test_robot_camera_visual_physics_freeze_needs_selected_rgb_evidence() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_visual_physics_gate",
+    )
+
+    item = {
+        "kind": "object",
+        "target_id": "box_1",
+        "binding_status": "bound_in_both",
+        "category_status": "category_aligned",
+        "pose_status": "pose_aligned",
+        "support_status": "support_available_in_isaac_only",
+        "state_status": "visual_state_static_ref_baked",
+        "visual_state_contract": {
+            "status": "visual_state_static_ref_baked",
+            "protected_by": "prepared_usd_visual_physics_freeze",
+        },
+        "rgb_view_evidence": {
+            "status": "not_captured_in_selected_views",
+            "selected_target": False,
+        },
+        "render_contract_delta": {"status": "material_texture_names_match"},
+        "mujoco": {"category": "Box"},
+        "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
+    }
+
+    record = run_camera._object_gate_record(item)
+
+    assert record["object_gate_status"] == "not_comparable"
+    assert record["classification"] == "visual_state_needs_rgb_evidence"
+    assert record["blocking_status"] == "visual_state_requires_selected_rgb_evidence"
+
+
+def test_robot_camera_visual_physics_freeze_rejects_support_centered_rgb_evidence() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_visual_physics_gate_coverage",
+    )
+
+    item = {
+        "kind": "object",
+        "target_id": "box_1",
+        "binding_status": "bound_in_both",
+        "category_status": "category_aligned",
+        "pose_status": "pose_aligned",
+        "support_status": "support_available_in_isaac_only",
+        "state_status": "visual_state_static_ref_baked",
+        "visual_state_contract": {
+            "status": "visual_state_static_ref_baked",
+            "protected_by": "prepared_usd_visual_physics_freeze",
+        },
+        "rgb_view_evidence": {
+            "status": "selected_views_nonblank",
+            "selected_target": True,
+            "target_coverage_status": "selected_target_coverage_gap",
+            "robot_pose_target_status": "support_or_receptacle_centered_pose",
+            "robot_pose_target_object_id": "",
+            "robot_pose_target_receptacle_id": "bed_1",
+        },
+        "render_contract_delta": {"status": "material_texture_names_match"},
+        "mujoco": {"category": "Box"},
+        "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
+    }
+
+    record = run_camera._object_gate_record(item)
+
+    assert record["object_gate_status"] == "not_comparable"
+    assert record["classification"] == "visual_state_needs_target_coverage"
+    assert record["blocking_status"] == "visual_state_requires_selected_target_coverage"
+    assert record["target_coverage_status"] == "selected_target_coverage_gap"
+
+
+def test_robot_camera_visual_physics_freeze_rejects_target_region_delta() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_visual_physics_gate_region_delta",
+    )
+
+    item = {
+        "kind": "object",
+        "target_id": "box_1",
+        "binding_status": "bound_in_both",
+        "category_status": "category_aligned",
+        "pose_status": "pose_aligned",
+        "support_status": "support_available_in_isaac_only",
+        "state_status": "visual_state_static_ref_baked",
+        "visual_state_contract": {
+            "status": "visual_state_static_ref_baked",
+            "protected_by": "prepared_usd_visual_physics_freeze",
+        },
+        "rgb_view_evidence": {
+            "status": "selected_views_nonblank",
+            "selected_target": True,
+            "target_coverage_status": "selected_object_centered_coverage",
+            "robot_pose_target_status": "object_centered_pose",
+            "robot_pose_target_object_id": "box_1",
+            "target_visual_state_status": "selected_object_visual_state_delta",
+            "target_visual_state_delta": {"mean_abs_rgb": 47.5},
+        },
+        "render_contract_delta": {"status": "material_texture_names_match"},
+        "mujoco": {"category": "Box"},
+        "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
+    }
+
+    record = run_camera._object_gate_record(item)
+
+    assert record["object_gate_status"] == "not_comparable"
+    assert record["classification"] == "visual_state_delta"
+    assert record["blocking_status"] == "selected_object_visual_state_delta"
+    assert record["target_visual_state_status"] == "selected_object_visual_state_delta"
+
+
+def test_robot_camera_visual_physics_freeze_can_pass_with_object_centered_rgb_evidence() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_visual_physics_gate_pass",
+    )
+
+    item = {
+        "kind": "object",
+        "target_id": "box_1",
+        "binding_status": "bound_in_both",
+        "category_status": "category_aligned",
+        "pose_status": "pose_aligned",
+        "support_status": "support_available_in_isaac_only",
+        "state_status": "visual_state_static_ref_baked",
+        "visual_state_contract": {
+            "status": "visual_state_static_ref_baked",
+            "protected_by": "prepared_usd_visual_physics_freeze",
+        },
+        "rgb_view_evidence": {
+            "status": "selected_views_nonblank",
+            "selected_target": True,
+            "target_coverage_status": "selected_object_centered_coverage",
+            "robot_pose_target_status": "object_centered_pose",
+            "robot_pose_target_object_id": "box_1",
+            "target_visual_state_status": "selected_object_visual_state_aligned",
+        },
+        "render_contract_delta": {"status": "material_texture_names_match"},
+        "mujoco": {"category": "Box"},
+        "isaac": {"category": "Box", "usd_prim_path": "/World/box_1"},
+    }
+
+    record = run_camera._object_gate_record(item)
+
+    assert record["object_gate_status"] == "comparable"
+    assert record["classification"] == "comparable"
+
+
+def test_robot_camera_rgb_evidence_records_selected_object_pose_coverage(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_rgb_target_coverage",
+    )
+    for image_relpath in (
+        "mujoco/fpv.png",
+        "mujoco/chase.png",
+        "isaac/fpv.png",
+        "isaac/chase.png",
+    ):
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), (80, 90, 100)).save(image_path)
+
+    evidence = run_camera._object_rgb_view_evidence(
+        kind="object",
+        target_id="box_1",
+        locations=[
+            {
+                "target": {"kind": "object", "target_id": "box_1"},
+                "robot_pose": {
+                    "target_object_id": "box_1",
+                    "target_position": [1.0, 2.0, 0.8],
+                    "pose_request": {
+                        "target_object_id": "box_1",
+                        "target_position": [1.0, 2.0, 0.8],
+                    },
+                },
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "contracts": {
+                    "mujoco": {
+                        "focus": {
+                            "object_id": "box_1",
+                            "focus_mode": "object_closeup",
+                            "fpv_visibility": {"boxes": [{"bbox": [1, 1, 10, 7]}]},
+                        }
+                    },
+                    "isaac": {"focus": {"object_id": "box_1", "focus_mode": "object_closeup"}},
+                },
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert evidence["status"] == "selected_views_nonblank"
+    assert evidence["target_coverage_status"] == "selected_object_centered_coverage"
+    assert evidence["robot_pose_target_status"] == "object_centered_pose"
+    assert evidence["focus_status"] == "selected_object_focus"
+    assert evidence["robot_pose_target_object_id"] == "box_1"
+    assert evidence["target_visual_state_status"] == "selected_object_visual_state_aligned"
+    assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 0.0
+
+
+def test_robot_camera_rgb_evidence_flags_support_centered_selected_object(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_rgb_support_coverage",
+    )
+    for image_relpath in (
+        "mujoco/fpv.png",
+        "mujoco/chase.png",
+        "isaac/fpv.png",
+        "isaac/chase.png",
+    ):
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), (80, 90, 100)).save(image_path)
+
+    evidence = run_camera._object_rgb_view_evidence(
+        kind="object",
+        target_id="box_1",
+        locations=[
+            {
+                "target": {"kind": "object", "target_id": "box_1"},
+                "robot_pose": {
+                    "target_receptacle_id": "bed_1",
+                    "target_position": [2.0, 3.0, 0.6],
+                    "pose_request": {
+                        "target_receptacle_id": "bed_1",
+                        "target_position": [2.0, 3.0, 0.6],
+                    },
+                },
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "contracts": {
+                    "mujoco": {"focus": {"receptacle_id": "bed_1"}},
+                    "isaac": {"focus": {"receptacle_id": "bed_1"}},
+                },
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert evidence["status"] == "selected_views_nonblank"
+    assert evidence["target_coverage_status"] == "selected_target_coverage_gap"
+    assert evidence["robot_pose_target_status"] == "support_or_receptacle_centered_pose"
+    assert evidence["focus_status"] == "selected_focus_mismatch"
+
+
+def test_robot_camera_rgb_evidence_flags_target_region_visual_delta(
+    tmp_path: Path,
+) -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_rgb_region_delta",
+    )
+    image_specs = {
+        "mujoco/fpv.png": (20, 20, 20),
+        "isaac/fpv.png": (100, 100, 100),
+        "mujoco/chase.png": (80, 90, 100),
+        "isaac/chase.png": (80, 90, 100),
+    }
+    for image_relpath, color in image_specs.items():
+        image_path = tmp_path / image_relpath
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (12, 8), color).save(image_path)
+
+    evidence = run_camera._object_rgb_view_evidence(
+        kind="object",
+        target_id="box_1",
+        locations=[
+            {
+                "target": {"kind": "object", "target_id": "box_1"},
+                "robot_pose": {
+                    "target_object_id": "box_1",
+                    "target_position": [1.0, 2.0, 0.8],
+                    "pose_request": {
+                        "target_object_id": "box_1",
+                        "target_position": [1.0, 2.0, 0.8],
+                    },
+                },
+                "views": {
+                    "mujoco": {"fpv": "mujoco/fpv.png", "chase": "mujoco/chase.png"},
+                    "isaac": {"fpv": "isaac/fpv.png", "chase": "isaac/chase.png"},
+                },
+                "contracts": {
+                    "mujoco": {
+                        "focus": {
+                            "object_id": "box_1",
+                            "focus_mode": "object_closeup",
+                            "fpv_visibility": {"boxes": [{"bbox": [1, 1, 10, 7]}]},
+                        }
+                    },
+                    "isaac": {"focus": {"object_id": "box_1", "focus_mode": "object_closeup"}},
+                },
+            }
+        ],
+        output_dir=tmp_path,
+    )
+
+    assert evidence["target_coverage_status"] == "selected_object_centered_coverage"
+    assert evidence["target_visual_state_status"] == "selected_object_visual_state_delta"
+    assert evidence["target_visual_state_delta"]["mean_abs_rgb"] == 80.0
 
 
 def test_robot_camera_box_visual_state_reports_preserved_isaac_physics() -> None:

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Operator Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="top-run-bar">
+        <div>
+          <div class="app-title">Agent Operator Console</div>
+          <div class="run-meta">
+            <span id="run-title">No run selected</span>
+            <span id="route-status" class="badge">idle</span>
+            <span id="lock-status">lock: none</span>
+            <span id="elapsed-status">00:00</span>
+          </div>
+        </div>
+        <div class="global-controls">
+          <button id="pause-button" class="secondary" disabled>Pause Agent</button>
+          <button id="stop-button" class="danger" disabled>Stop Run</button>
+          <button id="emergency-button" class="emergency" disabled>Emergency Stop</button>
+        </div>
+      </header>
+
+      <aside class="route-rail">
+        <section class="rail-section">
+          <h2>Routes</h2>
+          <div id="route-list" class="route-list"></div>
+        </section>
+      </aside>
+
+      <aside class="setup-panel">
+        <section class="rail-section">
+          <h2>Setup</h2>
+          <div id="selected-route-summary" class="selected-route-summary">
+            Choose a route to configure its parameters and gates.
+          </div>
+          <div id="common-fields">
+          <label>
+            Seed
+            <input id="seed-input" name="seed" value="7" />
+          </label>
+          <label>
+            Generated mess count
+            <input id="mess-count-input" name="generated_mess_count" value="5" />
+          </label>
+          <label>
+            Agent port
+            <input id="port-input" name="port" value="18788" />
+          </label>
+          </div>
+          <div id="agibot-fields" class="route-fields" hidden>
+          <label>
+            Context JSON
+            <input id="context-json-input" name="context_json" placeholder="Agibot context path" />
+          </label>
+          </div>
+          <div id="isaac-fields" class="route-fields" hidden>
+          <label>
+            Isaac scene USD path
+            <input
+              id="isaac-scene-input"
+              name="isaac_scene_usd_path"
+              placeholder="Optional prepared scene path"
+            />
+          </label>
+          <label class="check-row">
+            <input id="isaac-preflight-gate" type="checkbox" />
+            Isaac preflight accepted
+          </label>
+          </div>
+          <div id="agibot-gate-fields" class="route-fields" hidden>
+          <label class="check-row">
+            <input id="localization-gate" type="checkbox" />
+            Localization gate accepted
+          </label>
+          <label class="check-row">
+            <input id="enablement-gate" type="checkbox" />
+            Run enablement accepted
+          </label>
+          <label class="check-row">
+            <input id="estop-gate" type="checkbox" />
+            E-stop readiness visible
+          </label>
+          </div>
+          <label>
+            <span>Task prompt</span>
+            <textarea id="prompt-input" maxlength="2000" rows="5"></textarea>
+          </label>
+          <div class="prompt-copy" id="prompt-copy">Empty prompt uses the route default.</div>
+          <div class="char-count" id="char-count">0 / 2000</div>
+          <div id="gate-list" class="gate-list"></div>
+          <pre id="command-preview" class="command-preview"></pre>
+          <button id="start-button" class="primary">Start Agent Run</button>
+          <div class="inline-error" id="start-error"></div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <nav class="view-modes" aria-label="Workspace view modes">
+          <button class="view-mode active" data-view="overview">Overview</button>
+          <button class="view-mode" data-view="fpv">FPV</button>
+          <button class="view-mode" data-view="map">Map</button>
+          <button class="view-mode" data-view="grounding">Grounding</button>
+          <button class="view-mode" data-view="chase">Chase</button>
+          <button class="view-mode" data-view="outputs">Outputs</button>
+        </nav>
+        <section id="visual-grid" class="view-grid mode-overview">
+          <article class="image-panel" data-panel="fpv">
+            <div class="panel-header"><span>FPV</span><button data-copy="fpv">Copy Path</button></div>
+            <div class="image-frame ratio-4-3" id="fpv-frame">No frame yet. Waiting for the first observation artifact.</div>
+          </article>
+          <article class="image-panel" data-panel="grounding">
+            <div class="panel-header"><span>Grounding</span><button data-copy="grounding">Copy Path</button></div>
+            <div class="image-frame ratio-4-3" id="grounding-frame">No grounding result yet.</div>
+          </article>
+          <article class="image-panel" data-panel="map">
+            <div class="panel-header"><span>Map</span><button data-copy="map">Copy Path</button></div>
+            <div class="image-frame" id="map-frame">Map artifact has not been written yet.</div>
+          </article>
+          <article class="image-panel" data-panel="chase">
+            <div class="panel-header"><span>Chase</span><button data-copy="chase">Copy Path</button></div>
+            <div class="image-frame ratio-16-9" id="chase-frame">Chase view unavailable for this backend.</div>
+          </article>
+          <article id="outputs-panel" class="outputs-panel" data-panel="outputs">
+            <h2>Outputs</h2>
+            <div id="artifact-list" class="artifact-list"></div>
+          </article>
+        </section>
+      </main>
+
+      <aside class="state-rail">
+        <section>
+          <h2>Run State</h2>
+          <dl id="run-state">
+            <dt>Phase</dt><dd id="phase-value">idle</dd>
+            <dt>Backend Lock</dt><dd id="backend-lock-value">none</dd>
+            <dt>Terminal</dt><dd id="terminal-value">none</dd>
+          </dl>
+        </section>
+        <section>
+          <h2>Decision</h2>
+          <div id="decision-state" class="evidence-box">No decision yet. The agent has not called a robot tool.</div>
+        </section>
+        <section>
+          <h2>Tools</h2>
+          <div id="tool-state" class="evidence-box">No tool calls yet.</div>
+        </section>
+        <section>
+          <h2>Proof</h2>
+          <div id="proof-state" class="evidence-box">No checker result yet.</div>
+        </section>
+        <section>
+          <h2>Raw Logs</h2>
+          <button id="toggle-raw-button" class="secondary">Show Raw Evidence</button>
+          <pre id="raw-evidence" class="raw-evidence" hidden></pre>
+        </section>
+      </aside>
+
+      <footer class="event-strip">
+        <div id="event-log">Choose an agent route on the left. The console will show required gates before launch.</div>
+      </footer>
+    </div>
+
+    <dialog id="confirm-dialog">
+      <form method="dialog">
+        <h2 id="confirm-title">Launch Run</h2>
+        <pre id="confirm-body"></pre>
+        <div class="dialog-actions">
+          <button value="cancel" class="secondary">Cancel</button>
+          <button id="confirm-action" value="confirm" class="primary">Launch Run</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

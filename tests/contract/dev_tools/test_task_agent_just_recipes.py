@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -167,6 +168,7 @@ def test_public_just_summary_is_small_facade() -> None:
         "agent::harness",
         "agent::mcp",
         "agent::gateway",
+        "console::run",
     }
 
     hidden_recipes = {
@@ -180,6 +182,70 @@ def test_public_just_summary_is_small_facade() -> None:
         "agent::codex-nav",
     }
     assert summary.isdisjoint(hidden_recipes)
+
+
+def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    output_dir = tmp_path / "codex-harness8"
+    result = subprocess.run(
+        [
+            binary,
+            "molmo::codex-harness8",
+            "dry-run",
+            f"output_dir={output_dir}",
+            "row=direct-world-labels-sanitized",
+            "rate_limit_retries=2",
+            "rate_limit_retry_sleep_s=0",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert f"codex harness8 manifest: {output_dir / 'codex_cleanup_harness8.json'}" in result.stdout
+    manifest = json.loads((output_dir / "codex_cleanup_harness8.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "codex_cleanup_harness8_v1"
+    assert len(manifest["rows"]) == 8
+    assert {row["row_id"] for row in manifest["rows"]} == {
+        "direct-world-labels",
+        "direct-world-labels-sanitized",
+        "direct-camera-labels-grounding-dino",
+        "direct-camera-raw",
+        "dino-prior-world-labels",
+        "dino-prior-world-labels-sanitized",
+        "dino-prior-camera-labels-grounding-dino",
+        "dino-prior-camera-raw",
+    }
+    setup_command = manifest["setup_rows"][0]["command"]
+    assert setup_command[:5] == [
+        "just",
+        "task::run",
+        "semantic-map-build",
+        "direct",
+        "camera-labels",
+    ]
+    assert "visual_grounding=grounding-dino" in setup_command
+
+
+def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
+    route = trace_agent_harness(
+        "codex-cleanup-harness8",
+        "dry-run",
+        "output_dir=/tmp/roboclaws-codex-harness8",
+        "row=direct-world-labels",
+    )
+
+    assert route == [
+        "just",
+        "harness::codex-cleanup-harness8",
+        "dry-run",
+        "output_dir=/tmp/roboclaws-codex-harness8",
+        "row=direct-world-labels",
+    ]
 
 
 def test_justfile_marks_implementation_modules_private() -> None:
@@ -250,6 +316,19 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
     assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
     assert 'just molmo::cleanup "codex-live" "world-labels"' in harness_text
     assert '"skill" "$robot_views"' in harness_text
+
+
+def test_agent_harness_allows_codex_cleanup_harness8() -> None:
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    harness_text = (JUST_DIR / "harness.just").read_text(encoding="utf-8")
+
+    assert "codex-cleanup-harness8" in agent_text
+    assert re.search(
+        r"^codex-cleanup-harness8 mode=\"dry-run\" \*overrides:",
+        harness_text,
+        re.MULTILINE,
+    )
+    assert "just molmo::codex-harness8" in harness_text
 
 
 def test_agent_harness_allows_molmo_visual_grounding_benchmark_target() -> None:
@@ -1067,18 +1146,18 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
     assert "destination_policy.preferred_fixture_categories" in prompt
     assert "destination_policy.placement_tool_by_fixture_category" in prompt
     assert "instead of skipping the object" in prompt
-    assert "first complete an anchor discovery sweep" in prompt
-    assert "before the first pick" in prompt
+    assert "If no matching public anchor or destination_options entry is available yet" in prompt
+    assert "continue the waypoint sweep rather than inventing fixture ids" in prompt
     assert "do not re-clean observed handles" in prompt
-    assert "call done as the authoritative closeout probe" in prompt
+    assert "Treat public tool responses as authoritative" in prompt
     assert "pending_cleanup_candidates" in prompt
-    assert "If done reports a held candidate" in prompt
-    assert "open_receptacle has succeeded while holding an object" in prompt
-    assert "the next cleanup tool must be place_inside" in prompt
+    assert "candidate_fixture_id or destination_options" in prompt
+    assert "required_tool" in prompt
     assert "runtime_metric_map.public_semantic_anchors" in prompt
     assert "tool recovery hints" in prompt
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
+    assert "first complete an anchor discovery sweep" not in prompt
 
 
 def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:

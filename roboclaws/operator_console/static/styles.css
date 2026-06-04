@@ -1,0 +1,556 @@
+:root {
+  --bg: #f4f6f3;
+  --panel: #ffffff;
+  --accent: #1f8a70;
+  --text: #1f2522;
+  --muted: #66736d;
+  --border: #ced8d1;
+  --warning: #b56a00;
+  --danger: #b42318;
+  --success: #287d3c;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+button {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button:focus,
+input:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.primary {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.danger {
+  color: #ffffff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.emergency {
+  color: #ffffff;
+  background: #7f1d1d;
+  border: 2px solid var(--danger);
+}
+
+.secondary {
+  background: var(--panel);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 300px minmax(520px, 1fr) 300px;
+  grid-template-rows: 56px minmax(0, 1fr) 112px;
+  grid-template-areas:
+    "top top top top"
+    "routes setup workspace state"
+    "events events events events";
+  height: 100vh;
+  overflow: hidden;
+}
+
+.top-run-bar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.app-title {
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.run-meta,
+.char-count,
+.prompt-copy,
+.inline-error {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.global-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.route-rail,
+.setup-panel,
+.state-rail {
+  overflow: auto;
+  overflow-x: hidden;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+}
+
+.state-rail {
+  border-right: 0;
+  border-left: 1px solid var(--border);
+}
+
+.route-rail {
+  grid-area: routes;
+}
+
+.setup-panel {
+  grid-area: setup;
+}
+
+.state-rail {
+  grid-area: state;
+}
+
+.workspace {
+  grid-area: workspace;
+  overflow: hidden;
+  background: var(--panel);
+}
+
+.event-strip {
+  grid-area: events;
+  min-height: 112px;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+  overflow: auto;
+}
+
+.rail-section,
+.state-rail section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+input,
+textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  color: var(--text);
+  background: var(--panel);
+}
+
+textarea,
+pre,
+.evidence-box,
+.command-preview {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.route-list,
+.gate-list,
+.artifact-list {
+  display: grid;
+  gap: 8px;
+}
+
+.route-fields[hidden],
+#common-fields[hidden] {
+  display: none;
+}
+
+.route-card {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  min-height: 88px;
+  padding: 12px;
+  text-align: left;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.route-card > * {
+  min-width: 0;
+}
+
+.route-card.active {
+  border-color: var(--accent);
+  box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.route-card-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.route-card-title span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.route-card .route-card-title {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.route-card .route-card-title span:first-child {
+  overflow-wrap: normal;
+}
+
+.route-card .route-card-title .badge {
+  justify-self: start;
+}
+
+.selected-route-summary {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  width: fit-content;
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--bg);
+  color: var(--muted);
+}
+
+.badge.ready {
+  color: var(--success);
+}
+
+.badge.blocked,
+.inline-error {
+  color: var(--danger);
+}
+
+.badge.needs_action {
+  color: var(--warning);
+}
+
+.command-preview {
+  min-height: 72px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.view-modes {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.view-mode.active {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.view-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+  height: calc(100% - 77px);
+  padding: 16px;
+  overflow: hidden;
+}
+
+.mode-overview {
+  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-areas:
+    "fpv map"
+    "grounding map";
+}
+
+.mode-overview.no-grounding {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "fpv map";
+}
+
+.mode-overview [data-panel="map"] {
+  grid-area: map;
+}
+
+.mode-overview [data-panel="fpv"] {
+  grid-area: fpv;
+}
+
+.mode-overview [data-panel="grounding"] {
+  grid-area: grounding;
+}
+
+.mode-fpv,
+.mode-map,
+.mode-grounding,
+.mode-chase,
+.mode-outputs {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "focus";
+}
+
+.image-panel,
+.outputs-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.mode-fpv [data-panel="fpv"],
+.mode-map [data-panel="map"],
+.mode-grounding [data-panel="grounding"],
+.mode-chase [data-panel="chase"],
+.mode-outputs [data-panel="outputs"] {
+  grid-area: focus;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.panel-header button {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.image-frame {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  min-height: 0;
+  padding: 12px;
+  color: var(--muted);
+  text-align: center;
+  background: var(--bg);
+}
+
+.image-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ratio-4-3 {
+  aspect-ratio: 4 / 3;
+}
+
+.ratio-16-9 {
+  aspect-ratio: 16 / 9;
+}
+
+.ratio-1-1 {
+  aspect-ratio: 1 / 1;
+}
+
+.outputs-panel {
+  padding: 16px;
+  overflow: auto;
+}
+
+.evidence-box,
+#run-state,
+.artifact-list a,
+.gate-row {
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+
+#run-state {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0;
+  font-size: 12px;
+}
+
+#run-state dt {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+#run-state dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.gate-row {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.artifact-list a {
+  display: block;
+  color: var(--text);
+  text-decoration: none;
+}
+
+dialog {
+  width: min(640px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+dialog pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "top"
+      "routes"
+      "workspace"
+      "state"
+      "events";
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .top-run-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: auto;
+    min-height: 56px;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 8px 16px;
+  }
+
+  .global-controls,
+  .view-modes {
+    flex-wrap: wrap;
+  }
+
+  .route-rail,
+  .setup-panel,
+  .state-rail,
+  .workspace {
+    overflow: visible;
+  }
+
+  .view-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas: none;
+    height: auto;
+    overflow: visible;
+  }
+
+  .mode-overview {
+    grid-template-areas:
+      "fpv"
+      "grounding"
+      "map";
+  }
+
+  .mode-overview.no-grounding {
+    grid-template-areas:
+      "fpv"
+      "map";
+  }
+}

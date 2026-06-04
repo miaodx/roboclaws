@@ -1171,6 +1171,19 @@ def test_isaac_mess_seed_updates_locations_and_pose_overrides() -> None:
         "private_manifest": {
             "targets": [{"object_id": "mug_01", "valid_receptacle_ids": ["sink_01"]}],
         },
+        "generated_mess_manifest": {
+            "schema": "roboclaws_generated_mess_manifest_v1",
+            "targets": [
+                {
+                    "object_id": "mug_01",
+                    "valid_receptacle_ids": ["sink_01"],
+                    "target_receptacle_id": "sink_01",
+                    "start_receptacle_id": "sofa_01",
+                    "relation": "on",
+                    "placement_index": 3,
+                }
+            ],
+        },
         "locations": {"mug_01": "sink_01"},
         "containment": {},
         "object_pose_overrides": {},
@@ -1208,7 +1221,10 @@ def test_isaac_mess_seed_updates_locations_and_pose_overrides() -> None:
     assert state["object_pose_overrides"]["mug_01"]["position_source"] == (
         "isaac_support_placement_resolver"
     )
-    assert state["mess_placement_diagnostics"][0]["diagnostic_source"] == "mess_seed"
+    assert state["object_pose_overrides"]["mug_01"]["source"] == "canonical_mess_manifest"
+    assert state["mess_placement_diagnostics"][0]["diagnostic_source"] == (
+        "canonical_mess_manifest"
+    )
     assert state["mess_placement_diagnostics"][0]["placement_support_status"] == ("direct_support")
 
 
@@ -1564,6 +1580,110 @@ def test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_loc
     assert result["applied_objects"][0]["target_position"] == [12.0, 23.0, 4.5]
     assert result["applied_objects"][0]["authored_translate"] == [2.0, 3.0, 4.0]
     assert result["applied_objects"][0]["authored_translate_frame"] == "parent_local"
+
+
+def test_isaac_semantic_pose_stage_application_updates_existing_translate_op(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translations: list[object] = []
+
+    class _FakeParent:
+        def __bool__(self) -> bool:
+            return True
+
+    class _FakePrim:
+        def __init__(self) -> None:
+            self.parent = _FakeParent()
+
+        def IsValid(self) -> bool:
+            return True
+
+        def GetParent(self) -> _FakeParent:
+            return self.parent
+
+    class _FakeStage:
+        def __init__(self) -> None:
+            self.prim = _FakePrim()
+
+        def GetPrimAtPath(self, path: str) -> _FakePrim:
+            assert path == "/World/Geometry/teddy"
+            return self.prim
+
+    class _FakeParentWorldTransform:
+        def GetInverse(self) -> "_FakeParentWorldTransform":
+            return self
+
+        def Transform(self, value: object) -> tuple[float, float, float]:
+            x, y, z = value
+            return (float(x) - 3.0, float(y) - 4.0, float(z) - 5.0)
+
+    class _FakeTranslateOp:
+        def GetOpName(self) -> str:
+            return "xformOp:translate"
+
+        def Set(self, value: object) -> bool:
+            translations.append(value)
+            return True
+
+    class _FakeOrientOp:
+        def GetOpName(self) -> str:
+            return "xformOp:orient"
+
+    class _FakeXformable:
+        def __init__(self, prim: object) -> None:
+            self.prim = prim
+
+        def ComputeLocalToWorldTransform(self, time_code: float) -> _FakeParentWorldTransform:
+            assert time_code == 0.0
+            return _FakeParentWorldTransform()
+
+        def GetOrderedXformOps(self) -> list[object]:
+            assert isinstance(self.prim, _FakePrim)
+            return [_FakeTranslateOp(), _FakeOrientOp()]
+
+    class _FakeXformCommonAPI:
+        def __init__(self, prim: _FakePrim) -> None:
+            self.prim = prim
+
+        def SetTranslate(self, value: object) -> None:
+            raise AssertionError("existing translate op should be authored directly")
+
+    class _FakeGf:
+        @staticmethod
+        def Vec3d(*values: float) -> tuple[float, float, float]:
+            return (float(values[0]), float(values[1]), float(values[2]))
+
+    fake_pxr = types.SimpleNamespace(
+        Gf=_FakeGf,
+        UsdGeom=types.SimpleNamespace(
+            XformCommonAPI=_FakeXformCommonAPI,
+            Xformable=_FakeXformable,
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "pxr", fake_pxr)
+    monkeypatch.setitem(sys.modules, "pxr.Gf", _FakeGf)
+    monkeypatch.setitem(sys.modules, "pxr.UsdGeom", fake_pxr.UsdGeom)
+
+    result = isaac_lab_backend_worker._apply_semantic_pose_state_to_stage(
+        stage_utils=SimpleNamespace(get_current_stage=lambda: _FakeStage()),
+        semantic_pose_state={
+            "object_poses": {
+                "teddy": {
+                    "usd_prim_path": "/World/Geometry/teddy",
+                    "support_receptacle_id": "desk",
+                    "position": [8.0, 10.0, 12.0],
+                }
+            },
+            "receptacle_index": {},
+        },
+    )
+
+    assert result["status"] == "applied"
+    assert translations == [pytest.approx((5.0, 6.0, 7.0))]
+    applied = result["applied_objects"][0]
+    assert applied["authored_translate"] == [5.0, 6.0, 7.0]
+    assert applied["translate_application_method"] == "existing_xformOp_translate"
+    assert applied["authored_xform_op"] == "xformOp:translate"
 
 
 def test_isaac_semantic_pose_stage_application_blocks_parent_transform_failure(
@@ -2191,7 +2311,150 @@ def test_isaac_scene_index_can_pin_generated_mess_object_ids() -> None:
     assert scenario.private_manifest.targets[0].valid_receptacle_ids == ("fridge_01",)
 
 
-def test_isaac_scene_index_rejects_missing_pinned_generated_mess_id() -> None:
+def test_isaac_scene_index_consumes_canonical_generated_mess_manifest() -> None:
+    object_index = {
+        "apple_01": {
+            "asset_id": "Apple_1",
+            "category": "Apple",
+            "kind": "object",
+            "parent": "counter_01",
+            "public_label": "Apple Apple|surface|1|3 Apple_1",
+        },
+        "plate_01": {
+            "asset_id": "Plate_1",
+            "category": "Plate",
+            "kind": "object",
+            "parent": "table_01",
+            "public_label": "Plate Plate|surface|1|4 Plate_1",
+        },
+    }
+    receptacle_index = {
+        "counter_01": {
+            "category": "CounterTop",
+            "kind": "receptacle",
+            "public_label": "CounterTop CounterTop|1|1",
+        },
+        "fridge_01": {
+            "category": "Fridge",
+            "kind": "receptacle",
+            "public_label": "Fridge Fridge|1|1",
+        },
+        "sink_01": {"category": "Sink", "kind": "receptacle", "public_label": "Sink Sink|1|1"},
+        "sofa_01": {"category": "Sofa", "kind": "receptacle", "public_label": "Sofa Sofa|1|1"},
+        "table_01": {
+            "category": "DiningTable",
+            "kind": "receptacle",
+            "public_label": "DiningTable DiningTable|1|1",
+        },
+    }
+    manifest = {
+        "schema": "roboclaws_generated_mess_manifest_v1",
+        "targets": [
+            {
+                "object_id": "apple_01",
+                "valid_receptacle_ids": ["fridge_01"],
+                "target_receptacle_id": "fridge_01",
+                "start_receptacle_id": "sofa_01",
+                "relation": "on",
+                "placement_index": 0,
+            },
+            {
+                "object_id": "plate_01",
+                "valid_receptacle_ids": ["sink_01"],
+                "target_receptacle_id": "sink_01",
+                "start_receptacle_id": "sofa_01",
+                "relation": "on",
+                "placement_index": 1,
+            },
+        ],
+    }
+
+    scenario = isaac_lab_backend_worker._scenario_from_scene_index(
+        scene_source="procthor-10k-val",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=2,
+        generated_mess_manifest=manifest,
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+    assert scenario is not None
+    assert [item.object_id for item in scenario.objects] == ["apple_01", "plate_01"]
+    assert [item.location_id for item in scenario.objects] == ["sofa_01", "sofa_01"]
+    assert [target.valid_receptacle_ids[0] for target in scenario.private_manifest.targets] == [
+        "fridge_01",
+        "sink_01",
+    ]
+
+
+def test_isaac_scene_index_preserves_teddybear_category_for_placement() -> None:
+    object_index = {
+        "teddy_01": {
+            "asset_id": "Teddy_Bear_1",
+            "category": "TeddyBear",
+            "kind": "object",
+            "parent": "desk_01",
+            "public_label": "TeddyBear TeddyBear|surface|1|8 Teddy_Bear_1",
+        },
+        "pillow_01": {
+            "asset_id": "Pillow_1",
+            "category": "Pillow",
+            "kind": "object",
+            "parent": "desk_01",
+            "public_label": "Pillow Pillow|surface|1|9 Pillow_1",
+        },
+    }
+    receptacle_index = {
+        "bed_01": {"category": "Bed", "kind": "receptacle", "public_label": "Bed Bed|1|1"},
+        "desk_01": {"category": "Desk", "kind": "receptacle", "public_label": "Desk Desk|1|1"},
+    }
+
+    scenario = isaac_lab_backend_worker._scenario_from_scene_index(
+        scene_source="procthor-10k-val",
+        scene_index=0,
+        seed=1,
+        generated_mess_count=2,
+        generated_mess_object_ids=("teddy_01", "pillow_01"),
+        object_index=object_index,
+        receptacle_index=receptacle_index,
+    )
+
+    assert scenario is not None
+    categories = {item.object_id: item.category for item in scenario.objects}
+    assert categories == {"teddy_01": "TeddyBear", "pillow_01": "Pillow"}
+    assert [target.valid_receptacle_ids[0] for target in scenario.private_manifest.targets] == [
+        "bed_01",
+        "bed_01",
+    ]
+
+
+def test_isaac_object_bottom_offset_uses_usd_root_position_before_bbox_center() -> None:
+    state = {
+        "object_index": {
+            "teddy_01": {
+                "usd_world_bounds": {
+                    "min": [1.0, 2.0, 0.84],
+                    "center": [1.2, 2.2, 1.10],
+                    "max": [1.4, 2.4, 1.36],
+                },
+                "usd_world_root_position": [1.2, 2.2, 0.90],
+            }
+        },
+        "objects": {
+            "teddy_01": {
+                "object_id": "teddy_01",
+                "category": "TeddyBear",
+            }
+        },
+    }
+
+    assert isaac_lab_backend_worker._isaac_object_bottom_offset(state, "teddy_01") == (
+        pytest.approx(0.06)
+    )
+
+
+def test_isaac_scene_index_rejects_missing_explicit_generated_mess_id() -> None:
     with pytest.raises(ValueError, match="explicit generated mess object id is unavailable"):
         isaac_lab_backend_worker._scenario_from_scene_index(
             scene_source="procthor-10k-val",

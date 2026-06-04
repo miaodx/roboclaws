@@ -1,0 +1,49 @@
+"""Secret redaction for operator-console raw evidence endpoints."""
+
+from __future__ import annotations
+
+import os
+import re
+from collections.abc import Iterable, Mapping
+
+SECRET_ENV_KEYS = (
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "CODEX_API_KEY",
+    "KIMI_API_KEY",
+    "MIMO_TP_KEY",
+    "NV_API_KEY",
+    "XM_LLM_API_KEY",
+    "XM_LLM_BASE_URL",
+    "XM_LLM_ANTHROPIC_BASE_URL",
+    "CODEX_BASE_URL",
+)
+
+SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"(?i)(authorization:\s*bearer\s+)[^\s'\"<>]+"),
+    re.compile(r"(?i)(api[_-]?key['\"]?\s*[:=]\s*['\"]?)[^\s'\",}]+"),
+    re.compile(r"(?i)(token['\"]?\s*[:=]\s*['\"]?)[^\s'\",}]+"),
+    re.compile(r"\b(?:sk-[A-Za-z0-9_-]{12,})\b"),
+)
+
+
+def redact_text(text: str, *, env: Mapping[str, str] | None = None) -> str:
+    """Return text with known local secrets and provider headers removed."""
+
+    env_map = os.environ if env is None else env
+    redacted = text
+    for value in _secret_values(env_map):
+        redacted = redacted.replace(value, "[REDACTED]")
+    for pattern in SECRET_PATTERNS:
+        redacted = pattern.sub(
+            lambda match: f"{match.group(1)}[REDACTED]" if match.groups() else "[REDACTED]",
+            redacted,
+        )
+    return redacted
+
+
+def _secret_values(env: Mapping[str, str]) -> Iterable[str]:
+    for key in SECRET_ENV_KEYS:
+        value = env.get(key)
+        if value and len(value) >= 6:
+            yield value
