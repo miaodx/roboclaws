@@ -956,6 +956,8 @@ codex-harness8 mode="dry-run" *overrides:
     rate_limit_retries="1"
     rate_limit_retry_sleep_s="60"
     codex_max_continuations="0"
+    dino_sidecar_lifecycle="auto"
+    dino_sidecar_startup_timeout_s="180"
 
     mode="${mode#mode=}"
     for override in {{overrides}}; do
@@ -969,7 +971,7 @@ codex-harness8 mode="dry-run" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|rate_limit_retries|rate_limit_retry_sleep_s|codex_max_continuations)
+        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|rate_limit_retries|rate_limit_retry_sleep_s|codex_max_continuations|dino_sidecar_lifecycle|dino_sidecar_startup_timeout_s)
           ;;
         visual_grounding_timeout)
           key="visual_grounding_timeout_s"
@@ -993,6 +995,8 @@ codex-harness8 mode="dry-run" *overrides:
       --rate-limit-retries "$rate_limit_retries"
       --rate-limit-retry-sleep-s "$rate_limit_retry_sleep_s"
       --codex-max-continuations "$codex_max_continuations"
+      --dino-sidecar-lifecycle "$dino_sidecar_lifecycle"
+      --dino-sidecar-startup-timeout-s "$dino_sidecar_startup_timeout_s"
     )
     if [[ -n "$row" ]]; then
       IFS=',' read -r -a selected_rows <<< "$row"

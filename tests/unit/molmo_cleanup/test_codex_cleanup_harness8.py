@@ -312,6 +312,7 @@ def test_prior_setup_rate_limit_blocks_prior_rows(
             rate_limit_retry_sleep_s=0,
             continue_on_error=True,
             row=["dino-prior-world-labels"],
+            dino_sidecar_lifecycle="off",
         ),
     )
 
@@ -320,3 +321,274 @@ def test_prior_setup_rate_limit_blocks_prior_rows(
     assert harness["setup_status"] == "rate_limited"
     assert selected[0]["status"] == "blocked"
     assert selected[0]["behavior_status"] == "infra_failure"
+
+
+def test_execute_harness_non_dino_row_does_not_probe_or_start_sidecar(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="",
+        visual_grounding_timeout_s="auto",
+    )
+    probed = False
+    executed: list[str] = []
+
+    def fake_probe(_base_url: str):
+        nonlocal probed
+        probed = True
+        return {"healthy": True}
+
+    monkeypatch.setattr(harness8, "_probe_dino_sidecar", fake_probe)
+    monkeypatch.setattr(
+        harness8,
+        "_execute_row_with_retries",
+        lambda row, _args: executed.append(row["row_id"]) or 0,
+    )
+
+    status = harness8._execute_harness(
+        harness,
+        Namespace(
+            runtime_map_prior="",
+            seed=7,
+            continue_on_error=True,
+            row=["direct-world-labels"],
+            dino_sidecar_lifecycle="auto",
+            dino_sidecar_startup_timeout_s=1,
+        ),
+    )
+
+    assert status == 0
+    assert probed is False
+    assert executed == ["direct-world-labels"]
+    assert harness["dino_sidecar"]["status"] == "not_required"
+
+
+def test_execute_harness_reuses_healthy_external_dino_sidecar(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="",
+        visual_grounding_timeout_s="auto",
+    )
+    starts: list[tuple[str, int]] = []
+    executed: list[str] = []
+
+    monkeypatch.setattr(
+        harness8,
+        "_probe_dino_sidecar",
+        lambda _base_url: {
+            "healthy": True,
+            "pipeline_id": "grounding-dino",
+            "diagnostic_mode": "real_grounding_dino",
+        },
+    )
+    monkeypatch.setattr(
+        harness8._DinoSidecarForHarness,
+        "_start_owned_sidecar",
+        lambda _self, *, host, port: starts.append((host, port)),
+    )
+    monkeypatch.setattr(
+        harness8,
+        "_execute_row_with_retries",
+        lambda row, _args: executed.append(row["row_id"]) or 0,
+    )
+
+    status = harness8._execute_harness(
+        harness,
+        Namespace(
+            runtime_map_prior="",
+            seed=7,
+            continue_on_error=True,
+            row=["direct-camera-labels-grounding-dino"],
+            dino_sidecar_lifecycle="auto",
+            dino_sidecar_startup_timeout_s=1,
+        ),
+    )
+
+    assert status == 0
+    assert starts == []
+    assert executed == ["direct-camera-labels-grounding-dino"]
+    assert harness["dino_sidecar"]["status"] == "reused"
+    assert harness["dino_sidecar"]["owner"] == "external"
+    assert harness["dino_sidecar"]["started_by_harness"] is False
+
+
+def test_execute_harness_starts_and_stops_owned_dino_sidecar(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="",
+        visual_grounding_timeout_s="auto",
+    )
+    lifecycle: list[str] = []
+
+    class FakeProcess:
+        pid = 12345
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def terminate(self):
+            lifecycle.append("terminate")
+            self.returncode = -15
+
+        def wait(self, timeout=None):
+            lifecycle.append(f"wait:{timeout}")
+            if self.returncode is None:
+                self.returncode = 0
+            return self.returncode
+
+        def kill(self):
+            lifecycle.append("kill")
+            self.returncode = -9
+
+    probes = [
+        {"healthy": False, "reason": "connection_error"},
+        {
+            "healthy": True,
+            "pipeline_id": "grounding-dino",
+            "diagnostic_mode": "real_grounding_dino",
+        },
+    ]
+
+    def fake_probe(_base_url: str):
+        return probes.pop(0)
+
+    def fake_popen(*_args, **_kwargs):
+        lifecycle.append("start")
+        return FakeProcess()
+
+    monkeypatch.setattr(harness8, "_probe_dino_sidecar", fake_probe)
+    monkeypatch.setattr(harness8, "_dino_sidecar_python_bin", lambda: Path("/bin/python"))
+    monkeypatch.setattr(harness8, "_tcp_accepting", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(harness8.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(
+        harness8,
+        "_execute_row_with_retries",
+        lambda _row, _args: 0,
+    )
+
+    status = harness8._execute_harness(
+        harness,
+        Namespace(
+            output_dir=tmp_path,
+            runtime_map_prior="",
+            seed=7,
+            continue_on_error=True,
+            row=["direct-camera-labels-grounding-dino"],
+            dino_sidecar_lifecycle="auto",
+            dino_sidecar_startup_timeout_s=1,
+        ),
+    )
+
+    assert status == 0
+    assert lifecycle == ["start", "terminate", "wait:10"]
+    assert harness["dino_sidecar"]["started_by_harness"] is True
+    assert harness["dino_sidecar"]["status"] == "stopped"
+    assert harness["dino_sidecar"]["stop_exit_status"] == -15
+
+
+def test_execute_harness_blocks_dino_row_when_port_bound_by_wrong_service(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="",
+        visual_grounding_timeout_s="auto",
+    )
+    executed: list[str] = []
+
+    monkeypatch.setattr(
+        harness8,
+        "_probe_dino_sidecar",
+        lambda _base_url: {
+            "healthy": False,
+            "pipeline_id": "fake-http",
+            "reason": "sidecar did not report the real Grounding DINO adapter",
+        },
+    )
+    monkeypatch.setattr(harness8, "_tcp_accepting", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(
+        harness8,
+        "_execute_row_with_retries",
+        lambda row, _args: executed.append(row["row_id"]) or 0,
+    )
+
+    status = harness8._execute_harness(
+        harness,
+        Namespace(
+            output_dir=tmp_path,
+            runtime_map_prior="",
+            seed=7,
+            continue_on_error=True,
+            row=["direct-camera-labels-grounding-dino"],
+            dino_sidecar_lifecycle="auto",
+            dino_sidecar_startup_timeout_s=1,
+        ),
+    )
+
+    row = next(
+        row
+        for row in harness["rows"]
+        if row["row_id"] == "direct-camera-labels-grounding-dino"
+    )
+    assert status == 1
+    assert executed == []
+    assert harness["dino_sidecar"]["status"] == "infra_failed"
+    assert row["status"] == "infra_failed"
+    assert row["behavior_status"] == "infra_failure"
+    assert "not a healthy real Grounding DINO sidecar" in row["reason"]
+
+
+def test_prior_rows_require_dino_setup_sidecar_only_without_explicit_prior(
+    tmp_path: Path,
+) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="",
+        visual_grounding_timeout_s="auto",
+    )
+    prior_world_row = next(
+        row for row in harness["rows"] if row["row_id"] == "dino-prior-world-labels"
+    )
+
+    required_without_prior = harness8._selected_rows_requiring_dino_sidecar(
+        harness,
+        [prior_world_row],
+        explicit_runtime_map_prior="",
+    )
+    required_with_prior = harness8._selected_rows_requiring_dino_sidecar(
+        harness,
+        [prior_world_row],
+        explicit_runtime_map_prior="output/prior/runtime_metric_map.json",
+    )
+
+    assert [row["row_id"] for row in required_without_prior] == [
+        "setup-semantic-map-prior-dino",
+        "dino-prior-world-labels",
+    ]
+    assert required_with_prior == []

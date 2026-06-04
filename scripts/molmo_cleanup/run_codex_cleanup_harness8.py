@@ -3,19 +3,26 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fcntl
 import html
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
+from urllib import error as urllib_error
+from urllib import parse as urllib_parse
+from urllib import request as urllib_request
 
 if __package__ in {None, ""}:
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
+    REPO_ROOT = Path(__file__).resolve().parents[2]
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+else:
+    REPO_ROOT = Path(__file__).resolve().parents[2]
 
 from roboclaws.core.rerun import shell_join  # noqa: E402
 from roboclaws.household.apple2apple_test_grid import (  # noqa: E402
@@ -23,6 +30,14 @@ from roboclaws.household.apple2apple_test_grid import (  # noqa: E402
     RUNTIME_MAP_PRIOR_PLACEHOLDER,
 )
 from roboclaws.household.realworld_contract import DEFAULT_REALWORLD_TASK  # noqa: E402
+from roboclaws.household.visual_grounding import (  # noqa: E402
+    DEFAULT_VISUAL_GROUNDING_BASE_URL,
+    VISUAL_GROUNDING_REQUEST_SCHEMA,
+    VISUAL_GROUNDING_RESPONSE_SCHEMA,
+)
+from scripts.visual_grounding.serve_fake_visual_grounding import (  # noqa: E402
+    ENDPOINT as VISUAL_GROUNDING_ENDPOINT,
+)
 
 HARNESS_SCHEMA = "codex_cleanup_harness8_v1"
 ROW_SCHEMA = "codex_cleanup_harness8_row_v1"
@@ -45,6 +60,20 @@ VISUAL_GROUNDING_INFRA_FAILURE_REASONS = {
     "connection_error",
     "timeout",
     "service_unavailable",
+}
+DINO_VISUAL_GROUNDING_PIPELINE_ID = "grounding-dino"
+DINO_SIDECAR_LOCK_PATH = Path("output/molmo/.visual-grounding-dino.lock")
+DINO_SIDECAR_LOG_NAME = "visual-grounding-dino-sidecar.log"
+DINO_SIDECAR_PROBE_IMAGE_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP8z8AARQAFAAH/"
+    "e+m+7wAAAABJRU5ErkJggg=="
+)
+DEFAULT_DINO_SIDECAR_ENV = {
+    "VISUAL_GROUNDING_DEVICE": "auto",
+    "VISUAL_GROUNDING_TORCH_DTYPE": "auto",
+    "VISUAL_GROUNDING_DINO_MODEL_ID": "IDEA-Research/grounding-dino-base",
+    "VISUAL_GROUNDING_DINO_BOX_THRESHOLD": "0.25",
+    "VISUAL_GROUNDING_DINO_TEXT_THRESHOLD": "0.20",
 }
 
 
@@ -89,6 +118,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "must both consume prior-map state and sweep/ground RAW_FPV evidence."
         ),
     )
+    parser.add_argument(
+        "--dino-sidecar-lifecycle",
+        choices=("auto", "reuse-only", "off"),
+        default="auto",
+        help=(
+            "Lifecycle policy for Grounding DINO rows. auto reuses a healthy "
+            "real sidecar or starts one and stops it after the harness; "
+            "reuse-only requires a healthy pre-existing sidecar; off restores "
+            "the old unmanaged behavior."
+        ),
+    )
+    parser.add_argument("--dino-sidecar-startup-timeout-s", type=float, default=180.0)
     return parser.parse_args(argv)
 
 
@@ -355,23 +396,33 @@ def _execute_harness(harness: dict[str, Any], args: argparse.Namespace) -> int:
             row["reason"] = "row was not selected for this execution"
             row["updated_at"] = _utc_timestamp()
 
-    prior_path = args.runtime_map_prior
-    if any(row.get("requires_runtime_map_prior") for row in selected_rows) and not prior_path:
-        prior_path = _execute_prior_build(harness, args)
-        harness["runtime_map_prior"] = prior_path
-        if not prior_path:
-            _mark_prior_dependent_rows_blocked(selected_rows, harness)
+    dino_rows = _selected_rows_requiring_dino_sidecar(
+        harness,
+        selected_rows,
+        explicit_runtime_map_prior=str(args.runtime_map_prior or ""),
+    )
+    with _dino_sidecar_for_harness(harness, args, dino_rows) as sidecar:
+        if sidecar.blocking_reason:
+            _mark_dino_dependent_rows_blocked(dino_rows, sidecar.blocking_reason)
             return 1
-        _replace_runtime_map_prior(harness, prior_path)
 
-    failure_count = 0
-    for row in selected_rows:
-        status = _execute_row_with_retries(row, args)
-        if status != 0:
-            failure_count += 1
-            if not args.continue_on_error:
-                break
-    return 1 if failure_count else 0
+        prior_path = args.runtime_map_prior
+        if any(row.get("requires_runtime_map_prior") for row in selected_rows) and not prior_path:
+            prior_path = _execute_prior_build(harness, args)
+            harness["runtime_map_prior"] = prior_path
+            if not prior_path:
+                _mark_prior_dependent_rows_blocked(selected_rows, harness)
+                return 1
+            _replace_runtime_map_prior(harness, prior_path)
+
+        failure_count = 0
+        for row in selected_rows:
+            status = _execute_row_with_retries(row, args)
+            if status != 0:
+                failure_count += 1
+                if not args.continue_on_error:
+                    break
+        return 1 if failure_count else 0
 
 
 def _execute_prior_build(harness: dict[str, Any], args: argparse.Namespace) -> str:
@@ -414,6 +465,514 @@ def _mark_prior_dependent_rows_blocked(
         row["behavior_status"] = "infra_failure"
         row["reason"] = reason
         row["updated_at"] = _utc_timestamp()
+
+
+class _DinoSidecarForHarness:
+    def __init__(
+        self,
+        harness: dict[str, Any],
+        args: argparse.Namespace,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        self.harness = harness
+        self.args = args
+        self.rows = rows
+        self.blocking_reason = ""
+        self.process: subprocess.Popen[bytes] | None = None
+        self.lock_file = None
+        self.log_path: Path | None = None
+        self.metadata: dict[str, Any] = {
+            "schema": "codex_cleanup_harness8_dino_sidecar_lifecycle_v1",
+            "required": bool(rows),
+            "policy": str(getattr(args, "dino_sidecar_lifecycle", "auto")),
+            "base_url": _visual_grounding_base_url(),
+            "row_ids": [str(row.get("row_id") or "") for row in rows],
+            "status": "pending" if rows else "not_required",
+            "owner": "none",
+            "started_by_harness": False,
+        }
+
+    def __enter__(self) -> _DinoSidecarForHarness:
+        self.harness["dino_sidecar"] = self.metadata
+        if not self.rows:
+            return self
+
+        policy = str(getattr(self.args, "dino_sidecar_lifecycle", "auto") or "auto")
+        if policy == "off":
+            self.metadata["status"] = "unmanaged"
+            self.metadata["reason"] = "dino sidecar lifecycle management was disabled"
+            return self
+
+        if not self._acquire_lock():
+            return self
+
+        base_url = str(self.metadata["base_url"])
+        probe = _probe_dino_sidecar(base_url)
+        self.metadata["initial_probe"] = probe
+        if probe.get("healthy"):
+            self.metadata["status"] = "reused"
+            self.metadata["owner"] = "external"
+            self.metadata["ready_at"] = _utc_timestamp()
+            return self
+
+        if policy == "reuse-only":
+            self._block(
+                "Grounding DINO sidecar lifecycle is reuse-only, but no healthy real sidecar "
+                f"was reachable at {base_url}: {probe.get('reason') or 'not ready'}"
+            )
+            return self
+
+        try:
+            host, port = _visual_grounding_host_port(base_url)
+        except RuntimeError as exc:
+            self._block(str(exc))
+            return self
+        if _tcp_accepting(host, port):
+            self._block(
+                f"TCP port {host}:{port} is already in use, but it is not a healthy real "
+                f"Grounding DINO sidecar: {probe.get('reason') or 'not ready'}"
+            )
+            return self
+
+        self._start_owned_sidecar(host=host, port=port)
+        return self
+
+    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+        self._stop_owned_sidecar()
+        self._release_lock()
+
+    def _acquire_lock(self) -> bool:
+        lock_path = REPO_ROOT / DINO_SIDECAR_LOCK_PATH
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_file = lock_path.open("a+", encoding="utf-8")
+        try:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock_file.seek(0)
+            active = lock_file.read().strip()
+            lock_file.close()
+            detail = f": {active}" if active else ""
+            self._block(
+                f"another Codex harness owns the Grounding DINO sidecar lock {lock_path}"
+                f"{detail}"
+            )
+            return False
+        lock_file.seek(0)
+        lock_file.truncate()
+        lock_file.write(
+            json.dumps(
+                {
+                    "pid": os.getpid(),
+                    "output_dir": str(_harness_output_dir(self.args, self.rows)),
+                    "base_url": self.metadata["base_url"],
+                    "started_at": _utc_timestamp(),
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+        lock_file.flush()
+        self.lock_file = lock_file
+        self.metadata["lock_path"] = str(lock_path)
+        return True
+
+    def _start_owned_sidecar(self, *, host: str, port: int) -> None:
+        python_bin = _dino_sidecar_python_bin()
+        if not python_bin:
+            self._block(
+                "Grounding DINO sidecar was not reachable and no sidecar Python runtime "
+                "was found. Set ROBOCLAWS_VISUAL_GROUNDING_PYTHON or create "
+                ".venv-visual-grounding/."
+            )
+            return
+
+        sidecar_dir = _harness_output_dir(self.args, self.rows) / "_sidecars"
+        sidecar_dir.mkdir(parents=True, exist_ok=True)
+        self.log_path = sidecar_dir / DINO_SIDECAR_LOG_NAME
+        command = [
+            str(python_bin),
+            "scripts/visual_grounding/serve_visual_grounding_service.py",
+            "--host",
+            host,
+            "--port",
+            str(port),
+            "--pipeline",
+            "real-router",
+            "--adapter-mode",
+            "real",
+        ]
+        env = os.environ.copy()
+        for key, value in DEFAULT_DINO_SIDECAR_ENV.items():
+            env.setdefault(key, value)
+        with self.log_path.open("ab") as log_file:
+            self.process = subprocess.Popen(
+                command,
+                cwd=REPO_ROOT,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+            )
+        self.metadata.update(
+            {
+                "status": "starting",
+                "owner": "harness",
+                "started_by_harness": True,
+                "pid": self.process.pid,
+                "log_path": str(self.log_path),
+                "command": command,
+                "started_at": _utc_timestamp(),
+            }
+        )
+
+        probe = _wait_for_dino_sidecar_ready(
+            base_url=str(self.metadata["base_url"]),
+            process=self.process,
+            timeout_s=float(getattr(self.args, "dino_sidecar_startup_timeout_s", 180.0)),
+        )
+        self.metadata["ready_probe"] = probe
+        if probe.get("healthy"):
+            self.metadata["status"] = "started"
+            self.metadata["ready_at"] = _utc_timestamp()
+            return
+
+        self._block(
+            "Grounding DINO sidecar was started by the harness but did not become "
+            f"ready: {probe.get('reason') or 'not ready'}"
+        )
+
+    def _stop_owned_sidecar(self) -> None:
+        process = self.process
+        if process is None:
+            return
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=10)
+        self.metadata["stopped_at"] = _utc_timestamp()
+        self.metadata["stop_exit_status"] = process.returncode
+        if self.metadata.get("status") in {"started", "starting"}:
+            self.metadata["status"] = "stopped"
+
+    def _release_lock(self) -> None:
+        if self.lock_file is None:
+            return
+        try:
+            fcntl.flock(self.lock_file.fileno(), fcntl.LOCK_UN)
+        finally:
+            self.lock_file.close()
+            self.lock_file = None
+
+    def _block(self, reason: str) -> None:
+        self.blocking_reason = reason
+        self.metadata["status"] = "infra_failed"
+        self.metadata["owner"] = "none"
+        self.metadata["reason"] = reason
+        self.metadata["updated_at"] = _utc_timestamp()
+
+
+def _dino_sidecar_for_harness(
+    harness: dict[str, Any],
+    args: argparse.Namespace,
+    rows: list[dict[str, Any]],
+) -> _DinoSidecarForHarness:
+    return _DinoSidecarForHarness(harness, args, rows)
+
+
+def _selected_rows_requiring_dino_sidecar(
+    harness: dict[str, Any],
+    selected_rows: list[dict[str, Any]],
+    *,
+    explicit_runtime_map_prior: str = "",
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    prior_already_available = bool(explicit_runtime_map_prior or harness.get("runtime_map_prior"))
+    if any(row.get("requires_runtime_map_prior") for row in selected_rows) and not (
+        prior_already_available
+    ):
+        rows.extend(
+            row
+            for row in harness.get("setup_rows") or []
+            if _row_command_uses_grounding_dino(row)
+        )
+        rows.extend(row for row in selected_rows if row.get("requires_runtime_map_prior"))
+    rows.extend(row for row in selected_rows if _row_command_uses_grounding_dino(row))
+    return _dedupe_rows(rows)
+
+
+def _mark_dino_dependent_rows_blocked(
+    rows: list[dict[str, Any]],
+    reason: str,
+) -> None:
+    for row in _dedupe_rows(rows):
+        direct_dino_dependency = _is_setup_row(row) or _row_command_uses_grounding_dino(row)
+        row["status"] = "infra_failed" if direct_dino_dependency else "blocked"
+        row["behavior_status"] = "infra_failure"
+        row["reason"] = reason
+        row["updated_at"] = _utc_timestamp()
+
+
+def _dedupe_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for row in rows:
+        row_id = str(row.get("row_id") or "")
+        if row_id in seen:
+            continue
+        seen.add(row_id)
+        deduped.append(row)
+    return deduped
+
+
+def _row_command_uses_grounding_dino(row: dict[str, Any]) -> bool:
+    for item in row.get("command") or []:
+        text = str(item)
+        if not text.startswith("visual_grounding="):
+            continue
+        value = text.split("=", maxsplit=1)[1]
+        producers = value.replace(",", "+").split("+")
+        if DINO_VISUAL_GROUNDING_PIPELINE_ID in producers:
+            return True
+    return False
+
+
+def _visual_grounding_base_url() -> str:
+    return os.environ.get("VISUAL_GROUNDING_BASE_URL") or DEFAULT_VISUAL_GROUNDING_BASE_URL
+
+
+def _visual_grounding_host_port(base_url: str) -> tuple[str, int]:
+    parsed = urllib_parse.urlparse(base_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise RuntimeError(f"unsupported visual grounding base URL: {base_url}")
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    return host, int(port)
+
+
+def _dino_sidecar_python_bin() -> Path | None:
+    configured = os.environ.get("ROBOCLAWS_VISUAL_GROUNDING_PYTHON")
+    if configured and Path(configured).is_file():
+        return Path(configured)
+    candidates = [REPO_ROOT / ".venv-visual-grounding/bin/python"]
+    return next((path for path in candidates if path.is_file()), None)
+
+
+def _harness_output_dir(args: argparse.Namespace, rows: list[dict[str, Any]]) -> Path:
+    output_dir = getattr(args, "output_dir", None)
+    if output_dir:
+        return Path(output_dir)
+    for row in rows:
+        row_output_dir = row.get("output_dir")
+        if row_output_dir:
+            return Path(str(row_output_dir)).parent
+    return Path("output/molmo/codex-harness8")
+
+
+def _wait_for_dino_sidecar_ready(
+    *,
+    base_url: str,
+    process: subprocess.Popen[bytes],
+    timeout_s: float,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + max(timeout_s, 0.0)
+    last_probe = _probe_dino_sidecar(base_url)
+    while True:
+        if last_probe.get("healthy"):
+            return last_probe
+        if process.poll() is not None:
+            last_probe["reason"] = (
+                f"sidecar process exited before readiness with status {process.returncode}; "
+                f"{last_probe.get('reason') or 'not ready'}"
+            )
+            return last_probe
+        if time.monotonic() >= deadline:
+            last_probe["reason"] = (
+                f"sidecar did not become ready within {timeout_s:g}s; "
+                f"{last_probe.get('reason') or 'not ready'}"
+            )
+            return last_probe
+        time.sleep(1.0)
+        last_probe = _probe_dino_sidecar(base_url)
+
+
+def _probe_dino_sidecar(base_url: str, *, timeout_s: float = 2.0) -> dict[str, Any]:
+    endpoint_url = base_url.rstrip("/") + VISUAL_GROUNDING_ENDPOINT
+    request = urllib_request.Request(
+        endpoint_url,
+        data=json.dumps(_dino_probe_request()).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "roboclaws-codex-harness8-dino-probe/1.0",
+        },
+        method="POST",
+    )
+    started = time.monotonic()
+    try:
+        with urllib_request.urlopen(request, timeout=timeout_s) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        return {
+            "healthy": False,
+            "base_url": base_url,
+            "endpoint_url": endpoint_url,
+            "reason": f"http_error_{exc.code}",
+            "latency_ms": _elapsed_ms(started),
+        }
+    except (urllib_error.URLError, TimeoutError, socket.timeout) as exc:
+        return {
+            "healthy": False,
+            "base_url": base_url,
+            "endpoint_url": endpoint_url,
+            "reason": _probe_error_reason(exc),
+            "latency_ms": _elapsed_ms(started),
+        }
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return {
+            "healthy": False,
+            "base_url": base_url,
+            "endpoint_url": endpoint_url,
+            "reason": f"invalid_json_response: {exc}",
+            "latency_ms": _elapsed_ms(started),
+        }
+    return _dino_probe_summary(
+        payload,
+        base_url=base_url,
+        endpoint_url=endpoint_url,
+        started=started,
+    )
+
+
+def _dino_probe_request() -> dict[str, Any]:
+    return {
+        "schema": VISUAL_GROUNDING_REQUEST_SCHEMA,
+        "run_id": "codex-harness8-dino-sidecar-probe",
+        "observation_id": "readiness_probe",
+        "waypoint_id": "readiness_probe",
+        "room_id": "readiness_probe",
+        "capture_context": {"discovered_during": "harness_readiness_probe"},
+        "image": {
+            "mime_type": "image/png",
+            "bytes_base64": DINO_SIDECAR_PROBE_IMAGE_BASE64,
+            "width": 1,
+            "height": 1,
+        },
+        "category_hints": [],
+        "fixture_hints": [],
+        "pipeline_request": {
+            "pipeline_id": DINO_VISUAL_GROUNDING_PIPELINE_ID,
+            "proposer": {"producer_id": DINO_VISUAL_GROUNDING_PIPELINE_ID},
+            "refiner": {},
+        },
+    }
+
+
+def _dino_probe_summary(
+    payload: Any,
+    *,
+    base_url: str,
+    endpoint_url: str,
+    started: float,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {
+            "healthy": False,
+            "base_url": base_url,
+            "endpoint_url": endpoint_url,
+            "reason": "response was not a JSON object",
+            "latency_ms": _elapsed_ms(started),
+        }
+    pipeline = payload.get("pipeline") if isinstance(payload.get("pipeline"), dict) else {}
+    stages = pipeline.get("stages") if isinstance(pipeline.get("stages"), list) else []
+    diagnostics = (
+        payload.get("diagnostics") if isinstance(payload.get("diagnostics"), dict) else {}
+    )
+    stage_summaries = [
+        {
+            "stage": stage.get("stage") or "",
+            "producer_id": stage.get("producer_id") or "",
+            "version": stage.get("version") or "",
+            "status": stage.get("status") or "",
+        }
+        for stage in stages
+        if isinstance(stage, dict)
+    ]
+    summary = {
+        "healthy": False,
+        "base_url": base_url,
+        "endpoint_url": endpoint_url,
+        "schema": payload.get("schema") or "",
+        "status": payload.get("status") or "",
+        "pipeline_id": pipeline.get("pipeline_id") or "",
+        "diagnostic_mode": diagnostics.get("diagnostic_mode") or "",
+        "stages": stage_summaries,
+        "latency_ms": _elapsed_ms(started),
+    }
+    if (
+        payload.get("schema") == VISUAL_GROUNDING_RESPONSE_SCHEMA
+        and payload.get("status") == "ok"
+        and pipeline.get("pipeline_id") == DINO_VISUAL_GROUNDING_PIPELINE_ID
+        and _probe_response_is_real_dino(summary)
+    ):
+        summary["healthy"] = True
+        summary["reason"] = ""
+        return summary
+    summary["reason"] = _unhealthy_dino_probe_reason(payload, summary)
+    return summary
+
+
+def _probe_response_is_real_dino(summary: dict[str, Any]) -> bool:
+    if summary.get("diagnostic_mode") == "real_grounding_dino":
+        return True
+    stages = summary.get("stages")
+    if not isinstance(stages, list):
+        return False
+    return any(
+        isinstance(stage, dict)
+        and stage.get("producer_id") == DINO_VISUAL_GROUNDING_PIPELINE_ID
+        and stage.get("version") == "real-sidecar-adapter-v1"
+        for stage in stages
+    )
+
+
+def _unhealthy_dino_probe_reason(payload: dict[str, Any], summary: dict[str, Any]) -> str:
+    if payload.get("schema") != VISUAL_GROUNDING_RESPONSE_SCHEMA:
+        return "visual grounding response schema mismatch"
+    if payload.get("status") != "ok":
+        error = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+        return str(error.get("reason") or payload.get("status") or "sidecar returned failure")
+    if summary.get("pipeline_id") != DINO_VISUAL_GROUNDING_PIPELINE_ID:
+        return (
+            "sidecar answered with pipeline "
+            f"{summary.get('pipeline_id')!r}, not {DINO_VISUAL_GROUNDING_PIPELINE_ID!r}"
+        )
+    return "sidecar did not report the real Grounding DINO adapter"
+
+
+def _probe_error_reason(exc: BaseException) -> str:
+    if isinstance(exc, urllib_error.URLError):
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            return "timeout"
+        if reason:
+            return f"connection_error: {reason}"
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return "timeout"
+    return f"connection_error: {exc}"
+
+
+def _tcp_accepting(host: str, port: int, *, timeout_s: float = 0.5) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
+
+
+def _elapsed_ms(started: float) -> int:
+    return round((time.monotonic() - started) * 1000)
 
 
 def _execute_row_with_retries(row: dict[str, Any], args: argparse.Namespace) -> int:

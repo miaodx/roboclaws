@@ -47,7 +47,18 @@ assert os.environ.get("XM_LLM_API_KEY") or (
 PY
 ```
 
-For the DINO rows, start the visual-grounding sidecar in another terminal:
+For the DINO rows, the harness manages the real Grounding DINO sidecar by
+default:
+
+- if a healthy real sidecar already answers at `VISUAL_GROUNDING_BASE_URL` or
+  `http://127.0.0.1:18880`, it is reused and left running;
+- if no sidecar is reachable, the harness starts one from
+  `.venv-visual-grounding/bin/python` or `ROBOCLAWS_VISUAL_GROUNDING_PYTHON` and
+  stops only that process when the harness exits;
+- if the port is already bound by an unhealthy or non-DINO service, DINO rows are
+  marked as infrastructure failure instead of killing the unknown process.
+
+The harness-owned process uses the recommended DINO base configuration:
 
 ```bash
 VISUAL_GROUNDING_DEVICE=auto \
@@ -59,8 +70,10 @@ VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
     --pipeline real-router --adapter-mode real
 ```
 
-If the sidecar is intentionally not available, use dry-run only. Do not replace
-real DINO with `contract-fake` for performance-regression evidence.
+Use `dino_sidecar_lifecycle=reuse-only` when you want the run to require an
+already-running sidecar. Use `dino_sidecar_lifecycle=off` only for debugging the
+old unmanaged behavior. Do not replace real DINO with `contract-fake` for
+performance-regression evidence.
 
 ## Trigger
 
