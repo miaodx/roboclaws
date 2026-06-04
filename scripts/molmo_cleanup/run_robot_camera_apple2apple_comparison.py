@@ -145,6 +145,22 @@ def main(argv: list[str] | None = None) -> int:
             "This is an opt-in capture-quality probe control."
         ),
     )
+    parser.add_argument(
+        "--isaac-aa-op",
+        type=int,
+        help=(
+            "Optional Isaac /rtx/post/aa/op value for an opt-in capture-quality probe. "
+            "The worker records the previous value and restores it after capture."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-tonemap-op",
+        type=int,
+        help=(
+            "Optional Isaac /rtx/post/tonemap/op value for an opt-in native tone probe. "
+            "The worker records the previous value and restores it after capture."
+        ),
+    )
     parser.add_argument("--location-count", type=int, default=4)
     parser.add_argument(
         "--isaac-robot-view-color-profile-path",
@@ -671,7 +687,16 @@ def _capture_quality_probe_config(args: argparse.Namespace) -> dict[str, Any]:
         ),
         "render_settle_frames": render_settle_frames,
         "samples_per_pixel": _quality_setting_not_available("samples_per_pixel"),
-        "anti_aliasing": _quality_setting_not_available("anti_aliasing"),
+        "anti_aliasing": _quality_setting_request(
+            "anti_aliasing",
+            value=getattr(args, "isaac_aa_op", None),
+            setting_path="/rtx/post/aa/op",
+        ),
+        "tonemap_operator": _quality_setting_request(
+            "tonemap_operator",
+            value=getattr(args, "isaac_tonemap_op", None),
+            setting_path="/rtx/post/tonemap/op",
+        ),
         "denoise": _quality_setting_not_available("denoise"),
         "taa": _quality_setting_not_available("taa"),
         "texture_filtering": _quality_setting_not_available("texture_filtering"),
@@ -714,6 +739,7 @@ def _ensure_capture_quality_probe_manifest(manifest: dict[str, Any]) -> dict[str
         "render_settle_frames": 0,
         "samples_per_pixel": _quality_setting_not_available("samples_per_pixel"),
         "anti_aliasing": _quality_setting_not_available("anti_aliasing"),
+        "tonemap_operator": _quality_setting_not_available("tonemap_operator"),
         "denoise": _quality_setting_not_available("denoise"),
         "taa": _quality_setting_not_available("taa"),
         "texture_filtering": _quality_setting_not_available("texture_filtering"),
@@ -731,6 +757,24 @@ def _quality_setting_not_available(name: str) -> dict[str, Any]:
         "value": None,
         "setting_path": "",
         "default_render_settings_changed": False,
+    }
+
+
+def _quality_setting_request(
+    name: str,
+    *,
+    value: Any,
+    setting_path: str,
+) -> dict[str, Any]:
+    if value is None:
+        return _quality_setting_not_available(name)
+    return {
+        "name": name,
+        "status": "requested",
+        "value": int(value),
+        "setting_path": setting_path,
+        "requested_value": int(value),
+        "default_render_settings_changed": True,
     }
 
 
@@ -764,10 +808,18 @@ def _resolution_dict(width: Any, height: Any) -> dict[str, int]:
 
 
 def _render_settle_args(capture_quality: dict[str, Any]) -> list[str]:
+    args: list[str] = []
     render_settle_frames = max(0, int(capture_quality.get("render_settle_frames") or 0))
+    anti_aliasing = _dict(capture_quality.get("anti_aliasing"))
+    if anti_aliasing.get("status") == "requested" and anti_aliasing.get("value") is not None:
+        args.extend(["--isaac-aa-op", str(int(anti_aliasing["value"]))])
+    tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
+    if tonemap_operator.get("status") == "requested" and tonemap_operator.get("value") is not None:
+        args.extend(["--isaac-tonemap-op", str(int(tonemap_operator["value"]))])
     if render_settle_frames <= 0:
-        return []
-    return ["--render-settle-frames", str(render_settle_frames)]
+        return args
+    args.extend(["--render-settle-frames", str(render_settle_frames)])
+    return args
 
 
 def _prepare_saved_report_images(
@@ -5314,6 +5366,7 @@ def _render_capture_quality_probe(manifest: dict[str, Any]) -> str:
         ("downsample filter", capture_quality.get("downsample_filter")),
         ("render settle frames", capture_quality.get("render_settle_frames")),
         ("samples/AA", _quality_status_label(capture_quality, "anti_aliasing")),
+        ("tone op", _quality_status_label(capture_quality, "tonemap_operator")),
         ("denoise", _quality_status_label(capture_quality, "denoise")),
         ("TAA", _quality_status_label(capture_quality, "taa")),
         ("policy", capture_quality.get("policy_classification")),

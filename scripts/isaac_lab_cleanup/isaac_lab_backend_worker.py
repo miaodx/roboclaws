@@ -320,6 +320,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "saving robot-view images. This is an opt-in capture-quality probe control."
         ),
     )
+    robot_views.add_argument(
+        "--isaac-aa-op",
+        type=int,
+        help=(
+            "Optional Isaac /rtx/post/aa/op value for an opt-in capture-quality probe. "
+            "The worker records the previous value and restores it after capture."
+        ),
+    )
+    robot_views.add_argument(
+        "--isaac-tonemap-op",
+        type=int,
+        help=(
+            "Optional Isaac /rtx/post/tonemap/op value for an opt-in native tone probe. "
+            "The worker records the previous value and restores it after capture."
+        ),
+    )
 
     camera_views = subparsers.add_parser("camera_views")
     camera_views.add_argument("--output-dir", type=Path, required=True)
@@ -716,6 +732,8 @@ def capture_semantic_pose_robot_views(
     focus_receptacle_id: str | None = None,
     color_profile_override: dict[str, Any] | None = None,
     render_settle_frames: int = 0,
+    isaac_aa_op: int | None = None,
+    isaac_tonemap_op: int | None = None,
 ) -> dict[str, Any]:
     _require_isaac_import()
     from isaaclab.app import AppLauncher
@@ -735,6 +753,8 @@ def capture_semantic_pose_robot_views(
         semantic_pose_state=_dict(state.get("semantic_pose_state")),
         color_profile_override=color_profile_override,
         render_settle_frames=render_settle_frames,
+        isaac_aa_op=isaac_aa_op,
+        isaac_tonemap_op=isaac_tonemap_op,
     )
     capture["simulation_app_reuse_token"] = simulation_app
     return capture
@@ -2043,6 +2063,8 @@ def _capture_isaac_lab_camera_views(
     semantic_pose_state: dict[str, Any] | None = None,
     color_profile_override: dict[str, Any] | None = None,
     render_settle_frames: int = 0,
+    isaac_aa_op: int | None = None,
+    isaac_tonemap_op: int | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -2149,6 +2171,12 @@ def _capture_isaac_lab_camera_views(
     )
     sim.reset()
     render_settle_frames = max(0, int(render_settle_frames))
+    settings = _isaac_settings_interface()
+    settings_mutation = _apply_isaac_capture_quality_overrides(
+        settings=settings,
+        isaac_aa_op=isaac_aa_op,
+        isaac_tonemap_op=isaac_tonemap_op,
+    )
     native_render_diagnostics = _isaac_native_render_diagnostics(
         renderer_mode=REAL_SMOKE_RENDERER_MODE,
         capture_method=REAL_ROBOT_VIEW_CAPTURE_METHOD,
@@ -2165,7 +2193,8 @@ def _capture_isaac_lab_camera_views(
         isaac_lab_isp_active=False,
         capture_quality_settings=_capture_quality_settings(
             render_settle_frames=render_settle_frames,
-            settings=_isaac_settings_interface(),
+            settings=settings,
+            settings_mutation=settings_mutation,
         ),
     )
     saved: dict[str, str] = {}
@@ -2175,83 +2204,93 @@ def _capture_isaac_lab_camera_views(
     camera_diagnostics: dict[str, dict[str, Any]] = {}
     color_profile = _robot_view_color_profile(color_profile_override)
     color_management: dict[str, dict[str, Any]] = {}
-    for view_name in ROBOT_VIEW_KEYS:
-        if view_name == "fpv" and mounted_head_camera:
-            camera = head_camera
-            if camera is None:
-                raise RuntimeError("mounted head camera was requested but Camera sensor is absent")
-            robot_pose_application = _position_robot_for_head_camera_view(
-                stage_utils=stage_utils,
-                scene_bounds=scene_bounds,
-                semantic_pose_state=semantic_pose_state,
-            )
-            camera_diagnostics[view_name] = _usd_camera_diagnostics(
-                stage_utils=stage_utils,
-                prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
-                view_name=view_name,
-                width=width,
-                height=height,
-                robot_pose_application=robot_pose_application,
-                lens_application=head_camera_lens,
-            )
-        else:
-            camera = scene_camera
-            positions, targets = view_poses[view_name]
-            camera.set_world_poses_from_view(positions, targets)
-            camera_diagnostics[view_name] = _isaac_eye_target_camera_diagnostics(
-                view_name=view_name,
-                positions=positions,
-                targets=targets,
-                width=width,
-                height=height,
-                camera_basis="robot_relative_camera_follower"
-                if view_name == "chase"
-                and _robot_relative_chase_eye_target(
-                    _dict(_dict(semantic_pose_state).get("robot_pose"))
+    try:
+        for view_name in ROBOT_VIEW_KEYS:
+            if view_name == "fpv" and mounted_head_camera:
+                camera = head_camera
+                if camera is None:
+                    raise RuntimeError(
+                        "mounted head camera was requested but Camera sensor is absent"
+                    )
+                robot_pose_application = _position_robot_for_head_camera_view(
+                    stage_utils=stage_utils,
+                    scene_bounds=scene_bounds,
+                    semantic_pose_state=semantic_pose_state,
                 )
-                is not None
-                else "scene_bounds_eye_target",
-            )
-        rgb_image = None
-        for _ in range(24):
-            sim.step()
-            total_render_steps += 1
-            camera.update(dt=sim.get_physics_dt())
-            rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-            if rgb_image is not None and _image_has_variance(rgb_image, np=np):
-                break
-        for _ in range(render_settle_frames):
-            sim.step()
-            total_render_steps += 1
-            camera.update(dt=sim.get_physics_dt())
-            settled_rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
-            if settled_rgb_image is not None:
-                rgb_image = settled_rgb_image
-        if rgb_image is None:
-            raise RuntimeError(f"Isaac Lab camera did not produce an RGB tensor for {view_name}")
-        if not _image_has_variance(rgb_image, np=np):
-            raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_name}")
-        if view_name != "map":
-            rgb_image, color_management[view_name] = apply_camera_color_profile(
-                rgb_image,
-                np=np,
-                profile=color_profile,
-                backend=ISAACLAB_SUBPROCESS_BACKEND,
-                view_id=view_name,
-            )
-        output_path = view_paths[view_name]
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        Image.fromarray(rgb_image, mode="RGB").save(output_path)
-        saved[view_name] = str(output_path)
-        if include_segmentation:
-            segmentation_views.append(
-                _camera_segmentation_view_diagnostics(
-                    camera,
-                    data_types=segmentation_data_types,
+                camera_diagnostics[view_name] = _usd_camera_diagnostics(
+                    stage_utils=stage_utils,
+                    prim_path=ISAAC_RBY1M_HEAD_CAMERA_PRIM,
                     view_name=view_name,
-                    np=np,
+                    width=width,
+                    height=height,
+                    robot_pose_application=robot_pose_application,
+                    lens_application=head_camera_lens,
                 )
-            )
+            else:
+                camera = scene_camera
+                positions, targets = view_poses[view_name]
+                camera.set_world_poses_from_view(positions, targets)
+                camera_diagnostics[view_name] = _isaac_eye_target_camera_diagnostics(
+                    view_name=view_name,
+                    positions=positions,
+                    targets=targets,
+                    width=width,
+                    height=height,
+                    camera_basis="robot_relative_camera_follower"
+                    if view_name == "chase"
+                    and _robot_relative_chase_eye_target(
+                        _dict(_dict(semantic_pose_state).get("robot_pose"))
+                    )
+                    is not None
+                    else "scene_bounds_eye_target",
+                )
+            rgb_image = None
+            for _ in range(24):
+                sim.step()
+                total_render_steps += 1
+                camera.update(dt=sim.get_physics_dt())
+                rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+                if rgb_image is not None and _image_has_variance(rgb_image, np=np):
+                    break
+            for _ in range(render_settle_frames):
+                sim.step()
+                total_render_steps += 1
+                camera.update(dt=sim.get_physics_dt())
+                settled_rgb_image = _rgb_tensor_to_uint8(camera.data.output.get("rgb"), np=np)
+                if settled_rgb_image is not None:
+                    rgb_image = settled_rgb_image
+            if rgb_image is None:
+                raise RuntimeError(
+                    f"Isaac Lab camera did not produce an RGB tensor for {view_name}"
+                )
+            if not _image_has_variance(rgb_image, np=np):
+                raise RuntimeError(f"Isaac Lab camera RGB tensor was blank for {view_name}")
+            if view_name != "map":
+                rgb_image, color_management[view_name] = apply_camera_color_profile(
+                    rgb_image,
+                    np=np,
+                    profile=color_profile,
+                    backend=ISAACLAB_SUBPROCESS_BACKEND,
+                    view_id=view_name,
+                )
+            output_path = view_paths[view_name]
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            Image.fromarray(rgb_image, mode="RGB").save(output_path)
+            saved[view_name] = str(output_path)
+            if include_segmentation:
+                segmentation_views.append(
+                    _camera_segmentation_view_diagnostics(
+                        camera,
+                        data_types=segmentation_data_types,
+                        view_name=view_name,
+                        np=np,
+                    )
+                )
+    finally:
+        _restore_isaac_capture_quality_overrides(
+            settings=settings,
+            mutation=settings_mutation,
+        )
     return {
         "render_steps": total_render_steps,
         "robot_view_images": saved,
@@ -3289,12 +3328,20 @@ def _ensure_capture_lighting(
         "schema": "isaac_capture_lighting_diagnostics_v1",
         "status": "using_existing_stage_lights" if not added_lights else "added_capture_lights",
         "profile_id": str(profile.get("profile_id") or ""),
+        "profile_source": str(profile.get("source") or ""),
+        "mujoco_headlight_ambient": profile.get("mujoco_headlight_ambient"),
+        "mujoco_headlight_diffuse": profile.get("mujoco_headlight_diffuse"),
         "existing_light_count": len(existing_lights),
         "existing_light_paths": existing_lights,
         "added_light_count": len(added_lights),
         "added_light_paths": added_lights,
         "requested_dome_intensity": dome_intensity,
         "requested_key_intensity": key_intensity,
+        "requested_key_rotation_deg": [
+            float(key_rotation[0]),
+            float(key_rotation[1]),
+            float(key_rotation[2]),
+        ],
     }
 
 
@@ -4399,6 +4446,7 @@ def _capture_quality_settings(
     *,
     render_settle_frames: int,
     settings: Any | None,
+    settings_mutation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     rows = {
         key: _isaac_setting_value(settings, paths)
@@ -4411,17 +4459,31 @@ def _capture_quality_settings(
         }
         for key, paths in ISAAC_CAPTURE_QUALITY_SETTING_FIELDS.items()
     }
+    mutation = _dict(settings_mutation)
+    mutated_rows = _dict(mutation.get("settings"))
+    for key, row in mutated_rows.items():
+        rows[str(key)] = _dict(row)
+    settings_mutation_attempted = bool(mutation.get("settings_mutation_attempted"))
+    default_render_settings_changed = bool(mutation.get("default_render_settings_changed"))
+    reason = (
+        "Capture-quality probe metadata includes explicit opt-in native renderer setting "
+        "mutation. The worker records previous values and attempts to restore them after "
+        "capture."
+        if settings_mutation_attempted
+        else (
+            "Capture-quality probe metadata is recorded without mutating native renderer "
+            "defaults. Unsupported sampling, denoise, TAA, or texture filtering knobs are "
+            "reported as not_available."
+        )
+    )
     return {
         "schema": "isaac_capture_quality_settings_v1",
         "render_settle_frames": max(0, int(render_settle_frames)),
         **rows,
-        "settings_mutation_attempted": False,
-        "default_render_settings_changed": False,
-        "reason": (
-            "Capture-quality probe metadata is recorded without mutating native renderer "
-            "defaults. Unsupported sampling, denoise, TAA, or texture filtering knobs are "
-            "reported as not_available."
-        ),
+        "settings_mutation_attempted": settings_mutation_attempted,
+        "default_render_settings_changed": default_render_settings_changed,
+        "settings_mutation": mutation,
+        "reason": reason,
     }
 
 
@@ -4451,9 +4513,29 @@ def _isaac_native_render_diagnostics(
                 missing_count += 1
         groups[group_name] = group
     status = "captured" if settings is not None else "settings_api_unavailable"
+    settings_mutation = _dict(
+        capture_quality_settings.get("settings_mutation")
+        if isinstance(capture_quality_settings, dict)
+        else None
+    )
+    settings_mutation_attempted = bool(
+        capture_quality_settings.get("settings_mutation_attempted")
+        if isinstance(capture_quality_settings, dict)
+        else False
+    )
+    default_render_settings_changed = bool(
+        capture_quality_settings.get("default_render_settings_changed")
+        if isinstance(capture_quality_settings, dict)
+        else False
+    )
     reason = (
         "Native Isaac renderer/camera settings were read from carb.settings. "
-        "No renderer defaults were changed by this diagnostics capture."
+        + (
+            "An explicit capture-quality probe setting was applied for this capture "
+            "and restoration was attempted afterward."
+            if settings_mutation_attempted
+            else "No renderer defaults were changed by this diagnostics capture."
+        )
         if settings is not None
         else (
             "Isaac Kit settings API was not available to this worker; diagnostics "
@@ -4486,13 +4568,178 @@ def _isaac_native_render_diagnostics(
             settings=settings,
         ),
         "isaac_lab_isp_active": bool(isaac_lab_isp_active),
-        "settings_mutation_attempted": False,
-        "default_render_settings_changed": False,
+        "settings_mutation_attempted": settings_mutation_attempted,
+        "default_render_settings_changed": default_render_settings_changed,
+        "settings_mutation": settings_mutation,
         "post_render_comparison_profile": {
             "applied": False,
             "source": "not_a_native_renderer_setting",
         },
         "reason": reason,
+    }
+
+
+def _apply_isaac_capture_quality_overrides(
+    *,
+    settings: Any | None,
+    isaac_aa_op: int | None,
+    isaac_tonemap_op: int | None = None,
+) -> dict[str, Any]:
+    mutation: dict[str, Any] = {
+        "schema": "isaac_capture_quality_settings_mutation_v1",
+        "settings_mutation_attempted": False,
+        "default_render_settings_changed": False,
+        "settings": {},
+    }
+    if isaac_aa_op is None and isaac_tonemap_op is None:
+        mutation["status"] = "not_requested"
+        return mutation
+    mutation["settings_mutation_attempted"] = True
+    if settings is None:
+        mutation["status"] = "settings_api_unavailable"
+        if isaac_aa_op is not None:
+            mutation["settings"]["anti_aliasing"] = {
+                "name": "anti_aliasing",
+                "status": "not_available",
+                "value": None,
+                "requested_value": int(isaac_aa_op),
+                "setting_path": "",
+                "candidate_paths": list(ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"]),
+                "default_render_settings_changed": False,
+            }
+        if isaac_tonemap_op is not None:
+            mutation["settings"]["tonemap_operator"] = {
+                "name": "tonemap_operator",
+                "status": "not_available",
+                "value": None,
+                "requested_value": int(isaac_tonemap_op),
+                "setting_path": "",
+                "candidate_paths": list(
+                    ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["operator"]
+                ),
+                "default_render_settings_changed": False,
+            }
+        return mutation
+    if isaac_aa_op is not None:
+        row = _set_isaac_setting(
+            settings,
+            ISAAC_CAPTURE_QUALITY_SETTING_FIELDS["anti_aliasing"],
+            int(isaac_aa_op),
+            name="anti_aliasing",
+        )
+        mutation["settings"]["anti_aliasing"] = row
+    if isaac_tonemap_op is not None:
+        row = _set_isaac_setting(
+            settings,
+            ISAAC_NATIVE_RENDER_SETTING_PATHS["tone_mapping"]["operator"],
+            int(isaac_tonemap_op),
+            name="tonemap_operator",
+        )
+        mutation["settings"]["tonemap_operator"] = row
+    statuses = [
+        str(row.get("status") or "")
+        for row in _dict(mutation.get("settings")).values()
+        if isinstance(row, dict)
+    ]
+    mutation["default_render_settings_changed"] = any(status == "applied" for status in statuses)
+    if any(status == "applied" for status in statuses):
+        mutation["status"] = "applied"
+    elif statuses:
+        mutation["status"] = ",".join(statuses)
+    else:
+        mutation["status"] = "not_available"
+    return mutation
+
+
+def _restore_isaac_capture_quality_overrides(
+    *,
+    settings: Any | None,
+    mutation: dict[str, Any],
+) -> dict[str, Any]:
+    if not mutation.get("settings_mutation_attempted"):
+        mutation["restore_status"] = "not_needed"
+        return mutation
+    if settings is None:
+        mutation["restore_status"] = "settings_api_unavailable"
+        return mutation
+    restored_any = False
+    failed_any = False
+    for row in _dict(mutation.get("settings")).values():
+        if not isinstance(row, dict) or row.get("status") != "applied":
+            continue
+        path = str(row.get("setting_path") or "")
+        if not path:
+            continue
+        try:
+            settings.set(path, row.get("previous_value"))
+        except Exception as exc:
+            row["restore_status"] = "failed"
+            row["restore_error"] = str(exc)
+            failed_any = True
+            continue
+        row["restore_status"] = "restored"
+        row["restored_value"] = _json_safe_setting_value(row.get("previous_value"))
+        restored_any = True
+    if failed_any:
+        mutation["restore_status"] = "restore_failed"
+    elif restored_any:
+        mutation["restore_status"] = "restored"
+    else:
+        mutation["restore_status"] = "not_needed"
+    return mutation
+
+
+def _set_isaac_setting(
+    settings: Any,
+    candidate_paths: tuple[str, ...],
+    requested_value: Any,
+    *,
+    name: str,
+) -> dict[str, Any]:
+    paths = list(candidate_paths)
+    for path in candidate_paths:
+        try:
+            previous_value = settings.get(path)
+        except Exception:
+            continue
+        if previous_value is None:
+            continue
+        try:
+            settings.set(path, requested_value)
+        except Exception as exc:
+            return {
+                "name": name,
+                "status": "set_failed",
+                "value": _json_safe_setting_value(previous_value),
+                "previous_value": _json_safe_setting_value(previous_value),
+                "requested_value": _json_safe_setting_value(requested_value),
+                "setting_path": path,
+                "candidate_paths": paths,
+                "default_render_settings_changed": False,
+                "error": str(exc),
+            }
+        try:
+            new_value = settings.get(path)
+        except Exception:
+            new_value = requested_value
+        return {
+            "name": name,
+            "status": "applied",
+            "value": _json_safe_setting_value(new_value),
+            "previous_value": _json_safe_setting_value(previous_value),
+            "requested_value": _json_safe_setting_value(requested_value),
+            "setting_path": path,
+            "candidate_paths": paths,
+            "default_render_settings_changed": True,
+        }
+    return {
+        "name": name,
+        "status": "not_available",
+        "value": None,
+        "requested_value": _json_safe_setting_value(requested_value),
+        "setting_path": "",
+        "candidate_paths": paths,
+        "default_render_settings_changed": False,
     }
 
 
@@ -6437,6 +6684,8 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         width=args.render_width,
         height=args.render_height,
         render_settle_frames=max(0, int(args.render_settle_frames or 0)),
+        isaac_aa_op=args.isaac_aa_op,
+        isaac_tonemap_op=args.isaac_tonemap_op,
         focus_object_id=args.focus_object_id,
         focus_receptacle_id=args.focus_receptacle_id,
     )
@@ -6826,6 +7075,8 @@ def _real_semantic_pose_robot_view_images(
     width: int,
     height: int,
     render_settle_frames: int = 0,
+    isaac_aa_op: int | None = None,
+    isaac_tonemap_op: int | None = None,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
@@ -6845,6 +7096,10 @@ def _real_semantic_pose_robot_view_images(
         }
         if render_settle_frames:
             capture_kwargs["render_settle_frames"] = render_settle_frames
+        if isaac_aa_op is not None:
+            capture_kwargs["isaac_aa_op"] = isaac_aa_op
+        if isaac_tonemap_op is not None:
+            capture_kwargs["isaac_tonemap_op"] = isaac_tonemap_op
         color_profile_override = _dict(state.get("robot_view_color_profile_override"))
         if color_profile_override:
             capture_kwargs["color_profile_override"] = color_profile_override

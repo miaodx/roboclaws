@@ -329,6 +329,70 @@ def test_isaac_lab_backend_can_request_robot_view_settle_frames(
     assert captured["args"][-2:] == ("--render-settle-frames", "16")
 
 
+def test_isaac_lab_backend_can_request_robot_view_aa_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        include_robot=True,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {"ok": True}
+
+    monkeypatch.setattr(backend, "_run_worker", fake_run_worker)
+
+    backend.write_robot_views_with_resolution(
+        tmp_path / "robot_views",
+        label="aa_probe",
+        width=540,
+        height=360,
+        isaac_aa_op=2,
+    )
+
+    assert captured["command"] == "robot_views"
+    assert "--isaac-aa-op" in captured["args"]
+    assert captured["args"][-2:] == ("--isaac-aa-op", "2")
+
+
+def test_isaac_lab_backend_can_request_robot_view_tonemap_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        include_robot=True,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {"ok": True}
+
+    monkeypatch.setattr(backend, "_run_worker", fake_run_worker)
+
+    backend.write_robot_views_with_resolution(
+        tmp_path / "robot_views",
+        label="tone_probe",
+        width=540,
+        height=360,
+        isaac_tonemap_op=5,
+    )
+
+    assert captured["command"] == "robot_views"
+    assert "--isaac-tonemap-op" in captured["args"]
+    assert captured["args"][-2:] == ("--isaac-tonemap-op", "5")
+
+
 def test_isaac_worker_can_request_semantic_filter_override(tmp_path: Path) -> None:
     args = isaac_lab_backend_worker.parse_args(
         [
@@ -795,6 +859,86 @@ def test_isaac_native_render_diagnostics_reads_available_settings(
     assert diagnostics["isaac_lab_isp_active"] is False
     assert diagnostics["settings_mutation_attempted"] is False
     assert diagnostics["default_render_settings_changed"] is False
+
+
+def test_isaac_capture_quality_aa_probe_records_set_and_restore() -> None:
+    class _FakeSettings:
+        def __init__(self) -> None:
+            self.values = {"/rtx/post/aa/op": 3}
+            self.set_calls: list[tuple[str, object]] = []
+
+        def get(self, path: str) -> object:
+            return self.values.get(path)
+
+        def set(self, path: str, value: object) -> None:
+            self.set_calls.append((path, value))
+            self.values[path] = value
+
+    settings = _FakeSettings()
+
+    mutation = isaac_lab_backend_worker._apply_isaac_capture_quality_overrides(
+        settings=settings,
+        isaac_aa_op=2,
+        isaac_tonemap_op=None,
+    )
+    capture_quality = isaac_lab_backend_worker._capture_quality_settings(
+        render_settle_frames=0,
+        settings=settings,
+        settings_mutation=mutation,
+    )
+    restored = isaac_lab_backend_worker._restore_isaac_capture_quality_overrides(
+        settings=settings,
+        mutation=mutation,
+    )
+
+    assert settings.set_calls == [("/rtx/post/aa/op", 2), ("/rtx/post/aa/op", 3)]
+    assert capture_quality["settings_mutation_attempted"] is True
+    assert capture_quality["default_render_settings_changed"] is True
+    assert capture_quality["anti_aliasing"]["status"] == "applied"
+    assert capture_quality["anti_aliasing"]["previous_value"] == 3
+    assert capture_quality["anti_aliasing"]["requested_value"] == 2
+    assert restored["restore_status"] == "restored"
+    assert restored["settings"]["anti_aliasing"]["restore_status"] == "restored"
+
+
+def test_isaac_native_tonemap_probe_records_set_and_restore() -> None:
+    class _FakeSettings:
+        def __init__(self) -> None:
+            self.values = {"/rtx/post/tonemap/op": 6}
+            self.set_calls: list[tuple[str, object]] = []
+
+        def get(self, path: str) -> object:
+            return self.values.get(path)
+
+        def set(self, path: str, value: object) -> None:
+            self.set_calls.append((path, value))
+            self.values[path] = value
+
+    settings = _FakeSettings()
+
+    mutation = isaac_lab_backend_worker._apply_isaac_capture_quality_overrides(
+        settings=settings,
+        isaac_aa_op=None,
+        isaac_tonemap_op=5,
+    )
+    capture_quality = isaac_lab_backend_worker._capture_quality_settings(
+        render_settle_frames=0,
+        settings=settings,
+        settings_mutation=mutation,
+    )
+    restored = isaac_lab_backend_worker._restore_isaac_capture_quality_overrides(
+        settings=settings,
+        mutation=mutation,
+    )
+
+    assert settings.set_calls == [("/rtx/post/tonemap/op", 5), ("/rtx/post/tonemap/op", 6)]
+    assert capture_quality["settings_mutation_attempted"] is True
+    assert capture_quality["default_render_settings_changed"] is True
+    assert capture_quality["settings_mutation"]["settings"]["tonemap_operator"]["status"] == (
+        "applied"
+    )
+    assert restored["restore_status"] == "restored"
+    assert restored["settings"]["tonemap_operator"]["restore_status"] == "restored"
 
 
 def test_isaac_camera_render_product_paths_are_extracted() -> None:
@@ -3695,14 +3839,15 @@ def test_isaac_lab_real_worker_robot_views_record_capture_quality_settle(
     assert result["ok"] is True
     assert result["render_settle_frames"] == 16
     assert result["camera_diagnostics"]["render_settle_frames"] == 16
-    assert result["native_render_diagnostics"]["capture_quality_settings"][
-        "render_settle_frames"
-    ] == 16
+    assert (
+        result["native_render_diagnostics"]["capture_quality_settings"]["render_settle_frames"]
+        == 16
+    )
     state = isaac_lab_backend_worker.read_state(state_path)
     assert state["semantic_pose_view_capture"]["render_settle_frames"] == 16
-    assert state["native_render_diagnostics"]["capture_quality_settings"][
-        "render_settle_frames"
-    ] == 16
+    assert (
+        state["native_render_diagnostics"]["capture_quality_settings"]["render_settle_frames"] == 16
+    )
 
 
 def test_isaac_chase_pose_uses_robot_relative_camera_follower() -> None:

@@ -74,6 +74,8 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
             "metric_height": 2,
             "downsample_filter": "nearest",
             "render_settle_frames": 16,
+            "isaac_aa_op": 2,
+            "isaac_tonemap_op": 5,
         },
     )()
     capture_quality = run_camera._capture_quality_probe_config(args)
@@ -109,6 +111,18 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
     assert capture_quality["render_resolution_saved"] == {"width": 6, "height": 4}
     assert capture_quality["metric_resolution"] == {"width": 3, "height": 2}
     assert capture_quality["render_settle_frames"] == 16
+    assert capture_quality["anti_aliasing"]["status"] == "requested"
+    assert capture_quality["anti_aliasing"]["requested_value"] == 2
+    assert capture_quality["tonemap_operator"]["status"] == "requested"
+    assert capture_quality["tonemap_operator"]["requested_value"] == 5
+    assert run_camera._render_settle_args(capture_quality) == [
+        "--isaac-aa-op",
+        "2",
+        "--isaac-tonemap-op",
+        "5",
+        "--render-settle-frames",
+        "16",
+    ]
     assert location["views"]["mujoco"]["fpv"].endswith(".saved_6x4.png")
     assert location["raw_render_views"]["mujoco"]["fpv"].endswith("0001_target.fpv.png")
     assert location["metric_views"]["fpv"]["mujoco"].endswith(".metric_fpv_3x2.png")

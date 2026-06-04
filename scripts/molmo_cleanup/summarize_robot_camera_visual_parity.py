@@ -483,6 +483,11 @@ def _capture_quality_probe_summary(payload: dict[str, Any]) -> dict[str, Any]:
             "samples_per_pixel",
         ),
         "anti_aliasing": _quality_setting_row(explicit, native_capture_quality, "anti_aliasing"),
+        "tonemap_operator": _quality_setting_row(
+            explicit,
+            native_capture_quality,
+            "tonemap_operator",
+        ),
         "denoise": _quality_setting_row(explicit, native_capture_quality, "denoise"),
         "taa": _quality_setting_row(explicit, native_capture_quality, "taa"),
         "texture_filtering": _quality_setting_row(
@@ -490,8 +495,7 @@ def _capture_quality_probe_summary(payload: dict[str, Any]) -> dict[str, Any]:
             native_capture_quality,
             "texture_filtering",
         ),
-        "policy_classification": explicit.get("policy_classification")
-        or "capture_quality_probe",
+        "policy_classification": explicit.get("policy_classification") or "capture_quality_probe",
         "default_renderer_promotion": explicit.get("default_renderer_promotion") is True,
     }
 
@@ -530,6 +534,11 @@ def _capture_quality_settings_summary(
             native_capture_quality,
             "anti_aliasing",
         ),
+        "tonemap_operator": _quality_setting_row(
+            capture_quality,
+            native_capture_quality,
+            "tonemap_operator",
+        ),
         "denoise": _quality_setting_row(capture_quality, native_capture_quality, "denoise"),
         "taa": _quality_setting_row(capture_quality, native_capture_quality, "taa"),
         "texture_filtering": _quality_setting_row(
@@ -553,7 +562,29 @@ def _is_capture_quality_probe(capture_quality: dict[str, Any]) -> bool:
         or capture_quality.get("saved_image_mode") != "direct_capture"
         or int(capture_quality.get("render_settle_frames") or 0) > 0
         or render_size not in {(0, 0), (540, 360)}
+        or _has_requested_quality_setting(capture_quality)
     )
+
+
+def _has_requested_quality_setting(capture_quality: dict[str, Any]) -> bool:
+    for key in (
+        "samples_per_pixel",
+        "anti_aliasing",
+        "tonemap_operator",
+        "denoise",
+        "taa",
+        "texture_filtering",
+    ):
+        row = _dict(capture_quality.get(key))
+        if not row:
+            continue
+        if row.get("default_render_settings_changed") is True:
+            return True
+        if str(row.get("status") or "") in {"requested", "applied", "set_failed"}:
+            return True
+        if row.get("requested_value") is not None:
+            return True
+    return False
 
 
 def _clean_resolution(value: dict[str, Any]) -> dict[str, int]:
@@ -3123,6 +3154,7 @@ def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
         if not capture_quality:
             continue
         anti_aliasing = _dict(capture_quality.get("anti_aliasing"))
+        tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
         denoise = _dict(capture_quality.get("denoise"))
         taa = _dict(capture_quality.get("taa"))
         rows.append(
@@ -3138,6 +3170,7 @@ def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(capture_quality.get('downsample_filter') or ''))}</td>"
             f"<td>{html.escape(str(capture_quality.get('render_settle_frames') or 0))}</td>"
             f"<td>{html.escape(str(anti_aliasing.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(tonemap_operator.get('status') or ''))}</td>"
             f"<td>{html.escape(str(denoise.get('status') or ''))}</td>"
             f"<td>{html.escape(str(taa.get('status') or ''))}</td>"
             f"<td>{html.escape(str(capture_quality.get('policy_classification') or ''))}</td>"
@@ -3152,7 +3185,7 @@ def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
         "<table><thead><tr><th>Source</th><th>Manifest</th><th>Kind</th>"
         "<th>Render Size</th><th>Saved Size</th><th>Metric Size</th>"
         "<th>Saved Mode</th><th>Metric Mode</th><th>Filter</th><th>Settle</th>"
-        "<th>AA</th><th>Denoise</th><th>TAA</th><th>Policy</th></tr></thead><tbody>"
+        "<th>AA</th><th>Tone Op</th><th>Denoise</th><th>TAA</th><th>Policy</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
     )
@@ -3215,6 +3248,9 @@ def _capture_quality_cell(item: dict[str, Any]) -> str:
     ]
     if capture_quality.get("downsample_filter"):
         parts.append(f"filter={capture_quality.get('downsample_filter')}")
+    tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
+    if tonemap_operator:
+        parts.append(f"tone_op={tonemap_operator.get('status') or ''}")
     return "; ".join(parts)
 
 

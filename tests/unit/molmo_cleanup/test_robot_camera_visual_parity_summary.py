@@ -980,9 +980,7 @@ def test_visual_parity_summary_ranks_capture_quality_downsample_against_metric_b
     assert rows["hires_1080_direct"]["fpv_mean_abs_rgb_delta_vs_baseline"] == -6.0
     assert rows["hires_1080_direct"]["metric_resolution"] == {"width": 1080, "height": 720}
     assert rows["hires_1080_downsample540"]["probe_kind"] == "capture_quality"
-    assert rows["hires_1080_downsample540"]["policy_classification"] == (
-        "capture_quality_probe"
-    )
+    assert rows["hires_1080_downsample540"]["policy_classification"] == ("capture_quality_probe")
     assert rows["hires_1080_downsample540"]["baseline_path"] == str(baseline)
     assert rows["hires_1080_downsample540"]["fpv_mean_abs_rgb_delta_vs_baseline"] == -4.0
     assert rows["hires_1080_downsample540"]["chase_mean_abs_rgb_delta_vs_baseline"] == -1.0
@@ -998,9 +996,10 @@ def test_visual_parity_summary_ranks_capture_quality_downsample_against_metric_b
         "downsampled_from_render_capture"
     )
     assert rows["hires_1080_downsample540"]["render_settle_frames"] == 16
-    assert rows["hires_1080_downsample540"]["capture_quality_settings"]["anti_aliasing"][
-        "status"
-    ] == "available"
+    assert (
+        rows["hires_1080_downsample540"]["capture_quality_settings"]["anti_aliasing"]["status"]
+        == "available"
+    )
     assert manifest["render_difference_probe_batch"]["policy_classification_counts"] == {
         "capture_quality_probe": 2,
     }
@@ -1077,6 +1076,128 @@ def test_visual_parity_summary_does_not_treat_native_quality_metadata_as_probe(
     assert manifest["render_difference_probe_batch"]["policy_classification_counts"] == {
         "native_default_candidate": 1,
     }
+
+
+def test_visual_parity_summary_treats_requested_aa_as_capture_quality_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_requested_aa",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "aa_op2_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=37.9,
+        chase=60.1,
+        location_count=4,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 540, "height": 360},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+            "anti_aliasing": {
+                "name": "anti_aliasing",
+                "status": "requested",
+                "value": 2,
+                "requested_value": 2,
+                "setting_path": "/rtx/post/aa/op",
+                "default_render_settings_changed": True,
+            },
+        },
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"aa_op2_540={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["aa_op2_540"]["probe_kind"] == "capture_quality"
+    assert rows["aa_op2_540"]["policy_classification"] == "capture_quality_probe"
+    assert rows["aa_op2_540"]["capture_quality_settings"]["anti_aliasing"]["status"] == (
+        "requested"
+    )
+
+
+def test_visual_parity_summary_treats_requested_tonemap_as_capture_quality_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_requested_tonemap",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "tonemap_op5_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=60.2,
+        location_count=4,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 540, "height": 360},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+            "tonemap_operator": {
+                "name": "tonemap_operator",
+                "status": "requested",
+                "value": 5,
+                "requested_value": 5,
+                "setting_path": "/rtx/post/tonemap/op",
+                "default_render_settings_changed": True,
+            },
+        },
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"tonemap_op5_540={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["tonemap_op5_540"]["probe_kind"] == "capture_quality"
+    assert rows["tonemap_op5_540"]["policy_classification"] == "capture_quality_probe"
+    assert rows["tonemap_op5_540"]["capture_quality_settings"]["tonemap_operator"]["status"] == (
+        "requested"
+    )
 
 
 def test_visual_parity_summary_blocks_default_rendering_without_native_diagnostics(
