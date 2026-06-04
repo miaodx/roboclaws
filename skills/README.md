@@ -35,6 +35,8 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
   AI2-THOR demo helpers.
 - `molmo-realworld-cleanup`: household cleanup behavior over public household
   world, manipulation, and episode capabilities.
+- `codex-cleanup-harness8`: repeatable eight-case Codex cleanup regression
+  grid for source and cleanup-skill changes.
 - `actionable-semantic-map-conversion`: offline robot semantic-memory conversion
   into `actionable_semantic_map_snapshot_v1` for downstream household tasks.
 

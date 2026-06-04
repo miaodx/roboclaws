@@ -444,6 +444,11 @@ def test_visual_parity_summary_tracks_combined_material_light_candidate(
     assert "<img src='../val0_scale_square_rotx25/isaac/robot_views/0001_target.fpv.png'" in (
         report_html
     )
+    assert 'class="lightbox"' in report_html
+    assert "data-lightbox" in report_html
+    assert 'aria-hidden="true"' in report_html
+    assert 'document.querySelectorAll("img:not([data-lightbox-image])")' in report_html
+    assert 'title", "Open image preview"' in report_html
     assert "non-comparable auxiliary" not in report_html
     assert "robot_0/camera_follower / robot_relative_camera_follower" in report_html
     assert "Object Parity" in report_html
@@ -671,6 +676,187 @@ def test_visual_parity_summary_carries_native_isaac_render_diagnostics(
         == "not_a_native_renderer_setting"
     )
     assert manifest["default_rendering_visual_parity"]["ready"] is False
+
+
+def test_visual_parity_summary_ranks_render_difference_probe_batch(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(SCRIPT_PATH, "summarize_robot_camera_visual_parity_render_probe_batch")
+    native = {
+        "schema": "robot_camera_native_isaac_render_diagnostics_v1",
+        "status": "native_settings_recorded",
+        "renderer_mode": "isaac_lab_headless_rtx",
+        "settings_api_available": True,
+        "default_render_settings_changed": True,
+        "tone_mapping": {"op": {"status": "recorded", "value": 2}},
+        "camera_exposure": {"filmIso": {"status": "recorded", "value": 100}},
+        "renderer": {"samples_per_pixel": {"status": "recorded", "value": 64}},
+        "post_render_comparison_profile": {
+            "applied": False,
+            "source": "not_a_native_renderer_setting",
+        },
+    }
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=40.0,
+        chase=80.0,
+        location_count=2,
+        native_isaac_render_diagnostics={**native, "default_render_settings_changed": False},
+        locations=[
+            _residual_location(
+                "0001_low",
+                fpv_mean=38.0,
+                chase_mean=75.0,
+                fpv_class="low_residual",
+                chase_class="geometry_or_texture_edge_residual",
+            ),
+            _residual_location(
+                "0002_edge",
+                fpv_mean=42.0,
+                chase_mean=85.0,
+                fpv_class="geometry_or_texture_edge_residual",
+                chase_class="low_residual",
+            ),
+        ],
+    )
+    native_probe = _write_robot_camera_manifest(
+        tmp_path / "native_tone_exposure" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=33.0,
+        chase=80.5,
+        location_count=2,
+        native_isaac_render_diagnostics=native,
+        locations=[
+            _residual_location(
+                "0001_low",
+                fpv_mean=30.0,
+                chase_mean=75.5,
+                fpv_class="low_residual",
+                chase_class="low_residual",
+            ),
+            _residual_location(
+                "0002_edge",
+                fpv_mean=36.0,
+                chase_mean=85.5,
+                fpv_class="view_dependent_color_residual",
+                chase_class="low_residual",
+            ),
+        ],
+    )
+    report_side_probe = _write_robot_camera_manifest(
+        tmp_path / "prepared_scale_square_view_rgb" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=32.0,
+        chase=80.4,
+        location_count=2,
+        native_isaac_render_diagnostics={**native, "default_render_settings_changed": False},
+    )
+    (report_side_probe.parent / "isaac_state.json").write_text(
+        json.dumps(
+            {
+                "robot_view_color_profile_override": {
+                    "backend_view_rgb_gain": {
+                        "isaaclab_subprocess": {
+                            "fpv": [0.94, 0.84, 0.82],
+                            "chase": [1.3, 1.2, 1.1],
+                        }
+                    },
+                    "backend_view_rgb_gain_source": "unit report-side profile",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    applied_post_render_probe = _write_robot_camera_manifest(
+        tmp_path / "applied_post_render_profile" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=31.0,
+        chase=80.2,
+        location_count=2,
+        native_isaac_render_diagnostics={
+            **native,
+            "post_render_comparison_profile": {
+                "applied": True,
+                "source": "not_a_native_renderer_setting",
+            },
+        },
+    )
+    rejected_probe = _write_robot_camera_manifest(
+        tmp_path / "distantlight_rotx25_chase_regression" / "comparison_manifest.json",
+        scene_index=0,
+        seed=6,
+        generated_mess_count=5,
+        fpv=34.0,
+        chase=83.0,
+        location_count=2,
+        native_isaac_render_diagnostics=native,
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[
+            f"native_tone_exposure={native_probe}",
+            f"prepared_scale_square_view_rgb={report_side_probe}",
+            f"applied_post_render_profile={applied_post_render_probe}",
+            f"distantlight_rotx25_chase_regression={rejected_probe}",
+        ],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    batch = manifest["render_difference_probe_batch"]
+    assert batch["status"] == "ranked_probe_batch_available"
+    rows = {row["label"]: row for row in batch["ranked_rows"]}
+    assert rows["native_tone_exposure"]["rank"] == 1
+    assert rows["native_tone_exposure"]["probe_kind"] == "tone_color"
+    assert rows["native_tone_exposure"]["policy_classification"] == "native_default_candidate"
+    assert rows["native_tone_exposure"]["fpv_mean_abs_rgb_delta_vs_baseline"] == -7.0
+    assert rows["native_tone_exposure"]["chase_mean_abs_rgb_delta_vs_baseline"] == 0.5
+    assert rows["native_tone_exposure"]["native_settings_used"]["tone_mapping"] == {
+        "op": {"status": "recorded", "value": 2}
+    }
+    assert rows["native_tone_exposure"]["residual_class_distribution"]["fpv"] == {
+        "low_residual": 1,
+        "view_dependent_color_residual": 1,
+    }
+    assert rows["prepared_scale_square_view_rgb"]["policy_classification"] == "report_side_only"
+    assert rows["prepared_scale_square_view_rgb"]["report_side_comparison_profile"][
+        "backend_view_rgb_gain"
+    ] == {
+        "isaaclab_subprocess": {
+            "fpv": [0.94, 0.84, 0.82],
+            "chase": [1.3, 1.2, 1.1],
+        }
+    }
+    assert rows["applied_post_render_profile"]["policy_classification"] == "report_side_only"
+    assert rows["applied_post_render_profile"]["classification_reason"] == (
+        "probe uses report-side RGB/view compensation, not native renderer settings"
+    )
+    assert rows["distantlight_rotx25_chase_regression"]["probe_kind"] == "light_shadow"
+    assert rows["distantlight_rotx25_chase_regression"]["policy_classification"] == "rejected"
+    assert rows["distantlight_rotx25_chase_regression"]["chase_regression"] is True
+    assert batch["policy_classification_counts"] == {
+        "native_default_candidate": 1,
+        "rejected": 1,
+        "report_side_only": 2,
+    }
+    report_html = (tmp_path / "summary" / "report.html").read_text(encoding="utf-8")
+    assert "<h2>Render Difference Probe Batch</h2>" in report_html
+    assert "native_default_candidate" in report_html
+    assert "report_side_only" in report_html
+    assert "rejected" in report_html
 
 
 def test_visual_parity_summary_blocks_default_rendering_without_native_diagnostics(
@@ -1432,6 +1618,31 @@ def _image_diff_location(
             "chase": _image_diff(chase_mean, chase_edge, chase_mujoco_luma, chase_isaac_luma),
         },
     }
+
+
+def _residual_location(
+    label: str,
+    *,
+    fpv_mean: float,
+    chase_mean: float,
+    fpv_class: str,
+    chase_class: str,
+) -> dict:
+    return {
+        "label": label,
+        "target": {"target_id": label},
+        "status": "success",
+        "image_diffs": {
+            "fpv": _image_diff_with_class(fpv_mean, fpv_class),
+            "chase": _image_diff_with_class(chase_mean, chase_class),
+        },
+    }
+
+
+def _image_diff_with_class(mean_abs_rgb: float, residual_class: str) -> dict:
+    payload = _image_diff(mean_abs_rgb, 3.0, 85.0, 95.0)
+    payload["residual"]["residual_class"] = residual_class
+    return payload
 
 
 def _image_diff(

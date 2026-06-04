@@ -11,6 +11,12 @@ from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.planner_observed_binding import (
     observed_handle_planner_binding,
 )
+from roboclaws.household.raw_fpv_guidance import (
+    RAW_FPV_DECLARATION_STRATEGY,
+    raw_fpv_inline_candidate_instruction,
+    raw_fpv_visual_candidate_recovery,
+    raw_fpv_visual_candidate_recovery_hint,
+)
 from roboclaws.household.robot_view_pose import room_for_point
 from roboclaws.household.semantic_acceptability import (
     annotate_score_with_semantic_acceptability,
@@ -62,8 +68,6 @@ CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
-RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
-RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE = "sanitized_visible_object_detections"
@@ -86,25 +90,6 @@ REALWORLD_PERCEPTION_MODES = frozenset(
     }
 )
 _NON_ACTIONABLE_HANDLE_STATES = frozenset({"placed", "placed_closed", "skipped", "stale"})
-
-
-def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> str:
-    subject = (
-        f"observation_id={observation_id}" if observation_id else "the current raw FPV observation"
-    )
-    return (
-        f"Raw FPV-only mode uses {RAW_FPV_DECLARATION_STRATEGY}: inspect the FPV "
-        f"image block for {subject}, do not batch-register candidates first, "
-        "and call navigate_to_visual_candidate only when acting on a plausible "
-        "cleanup object. Use broad cleanup categories such as "
-        f"{RAW_FPV_CATEGORY_HINT} when the exact object class is uncertain. "
-        "In minimal map mode, omit target_fixture_id until grounding returns a "
-        "public candidate_fixture_id; in rich legacy/debug mode, target_fixture_id "
-        "may come from non-empty fixture_hints. "
-        "After a successful pick/place for an observed handle, do not act on "
-        "that same handle again; if grounding resolves to an already-handled "
-        "object, continue the waypoint sweep."
-    )
 
 
 _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
@@ -932,17 +917,25 @@ class RealWorldCleanupContract:
             candidate_error = _visual_candidate_validation_error(
                 candidate,
                 require_target_fixture_id=self.map_mode != MINIMAL_MAP_MODE,
+                map_mode=self.map_mode,
+                perception_mode=self.perception_mode,
+                producer_type=producer_type,
             )
             if candidate_error is not None:
+                source_observation_id = str(raw_observation["observation_id"])
                 return self._error(
                     "declare_visual_candidates",
                     "invalid_visual_candidate",
-                    observation_id=str(raw_observation["observation_id"]),
+                    observation_id=source_observation_id,
                     candidate_index=index,
                     candidate_error=candidate_error,
-                    recovery_hint=(
-                        "Declare category, target_fixture_id, evidence_note, and a valid "
-                        "bbox, point, or verbal_region image_region from public FPV evidence."
+                    raw_fpv_candidate_recovery=raw_fpv_visual_candidate_recovery(
+                        source_observation_id=source_observation_id,
+                        map_mode=self.map_mode,
+                    ),
+                    recovery_hint=raw_fpv_visual_candidate_recovery_hint(
+                        source_observation_id=source_observation_id,
+                        map_mode=self.map_mode,
                     ),
                 )
             declared.append(
@@ -1017,6 +1010,9 @@ class RealWorldCleanupContract:
                 "navigate_to_visual_candidate",
                 str(declaration_response.get("error_reason") or "declaration_failed"),
                 candidate_error=declaration_response.get("candidate_error", {}),
+                raw_fpv_candidate_recovery=declaration_response.get(
+                    "raw_fpv_candidate_recovery", {}
+                ),
                 recovery_hint=declaration_response.get("recovery_hint", ""),
             )
         declarations = declaration_response.get("model_declared_observations") or []
@@ -1555,8 +1551,8 @@ class RealWorldCleanupContract:
     def _runtime_public_semantic_anchors(self) -> list[dict[str, Any]]:
         """Build run-local anchors for fixed places discovered through public evidence."""
 
-        anchors: list[dict[str, Any]] = [dict(item) for item in self._runtime_map_anchor_priors]
-        seen = {str(item.get("anchor_id") or "") for item in anchors}
+        anchors: list[dict[str, Any]] = []
+        seen: set[str] = set()
 
         if self.map_mode == MINIMAL_MAP_MODE:
             for waypoint in self._public_waypoints:
@@ -1583,6 +1579,14 @@ class RealWorldCleanupContract:
                 continue
             anchors.append(anchor)
             seen.add(anchor_id)
+
+        for prior_anchor in self._runtime_map_anchor_priors:
+            anchor_id = str(prior_anchor.get("anchor_id") or "")
+            if anchor_id and anchor_id in seen:
+                continue
+            anchors.append(dict(prior_anchor))
+            if anchor_id:
+                seen.add(anchor_id)
 
         for anchor in anchors:
             _assert_no_forbidden_agent_view_keys(anchor)
@@ -2245,9 +2249,7 @@ class RealWorldCleanupContract:
                 cleanup_recommended = False
                 candidate_source = "policy_required_destination_selection"
                 destination_policy_status = "policy_required"
-            destination_policy = _public_destination_policy_for_category(
-                detection.get("category")
-            )
+            destination_policy = _public_destination_policy_for_category(detection.get("category"))
             row = {
                 "object_id": handle,
                 "state": state,
@@ -4924,11 +4926,7 @@ def _public_destination_policy_for_category(category: Any) -> dict[str, Any]:
 
 
 def _public_destination_policy_tool_for_fixture_category(category: Any) -> str:
-    return (
-        "place_inside"
-        if _norm(category) in _INSIDE_DESTINATION_CATEGORY_TERMS
-        else "place"
-    )
+    return "place_inside" if _norm(category) in _INSIDE_DESTINATION_CATEGORY_TERMS else "place"
 
 
 def _normalize_fixture_category_label(value: Any) -> str:
@@ -5135,21 +5133,38 @@ def _visual_candidate_validation_error(
     candidate: Any,
     *,
     require_target_fixture_id: bool = True,
+    map_mode: str = RICH_MAP_MODE,
+    perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
+    producer_type: str = "",
 ) -> dict[str, str] | None:
     if not isinstance(candidate, dict):
         return {"field": "candidate", "reason": "candidate must be an object"}
     for field in ("category", "evidence_note"):
         if not str(candidate.get(field) or "").strip():
             return {"field": field, "reason": f"{field} is required"}
+    target_fixture_id = str(candidate.get("target_fixture_id") or "").strip()
     if (
         require_target_fixture_id
         and str(candidate.get("producer_type") or "") != EXTERNAL_VISUAL_GROUNDING_PROVENANCE
-        and not str(candidate.get("target_fixture_id") or "").strip()
+        and not target_fixture_id
     ):
         return {"field": "target_fixture_id", "reason": "target_fixture_id is required"}
     region_error = _image_region_validation_error(candidate.get("image_region"))
     if region_error is not None:
         return region_error
+    if (
+        map_mode == MINIMAL_MAP_MODE
+        and perception_mode == RAW_FPV_ONLY_MODE
+        and str(producer_type or "") == MAIN_CLEANUP_AGENT_PRODUCER
+        and target_fixture_id
+    ):
+        return {
+            "field": "target_fixture_id",
+            "reason": (
+                "target_fixture_id must be omitted in minimal map RAW_FPV; use the "
+                "candidate_fixture_id returned by navigate_to_visual_candidate"
+            ),
+        }
     return None
 
 

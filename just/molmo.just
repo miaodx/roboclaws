@@ -942,6 +942,95 @@ apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed=
     fi
     "$python_bin" scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py "${args[@]}"
 
+# Build or execute the eight-case live Codex cleanup harness.
+codex-harness8 mode="dry-run" *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mode="{{mode}}"
+    output_dir="output/molmo/codex-harness8"
+    seed="7"
+    generated_mess_count="10"
+    row=""
+    runtime_map_prior=""
+    visual_grounding_timeout_s="auto"
+    rate_limit_retries="1"
+    rate_limit_retry_sleep_s="60"
+    codex_max_continuations="0"
+    dino_sidecar_lifecycle="auto"
+    dino_sidecar_startup_timeout_s="180"
+
+    mode="${mode#mode=}"
+    for override in {{overrides}}; do
+      [[ -z "$override" ]] && continue
+      if [[ "$override" != *=* ]]; then
+        echo "error: override '$override' is not key=value" >&2
+        exit 1
+      fi
+      key="${override%%=*}"
+      value="${override#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|rate_limit_retries|rate_limit_retry_sleep_s|codex_max_continuations|dino_sidecar_lifecycle|dino_sidecar_startup_timeout_s)
+          ;;
+        visual_grounding_timeout)
+          key="visual_grounding_timeout_s"
+          ;;
+        rate_limit_retry_sleep)
+          key="rate_limit_retry_sleep_s"
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+
+    args=(
+      --output-dir "$output_dir"
+      --seed "$seed"
+      --generated-mess-count "$generated_mess_count"
+      --visual-grounding-timeout-s "$visual_grounding_timeout_s"
+      --rate-limit-retries "$rate_limit_retries"
+      --rate-limit-retry-sleep-s "$rate_limit_retry_sleep_s"
+      --codex-max-continuations "$codex_max_continuations"
+      --dino-sidecar-lifecycle "$dino_sidecar_lifecycle"
+      --dino-sidecar-startup-timeout-s "$dino_sidecar_startup_timeout_s"
+    )
+    if [[ -n "$row" ]]; then
+      IFS=',' read -r -a selected_rows <<< "$row"
+      for selected_row in "${selected_rows[@]}"; do
+        [[ -z "$selected_row" ]] && continue
+        args+=(--row "$selected_row")
+      done
+    fi
+    if [[ -n "$runtime_map_prior" ]]; then
+      args+=(--runtime-map-prior "$runtime_map_prior")
+    fi
+    case "$mode" in
+      dry-run|dry|"")
+        ;;
+      execute|run|live)
+        args+=(--execute --continue-on-error)
+        ;;
+      *)
+        echo "error: unsupported codex-harness8 mode '$mode' (expected dry-run or execute)" >&2
+        exit 1
+        ;;
+    esac
+    python_bin="${ROBOCLAWS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x ".venv/bin/python" ]]; then
+        python_bin=".venv/bin/python"
+      elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+      else
+        python_bin="python"
+      fi
+    fi
+    "$python_bin" scripts/molmo_cleanup/run_codex_cleanup_harness8.py "${args[@]}"
+
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" port="18788":
     just molmo::cleanup "openclaw-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"
@@ -1029,7 +1118,7 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
       --render-height "$render_height"
 
 # Render-only scene identity probe: same MolmoSpaces scene anchors through MuJoCo and Isaac.
-scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/scene_semantic.usda" render_width="960" render_height="640":
+scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/scene_semantic.usda" render_width="960" render_height="640" genesis="off":
     #!/usr/bin/env bash
     set -euo pipefail
     seed="{{seed}}"
@@ -1040,6 +1129,18 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     scene_usd_path="{{scene_usd_path}}"
     render_width="{{render_width}}"
     render_height="{{render_height}}"
+    genesis="{{genesis}}"
+    raw_args=(
+      "$seed"
+      "$generated_mess_count"
+      "$output_dir"
+      "$scene_source"
+      "$scene_index"
+      "$scene_usd_path"
+      "$render_width"
+      "$render_height"
+      "$genesis"
+    )
     seed="${seed#seed=}"
     generated_mess_count="${generated_mess_count#generated_mess_count=}"
     output_dir="${output_dir#output_dir=}"
@@ -1048,9 +1149,33 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     scene_usd_path="${scene_usd_path#scene_usd_path=}"
     render_width="${render_width#render_width=}"
     render_height="${render_height#render_height=}"
+    genesis="${genesis#genesis=}"
+    for override in "${raw_args[@]}"; do
+      case "$override" in
+        seed=*) seed="${override#seed=}" ;;
+        generated_mess_count=*) generated_mess_count="${override#generated_mess_count=}" ;;
+        output_dir=*) output_dir="${override#output_dir=}" ;;
+        scene_source=*) scene_source="${override#scene_source=}" ;;
+        scene_index=*) scene_index="${override#scene_index=}" ;;
+        scene_usd_path=*) scene_usd_path="${override#scene_usd_path=}" ;;
+        render_width=*) render_width="${override#render_width=}" ;;
+        render_height=*) render_height="${override#render_height=}" ;;
+        genesis=*) genesis="${override#genesis=}" ;;
+      esac
+    done
+    if [[ "$seed" == *=* && "${seed%%=*}" != "seed" ]]; then seed="7"; fi
+    if [[ "$generated_mess_count" == *=* && "${generated_mess_count%%=*}" != "generated_mess_count" ]]; then generated_mess_count="1"; fi
+    if [[ "$output_dir" == *=* && "${output_dir%%=*}" != "output_dir" ]]; then output_dir="output/molmo/scene-camera-comparison"; fi
+    if [[ "$scene_source" == *=* && "${scene_source%%=*}" != "scene_source" ]]; then scene_source="procthor-10k-val"; fi
+    if [[ "$scene_index" == *=* && "${scene_index%%=*}" != "scene_index" ]]; then scene_index="1"; fi
+    if [[ "$scene_usd_path" == *=* && "${scene_usd_path%%=*}" != "scene_usd_path" ]]; then scene_usd_path="output/isaaclab/flattened-semantic-usd/0529_val1_flattened_semantic_scene/scene_semantic.usda"; fi
+    if [[ "$render_width" == *=* && "${render_width%%=*}" != "render_width" ]]; then render_width="960"; fi
+    if [[ "$render_height" == *=* && "${render_height%%=*}" != "render_height" ]]; then render_height="640"; fi
+    if [[ "$genesis" == *=* && "${genesis%%=*}" != "genesis" ]]; then genesis="off"; fi
 
     molmospaces_python="${ROBOCLAWS_MOLMOSPACES_PYTHON:-.venv/bin/python}"
     isaac_python="${ROBOCLAWS_ISAACLAB_PYTHON:-.venv-isaaclab/bin/python}"
+    genesis_python="${ROBOCLAWS_GENESIS_PYTHON:-.venv-genesis/bin/python}"
     if [[ ! -x "$molmospaces_python" ]]; then
       echo "error: missing MolmoSpaces runtime: ${molmospaces_python}" >&2
       echo "       run: uv sync --extra dev --extra molmospaces" >&2
@@ -1059,6 +1184,11 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     if [[ ! -x "$isaac_python" ]]; then
       echo "error: missing Isaac Lab runtime: ${isaac_python}" >&2
       echo "       create .venv-isaaclab/ or set ROBOCLAWS_ISAACLAB_PYTHON" >&2
+      exit 1
+    fi
+    if [[ "$genesis" == "on" && ! -x "$genesis_python" ]]; then
+      echo "error: missing Genesis runtime: ${genesis_python}" >&2
+      echo "       create .venv-genesis/ or set ROBOCLAWS_GENESIS_PYTHON" >&2
       exit 1
     fi
     if [[ ! -f "$scene_usd_path" ]]; then
@@ -1079,5 +1209,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
       --scene-index "$scene_index" \
       --molmospaces-python "$molmospaces_python" \
       --isaac-python "$isaac_python" \
+      --genesis "$genesis" \
+      --genesis-python "$genesis_python" \
       --render-width "$render_width" \
       --render-height "$render_height"

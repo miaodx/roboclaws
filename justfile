@@ -33,6 +33,7 @@ mod verify    'just/verify.just'
 mod molmo     'just/molmo.just'
 mod agent     'just/agent.just'
 mod task      'just/task.just'
+mod console   'just/console.just'
 
 # Default: show the public recipe list.
 [private]

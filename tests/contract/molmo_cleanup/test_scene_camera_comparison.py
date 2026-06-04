@@ -14,6 +14,7 @@ from roboclaws.household.camera_control import (
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
 )
 from roboclaws.household.scene_camera_comparison import (
+    GENESIS_LANE_ID,
     ISAAC_LANE_ID,
     MOLMOSPACES_LANE_ID,
     SCENE_CAMERA_COMPARISON_SCHEMA,
@@ -21,6 +22,7 @@ from roboclaws.household.scene_camera_comparison import (
     _camera_intrinsics_contract_from_capture,
     _camera_pose_contract_from_capture,
     _candidate_color_calibrations,
+    _candidate_visual_diagnostics,
     _canonical_camera_control_views,
     _contact_sheet_entries,
     _image_pair_visual_delta,
@@ -35,9 +37,11 @@ from roboclaws.household.scene_camera_comparison import (
     _render_domain_contract_probe,
     _render_domain_source_diagnostics,
     _render_domain_view_triage,
+    _renderer_version,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
     _scene_frame_transform_from_capture,
+    comparison_successful,
     render_scene_camera_comparison_report,
 )
 
@@ -631,6 +635,8 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Render-only scene identity probe" in html
     assert "Contact Sheet" in html
     assert "contact_sheet.png" in html
+    assert 'data-image-src="contact_sheet.png"' in html
+    assert 'id="image-modal"' in html
     assert "does not execute household cleanup" in html
     assert "pick, place, or scoring" in html
     assert "MolmoSpaces metadata handle" in html
@@ -641,6 +647,7 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Target Vs USD Bounds Diagnostics" in html
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
+    assert "Candidate Visual Acceptance" in html
     assert "Native Isaac Render Diagnostics" in html
     assert "Render Domain Source Diagnostics" in html
     assert "Render Domain View Triage" in html
@@ -1085,6 +1092,144 @@ def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_pat
 
     assert [entry["view_id"] for entry in entries] == ["room_01_room_2"]
     assert set(entries[0]["images"]) == {MOLMOSPACES_LANE_ID, ISAAC_LANE_ID}
+
+
+def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> None:
+    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
+    _write_image(tmp_path / "isaac.png", color=(80, 40, 20))
+    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
+    manifest = {
+        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
+        "purpose": "render-only test",
+        "scene": {"scene_usd_path": "scene.usda"},
+        "camera_control": {
+            "api_name": CAMERA_CONTROL_API_NAME,
+            "request_artifact": "camera_control_request.json",
+            "same_pose_contract": True,
+        },
+        "lane_registry": {
+            "baseline": MOLMOSPACES_LANE_ID,
+            "candidates": [ISAAC_LANE_ID, GENESIS_LANE_ID],
+        },
+        "canonical_camera_views": [
+            {
+                "view_id": "view_01",
+                "label": "test view",
+                "room_id": "room_1",
+                "category": "Table",
+            }
+        ],
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {
+                "status": "success",
+                "images": {
+                    "view_01": {
+                        "path": "molmo.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+                "views": [{"view_id": "view_01", "eye": [0, 0, 1], "target": [0, 1, 1]}],
+            },
+            ISAAC_LANE_ID: {
+                "status": "success",
+                "images": {
+                    "view_01": {
+                        "path": "isaac.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+                "views": [{"view_id": "view_01", "eye": [0, 0, 1], "target": [0, 1, 1]}],
+            },
+            GENESIS_LANE_ID: {
+                "status": "success",
+                "runtime": {"runtime_mode": "fake"},
+                "scene_usd": "scene.usda",
+                "visual_artifact_provenance": "genesis_real_rgb_render",
+                "images": {
+                    "view_01": {
+                        "path": "genesis.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+                "views": [{"view_id": "view_01", "eye": [0, 0, 1], "target": [0, 1, 1]}],
+            },
+        },
+    }
+
+    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
+
+    html = report.read_text(encoding="utf-8")
+    assert (tmp_path / "contact_sheet.png").is_file()
+    assert manifest["contact_sheet"]["lanes"] == [
+        MOLMOSPACES_LANE_ID,
+        ISAAC_LANE_ID,
+        GENESIS_LANE_ID,
+    ]
+    assert GENESIS_LANE_ID in html
+    assert "genesis.png" in html
+    assert 'data-image-src="genesis.png"' in html
+    assert '<dialog class="image-modal"' in html
+    assert "modal.showModal()" in html
+
+
+def test_scene_camera_genesis_visual_mesh_fallback_is_degraded_visual_evidence(
+    tmp_path: Path,
+) -> None:
+    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
+    _write_image(tmp_path / "genesis.png", color=(120, 120, 120))
+    manifest = {
+        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
+        "purpose": "render-only test",
+        "lane_registry": {
+            "baseline": MOLMOSPACES_LANE_ID,
+            "candidates": [GENESIS_LANE_ID],
+        },
+        "canonical_camera_views": [{"view_id": "view_01", "label": "test view"}],
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {
+                "status": "success",
+                "images": {
+                    "view_01": {
+                        "path": "molmo.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+            GENESIS_LANE_ID: {
+                "status": "success",
+                "scene_load": {
+                    "genesis_import_mode": "prepared_usd_visual_mesh",
+                    "claim_boundary": "geometry-only fallback",
+                },
+                "images": {
+                    "view_01": {
+                        "path": "genesis.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+        },
+    }
+
+    diagnostics = _candidate_visual_diagnostics(manifest, output_dir=tmp_path)
+    manifest["candidate_visual_diagnostics"] = diagnostics
+
+    assert diagnostics["status"] == "degraded_visual_fidelity"
+    assert diagnostics["degraded_candidates"] == [GENESIS_LANE_ID]
+    assert (
+        "render_only_visual_mesh_drops_usd_materials_and_textures"
+        in diagnostics["candidates"][0]["warning_reasons"]
+    )
+    assert not comparison_successful(manifest)
+
+    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
+    html = report.read_text(encoding="utf-8")
+    assert "Do not accept the Genesis lane as visually comparable yet" in html
+    assert "render_only_visual_mesh_drops_usd_materials_and_textures" in html
+
+
+def test_scene_camera_renderer_version_includes_genesis_runtime() -> None:
+    assert _renderer_version({"genesis_version": "1.0.0"}) == "1.0.0"
 
 
 def test_scene_camera_comparison_manifest_is_json_serializable() -> None:
@@ -1605,3 +1750,39 @@ def test_scene_camera_comparison_recipe_checks_prepared_usd_before_running(tmp_p
     assert result.returncode != 0
     assert "missing prepared scene USD" in result.stderr
     assert str(missing_usd) in result.stderr
+
+
+def test_scene_camera_comparison_recipe_preflights_genesis_only_when_enabled(
+    tmp_path: Path,
+) -> None:
+    molmo_python = tmp_path / "molmo-python"
+    isaac_python = tmp_path / "isaac-python"
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text("#usda 1.0\n", encoding="utf-8")
+    for runtime in (molmo_python, isaac_python):
+        runtime.write_text("#!/usr/bin/env sh\nexit 0\n", encoding="utf-8")
+        runtime.chmod(0o755)
+
+    env = os.environ.copy()
+    env.pop("ROBOCLAWS_JUST_TRACE", None)
+    env["ROBOCLAWS_MOLMOSPACES_PYTHON"] = str(molmo_python)
+    env["ROBOCLAWS_ISAACLAB_PYTHON"] = str(isaac_python)
+    env["ROBOCLAWS_GENESIS_PYTHON"] = str(tmp_path / "missing-genesis-python")
+    result = subprocess.run(
+        [
+            just_bin(),
+            "-f",
+            str(MOLMO_JUST),
+            "scene-camera-comparison",
+            "genesis=on",
+            f"scene_usd_path={scene_usd}",
+        ],
+        cwd=tmp_path,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "missing Genesis runtime" in result.stderr
