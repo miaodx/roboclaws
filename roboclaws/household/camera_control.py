@@ -23,10 +23,39 @@ DEFAULT_SCENE_PROBE_LENS = {
     "focal_length_mm": 24.0,
 }
 DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
-    "profile_id": "scene_probe_existing_usd_lights_v1",
-    "isaac_dome_intensity": 0.0,
+    "profile_id": "scene_probe_mujoco_headlight_fill_v1",
+    "source": (
+        "MuJoCo MolmoSpaces base MJCF uses a headlight with ambient=0.35 and "
+        "diffuse=0.4 plus a default directional light when no house lights are exported."
+    ),
+    "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
+    "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
+    "isaac_dome_intensity": 60.0,
     "isaac_key_intensity": 0.0,
-    "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
+    "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
+    "genesis_ambient_light": [0.37, 0.37, 0.37],
+    "genesis_background_color": [0.04, 0.08, 0.12],
+    "genesis_shadow": False,
+    "genesis_directional_lights": [
+        {
+            "type": "directional",
+            "dir": [-1.0, -1.0, -1.0],
+            "color": [1.0, 1.0, 1.0],
+            "intensity": 3.0,
+        },
+        {
+            "type": "directional",
+            "dir": [1.0, 1.0, -0.6],
+            "color": [1.0, 0.96, 0.9],
+            "intensity": 0.8,
+        },
+        {
+            "type": "directional",
+            "dir": [0.0, -1.0, -0.35],
+            "color": [0.9, 0.95, 1.0],
+            "intensity": 0.45,
+        },
+    ],
 }
 DEFAULT_SCENE_PROBE_COLOR_PROFILE = {
     "profile_id": "display_srgb_soft_highlight_v1",
@@ -265,12 +294,47 @@ def _camera_lens(value: Any) -> dict[str, float]:
 def _lighting_profile(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
     return {
-        "profile_id": str(raw.get("profile_id") or "scene_probe_existing_usd_lights_v1"),
-        "isaac_dome_intensity": float(raw.get("isaac_dome_intensity", 0.0)),
-        "isaac_key_intensity": float(raw.get("isaac_key_intensity", 0.0)),
+        "profile_id": str(
+            raw.get("profile_id") or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["profile_id"]
+        ),
+        "source": str(raw.get("source") or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["source"]),
+        "mujoco_headlight_ambient": _vec3(
+            raw.get("mujoco_headlight_ambient"),
+            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["mujoco_headlight_ambient"],
+        ),
+        "mujoco_headlight_diffuse": _vec3(
+            raw.get("mujoco_headlight_diffuse"),
+            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["mujoco_headlight_diffuse"],
+        ),
+        "isaac_dome_intensity": float(
+            raw.get(
+                "isaac_dome_intensity",
+                DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["isaac_dome_intensity"],
+            )
+        ),
+        "isaac_key_intensity": float(
+            raw.get(
+                "isaac_key_intensity",
+                DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["isaac_key_intensity"],
+            )
+        ),
         "isaac_key_rotation_deg": _vec3(
             raw.get("isaac_key_rotation_deg"),
-            default=[-55.0, 0.0, 35.0],
+            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["isaac_key_rotation_deg"],
+        ),
+        "genesis_ambient_light": _vec3(
+            raw.get("genesis_ambient_light"),
+            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_ambient_light"],
+        ),
+        "genesis_background_color": _vec3(
+            raw.get("genesis_background_color"),
+            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_background_color"],
+        ),
+        "genesis_shadow": bool(
+            raw.get("genesis_shadow", DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_shadow"])
+        ),
+        "genesis_directional_lights": _genesis_directional_lights(
+            raw.get("genesis_directional_lights")
         ),
     }
 
@@ -448,6 +512,27 @@ def _tone_adjustment(value: Any) -> dict[str, float] | None:
     parsed.setdefault("saturation", 1.0)
     parsed.setdefault("gain", 1.0)
     return parsed
+
+
+def _genesis_directional_lights(value: Any) -> list[dict[str, Any]]:
+    raw_lights = value if isinstance(value, list) else []
+    parsed: list[dict[str, Any]] = []
+    for raw_light in raw_lights:
+        if not isinstance(raw_light, dict):
+            continue
+        parsed.append(
+            {
+                "type": str(raw_light.get("type") or "directional"),
+                "dir": _vec3(raw_light.get("dir"), default=[-1.0, -1.0, -1.0]),
+                "color": _vec3(raw_light.get("color"), default=[1.0, 1.0, 1.0]),
+                "intensity": float(raw_light.get("intensity", 1.0)),
+            }
+        )
+    if parsed:
+        return parsed
+    return [
+        dict(item) for item in DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_directional_lights"]
+    ]
 
 
 def _vec3(value: Any, *, default: list[float]) -> list[float]:

@@ -30,9 +30,13 @@ from roboclaws.household.genesis_backend import GENESIS_SCENE_CAMERA_VIEW_VARIAN
 
 GENESIS_LANE_ID = "genesis-prepared-usd"
 GENESIS_RENDER_LIGHTING_PROFILE = {
-    "profile_id": "genesis_prepared_usd_materialized_room_light_v1",
-    "source": "Genesis rasterizer room-light calibration for prepared USD visual assets.",
-    "ambient_light": [0.32, 0.32, 0.32],
+    "profile_id": "scene_probe_mujoco_headlight_fill_v1",
+    "source": (
+        "MuJoCo-headlight-inspired Genesis environment fill for prepared USD visual assets."
+    ),
+    "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
+    "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
+    "ambient_light": [0.37, 0.37, 0.37],
     "background_color": [0.04, 0.08, 0.12],
     "shadow": False,
     "lights": [
@@ -41,7 +45,19 @@ GENESIS_RENDER_LIGHTING_PROFILE = {
             "dir": [-1.0, -1.0, -1.0],
             "color": [1.0, 1.0, 1.0],
             "intensity": 3.0,
-        }
+        },
+        {
+            "type": "directional",
+            "dir": [1.0, 1.0, -0.6],
+            "color": [1.0, 0.96, 0.9],
+            "intensity": 0.8,
+        },
+        {
+            "type": "directional",
+            "dir": [0.0, -1.0, -0.35],
+            "color": [0.9, 0.95, 1.0],
+            "intensity": 0.45,
+        },
     ],
 }
 GENESIS_COLOR_PROFILE_LUMINANCE_GAIN = 0.94
@@ -204,15 +220,28 @@ def _write_real_camera_views(
         "runtime_mode": "real",
         "genesis_import_mode": "native_usd_stage",
     }
+    genesis_lighting_profile = _genesis_lighting_profile(request.get("lighting_profile") or {})
 
     try:
         if not getattr(gs, "_initialized", False):
             gs.init(backend=gs.cpu)
-        scene = _genesis_scene(gs, width=width, height=height, vertical_fov=vertical_fov)
+        scene = _genesis_scene(
+            gs,
+            width=width,
+            height=height,
+            vertical_fov=vertical_fov,
+            lighting_profile=genesis_lighting_profile,
+        )
         try:
             scene.add_stage(morph=gs.morphs.USD(file=str(scene_usd)))
         except Exception as exc:
-            scene = _genesis_scene(gs, width=width, height=height, vertical_fov=vertical_fov)
+            scene = _genesis_scene(
+                gs,
+                width=width,
+                height=height,
+                vertical_fov=vertical_fov,
+                lighting_profile=genesis_lighting_profile,
+            )
             scene_load = _add_prepared_usd_visual_fallback(
                 scene=scene,
                 gs=gs,
@@ -284,9 +313,10 @@ def _write_real_camera_views(
         "calibration_status": request.get("calibration_status"),
         "lighting_profile": request.get("lighting_profile") or {},
         "lighting_diagnostics": {
-            "status": "genesis_room_light_profile_applied",
+            "status": "genesis_environment_fill_profile_applied",
             "source": "prepared_usd_plus_genesis_rasterizer",
-            "genesis_lighting_profile": GENESIS_RENDER_LIGHTING_PROFILE,
+            "requested_lighting_profile": request.get("lighting_profile") or {},
+            "genesis_lighting_profile": genesis_lighting_profile,
         },
         "color_profile": color_profile,
         "color_management": {
@@ -301,7 +331,14 @@ def _write_real_camera_views(
     }
 
 
-def _genesis_scene(gs: Any, *, width: int, height: int, vertical_fov: float) -> Any:
+def _genesis_scene(
+    gs: Any,
+    *,
+    width: int,
+    height: int,
+    vertical_fov: float,
+    lighting_profile: dict[str, Any] | None = None,
+) -> Any:
     return gs.Scene(
         viewer_options=gs.options.ViewerOptions(
             res=(width, height),
@@ -309,18 +346,23 @@ def _genesis_scene(gs: Any, *, width: int, height: int, vertical_fov: float) -> 
             camera_lookat=(0.0, 0.0, 1.0),
             camera_fov=vertical_fov,
         ),
-        vis_options=_genesis_vis_options(gs),
+        vis_options=_genesis_vis_options(gs, lighting_profile=lighting_profile),
         renderer=gs.renderers.Rasterizer(),
         show_viewer=False,
         show_FPS=False,
     )
 
 
-def _genesis_vis_options(gs: Any) -> Any:
+def _genesis_vis_options(gs: Any, *, lighting_profile: dict[str, Any] | None = None) -> Any:
+    profile = (
+        lighting_profile
+        if isinstance(lighting_profile, dict)
+        else GENESIS_RENDER_LIGHTING_PROFILE
+    )
     return gs.options.VisOptions(
-        ambient_light=tuple(GENESIS_RENDER_LIGHTING_PROFILE["ambient_light"]),
-        background_color=tuple(GENESIS_RENDER_LIGHTING_PROFILE["background_color"]),
-        shadow=bool(GENESIS_RENDER_LIGHTING_PROFILE["shadow"]),
+        ambient_light=tuple(profile["ambient_light"]),
+        background_color=tuple(profile["background_color"]),
+        shadow=bool(profile["shadow"]),
         lights=[
             {
                 "type": light["type"],
@@ -328,9 +370,61 @@ def _genesis_vis_options(gs: Any) -> Any:
                 "color": tuple(light["color"]),
                 "intensity": float(light["intensity"]),
             }
-            for light in GENESIS_RENDER_LIGHTING_PROFILE["lights"]
+            for light in profile["lights"]
         ],
     )
+
+
+def _genesis_lighting_profile(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "profile_id": str(
+            lighting_profile.get("profile_id") or GENESIS_RENDER_LIGHTING_PROFILE["profile_id"]
+        ),
+        "source": str(
+            lighting_profile.get("source") or GENESIS_RENDER_LIGHTING_PROFILE["source"]
+        ),
+        "mujoco_headlight_ambient": _vec3(
+            lighting_profile.get("mujoco_headlight_ambient"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_ambient"],
+        ),
+        "mujoco_headlight_diffuse": _vec3(
+            lighting_profile.get("mujoco_headlight_diffuse"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_diffuse"],
+        ),
+        "ambient_light": _vec3(
+            lighting_profile.get("genesis_ambient_light"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["ambient_light"],
+        ),
+        "background_color": _vec3(
+            lighting_profile.get("genesis_background_color"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["background_color"],
+        ),
+        "shadow": bool(
+            lighting_profile.get("genesis_shadow", GENESIS_RENDER_LIGHTING_PROFILE["shadow"])
+        ),
+        "lights": _genesis_directional_lights(
+            lighting_profile.get("genesis_directional_lights")
+        ),
+    }
+
+
+def _genesis_directional_lights(value: Any) -> list[dict[str, Any]]:
+    raw_lights = value if isinstance(value, list) else []
+    parsed: list[dict[str, Any]] = []
+    for raw_light in raw_lights:
+        if not isinstance(raw_light, dict):
+            continue
+        parsed.append(
+            {
+                "type": str(raw_light.get("type") or "directional"),
+                "dir": _vec3(raw_light.get("dir"), fallback=[-1.0, -1.0, -1.0]),
+                "color": _vec3(raw_light.get("color"), fallback=[1.0, 1.0, 1.0]),
+                "intensity": float(raw_light.get("intensity", 1.0)),
+            }
+        )
+    if parsed:
+        return parsed
+    return [dict(item) for item in GENESIS_RENDER_LIGHTING_PROFILE["lights"]]
 
 
 def _genesis_color_profile(color_profile: dict[str, Any]) -> dict[str, Any]:

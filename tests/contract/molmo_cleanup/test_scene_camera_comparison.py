@@ -12,6 +12,7 @@ from PIL import Image
 from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
+    DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     scene_probe_camera_control_request,
 )
 from roboclaws.household.scene_camera_comparison import (
@@ -256,12 +257,7 @@ def _manifest() -> dict[str, object]:
                 "vertical_fov_deg": 45.0,
                 "focal_length_mm": 24.0,
             },
-            "lighting_profile": {
-                "profile_id": "scene_probe_existing_usd_lights_v1",
-                "isaac_dome_intensity": 0.0,
-                "isaac_key_intensity": 0.0,
-                "isaac_key_rotation_deg": [-55.0, 0.0, 35.0],
-            },
+            "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
             "color_profile": {
                 "profile_id": "display_srgb_soft_highlight_v1",
                 "highlight_knee": 225.0,
@@ -516,7 +512,7 @@ def _manifest() -> dict[str, object]:
                 "visual_artifact_provenance": "mujoco_camera_control_canonical_eye_target",
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
-                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
                 "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "images": {
                     "room_01_room_2": {
@@ -566,12 +562,15 @@ def _manifest() -> dict[str, object]:
                 ),
                 "camera_control_api": CAMERA_CONTROL_API_NAME,
                 "calibration_status": "canonical_scene_frame_similarity_fit_v1",
-                "lighting_profile": {"profile_id": "scene_probe_existing_usd_lights_v1"},
+                "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
                 "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "lighting_diagnostics": {
-                    "status": "using_existing_stage_lights",
+                    "status": "added_capture_lights",
                     "existing_light_count": 2,
-                    "added_light_count": 0,
+                    "added_light_count": 1,
+                    "added_light_paths": ["/RoboclawsSmokeDomeLight"],
+                    "requested_dome_intensity": 60.0,
+                    "requested_key_intensity": 0.0,
                 },
                 "native_render_diagnostics": _native_isaac_diagnostics(),
                 "images": {
@@ -702,8 +701,11 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "display_srgb_soft_highlight_v1" in html
     assert "canonical_eye_target_camera_v1" in html
     assert "backend eye=" in html
-    assert "scene_probe_existing_usd_lights_v1" in html
-    assert "using_existing_stage_lights" in html
+    assert "scene_probe_mujoco_headlight_fill_v1" in html
+    assert "added_capture_lights" in html
+    assert _manifest()["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"][
+        "added_light_paths"
+    ] == ["/RoboclawsSmokeDomeLight"]
     assert "Candidate color calibrations" in html
     assert "best=" in html
     assert MOLMOSPACES_LANE_ID in html
@@ -1329,6 +1331,20 @@ def test_scene_camera_comparison_default_color_profile_contract() -> None:
         "isaaclab-prepared-usd"
     ] == pytest.approx(0.7161647108631373)
     assert "0530_0009" in DEFAULT_SCENE_PROBE_COLOR_PROFILE["backend_luminance_gain_source"]
+
+
+def test_scene_camera_comparison_default_lighting_profile_contract() -> None:
+    profile = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
+
+    assert profile["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
+    assert profile["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
+    assert profile["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
+    assert profile["isaac_key_intensity"] == pytest.approx(0.0)
+    assert profile["isaac_key_rotation_deg"] == pytest.approx([-45.0, 0.0, 35.0])
+    assert profile["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
+    assert profile["genesis_shadow"] is False
+    assert len(profile["genesis_directional_lights"]) == 3
 
 
 def test_scene_camera_color_profile_normalizes_backend_tone_adjustment() -> None:

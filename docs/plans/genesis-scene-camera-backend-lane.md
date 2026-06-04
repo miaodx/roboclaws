@@ -1,6 +1,6 @@
 ---
 refactor_scope: genesis-scene-camera-visual-fidelity
-status: DONE
+status: CONTINUE
 accepted_severities:
   - P0
   - P1
@@ -10,7 +10,7 @@ last_verified: 2026-06-04
 
 # Genesis Scene-Camera Backend Lane
 
-**Status:** DONE
+**Status:** CONTINUE
 **Created:** 2026-06-04
 **Source:** Genesis World submodule addition and follow-up discussion about
 adding Genesis as a backend variant like the Isaac path.
@@ -242,7 +242,7 @@ last_verified: 2026-06-04
 
 ### Status
 
-DONE
+CONTINUE
 
 ### Target
 
@@ -393,6 +393,20 @@ import mode.
   and 6 Genesis standalone image buttons. Visual QA inspected `contact_sheet.png`
   and accepted the remaining differences as renderer style rather than the
   earlier dark/cold/washed-out failure.
+- 2026-06-04: Reopened after human review called out remaining lack of
+  environment light in Isaac and Genesis. Stronger Isaac/Genesis fill probes
+  overcorrected or failed the visual metric gate:
+  `0604_envfill/0604_1752`, `0604_envfill_tuned/0604_1756`, and
+  `0604_envfill_keyonly/0604_1808`. Accepted the softer renderer-side fill
+  profile from
+  `output/molmo/scene-camera-comparison/genesis-materialized-proof/0604_envfill_soft/0604_1805/`:
+  shared `lighting_profile.profile_id=scene_probe_mujoco_headlight_fill_v1`,
+  MuJoCo headlight metadata, Isaac dome fill intensity `60.0` with no key light,
+  and Genesis ambient `0.37` plus three directional fill lights. This materially
+  brightens Genesis and adds explicit environment fill to Isaac while preserving
+  `degraded_candidates=[]`. It does not fully eliminate the Isaac `room_01`
+  wall residual; the artifact reports `room_wall_light_diagnostics.status=
+  global_tone_or_exposure_delta`, and stronger Isaac lighting failed the gate.
 
 ## Risks
 
