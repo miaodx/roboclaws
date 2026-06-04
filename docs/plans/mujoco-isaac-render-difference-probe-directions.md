@@ -115,6 +115,18 @@ contract execution and does not promote renderer defaults.
   `settle16` is still a capture-timing candidate rather than a default-renderer
   solution. Summary:
   `output/molmo/robot-camera-apple2apple/0604_latest_code_val1_seed6_8loc_settle16_matched_summary_ec2d25c8/report.html`.
+- A targeted current-code bed/fabric material probe on the val_0 bed-heavy
+  four-location held-out slice is rejected. Starting from the current combined
+  USD, `bed_source_raw` rewrote 8 bed texture `sourceColorSpace` fields to
+  `raw`; real MuJoCo/Isaac render metrics regressed FPV
+  `32.8863 -> 33.4799` and chase `37.6759 -> 37.7414`. The same slice with
+  `bed_scale_power05`, a category-level bed texture scale/fallback power-0.5
+  probe, also regressed FPV `32.8863 -> 33.9983` while only slightly improving
+  chase `37.6759 -> 37.5649`. Both rows keep the same residual class counts and
+  are ranked as rejected behind `settle_16_540`. Do not expand these bed
+  color-space or partial-scale directions without a new target-specific
+  mechanism. Summary:
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_material_bed_probe_summary/report.html`.
 
 ## Target
 
