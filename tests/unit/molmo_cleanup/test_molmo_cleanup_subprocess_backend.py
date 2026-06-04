@@ -1161,12 +1161,8 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert request["lighting_profile"]["mujoco_headlight_ambient"] == pytest.approx(
         [0.35, 0.35, 0.35]
     )
-    assert request["lighting_profile"]["mujoco_headlight_diffuse"] == pytest.approx(
-        [0.4, 0.4, 0.4]
-    )
-    assert request["lighting_profile"]["genesis_ambient_light"] == pytest.approx(
-        [0.37, 0.37, 0.37]
-    )
+    assert request["lighting_profile"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert request["lighting_profile"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
     assert request["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert request["color_profile"]["highlight_knee"] == pytest.approx(225.0)
     assert request["color_profile"]["backend_luminance_gain"]["molmospaces-mujoco"] == (
@@ -1426,6 +1422,33 @@ def test_worker_robot_views_uses_robot_head_camera_for_fpv(
         "robot_0/camera_follower"
     )
     assert Path(result["views"]["fpv"]).is_file()
+
+
+def test_worker_grows_mujoco_offscreen_buffer_for_high_res_render() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+
+    class GlobalSettings:
+        offwidth = 1280
+        offheight = 720
+
+    class Vis:
+        global_ = GlobalSettings()
+
+    class Model:
+        vis = Vis()
+
+    model = Model()
+
+    worker._ensure_offscreen_framebuffer(model, width=1620, height=1080)
+
+    assert model.vis.global_.offwidth == 1620
+    assert model.vis.global_.offheight == 1080
+
+    worker._ensure_offscreen_framebuffer(model, width=540, height=360)
+
+    assert model.vis.global_.offwidth == 1620
+    assert model.vis.global_.offheight == 1080
 
 
 def test_worker_robot_views_keeps_backend_local_fallback_without_pose(

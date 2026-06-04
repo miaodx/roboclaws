@@ -48,15 +48,32 @@ contract execution and does not promote renderer defaults.
   `25.4550 -> 25.4441` while regressing chase `41.7204 -> 41.7532`.
 - High-resolution 1080->540 downsample is not a default candidate on the
   primary slice: FPV regressed `25.4550 -> 25.6557` even though chase improved
-  `41.7204 -> 37.3285`. Keep direct high-resolution images as report-review
-  evidence only unless later same-size metrics improve FPV too.
-- `render_settle_frames=16` is the strongest capture-quality candidate so far:
+  `41.7204 -> 37.3285`. A follow-up `1620x1080 -> 540x360` probe needed a
+  MuJoCo offscreen-framebuffer fix, then improved chase less strongly
+  (`41.7204 -> 37.8022`) while leaving FPV effectively unchanged
+  (`25.4550 -> 25.4521`). Treat high-resolution/downsample alone as
+  comparison evidence, not a default candidate. Summary:
+  `output/molmo/robot-camera-apple2apple/0604_val1_seed6_4loc_capture_resolution_settle_summary_framebufferfix_ae02e705/report.html`.
+- `render_settle_frames=16` is the strongest stable capture-quality candidate
+  so far:
   primary slice improves FPV/chase `25.4550` / `41.7204` to `24.9437` /
   `34.7722`; a comparable val_0 four-location skip-audit held-out run improves
   `32.8863` / `37.6759` to `32.7532` / `37.4365`. Do not promote it as a
   default yet because per-target rows still regress (`atomizer` and
   `baseballbat` chase on primary, one bed FPV on val_0). Treat it as a
   capture-quality candidate, not a solved visual-parity fix.
+- The only supported combined capture-quality probe,
+  `1620x1080 -> 540x360 + render_settle_frames=16`, ranks best on the primary
+  slice and makes all FPV residuals low (`25.4550 -> 24.5468`, chase
+  `41.7204 -> 35.5907`), but it fails held-out promotion: on the val_0
+  four-location skip-audit slice, FPV slightly regresses
+  `32.8863 -> 32.9267` and chase improves only marginally
+  `37.6759 -> 37.5460`, ranking behind plain `settle16`. Keep this combination
+  as primary-slice evidence only; do not promote resolution/downsample or the
+  combo. Summaries:
+  `output/molmo/robot-camera-apple2apple/0604_val1_seed6_4loc_capture_resolution_settle_combo_summary_framebufferfix_ae02e705/report.html`
+  and
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_capture_combo_heldout_summary_framebufferfix/report.html`.
 - Capture-quality comparison runs may use `--skip-object-parity-audit` to avoid
   val_0 full-scene object-audit/report postprocessing dominating the probe. A
   skip-audit artifact is valid for image-metric ranking only; rerun without the
@@ -79,6 +96,25 @@ contract execution and does not promote renderer defaults.
   slightly regresses FPV (`25.4550 -> 25.4658`) while leaving chase unchanged
   (`41.7204 -> 41.7163`), so do not expand an exposure grid unless a new
   targeted reason appears.
+- The matching primary `exposure_bias=+1` run is also rejected: FPV changes only
+  at noise level (`25.4550 -> 25.4479`) while chase regresses
+  (`41.7204 -> 41.8282`), and the alarm-clock FPV residual class worsens. Close
+  the native exposure axis unless a later targeted hypothesis reopens it.
+  Summary:
+  `output/molmo/robot-camera-apple2apple/0604_val1_seed6_4loc_exposure_probe_summary_ae02e705/report.html`.
+- A matched latest-code `val_1` / seed 6 / two-mess / eight-location combined
+  USD rerun gives stronger but still incomplete support for `settle16`: with
+  identical selected targets, baseline FPV/chase `28.5147` / `43.5060` improves
+  to `28.0558` / `40.0803`, FPV residual classes improve from
+  `2 geometry_or_texture_edge_residual + 6 low_residual` to
+  `1 geometry_or_texture_edge_residual + 7 low_residual`, and chase improves
+  from `6 geometry_or_texture_edge_residual + 2 low_residual` to
+  `4 geometry_or_texture_edge_residual + 3 low_residual + 1 render_domain_residual`.
+  However, per-target regressions remain (`atomizer` FPV/chase,
+  `baseballbat` FPV/chase, one cellphone FPV/chase, and box chase), so
+  `settle16` is still a capture-timing candidate rather than a default-renderer
+  solution. Summary:
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val1_seed6_8loc_settle16_matched_summary_ec2d25c8/report.html`.
 
 ## Target
 
