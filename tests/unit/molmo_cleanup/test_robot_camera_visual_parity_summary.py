@@ -444,6 +444,11 @@ def test_visual_parity_summary_tracks_combined_material_light_candidate(
     assert "<img src='../val0_scale_square_rotx25/isaac/robot_views/0001_target.fpv.png'" in (
         report_html
     )
+    assert 'class="lightbox"' in report_html
+    assert "data-lightbox" in report_html
+    assert 'aria-hidden="true"' in report_html
+    assert 'document.querySelectorAll("img:not([data-lightbox-image])")' in report_html
+    assert 'title", "Open image preview"' in report_html
     assert "non-comparable auxiliary" not in report_html
     assert "robot_0/camera_follower / robot_relative_camera_follower" in report_html
     assert "Object Parity" in report_html

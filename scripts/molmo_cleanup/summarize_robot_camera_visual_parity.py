@@ -2682,9 +2682,57 @@ def _render_report(manifest: dict[str, Any]) -> str:
       margin-top: 8px;
     }}
     figure {{ margin: 0; }}
-    img {{ display: block; width: 100%; height: auto; border: 1px solid #ccc; background: #111; }}
+    img {{
+      display: block;
+      width: 100%;
+      height: auto;
+      border: 1px solid #ccc;
+      background: #111;
+      cursor: zoom-in;
+    }}
     figcaption {{ color: #555; font-size: 12px; margin-top: 4px; }}
     .muted {{ color: #666; }}
+    .lightbox {{
+      align-items: center;
+      background: rgb(0 0 0 / 0.86);
+      display: none;
+      inset: 0;
+      justify-content: center;
+      padding: 28px;
+      position: fixed;
+      z-index: 1000;
+    }}
+    .lightbox[aria-hidden="false"] {{ display: flex; }}
+    .lightbox__figure {{
+      max-height: 94vh;
+      max-width: min(1200px, 96vw);
+    }}
+    .lightbox__figure img {{
+      border-color: #444;
+      cursor: default;
+      max-height: 88vh;
+      object-fit: contain;
+      width: auto;
+      max-width: 100%;
+    }}
+    .lightbox__figure figcaption {{
+      color: #f3f3f3;
+      font-size: 14px;
+      margin-top: 8px;
+      text-align: center;
+    }}
+    .lightbox__close {{
+      background: #fff;
+      border: 0;
+      border-radius: 4px;
+      color: #111;
+      cursor: pointer;
+      font: inherit;
+      padding: 8px 12px;
+      position: fixed;
+      right: 24px;
+      top: 18px;
+    }}
   </style>
 </head>
 <body>
@@ -2719,6 +2767,69 @@ def _render_report(manifest: dict[str, Any]) -> str:
   <table><thead>{probe_header}</thead><tbody>{probe_rows}</tbody></table>
   <h2>Object Visual Parity Audit</h2>
   {object_audit_rows}
+  <div
+    class="lightbox"
+    data-lightbox
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Image preview"
+  >
+    <button class="lightbox__close" type="button" data-lightbox-close>Close</button>
+    <figure class="lightbox__figure">
+      <img data-lightbox-image alt="">
+      <figcaption data-lightbox-caption></figcaption>
+    </figure>
+  </div>
+  <script>
+    (() => {{
+      const lightbox = document.querySelector("[data-lightbox]");
+      if (!lightbox) return;
+      const preview = lightbox.querySelector("[data-lightbox-image]");
+      const caption = lightbox.querySelector("[data-lightbox-caption]");
+      const closeButton = lightbox.querySelector("[data-lightbox-close]");
+
+      const close = () => {{
+        lightbox.setAttribute("aria-hidden", "true");
+        preview.removeAttribute("src");
+        preview.setAttribute("alt", "");
+        caption.textContent = "";
+      }};
+
+      const open = (image) => {{
+        const figureCaption = image.closest("figure")?.querySelector("figcaption");
+        const label = figureCaption?.textContent || image.getAttribute("alt") || "Image preview";
+        preview.setAttribute("src", image.currentSrc || image.src);
+        preview.setAttribute("alt", image.getAttribute("alt") || label);
+        caption.textContent = label;
+        lightbox.setAttribute("aria-hidden", "false");
+        closeButton.focus();
+      }};
+
+      document.querySelectorAll("img:not([data-lightbox-image])").forEach((image) => {{
+        image.setAttribute("role", "button");
+        image.setAttribute("tabindex", "0");
+        image.setAttribute("title", "Open image preview");
+        image.addEventListener("click", () => open(image));
+        image.addEventListener("keydown", (event) => {{
+          if (event.key === "Enter" || event.key === " ") {{
+            event.preventDefault();
+            open(image);
+          }}
+        }});
+      }});
+
+      closeButton.addEventListener("click", close);
+      lightbox.addEventListener("click", (event) => {{
+        if (event.target === lightbox) close();
+      }});
+      document.addEventListener("keydown", (event) => {{
+        if (event.key === "Escape" && lightbox.getAttribute("aria-hidden") === "false") {{
+          close();
+        }}
+      }});
+    }})();
+  </script>
 </body>
 </html>
 """
