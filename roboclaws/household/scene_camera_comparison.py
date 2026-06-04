@@ -312,6 +312,10 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     )
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
+        manifest,
+        output_dir=output_dir,
+    )
     manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
     manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
@@ -338,6 +342,11 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
     if not isinstance(manifest.get("visual_diagnostics"), dict):
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
+    if not isinstance(manifest.get("room_wall_light_diagnostics"), dict):
+        manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
+            manifest,
+            output_dir=output_dir,
+        )
     if not isinstance(manifest.get("native_isaac_render_diagnostics"), dict):
         manifest["native_isaac_render_diagnostics"] = _native_isaac_render_diagnostics(manifest)
     if not isinstance(manifest.get("render_domain_source_diagnostics"), dict):
@@ -1915,6 +1924,164 @@ def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[s
         ),
         "views": view_results,
     }
+
+
+def _room_wall_light_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[str, Any]:
+    entries = [
+        entry
+        for entry in _contact_sheet_entries(manifest, output_dir=output_dir)
+        if _is_room_view(manifest, str(entry.get("view_id") or ""))
+    ]
+    registry = (
+        manifest.get("lane_registry") if isinstance(manifest.get("lane_registry"), dict) else {}
+    )
+    baseline_id = str(registry.get("baseline") or MOLMOSPACES_LANE_ID)
+    candidate_ids = [
+        lane_id
+        for lane_id in _lane_order(manifest)
+        if lane_id != baseline_id
+    ]
+    pairs = []
+    for entry in entries:
+        view_id = str(entry.get("view_id") or "")
+        baseline_path = entry["images"].get(baseline_id)
+        if baseline_path is None:
+            continue
+        baseline_image = _image_visual_metrics(baseline_path)
+        baseline_wall = _image_region_visual_metrics(
+            baseline_path,
+            region_id="upper_center_wall_proxy",
+        )
+        for candidate_id in candidate_ids:
+            candidate_path = entry["images"].get(candidate_id)
+            if candidate_path is None:
+                continue
+            candidate_image = _image_visual_metrics(candidate_path)
+            candidate_wall = _image_region_visual_metrics(
+                candidate_path,
+                region_id="upper_center_wall_proxy",
+            )
+            image_delta = (
+                float(candidate_image["mean_luminance"])
+                - float(baseline_image["mean_luminance"])
+            )
+            wall_delta = (
+                float(candidate_wall["mean_luminance"])
+                - float(baseline_wall["mean_luminance"])
+            )
+            pairs.append(
+                {
+                    "view_id": view_id,
+                    "label": entry.get("label") or "",
+                    "candidate": candidate_id,
+                    "baseline": baseline_id,
+                    "region_id": "upper_center_wall_proxy",
+                    "baseline_image_luminance": baseline_image["mean_luminance"],
+                    "candidate_image_luminance": candidate_image["mean_luminance"],
+                    "image_luminance_delta": image_delta,
+                    "baseline_wall_luminance": baseline_wall["mean_luminance"],
+                    "candidate_wall_luminance": candidate_wall["mean_luminance"],
+                    "wall_luminance_delta": wall_delta,
+                    "wall_luminance_ratio": (
+                        float(candidate_wall["mean_luminance"])
+                        / float(baseline_wall["mean_luminance"])
+                    )
+                    if float(baseline_wall["mean_luminance"]) > 0
+                    else None,
+                    "classification": _room_wall_light_classification(
+                        image_delta=image_delta,
+                        wall_delta=wall_delta,
+                    ),
+                }
+            )
+    if not pairs:
+        return {
+            "schema": "scene_camera_room_wall_light_diagnostics_v1",
+            "status": "missing_room_view_pairs",
+            "room_view_count": len(entries),
+            "candidate_count": len(candidate_ids),
+            "region_id": "upper_center_wall_proxy",
+            "interpretation": (
+                "No room-view baseline/candidate image pairs were available for wall-light "
+                "review."
+            ),
+            "pairs": [],
+        }
+    dark_wall_pairs = [
+        item
+        for item in pairs
+        if item.get("classification")
+        in {
+            "candidate_wall_proxy_darker_than_baseline",
+            "candidate_global_tone_darker_than_baseline",
+        }
+    ]
+    wall_specific_pairs = [
+        item
+        for item in pairs
+        if item.get("classification") == "candidate_wall_proxy_darker_than_baseline"
+    ]
+    if wall_specific_pairs:
+        status = "wall_light_or_shadow_delta"
+        next_action = (
+            "Inspect room lights, wall/ceiling shadow flags, and wall material albedo before "
+            "changing camera geometry or accepting a simple global gain."
+        )
+    elif dark_wall_pairs:
+        status = "global_tone_or_exposure_delta"
+        next_action = (
+            "A candidate room view is darker as a whole; compare exposure/gain before "
+            "local wall-light tuning."
+        )
+    else:
+        status = "wall_proxy_luminance_reviewable"
+        next_action = ""
+    return {
+        "schema": "scene_camera_room_wall_light_diagnostics_v1",
+        "status": status,
+        "room_view_count": len(entries),
+        "candidate_count": len(candidate_ids),
+        "pair_count": len(pairs),
+        "dark_wall_pair_count": len(dark_wall_pairs),
+        "wall_specific_pair_count": len(wall_specific_pairs),
+        "region_id": "upper_center_wall_proxy",
+        "region_note": (
+            "This is an image-space proxy over the upper-center room view, not semantic wall "
+            "segmentation. It is intended to catch the dark-wall failure mode visible in "
+            "review artifacts."
+        ),
+        "interpretation": (
+            "Room/wall diagnostics compare baseline and candidate luminance in room views. "
+            "They separate wall-proxy darkness from object-anchor material deltas."
+        ),
+        "recommended_next_action": next_action,
+        "pairs": pairs,
+    }
+
+
+def _room_wall_light_classification(*, image_delta: float, wall_delta: float) -> str:
+    if wall_delta <= -25.0 and abs(image_delta) < 20.0:
+        return "candidate_wall_proxy_darker_than_baseline"
+    if wall_delta <= -25.0 and image_delta <= -20.0:
+        return "candidate_global_tone_darker_than_baseline"
+    if abs(wall_delta) <= 12.0:
+        return "wall_proxy_luminance_matched"
+    if wall_delta >= 25.0:
+        return "candidate_wall_proxy_brighter_than_baseline"
+    return "wall_proxy_luminance_delta"
+
+
+def _is_room_view(manifest: dict[str, Any], view_id: str) -> bool:
+    if view_id.startswith("room_"):
+        return True
+    for item in manifest.get("canonical_camera_views") or []:
+        if (
+            isinstance(item, dict)
+            and str(item.get("view_id") or "") == view_id
+            and str(item.get("anchor_kind") or "") == "room"
+        ):
+            return True
+    return False
 
 
 def _candidate_visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[str, Any]:
@@ -3688,6 +3855,32 @@ def _render_source_snippet(lines: list[str]) -> str:
 def _image_visual_metrics(path: Path) -> dict[str, Any]:
     with Image.open(path).convert("RGB") as image:
         pixels = list(image.getdata())
+    return _pixel_visual_metrics(pixels)
+
+
+def _image_region_visual_metrics(path: Path, *, region_id: str) -> dict[str, Any]:
+    with Image.open(path).convert("RGB") as image:
+        width, height = image.size
+        if region_id == "upper_center_wall_proxy":
+            left = int(width * 0.30)
+            right = max(left + 1, int(width * 0.70))
+            top = int(height * 0.08)
+            bottom = max(top + 1, int(height * 0.42))
+        else:
+            left, top, right, bottom = 0, 0, width, height
+        pixels = list(image.crop((left, top, right, bottom)).getdata())
+    metrics = _pixel_visual_metrics(pixels)
+    metrics["region_id"] = region_id
+    metrics["region_box_fraction"] = {
+        "left": left / max(width, 1),
+        "top": top / max(height, 1),
+        "right": right / max(width, 1),
+        "bottom": bottom / max(height, 1),
+    }
+    return metrics
+
+
+def _pixel_visual_metrics(pixels: list[tuple[int, int, int]]) -> dict[str, Any]:
     count = max(len(pixels), 1)
     sums = [0.0, 0.0, 0.0]
     luminance_sum = 0.0
@@ -4000,6 +4193,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
     body = "\n".join(
         [
             _summary_section(title, manifest),
+            _standalone_review_section(manifest, output_dir=output_dir),
             _contact_sheet_section(manifest, output_dir=output_dir),
             _pose_contract_section(manifest),
             _intrinsics_contract_section(manifest),
@@ -4008,6 +4202,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _transform_section(manifest),
             _projection_diagnostics_section(manifest),
             _visual_diagnostics_section(manifest),
+            _room_wall_light_diagnostics_section(manifest),
             _candidate_visual_diagnostics_section(manifest),
             _native_isaac_render_diagnostics_section(manifest),
             _render_domain_source_section(manifest),
@@ -4016,7 +4211,6 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _anchor_section(manifest),
             _runtime_section(manifest),
             _failure_section(manifest),
-            _view_sections(manifest, output_dir=output_dir),
         ]
     )
     return f"""<!doctype html>
@@ -4031,17 +4225,17 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
       background: #eef2f6;
       color: #20242c;
     }}
-    main {{ max-width: 1360px; margin: 0 auto; padding: 28px 20px 48px; }}
-    h1 {{ margin: 0; font-size: 30px; letter-spacing: 0; }}
+    main {{ max-width: 1360px; margin: 0 auto; padding: 20px 20px 42px; }}
+    h1 {{ margin: 0; font-size: 28px; letter-spacing: 0; }}
     h2 {{ margin: 0 0 12px; font-size: 20px; letter-spacing: 0; }}
     h3 {{ margin: 0 0 8px; font-size: 16px; letter-spacing: 0; }}
     .summary {{
       background: #20242c;
       color: #f8fafc;
       border-radius: 8px;
-      padding: 22px;
+      padding: 18px;
     }}
-    .summary p {{ color: #dbe5ef; max-width: 980px; }}
+    .summary p {{ color: #dbe5ef; max-width: 980px; margin: 8px 0; }}
     .eyebrow {{
       margin: 0 0 6px;
       color: #a7d8cf;
@@ -4067,8 +4261,8 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
       background: #fff;
       border: 1px solid #d8dee8;
       border-radius: 8px;
-      padding: 18px;
-      margin-top: 18px;
+      padding: 16px;
+      margin-top: 14px;
     }}
     .note {{ color: #565f70; margin: 0 0 12px; }}
     .warning-note {{
@@ -4096,6 +4290,11 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
       grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
       gap: 12px;
     }}
+    .review-panel {{
+      border-color: #aab7c7;
+      box-shadow: 0 1px 2px rgba(15, 23, 42, .08);
+    }}
+    .review-panel h2 {{ margin-bottom: 6px; }}
     .contact-sheet {{
       width: 100%;
       max-height: 960px;
@@ -4879,6 +5078,65 @@ def _visual_diagnostics_section(manifest: dict[str, Any]) -> str:
 """
 
 
+def _room_wall_light_diagnostics_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("room_wall_light_diagnostics")
+        if isinstance(manifest.get("room_wall_light_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("pairs") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('candidate', '')))}</td>"
+            f"<td>{html.escape(str(item.get('region_id', '')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('baseline_wall_luminance')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('candidate_wall_luminance')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('wall_luminance_delta')))}</td>"
+            f"<td>{html.escape(_float_text(item.get('image_luminance_delta')))}</td>"
+            f"<td>{html.escape(str(item.get('classification', '')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "View",
+            "Candidate",
+            "Region",
+            "Baseline wall luminance",
+            "Candidate wall luminance",
+            "Wall luminance delta",
+            "Image luminance delta",
+            "Classification",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"room_views={diagnostics.get('room_view_count')}; "
+        f"pairs={diagnostics.get('pair_count')}; "
+        f"dark_wall_pairs={diagnostics.get('dark_wall_pair_count')}; "
+        f"wall_specific_pairs={diagnostics.get('wall_specific_pair_count')}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Room Wall Light Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("region_note") or ""))}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
 def _candidate_visual_diagnostics_section(manifest: dict[str, Any]) -> str:
     diagnostics = (
         manifest.get("candidate_visual_diagnostics")
@@ -5318,7 +5576,29 @@ def _failure_section(manifest: dict[str, Any]) -> str:
 """
 
 
-def _view_sections(manifest: dict[str, Any], *, output_dir: Path) -> str:
+def _standalone_review_section(manifest: dict[str, Any], *, output_dir: Path) -> str:
+    views = _view_sections(manifest, output_dir=output_dir, primary=True)
+    if not views:
+        return ""
+    note = (
+        "Primary visual review surface: each lane image is standalone and opens in the "
+        "popup. The contact sheet below is only a secondary overview."
+    )
+    return f"""
+<section class="panel review-panel">
+  <h2>Standalone Image Review</h2>
+  <p class="note">{html.escape(note)}</p>
+</section>
+{views}
+"""
+
+
+def _view_sections(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    primary: bool = False,
+) -> str:
     views = [
         item
         for item in manifest.get("canonical_camera_views") or []
@@ -5346,9 +5626,10 @@ def _view_sections(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _figure(manifest, lane_id, view_id, output_dir=output_dir)
             for lane_id in _lane_order(manifest)
         )
+        panel_class = "panel review-panel" if primary else "panel"
         blocks.append(
             f"""
-<section class="panel">
+<section class="{panel_class}">
   <h2>{room} {category}</h2>
   <p class="note">{anchor_id} {basis}</p>
   <div class="comparison-grid">
@@ -5375,6 +5656,13 @@ def _figure(manifest: dict[str, Any], lane_id: str, view_id: str, *, output_dir:
     detail = _dimension_text(
         image.get("dimensions") if isinstance(image.get("dimensions"), dict) else {}
     )
+    tone = _figure_tone_text(output_dir / path) if not missing else ""
+    wall_tone = (
+        _figure_wall_tone_text(output_dir / path)
+        if not missing and _is_room_view(manifest, view_id)
+        else ""
+    )
+    candidate_delta = _figure_candidate_delta_text(manifest, lane_id=lane_id, view_id=view_id)
     alt = f"{lane_id} {view_id}"
     target = view.get("target") or view.get("lookat")
     pose = f"eye={_vec_text(view.get('eye'))} target={_vec_text(target)}"
@@ -5384,11 +5672,58 @@ def _figure(manifest: dict[str, Any], lane_id: str, view_id: str, *, output_dir:
         f"<figure>{_image_button(path, alt)}"
         f"<figcaption><strong>{html.escape(lane_id)}</strong>"
         f"<span>{html.escape(detail + missing)}</span>"
+        f"<span>{html.escape(tone)}</span>"
+        f"<span>{html.escape(wall_tone)}</span>"
+        f"<span>{html.escape(candidate_delta)}</span>"
         f"<span>{html.escape(pose)}</span>"
         f"<span>{html.escape(backend_pose)}</span>"
         f"<span>{html.escape(calibration)}</span>"
         "</figcaption></figure>"
     )
+
+
+def _figure_tone_text(path: Path) -> str:
+    metrics = _image_visual_metrics(path)
+    return (
+        f"tone lum={_float_text(metrics.get('mean_luminance'))} "
+        f"rgb={_rgb_text(metrics.get('mean_rgb'))}"
+    )
+
+
+def _figure_wall_tone_text(path: Path) -> str:
+    metrics = _image_region_visual_metrics(path, region_id="upper_center_wall_proxy")
+    return f"wall-proxy lum={_float_text(metrics.get('mean_luminance'))}"
+
+
+def _figure_candidate_delta_text(
+    manifest: dict[str, Any],
+    *,
+    lane_id: str,
+    view_id: str,
+) -> str:
+    registry = (
+        manifest.get("lane_registry") if isinstance(manifest.get("lane_registry"), dict) else {}
+    )
+    baseline_id = str(registry.get("baseline") or MOLMOSPACES_LANE_ID)
+    if lane_id == baseline_id:
+        return "baseline tone reference"
+    diagnostics = (
+        manifest.get("candidate_visual_diagnostics")
+        if isinstance(manifest.get("candidate_visual_diagnostics"), dict)
+        else {}
+    )
+    for candidate in diagnostics.get("candidates") or []:
+        if not isinstance(candidate, dict) or str(candidate.get("candidate") or "") != lane_id:
+            continue
+        for view in candidate.get("views") or []:
+            if not isinstance(view, dict) or str(view.get("view_id") or "") != view_id:
+                continue
+            delta = view.get("delta") if isinstance(view.get("delta"), dict) else {}
+            return (
+                f"vs baseline lum_delta={_float_text(delta.get('mean_luminance_delta'))} "
+                f"px_delta={_float_text(delta.get('mean_absolute_pixel_delta'))}"
+            )
+    return ""
 
 
 def _image_button(src: str, alt: str, *, css_class: str = "") -> str:
@@ -5503,6 +5838,15 @@ def _float_text(value: Any) -> str:
         return ""
     try:
         return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _rgb_text(value: Any) -> str:
+    if not isinstance(value, list) or len(value) < 3:
+        return ""
+    try:
+        return "[" + ", ".join(f"{float(item):.1f}" for item in value[:3]) + "]"
     except (TypeError, ValueError):
         return str(value)
 

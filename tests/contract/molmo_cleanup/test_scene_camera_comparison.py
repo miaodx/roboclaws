@@ -40,6 +40,7 @@ from roboclaws.household.scene_camera_comparison import (
     _renderer_version,
     _room_camera_control_views,
     _room_scale_contract_from_capture,
+    _room_wall_light_diagnostics,
     _scene_frame_transform_from_capture,
     comparison_successful,
     render_scene_camera_comparison_report,
@@ -72,6 +73,20 @@ def _require_official_render_sources() -> None:
 def _write_image(path: Path, color: tuple[int, int, int]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (64, 48), color=color).save(path)
+
+
+def _write_wall_proxy_image(
+    path: Path,
+    *,
+    base: tuple[int, int, int],
+    wall_proxy: tuple[int, int, int],
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image = Image.new("RGB", (100, 100), color=base)
+    for x in range(30, 70):
+        for y in range(8, 42):
+            image.putpixel((x, y), wall_proxy)
+    image.save(path)
 
 
 def _visual_metric_pair(
@@ -633,9 +648,13 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert manifest["artifacts"]["contact_sheet"] == "contact_sheet.png"  # type: ignore[index]
     assert manifest["contact_sheet"]["view_count"] == 3  # type: ignore[index]
     assert "Render-only scene identity probe" in html
+    assert "Standalone Image Review" in html
     assert "Contact Sheet" in html
+    assert html.index("Standalone Image Review") < html.index("Contact Sheet")
     assert "contact_sheet.png" in html
     assert 'data-image-src="contact_sheet.png"' in html
+    assert 'data-image-src="molmospaces/camera_views/room_01_room_2.png"' in html
+    assert 'data-image-src="isaaclab/camera_views/view_02_sink.png"' in html
     assert 'id="image-modal"' in html
     assert "does not execute household cleanup" in html
     assert "pick, place, or scoring" in html
@@ -647,6 +666,12 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "Target Vs USD Bounds Diagnostics" in html
     assert "Projection Diagnostics" in html
     assert "Visual Diagnostics" in html
+    assert "Room Wall Light Diagnostics" in html
+    assert "upper_center_wall_proxy" in html
+    assert "tone lum=" in html
+    assert "wall-proxy lum=" in html
+    assert "baseline tone reference" in html
+    assert "vs baseline lum_delta=" in html
     assert "Candidate Visual Acceptance" in html
     assert "Native Isaac Render Diagnostics" in html
     assert "Render Domain Source Diagnostics" in html
@@ -897,6 +922,32 @@ def test_scene_camera_render_domain_calibration_flags_view_dependent_delta() -> 
     assert calibration["status"] == "view_dependent_render_domain_delta"
     assert calibration["mean_abs_calibrated_luminance_residual"] > 12.0
     assert "material" in calibration["recommended_next_action"]
+
+
+def test_scene_camera_room_wall_light_diagnostics_flag_wall_specific_delta(
+    tmp_path: Path,
+) -> None:
+    manifest = _manifest()
+    _write_wall_proxy_image(
+        tmp_path / "molmospaces/camera_views/room_01_room_2.png",
+        base=(120, 120, 120),
+        wall_proxy=(170, 170, 170),
+    )
+    _write_wall_proxy_image(
+        tmp_path / "isaaclab/camera_views/room_01_room_2.png",
+        base=(120, 120, 120),
+        wall_proxy=(70, 70, 70),
+    )
+
+    diagnostics = _room_wall_light_diagnostics(manifest, output_dir=tmp_path)
+
+    assert diagnostics["status"] == "wall_light_or_shadow_delta"
+    assert diagnostics["wall_specific_pair_count"] == 1
+    assert diagnostics["pairs"][0]["classification"] == (
+        "candidate_wall_proxy_darker_than_baseline"
+    )
+    assert diagnostics["pairs"][0]["wall_luminance_delta"] == pytest.approx(-100.0)
+    assert "wall material albedo" in diagnostics["recommended_next_action"]
 
 
 def test_scene_camera_projection_diagnostics_quantify_same_pinhole_geometry() -> None:

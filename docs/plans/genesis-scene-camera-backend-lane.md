@@ -261,6 +261,17 @@ DONE
   it demonstrably beats the prepared-USD visual path.
 - [x] P2: Preserve the clickable image popup/report UX and keep visual diagnostics
   explicit enough to catch future false-green render lanes.
+- [x] P1: Make standalone per-view/per-lane images the primary report review
+  surface, with every lane image directly clickable in the popup. Keep the
+  contact sheet only as a secondary overview artifact.
+- [x] P1: Put compact per-view tone metrics near each standalone image so
+  MuJoCo/Isaac/Genesis color-tone differences are inspectable where the images
+  are reviewed.
+- [x] P1: Add a room/wall light diagnostic that separates wall or room-view
+  darkness from object/material deltas and records whether a global gain is
+  insufficient.
+- [x] P2: Keep candidate color/luminance calibration explicit; do not hide tone
+  mismatch behind generic renderer-difference language.
 
 ### Parked Cross-Seam / Future Ideas
 
@@ -288,9 +299,12 @@ DONE
 Stop only when a real local comparison artifact exists with MuJoCo, Isaac, and
 Genesis lanes succeeding, Genesis runtime metadata proving real rendering,
 Genesis visual diagnostics not reporting `degraded_visual_fidelity`, clickable
-images working in the report, and the Genesis images visually comparable enough
-for human review. If native USD/MJCF cannot meet that, stop with this plan still
-`CONTINUE` and record the exact blocked visual import mode.
+standalone lane images working in the report, the contact sheet demoted to a
+secondary overview, compact tone metrics visible next to the reviewed images,
+room/wall light diagnostics recorded for dark wall cases, and the Genesis images
+visually comparable enough for human review. If native USD/MJCF cannot meet
+that, stop with this plan still `CONTINUE` and record the exact blocked visual
+import mode.
 
 ### Execution Log
 
@@ -327,6 +341,28 @@ for human review. If native USD/MJCF cannot meet that, stop with this plan still
   image buttons; clicking a Genesis image opened the popup dialog with
   `imageSrc=genesis/camera_views/view_02_bed.png` and
   `title=genesis-prepared-usd view_02_bed`.
+- 2026-06-04: Reopened the plan for the accepted review-grade follow-up:
+  standalone clickable lane images must become the primary visual review
+  surface, and the report must carry local tone plus room/wall light diagnostics
+  close enough to the images to make MuJoCo/Isaac/Genesis style differences
+  actionable.
+- 2026-06-04: Completed the review-grade follow-up. New report artifact:
+  `output/molmo/scene-camera-comparison/genesis-materialized-proof/0604_report_review/report.html`.
+  The report now puts `Standalone Image Review` before `Contact Sheet`, keeps 19
+  image buttons clickable, includes per-image `tone lum`, RGB, wall-proxy
+  luminance, and baseline delta captions, and records
+  `room_wall_light_diagnostics` in `comparison_manifest.json`. The copied real
+  Genesis artifact classifies the Genesis room-view darkness as
+  `global_tone_or_exposure_delta` rather than wall-specific shadow-only failure.
+  Browser QA through Chrome DevTools clicked
+  `genesis/camera_views/room_01_room_2.png` and opened the popup dialog with
+  `title=genesis-prepared-usd room_01_room_2`; screenshots are
+  `report_top.png` and `modal_check.png` in the same artifact directory.
+  Verification passed:
+  `ruff check scripts/genesis_cleanup/genesis_backend_worker.py roboclaws/household/scene_camera_comparison.py tests/unit/molmo_cleanup/test_genesis_backend.py tests/contract/molmo_cleanup/test_scene_camera_comparison.py`;
+  `python -m py_compile scripts/genesis_cleanup/genesis_backend_worker.py roboclaws/household/scene_camera_comparison.py`;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_genesis_backend.py tests/contract/molmo_cleanup/test_scene_camera_comparison.py`
+  with 45 tests, 2 skipped.
 
 ## Risks
 
