@@ -4355,21 +4355,37 @@ def _render_report(manifest: dict[str, Any]) -> str:
             "h1{margin:0 0 8px;font-size:24px}",
             "h2{font-size:18px;margin:0 0 10px}",
             "h2 span{font-weight:400;color:#5f6368}",
+            ".quick-summary{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 12px}",
+            ".chip{font-size:12px;background:#f4f1e8;border:1px solid #d9d7ce;"
+            "border-radius:4px;padding:4px 7px;color:#3c4043}",
+            "a{color:#174ea6}",
             ".pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}",
             ".pair{border-top:1px solid #ece8dd;padding-top:10px}",
             "figure{margin:0 0 8px}",
             "img{display:block;width:100%;height:auto;border:1px solid #ddd;background:#111}",
             "figcaption,p{font-size:13px;color:#5f6368;margin:6px 0}",
             "pre{font-size:12px;background:#f4f1e8;padding:10px;overflow:auto}",
+            "details{border:1px solid #e3dfd4;background:#fbfaf6;margin:10px 0}",
+            "summary{cursor:pointer;font-weight:600;padding:10px 12px;color:#3c4043}",
+            "details[open] summary{border-bottom:1px solid #e3dfd4}",
+            "details pre{margin:0;border:0}",
+            ".details-body{padding:0 12px 12px}",
+            ".location-meta{margin-top:12px}",
+            "table{border-collapse:collapse;width:100%;font-size:12px;margin:10px 0;"
+            "display:block;overflow:auto}",
+            "th,td{border:1px solid #e0ddd4;padding:6px;text-align:left;vertical-align:top}",
             ".bad{color:#9b1c1c}",
             "@media(max-width:800px){.pairs{grid-template-columns:1fr}}",
         ]
     )
     rows = []
-    for item in manifest.get("locations") or []:
+    for row_index, item in enumerate(manifest.get("locations") or []):
+        section_id = " id='locations'" if row_index == 0 else ""
         if item.get("status") != "success":
             rows.append(
-                "<section class='location'><h2>"
+                "<section class='location'"
+                + section_id
+                + "><h2>"
                 + html.escape(str(item.get("label")))
                 + "</h2><p class='bad'>"
                 + html.escape(str(item.get("blocker")))
@@ -4398,49 +4414,97 @@ def _render_report(manifest: dict[str, Any]) -> str:
                 + "</p></div>"
             )
         rows.append(
-            "<section class='location'><h2>"
+            "<section class='location'"
+            + section_id
+            + "><h2>"
             + html.escape(str(item["label"]))
             + " <span>"
             + html.escape(str(item["target"]))
             + "</span></h2>"
-            + "<pre>"
-            + html.escape(json.dumps(item["robot_pose"], indent=2, sort_keys=True))
-            + "</pre><pre>"
-            + html.escape(
-                json.dumps(
-                    item.get("camera_contract_diagnostics", {}),
-                    indent=2,
-                    sort_keys=True,
-                )
-            )
-            + "</pre><pre>"
-            + html.escape(
-                json.dumps(
-                    item.get("render_contract_diagnostics", {}),
-                    indent=2,
-                    sort_keys=True,
-                )
-            )
-            + "</pre><div class='pairs'>"
+            + "<div class='pairs'>"
             + "".join(pairs)
+            + "</div><div class='location-meta'>"
+            + _render_json_details("Robot pose JSON", item["robot_pose"])
+            + _render_json_details(
+                "Camera contract diagnostics JSON",
+                item.get("camera_contract_diagnostics", {}),
+            )
+            + _render_json_details(
+                "Render contract diagnostics JSON",
+                item.get("render_contract_diagnostics", {}),
+            )
             + "</div></section>"
         )
+    diagnostic_sections = (
+        _render_details_html(
+            "Native Isaac Render Diagnostics",
+            _render_native_isaac_render_diagnostics(manifest),
+        )
+        + _render_details_html(
+            "Object/Render Gate",
+            _render_object_render_parity_diagnostics(manifest),
+        )
+        + _render_details_html(
+            "Object Parity Audit",
+            _render_object_parity_audit(manifest),
+        )
+    )
     return (
         "<!doctype html><html><head><meta charset='utf-8'>"
         "<title>RBY1M Robot Camera Apple2Apple</title>"
         "<style>" + style + "</style></head><body><header><h1>RBY1M Robot Camera Apple2Apple</h1>"
         "<p>"
         + html.escape(str(manifest.get("purpose")))
-        + "</p><pre>"
-        + html.escape(json.dumps(manifest.get("summary", {}), indent=2, sort_keys=True))
-        + "</pre>"
+        + "</p>"
+        + _render_quick_summary(manifest)
+        + ("<p><a href='#locations'>Jump to image comparisons</a></p>" if rows else "")
+        + _render_json_details("Run summary JSON", manifest.get("summary", {}))
         + _render_generated_mess_manifest(manifest)
-        + _render_native_isaac_render_diagnostics(manifest)
-        + _render_object_render_parity_diagnostics(manifest)
-        + _render_object_parity_audit(manifest)
+        + diagnostic_sections
         + "</header>"
         + "".join(rows)
         + "</body></html>"
+    )
+
+
+def _render_quick_summary(manifest: dict[str, Any]) -> str:
+    summary = _dict(manifest.get("summary"))
+    mess_generation = _dict(manifest.get("mess_generation"))
+    values = [
+        ("status", manifest.get("status")),
+        ("locations", summary.get("successful_location_count") or summary.get("location_count")),
+        ("fpv mean abs RGB", summary.get("fpv_mean_abs_rgb_avg")),
+        ("chase mean abs RGB", summary.get("chase_mean_abs_rgb_avg")),
+        ("mess", mess_generation.get("generated_mess_count")),
+        ("mess status", mess_generation.get("status")),
+    ]
+    chips = [
+        "<span class='chip'>" + html.escape(label) + ": " + html.escape(str(value)) + "</span>"
+        for label, value in values
+        if value not in (None, "")
+    ]
+    return "<div class='quick-summary'>" + "".join(chips) + "</div>" if chips else ""
+
+
+def _render_details_html(title: str, body: str) -> str:
+    if not body:
+        return ""
+    return (
+        "<details class='report-details'><summary>"
+        + html.escape(title)
+        + "</summary><div class='details-body'>"
+        + body
+        + "</div></details>"
+    )
+
+
+def _render_json_details(title: str, payload: Any) -> str:
+    return (
+        "<details class='json-details'><summary>"
+        + html.escape(title)
+        + "</summary><pre>"
+        + html.escape(json.dumps(payload, indent=2, sort_keys=True))
+        + "</pre></details>"
     )
 
 
@@ -4448,11 +4512,7 @@ def _render_generated_mess_manifest(manifest: dict[str, Any]) -> str:
     mess_generation = _dict(manifest.get("mess_generation"))
     if not mess_generation:
         return ""
-    return (
-        "<h2>Canonical Generated Mess Manifest</h2><pre>"
-        + html.escape(json.dumps(mess_generation, indent=2, sort_keys=True))
-        + "</pre>"
-    )
+    return _render_json_details("Canonical Generated Mess Manifest", mess_generation)
 
 
 def _render_native_isaac_render_diagnostics(manifest: dict[str, Any]) -> str:

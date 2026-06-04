@@ -243,10 +243,66 @@ def test_robot_camera_report_renders_canonical_generated_mess_manifest() -> None
     )
 
     assert "Canonical Generated Mess Manifest" in report_html
+    assert "<details class='json-details'><summary>Canonical Generated Mess Manifest</summary>" in (
+        report_html
+    )
     assert "canonical_generated_mess_manifest" in report_html
     assert "generated_mess_manifest.json" in report_html
     assert "start_receptacle_id" in report_html
     assert "plate_1" in report_html
+
+
+def test_robot_camera_report_puts_images_before_location_json() -> None:
+    run_camera = _load_module(
+        RUN_CAMERA_COMPARISON_PATH,
+        "run_robot_camera_apple2apple_comparison_report_images_first",
+    )
+
+    report_html = run_camera._render_report(
+        {
+            "purpose": "unit",
+            "status": "success",
+            "summary": {
+                "successful_location_count": 1,
+                "fpv_mean_abs_rgb_avg": 1.2,
+                "chase_mean_abs_rgb_avg": 3.4,
+            },
+            "locations": [
+                {
+                    "status": "success",
+                    "label": "0001",
+                    "target": "desk_1",
+                    "robot_pose": {"position": [0, 0, 0]},
+                    "camera_contract_diagnostics": {"status": "ok"},
+                    "render_contract_diagnostics": {"status": "ok"},
+                    "views": {
+                        "mujoco": {"fpv": "mujoco.fpv.png", "chase": "mujoco.chase.png"},
+                        "isaac": {"fpv": "isaac.fpv.png", "chase": "isaac.chase.png"},
+                    },
+                    "image_diffs": {
+                        "fpv": {
+                            "mean_abs_rgb": 1.0,
+                            "nonzero_fraction": 0.1,
+                            "residual": {"residual_class": "low_residual"},
+                        },
+                        "chase": {
+                            "mean_abs_rgb": 2.0,
+                            "nonzero_fraction": 0.2,
+                            "residual": {"residual_class": "geometry_or_texture_edge_residual"},
+                        },
+                    },
+                }
+            ],
+        }
+    )
+
+    assert "Jump to image comparisons" in report_html
+    assert "<div class='quick-summary'>" in report_html
+    assert "<details class='json-details'><summary>Run summary JSON</summary>" in report_html
+    location_start = report_html.index("id='locations'")
+    image_grid = report_html.index("<div class='pairs'>", location_start)
+    location_json = report_html.index("Robot pose JSON", location_start)
+    assert image_grid < location_json
 
 
 def test_robot_camera_blocks_on_canonical_placement_diagnostic_mismatch() -> None:
