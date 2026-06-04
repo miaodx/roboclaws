@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 
+from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
+
 COMMON_PREFIX = (
     "Use the bundled molmo-realworld-cleanup skill instructions. "
     "Use the cleanup MCP tool entries exactly as exposed by Codex; in text, "
@@ -66,13 +68,11 @@ WORLD_LABELS_SANITIZED_PROMPT = (
     "any tool returns required_tool, call that public tool next. Use metric_map, "
     "fixture_hints, runtime_metric_map.public_semantic_anchors, "
     "destination_policy, destination_options, and tool recovery hints to choose "
-    "where to place observed objects. "
-    + COMMON_CLEANUP_RULES
+    "where to place observed objects. " + COMMON_CLEANUP_RULES
 )
 
 CAMERA_LABELS_PROMPT = (
-    COMMON_PREFIX
-    + "When the next action is an MCP tool call, make that tool call before "
+    COMMON_PREFIX + "When the next action is an MCP tool call, make that tool call before "
     "writing progress text and never end a turn by saying you will call a tool "
     "later. After every successful place/place_inside, immediately call observe "
     "before ending the turn or choosing another object. "
@@ -99,19 +99,9 @@ CAMERA_RAW_PROMPT = (
     "checklist from metric_map.inspection_waypoints, sweep every inspection "
     "waypoint with navigate_to_waypoint then observe, and mark a waypoint complete "
     "only after that waypoint_id has an observe response. Inspect each raw FPV "
-    "image block returned by observe, do not expect structured labels, and when "
-    "you see a plausible cleanup object call navigate_to_visual_candidate with "
-    "source_observation_id, a broad category when uncertain (food, dish, book, "
-    "linen, toy, electronics, pillow), evidence_note, and image_region before "
-    "pick. In minimal map mode, do not invent fixture ids from empty fixture_hints; "
-    "omit target_fixture_id and use the candidate_fixture_id/recommended_tool "
-    "returned by navigate_to_visual_candidate plus runtime_metric_map."
-    "public_semantic_anchors. In explicit rich legacy/debug mode only, "
-    "target_fixture_id may come from non-empty fixture_hints. Prefer "
-    "image_region={type:verbal_region,value:front of desk}; use "
-    "image_region={type:bbox,value:[x,y,width,height]} only when you can estimate "
-    'it confidently. Never send bbox_normalized, bare x/y/width/height fields, '
-    'target_fixture_id="", target_fixture_id="None", or target_fixture_id=null. '
+    "image block returned by observe, do not expect structured labels. "
+    + raw_fpv_inline_candidate_instruction()
+    + " "
     "Omit source_fixture_id unless you are confident. If visual candidate grounding "
     "is unresolved, continue the waypoint sweep instead of calling done; if your "
     "successful cleanup count is still below seven, reobserve from another public "
@@ -149,15 +139,13 @@ def render_semantic_map_build_prompt(profile: str, task: str) -> str:
     prompt = COMMON_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
     if profile == "camera-raw":
         return (
-            prompt
-            + " This is the raw-FPV map-build lane: inspect each raw FPV image block "
+            prompt + " This is the raw-FPV map-build lane: inspect each raw FPV image block "
             "returned by observe, record only public map evidence, and do not declare "
             "cleanup candidates."
         )
     if profile == "world-labels-sanitized":
         return (
-            prompt
-            + " Treat visible_object_detections as structured public detections without "
+            prompt + " Treat visible_object_detections as structured public detections without "
             "destination oracle fields; use them only as map labels."
         )
     return prompt

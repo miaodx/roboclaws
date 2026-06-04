@@ -699,9 +699,12 @@ def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_desti
     assert worklist_item["candidate_fixture_id"] == ""
     assert worklist_item["destination_policy_status"] == "policy_required"
     assert worklist_item["destination_policy"] == observed["destination_policy"]
-    assert runtime_map["producer_summary"]["producer_types"][
-        SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
-    ] >= 1
+    assert (
+        runtime_map["producer_summary"]["producer_types"][
+            SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
+        ]
+        >= 1
+    )
     _assert_no_forbidden_keys(runtime_map)
 
 
@@ -1217,6 +1220,9 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     assert observation["raw_fpv_observation"]["image_artifacts"] == {}
     assert "inline_on_navigate" in observation["instruction"]
     assert "navigate_to_visual_candidate" in observation["instruction"]
+    assert "omit target_fixture_id" in observation["instruction"]
+    assert "candidate_fixture_id/recommended_tool" in observation["instruction"]
+    assert "image_region={type:verbal_region,value:front of desk}" in observation["instruction"]
     assert "declare_visual_candidates" not in observation["instruction"]
     assert agent_view["perception_mode"] == RAW_FPV_ONLY_MODE
     assert agent_view["structured_detections_available"] is False
@@ -1576,6 +1582,7 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         perception_mode=RAW_FPV_ONLY_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
 
     waypoint = contract.metric_map()["inspection_waypoints"][0]
@@ -1598,29 +1605,93 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
     assert declared["ok"] is False
     assert declared["error_reason"] == "invalid_visual_candidate"
     assert declared["candidate_error"]["field"] == "image_region.type"
+    recovery = declared["raw_fpv_candidate_recovery"]
+    assert recovery["schema"] == "raw_fpv_visual_candidate_recovery_v1"
+    assert recovery["required_tool"] == "navigate_to_visual_candidate"
+    assert recovery["minimal_map_target_fixture_rule"] == "omit_target_fixture_id"
+    assert (
+        recovery["valid_example"]["source_observation_id"]
+        == (observation["raw_fpv_observation"]["observation_id"])
+    )
+    assert "target_fixture_id" not in recovery["valid_example"]
+    assert {
+        "type": "verbal_region",
+        "value": "front of desk",
+    } in recovery["accepted_image_region_forms"]
     assert (
         contract.agent_view_payload()["model_declared_observation_evidence"]["observation_count"]
         == 0
     )
     _assert_no_forbidden_keys(declared)
 
-    missing_target = contract.declare_visual_candidates(
+    missing_region = contract.declare_visual_candidates(
         observation["raw_fpv_observation"]["observation_id"],
         candidates=[
             {
                 "category": "mug",
+                "target_fixture_id": "sink_01",
                 "evidence_note": "small item near the sink",
-                "image_region": {"type": "bbox", "value": [0.1, 0.1, 0.2, 0.2]},
             }
         ],
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
 
-    assert missing_target["ok"] is False
-    assert missing_target["error_reason"] == "invalid_visual_candidate"
-    assert missing_target["candidate_error"]["field"] == "target_fixture_id"
-    _assert_no_forbidden_keys(missing_target)
+    assert missing_region["ok"] is False
+    assert missing_region["error_reason"] == "invalid_visual_candidate"
+    assert missing_region["candidate_error"]["field"] == "image_region"
+    assert "valid navigate_to_visual_candidate example" in missing_region["recovery_hint"]
+    assert missing_region["raw_fpv_candidate_recovery"]["valid_example"]["image_region"] == {
+        "type": "verbal_region",
+        "value": "front of desk",
+    }
+    _assert_no_forbidden_keys(missing_region)
+
+
+def test_minimal_raw_fpv_navigate_validation_returns_schema_recovery() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="toy",
+        evidence_note="small object on the bed",
+    )
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "invalid_visual_candidate"
+    assert response["candidate_error"]["field"] == "image_region"
+    recovery = response["raw_fpv_candidate_recovery"]
+    assert recovery["required_next_action"] == "retry_navigate_to_visual_candidate"
+    assert recovery["minimal_map_target_fixture_rule"] == "omit_target_fixture_id"
+    assert "target_fixture_id" not in recovery["valid_example"]
+    assert "bbox_normalized" in recovery["invalid_fields_to_avoid"]
+    assert 'target_fixture_id="None"' in recovery["invalid_fields_to_avoid"]
+    _assert_no_forbidden_keys(response)
+
+    invented_target = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="toy",
+        target_fixture_id="generated_area",
+        evidence_note="small object on the bed",
+        image_region={"type": "verbal_region", "value": "front of desk"},
+    )
+
+    assert invented_target["ok"] is False
+    assert invented_target["error_reason"] == "invalid_visual_candidate"
+    assert invented_target["candidate_error"]["field"] == "target_fixture_id"
+    assert "must be omitted in minimal map RAW_FPV" in invented_target["candidate_error"]["reason"]
+    assert (
+        invented_target["raw_fpv_candidate_recovery"]["minimal_map_target_fixture_rule"]
+        == "omit_target_fixture_id"
+    )
+    _assert_no_forbidden_keys(invented_target)
 
 
 def test_realworld_model_declared_grounding_accepts_public_category_families() -> None:

@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.report import runtime_timing_from_trace
 
 FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
@@ -736,16 +737,10 @@ def _codex_continuation_prompt(
     if profile == "camera-raw":
         perception_instruction = (
             "For camera-raw observations, inspect the raw FPV image block yourself. "
-            "Do not call declare_visual_candidates. When you see a "
-            "plausible cleanup object, call navigate_to_visual_candidate "
-            "with source_observation_id, a broad category if uncertain, "
-            "a real target_fixture_id copied from fixture_hints, evidence_note, "
-            "and image_region. Prefer image_region type verbal_region; use bbox "
-            "only when you can estimate it confidently. Never send "
-            'bbox_normalized, bare x/y/width/height fields, target_fixture_id="", '
-            'target_fixture_id="None", or target_fixture_id=null. Continue with '
-            "pick -> navigate_to_receptacle -> open? -> place/place_inside only "
-            "after visual grounding resolves."
+            "Do not call declare_visual_candidates. "
+            + raw_fpv_inline_candidate_instruction()
+            + " Continue with pick -> navigate_to_receptacle -> open? -> "
+            "place/place_inside only after visual grounding resolves."
         )
     elif profile == "camera-labels":
         perception_instruction = (

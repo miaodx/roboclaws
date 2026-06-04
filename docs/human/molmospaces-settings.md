@@ -82,6 +82,9 @@ agent runs. That keeps the live image-agent loop close to the operator's mental
 model: observe a raw camera frame, choose one plausible cleanup object, navigate
 to it, then pick and place it. Explicit registration remains useful for
 `camera-labels`, where perception and cleanup selection are separate roles.
+In minimal-map `camera-raw`, omit `target_fixture_id`; use the
+`candidate_fixture_id` and `recommended_tool` returned by
+`navigate_to_visual_candidate`.
 
 The declaration evidence should include source observation id, category, target
 fixture id, evidence note, image region, producer metadata, grounding status,

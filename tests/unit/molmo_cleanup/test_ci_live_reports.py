@@ -526,7 +526,11 @@ def test_live_codex_raw_continuation_prompt_blocks_label_declarations() -> None:
     assert "For camera-raw observations" in continuation
     assert "Do not call declare_visual_candidates" in continuation
     assert "call navigate_to_visual_candidate" in continuation
+    assert "copied from fixture_hints" not in continuation
+    assert "omit target_fixture_id" in continuation
+    assert "candidate_fixture_id/recommended_tool" in continuation
     assert "Prefer image_region type verbal_region" in continuation
+    assert "image_region={type:verbal_region,value:front of desk}" in continuation
     assert "Never send bbox_normalized" in continuation
     assert 'target_fixture_id=""' in continuation
     assert 'target_fixture_id="None"' in continuation
@@ -953,9 +957,7 @@ def test_live_codex_recovers_from_misrouted_undeclared_coding_tool_error(
     assert "roboclaws__" in calls[1][-1]
 
 
-def test_live_codex_provider_rate_limit_exits_for_row_retry(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_live_codex_provider_rate_limit_exits_for_row_retry(tmp_path: Path, monkeypatch) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
     run_dir = tmp_path / "run"
     run_dir.mkdir()
