@@ -1130,33 +1130,33 @@ def test_molmo_camera_raw_prompt_scales_to_requested_cleanup_count() -> None:
     assert "at least seven grounded cleanup chains have succeeded" not in prompt
 
 
-def test_molmo_camera_raw_live_gate_scales_to_generated_mess_count() -> None:
+def test_molmo_camera_raw_live_gate_uses_generated_mess_success_threshold() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
     match = re.search(r"camera-raw\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
     assert match is not None
     body = match.group("body")
 
-    assert 'raw_fpv_required_cleanup_count="$generated_mess_count"' in body
+    assert "generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))" in text
+    assert 'raw_fpv_required_cleanup_count="$generated_mess_success_threshold"' in body
     assert '--min-model-declared-observations "$raw_fpv_required_cleanup_count"' in body
     assert '--min-model-declared-actions "$raw_fpv_required_cleanup_count"' in body
     assert '--min-semantic-accepted-count "$raw_fpv_required_cleanup_count"' in body
-    assert "(generated_mess_count * 7 + 9) / 10" not in body
 
 
-def test_molmo_live_kickoff_prompt_receives_generated_mess_count_for_camera_raw() -> None:
+def test_molmo_live_kickoff_prompt_receives_success_threshold_for_camera_raw() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
 
     assert 'prompt_cleanup_count="$generated_mess_count"' in text
-    assert "prompt_cleanup_count=$(( (generated_mess_count * 7 + 9) / 10 ))" not in text
+    assert 'prompt_cleanup_count="$generated_mess_success_threshold"' in text
     assert '--target-cleanup-count "$prompt_cleanup_count"' in text
 
 
-def test_live_codex_camera_raw_default_gate_uses_generated_mess_count() -> None:
+def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshold() -> None:
     text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     assert "def _raw_fpv_required_cleanup_count(generated_mess_count: int) -> int:" in text
     assert "_raw_fpv_required_cleanup_count(int(self.args.min_generated_mess_count))" in text
-    assert "(count * 7 + 9) // 10" not in text
+    assert "math.ceil(generated_mess_count * 0.70)" in text
     assert (
         '"--min-model-declared-observations",\n                raw_fpv_required_cleanup_count'
         in text

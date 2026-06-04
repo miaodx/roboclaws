@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import math
 import os
 import shutil
 import socket
@@ -60,7 +61,7 @@ class ProviderRateLimitError(RuntimeError):
 
 
 def _raw_fpv_required_cleanup_count(generated_mess_count: int) -> int:
-    return max(1, generated_mess_count)
+    return max(1, math.ceil(generated_mess_count * 0.70))
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

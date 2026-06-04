@@ -1097,7 +1097,7 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
     assert command.count("--min-sweep-coverage") == 1
 
 
-def test_live_codex_camera_raw_checker_defaults_to_generated_mess_count(
+def test_live_codex_camera_raw_checker_defaults_to_generated_mess_success_threshold(
     tmp_path: Path, monkeypatch
 ) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
@@ -1128,9 +1128,9 @@ def test_live_codex_camera_raw_checker_defaults_to_generated_mess_count(
 
     command = captured["command"]
     assert "--require-clean-agent-run" in command
-    assert command[command.index("--min-model-declared-observations") + 1] == "5"
-    assert command[command.index("--min-model-declared-actions") + 1] == "5"
-    assert command[command.index("--min-semantic-accepted-count") + 1] == "5"
+    assert command[command.index("--min-model-declared-observations") + 1] == "4"
+    assert command[command.index("--min-model-declared-actions") + 1] == "4"
+    assert command[command.index("--min-semantic-accepted-count") + 1] == "4"
     assert command[command.index("--min-sweep-coverage") + 1] == "1.0"
 
 
