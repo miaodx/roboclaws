@@ -19,13 +19,14 @@ from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
 )
+from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.planner_proof_attachment import attach_planner_proof
 from roboclaws.household.planner_proof_requests import write_planner_proof_requests
-from roboclaws.household.profiles import cleanup_profile_metadata_for_run
+from roboclaws.household.profiles import CAMERA_RAW_PROFILE, cleanup_profile_metadata_for_run
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
@@ -55,12 +56,14 @@ from roboclaws.household.semantic_timeline import (
     SEMANTIC_LOOP_VARIANT,
     camera_offsets_from_raw_fpv_observation,
     cleanup_plan_from_semantic_substeps,
+    has_complete_semantic_sequence,
     primitive_provenance_counts,
     record_robot_view_step,
     robot_view_camera_control_summary,
     robot_view_capture_for_tool,
     semantic_diagnostics,
     semantic_substeps,
+    successful_semantic_phases,
 )
 from roboclaws.household.skill_scratchpad import read_or_create_skill_scratchpad
 from roboclaws.household.types import CleanupScenario
@@ -262,11 +265,63 @@ class RealWorldMolmoCleanupMCPServer:
             }
         response = self._augment_response(name, request, response)
         response = self._attach_raw_fpv_artifact_if_needed(name, response)
+        if name == "done" and response.get("ok"):
+            response = self._guard_raw_fpv_live_done(response) or response
         self._write_tool_response(name, response)
         if name == "done" and response.get("ok"):
             return self._finalize_done(str(kwargs.get("reason", "")), response)
         self._record_tool_robot_view(name, request, response)
         return response
+
+    def _guard_raw_fpv_live_done(self, done_response: dict[str, Any]) -> dict[str, Any] | None:
+        if (
+            not self.agent_driven
+            or self.perception_mode != RAW_FPV_ONLY_MODE
+            or self.cleanup_profile != CAMERA_RAW_PROFILE
+        ):
+            return None
+        required_count = self._required_raw_fpv_live_cleanup_count()
+        if required_count <= 0:
+            return None
+        trace_events = self._read_trace_events()
+        substeps = semantic_substeps(trace_events, self.contract.public_receptacles_by_id())
+        complete_handles = _complete_semantic_substep_handles(substeps)
+        if len(complete_handles) >= required_count:
+            return None
+        return {
+            "ok": False,
+            "tool": "done",
+            "status": "error",
+            "error_reason": "insufficient_grounded_cleanup_chains",
+            "required_tool": "navigate_to_visual_candidate",
+            "complete_semantic_substep_objects": len(complete_handles),
+            "complete_semantic_substep_object_ids": complete_handles,
+            "required_complete_semantic_substep_objects": required_count,
+            "semantic_substep_count": len(substeps),
+            "recovery_hint": (
+                "Continue the RAW_FPV cleanup loop before done. For each plausible "
+                "object in a raw FPV observation, call navigate_to_visual_candidate; "
+                "when it returns ok=true, immediately call pick, navigate_to_receptacle "
+                "with candidate_fixture_id, then the recommended placement tool. Call "
+                "done only after enough grounded cleanup chains have completed."
+            ),
+            "contract": REALWORLD_CONTRACT,
+            "agent_driven": self.agent_driven,
+        }
+
+    def _required_raw_fpv_live_cleanup_count(self) -> int:
+        requested_count = getattr(
+            self.base_contract.backend,
+            "requested_generated_mess_count",
+            None,
+        )
+        try:
+            target_count = int(requested_count)
+        except (TypeError, ValueError):
+            target_count = len(self.scenario.private_manifest.targets)
+        if target_count <= 0:
+            target_count = len(self.scenario.private_manifest.targets)
+        return generated_mess_success_threshold(target_count)
 
     def _agent_view_payload(self) -> dict[str, Any]:
         agent_view = self.contract.agent_view_payload()
@@ -846,6 +901,15 @@ def _compact_declare_visual_candidates_response(response: dict[str, Any]) -> dic
         "visible_object_detections": [],
         "private_target_truth_included": False,
     }
+
+
+def _complete_semantic_substep_handles(substeps: list[dict[str, Any]]) -> list[str]:
+    handles = []
+    for item in substeps:
+        phases = successful_semantic_phases(item.get("steps", []))
+        if has_complete_semantic_sequence(phases):
+            handles.append(str(item.get("object_id") or ""))
+    return [handle for handle in handles if handle]
 
 
 def _compact_visual_grounding_pipeline(pipeline: dict[str, Any]) -> dict[str, Any]:

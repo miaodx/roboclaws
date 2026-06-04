@@ -458,6 +458,151 @@ class _FakeVisualBackend(ApiSemanticCleanupBackend):
         }
 
 
+class MolmoSpacesSubprocessBackend(_FakeVisualBackend):
+    """Test double whose class name satisfies cleanup profile metadata validation."""
+
+    requested_generated_mess_count = 5
+
+
+def _raw_fpv_camera_raw_server(tmp_path: Path) -> Any:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = MolmoSpacesSubprocessBackend(scenario)
+    return make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=CleanupBackendSession(scenario, backend=backend),
+        port=0,
+        policy="codex_agent",
+        agent_driven=True,
+        record_robot_views=True,
+        perception_mode=RAW_FPV_ONLY_MODE,
+        cleanup_profile="camera-raw",
+    )
+
+
+def _sweep_with_unresolved_raw_fpv_declarations(
+    server: Any,
+    *,
+    declaration_count: int,
+) -> None:
+    metric_map = server.call_tool("metric_map")
+    declarations = 0
+    for waypoint in metric_map["inspection_waypoints"]:
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+        observation = server.call_tool("observe")
+        if declarations < declaration_count:
+            response = server.call_tool(
+                "navigate_to_visual_candidate",
+                source_observation_id=observation["raw_fpv_observation"]["observation_id"],
+                category="imaginary widget",
+                evidence_note="nonexistent public object declaration for done guard",
+                image_region={"type": "verbal_region", "value": "front area"},
+            )
+            assert response["ok"] is False
+            assert response["error_reason"] == "visual_candidate_not_resolved"
+            declarations += 1
+    assert declarations == declaration_count
+
+
+def _clean_raw_fpv_candidate(
+    server: Any,
+    *,
+    observation_id: str,
+    category: str,
+) -> str | None:
+    candidate = server.call_tool(
+        "navigate_to_visual_candidate",
+        source_observation_id=observation_id,
+        category=category,
+        evidence_note=f"{category} visible item for cleanup",
+        image_region={"type": "verbal_region", "value": f"visible {category} item"},
+    )
+    if not candidate.get("ok"):
+        return None
+    object_id = str(candidate["object_id"])
+    assert server.call_tool("pick", object_id=object_id)["ok"] is True
+    fixture_id = str(candidate["candidate_fixture_id"])
+    assert server.call_tool("navigate_to_receptacle", fixture_id=fixture_id)["ok"] is True
+    if candidate["recommended_tool"] == "place_inside":
+        placed = server.call_tool("place_inside", fixture_id=fixture_id)
+    else:
+        placed = server.call_tool("place", fixture_id=fixture_id)
+    assert placed["ok"] is True
+    server.call_tool("observe")
+    return object_id
+
+
+def _complete_raw_fpv_cleanup_chains(
+    server: Any,
+    *,
+    required_count: int,
+) -> set[str]:
+    metric_map = server.call_tool("metric_map")
+    handled: set[str] = set()
+    categories = ("food", "book", "dish", "linen", "toy", "electronics", "tomato")
+    for waypoint in metric_map["inspection_waypoints"]:
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+        observation = server.call_tool("observe")
+        observation_id = observation["raw_fpv_observation"]["observation_id"]
+        for category in categories:
+            object_id = _clean_raw_fpv_candidate(
+                server,
+                observation_id=observation_id,
+                category=category,
+            )
+            if object_id is None or object_id in handled:
+                continue
+            handled.add(object_id)
+            break
+        if len(handled) >= required_count:
+            break
+    assert len(handled) >= required_count
+    for waypoint in metric_map["inspection_waypoints"]:
+        if waypoint.get("visited"):
+            continue
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+        server.call_tool("observe")
+    return handled
+
+
+def test_realworld_mcp_raw_fpv_camera_raw_done_requires_complete_live_chains(
+    tmp_path: Path,
+) -> None:
+    server = _raw_fpv_camera_raw_server(tmp_path)
+    try:
+        _sweep_with_unresolved_raw_fpv_declarations(server, declaration_count=5)
+        done = server.call_tool("done", reason="codex finished early after sweep")
+    finally:
+        server.close()
+
+    assert done["ok"] is False
+    assert done["tool"] == "done"
+    assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
+    assert done["required_tool"] == "navigate_to_visual_candidate"
+    assert done["complete_semantic_substep_objects"] == 0
+    assert done["required_complete_semantic_substep_objects"] == 4
+    assert "score" not in done
+    assert "cleanup_status" not in done
+    assert not (tmp_path / "run_result.json").exists()
+
+
+def test_realworld_mcp_raw_fpv_camera_raw_done_allows_complete_live_chains(
+    tmp_path: Path,
+) -> None:
+    server = _raw_fpv_camera_raw_server(tmp_path)
+    try:
+        handled = _complete_raw_fpv_cleanup_chains(server, required_count=4)
+        done = server.call_tool("done", reason="enough grounded chains completed")
+        run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
+    finally:
+        server.close()
+
+    assert done["ok"] is True
+    assert len(handled) >= 4
+    assert run_result["cleanup_profile"] == "camera-raw"
+    assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] >= 4
+
+
 def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
     smoke = _load_smoke_module()
     scenario = build_cleanup_scenario(seed=7)
