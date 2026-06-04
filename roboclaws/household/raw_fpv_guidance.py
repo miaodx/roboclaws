@@ -36,8 +36,9 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         "Use the candidate_fixture_id/recommended_tool returned by "
         "navigate_to_visual_candidate plus runtime_metric_map.public_semantic_anchors. "
         "In explicit rich legacy/debug mode only, target_fixture_id may come from "
-        "non-empty fixture_hints. Prefer image_region type verbal_region; use "
-        "image_region={type:verbal_region,value:front of desk}; use "
+        "non-empty fixture_hints. Prefer image_region type verbal_region; "
+        "Prefer image_region={type:verbal_region,value:front of desk} when a "
+        "short spatial description is enough; use "
         "image_region={type:bbox,value:[x,y,width,height]} only when you can estimate "
         "it confidently. Never send bbox_normalized, bare x/y/width/height fields, "
         'target_fixture_id="", target_fixture_id="None", or target_fixture_id=null. '
