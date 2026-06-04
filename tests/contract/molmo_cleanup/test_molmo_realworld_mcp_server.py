@@ -524,6 +524,14 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert observation["schema"] == "raw_fpv_mcp_observe_state_v1"
     assert observation["perception_mode"] == RAW_FPV_ONLY_MODE
     assert observation["visible_object_detections"] == []
+    assert observation["cleanup_worklist_summary"] == {
+        "schema": "cleanup_worklist_summary_v1",
+        "object_count": 0,
+        "handled_object_handles": [],
+        "pending_object_handles": [],
+        "objects": [],
+        "held_object_id": None,
+    }
     assert "inline_on_navigate" in observation["instruction"]
     assert "navigate_to_visual_candidate" in observation["instruction"]
     assert "declare_visual_candidates" not in observation["instruction"]
@@ -547,6 +555,55 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     image_block = observation_blocks[1]
     assert hasattr(image_block, "data")
     assert isinstance(image_block.data, bytes)
+    assert len(image_block.data) > 0
+
+
+def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _FakeVisualBackend(scenario)
+    base_contract = CleanupBackendSession(scenario, backend=backend)
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=base_contract,
+        port=0,
+        record_robot_views=True,
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+    try:
+        work_waypoint = next(
+            item
+            for item in server.contract.metric_map()["inspection_waypoints"]
+            if item["waypoint_id"] == "generated_exploration_007"
+        )
+        server.call_tool("navigate_to_waypoint", waypoint_id=str(work_waypoint["waypoint_id"]))
+        observation = server.call_tool("observe")
+        candidate = server.call_tool(
+            "navigate_to_visual_candidate",
+            source_observation_id=observation["raw_fpv_observation"]["observation_id"],
+            category="tomato",
+            evidence_note="round produce item on the desk",
+            image_region={"type": "verbal_region", "value": "front of desk"},
+        )
+        assert candidate["ok"] is True
+        assert server.call_tool("pick", object_id=candidate["object_id"])["ok"] is True
+        fixture_id = candidate["candidate_fixture_id"]
+        assert server.call_tool("navigate_to_receptacle", fixture_id=fixture_id)["ok"] is True
+        assert server.call_tool("place_inside", fixture_id=fixture_id)["ok"] is True
+        observation_blocks = server._mcp_observe_response()
+    finally:
+        server.close()
+
+    assert isinstance(observation_blocks, list)
+    observation_state = json.loads(observation_blocks[0])
+    image_block = observation_blocks[1]
+    summary = observation_state["cleanup_worklist_summary"]
+    objects = {item["object_id"]: item for item in summary["objects"]}
+    assert candidate["object_id"] in summary["handled_object_handles"]
+    assert objects[candidate["object_id"]]["state"] == "placed"
+    assert objects[candidate["object_id"]]["category"]
     assert len(image_block.data) > 0
 
 

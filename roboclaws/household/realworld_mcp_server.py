@@ -603,7 +603,13 @@ class RealWorldMolmoCleanupMCPServer:
         resolved = _resolve_artifact_path(self.run_dir, str(fpv_path))
         if not resolved.is_file():
             return response
-        state_text = json.dumps(_compact_raw_fpv_mcp_observe_state(response), sort_keys=True)
+        state_text = json.dumps(
+            _compact_raw_fpv_mcp_observe_state(
+                response,
+                cleanup_worklist=self.contract.cleanup_worklist_payload(),
+            ),
+            sort_keys=True,
+        )
         return [state_text, MCPImage(data=resolved.read_bytes(), format="png")]
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
@@ -934,7 +940,11 @@ def _compact_camera_model_candidate(item: dict[str, Any]) -> dict[str, Any]:
     return compact
 
 
-def _compact_raw_fpv_mcp_observe_state(response: dict[str, Any]) -> dict[str, Any]:
+def _compact_raw_fpv_mcp_observe_state(
+    response: dict[str, Any],
+    *,
+    cleanup_worklist: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     raw = response.get("raw_fpv_observation") if isinstance(response, dict) else {}
     raw = raw if isinstance(raw, dict) else {}
     return {
@@ -949,6 +959,7 @@ def _compact_raw_fpv_mcp_observe_state(response: dict[str, Any]) -> dict[str, An
         "held_object_id": response.get("held_object_id") or raw.get("held_object_id"),
         "visible_object_detections": response.get("visible_object_detections") or [],
         "raw_fpv_observation": _compact_raw_fpv_observation(raw),
+        "cleanup_worklist_summary": _compact_cleanup_worklist_summary(cleanup_worklist),
         "instruction": response.get("instruction"),
     }
 
@@ -990,6 +1001,43 @@ def _compact_camera_control_contract(contract: Any) -> dict[str, Any]:
         "agent_facing_fpv_source": agent_facing_fpv.get("source"),
         "canonical_camera_control": agent_facing_fpv.get("canonical_camera_control") is True,
     }
+
+
+def _compact_cleanup_worklist_summary(worklist: dict[str, Any] | None) -> dict[str, Any]:
+    worklist = worklist if isinstance(worklist, dict) else {}
+    objects = [item for item in worklist.get("objects") or [] if isinstance(item, dict)]
+    return {
+        "schema": "cleanup_worklist_summary_v1",
+        "object_count": len(objects),
+        "handled_object_handles": [
+            str(item.get("object_id") or "")
+            for item in objects
+            if str(item.get("state") or "") in {"placed", "placed_closed", "skipped"}
+        ],
+        "pending_object_handles": [
+            str(item.get("object_id") or "")
+            for item in objects
+            if str(item.get("state") or "") == "pending"
+        ],
+        "objects": [_compact_worklist_object(item) for item in objects],
+        "held_object_id": worklist.get("held_object_id"),
+    }
+
+
+def _compact_worklist_object(item: dict[str, Any]) -> dict[str, Any]:
+    return _select_keys(
+        item,
+        (
+            "object_id",
+            "state",
+            "category",
+            "room_id",
+            "last_waypoint_id",
+            "candidate_fixture_id",
+            "candidate_source",
+            "cleanup_recommended",
+        ),
+    )
 
 
 def _select_keys(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
