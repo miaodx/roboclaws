@@ -21,6 +21,7 @@ from roboclaws.household.realworld_contract import (
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
     VISUAL_GROUNDING_CATEGORY_HINTS,
     RealWorldCleanupContract,
+    _declared_category_matches_object,
     cleanup_policy_trace_from_events,
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
@@ -43,6 +44,17 @@ def _contract(
 ) -> RealWorldCleanupContract:
     kwargs.setdefault("map_mode", RICH_MAP_MODE)
     return RealWorldCleanupContract(session, **kwargs)
+
+
+def test_visual_candidate_exact_category_matching_does_not_cross_broad_family() -> None:
+    plate = CleanupObject("plate_01", "Plate", "Plate", "table_01")
+    mug = CleanupObject("mug_01", "ceramic mug", "dish", "sofa_01")
+
+    assert _declared_category_matches_object("plate", plate) is True
+    assert _declared_category_matches_object("dish", plate) is True
+    assert _declared_category_matches_object("cup", plate) is False
+    assert _declared_category_matches_object("plate", mug) is False
+    assert _declared_category_matches_object("dish", mug) is True
 
 
 class _PoseRecordingBackend:

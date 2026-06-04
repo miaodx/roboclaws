@@ -90,6 +90,9 @@ REALWORLD_PERCEPTION_MODES = frozenset(
     }
 )
 _NON_ACTIONABLE_HANDLE_STATES = frozenset({"placed", "placed_closed", "skipped", "stale"})
+_EXACT_VISUAL_CATEGORY_ALIASES = frozenset(
+    {"cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"}
+)
 
 
 _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
@@ -5325,6 +5328,8 @@ def _declared_category_matches_object(category_norm: str, obj: Any) -> bool:
     object_norm = _norm(f"{getattr(obj, 'category', '')} {getattr(obj, 'name', '')}")
     if not category_norm or category_norm in object_norm or object_norm in category_norm:
         return True
+    if category_norm in _EXACT_VISUAL_CATEGORY_ALIASES:
+        return False
     declared_families = _category_alias_families(category_norm)
     object_families = _category_alias_families(object_norm)
     return bool(declared_families.intersection(object_families))
