@@ -2300,6 +2300,14 @@ class RealWorldCleanupContract:
                 row["destination_policy"] = destination_policy
             if not self.sanitize_world_labels:
                 row["cleanup_recommended"] = cleanup_recommended
+                internal_candidate_fixture_id = (
+                    self.internal_fixture_id_for_public_reference(public_candidate_fixture_id)
+                    or str(candidate_fixture_id)
+                )
+                row["recommended_tool"] = _recommended_place_tool(
+                    internal_candidate_fixture_id,
+                    self._fixtures,
+                ) if public_candidate_fixture_id else ""
             lifecycle_rows.append(row)
         waypoint_rows = []
         for waypoint in self._public_waypoints:

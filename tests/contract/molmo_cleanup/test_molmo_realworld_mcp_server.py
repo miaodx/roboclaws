@@ -530,6 +530,8 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
         "handled_object_handles": [],
         "pending_object_handles": [],
         "objects": [],
+        "next_actions": [],
+        "next_action_count": 0,
         "held_object_id": None,
     }
     assert "inline_on_navigate" in observation["instruction"]
@@ -651,6 +653,55 @@ def test_realworld_mcp_raw_fpv_trace_records_agent_facing_compact_state(
         "raw_fpv_observation"
     ]["observation_id"]
     assert "camera_control_contract" not in compact_state["raw_fpv_observation"]
+
+
+def test_realworld_mcp_raw_fpv_compact_state_lists_actionable_pending_handles(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _FakeVisualBackend(scenario)
+    base_contract = CleanupBackendSession(scenario, backend=backend)
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=base_contract,
+        port=0,
+        record_robot_views=True,
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+    try:
+        server.call_tool("metric_map")
+        server.call_tool("navigate_to_waypoint", waypoint_id="generated_exploration_003")
+        server.call_tool("observe")
+        server.call_tool("navigate_to_waypoint", waypoint_id="generated_exploration_007")
+        observation = server.call_tool("observe")
+        candidate = server.call_tool(
+            "navigate_to_visual_candidate",
+            source_observation_id=observation["raw_fpv_observation"]["observation_id"],
+            category="tomato",
+            evidence_note="round produce item on the desk",
+            image_region={"type": "verbal_region", "value": "front of desk"},
+        )
+        assert candidate["ok"] is True
+        assert candidate["required_next_tool"] == "pick"
+        observation_blocks = server._mcp_observe_response()
+    finally:
+        server.close()
+
+    observation_state = json.loads(observation_blocks[0])
+    summary = observation_state["cleanup_worklist_summary"]
+    next_action = summary["next_actions"][0]
+
+    assert summary["next_action_count"] == 1
+    assert next_action["object_id"] == candidate["object_id"]
+    assert next_action["candidate_fixture_id"] == candidate["candidate_fixture_id"]
+    assert next_action["recommended_tool"] == candidate["recommended_tool"]
+    assert next_action["state"] == "navigating_to_object"
+    assert next_action["tool_sequence"] == [
+        "pick",
+        "navigate_to_receptacle",
+        candidate["recommended_tool"],
+    ]
 
 
 def test_realworld_mcp_raw_fpv_artifact_filters_private_camera_contract_keys(

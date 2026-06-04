@@ -1015,6 +1015,7 @@ def _compact_camera_control_contract(contract: Any) -> dict[str, Any]:
 def _compact_cleanup_worklist_summary(worklist: dict[str, Any] | None) -> dict[str, Any]:
     worklist = worklist if isinstance(worklist, dict) else {}
     objects = [item for item in worklist.get("objects") or [] if isinstance(item, dict)]
+    next_actions = _compact_worklist_next_actions(objects)
     return {
         "schema": "cleanup_worklist_summary_v1",
         "object_count": len(objects),
@@ -1029,8 +1030,49 @@ def _compact_cleanup_worklist_summary(worklist: dict[str, Any] | None) -> dict[s
             if str(item.get("state") or "") == "pending"
         ],
         "objects": [_compact_worklist_object(item) for item in objects],
+        "next_actions": next_actions,
+        "next_action_count": len(next_actions),
         "held_object_id": worklist.get("held_object_id"),
     }
+
+
+def _compact_worklist_next_actions(objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    actions = []
+    for item in objects:
+        state = str(item.get("state") or "")
+        object_id = str(item.get("object_id") or "")
+        candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
+        if (
+            state not in {"pending", "navigating_to_object", "held"}
+            or not object_id
+            or not candidate_fixture_id
+            or not bool(item.get("cleanup_recommended"))
+        ):
+            continue
+        recommended_tool = str(item.get("recommended_tool") or "place")
+        if state == "held":
+            tool_sequence = ["navigate_to_receptacle", recommended_tool]
+        elif state == "navigating_to_object":
+            tool_sequence = ["pick", "navigate_to_receptacle", recommended_tool]
+        else:
+            tool_sequence = [
+                "navigate_to_object",
+                "pick",
+                "navigate_to_receptacle",
+                recommended_tool,
+            ]
+        actions.append(
+            {
+                "object_id": object_id,
+                "category": str(item.get("category") or ""),
+                "candidate_fixture_id": candidate_fixture_id,
+                "recommended_tool": recommended_tool,
+                "state": state,
+                "tool_sequence": tool_sequence,
+                "source": "cleanup_worklist_summary",
+            }
+        )
+    return actions
 
 
 def _compact_worklist_object(item: dict[str, Any]) -> dict[str, Any]:
@@ -1045,6 +1087,7 @@ def _compact_worklist_object(item: dict[str, Any]) -> dict[str, Any]:
             "candidate_fixture_id",
             "candidate_source",
             "cleanup_recommended",
+            "recommended_tool",
         ),
     )
 

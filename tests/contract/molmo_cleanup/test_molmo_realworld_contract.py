@@ -1676,6 +1676,13 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
     assert declaration["target_fixture_category"] == "fridge"
     assert declaration["target_plausibility"]["status"] == "plausible"
     assert declaration["target_plausibility"]["expected_fixture_id"] == target_anchor_id
+    worklist = contract.cleanup_worklist_payload()
+    worklist_item = next(
+        item for item in worklist["objects"] if item["object_id"] == response["object_id"]
+    )
+    assert worklist_item["cleanup_recommended"] is True
+    assert worklist_item["candidate_fixture_id"] == target_anchor_id
+    assert worklist_item["recommended_tool"] == "place_inside"
     assert contract.pick(response["object_id"])["ok"] is True
     _assert_no_forbidden_keys(response)
 
