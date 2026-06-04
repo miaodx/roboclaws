@@ -87,7 +87,7 @@ Key pieces:
   server processes behind `python -m roboclaws.cli.agent_server ...`.
 - `roboclaws/household/report.py` renders the shared report.
 - `roboclaws/household/camera_control.py` owns the external render-camera
-  request schema used by MuJoCo/Isaac scene probes.
+  request schema used by MuJoCo, Isaac, and opt-in Genesis scene probes.
 - `roboclaws/household/agibot_sdk_runner.py` and
   `vendors/agibot_sdk/tools/run_agibot_cleanup_backend.py` keep the Agibot SDK
   boundary behind a subprocess runner.

@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from roboclaws.household.genesis_backend import GenesisSubprocessBackend
-from scripts.genesis_cleanup.genesis_backend_worker import _extract_render_only_visual_mesh
+from scripts.genesis_cleanup.genesis_backend_worker import (
+    GENESIS_RENDER_LIGHTING_PROFILE,
+    _extract_materialized_usd_visual_asset,
+    _extract_render_only_visual_mesh,
+    _genesis_color_profile,
+    _genesis_scene,
+)
 
 
 def test_genesis_backend_reports_missing_runtime(tmp_path: Path) -> None:
@@ -130,3 +136,158 @@ def Xform "World"
     assert result["vertex_count"] == 3
     assert result["triangle_count"] == 1
     assert (tmp_path / "mesh.obj").read_text(encoding="utf-8").count("\nf ") == 1
+
+
+def test_genesis_materialized_visual_asset_preserves_texture_material(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("pxr")
+    texture_dir = tmp_path / "textures"
+    texture_dir.mkdir()
+    (texture_dir / "floor.png").write_bytes(b"not a real png but enough for asset copy")
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text(
+        """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Mesh "Triangle"
+    {
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </World/Looks/Material_01>
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Material_01"
+        {
+            token outputs:surface.connect =
+                </World/Looks/Material_01/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect =
+                    </World/Looks/Material_01/DiffuseTexture.outputs:rgb>
+                float inputs:opacity = 1
+                token outputs:surface
+            }
+
+            def Shader "DiffuseTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/floor.png@
+                color4f inputs:fallback = (0.2, 0.3, 0.4, 1)
+                float3 inputs:scale = (0.6, 0.5, 0.4)
+                float2 inputs:st.connect = </World/Looks/Material_01/StReader.outputs:result>
+                float3 outputs:rgb
+            }
+
+            def Shader "StReader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                token inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    result = _extract_materialized_usd_visual_asset(scene_usd, tmp_path / "visual_asset")
+
+    obj_text = Path(str(result["mesh_path"])).read_text(encoding="utf-8")
+    mtl_text = Path(str(result["material_path"])).read_text(encoding="utf-8")
+    assert result["source_mesh_count"] == 1
+    assert result["material_count"] == 1
+    assert result["textured_material_count"] == 1
+    assert result["texture_count"] == 1
+    assert result["triangle_count"] == 1
+    assert result["textured_triangle_count"] == 1
+    assert "vt " in obj_text
+    assert "usemtl Material_01" in obj_text
+    assert "map_Kd textures/floor.png" in mtl_text
+    assert (tmp_path / "visual_asset" / "textures" / "floor.png").is_file()
+
+
+def test_genesis_scene_applies_visual_lighting_options() -> None:
+    captured: dict[str, object] = {}
+
+    class FakeViewerOptions:
+        def __init__(self, **kwargs: object) -> None:
+            captured["viewer_options"] = kwargs
+
+    class FakeVisOptions:
+        def __init__(self, **kwargs: object) -> None:
+            captured["vis_options"] = kwargs
+
+    class FakeRasterizer:
+        pass
+
+    class FakeScene:
+        def __init__(self, **kwargs: object) -> None:
+            captured["scene"] = kwargs
+
+    class FakeOptions:
+        ViewerOptions = FakeViewerOptions
+        VisOptions = FakeVisOptions
+
+    class FakeRenderers:
+        Rasterizer = FakeRasterizer
+
+    class FakeGenesis:
+        options = FakeOptions
+        renderers = FakeRenderers
+        Scene = FakeScene
+
+    scene = _genesis_scene(FakeGenesis, width=960, height=640, vertical_fov=45.0)
+
+    assert isinstance(scene, FakeScene)
+    assert captured["viewer_options"] == {
+        "res": (960, 640),
+        "camera_pos": (0.0, -3.0, 2.0),
+        "camera_lookat": (0.0, 0.0, 1.0),
+        "camera_fov": 45.0,
+    }
+    assert captured["vis_options"] == {
+        "ambient_light": tuple(GENESIS_RENDER_LIGHTING_PROFILE["ambient_light"]),
+        "background_color": tuple(GENESIS_RENDER_LIGHTING_PROFILE["background_color"]),
+        "shadow": GENESIS_RENDER_LIGHTING_PROFILE["shadow"],
+        "lights": [
+            {
+                "type": "directional",
+                "dir": (-1.0, -1.0, -1.0),
+                "color": (1.0, 1.0, 1.0),
+                "intensity": 3.0,
+            }
+        ],
+    }
+
+
+def test_genesis_color_profile_adds_explicit_luminance_calibration() -> None:
+    profile = _genesis_color_profile(
+        {
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_luminance_gain": {"molmospaces-mujoco": 1.0},
+            "backend_luminance_gain_source": "existing-source",
+        }
+    )
+
+    assert profile["backend_luminance_gain"]["molmospaces-mujoco"] == 1.0
+    assert profile["backend_luminance_gain"]["genesis-prepared-usd"] == pytest.approx(0.94)
+    assert "existing-source" in profile["backend_luminance_gain_source"]
+    assert "Genesis materialized USD visual probe 2026-06-04" in profile[
+        "backend_luminance_gain_source"
+    ]

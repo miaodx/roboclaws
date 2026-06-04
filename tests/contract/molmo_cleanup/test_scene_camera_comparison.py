@@ -1168,6 +1168,8 @@ def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> N
     assert GENESIS_LANE_ID in html
     assert "genesis.png" in html
     assert 'data-image-src="genesis.png"' in html
+    assert '<dialog class="image-modal"' in html
+    assert "modal.showModal()" in html
 
 
 def test_scene_camera_genesis_visual_mesh_fallback_is_degraded_visual_evidence(

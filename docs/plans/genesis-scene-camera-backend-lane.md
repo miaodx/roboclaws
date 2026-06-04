@@ -1,6 +1,16 @@
+---
+refactor_scope: genesis-scene-camera-visual-fidelity
+status: DONE
+accepted_severities:
+  - P0
+  - P1
+  - P2
+last_verified: 2026-06-04
+---
+
 # Genesis Scene-Camera Backend Lane
 
-**Status:** Draft plan, ready for implementation
+**Status:** DONE
 **Created:** 2026-06-04
 **Source:** Genesis World submodule addition and follow-up discussion about
 adding Genesis as a backend variant like the Isaac path.
@@ -211,9 +221,112 @@ Pass criteria:
 - Genesis lane reports real Genesis runtime metadata.
 - Genesis lane loads the caller-supplied prepared USD scene.
 - Genesis lane writes nonblank images for the canonical camera-control views.
+- Genesis lane images are materially/texturally comparable enough for human
+  review and the manifest no longer reports
+  `candidate_visual_diagnostics.status=degraded_visual_fidelity`.
 - Genesis lane echoes camera pose/intrinsics evidence well enough for pairwise
   geometry and visual diagnostics.
 - Report and manifest label the result as render-only scene-camera evidence.
+
+## Refactor Scope Gate
+
+```yaml
+refactor_scope: genesis-scene-camera-visual-fidelity
+status: DONE
+accepted_severities:
+  - P0
+  - P1
+  - P2
+last_verified: 2026-06-04
+```
+
+### Status
+
+DONE
+
+### Target
+
+`scripts/genesis_cleanup/genesis_backend_worker.py` and the
+`scene-camera-comparison` Genesis lane diagnostics/report surface.
+
+### Accepted Cleanup Checklist
+
+- [x] P0: Stop treating first implementation as success. The lane is not accepted
+  while the comparison manifest marks Genesis as `degraded_visual_fidelity`.
+- [x] P1: Replace the current material-free `prepared_usd_visual_mesh` OBJ fallback
+  with a material-preserving prepared-USD visual import path.
+- [x] P1: Keep native Genesis USD/MJCF facts honest: Genesis supports both USD and
+  MJCF morphs, but this MolmoSpaces prepared scene currently fails native USD
+  stage import as a mixed physics graph and MJCF remains a parked spike unless
+  it demonstrably beats the prepared-USD visual path.
+- [x] P2: Preserve the clickable image popup/report UX and keep visual diagnostics
+  explicit enough to catch future false-green render lanes.
+
+### Parked Cross-Seam / Future Ideas
+
+- A full `household-cleanup` Genesis backend with scene indexing, state
+  mutation, robot control, and primitive provenance.
+- A broader MJCF backend spike. Genesis has `gs.morphs.MJCF`, but its current
+  loader treats MJCF as one large entity rather than a normal multi-entity
+  scene; see `vendors/genesis-world/genesis/options/morphs.py`. Treat MJCF as a
+  future spike only if it demonstrably beats the accepted prepared-USD visual
+  package path.
+- Fully generic N-way visual metrics. The current gate remains
+  baseline-to-candidate against MuJoCo.
+
+### Evidence Ladder
+
+- L1: Genesis worker unit tests for prepared-USD visual extraction metadata.
+- L2: Scene-camera comparison contract tests for visual diagnostics and report
+  modal/lightbox markup.
+- L4: Real local Genesis comparison run using `.venv-genesis` and the prepared
+  flattened semantic USD.
+- Visual QA: inspect the report/contact sheet, not just the JSON manifest.
+
+### Stop Condition
+
+Stop only when a real local comparison artifact exists with MuJoCo, Isaac, and
+Genesis lanes succeeding, Genesis runtime metadata proving real rendering,
+Genesis visual diagnostics not reporting `degraded_visual_fidelity`, clickable
+images working in the report, and the Genesis images visually comparable enough
+for human review. If native USD/MJCF cannot meet that, stop with this plan still
+`CONTINUE` and record the exact blocked visual import mode.
+
+### Execution Log
+
+- 2026-06-04: Current artifact
+  `output/molmo/scene-camera-comparison/genesis-local-proof-patched/0604_1146/`
+  renders Genesis through `prepared_usd_visual_mesh`, but the OBJ fallback drops
+  USD materials/textures and the manifest correctly reports
+  `degraded_visual_fidelity`.
+- 2026-06-04: Genesis support check found `gs.morphs.USD` and `gs.morphs.MJCF`.
+  Native USD import of the prepared `val_1` stage fails on mixed/multi-parent
+  physics graph structure; direct USD entity import fails on mixed entity
+  detection. USD remains the primary path because the prepared stage has 632
+  Mesh prims, 98 materials, and 153 valid material bindings available for
+  visual-only import.
+- 2026-06-04: Implemented the accepted fix in
+  `scripts/genesis_cleanup/genesis_backend_worker.py`: failed native
+  `scene.add_stage(...)` now falls back through a fresh Genesis scene, the
+  prepared USD visual package preserves OBJ/MTL material bindings, diffuse
+  colors, UVs, and diffuse texture maps, and Genesis applies an explicit
+  lane-local luminance calibration instead of weakening the report threshold.
+- 2026-06-04: Final accepted artifact:
+  `output/molmo/scene-camera-comparison/genesis-materialized-proof/0604_calibrated/0604_1451/`.
+  `comparison_successful=True`; MuJoCo, Isaac, and Genesis lanes all succeeded;
+  Genesis runtime is real Genesis 1.0.0 from `.venv-genesis`; import mode is
+  `prepared_usd_visual_asset_package`; extracted asset metadata records 153
+  visible meshes, 98 materials, 53 textured materials, 50 copied textures,
+  43,647 triangles, and 25,349 textured triangles. Candidate visual diagnostics
+  are `computed`, degraded candidates are empty, and Genesis records mean pixel
+  delta `39.76119384763466` and max pixel delta `59.989665798621466`.
+- 2026-06-04: Visual QA passed by inspecting
+  `output/molmo/scene-camera-comparison/genesis-materialized-proof/0604_calibrated/0604_1451/contact_sheet.png`.
+  The Genesis images are not renderer-identical, but they are textured,
+  nonblank, and usable for human review. Browser QA of `report.html` found 19
+  image buttons; clicking a Genesis image opened the popup dialog with
+  `imageSrc=genesis/camera_views/view_02_bed.png` and
+  `title=genesis-prepared-usd view_02_bed`.
 
 ## Risks
 

@@ -564,10 +564,18 @@ Render-only MuJoCo/Isaac scene camera comparison:
 just molmo::scene-camera-comparison
 ```
 
-This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo and a
-prepared Isaac USD with one external camera request. It is for scene/camera
-review only: it does not run cleanup, pick/place, private scoring, or pickup
-box annotation. The main lane now uses explicit canonical
+Add the opt-in Genesis candidate lane when reviewing Genesis visual parity:
+
+```bash
+ROBOCLAWS_GENESIS_PYTHON=.venv-genesis/bin/python \
+  just molmo::scene-camera-comparison genesis=on \
+  scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1_material_scale_square_prepared_gate/scene_semantic.usda
+```
+
+This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo, a
+prepared Isaac USD, and optionally Genesis with one external camera request. It
+is for scene/camera review only: it does not run cleanup, pick/place, private
+scoring, or pickup box annotation. The main lane now uses explicit canonical
 `eye`/`target`/`up` poses in the MolmoSpaces scene frame for both backends.
 Room-level views use MolmoSpaces room mesh world bounds, not MuJoCo mesh
 `geom_size`, so the room camera starts from a real room scale. The report also
@@ -583,6 +591,9 @@ the configured surface-aim height allowance separately from a true target/scene
 frame mismatch. A passing camera-pose contract means the two backends accepted
 the same render-camera API pose; material differences, renderer lighting, or
 display color-management differences can still prevent full visual identity.
+The Genesis lane is render-only evidence: when native USD stage import fails on
+the prepared mixed physics graph, it uses a material-preserving OBJ/MTL visual
+package fallback and reports that import mode in the manifest.
 
 Real visual MCP smoke:
 
