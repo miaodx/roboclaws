@@ -289,6 +289,7 @@ class IsaacLabSubprocessBackend:
         isaac_aa_op: int | None = None,
         isaac_tonemap_op: int | None = None,
         isaac_exposure_bias: float | None = None,
+        isaac_colorcorr_gain: tuple[float, float, float] | None = None,
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
     ) -> dict[str, Any]:
@@ -308,6 +309,13 @@ class IsaacLabSubprocessBackend:
             args.extend(["--isaac-tonemap-op", str(int(isaac_tonemap_op))])
         if isaac_exposure_bias is not None:
             args.extend(["--isaac-exposure-bias", str(float(isaac_exposure_bias))])
+        if isaac_colorcorr_gain is not None:
+            args.extend(
+                [
+                    "--isaac-colorcorr-gain",
+                    ",".join(f"{float(value):.6g}" for value in isaac_colorcorr_gain),
+                ]
+            )
         if render_settle_frames:
             args.extend(["--render-settle-frames", str(max(0, int(render_settle_frames)))])
         if focus_object_id is not None:

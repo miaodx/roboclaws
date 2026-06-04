@@ -345,6 +345,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "capture."
         ),
     )
+    robot_views.add_argument(
+        "--isaac-colorcorr-gain",
+        type=_parse_rgb_gain,
+        help=(
+            "Optional Isaac /rtx/post/colorcorr gain as R,G,B for an opt-in native color "
+            "correction probe. The worker enables color correction, records previous values, "
+            "and restores them after capture."
+        ),
+    )
 
     camera_views = subparsers.add_parser("camera_views")
     camera_views.add_argument("--output-dir", type=Path, required=True)
@@ -744,6 +753,7 @@ def capture_semantic_pose_robot_views(
     isaac_aa_op: int | None = None,
     isaac_tonemap_op: int | None = None,
     isaac_exposure_bias: float | None = None,
+    isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
     _require_isaac_import()
     from isaaclab.app import AppLauncher
@@ -766,6 +776,7 @@ def capture_semantic_pose_robot_views(
         isaac_aa_op=isaac_aa_op,
         isaac_tonemap_op=isaac_tonemap_op,
         isaac_exposure_bias=isaac_exposure_bias,
+        isaac_colorcorr_gain=isaac_colorcorr_gain,
     )
     capture["simulation_app_reuse_token"] = simulation_app
     return capture
@@ -1229,6 +1240,19 @@ def _float_or_default(value: Any, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return float(default)
+
+
+def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
+    parts = [part.strip() for part in str(value).split(",")]
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError("RGB gain must be three comma-separated floats")
+    try:
+        gain = tuple(float(part) for part in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("RGB gain must contain only floats") from exc
+    if any(item <= 0.0 for item in gain):
+        raise argparse.ArgumentTypeError("RGB gain values must be positive")
+    return gain  # type: ignore[return-value]
 
 
 def _usd_receptacle_support_surfaces(*, prim: Any, usd_geom: Any) -> list[dict[str, Any]]:
@@ -2077,6 +2101,7 @@ def _capture_isaac_lab_camera_views(
     isaac_aa_op: int | None = None,
     isaac_tonemap_op: int | None = None,
     isaac_exposure_bias: float | None = None,
+    isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
     import isaaclab.sim as sim_utils
     import isaacsim.core.utils.stage as stage_utils
@@ -2189,6 +2214,7 @@ def _capture_isaac_lab_camera_views(
         isaac_aa_op=isaac_aa_op,
         isaac_tonemap_op=isaac_tonemap_op,
         isaac_exposure_bias=isaac_exposure_bias,
+        isaac_colorcorr_gain=isaac_colorcorr_gain,
     )
     native_render_diagnostics = _isaac_native_render_diagnostics(
         renderer_mode=REAL_SMOKE_RENDERER_MODE,
@@ -4598,6 +4624,7 @@ def _apply_isaac_capture_quality_overrides(
     isaac_aa_op: int | None,
     isaac_tonemap_op: int | None = None,
     isaac_exposure_bias: float | None = None,
+    isaac_colorcorr_gain: tuple[float, float, float] | None = None,
 ) -> dict[str, Any]:
     mutation: dict[str, Any] = {
         "schema": "isaac_capture_quality_settings_mutation_v1",
@@ -4605,7 +4632,12 @@ def _apply_isaac_capture_quality_overrides(
         "default_render_settings_changed": False,
         "settings": {},
     }
-    if isaac_aa_op is None and isaac_tonemap_op is None and isaac_exposure_bias is None:
+    if (
+        isaac_aa_op is None
+        and isaac_tonemap_op is None
+        and isaac_exposure_bias is None
+        and isaac_colorcorr_gain is None
+    ):
         mutation["status"] = "not_requested"
         return mutation
     mutation["settings_mutation_attempted"] = True
@@ -4645,6 +4677,29 @@ def _apply_isaac_capture_quality_overrides(
                 ),
                 "default_render_settings_changed": False,
             }
+        if isaac_colorcorr_gain is not None:
+            mutation["settings"]["colorcorr_enabled"] = {
+                "name": "colorcorr_enabled",
+                "status": "not_available",
+                "value": None,
+                "requested_value": True,
+                "setting_path": "",
+                "candidate_paths": list(
+                    ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["enabled"]
+                ),
+                "default_render_settings_changed": False,
+            }
+            mutation["settings"]["colorcorr_gain"] = {
+                "name": "colorcorr_gain",
+                "status": "not_available",
+                "value": None,
+                "requested_value": list(isaac_colorcorr_gain),
+                "setting_path": "",
+                "candidate_paths": list(
+                    ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["gain"]
+                ),
+                "default_render_settings_changed": False,
+            }
         return mutation
     if isaac_aa_op is not None:
         row = _set_isaac_setting(
@@ -4670,6 +4725,21 @@ def _apply_isaac_capture_quality_overrides(
             name="exposure_bias",
         )
         mutation["settings"]["exposure_bias"] = row
+    if isaac_colorcorr_gain is not None:
+        enabled_row = _set_isaac_setting(
+            settings,
+            ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["enabled"],
+            True,
+            name="colorcorr_enabled",
+        )
+        mutation["settings"]["colorcorr_enabled"] = enabled_row
+        gain_row = _set_isaac_setting(
+            settings,
+            ISAAC_NATIVE_RENDER_SETTING_PATHS["color_correction"]["gain"],
+            list(isaac_colorcorr_gain),
+            name="colorcorr_gain",
+        )
+        mutation["settings"]["colorcorr_gain"] = gain_row
     statuses = [
         str(row.get("status") or "")
         for row in _dict(mutation.get("settings")).values()
@@ -6721,6 +6791,7 @@ def write_robot_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[s
         isaac_aa_op=args.isaac_aa_op,
         isaac_tonemap_op=args.isaac_tonemap_op,
         isaac_exposure_bias=args.isaac_exposure_bias,
+        isaac_colorcorr_gain=args.isaac_colorcorr_gain,
         focus_object_id=args.focus_object_id,
         focus_receptacle_id=args.focus_receptacle_id,
     )
@@ -7113,6 +7184,7 @@ def _real_semantic_pose_robot_view_images(
     isaac_aa_op: int | None = None,
     isaac_tonemap_op: int | None = None,
     isaac_exposure_bias: float | None = None,
+    isaac_colorcorr_gain: tuple[float, float, float] | None = None,
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
 ) -> dict[str, str]:
@@ -7138,6 +7210,8 @@ def _real_semantic_pose_robot_view_images(
             capture_kwargs["isaac_tonemap_op"] = isaac_tonemap_op
         if isaac_exposure_bias is not None:
             capture_kwargs["isaac_exposure_bias"] = isaac_exposure_bias
+        if isaac_colorcorr_gain is not None:
+            capture_kwargs["isaac_colorcorr_gain"] = isaac_colorcorr_gain
         color_profile_override = _dict(state.get("robot_view_color_profile_override"))
         if color_profile_override:
             capture_kwargs["color_profile_override"] = color_profile_override

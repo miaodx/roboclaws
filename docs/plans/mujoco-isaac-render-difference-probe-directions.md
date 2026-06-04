@@ -127,6 +127,15 @@ contract execution and does not promote renderer defaults.
   color-space or partial-scale directions without a new target-specific
   mechanism. Summary:
   `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_material_bed_probe_summary/report.html`.
+- A native Isaac color-correction gain probe is rejected. The gain fitted from
+  the val_0 FPV baseline (`1.088088,1.06136,1.099827`) was applied through
+  `/rtx/post/colorcorr/enabled` and `/rtx/post/colorcorr/gain`; the worker
+  recorded previous values and restored them after capture. The real
+  MuJoCo/Isaac render regressed FPV and chase strongly versus the same baseline
+  (`+10.0156` FPV, `+7.4897` chase), so close this native colorcorr gain axis
+  and do not expand it without a new non-global, target-specific hypothesis.
+  Summary:
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_native_colorcorr_gain_summary/report.html`.
 
 ## Target
 

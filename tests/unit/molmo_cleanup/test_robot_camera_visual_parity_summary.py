@@ -1200,6 +1200,68 @@ def test_visual_parity_summary_treats_requested_tonemap_as_capture_quality_probe
     )
 
 
+def test_visual_parity_summary_treats_requested_colorcorr_as_capture_quality_probe(
+    tmp_path: Path,
+) -> None:
+    summary = _load_module(
+        SCRIPT_PATH,
+        "summarize_robot_camera_visual_parity_requested_colorcorr",
+    )
+    baseline = _write_robot_camera_manifest(
+        tmp_path / "baseline_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=38.0,
+        chase=60.0,
+        location_count=4,
+    )
+    probe = _write_robot_camera_manifest(
+        tmp_path / "colorcorr_gain_540" / "comparison_manifest.json",
+        scene_index=1,
+        seed=6,
+        generated_mess_count=2,
+        fpv=34.0,
+        chase=60.2,
+        location_count=4,
+        capture_quality_probe={
+            "status": "capture_quality_probe_configured",
+            "render_resolution_requested": {"width": 540, "height": 360},
+            "render_resolution_saved": {"width": 540, "height": 360},
+            "metric_resolution": {"width": 540, "height": 360},
+            "saved_image_mode": "direct_capture",
+            "metric_image_mode": "direct_capture",
+            "render_settle_frames": 0,
+            "colorcorr_gain": {
+                "name": "colorcorr_gain",
+                "status": "requested",
+                "value": [1.08, 1.06, 1.1],
+                "requested_value": [1.08, 1.06, 1.1],
+                "setting_path": "/rtx/post/colorcorr/gain",
+                "default_render_settings_changed": True,
+            },
+        },
+    )
+
+    manifest = summary.build_summary(
+        output_dir=tmp_path / "summary",
+        baseline_manifest_paths=[baseline],
+        probe_specs=[f"colorcorr_gain_540={probe}"],
+        raw_fpv_run_result_paths=[],
+        calibration_manifest_paths=[],
+        required_scene_count=1,
+        required_seed_count=1,
+    )
+
+    rows = {row["label"]: row for row in manifest["render_difference_probe_batch"]["ranked_rows"]}
+    assert rows["colorcorr_gain_540"]["probe_kind"] == "capture_quality"
+    assert rows["colorcorr_gain_540"]["policy_classification"] == "capture_quality_probe"
+    assert (
+        rows["colorcorr_gain_540"]["capture_quality_settings"]["colorcorr_gain"]["status"]
+        == "requested"
+    )
+
+
 def test_visual_parity_summary_blocks_default_rendering_without_native_diagnostics(
     tmp_path: Path,
 ) -> None:

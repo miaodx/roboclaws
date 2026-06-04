@@ -77,6 +77,7 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
             "isaac_aa_op": 2,
             "isaac_tonemap_op": 5,
             "isaac_exposure_bias": -1.0,
+            "isaac_colorcorr_gain": (0.9, 0.8, 0.7),
         },
     )()
     capture_quality = run_camera._capture_quality_probe_config(args)
@@ -118,6 +119,8 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
     assert capture_quality["tonemap_operator"]["requested_value"] == 5
     assert capture_quality["exposure_bias"]["status"] == "requested"
     assert capture_quality["exposure_bias"]["requested_value"] == -1.0
+    assert capture_quality["colorcorr_gain"]["status"] == "requested"
+    assert capture_quality["colorcorr_gain"]["requested_value"] == (0.9, 0.8, 0.7)
     assert run_camera._render_settle_args(capture_quality) == [
         "--isaac-aa-op",
         "2",
@@ -125,6 +128,8 @@ def test_robot_camera_capture_quality_downsample_keeps_metric_artifacts(
         "5",
         "--isaac-exposure-bias",
         "-1.0",
+        "--isaac-colorcorr-gain",
+        "0.9,0.8,0.7",
         "--render-settle-frames",
         "16",
     ]

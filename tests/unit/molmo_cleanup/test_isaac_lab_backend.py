@@ -425,6 +425,38 @@ def test_isaac_lab_backend_can_request_robot_view_exposure_probe(
     assert captured["args"][-2:] == ("--isaac-exposure-bias", "-1.0")
 
 
+def test_isaac_lab_backend_can_request_robot_view_colorcorr_gain_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backend = IsaacLabSubprocessBackend(
+        run_dir=tmp_path,
+        python_executable=Path(sys.executable),
+        runtime_mode="fake",
+        include_robot=True,
+    )
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {"ok": True}
+
+    monkeypatch.setattr(backend, "_run_worker", fake_run_worker)
+
+    backend.write_robot_views_with_resolution(
+        tmp_path / "robot_views",
+        label="colorcorr_probe",
+        width=540,
+        height=360,
+        isaac_colorcorr_gain=(0.9, 0.8, 0.7),
+    )
+
+    assert captured["command"] == "robot_views"
+    assert "--isaac-colorcorr-gain" in captured["args"]
+    assert captured["args"][-2:] == ("--isaac-colorcorr-gain", "0.9,0.8,0.7")
+
+
 def test_isaac_worker_can_request_semantic_filter_override(tmp_path: Path) -> None:
     args = isaac_lab_backend_worker.parse_args(
         [
@@ -1029,6 +1061,60 @@ def test_isaac_native_exposure_probe_records_set_and_restore() -> None:
     )
     assert restored["restore_status"] == "restored"
     assert restored["settings"]["exposure_bias"]["restore_status"] == "restored"
+
+
+def test_isaac_native_colorcorr_gain_probe_records_set_and_restore() -> None:
+    class _FakeSettings:
+        def __init__(self) -> None:
+            self.values = {
+                "/rtx/post/colorcorr/enabled": False,
+                "/rtx/post/colorcorr/gain": [1.0, 1.0, 1.0],
+            }
+            self.set_calls: list[tuple[str, object]] = []
+
+        def get(self, path: str) -> object:
+            return self.values.get(path)
+
+        def set(self, path: str, value: object) -> None:
+            self.set_calls.append((path, value))
+            self.values[path] = value
+
+    settings = _FakeSettings()
+
+    mutation = isaac_lab_backend_worker._apply_isaac_capture_quality_overrides(
+        settings=settings,
+        isaac_aa_op=None,
+        isaac_tonemap_op=None,
+        isaac_exposure_bias=None,
+        isaac_colorcorr_gain=(0.9, 0.8, 0.7),
+    )
+    capture_quality = isaac_lab_backend_worker._capture_quality_settings(
+        render_settle_frames=0,
+        settings=settings,
+        settings_mutation=mutation,
+    )
+    restored = isaac_lab_backend_worker._restore_isaac_capture_quality_overrides(
+        settings=settings,
+        mutation=mutation,
+    )
+
+    assert settings.set_calls == [
+        ("/rtx/post/colorcorr/enabled", True),
+        ("/rtx/post/colorcorr/gain", [0.9, 0.8, 0.7]),
+        ("/rtx/post/colorcorr/enabled", False),
+        ("/rtx/post/colorcorr/gain", [1.0, 1.0, 1.0]),
+    ]
+    assert capture_quality["settings_mutation_attempted"] is True
+    assert capture_quality["default_render_settings_changed"] is True
+    assert capture_quality["settings_mutation"]["settings"]["colorcorr_enabled"]["status"] == (
+        "applied"
+    )
+    assert capture_quality["settings_mutation"]["settings"]["colorcorr_gain"]["status"] == (
+        "applied"
+    )
+    assert restored["restore_status"] == "restored"
+    assert restored["settings"]["colorcorr_enabled"]["restore_status"] == "restored"
+    assert restored["settings"]["colorcorr_gain"]["restore_status"] == "restored"
 
 
 def test_isaac_camera_render_product_paths_are_extracted() -> None:

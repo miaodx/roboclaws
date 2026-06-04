@@ -170,6 +170,15 @@ def main(argv: list[str] | None = None) -> int:
             "capture."
         ),
     )
+    parser.add_argument(
+        "--isaac-colorcorr-gain",
+        type=_parse_rgb_gain,
+        help=(
+            "Optional Isaac /rtx/post/colorcorr gain as R,G,B for an opt-in native color "
+            "correction probe. The worker enables color correction, records previous values, "
+            "and restores them after capture."
+        ),
+    )
     parser.add_argument("--location-count", type=int, default=4)
     parser.add_argument(
         "--isaac-robot-view-color-profile-path",
@@ -724,6 +733,11 @@ def _capture_quality_probe_config(args: argparse.Namespace) -> dict[str, Any]:
             value=getattr(args, "isaac_exposure_bias", None),
             setting_path="/rtx/post/tonemap/exposureBias",
         ),
+        "colorcorr_gain": _quality_setting_request(
+            "colorcorr_gain",
+            value=getattr(args, "isaac_colorcorr_gain", None),
+            setting_path="/rtx/post/colorcorr/gain",
+        ),
         "denoise": _quality_setting_not_available("denoise"),
         "taa": _quality_setting_not_available("taa"),
         "texture_filtering": _quality_setting_not_available("texture_filtering"),
@@ -806,6 +820,19 @@ def _quality_setting_request(
     }
 
 
+def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
+    parts = [part.strip() for part in str(value).split(",")]
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError("RGB gain must be three comma-separated floats")
+    try:
+        gain = tuple(float(part) for part in parts)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("RGB gain must contain only floats") from exc
+    if any(item <= 0.0 for item in gain):
+        raise argparse.ArgumentTypeError("RGB gain values must be positive")
+    return gain  # type: ignore[return-value]
+
+
 def _paired_dimension(
     args: argparse.Namespace,
     width_attr: str,
@@ -847,6 +874,16 @@ def _render_settle_args(capture_quality: dict[str, Any]) -> list[str]:
     exposure_bias = _dict(capture_quality.get("exposure_bias"))
     if exposure_bias.get("status") == "requested" and exposure_bias.get("value") is not None:
         args.extend(["--isaac-exposure-bias", str(float(exposure_bias["value"]))])
+    colorcorr_gain = _dict(capture_quality.get("colorcorr_gain"))
+    if colorcorr_gain.get("status") == "requested" and colorcorr_gain.get("value") is not None:
+        values = colorcorr_gain["value"]
+        if isinstance(values, (list, tuple)) and len(values) == 3:
+            args.extend(
+                [
+                    "--isaac-colorcorr-gain",
+                    ",".join(f"{float(value):.6g}" for value in values),
+                ]
+            )
     if render_settle_frames <= 0:
         return args
     args.extend(["--render-settle-frames", str(render_settle_frames)])

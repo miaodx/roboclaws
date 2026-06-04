@@ -488,6 +488,16 @@ def _capture_quality_probe_summary(payload: dict[str, Any]) -> dict[str, Any]:
             native_capture_quality,
             "tonemap_operator",
         ),
+        "exposure_bias": _quality_setting_row(
+            explicit,
+            native_capture_quality,
+            "exposure_bias",
+        ),
+        "colorcorr_gain": _quality_setting_row(
+            explicit,
+            native_capture_quality,
+            "colorcorr_gain",
+        ),
         "denoise": _quality_setting_row(explicit, native_capture_quality, "denoise"),
         "taa": _quality_setting_row(explicit, native_capture_quality, "taa"),
         "texture_filtering": _quality_setting_row(
@@ -539,6 +549,16 @@ def _capture_quality_settings_summary(
             native_capture_quality,
             "tonemap_operator",
         ),
+        "exposure_bias": _quality_setting_row(
+            capture_quality,
+            native_capture_quality,
+            "exposure_bias",
+        ),
+        "colorcorr_gain": _quality_setting_row(
+            capture_quality,
+            native_capture_quality,
+            "colorcorr_gain",
+        ),
         "denoise": _quality_setting_row(capture_quality, native_capture_quality, "denoise"),
         "taa": _quality_setting_row(capture_quality, native_capture_quality, "taa"),
         "texture_filtering": _quality_setting_row(
@@ -571,6 +591,8 @@ def _has_requested_quality_setting(capture_quality: dict[str, Any]) -> bool:
         "samples_per_pixel",
         "anti_aliasing",
         "tonemap_operator",
+        "exposure_bias",
+        "colorcorr_gain",
         "denoise",
         "taa",
         "texture_filtering",
@@ -3155,6 +3177,8 @@ def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
             continue
         anti_aliasing = _dict(capture_quality.get("anti_aliasing"))
         tonemap_operator = _dict(capture_quality.get("tonemap_operator"))
+        exposure_bias = _dict(capture_quality.get("exposure_bias"))
+        colorcorr_gain = _dict(capture_quality.get("colorcorr_gain"))
         denoise = _dict(capture_quality.get("denoise"))
         taa = _dict(capture_quality.get("taa"))
         rows.append(
@@ -3171,6 +3195,8 @@ def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(capture_quality.get('render_settle_frames') or 0))}</td>"
             f"<td>{html.escape(str(anti_aliasing.get('status') or ''))}</td>"
             f"<td>{html.escape(str(tonemap_operator.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(exposure_bias.get('status') or ''))}</td>"
+            f"<td>{html.escape(str(colorcorr_gain.get('status') or ''))}</td>"
             f"<td>{html.escape(str(denoise.get('status') or ''))}</td>"
             f"<td>{html.escape(str(taa.get('status') or ''))}</td>"
             f"<td>{html.escape(str(capture_quality.get('policy_classification') or ''))}</td>"
@@ -3185,7 +3211,8 @@ def _render_capture_quality_summary(manifest: dict[str, Any]) -> str:
         "<table><thead><tr><th>Source</th><th>Manifest</th><th>Kind</th>"
         "<th>Render Size</th><th>Saved Size</th><th>Metric Size</th>"
         "<th>Saved Mode</th><th>Metric Mode</th><th>Filter</th><th>Settle</th>"
-        "<th>AA</th><th>Tone Op</th><th>Denoise</th><th>TAA</th><th>Policy</th></tr></thead><tbody>"
+        "<th>AA</th><th>Tone Op</th><th>Exposure</th><th>Colorcorr</th>"
+        "<th>Denoise</th><th>TAA</th><th>Policy</th></tr></thead><tbody>"
         + "\n".join(rows)
         + "</tbody></table>"
     )
@@ -3217,6 +3244,8 @@ def _render_render_difference_probe_batch(batch: dict[str, Any]) -> str:
             f"<td>{_html_value(native.get('status'))}<br>"
             f"<code>changed={_html_value(native.get('default_render_settings_changed'))}</code>"
             f"<br><code>aa={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('anti_aliasing')).get('status'))}</code>"
+            f"<br><code>exposure={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('exposure_bias')).get('status'))}</code>"
+            f"<br><code>colorcorr={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('colorcorr_gain')).get('status'))}</code>"
             f"<br><code>denoise={_html_value(_dict(_dict(row.get('capture_quality_settings')).get('denoise')).get('status'))}</code>"
             "</td>"
             "</tr>"
