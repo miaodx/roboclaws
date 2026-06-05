@@ -14,6 +14,7 @@ CAPTURE_PATH = REPO_ROOT / "scripts" / "agibot" / "capture_map_context_views.py"
 GENERATOR_PATH = REPO_ROOT / "scripts" / "agibot" / "generate_metric_map_from_context.py"
 VERIFY_PATH = REPO_ROOT / "scripts" / "agibot" / "verify_waypoints_with_pnc.py"
 SDK_RUNNER_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
+RAW_FPV_CHECK_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "check_raw_fpv_status.py"
 COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
 
 
@@ -401,6 +402,122 @@ def test_sdk_runner_successful_mocked_gdk_navigation_records_normal_navi(
     assert fake_gdk.gdk_release_calls == 1
 
 
+def test_sdk_runner_camera_observation_uses_vendor_camera_then_sleep_order(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _require_agibot_sdk_runner()
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_camera_order")
+    events: list[str] = []
+    fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory(events=events))
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: events.append(f"sleep:{seconds}"))
+
+    response = runner._execute_camera_observation(
+        output_dir=tmp_path,
+        camera_name="head_color",
+        robot_host="127.0.0.1",
+        init_wait_s=3.0,
+        image_timeout_ms=1000.0,
+    )
+
+    assert response["ok"] is True
+    assert response["primitive_provenance"] == "agibot_gdk_head_color_camera"
+    assert response["camera_artifact"] == "head_color.jpg"
+    assert events == ["camera_created", "sleep:3.0", "get_latest_image", "close_camera"]
+    assert fake_gdk.gdk_release_calls == 1
+    assert (tmp_path / "head_color.jpg").read_bytes().startswith(b"\xff\xd8")
+
+
+def test_sdk_runner_camera_observation_fails_loudly_on_missing_numpy(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _require_agibot_sdk_runner()
+    runner = _load_module(SDK_RUNNER_PATH, "run_agibot_cleanup_backend_mocked_camera_numpy")
+    fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory(missing_numpy=True))
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(runner, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(runner, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda seconds: None)
+
+    with pytest.raises(ModuleNotFoundError, match="numpy"):
+        runner._execute_camera_observation(
+            output_dir=tmp_path,
+            camera_name="head_color",
+            robot_host="127.0.0.1",
+            init_wait_s=0.0,
+            image_timeout_ms=1000.0,
+        )
+
+    assert fake_gdk.gdk_release_calls == 1
+
+
+def test_raw_fpv_checker_records_head_color_status_and_no_motion(
+    monkeypatch, tmp_path: Path
+) -> None:
+    checker = _load_module(RAW_FPV_CHECK_PATH, "check_raw_fpv_status_mocked_success")
+    fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory())
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(checker, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(checker, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(checker.time, "sleep", lambda seconds: None)
+
+    rc = checker.main_from_args(
+        [
+            "--robot-host",
+            "127.0.0.1",
+            "--output-dir",
+            str(tmp_path),
+            "--cameras",
+            "head_color",
+        ]
+    )
+
+    status = json.loads((tmp_path / "raw_fpv_status.json").read_text(encoding="utf-8"))
+    head = status["checks"][0]
+    assert rc == 0
+    assert status["raw_fpv_status"] == "head_color_available"
+    assert status["read_only"] is True
+    assert status["navigation_submission"] is False
+    assert status["motion_or_write_calls_used"] == []
+    assert head["ok"] is True
+    assert head["camera"] == "head_color"
+    assert head["shape"] == [640, 400]
+    assert head["fps"] == 30.0
+    assert (tmp_path / "head_color_latest.jpg").read_bytes().startswith(b"\xff\xd8")
+    assert fake_gdk.gdk_release_calls == 1
+
+
+def test_raw_fpv_checker_fails_loudly_on_missing_numpy(
+    monkeypatch, tmp_path: Path
+) -> None:
+    checker = _load_module(RAW_FPV_CHECK_PATH, "check_raw_fpv_status_mocked_numpy")
+    fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory(missing_numpy=True))
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(checker, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(checker, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(checker.time, "sleep", lambda seconds: None)
+
+    with pytest.raises(ModuleNotFoundError, match="numpy"):
+        checker.main_from_args(
+            [
+                "--robot-host",
+                "127.0.0.1",
+                "--output-dir",
+                str(tmp_path),
+                "--cameras",
+                "head_color",
+            ]
+        )
+
+    assert fake_gdk.gdk_release_calls == 1
+
+
 def test_sdk_runner_timeout_cancels_gdk_navigation_and_records_evidence(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -674,15 +791,25 @@ class _FakeAgibotGDK:
             )
             self.timestamp_ns = 0
 
+    class CameraType:
+        kHeadColor = "kHeadColor"
+        kHeadStereoLeft = "kHeadStereoLeft"
+        kHeadStereoRight = "kHeadStereoRight"
+        kHeadDepth = "kHeadDepth"
+        kHandLeftColor = "kHandLeftColor"
+        kHandRightColor = "kHandRightColor"
+
     def __init__(
         self,
         pnc: object | None = None,
         map_item: object | None = None,
         slam: object | None = None,
+        camera_factory: object | None = None,
     ) -> None:
         self.pnc = pnc or _FakePnc()
         self.map_item = map_item
         self.slam = slam or _FakeSlam()
+        self.camera_factory = camera_factory
         self.map_calls = 0
         self.gdk_release_calls = 0
 
@@ -702,6 +829,11 @@ class _FakeAgibotGDK:
     def Slam(self) -> object:
         return self.slam
 
+    def Camera(self) -> object:
+        if self.camera_factory is None:
+            raise AssertionError("unexpected Camera() call")
+        return self.camera_factory()
+
 
 class _FakeMap:
     def __init__(self, item: object | None) -> None:
@@ -709,6 +841,55 @@ class _FakeMap:
 
     def get_curr_map(self) -> object | None:
         return self.item
+
+
+class _FakeCameraFactory:
+    def __init__(self, *, missing_numpy: bool = False, events: list[str] | None = None) -> None:
+        self.missing_numpy = missing_numpy
+        self.events = events if events is not None else []
+
+    def __call__(self) -> object:
+        self.events.append("camera_created")
+        return _FakeCamera(self.events, missing_numpy=self.missing_numpy)
+
+
+class _FakeCamera:
+    def __init__(self, events: list[str], *, missing_numpy: bool) -> None:
+        self.events = events
+        self.missing_numpy = missing_numpy
+
+    def get_image_shape(self, camera_type: object) -> tuple[int, int]:
+        return (640, 400)
+
+    def get_image_fps(self, camera_type: object) -> float:
+        return 30.0
+
+    def get_latest_image(self, camera_type: object, timeout_ms: float) -> object:
+        self.events.append("get_latest_image")
+        if self.missing_numpy:
+            raise ModuleNotFoundError("No module named 'numpy'", name="numpy")
+        return SimpleNamespace(
+            timestamp_ns=123,
+            width=640,
+            height=400,
+            encoding=SimpleNamespace(name="JPEG"),
+            color_format=SimpleNamespace(name="RGB"),
+            bit_depth=8,
+            data=_FakeImageData(b"\xff\xd8fake-jpeg\xff\xd9"),
+        )
+
+    def close_camera(self) -> int:
+        self.events.append("close_camera")
+        return _FakeAgibotGDK.GDKRes.kSuccess
+
+
+class _FakeImageData:
+    def __init__(self, payload: bytes) -> None:
+        self.payload = payload
+        self.shape = (len(payload),)
+
+    def tobytes(self) -> bytes:
+        return self.payload
 
 
 def _run_sdk(*args: str) -> subprocess.CompletedProcess[str]:

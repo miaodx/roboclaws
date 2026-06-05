@@ -2627,6 +2627,46 @@ def test_checker_can_require_robot_view_report_artifacts(tmp_path: Path) -> None
     )
 
 
+def test_checker_counts_visual_candidate_robot_view_as_object_navigation(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7)
+    robot_views = tmp_path / "robot_views"
+    robot_views.mkdir()
+    for name in ("step.fpv.png", "step.chase.png", "step.map.png", "step.verify.png"):
+        (robot_views / name).write_bytes(b"placeholder")
+    _insert_robot_timeline_before_score(tmp_path / "report.html")
+    result["view_variant"] = "molmospaces-rby1m-fpv-map-chase-verify"
+    result["artifacts"]["robot_views"] = str(robot_views)
+    result["robot_view_steps"] = [
+        {
+            **_robot_step("navigate_to_visual_candidate observed_001"),
+            "semantic_phase": "navigate_to_object",
+            "action_evidence": {
+                "backend_primitive": "navigate_to_object",
+                "agent_tool": "navigate_to_visual_candidate",
+            },
+        },
+        _robot_step("pick observed_001"),
+        _robot_step("navigate_to_receptacle refrigerator_01"),
+        _robot_step("open_receptacle refrigerator_01"),
+        _robot_step("place_inside observed_001"),
+        _robot_step("close_receptacle refrigerator_01"),
+        _robot_step("place observed_002"),
+    ]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        require_robot_views=True,
+    )
+
+
 def test_checker_openclaw_minimum_robot_views_allows_partial_visual_actions(
     tmp_path: Path,
 ) -> None:

@@ -1266,8 +1266,22 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
                 "focus": {},
             },
             {
-                "action": "navigate_to_object observed_001",
+                "action": "navigate_to_visual_candidate observed_001",
                 "semantic_phase": "navigate_to_object",
+                "action_evidence": {
+                    "schema": "robot_timeline_action_evidence_v1",
+                    "agent_tool": "navigate_to_visual_candidate",
+                    "agent_action": "navigate_to_visual_candidate observed_001",
+                    "backend_primitive": "navigate_to_object",
+                    "resolved_object_id": "observed_001",
+                    "source_observation_id": "raw_fpv_001",
+                    "source_image_bbox": [10, 20, 30, 40],
+                    "reviewability_status": "reviewable",
+                    "grounding_status": "resolved",
+                    "grounding_confidence": 0.72,
+                    "declared_category": "dish",
+                    "evidence_note": "white dish visible in the FPV crop",
+                },
                 "robot_pose": {},
                 "views": {"fpv": "robot_views/nav.fpv.png"},
                 "focus": {},
@@ -1284,9 +1298,15 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
     html = report_path.read_text(encoding="utf-8")
     timeline_html = html[html.index("<h2>Robot View Timeline</h2>") : html.index("<h2>Score</h2>")]
     raw_fpv_html = html[html.index("<h2>Raw FPV Observations</h2>") :]
-    assert "navigate_to_object observed_001" in timeline_html
+    assert "navigate_to_visual_candidate observed_001" in timeline_html
     assert "Subphase: <strong>nav</strong>" in timeline_html
-    assert "observe raw_fpv_001" not in timeline_html
+    assert "Agent tool: <strong>navigate_to_visual_candidate</strong>" in timeline_html
+    assert "Source observe: <strong>raw_fpv_001</strong>" in timeline_html
+    assert "Source FPV bbox: <strong>[10, 20, 30, 40]</strong>" in timeline_html
+    assert "Grounding: <strong>resolved (0.72)</strong>" in timeline_html
+    assert "Backend primitive: <strong>navigate_to_object</strong>" in timeline_html
+    assert "Declared category: <strong>dish</strong>" in timeline_html
+    assert "white dish visible in the FPV crop" in timeline_html
     assert "robot_views/raw.fpv.png" not in timeline_html
     assert "raw_fpv_001" in raw_fpv_html
     assert "robot_views/raw.fpv.png" in raw_fpv_html
@@ -1295,6 +1315,80 @@ def test_cleanup_report_keeps_raw_fpv_scans_out_of_primary_robot_timeline(
     assert "Head-camera FPV" in raw_fpv_html
     assert "scene_probe_existing_usd_lights_v1" in raw_fpv_html
     assert "display_srgb_soft_highlight_v1" in raw_fpv_html
+
+
+def test_cleanup_report_renders_world_label_navigation_evidence(tmp_path: Path) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    score = score_cleanup(scenario.object_locations(), scenario.private_manifest)
+    before = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "before.png",
+        title="Before",
+    )
+    after = write_state_snapshot(
+        scenario,
+        scenario.object_locations(),
+        tmp_path / "after.png",
+        title="After",
+    )
+    robot_dir = tmp_path / "robot_views"
+    robot_dir.mkdir()
+    Image.new("RGB", (32, 24), color=(230, 230, 230)).save(robot_dir / "nav.fpv.png")
+    run_result = {
+        "cleanup_status": score.status,
+        "primitive_provenance": API_SEMANTIC_PROVENANCE,
+        "score": score.to_dict(),
+    }
+
+    report_path = render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+        robot_view_steps=[
+            {
+                "action": "observe",
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/nav.fpv.png"},
+                "focus": {},
+            },
+            {
+                "action": "navigate_to_object observed_001",
+                "semantic_phase": "navigate_to_object",
+                "action_evidence": {
+                    "schema": "robot_timeline_action_evidence_v1",
+                    "agent_tool": "navigate_to_object",
+                    "agent_action": "navigate_to_object observed_001",
+                    "backend_primitive": "navigate_to_object",
+                    "resolved_object_id": "observed_001",
+                    "source_observation_id": (
+                        "visible_detection:generated_exploration_001:observed_001"
+                    ),
+                    "source_image_bbox": [81, 65, 42, 31],
+                    "reviewability_status": "reviewable",
+                },
+                "robot_pose": {},
+                "views": {"fpv": "robot_views/nav.fpv.png"},
+                "focus": {},
+            },
+        ],
+    )
+
+    timeline_html = report_path.read_text(encoding="utf-8")
+    timeline_html = timeline_html[
+        timeline_html.index("<h2>Robot View Timeline</h2>") : timeline_html.index("<h2>Score</h2>")
+    ]
+    assert "navigate_to_object observed_001" in timeline_html
+    assert "Agent tool: <strong>navigate_to_object</strong>" in timeline_html
+    assert (
+        "Source observe: <strong>visible_detection:generated_exploration_001:observed_001</strong>"
+        in timeline_html
+    )
+    assert "Source FPV bbox: <strong>[81, 65, 42, 31]</strong>" in timeline_html
+    assert "Backend primitive: <strong>navigate_to_object</strong>" in timeline_html
 
 
 def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:

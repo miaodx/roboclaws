@@ -10,11 +10,15 @@ import pytest
 from PIL import Image
 
 from roboclaws.household.camera_control import (
+    BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
     CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    SCENE_LIGHT_RIG_SCHEMA,
     SCENE_PROBE_LIGHTING_PROFILES,
     SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE,
+    scene_light_rig,
+    scene_light_rig_roles,
     scene_probe_camera_control_request,
 )
 from roboclaws.household.scene_camera_comparison import (
@@ -33,7 +37,10 @@ from roboclaws.household.scene_camera_comparison import (
     _image_pair_visual_delta,
     _image_visual_metrics,
     _isaac_view_specs,
+    _key_light_direction_diagnostics,
+    _material_response_diagnostics,
     _molmospaces_view_specs,
+    _mujoco_render_contract_from_xml,
     _native_isaac_render_diagnostics,
     _normalize_color_profile_for_replay,
     _offline_color_profile_replay,
@@ -198,6 +205,180 @@ def Xform "val_1"
     )
 
 
+def _write_material_response_fixtures(
+    tmp_path: Path,
+    manifest: dict[str, object],
+) -> None:
+    xml_path = tmp_path / "scene.xml"
+    xml_path.write_text(
+        """
+<mujoco>
+  <asset>
+    <texture type="2d" name="BasketballTex" file="textures/Basketball.png" />
+    <texture type="2d" name="ClothTex" file="textures/Cloth.png" />
+    <material name="material_BasketBall" texture="BasketballTex" rgba="1 1 1 1" />
+    <material name="material_Cloth" texture="ClothTex" rgba="1 1 1 1" />
+  </asset>
+  <worldbody>
+    <body name="basketball_01">
+      <geom name="basketball_01_visual_0" class="__VISUAL_MJT__" type="mesh"
+            material="material_BasketBall" mesh="BasketballMesh" />
+    </body>
+    <body name="cloth_01">
+      <geom name="cloth_01_visual_0" class="__VISUAL_MJT__" type="mesh"
+            material="material_Cloth" mesh="ClothMesh" />
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    usd_path = tmp_path / "scene.usda"
+    usd_path.write_text(
+        """
+#usda 1.0
+def Xform "val_1"
+{
+  def Scope "Geometry"
+  {
+    def Xform "basketball_01"
+    {
+      def Mesh "BasketballMesh"
+      {
+        rel material:binding = </val_1/Geometry/basketball_01/Materials/material_BasketBall>
+      }
+      def Scope "Materials"
+      {
+        def Material "material_BasketBall"
+        {
+          def Shader "PreviewSurface"
+          {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect =
+                </val_1/Geometry/basketball_01/Materials/material_BasketBall/DiffuseTexture.outputs:rgb>
+          }
+          def Shader "DiffuseTexture"
+          {
+            asset inputs:file = @textures/Basketball.png@
+          }
+        }
+      }
+    }
+    def Xform "cloth_01"
+    {
+      def Mesh "ClothMesh"
+      {
+        rel material:binding = </val_1/Geometry/cloth_01/Materials/material_Cloth>
+      }
+      def Scope "Materials"
+      {
+        def Material "material_Cloth"
+        {
+          def Shader "PreviewSurface"
+          {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect =
+                </val_1/Geometry/cloth_01/Materials/material_Cloth/DiffuseTexture.outputs:rgb>
+          }
+          def Shader "DiffuseTexture"
+          {
+            asset inputs:file = @textures/Cloth.png@
+          }
+        }
+      }
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest["lanes"][MOLMOSPACES_LANE_ID]["scene_xml"] = str(xml_path)  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["scene_usd"] = str(usd_path)  # type: ignore[index]
+    manifest["lanes"][GENESIS_LANE_ID] = _genesis_lane_fixture()  # type: ignore[index]
+    manifest["genesis_movable_object_visibility_diagnostics"] = {
+        "schema": "genesis_movable_object_visibility_diagnostics_v1",
+        "status": "computed",
+        "object_count": 2,
+        "in_frame_object_count": 2,
+        "objects": [],
+        "crop_artifacts": {
+            "schema": "genesis_movable_object_crop_artifacts_v1",
+            "crop_size_px": 16,
+            "crop_dir": "genesis_movable_object_crops",
+            "object_count": 2,
+            "objects": [
+                {
+                    "object_key": "basketball_01",
+                    "category": "BasketBall",
+                    "view_id": "view_03_diningtable",
+                    "crop_status": "written",
+                    "geometry_status": "runtime_pose_match",
+                    "geometry_delta_m": 0.0,
+                    "lanes": [MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID],
+                },
+                {
+                    "object_key": "cloth_01",
+                    "category": "Cloth",
+                    "view_id": "view_04_sink",
+                    "crop_status": "written",
+                    "geometry_status": "runtime_pose_match",
+                    "geometry_delta_m": 0.0,
+                    "lanes": [MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID],
+                },
+            ],
+        },
+    }
+    crop_dir = tmp_path / "genesis_movable_object_crops"
+    _write_image(
+        crop_dir / f"basketball_01__view_03_diningtable__{MOLMOSPACES_LANE_ID}.png",
+        color=(180, 180, 180),
+    )
+    _write_image(
+        crop_dir / f"basketball_01__view_03_diningtable__{ISAAC_LANE_ID}.png",
+        color=(90, 90, 90),
+    )
+    _write_image(
+        crop_dir / f"basketball_01__view_03_diningtable__{GENESIS_LANE_ID}.png",
+        color=(80, 80, 80),
+    )
+    _write_image(
+        crop_dir / f"cloth_01__view_04_sink__{MOLMOSPACES_LANE_ID}.png",
+        color=(80, 120, 80),
+    )
+    _write_image(
+        crop_dir / f"cloth_01__view_04_sink__{ISAAC_LANE_ID}.png",
+        color=(200, 80, 100),
+    )
+    _write_image(
+        crop_dir / f"cloth_01__view_04_sink__{GENESIS_LANE_ID}.png",
+        color=(200, 80, 100),
+    )
+    asset_dir = tmp_path / "genesis" / "camera_views" / "prepared_usd_visual_asset"
+    asset_dir.mkdir(parents=True)
+    (asset_dir / "prepared_usd_visual_asset.obj").write_text(
+        """
+mtllib prepared_usd_visual_asset.mtl
+usemtl material_BasketBall_BASKETBALL_AlbedoTransparency
+f 1 2 3
+usemtl material_Cloth_8_Mat
+f 1 3 4
+""",
+        encoding="utf-8",
+    )
+    (asset_dir / "prepared_usd_visual_asset.mtl").write_text(
+        """
+newmtl material_BasketBall_BASKETBALL_AlbedoTransparency
+Kd 1.0 1.0 1.0
+map_Kd textures/BasketBall_BASKETBALL_AlbedoTransparency.png
+
+newmtl material_Cloth_8_Mat
+Kd 1.0 1.0 1.0
+map_Kd textures/Cloth1AO.png
+""",
+        encoding="utf-8",
+    )
+
+
 def _native_isaac_diagnostics() -> dict[str, object]:
     return {
         "schema": "isaac_native_render_diagnostics_v1",
@@ -244,6 +425,21 @@ def _native_isaac_diagnostics() -> dict[str, object]:
 
 def _genesis_lane_fixture() -> dict[str, object]:
     lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
+    key = rig["key"]
+    ambient = rig["ambient"]
+    genesis = rig["backend_overrides"]["genesis"]
+    genesis_lights = [
+        {
+            "type": "directional",
+            "dir": list(key["direction"]),
+            "color": list(key["color"]),
+            "intensity": genesis["key_intensity"],
+            "role": "key",
+            "source": "scene_light_rig.key.direction",
+        }
+    ]
     return {
         "status": "success",
         "python_executable": ".venv-genesis/bin/python",
@@ -254,15 +450,20 @@ def _genesis_lane_fixture() -> dict[str, object]:
         "calibration_status": "canonical_scene_frame_similarity_fit_v1",
         "lighting_profile": lighting_profile,
         "lighting_diagnostics": {
-            "status": "genesis_environment_fill_profile_applied",
+            "status": "genesis_scene_light_rig_applied",
             "source": "prepared_usd_plus_genesis_rasterizer",
             "genesis_lighting_profile": {
                 "profile_id": lighting_profile["profile_id"],
                 "source": lighting_profile["source"],
-                "ambient_light": lighting_profile["genesis_ambient_light"],
-                "background_color": lighting_profile["genesis_background_color"],
-                "shadow": lighting_profile["genesis_shadow"],
-                "lights": lighting_profile["genesis_directional_lights"],
+                "scene_light_rig": rig,
+                "scene_light_rig_schema": rig["schema"],
+                "scene_light_rig_roles": roles,
+                "ambient_light": ambient["genesis_ambient_light"],
+                "background_color": ambient["genesis_background_color"],
+                "shadow": key["shadow"],
+                "scene_key_light_direction": key["direction"],
+                "scene_key_light_frame": rig["frame"],
+                "lights": genesis_lights,
             },
         },
         "color_profile": {
@@ -661,11 +862,22 @@ def _manifest() -> dict[str, object]:
                 "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "lighting_diagnostics": {
                     "status": "added_capture_lights",
+                    "scene_light_rig": scene_light_rig(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
+                    "scene_light_rig_schema": SCENE_LIGHT_RIG_SCHEMA,
+                    "scene_light_rig_roles": scene_light_rig_roles(
+                        scene_light_rig(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
+                    ),
+                    "authored_scene_lights_policy": "disabled_for_comparison",
                     "existing_light_count": 2,
-                    "added_light_count": 1,
-                    "added_light_paths": ["/RoboclawsSmokeDomeLight"],
-                    "requested_dome_intensity": 60.0,
-                    "requested_key_intensity": 0.0,
+                    "existing_light_intensity_scale": 0.0,
+                    "added_light_count": 2,
+                    "added_light_paths": [
+                        "/RoboclawsSmokeDomeLight",
+                        "/RoboclawsSmokeKeyLight",
+                    ],
+                    "requested_dome_intensity": 120.0,
+                    "requested_key_intensity": 900.0,
+                    "applied_key_light_direction": [-0.57735, 0.57735, -0.57735],
                 },
                 "native_render_diagnostics": _native_isaac_diagnostics(),
                 "images": {
@@ -786,10 +998,15 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "environment_light_configured_tone_adjusted" in html
     assert "missing_environment_light_lanes=" in html
     assert "tone_adjusted_lanes=genesis-prepared-usd" in html
-    assert "genesis_environment_fill_profile_applied" in html
+    assert "genesis_scene_light_rig_applied" in html
+    assert "scene_light_rig_v1" in html
+    assert "active_roles=ambient_light, background_color, directional_key" in html
     assert "ambient=0.37, 0.37, 0.37" in html
-    assert "directional_lights=3" in html
+    assert "directional_lights=1" in html
+    assert "authored=disabled_for_comparison" in html
     assert "background=0.04, 0.08, 0.12" in html
+    assert "active_authored_usd_lights=0" in html
+    assert "active_roles=dome_environment, directional_key" in html
     assert "post_render_tone_adjustment_applied" in html
     assert "view_tone_overrides=1" in html
     assert "Genesis baked-texture visual probe" in html
@@ -821,10 +1038,11 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "display_srgb_soft_highlight_v1" in html
     assert "canonical_eye_target_camera_v1" in html
     assert "backend eye=" in html
-    assert "scene_probe_mujoco_headlight_fill_v1" in html
+    assert "scene_probe_balanced_review_light_v1" in html
     assert "added_capture_lights" in html
     assert _manifest()["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"]["added_light_paths"] == [
-        "/RoboclawsSmokeDomeLight"
+        "/RoboclawsSmokeDomeLight",
+        "/RoboclawsSmokeKeyLight",
     ]
     assert "Candidate color calibrations" in html
     assert "best=" in html
@@ -1249,6 +1467,51 @@ def test_render_domain_contract_probe_reads_mjcf_and_usda_contracts(tmp_path: Pa
     assert room["contract_delta"]["mujoco_light_count"] == 1
     assert room["contract_delta"]["isaac_light_count"] == 2
     assert probe["isaac_shadow_disabled_prim_count"] == 1
+
+
+def test_material_response_diagnostics_samples_crop_material_evidence(tmp_path: Path) -> None:
+    manifest = _manifest()
+    _write_material_response_fixtures(tmp_path, manifest)
+
+    diagnostics = _material_response_diagnostics(manifest, output_dir=tmp_path)
+
+    rows = {item["object_key"]: item for item in diagnostics["objects"]}
+    basketball = rows["basketball_01"]
+    cloth = rows["cloth_01"]
+    assert diagnostics["schema"] == "scene_camera_material_response_diagnostics_v1"
+    assert diagnostics["status"] == "computed"
+    assert diagnostics["sample_count"] == 2
+    assert diagnostics["conclusion"] == "mixed"
+    assert diagnostics["mujoco_parse_status"] == "parsed"
+    assert diagnostics["isaac_parse_status"] == "parsed"
+    assert diagnostics["genesis_material_parse_status"] == "parsed"
+    assert basketball["signal"] == "shared_brightness_tone_drift"
+    assert cloth["signal"] == "material_texture_or_local_shadow_residual"
+    assert basketball["mujoco"]["materials"] == ["material_BasketBall"]
+    assert basketball["isaac"]["materials"] == ["material_BasketBall"]
+    assert basketball["genesis"]["status"] == "matched_by_material_name"
+    assert basketball["genesis"]["texture_files"] == [
+        "textures/BasketBall_BASKETBALL_AlbedoTransparency.png"
+    ]
+    assert cloth["genesis"]["materials"] == ["material_Cloth_8_Mat"]
+    assert "material evidence" in diagnostics["recommended_next_action"]
+
+
+def test_material_response_diagnostics_renders_report_section(tmp_path: Path) -> None:
+    manifest = _manifest()
+    _write_material_response_fixtures(tmp_path, manifest)
+    manifest["material_response_diagnostics"] = _material_response_diagnostics(
+        manifest,
+        output_dir=tmp_path,
+    )
+
+    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
+    html = report.read_text(encoding="utf-8")
+
+    assert "Material Response Diagnostics" in html
+    assert "conclusion=mixed" in html
+    assert "shared_brightness_tone_drift" in html
+    assert "material_Cloth_8_Mat" in html
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:
@@ -2097,45 +2360,180 @@ def test_scene_camera_comparison_default_color_profile_contract() -> None:
 
 def test_scene_camera_comparison_default_lighting_profile_contract() -> None:
     profile = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
+    rig = scene_light_rig(profile)
+    roles = scene_light_rig_roles(rig)
 
-    assert profile["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
-    assert profile["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
-    assert profile["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
-    assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
-    assert profile["isaac_key_intensity"] == pytest.approx(0.0)
-    assert profile["isaac_key_rotation_deg"] == pytest.approx([-45.0, 0.0, 35.0])
-    assert profile["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
-    assert profile["genesis_shadow"] is False
-    assert len(profile["genesis_directional_lights"]) == 3
+    assert profile["profile_id"] == "scene_probe_balanced_review_light_v1"
+    assert rig["schema"] == SCENE_LIGHT_RIG_SCHEMA
+    assert rig["frame"] == "molmospaces_scene_frame_v1"
+    assert rig["key"]["enabled"] is True
+    assert rig["key"]["shadow"] is True
+    assert rig["key"]["direction"] == pytest.approx([-0.57735, 0.57735, -0.57735])
+    assert rig["ambient"]["enabled"] is True
+    assert rig["ambient"]["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
+    assert rig["ambient"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(120.0)
+    assert rig["ambient"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
+    assert rig["fill"]["enabled"] is False
+    assert rig["authored_scene_lights_policy"] == "disabled_for_comparison"
+    assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(900.0)
+    assert rig["backend_overrides"]["isaac"]["existing_light_intensity_scale"] == pytest.approx(
+        0.0
+    )
+    assert roles["key_enabled"] is True
+    assert roles["ambient_enabled"] is True
+    assert roles["fill_enabled"] is False
 
 
-def test_scene_camera_shadow_parity_lighting_profile_is_probe_only() -> None:
+def test_scene_camera_shadow_parity_lighting_profile_is_probe_profile() -> None:
     default = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
     profile = SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE
+    rig = scene_light_rig(profile)
 
-    assert default["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
-    assert default["genesis_shadow"] is False
-    assert default["isaac_dome_intensity"] == pytest.approx(60.0)
-    assert default["isaac_key_intensity"] == pytest.approx(0.0)
+    assert default["profile_id"] == "scene_probe_balanced_review_light_v1"
     assert profile["profile_id"] == "scene_probe_shadow_parity_probe_v1"
-    assert profile["genesis_shadow"] is True
-    assert profile["isaac_dome_intensity"] == pytest.approx(12.0)
-    assert profile["isaac_key_intensity"] == pytest.approx(1200.0)
-    assert SCENE_PROBE_LIGHTING_PROFILES["default"] is default
+    assert rig["schema"] == SCENE_LIGHT_RIG_SCHEMA
+    assert rig["key"]["shadow"] is True
+    assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(12.0)
+    assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(1200.0)
+    assert rig["fill"]["enabled"] is False
     assert SCENE_PROBE_LIGHTING_PROFILES["shadow-parity"] is profile
     assert _scene_camera_lighting_profile("shadow-parity") == profile
+
+
+def test_scene_camera_balanced_review_lighting_profile_is_default() -> None:
+    default = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
+    profile = BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE
+    rig = scene_light_rig(profile)
+
+    assert default is profile
+    assert profile["profile_id"] == "scene_probe_balanced_review_light_v1"
+    assert rig["key"]["enabled"] is True
+    assert rig["key"]["direction"] == pytest.approx([-0.57735, 0.57735, -0.57735])
+    assert rig["fill"]["enabled"] is False
+    assert SCENE_PROBE_LIGHTING_PROFILES["default"] is profile
+    assert SCENE_PROBE_LIGHTING_PROFILES["balanced-review"] is profile
+    assert _scene_camera_lighting_profile("default") == profile
+    assert _scene_camera_lighting_profile("balanced-review") == profile
+
+
+def test_scene_camera_mujoco_render_contract_reports_light_direction(tmp_path: Path) -> None:
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text(
+        """
+<mujoco>
+  <worldbody>
+    <light pos="1 -1 1.5" dir="-0.57735 0.57735 -0.57735"
+           directional="true" diffuse="0.5 0.5 0.5" />
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+
+    contract = _mujoco_render_contract_from_xml(str(scene_xml))
+
+    assert contract["status"] == "parsed"
+    assert contract["lights"][0]["dir_vector"] == pytest.approx(
+        [-0.577350269, 0.577350269, -0.577350269]
+    )
+
+
+def test_scene_camera_key_light_direction_diagnostics_accepts_aligned_vectors() -> None:
+    profile = dict(BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE)
+    render_probe = {
+        "mujoco_lights": [
+            {
+                "dir": "-0.57735 0.57735 -0.57735",
+                "dir_vector": [-0.577350269, 0.577350269, -0.577350269],
+            }
+        ]
+    }
+    genesis_profile = {
+        "lights": [
+            {
+                "dir": [-0.577350269, 0.577350269, -0.577350269],
+                "intensity": 3.0,
+            }
+        ]
+    }
+    isaac_lighting = {
+        "applied_key_light_direction": [-0.577350269, 0.577350269, -0.577350269]
+    }
+
+    diagnostics = _key_light_direction_diagnostics(
+        lighting_profile=profile,
+        render_probe=render_probe,
+        isaac_lighting=isaac_lighting,
+        genesis_profile=genesis_profile,
+    )
+
+    assert diagnostics["status"] == "key_light_direction_aligned"
+    assert diagnostics["isaac_angle_delta_deg"] == pytest.approx(0.0)
+    assert diagnostics["genesis_angle_delta_deg"] == pytest.approx(0.0)
+
+
+def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_status() -> None:
+    manifest = _manifest()
+    profile = dict(BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(profile)
+    manifest["camera_control"]["lighting_profile"] = profile  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"].update(  # type: ignore[index]
+        {
+            "requested_dome_intensity": rig["ambient"]["isaac_dome_intensity"],
+            "requested_key_intensity": rig["backend_overrides"]["isaac"]["key_intensity"],
+            "existing_light_intensity_scale": rig["backend_overrides"]["isaac"][
+                "existing_light_intensity_scale"
+            ],
+            "applied_key_light_direction": rig["key"]["direction"],
+            "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
+        }
+    )
+    genesis = _genesis_lane_fixture()
+    genesis["lighting_diagnostics"]["genesis_lighting_profile"]["shadow"] = True  # type: ignore[index]
+    manifest["lanes"][GENESIS_LANE_ID] = genesis  # type: ignore[index]
+    manifest["candidate_visual_diagnostics"] = {
+        "status": "computed",
+        "degraded_candidates": [],
+        "candidates": [],
+    }
+    manifest["render_domain_contract_probe"] = {
+        "status": "computed",
+        "high_priority_delta_count": 0,
+        "mujoco_light_count": 1,
+        "mujoco_lights": [
+            {
+                "dir": "-0.57735 0.57735 -0.57735",
+                "dir_vector": [-0.577350269, 0.577350269, -0.577350269],
+            }
+        ],
+        "isaac_light_count": 2,
+        "isaac_shadow_disabled_prim_count": 18,
+    }
+
+    diagnostics = _shadow_parity_probe(manifest)
+
+    assert diagnostics["status"] == "shadow_capable_profile_accepted"
+    assert diagnostics["is_shadow_capable_profile"] is True
+    assert diagnostics["comparison_successful"] is True
+    assert "passes the visual comparison gate" in diagnostics["recommended_next_action"]
 
 
 def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path: Path) -> None:
     manifest = _manifest()
     profile = dict(SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(profile)
     manifest["camera_control"]["lighting_profile"] = profile  # type: ignore[index]
     manifest["scene"]["lighting_profile_id"] = profile["profile_id"]  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["lighting_profile"] = profile  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"].update(  # type: ignore[index]
         {
-            "requested_dome_intensity": profile["isaac_dome_intensity"],
-            "requested_key_intensity": profile["isaac_key_intensity"],
+            "requested_dome_intensity": rig["ambient"]["isaac_dome_intensity"],
+            "requested_key_intensity": rig["backend_overrides"]["isaac"]["key_intensity"],
+            "existing_light_intensity_scale": rig["backend_overrides"]["isaac"][
+                "existing_light_intensity_scale"
+            ],
+            "applied_key_light_direction": rig["key"]["direction"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
@@ -2151,6 +2549,12 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
         "status": "computed",
         "high_priority_delta_count": 0,
         "mujoco_light_count": 1,
+        "mujoco_lights": [
+            {
+                "dir": "-0.57735 0.57735 -0.57735",
+                "dir_vector": [-0.577350269, 0.577350269, -0.577350269],
+            }
+        ],
         "isaac_light_count": 2,
         "isaac_shadow_disabled_prim_count": 18,
     }
@@ -2169,21 +2573,24 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
     assert diagnostics["isaac_key_intensity"] == pytest.approx(1200.0)
     assert diagnostics["isaac_shadow_disabled_prim_count"] == 18
     assert diagnostics["comparison_successful"] is True
+    assert diagnostics["key_light_direction"]["status"] == "key_light_direction_aligned"  # type: ignore[index]
     assert diagnostics["render_contract_high_priority_delta_count"] == 0
     assert "Shadow Parity Probe" in html
     assert "scene_probe_shadow_parity_probe_v1" in html
     assert "shadow_parity_probe_configured" in html
+    assert "key_light_direction_aligned" in html
     assert "Review bed/object views for cast-shadow return" in html
 
 
 def test_scene_camera_shadow_parity_probe_reports_visual_gate_failure() -> None:
     manifest = _manifest()
     profile = dict(SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(profile)
     manifest["camera_control"]["lighting_profile"] = profile  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"].update(  # type: ignore[index]
         {
-            "requested_dome_intensity": profile["isaac_dome_intensity"],
-            "requested_key_intensity": profile["isaac_key_intensity"],
+            "requested_dome_intensity": rig["ambient"]["isaac_dome_intensity"],
+            "requested_key_intensity": rig["backend_overrides"]["isaac"]["key_intensity"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )

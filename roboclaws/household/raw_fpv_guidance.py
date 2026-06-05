@@ -7,9 +7,9 @@ from typing import Any
 RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
 RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
 RAW_FPV_ACCEPTED_IMAGE_REGION_FORMS: tuple[dict[str, Any], ...] = (
-    {"type": "verbal_region", "value": "front of desk"},
     {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
     {"type": "point", "value": [390, 230]},
+    {"type": "verbal_region", "value": "front of desk"},
 )
 RAW_FPV_INVALID_FIELDS_TO_AVOID: tuple[str, ...] = (
     "bbox_normalized",
@@ -38,11 +38,11 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         "Use the candidate_fixture_id/recommended_tool returned by "
         "navigate_to_visual_candidate plus runtime_metric_map.public_semantic_anchors. "
         "In explicit rich legacy/debug mode only, target_fixture_id may come from "
-        "non-empty fixture_hints. Prefer image_region type verbal_region; "
-        "Prefer image_region={type:verbal_region,value:front of desk} when a "
-        "short spatial description is enough; use "
-        "image_region={type:bbox,value:[x,y,width,height]} only when you can estimate "
-        "it confidently. Never send bbox_normalized, bare x/y/width/height fields, "
+        "non-empty fixture_hints. For any candidate you want to navigate to or pick, "
+        "use image_region={type:bbox,value:[x,y,width,height]} from the visible "
+        "agent-facing FPV object. Verbal regions are accepted for clarification but "
+        "are not actionable without a reviewable bbox. Never send bbox_normalized, "
+        "bare x/y/width/height fields, "
         'target_fixture_id="", target_fixture_id="None", or target_fixture_id=null. '
         "After a successful pick/place for an observed handle, do not act on "
         "that same handle again; if grounding resolves to an already-handled "
@@ -59,7 +59,7 @@ def raw_fpv_visual_candidate_recovery(
         "source_observation_id": source_observation_id or "<raw_fpv_observation_id>",
         "category": "toy",
         "evidence_note": "small object visible on the bed",
-        "image_region": {"type": "verbal_region", "value": "front of desk"},
+        "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
     }
     minimal_map = map_mode == "minimal"
     if not minimal_map:
@@ -93,7 +93,7 @@ def raw_fpv_visual_candidate_recovery_hint(
     return (
         "Retry with a valid navigate_to_visual_candidate example: "
         f"source_observation_id={observation}, category=toy, evidence_note='small object "
-        "visible on the bed', image_region={type:verbal_region,value:front of desk}; "
+        "visible on the bed', image_region={type:bbox,value:[0.1,0.2,0.3,0.4]}; "
         f"{target_rule}. Avoid bbox_normalized, bare x/y/width/height fields, "
         'target_fixture_id="", target_fixture_id="None", and target_fixture_id=null.'
     )

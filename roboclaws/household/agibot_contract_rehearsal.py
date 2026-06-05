@@ -1589,6 +1589,7 @@ def _record_tool_robot_view(
         focus_object_id=capture.get("focus_object_id"),
         focus_receptacle_id=capture.get("focus_receptacle_id"),
         semantic_phase=capture.get("semantic_phase"),
+        action_evidence=capture.get("action_evidence"),
     )
 
 
@@ -1605,6 +1606,7 @@ def _record_robot_view(
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
     semantic_phase: str | None = None,
+    action_evidence: dict[str, Any] | None = None,
 ) -> int:
     capture_started = time.monotonic()
     next_index = record_robot_view_step(
@@ -1617,6 +1619,7 @@ def _record_robot_view(
         focus_object_id=focus_object_id,
         focus_receptacle_id=focus_receptacle_id,
         semantic_phase=semantic_phase,
+        action_evidence=action_evidence,
     )
     elapsed_s = round(time.monotonic() - capture_started, 6)
     if robot_view_steps:

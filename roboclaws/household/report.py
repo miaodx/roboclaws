@@ -5459,6 +5459,7 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         rows = []
         for item in observed:
             support = item.get("support_estimate") or {}
+            evidence = item.get("visual_grounding_evidence") or {}
             rows.append(
                 "<tr>"
                 f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
@@ -5466,6 +5467,8 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
                 f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
                 f"<td>{html.escape(str(item.get('source_observation_id', '')))}</td>"
                 f"<td>{html.escape(str(item.get('model_provenance', '')))}</td>"
+                f"<td>{html.escape(str(evidence.get('reviewability_status', '')))}</td>"
+                f"<td>{html.escape(str(evidence.get('image_bbox', '')))}</td>"
                 "</tr>"
             )
         if not rows:
@@ -5474,20 +5477,22 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
             observed_table = (
                 '<div class="table-wrap"><table><thead><tr><th>Observed handle</th>'
                 "<th>Category</th><th>Support estimate</th><th>Raw observation</th>"
-                "<th>Model provenance</th></tr></thead><tbody>"
-                + "".join(rows)
-                + "</tbody></table></div>"
+                "<th>Model provenance</th><th>FPV reviewability</th><th>FPV bbox</th>"
+                "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
             )
     else:
         rows = []
         for item in observed:
             support = item.get("support_estimate") or {}
+            evidence = item.get("visual_grounding_evidence") or {}
             rows.append(
                 "<tr>"
                 f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
                 f"<td>{html.escape(str(item.get('category', '')))}</td>"
                 f"<td>{html.escape(str(item.get('current_room_id', '')))}</td>"
                 f"<td>{html.escape(str(support.get('fixture_id', '')))}</td>"
+                f"<td>{html.escape(str(evidence.get('reviewability_status', '')))}</td>"
+                f"<td>{html.escape(str(evidence.get('image_bbox', '')))}</td>"
                 "</tr>"
             )
         if not rows:
@@ -5495,7 +5500,8 @@ def _agent_view_section(run_result: dict[str, Any]) -> str:
         else:
             observed_table = (
                 '<div class="table-wrap"><table><thead><tr><th>Observed handle</th>'
-                "<th>Category</th><th>Room</th><th>Support estimate</th></tr></thead>"
+                "<th>Category</th><th>Room</th><th>Support estimate</th>"
+                "<th>FPV reviewability</th><th>FPV bbox</th></tr></thead>"
                 "<tbody>" + "".join(rows) + "</tbody></table></div>"
             )
     summary = (
@@ -5566,6 +5572,7 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
     )
     rows = []
     for item in observed:
+        evidence = item.get("visual_grounding_evidence") or {}
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
@@ -5574,6 +5581,8 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('actionability', '')))}</td>"
             f"<td>{html.escape(str(item.get('producer_type', '')))}</td>"
             f"<td>{html.escape(str(item.get('source_observation_id', '')))}</td>"
+            f"<td>{html.escape(str(evidence.get('reviewability_status', '')))}</td>"
+            f"<td>{html.escape(str(evidence.get('image_bbox', '')))}</td>"
             "</tr>"
         )
     observed_table = (
@@ -5582,9 +5591,8 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
         else (
             '<div class="table-wrap"><table><thead><tr><th>Handle</th>'
             "<th>Category</th><th>State</th><th>Actionability</th>"
-            "<th>Producer</th><th>Observation</th></tr></thead><tbody>"
-            + "".join(rows)
-            + "</tbody></table></div>"
+            "<th>Producer</th><th>Observation</th><th>FPV reviewability</th>"
+            "<th>FPV bbox</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
         )
     )
     candidate_note = (
@@ -5606,6 +5614,7 @@ def _worklist_summary_table(worklist: dict[str, Any]) -> str:
         return ""
     rows = []
     for item in objects:
+        evidence = item.get("visual_grounding_evidence") or {}
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(item.get('object_id', '')))}</td>"
@@ -5613,6 +5622,8 @@ def _worklist_summary_table(worklist: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('category', '')))}</td>"
             f"<td>{html.escape(str(item.get('source_fixture_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('candidate_fixture_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('actionability_status', '')))}</td>"
+            f"<td>{html.escape(str(evidence.get('reviewability_status', '')))}</td>"
             f"<td>{html.escape(str(item.get('last_waypoint_id', '')))}</td>"
             "</tr>"
         )
@@ -5620,7 +5631,9 @@ def _worklist_summary_table(worklist: dict[str, Any]) -> str:
         "<h3>Observed Handle Lifecycle</h3>"
         '<div class="table-wrap"><table><thead><tr><th>Handle</th><th>State</th>'
         "<th>Category</th><th>Seen at fixture</th><th>Public candidate fixture</th>"
-        "<th>Last waypoint</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
+        "<th>Actionability</th><th>FPV reviewability</th><th>Last waypoint</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
     )
 
 
@@ -6493,6 +6506,7 @@ def _model_declared_observations_section(run_result: dict[str, Any]) -> str:
     rows = []
     for item in observations:
         region = item.get("image_region") or {}
+        evidence = item.get("visual_grounding_evidence") or {}
         pipeline = item.get("visual_grounding_pipeline") or {}
         overlay = str(item.get("visual_grounding_overlay") or "")
         overlay_cell = f'<a href="{html.escape(overlay)}">overlay</a>' if overlay else ""
@@ -6506,8 +6520,11 @@ def _model_declared_observations_section(run_result: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('target_fixture_id', '')))}</td>"
             f"<td>{html.escape(str(region.get('type', '')))}: "
             f"{html.escape(str(region.get('value', '')))}</td>"
+            f"<td>{html.escape(str(evidence.get('reviewability_status', '')))}</td>"
+            f"<td>{html.escape(str(evidence.get('image_bbox', '')))}</td>"
             f"<td>{html.escape(str(item.get('grounding_status', '')))} "
             f"({html.escape(str(item.get('grounding_confidence', '')))})</td>"
+            f"<td>{html.escape(str(item.get('actionability_status', '')))}</td>"
             f"<td>{html.escape(str(item.get('target_plausibility', {}).get('status', '')))}</td>"
             f"<td>{html.escape(str(item.get('acted_on', False)))}</td>"
             f"<td>{overlay_cell}</td>"
@@ -6526,7 +6543,8 @@ def _model_declared_observations_section(run_result: dict[str, Any]) -> str:
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Source observation</th>'
         "<th>Producer</th><th>Pipeline</th><th>Handle</th><th>Category</th><th>Target fixture</th>"
-        "<th>Image region</th><th>Grounding</th><th>Target plausibility</th>"
+        "<th>Image region</th><th>FPV reviewability</th><th>FPV bbox</th>"
+        "<th>Grounding</th><th>Actionability</th><th>Target plausibility</th>"
         "<th>Acted on</th><th>Overlay</th><th>Evidence note</th><th>Recovery hint</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
@@ -6709,6 +6727,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
             f'<p class="pose">{html.escape(pose_text)}</p>'
             f"{_semantic_phase_summary(semantic_phase)}"
             f"{_observation_role_summary(step, previous_action)}"
+            f"{_action_evidence_summary(step)}"
             f"{_focus_summary(step, focus)}"
             f"{_robot_evidence_summary(step)}"
             f"{_robot_view_provenance_summary(step)}"
@@ -6972,6 +6991,52 @@ def _focus_summary(step: dict[str, Any], focus: dict[str, Any]) -> str:
     if focus.get("provenance"):
         bits.append(_badge("Focus provenance", focus["provenance"]))
     return '<div class="focus-badges">' + "".join(bits) + "</div>"
+
+
+def _action_evidence_summary(step: dict[str, Any]) -> str:
+    evidence = step.get("action_evidence")
+    if not isinstance(evidence, dict) or not evidence:
+        return ""
+    bits = []
+    if evidence.get("agent_tool"):
+        bits.append(_badge("Agent tool", evidence["agent_tool"]))
+    if evidence.get("source_observation_id"):
+        bits.append(_badge("Source observe", evidence["source_observation_id"]))
+    bbox = _format_bbox(evidence.get("source_image_bbox"))
+    if bbox:
+        bits.append(_badge("Source FPV bbox", bbox))
+    if evidence.get("reviewability_status"):
+        bits.append(_badge("BBox review", evidence["reviewability_status"]))
+    if evidence.get("grounding_status"):
+        grounding = str(evidence["grounding_status"])
+        if evidence.get("grounding_confidence") is not None:
+            grounding += f" ({evidence['grounding_confidence']})"
+        bits.append(_badge("Grounding", grounding))
+    if evidence.get("resolved_object_id"):
+        bits.append(_badge("Resolved handle", evidence["resolved_object_id"]))
+    if evidence.get("backend_primitive"):
+        bits.append(_badge("Backend primitive", evidence["backend_primitive"]))
+    if evidence.get("declared_category"):
+        bits.append(_badge("Declared category", evidence["declared_category"]))
+    if evidence.get("target_fixture_id"):
+        bits.append(_badge("Public target", evidence["target_fixture_id"]))
+    note = str(evidence.get("evidence_note") or evidence.get("grounding_basis") or "")
+    note_html = f'<p class="note action-evidence-note">{html.escape(note)}</p>' if note else ""
+    if not bits and not note_html:
+        return ""
+    return '<div class="action-evidence-badges">' + "".join(bits) + f"</div>{note_html}"
+
+
+def _format_bbox(value: Any) -> str:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return ""
+    return "[" + ", ".join(_format_bbox_value(item) for item in value) + "]"
+
+
+def _format_bbox_value(value: Any) -> str:
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
 
 
 def _robot_evidence_summary(step: dict[str, Any]) -> str:
@@ -7672,6 +7737,11 @@ def _wrap_html(
     .semantic-badges .badge {{ font-size: 13px; padding: 5px 8px; background: #eef6ff; }}
     .focus-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }}
     .focus-badges .badge {{ font-size: 13px; padding: 5px 8px; }}
+    .action-evidence-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }}
+    .action-evidence-badges .badge {{
+      font-size: 12px; padding: 4px 7px; background: #fff7ed; border-color: #fed7aa;
+    }}
+    .action-evidence-note {{ margin-top: -4px; }}
     .evidence-badges {{ display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 10px; }}
     .evidence-badges .badge {{ font-size: 12px; padding: 4px 7px; background: #f8fafc; }}
     .views {{

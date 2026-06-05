@@ -68,6 +68,7 @@ CAMERA_MODEL_POLICY_SCHEMA = "camera_model_policy_v1"
 CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
+VISUAL_GROUNDING_EVIDENCE_SCHEMA = "visual_grounding_evidence_v1"
 DONE_READINESS_SCHEMA = "done_readiness_v1"
 DONE_READINESS_POLICY_RAW_FPV = "raw_fpv_grounded_cleanup_chains"
 DONE_READINESS_POLICY_EXPLICIT = "explicit_grounded_cleanup_chains"
@@ -77,6 +78,9 @@ SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE = "sanitized_visible_object_detections"
 WORLD_LABELS_SANITIZED_PROFILE = "world-labels-sanitized"
 VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = "visual_candidate_already_handled"
+VISUAL_EVIDENCE_REVIEWABLE_STATUS = "reviewable"
+VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS = "not_reviewable"
+VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY = "needs_visual_evidence"
 VISUAL_GROUNDING_CATEGORY_HINTS = [
     "food",
     "dish",
@@ -1069,6 +1073,33 @@ class RealWorldCleanupContract:
         )
         cleanup_recommended = bool(detection.get("cleanup_recommended", False))
         recommended_tool = str(detection.get("recommended_tool") or "")
+        visual_evidence_error = self._visual_evidence_actionability_error(
+            "navigate_to_visual_candidate",
+            handle,
+        )
+        if visual_evidence_error is not None:
+            return self._error(
+                "navigate_to_visual_candidate",
+                str(visual_evidence_error.get("error_reason") or "visual_evidence_not_reviewable"),
+                model_declared_observation=self._public_fixture_reference_payload(declaration),
+                object_id=handle,
+                candidate_fixture_id=candidate_fixture_id,
+                candidate_fixture_category=detection.get("candidate_fixture_category", ""),
+                cleanup_recommended=False,
+                recommended_tool="",
+                grounding_status=declaration.get("grounding_status", "resolved"),
+                required_next_tool="observe",
+                recovery_tool_options=visual_evidence_error.get("recovery_tool_options", []),
+                actionability_status=visual_evidence_error.get(
+                    "actionability_status",
+                    VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY,
+                ),
+                visual_grounding_evidence=visual_evidence_error.get(
+                    "visual_grounding_evidence",
+                    {},
+                ),
+                recovery_hint=visual_evidence_error.get("recovery_hint", ""),
+            )
         if not candidate_fixture_id or not recommended_tool:
             return self._error(
                 "navigate_to_visual_candidate",
@@ -1094,12 +1125,22 @@ class RealWorldCleanupContract:
                 str(navigation.get("error_reason") or "navigation_failed"),
                 model_declared_observation=self._public_fixture_reference_payload(declaration),
                 object_id=handle,
+                visual_grounding_evidence=navigation.get("visual_grounding_evidence", {}),
+                actionability_status=navigation.get("actionability_status", ""),
                 recovery_hint=navigation.get("recovery_hint", ""),
             )
         payload = {
             key: value
             for key, value in navigation.items()
-            if key not in {"tool", "ok", "status", "object_id"}
+            if key
+            not in {
+                "tool",
+                "ok",
+                "status",
+                "object_id",
+                "visual_grounding_evidence",
+                "actionability_status",
+            }
         }
         detection = self._detections_by_handle.get(handle, {})
         return self._ok(
@@ -1113,6 +1154,8 @@ class RealWorldCleanupContract:
             candidate_fixture_category=detection.get("candidate_fixture_category", ""),
             cleanup_recommended=cleanup_recommended,
             recommended_tool=recommended_tool,
+            visual_grounding_evidence=self._visual_evidence_for_handle(handle),
+            actionability_status="actionable",
             declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
             required_next_tool="pick",
         )
@@ -1165,6 +1208,12 @@ class RealWorldCleanupContract:
             if grounding_error is not None:
                 return grounding_error
             return self._error("navigate_to_object", "stale_reference", object_id=object_id)
+        visual_evidence_error = self._visual_evidence_actionability_error(
+            "navigate_to_object",
+            object_id,
+        )
+        if visual_evidence_error is not None:
+            return visual_evidence_error
         self._reset_camera_adjustment()
         response = self.contract.navigate_to_object(internal_id)
         if not response.get("ok"):
@@ -1185,6 +1234,8 @@ class RealWorldCleanupContract:
             pose_confidence=self._object_pose_confidence(object_id),
             pose_covariance=[0.1, 0.1, 0.05],
             requires_reobserve=False,
+            visual_grounding_evidence=self._visual_evidence_for_handle(object_id),
+            actionability_status="actionable",
             source_receptacle_id=response.get("source_receptacle_id"),
             previous_receptacle_id=response.get("previous_receptacle_id"),
             location_id=response.get("location_id"),
@@ -1210,6 +1261,9 @@ class RealWorldCleanupContract:
             if grounding_error is not None:
                 return grounding_error
             return self._error("pick", "stale_reference", object_id=object_id)
+        visual_evidence_error = self._visual_evidence_actionability_error("pick", object_id)
+        if visual_evidence_error is not None:
+            return visual_evidence_error
         if getattr(self, "_current_object_handle", None) != object_id:
             return self._semantic_order_error(
                 "pick",
@@ -2317,6 +2371,16 @@ class RealWorldCleanupContract:
             cleanup_recommended=bool(worklist_item.get("cleanup_recommended"))
             and not self.sanitize_world_labels,
         )
+        evidence = self._visual_evidence_for_handle(handle)
+        candidate_actionability_status = _candidate_actionability_status(
+            {
+                **detection,
+                "visual_grounding_evidence": evidence,
+                "grounding_status": grounding_status,
+            }
+        )
+        if actionability == "actionable" and candidate_actionability_status != "actionable":
+            actionability = candidate_actionability_status
         candidate_fixture_id = ""
         candidate_source = "policy_required_destination_selection"
         producer_type = (
@@ -2352,11 +2416,13 @@ class RealWorldCleanupContract:
             ),
             "source_observation_id": source_observation_id,
             "image_region": image_region,
+            "visual_grounding_evidence": evidence,
             "producer_type": producer_type,
             "producer_id": producer_id,
             "confidence": confidence,
             "freshness": str(detection.get("freshness") or "current_run"),
             "actionability": actionability,
+            "actionability_status": candidate_actionability_status,
             "state": state,
             "grounding_status": grounding_status,
             "candidate_fixture_id": candidate_fixture_id,
@@ -2408,6 +2474,14 @@ class RealWorldCleanupContract:
             grounding_status = str(
                 detection.get("grounding_status") or declaration.get("grounding_status") or ""
             )
+            visual_grounding_evidence = self._visual_evidence_for_handle(handle)
+            actionability_status = _candidate_actionability_status(
+                {
+                    **detection,
+                    "visual_grounding_evidence": visual_grounding_evidence,
+                    "grounding_status": grounding_status,
+                }
+            )
             public_candidate = self.target_fixture_for_detection(detection, public_fixtures)
             candidate_fixture_id = (public_candidate or {}).get("fixture_id", "")
             source_fixture_id = str(support.get("fixture_id") or "")
@@ -2418,6 +2492,7 @@ class RealWorldCleanupContract:
             state = str(lifecycle.get("state", "pending"))
             cleanup_recommended = bool(
                 grounding_status not in {"ambiguous", "unresolved"}
+                and actionability_status == "actionable"
                 and public_candidate_fixture_id
                 and public_candidate_fixture_id != public_source_fixture_id
                 and state not in _NON_ACTIONABLE_HANDLE_STATES
@@ -2442,6 +2517,8 @@ class RealWorldCleanupContract:
                 "source_fixture_id": public_source_fixture_id,
                 "candidate_fixture_id": public_candidate_fixture_id,
                 "grounding_status": grounding_status,
+                "actionability_status": actionability_status,
+                "visual_grounding_evidence": visual_grounding_evidence,
                 "candidate_source": candidate_source,
                 "last_waypoint_id": lifecycle.get("waypoint_id", ""),
                 "perception_source": lifecycle.get("perception_source", "visible_detection"),
@@ -2853,6 +2930,10 @@ class RealWorldCleanupContract:
                     "source_observation_id": source_observation_id,
                 },
             }
+            detection["visual_grounding_evidence"] = _visual_grounding_evidence_for_candidate(
+                detection
+            )
+            detection["actionability_status"] = _candidate_actionability_status(detection)
             detection.update(self._public_candidate_hint(detection))
             self._detections_by_handle[handle] = detection
             self._record_detection_lifecycle(handle, detection, public_waypoint)
@@ -2891,6 +2972,7 @@ class RealWorldCleanupContract:
                 "current_room_id": room_id,
                 "visibility_confidence": _visibility_confidence(handle),
                 "image_bbox": _image_bbox(handle),
+                "image_region": {"type": "bbox", "value": _image_bbox(handle)},
                 "perception_source": CAMERA_MODEL_POLICY_MODE,
                 "model_provenance": model_provenance,
                 "source_observation_id": observation_id,
@@ -2905,6 +2987,10 @@ class RealWorldCleanupContract:
                     "source_observation_id": observation_id,
                 },
             }
+            detection["visual_grounding_evidence"] = _visual_grounding_evidence_for_candidate(
+                detection
+            )
+            detection["actionability_status"] = _candidate_actionability_status(detection)
             detection.update(self._public_candidate_hint(detection))
             _assert_no_forbidden_agent_view_keys(detection)
             self._detections_by_handle[handle] = detection
@@ -2936,6 +3022,7 @@ class RealWorldCleanupContract:
                 public_candidate_fixture_id
                 and public_candidate_fixture_id != public_source_fixture_id
                 and not self._handle_is_non_actionable(str(detection.get("object_id") or ""))
+                and _candidate_actionability_status(detection) == "actionable"
             ),
             "candidate_source": "public_semantic_anchor"
             if self.map_mode == MINIMAL_MAP_MODE and candidate_fixture_id
@@ -3287,6 +3374,8 @@ class RealWorldCleanupContract:
                     "grounding_status": declaration["grounding_status"],
                     "grounding_confidence": declaration["grounding_confidence"],
                     "grounding_basis": declaration["grounding_basis"],
+                    "visual_grounding_evidence": declaration["visual_grounding_evidence"],
+                    "actionability_status": declaration["actionability_status"],
                 }
             )
             _assert_no_forbidden_agent_view_keys(detection)
@@ -3312,6 +3401,8 @@ class RealWorldCleanupContract:
                 "target_fixture_id": declaration["target_fixture_id"],
                 "target_fixture_category": declaration["target_fixture_category"],
                 "target_plausibility": declaration["target_plausibility"],
+                "visual_grounding_evidence": declaration["visual_grounding_evidence"],
+                "actionability_status": declaration["actionability_status"],
             }
             self._set_handle_state(
                 handle,
@@ -3540,6 +3631,20 @@ class RealWorldCleanupContract:
             self.internal_fixture_id_for_public_reference(target_fixture_id) or target_fixture_id
         )
         target_fixture = self._fixtures.get(internal_target_fixture_id, {})
+        visual_grounding_evidence = _visual_grounding_evidence_for_candidate(
+            candidate,
+            fallback_image_bbox=candidate.get("image_bbox"),
+            grounding_status=grounding_status,
+        )
+        if actionability_status == "actionable":
+            actionability_status = _candidate_actionability_status(
+                {
+                    "visual_grounding_evidence": visual_grounding_evidence,
+                    "grounding_status": grounding_status,
+                }
+            )
+            if actionability_status != "actionable":
+                recovery_hint = _visual_evidence_recovery_hint()
         target_plausibility = self._target_plausibility(
             category=str(candidate.get("category") or ""),
             target_fixture_id=target_fixture_id,
@@ -3569,6 +3674,7 @@ class RealWorldCleanupContract:
             "recovery_hint": recovery_hint,
             "target_plausibility": target_plausibility,
             "actionability_status": actionability_status,
+            "visual_grounding_evidence": visual_grounding_evidence,
             "private_truth_included": False,
         }
         for key in (
@@ -3630,6 +3736,7 @@ class RealWorldCleanupContract:
             "current_room_id": room_id,
             "visibility_confidence": _visibility_confidence(handle),
             "image_bbox": _image_bbox(handle),
+            "image_region": {"type": "bbox", "value": _image_bbox(handle)},
             "perception_source": perception_source,
             "producer_type": producer_type,
             "source_observation_id": source_observation_id,
@@ -3648,6 +3755,10 @@ class RealWorldCleanupContract:
         }
         detection["model_provenance"] = producer_type
         detection["support_estimate"]["model_provenance"] = producer_type
+        detection["visual_grounding_evidence"] = _visual_grounding_evidence_for_candidate(
+            detection
+        )
+        detection["actionability_status"] = _candidate_actionability_status(detection)
         detection.update(self._public_candidate_hint(detection))
         _assert_no_forbidden_agent_view_keys(detection)
         return detection
@@ -3721,6 +3832,59 @@ class RealWorldCleanupContract:
                     "Declare a tighter image_region or source_fixture_id before picking.",
                 ),
             ),
+        )
+
+    def _visual_evidence_for_handle(self, handle: str) -> dict[str, Any]:
+        detection = self._detections_by_handle.get(handle) or {}
+        evidence = detection.get("visual_grounding_evidence")
+        if isinstance(evidence, dict) and evidence:
+            return copy.deepcopy(evidence)
+        declaration = detection.get("model_declared_observation") or {}
+        return _visual_grounding_evidence_for_candidate(
+            {
+                **detection,
+                "image_region": detection.get("image_region") or declaration.get("image_region"),
+                "producer_type": detection.get("producer_type")
+                or declaration.get("producer_type"),
+                "producer_id": detection.get("producer_id") or declaration.get("producer_id"),
+                "source_observation_id": detection.get("source_observation_id")
+                or declaration.get("source_observation_id"),
+                "grounding_status": detection.get("grounding_status")
+                or declaration.get("grounding_status"),
+            }
+        )
+
+    def _visual_evidence_actionability_error(
+        self,
+        tool: str,
+        object_id: str,
+    ) -> dict[str, Any] | None:
+        detection = self._detections_by_handle.get(object_id)
+        if not detection:
+            return None
+        if self._handle_is_non_actionable(object_id):
+            return None
+        status = _candidate_actionability_status(detection)
+        if status == "actionable":
+            return None
+        evidence = self._visual_evidence_for_handle(object_id)
+        declaration = detection.get("model_declared_observation") or {}
+        return self._error(
+            tool,
+            "visual_evidence_not_reviewable",
+            object_id=object_id,
+            required_next_tool="observe",
+            recovery_tool_options=["observe", "adjust_camera"],
+            actionability_status=status,
+            visual_grounding_evidence=evidence,
+            grounding_status=detection.get("grounding_status")
+            or declaration.get("grounding_status")
+            or "resolved",
+            grounding_confidence=detection.get("grounding_confidence")
+            or declaration.get("grounding_confidence")
+            or 0.0,
+            source_observation_id=evidence.get("source_observation_id", ""),
+            recovery_hint=_visual_evidence_recovery_hint(),
         )
 
     def _raw_fpv_observation_by_id(self, observation_id: str | None) -> dict[str, Any] | None:
@@ -4166,6 +4330,150 @@ def _runtime_actionability(
     if cleanup_recommended and state in {"pending", "navigating_to_object"}:
         return "actionable"
     return state or "pending"
+
+
+def _visual_grounding_evidence_for_candidate(
+    candidate: dict[str, Any],
+    *,
+    fallback_image_bbox: Any = None,
+    grounding_status: str = "",
+) -> dict[str, Any]:
+    image_region = candidate.get("image_region")
+    if not image_region and candidate.get("image_bbox"):
+        image_region = {"type": "bbox", "value": candidate.get("image_bbox")}
+    image_region = _normalize_image_region(image_region)
+    bbox = image_region.get("value") if image_region.get("type") == "bbox" else fallback_image_bbox
+    if bbox is None:
+        bbox = candidate.get("image_bbox")
+    image_dimensions = candidate.get("image_dimensions") or {}
+    review = _bbox_reviewability(bbox, image_dimensions=image_dimensions)
+    pipeline = candidate.get("visual_grounding_pipeline") or {}
+    evidence = {
+        "schema": VISUAL_GROUNDING_EVIDENCE_SCHEMA,
+        "camera_frame": "agent_facing_fpv",
+        "source_observation_id": str(candidate.get("source_observation_id") or ""),
+        "producer_type": str(candidate.get("producer_type") or ""),
+        "producer_id": str(candidate.get("producer_id") or ""),
+        "image_region": image_region,
+        "image_bbox": review["image_bbox"],
+        "bbox_coordinate_space": review["bbox_coordinate_space"],
+        "reviewability_status": review["reviewability_status"],
+        "reviewability_reason": review["reviewability_reason"],
+        "grounding_status": str(grounding_status or candidate.get("grounding_status") or ""),
+        "actionability_status": "actionable"
+        if review["reviewability_status"] == VISUAL_EVIDENCE_REVIEWABLE_STATUS
+        else VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY,
+        "private_truth_included": False,
+    }
+    if candidate.get("visual_grounding_overlay"):
+        evidence["visual_grounding_overlay"] = str(candidate["visual_grounding_overlay"])
+    if pipeline:
+        evidence["visual_grounding_pipeline_id"] = str(pipeline.get("pipeline_id") or "")
+        evidence["visual_grounding_pipeline_status"] = str(pipeline.get("status") or "")
+    _assert_no_forbidden_agent_view_keys(evidence)
+    return evidence
+
+
+def _bbox_reviewability(
+    value: Any,
+    *,
+    image_dimensions: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    numbers = _numeric_bbox(value)
+    if numbers is None:
+        return {
+            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
+            "reviewability_reason": "missing_bbox",
+            "bbox_coordinate_space": "",
+            "image_bbox": [],
+        }
+    x, y, width, height = numbers
+    if width <= 0 or height <= 0:
+        return {
+            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
+            "reviewability_reason": "non_positive_bbox_extent",
+            "bbox_coordinate_space": "",
+            "image_bbox": numbers,
+        }
+    if x < 0 or y < 0:
+        return {
+            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
+            "reviewability_reason": "bbox_origin_outside_frame",
+            "bbox_coordinate_space": "",
+            "image_bbox": numbers,
+        }
+    if all(0.0 <= item <= 1.0 for item in numbers):
+        if x + width <= 1.0 and y + height <= 1.0:
+            return {
+                "reviewability_status": VISUAL_EVIDENCE_REVIEWABLE_STATUS,
+                "reviewability_reason": "normalized_bbox_inside_agent_fpv",
+                "bbox_coordinate_space": "normalized_xywh",
+                "image_bbox": numbers,
+            }
+        return {
+            "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
+            "reviewability_reason": "normalized_bbox_outside_frame",
+            "bbox_coordinate_space": "normalized_xywh",
+            "image_bbox": numbers,
+        }
+    dimensions = image_dimensions or {}
+    frame_width = _positive_int(dimensions.get("width"))
+    frame_height = _positive_int(dimensions.get("height"))
+    if frame_width is not None and frame_height is not None:
+        if x >= frame_width or y >= frame_height:
+            return {
+                "reviewability_status": VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS,
+                "reviewability_reason": "pixel_bbox_outside_frame",
+                "bbox_coordinate_space": "pixel_xywh",
+                "image_bbox": numbers,
+            }
+    return {
+        "reviewability_status": VISUAL_EVIDENCE_REVIEWABLE_STATUS,
+        "reviewability_reason": "pixel_bbox_present_on_agent_fpv",
+        "bbox_coordinate_space": "pixel_xywh",
+        "image_bbox": numbers,
+    }
+
+
+def _numeric_bbox(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    numbers = [_float_or_none(item) for item in value]
+    if any(number is None or not math.isfinite(number) for number in numbers):
+        return None
+    return [round(float(number), 6) for number in numbers if number is not None]
+
+
+def _candidate_actionability_status(candidate: dict[str, Any]) -> str:
+    declaration = candidate.get("model_declared_observation") or {}
+    existing = str(
+        candidate.get("actionability_status")
+        or declaration.get("actionability_status")
+        or ""
+    )
+    if existing == "already_handled":
+        return existing
+    grounding_status = str(
+        candidate.get("grounding_status") or declaration.get("grounding_status") or "resolved"
+    )
+    if grounding_status in {"ambiguous", "unresolved"}:
+        return "needs_clarification"
+    evidence = candidate.get("visual_grounding_evidence")
+    if not isinstance(evidence, dict) or not evidence:
+        evidence = _visual_grounding_evidence_for_candidate(candidate)
+    if evidence.get("reviewability_status") != VISUAL_EVIDENCE_REVIEWABLE_STATUS:
+        return VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY
+    if existing and existing != VISUAL_EVIDENCE_REQUIRED_ACTIONABILITY:
+        return existing
+    return "actionable"
+
+
+def _visual_evidence_recovery_hint() -> str:
+    return (
+        "Do not navigate or pick this candidate until the agent-facing FPV evidence "
+        "has a reviewable bbox. Observe or adjust_camera, then retry with "
+        "image_region={type:bbox,value:[x,y,width,height]} from the visible object."
+    )
 
 
 def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:

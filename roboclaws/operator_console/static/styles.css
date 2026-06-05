@@ -5,7 +5,7 @@
   --text: #1f2522;
   --muted: #66736d;
   --border: #ced8d1;
-  --warning: #b56a00;
+  --warning: #935600;
   --danger: #b42318;
   --success: #287d3c;
   color-scheme: light;
@@ -17,7 +17,7 @@
 
 body {
   margin: 0;
-  font-family: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 16px;
   line-height: 1.5;
   color: var(--text);
@@ -49,11 +49,29 @@ button:disabled {
   opacity: 0.55;
 }
 
-button:focus,
-input:focus,
-textarea:focus {
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+button:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.primary:not(:disabled):hover,
+.danger:not(:disabled):hover,
+.emergency:not(:disabled):hover,
+.view-mode.active:hover {
+  filter: brightness(0.92);
+}
+
+.route-card:not(:disabled):hover,
+.view-mode:not(.active):hover,
+.artifact-list a:hover {
+  border-color: var(--accent);
+  background: var(--bg);
 }
 
 .primary {
@@ -103,6 +121,7 @@ textarea:focus {
 }
 
 .app-title {
+  margin: 0;
   font-size: 20px;
   font-weight: 500;
   line-height: 1.25;
@@ -116,6 +135,26 @@ textarea:focus {
   font-weight: 500;
   line-height: 1.35;
   color: var(--muted);
+}
+
+.run-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+
+#run-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.top-run-bar.run-active #run-title {
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.15;
 }
 
 .global-controls {
@@ -200,7 +239,7 @@ textarea,
 pre,
 .evidence-box,
 .command-preview {
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .route-list,
@@ -289,17 +328,55 @@ pre,
   color: var(--muted);
 }
 
-.badge.ready {
+.badge.ready,
+.badge.passed {
   color: var(--success);
 }
 
 .badge.blocked,
+.badge.failed,
 .inline-error {
   color: var(--danger);
 }
 
-.badge.needs_action {
+.badge.needs_action,
+.badge.warning {
   color: var(--warning);
+}
+
+.badge.running {
+  color: var(--accent);
+}
+
+.meta-label,
+.field-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.artifact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.state-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.state-list dt {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.state-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .command-preview {
@@ -496,13 +573,14 @@ dialog pre {
   gap: 8px;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1360px) {
   .app-shell {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       "top"
       "routes"
+      "setup"
       "workspace"
       "state"
       "events";
