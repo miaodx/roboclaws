@@ -1754,3 +1754,61 @@ def test_sync_held_object_to_robot_pose_moves_freejoint_body() -> None:
         "position_source": "robot_relative_held_pose",
     }
     assert data.xpos[body_id].tolist() == pytest.approx([1.8, 2.0, 1.22])
+
+
+def test_worker_runtime_render_state_records_object_articulation_joints() -> None:
+    pytest.importorskip("mujoco")
+    worker = _load_worker_module()
+    model = worker.mujoco.MjModel.from_xml_string(
+        """
+        <mujoco>
+          <compiler angle="radian"/>
+          <worldbody>
+            <body name="box" pos="0 0 0">
+              <freejoint name="box_free"/>
+              <geom type="box" size="0.1 0.1 0.05"/>
+              <body name="box_flap" pos="0 0.1 0.05">
+                <joint name="box/flap_outer_1" type="hinge" axis="1 0 0" range="-3.14 3.14"/>
+                <geom type="box" size="0.1 0.01 0.05"/>
+              </body>
+            </body>
+          </worldbody>
+        </mujoco>
+        """
+    )
+    data = worker.mujoco.MjData(model)
+    joint_id = worker.mujoco.mj_name2id(
+        model,
+        worker.mujoco.mjtObj.mjOBJ_JOINT,
+        "box/flap_outer_1",
+    )
+    data.qpos[int(model.jnt_qposadr[joint_id])] = 2.75
+    worker.mujoco.mj_forward(model, data)
+    state = {
+        "qpos": [float(value) for value in data.qpos],
+        "objects": {
+            "box_01": {
+                "object_id": "box_01",
+                "category": "Box",
+                "body_name": "box",
+                "upstream_object_id": "Box|surface|1|1",
+            }
+        },
+    }
+
+    runtime_state = worker._runtime_render_state(model, data, state)
+
+    box_state = runtime_state["objects"]["box_01"]
+    assert runtime_state["articulated_object_count"] == 1
+    assert box_state["articulation_status"] == "articulated"
+    assert box_state["subtree_joint_count"] == 1
+    assert box_state["articulation_joints"] == [
+        {
+            "joint_name": "box/flap_outer_1",
+            "body_name": "box_flap",
+            "joint_type": "hinge",
+            "qposadr": int(model.jnt_qposadr[joint_id]),
+            "qpos": [2.75],
+            "range": [-3.14, 3.14],
+        }
+    ]

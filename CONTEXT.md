@@ -53,19 +53,9 @@ _Avoid_: whole task, demo recipe, environment primitive
 
 **Backend Variant**:
 The concrete implementation path behind a shared task/profile shape, such as
-`molmospaces_subprocess`, `api_semantic_synthetic`, `agibot_g2`, or
-`ros2_nav2`.
+`molmospaces_subprocess`, `api_semantic_synthetic`, `agibot_g2`, `ros2_nav2`,
+or the backend-specific primitives behind them.
 _Avoid_: new public task, new profile name, agent-facing tool namespace
-
-**Environment Primitive**:
-A backend-specific low-level action, simulator call, robot SDK call, planner
-call, or mock operation.
-_Avoid_: agent-facing capability, public task, universal tool
-
-**Execution Backend**:
-The actual environment where primitives run: mock, AI2-THOR, MolmoSpaces,
-Nav2/ROS2, Agibot G2, RBY1M, or a future robot.
-_Avoid_: capability profile, skill, task prompt
 
 ## Household World And Cleanup Vocabulary
 
@@ -157,6 +147,14 @@ A public, run-local list derived from current observations and priors. It
 tracks cleanup candidates and actionability state.
 _Avoid_: private target list, static map semantics, evaluator manifest
 
+**Done Readiness Gate**:
+A contract/runtime policy that decides whether a `done` call may finalize a
+run. It may block completion with public recovery blockers derived from Agent
+View, public tool traces, public worklists, and run acceptance configuration,
+but it must not expose private generated mess sets, acceptable destinations,
+hidden target lists, private manifests, or scorer truth.
+_Avoid_: skill scratchpad authority, private target-count leak, new cleanup task tool
+
 ## Perception And Grounding Vocabulary
 
 **Model-Declared Observation**:
@@ -164,23 +162,11 @@ A public observed handle created from camera evidence by the main agent or a
 camera inference producer.
 _Avoid_: simulator oracle, private target, ungrounded local note
 
-**Camera Inference Producer**:
-A model, detector, visual-grounding service, or main agent path that proposes
-public observations from camera evidence.
-_Avoid_: capability tool, cleanup policy, private evaluator
-
 **External Visual Grounding Service**:
 A replaceable service boundary for camera-derived candidates. It may use a fake
 producer, detector, refiner, or real VLM stack without changing the cleanup MCP
 contract.
 _Avoid_: cleanup runtime dependency, hidden fallback, private scorer
-
-**G2 Camera Grounding Lane**:
-The first Agibot G2 perception lane sends robot-local `head_color` / RAW_FPV
-image bytes through the existing External Visual Grounding Service, normally a
-workstation/GPU sidecar such as Grounding DINO. The robot captures observations;
-the sidecar produces public camera candidates.
-_Avoid_: simulator labels, robot-local model dependency, agent-visible service credentials
 
 **Visual Grounding Failure Evidence**:
 Visible producer failure evidence containing status, reason, timeout, and
@@ -192,13 +178,6 @@ A perception-only benchmark set built from fixed camera frames, public context,
 and private labels synchronized to the same scene state. For MolmoSpaces, it
 should sample multiple scene indices rather than only replay one stored room.
 _Avoid_: single-run artifact scrape, cleanup score, agent-facing dataset
-
-**Private BBox Ground Truth**:
-Hidden object-localization labels produced from simulator segmentation or manual
-annotation for benchmark scoring. These labels may include object id, category,
-visible pixels, and bounding boxes, but must not enter service requests, MCP
-responses, or Agent View.
-_Avoid_: public camera hint, detector output, synthetic placeholder bbox
 
 **Candidate Cleanup Destination**:
 A public destination hint for a detected object. It may guide cleanup but is not
@@ -226,30 +205,11 @@ grounding, and Runtime Metric Map output. Cleanup actions and physical
 manipulation remain disabled or blocked.
 _Avoid_: cleanup execution, object navigation, physical pick/place proof
 
-**Agibot Minimal Map Context**:
-The G2 real-robot starting context: Agibot GDK map source, occupancy/free-space
-artifacts, frame/origin/resolution metadata, current pose or localization
-evidence, safety bounds, operator gates, and system-generated exploration
-candidates. It must not require hand-authored rooms, fixtures, fixture labels,
-or manually tagged semantic waypoints; `semantic-map-build` creates Runtime
-Metric Map semantics from robot-local observations.
-_Avoid_: manually authored Agibot semantic map, GDK internals in Agent View, arbitrary coordinates
-
 **Simulator/Hardware Contract Parity**:
 The expectation that simulator and physical runs share public task/profile/tool
 shape while reports distinguish backend variant, provenance, and blocked
 capabilities.
 _Avoid_: simulator proof as hardware proof, robot-specific tool namespace
-
-**Agibot MolmoSpaces Pre-Hardware Rehearsal**:
-A simulated pre-hardware layer behind `backend=agibot_molmospaces_sim` that
-starts from a minimal map projection, runs online `semantic-map-build` over
-generated exploration candidates, writes Runtime Metric Map evidence, and can
-then rehearse cleanup actions in MolmoSpaces before G2 hardware testing. It may
-use RAW_FPV or a real External Visual Grounding Service such as Grounding DINO
-for local confidence, but it remains simulated evidence and not Agibot GDK
-execution proof.
-_Avoid_: contract-only smoke, digital twin claim, hardware validation, fixture-only CI gate
 
 **Operator-Recorded Waypoint**:
 A named robot pose prepared by an operator before a run.
@@ -333,6 +293,10 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 - Private generated mess sets, acceptable destinations, hidden target lists,
   private manifests, and scorer truth must not enter public profile metadata,
   Agent View, skill prompts, or MCP responses.
+- `done` may return public readiness blockers and required next tools, but those
+  blockers must be derived from public traces/worklists and must not disclose
+  private target membership, hidden acceptable destinations, or private scorer
+  truth.
 - Physical robot runs should reuse the same public task/profile/tool shape as
   simulation and differ by backend variant, provenance, safety gates, and
   blocked-capability status.

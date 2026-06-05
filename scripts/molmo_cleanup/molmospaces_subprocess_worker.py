@@ -1796,6 +1796,145 @@ def _refresh_object_positions(
             obj["position"] = _xyz(data.xpos[body_id])
 
 
+def _refresh_runtime_render_state(state: dict[str, Any]) -> None:
+    try:
+        model, data = _load_model_data_for_state(state)
+        _apply_qpos(data, state["qpos"])
+        mujoco.mj_forward(model, data)
+    except Exception as exc:
+        state["runtime_render_state"] = {
+            "schema": "molmospaces_runtime_render_state_v1",
+            "status": "unavailable",
+            "unavailable_reason": f"{type(exc).__name__}: {exc}",
+        }
+        return
+    state["runtime_render_state"] = _runtime_render_state(model, data, state)
+
+
+def _runtime_render_state(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    state: dict[str, Any],
+) -> dict[str, Any]:
+    objects = {}
+    articulated_count = 0
+    try:
+        for object_id, obj in sorted((state.get("objects") or {}).items()):
+            if not isinstance(obj, dict):
+                continue
+            body_name = str(obj.get("body_name") or "")
+            body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+            if body_id < 0:
+                continue
+            joints = _runtime_subtree_joints(
+                model,
+                data,
+                body_name,
+                exclude_root_freejoint=True,
+            )
+            if joints:
+                articulated_count += 1
+            objects[str(object_id)] = {
+                "object_key": str(object_id),
+                "category": obj.get("category") or "",
+                "body_name": body_name,
+                "upstream_object_id": obj.get("upstream_object_id") or obj.get("object_id") or "",
+                "position": _xyz(data.xpos[body_id]),
+                "subtree_joint_count": len(joints),
+                "articulation_status": "articulated" if joints else "rigid_or_free_body",
+                "articulation_joints": joints,
+            }
+    except Exception as exc:
+        return {
+            "schema": "molmospaces_runtime_render_state_v1",
+            "status": "unavailable",
+            "unavailable_reason": f"{type(exc).__name__}: {exc}",
+        }
+    return {
+        "schema": "molmospaces_runtime_render_state_v1",
+        "status": "computed",
+        "source": "mujoco_live_model_data_qpos",
+        "qpos_length": len(state.get("qpos") or []),
+        "object_count": len(objects),
+        "articulated_object_count": articulated_count,
+        "objects": objects,
+    }
+
+
+def _runtime_subtree_joints(
+    model: mujoco.MjModel,
+    data: mujoco.MjData,
+    body_name: str,
+    *,
+    exclude_root_freejoint: bool,
+) -> list[dict[str, Any]]:
+    root_body_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, body_name)
+    if root_body_id < 0:
+        return []
+    joints = []
+    for body_id in _subtree_body_ids(model, body_name):
+        joint_count = int(model.body_jntnum[body_id])
+        if joint_count <= 0:
+            continue
+        body_joint_start = int(model.body_jntadr[body_id])
+        for offset in range(joint_count):
+            joint_id = body_joint_start + offset
+            joint_type = int(model.jnt_type[joint_id])
+            if (
+                exclude_root_freejoint
+                and body_id == root_body_id
+                and offset == 0
+                and joint_type == int(mujoco.mjtJoint.mjJNT_FREE)
+            ):
+                continue
+            joint_name = mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, joint_id)
+            if not joint_name:
+                continue
+            qposadr = int(model.jnt_qposadr[joint_id])
+            qpos_width = _joint_qpos_width(model, joint_id)
+            joints.append(
+                {
+                    "joint_name": joint_name,
+                    "body_name": mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, body_id) or "",
+                    "joint_type": _joint_type_name(model, joint_id),
+                    "qposadr": qposadr,
+                    "qpos": [
+                        round(float(value), 6)
+                        for value in data.qpos[qposadr : qposadr + qpos_width]
+                    ],
+                    "range": [
+                        round(float(model.jnt_range[joint_id][0]), 6),
+                        round(float(model.jnt_range[joint_id][1]), 6),
+                    ]
+                    if bool(model.jnt_limited[joint_id])
+                    else [],
+                }
+            )
+    return joints
+
+
+def _joint_qpos_width(model: mujoco.MjModel, joint_id: int) -> int:
+    joint_type = int(model.jnt_type[joint_id])
+    if joint_type == int(mujoco.mjtJoint.mjJNT_FREE):
+        return 7
+    if joint_type == int(mujoco.mjtJoint.mjJNT_BALL):
+        return 4
+    return 1
+
+
+def _joint_type_name(model: mujoco.MjModel, joint_id: int) -> str:
+    joint_type = int(model.jnt_type[joint_id])
+    if joint_type == int(mujoco.mjtJoint.mjJNT_FREE):
+        return "free"
+    if joint_type == int(mujoco.mjtJoint.mjJNT_BALL):
+        return "ball"
+    if joint_type == int(mujoco.mjtJoint.mjJNT_SLIDE):
+        return "slide"
+    if joint_type == int(mujoco.mjtJoint.mjJNT_HINGE):
+        return "hinge"
+    return str(joint_type)
+
+
 def _resolve_placement(
     model: mujoco.MjModel,
     data: mujoco.MjData,
@@ -3998,6 +4137,7 @@ def _read_state(path: Path) -> dict[str, Any]:
 
 
 def _write_state(path: Path, state: dict[str, Any]) -> None:
+    _refresh_runtime_render_state(state)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 

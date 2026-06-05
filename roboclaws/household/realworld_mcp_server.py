@@ -19,14 +19,13 @@ from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
 )
-from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.planner_proof_attachment import attach_planner_proof
 from roboclaws.household.planner_proof_requests import write_planner_proof_requests
-from roboclaws.household.profiles import CAMERA_RAW_PROFILE, cleanup_profile_metadata_for_run
+from roboclaws.household.profiles import cleanup_profile_metadata_for_run
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
@@ -192,6 +191,7 @@ class RealWorldMolmoCleanupMCPServer:
                 runtime_map_prior=runtime_map_prior,
                 map_mode=map_mode,
                 cleanup_profile=cleanup_profile,
+                public_acceptance_config=_public_acceptance_config_from_backend(base_contract),
                 visual_grounding_client=visual_grounding_client_from_env(
                     visual_grounding,
                     base_url=visual_grounding_base_url,
@@ -265,63 +265,23 @@ class RealWorldMolmoCleanupMCPServer:
             }
         response = self._augment_response(name, request, response)
         response = self._attach_raw_fpv_artifact_if_needed(name, response)
-        if name == "done" and response.get("ok"):
-            response = self._guard_raw_fpv_live_done(response) or response
         self._write_tool_response(name, response)
         if name == "done" and response.get("ok"):
             return self._finalize_done(str(kwargs.get("reason", "")), response)
         self._record_tool_robot_view(name, request, response)
         return response
 
-    def _guard_raw_fpv_live_done(self, done_response: dict[str, Any]) -> dict[str, Any] | None:
-        if (
-            not self.agent_driven
-            or self.perception_mode != RAW_FPV_ONLY_MODE
-            or self.cleanup_profile != CAMERA_RAW_PROFILE
-        ):
-            return None
-        required_count = self._required_raw_fpv_live_cleanup_count()
-        if required_count <= 0:
-            return None
+    def done_readiness_evidence(self) -> dict[str, Any]:
         trace_events = self._read_trace_events()
         substeps = semantic_substeps(trace_events, self.contract.public_receptacles_by_id())
         complete_handles = _complete_semantic_substep_handles(substeps)
-        if len(complete_handles) >= required_count:
-            return None
         return {
-            "ok": False,
-            "tool": "done",
-            "status": "error",
-            "error_reason": "insufficient_grounded_cleanup_chains",
-            "required_tool": "navigate_to_visual_candidate",
+            "schema": "public_semantic_cleanup_evidence_v1",
             "complete_semantic_substep_objects": len(complete_handles),
             "complete_semantic_substep_object_ids": complete_handles,
-            "required_complete_semantic_substep_objects": required_count,
             "semantic_substep_count": len(substeps),
-            "recovery_hint": (
-                "Continue the RAW_FPV cleanup loop before done. For each plausible "
-                "object in a raw FPV observation, call navigate_to_visual_candidate; "
-                "when it returns ok=true, immediately call pick, navigate_to_receptacle "
-                "with candidate_fixture_id, then the recommended placement tool. Call "
-                "done only after enough grounded cleanup chains have completed."
-            ),
-            "contract": REALWORLD_CONTRACT,
-            "agent_driven": self.agent_driven,
+            "evidence_source": "public_mcp_trace_semantic_substeps",
         }
-
-    def _required_raw_fpv_live_cleanup_count(self) -> int:
-        requested_count = getattr(
-            self.base_contract.backend,
-            "requested_generated_mess_count",
-            None,
-        )
-        try:
-            target_count = int(requested_count)
-        except (TypeError, ValueError):
-            target_count = len(self.scenario.private_manifest.targets)
-        if target_count <= 0:
-            target_count = len(self.scenario.private_manifest.targets)
-        return generated_mess_success_threshold(target_count)
 
     def _agent_view_payload(self) -> dict[str, Any]:
         agent_view = self.contract.agent_view_payload()
@@ -836,11 +796,9 @@ class RealWorldMolmoCleanupMCPServer:
         trace_response = response
         if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
             trace_response = dict(response)
-            trace_response["agent_facing_compact_state"] = (
-                _compact_raw_fpv_mcp_observe_state(
-                    response,
-                    cleanup_worklist=self.contract.cleanup_worklist_payload(),
-                )
+            trace_response["agent_facing_compact_state"] = _compact_raw_fpv_mcp_observe_state(
+                response,
+                cleanup_worklist=self.contract.cleanup_worklist_payload(),
             )
         self._write_trace(tool=tool, event="response", response=trace_response)
 
@@ -1184,6 +1142,22 @@ def _backend_name(backend: Any, *, override: str = "") -> str:
     if backend.__class__.__name__ == "IsaacLabSubprocessBackend":
         return "isaaclab_subprocess"
     return "api_semantic_synthetic"
+
+
+def _public_acceptance_config_from_backend(
+    base_contract: CleanupBackendSession | None,
+) -> dict[str, int]:
+    if base_contract is None:
+        return {}
+    backend = getattr(base_contract, "backend", None)
+    requested = getattr(backend, "requested_generated_mess_count", None)
+    try:
+        requested_run_size = int(requested)
+    except (TypeError, ValueError):
+        return {}
+    if requested_run_size <= 0:
+        return {}
+    return {"requested_run_size": requested_run_size}
 
 
 def _resolve_artifact_path(run_dir: Path, value: str) -> Path:

@@ -25,6 +25,11 @@ from roboclaws.household.realworld_mcp_server import (
     make_molmo_realworld_cleanup_mcp,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.types import (
+    CleanupReceptacle,
+    CleanupScenario,
+    PrivateScoringManifest,
+)
 from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -464,6 +469,36 @@ class MolmoSpacesSubprocessBackend(_FakeVisualBackend):
     requested_generated_mess_count = 5
 
 
+def _empty_cleanup_scenario(scenario_id: str) -> CleanupScenario:
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task="check MCP done readiness policy",
+        seed=7,
+        objects=(),
+        receptacles=(
+            CleanupReceptacle("sofa_01", "Sofa", "living_area", category="Sofa"),
+            CleanupReceptacle("floor_01", "Floor", "living_area", category="Floor"),
+            CleanupReceptacle("armchair_01", "Armchair", "living_area", category="Armchair"),
+            CleanupReceptacle("desk_01", "Desk", "office", category="Desk"),
+            CleanupReceptacle(
+                "coffee_table_01", "Coffee Table", "living_area", category="CoffeeTable"
+            ),
+            CleanupReceptacle("sink_01", "Sink", "kitchen", category="Sink"),
+            CleanupReceptacle("bookshelf_01", "Bookshelf", "living_area", category="ShelvingUnit"),
+            CleanupReceptacle(
+                "laundry_hamper_01", "Laundry Hamper", "bedroom", category="LaundryHamper"
+            ),
+            CleanupReceptacle("fridge_01", "Fridge", "kitchen", category="Fridge"),
+            CleanupReceptacle("toy_bin_01", "Toy Bin", "living_area", category="ToyBin"),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
+        ),
+    )
+
+
 def _raw_fpv_camera_raw_server(tmp_path: Path) -> Any:
     scenario = build_cleanup_scenario(seed=7)
     backend = MolmoSpacesSubprocessBackend(scenario)
@@ -577,13 +612,56 @@ def test_realworld_mcp_raw_fpv_camera_raw_done_requires_complete_live_chains(
 
     assert done["ok"] is False
     assert done["tool"] == "done"
+    assert done["status"] == "blocked"
     assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
     assert done["required_tool"] == "navigate_to_visual_candidate"
     assert done["complete_semantic_substep_objects"] == 0
     assert done["required_complete_semantic_substep_objects"] == 4
+    assert done["completion"]["status"] == "blocked"
+    blocker = done["completion"]["blockers"][0]
+    assert blocker["type"] == "insufficient_grounded_cleanup_chains"
+    assert blocker["current"] == 0
+    assert blocker["required"] == 4
+    assert blocker["required_tool"] == "navigate_to_visual_candidate"
     assert "score" not in done
     assert "cleanup_status" not in done
+    assert "target_receptacle_id" not in str(done)
+    assert "private_manifest" not in str(done)
     assert not (tmp_path / "run_result.json").exists()
+
+
+def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chain_gate(
+    tmp_path: Path,
+) -> None:
+    scenario = _empty_cleanup_scenario("mcp-world-labels-readiness-policy-test")
+    backend = MolmoSpacesSubprocessBackend(scenario)
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=CleanupBackendSession(scenario, backend=backend),
+        port=0,
+        policy="codex_agent",
+        agent_driven=True,
+        record_robot_views=True,
+        cleanup_profile=WORLD_LABELS_PROFILE,
+    )
+    try:
+        assert "cleanup_worklist" not in _fastmcp_tool_names(server)
+        assert "check_done_ready" not in _fastmcp_tool_names(server)
+        metric_map = server.call_tool("metric_map")
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            server.call_tool("observe")
+        done = server.call_tool("done", reason="world-labels sweep complete")
+        run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
+    finally:
+        server.close()
+
+    assert done["ok"] is True
+    assert run_result["cleanup_profile"] == WORLD_LABELS_PROFILE
+    assert run_result["perception_mode"] != RAW_FPV_ONLY_MODE
+    assert run_result["requested_generated_mess_count"] == 5
+    assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] == 0
 
 
 def test_realworld_mcp_raw_fpv_camera_raw_done_allows_complete_live_chains(
@@ -791,12 +869,13 @@ def test_realworld_mcp_raw_fpv_trace_records_agent_facing_compact_state(
     compact_state = trace_observe["response"]["agent_facing_compact_state"]
 
     assert compact_state["schema"] == "raw_fpv_mcp_observe_state_v1"
-    assert compact_state["cleanup_worklist_summary"] == observation_state[
-        "cleanup_worklist_summary"
-    ]
-    assert compact_state["raw_fpv_observation"]["observation_id"] == observation_state[
-        "raw_fpv_observation"
-    ]["observation_id"]
+    assert (
+        compact_state["cleanup_worklist_summary"] == observation_state["cleanup_worklist_summary"]
+    )
+    assert (
+        compact_state["raw_fpv_observation"]["observation_id"]
+        == observation_state["raw_fpv_observation"]["observation_id"]
+    )
     assert "camera_control_contract" not in compact_state["raw_fpv_observation"]
 
 

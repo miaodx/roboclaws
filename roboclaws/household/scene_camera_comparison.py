@@ -22,8 +22,8 @@ from roboclaws.household.camera_control import (
     DEFAULT_SCENE_PROBE_CAMERA_ORBIT,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LENS,
-    DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     MOLMOSPACES_SCENE_FRAME,
+    SCENE_PROBE_LIGHTING_PROFILES,
     canonical_scene_camera_control_request,
     normalize_camera_control_request,
     write_camera_control_request,
@@ -156,11 +156,22 @@ class SceneCameraComparisonConfig:
     genesis_python: Path = Path(".venv-genesis/bin/python")
     render_width: int = DEFAULT_RENDER_WIDTH
     render_height: int = DEFAULT_RENDER_HEIGHT
+    lighting_profile_id: str = "default"
+
+
+def _scene_camera_lighting_profile(profile_id: str) -> dict[str, Any]:
+    key = str(profile_id or "default")
+    profile = SCENE_PROBE_LIGHTING_PROFILES.get(key)
+    if not isinstance(profile, dict):
+        available = ", ".join(sorted(SCENE_PROBE_LIGHTING_PROFILES))
+        raise ValueError(f"unknown scene-camera lighting profile {key!r}; available: {available}")
+    return dict(profile)
 
 
 def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str, Any]:
     output_dir = config.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    lighting_profile = _scene_camera_lighting_profile(config.lighting_profile_id)
     manifest: dict[str, Any] = {
         "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -177,13 +188,14 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
             "render_width": config.render_width,
             "render_height": config.render_height,
             "genesis_enabled": config.genesis_enabled,
+            "lighting_profile_id": str(lighting_profile.get("profile_id") or ""),
         },
         "camera_control": {
             "api_name": CAMERA_CONTROL_API_NAME,
             "camera_model": CANONICAL_CAMERA_MODEL,
             "coordinate_frame": MOLMOSPACES_SCENE_FRAME,
             "lens": dict(DEFAULT_SCENE_PROBE_LENS),
-            "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
+            "lighting_profile": dict(lighting_profile),
             "color_profile": dict(DEFAULT_SCENE_PROBE_COLOR_PROFILE),
             "calibration_status": CANONICAL_POSE_CALIBRATION,
             "calibration_note": (
@@ -208,8 +220,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         "view_specs": {},
         "lane_registry": {
             "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [ISAAC_LANE_ID]
-            + ([GENESIS_LANE_ID] if config.genesis_enabled else []),
+            "candidates": [ISAAC_LANE_ID] + ([GENESIS_LANE_ID] if config.genesis_enabled else []),
             "diagnostic_baseline": MOLMOSPACES_LANE_ID,
             "pairwise_diagnostic_candidate": ISAAC_LANE_ID,
             "candidate_diagnostic_note": (
@@ -228,6 +239,9 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     molmo = _capture_molmospaces_lane(config)
     manifest["lanes"][MOLMOSPACES_LANE_ID] = molmo
     molmo_state = molmo.pop("_state", {}) if isinstance(molmo, dict) else {}
+    if isinstance(molmo, dict) and isinstance(molmo_state, dict):
+        molmo["runtime_object_positions"] = _runtime_object_positions(molmo_state)
+        molmo["runtime_render_state"] = _runtime_render_state(molmo_state)
     anchors = _scene_anchors(molmo_state, limit=4)
     manifest["anchors"] = anchors
     room_views = _room_camera_control_views(molmo_state)
@@ -251,9 +265,15 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         width=config.render_width,
         height=config.render_height,
         lens=DEFAULT_SCENE_PROBE_LENS,
-        lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+        lighting_profile=lighting_profile,
         color_profile=DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     )
+    if isinstance(molmo.get("runtime_object_positions"), dict):
+        camera_request["runtime_object_positions"] = molmo["runtime_object_positions"]
+        camera_request["runtime_object_position_source"] = MOLMOSPACES_LANE_ID
+    if isinstance(molmo.get("runtime_render_state"), dict):
+        camera_request["runtime_render_state"] = molmo["runtime_render_state"]
+        camera_request["runtime_render_state_source"] = MOLMOSPACES_LANE_ID
     camera_request_path = write_camera_control_request(
         output_dir / "camera_control_request.json",
         camera_request,
@@ -311,6 +331,10 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         output_dir=output_dir,
     )
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
+    manifest["genesis_movable_object_visibility_diagnostics"] = (
+        _genesis_movable_object_visibility_diagnostics(manifest)
+    )
+    _write_genesis_movable_object_crops(manifest, output_dir=output_dir)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
         manifest,
@@ -320,6 +344,8 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
+    manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
     manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
@@ -340,6 +366,11 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         )
     if not isinstance(manifest.get("projection_diagnostics"), dict):
         manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
+    if not isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict):
+        manifest["genesis_movable_object_visibility_diagnostics"] = (
+            _genesis_movable_object_visibility_diagnostics(manifest)
+        )
+    _write_genesis_movable_object_crops(manifest, output_dir=output_dir)
     if not isinstance(manifest.get("visual_diagnostics"), dict):
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     if not isinstance(manifest.get("room_wall_light_diagnostics"), dict):
@@ -355,6 +386,10 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     if not isinstance(manifest.get("render_domain_contract_probe"), dict):
         manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    if not isinstance(manifest.get("lighting_tone_provenance"), dict):
+        manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
+    if not isinstance(manifest.get("shadow_parity_probe"), dict):
+        manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
     if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
         manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     report_path = output_dir / "report.html"
@@ -391,13 +426,9 @@ def failed_lane_summaries(manifest: dict[str, Any]) -> list[str]:
     )
     if candidate_visual.get("status") == "degraded_visual_fidelity":
         next_action = (
-            candidate_visual.get("recommended_next_action")
-            or "review candidate render quality"
+            candidate_visual.get("recommended_next_action") or "review candidate render quality"
         )
-        summaries.append(
-            "candidate visual fidelity: "
-            f"{next_action}"
-        )
+        summaries.append(f"candidate visual fidelity: {next_action}")
     return summaries
 
 
@@ -446,6 +477,57 @@ def _official_molmospaces_source() -> dict[str, Any]:
         "requested_revision": str(vcs_info.get("requested_revision") or "")
         if isinstance(vcs_info, dict)
         else "",
+    }
+
+
+def _runtime_object_positions(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    objects = state.get("objects") if isinstance(state.get("objects"), dict) else {}
+    result: dict[str, dict[str, Any]] = {}
+    for object_key, item in objects.items():
+        if not isinstance(item, dict):
+            continue
+        position = item.get("position")
+        if not _is_vec3(position):
+            continue
+        result[str(object_key)] = {
+            "category": item.get("category") or "",
+            "position": [float(value) for value in position[:3]],
+            "seeded_start_receptacle_id": item.get("seeded_start_receptacle_id") or "",
+            "target_receptacle_id": item.get("target_receptacle_id") or "",
+            "location_id": item.get("location_id") or "",
+            "location_relation": item.get("location_relation") or "",
+            "contained_in": item.get("contained_in"),
+            "upstream_object_id": item.get("upstream_object_id") or "",
+        }
+    return result
+
+
+def _runtime_render_state(state: dict[str, Any]) -> dict[str, Any]:
+    runtime_state = (
+        state.get("runtime_render_state")
+        if isinstance(state.get("runtime_render_state"), dict)
+        else {}
+    )
+    if runtime_state:
+        return runtime_state
+    positions = _runtime_object_positions(state)
+    return {
+        "schema": "molmospaces_runtime_render_state_v1",
+        "status": "positions_only_legacy_state",
+        "source": "legacy_runtime_object_positions_without_articulation",
+        "object_count": len(positions),
+        "articulated_object_count": 0,
+        "objects": {
+            object_key: {
+                "object_key": object_key,
+                "category": value.get("category") or "",
+                "position": value.get("position") or [],
+                "subtree_joint_count": 0,
+                "articulation_status": "unknown_legacy_state",
+                "articulation_joints": [],
+            }
+            for object_key, value in positions.items()
+        },
     }
 
 
@@ -1656,6 +1738,449 @@ def _projection_sample_points(
     return deduped
 
 
+def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
+    audit = _genesis_visual_object_audit(manifest)
+    intrinsics = (
+        manifest.get("camera_intrinsics_contract")
+        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
+        else {}
+    )
+    resolution = (
+        intrinsics.get("resolution") if isinstance(intrinsics.get("resolution"), dict) else {}
+    )
+    width = _optional_float(resolution.get("width"))
+    height = _optional_float(resolution.get("height"))
+    vertical_fov = _projection_vertical_fov(intrinsics)
+    if not audit:
+        return {
+            "schema": "genesis_movable_object_visibility_diagnostics_v1",
+            "status": "missing_genesis_visual_object_audit",
+            "object_count": 0,
+            "objects": [],
+        }
+    if width is None or height is None or vertical_fov is None:
+        return {
+            "schema": "genesis_movable_object_visibility_diagnostics_v1",
+            "status": "missing_intrinsics",
+            "object_count": 0,
+            "objects": [],
+        }
+    canonical_views = [
+        item for item in manifest.get("canonical_camera_views") or [] if isinstance(item, dict)
+    ]
+    molmo_positions = _molmospaces_runtime_object_positions(manifest)
+    runtime_render_objects = _molmospaces_runtime_render_objects(manifest)
+    prepared_articulation = _prepared_articulation_state_contract(manifest)
+    diagnostics = []
+    for item in audit.get("non_static_render_objects") or []:
+        if not isinstance(item, dict):
+            continue
+        center = item.get("bounds_center")
+        if not _is_vec3(center):
+            continue
+        bounds_points = _bounds_corner_points(
+            item.get("bounds_min"),
+            item.get("bounds_max"),
+            fallback_center=[float(value) for value in center[:3]],
+        )
+        projections = []
+        for view in canonical_views:
+            view_id = str(view.get("view_id") or "")
+            if not view_id:
+                continue
+            projected_bounds = _project_bounds_points(
+                bounds_points,
+                view=view,
+                width=width,
+                height=height,
+                vertical_fov_deg=vertical_fov,
+            )
+            if not projected_bounds:
+                continue
+            pixel = projected_bounds["center_pixel"]
+            distance_to_center = math.hypot(
+                float(pixel[0]) - width * 0.5,
+                float(pixel[1]) - height * 0.5,
+            )
+            projections.append(
+                {
+                    "view_id": view_id,
+                    "label": view.get("label") or "",
+                    "inside_frame": bool(projected_bounds.get("inside_frame")),
+                    "pixel": pixel,
+                    "pixel_bounds": projected_bounds.get("pixel_bounds"),
+                    "pixel_size": projected_bounds.get("pixel_size"),
+                    "depth_m": projected_bounds.get("min_depth_m"),
+                    "distance_to_image_center_px": distance_to_center,
+                }
+            )
+        inside = [projection for projection in projections if bool(projection.get("inside_frame"))]
+        nearest = sorted(
+            inside,
+            key=lambda value: float(value.get("distance_to_image_center_px") or 1e12),
+        )[:3]
+        object_key = str(item.get("object_key") or "")
+        molmo_position = _runtime_pose_for_object_key(object_key, molmo_positions)
+        runtime_render_state = _runtime_render_state_for_object_key(
+            object_key,
+            runtime_render_objects,
+        )
+        articulation_joints = (
+            runtime_render_state.get("articulation_joints")
+            if isinstance(runtime_render_state, dict)
+            and isinstance(runtime_render_state.get("articulation_joints"), list)
+            else []
+        )
+        articulation_joint_count = len(
+            [joint for joint in articulation_joints if isinstance(joint, dict)]
+        )
+        articulation_required = articulation_joint_count > 0
+        geometry_delta_m = (
+            _distance_3d([float(value) for value in center[:3]], molmo_position["position"])
+            if molmo_position and _is_vec3(molmo_position.get("position"))
+            else None
+        )
+        runtime_pose_overlay = (
+            item.get("runtime_pose_overlay")
+            if isinstance(item.get("runtime_pose_overlay"), dict)
+            else {}
+        )
+        runtime_pose_overlay_applied = bool(item.get("runtime_pose_overlay_applied"))
+        articulation_apply_status = _prepared_articulation_status_for_object(
+            object_key=object_key,
+            articulation_joints=articulation_joints,
+            prepared_articulation=prepared_articulation,
+        )
+        geometry_status = _runtime_geometry_status(
+            articulation_required=articulation_required,
+            articulation_apply_status=articulation_apply_status,
+            runtime_pose_overlay_applied=runtime_pose_overlay_applied,
+            geometry_delta_m=geometry_delta_m,
+        )
+        diagnostics.append(
+            {
+                "object_key": object_key,
+                "category": item.get("category"),
+                "asset_id": item.get("asset_id"),
+                "parent": item.get("parent"),
+                "room_id": item.get("room_id"),
+                "bounds_center": [float(value) for value in center[:3]],
+                "bounds_size": item.get("bounds_size") if _is_vec3(item.get("bounds_size")) else [],
+                "molmospaces_runtime_position": (
+                    molmo_position.get("position") if isinstance(molmo_position, dict) else []
+                ),
+                "runtime_location_id": (
+                    molmo_position.get("location_id") if isinstance(molmo_position, dict) else ""
+                ),
+                "seeded_start_receptacle_id": (
+                    molmo_position.get("seeded_start_receptacle_id")
+                    if isinstance(molmo_position, dict)
+                    else ""
+                ),
+                "target_receptacle_id": (
+                    molmo_position.get("target_receptacle_id")
+                    if isinstance(molmo_position, dict)
+                    else ""
+                ),
+                "geometry_delta_m": geometry_delta_m,
+                "geometry_status": geometry_status,
+                "runtime_pose_overlay_applied": runtime_pose_overlay_applied,
+                "runtime_pose_overlay_geometry_delta_m": (
+                    runtime_pose_overlay.get("geometry_delta_m")
+                    if isinstance(runtime_pose_overlay, dict)
+                    else None
+                ),
+                "runtime_pose_overlay_translation": (
+                    runtime_pose_overlay.get("translation")
+                    if isinstance(runtime_pose_overlay, dict)
+                    else []
+                ),
+                "runtime_render_state_status": (
+                    runtime_render_state.get("articulation_status")
+                    if isinstance(runtime_render_state, dict)
+                    else "missing_runtime_render_state"
+                ),
+                "articulation_required": articulation_required,
+                "articulation_joint_count": articulation_joint_count,
+                "articulation_joints": articulation_joints,
+                "articulation_apply_status": articulation_apply_status,
+                "in_frame_view_count": len(inside),
+                "projected_view_count": len(projections),
+                "nearest_in_frame_views": nearest,
+                "visibility_status": "projected_in_frame" if inside else "not_in_frame",
+            }
+        )
+    diagnostics.sort(
+        key=lambda value: (
+            str(value.get("category") or ""),
+            str(value.get("object_key") or ""),
+        )
+    )
+    return {
+        "schema": "genesis_movable_object_visibility_diagnostics_v1",
+        "status": "computed",
+        "interpretation": (
+            "Projects Genesis-audited non-static render object bounds into the shared "
+            "scene-camera views. This proves whether a bowl-like object is expected to enter "
+            "the review frame and provides object-focused crops, but it does not prove final "
+            "occlusion or material parity."
+        ),
+        "resolution": {"width": int(width), "height": int(height)},
+        "vertical_fov_deg": vertical_fov,
+        "object_count": len(diagnostics),
+        "in_frame_object_count": sum(
+            1 for item in diagnostics if int(item.get("in_frame_view_count") or 0) > 0
+        ),
+        "dynamic_pose_mismatch_count": sum(
+            1 for item in diagnostics if item.get("geometry_status") == "dynamic_pose_mismatch"
+        ),
+        "articulated_runtime_state_unsupported_count": sum(
+            1
+            for item in diagnostics
+            if item.get("geometry_status") == "articulated_runtime_state_unsupported"
+        ),
+        "articulated_static_baked_count": sum(
+            1
+            for item in diagnostics
+            if item.get("geometry_status") == "articulated_static_baked_match"
+        ),
+        "articulated_object_count": sum(
+            1 for item in diagnostics if bool(item.get("articulation_required"))
+        ),
+        "runtime_pose_overlay_object_count": sum(
+            1
+            for item in diagnostics
+            if item.get("geometry_status") == "runtime_pose_overlay_applied"
+        ),
+        "objects": diagnostics,
+    }
+
+
+def _runtime_geometry_status(
+    *,
+    articulation_required: bool,
+    articulation_apply_status: str,
+    runtime_pose_overlay_applied: bool,
+    geometry_delta_m: float | None,
+) -> str:
+    if articulation_required:
+        if articulation_apply_status == "prepared_usd_static_endpoint_baked":
+            return "articulated_static_baked_match"
+        return "articulated_runtime_state_unsupported"
+    if runtime_pose_overlay_applied and geometry_delta_m is not None and geometry_delta_m <= 0.25:
+        return "runtime_pose_overlay_applied"
+    if geometry_delta_m is not None and geometry_delta_m > 0.25:
+        return "dynamic_pose_mismatch"
+    if geometry_delta_m is not None:
+        return "runtime_pose_match"
+    return "missing_molmospaces_runtime_pose"
+
+
+def _prepared_articulation_state_contract(manifest: dict[str, Any]) -> dict[str, Any]:
+    probe = (
+        manifest.get("render_domain_contract_probe")
+        if isinstance(manifest.get("render_domain_contract_probe"), dict)
+        else {}
+    )
+    if not probe:
+        artifacts = _render_domain_artifact_paths(manifest)
+        probe = _isaac_render_contract_from_usda(artifacts.get("isaac_scene_usd"))
+    status = "missing_prepared_usd_articulation_contract"
+    endpoint_pose_status = probe.get("mujoco_visual_joint_endpoint_pose_status")
+    visual_physics_status = probe.get("visual_physics_status")
+    corrected_count = _optional_float(
+        probe.get("mujoco_visual_joint_endpoint_pose_corrected_count")
+    )
+    missing_count = _optional_float(probe.get("mujoco_visual_joint_endpoint_pose_missing_count"))
+    if (
+        endpoint_pose_status == "mujoco_visual_joint_endpoint_pose_applied"
+        and visual_physics_status == "frozen_static_visual_usd"
+        and (corrected_count or 0.0) > 0.0
+        and (missing_count or 0.0) == 0.0
+    ):
+        status = "prepared_usd_static_endpoint_baked"
+    elif visual_physics_status == "frozen_static_visual_usd":
+        status = "prepared_usd_static_without_endpoint_bake"
+    elif visual_physics_status == "physics_articulation_preserved":
+        status = "prepared_usd_physics_articulation_preserved"
+    elif endpoint_pose_status:
+        status = "prepared_usd_endpoint_bake_unverified"
+    return {
+        "status": status,
+        "mujoco_visual_joint_endpoint_pose_status": endpoint_pose_status,
+        "mujoco_visual_joint_endpoint_pose_corrected_count": probe.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": probe.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
+        "visual_physics_status": visual_physics_status,
+    }
+
+
+def _prepared_articulation_status_for_object(
+    *,
+    object_key: str,
+    articulation_joints: Any,
+    prepared_articulation: dict[str, Any],
+) -> str:
+    joints = [joint for joint in articulation_joints or [] if isinstance(joint, dict)]
+    if not joints:
+        return "not_required"
+    if prepared_articulation.get("status") != "prepared_usd_static_endpoint_baked":
+        return "unsupported_translation_only_visual_package"
+    if not _articulation_joints_match_prepared_endpoint_refs(joints, object_key=object_key):
+        return "unsupported_runtime_qpos_not_endpoint_baked"
+    return "prepared_usd_static_endpoint_baked"
+
+
+def _articulation_joints_match_prepared_endpoint_refs(
+    joints: list[dict[str, Any]],
+    *,
+    object_key: str,
+) -> bool:
+    relevant = [
+        joint
+        for joint in joints
+        if _joint_belongs_to_object(joint, object_key=object_key)
+        and str(joint.get("joint_type") or "").lower() == "hinge"
+    ]
+    if not relevant:
+        return False
+    for joint in relevant:
+        qpos = joint.get("qpos") if isinstance(joint.get("qpos"), list) else []
+        joint_range = joint.get("range") if isinstance(joint.get("range"), list) else []
+        if not qpos or len(joint_range) < 2:
+            return False
+        value = _optional_float(qpos[0])
+        low = _optional_float(joint_range[0])
+        high = _optional_float(joint_range[1])
+        if value is None or low is None or high is None:
+            return False
+        if not (math.isclose(value, low, abs_tol=1e-3) or math.isclose(value, high, abs_tol=1e-3)):
+            return False
+    return True
+
+
+def _joint_belongs_to_object(joint: dict[str, Any], *, object_key: str) -> bool:
+    aliases = _runtime_pose_lookup_aliases(object_key)
+    haystack = " ".join(
+        str(joint.get(key) or "") for key in ("joint_name", "body_name", "object_key")
+    )
+    return any(alias and alias in haystack for alias in aliases)
+
+
+def _molmospaces_runtime_object_positions(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    molmo = (
+        lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict) else {}
+    )
+    positions = (
+        molmo.get("runtime_object_positions")
+        if isinstance(molmo.get("runtime_object_positions"), dict)
+        else {}
+    )
+    indexed: dict[str, dict[str, Any]] = {}
+    for key, value in positions.items():
+        if not isinstance(value, dict):
+            continue
+        payload = dict(value)
+        payload.setdefault("object_key", str(key))
+        for alias in _runtime_pose_index_aliases(str(key)):
+            indexed.setdefault(alias, payload)
+    return indexed
+
+
+def _molmospaces_runtime_render_objects(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    molmo = (
+        lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict) else {}
+    )
+    runtime_state = (
+        molmo.get("runtime_render_state")
+        if isinstance(molmo.get("runtime_render_state"), dict)
+        else {}
+    )
+    objects = runtime_state.get("objects") if isinstance(runtime_state.get("objects"), dict) else {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for key, value in objects.items():
+        if not isinstance(value, dict):
+            continue
+        payload = dict(value)
+        payload.setdefault("object_key", str(key))
+        for alias in _runtime_pose_index_aliases(str(key)):
+            indexed.setdefault(alias, payload)
+        body_name = str(payload.get("body_name") or "")
+        if body_name:
+            for alias in _runtime_pose_index_aliases(body_name):
+                indexed.setdefault(alias, payload)
+    return indexed
+
+
+def _runtime_render_state_for_object_key(
+    object_key: str,
+    objects: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    for alias in _runtime_pose_lookup_aliases(object_key):
+        state = objects.get(alias)
+        if state is not None:
+            return state
+    return None
+
+
+def _runtime_pose_for_object_key(
+    object_key: str,
+    positions: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    for alias in _runtime_pose_lookup_aliases(object_key):
+        pose = positions.get(alias)
+        if pose is not None:
+            return pose
+    return None
+
+
+def _runtime_pose_index_aliases(object_key: str) -> set[str]:
+    aliases = {object_key, _safe_id(object_key), _loose_object_token(object_key)}
+    return {alias for alias in aliases if alias}
+
+
+def _runtime_pose_lookup_aliases(object_key: str) -> list[str]:
+    candidates = [object_key]
+    if object_key.startswith("tn__"):
+        candidates.append(object_key[4:])
+    candidates.extend(_trim_usd_name_suffixes(object_key))
+    for candidate in list(candidates):
+        if candidate.startswith("tn__"):
+            candidates.append(candidate[4:])
+        candidates.extend(_trim_usd_name_suffixes(candidate))
+    aliases: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        for alias in (candidate, _safe_id(candidate), _loose_object_token(candidate)):
+            if alias and alias not in seen:
+                seen.add(alias)
+                aliases.append(alias)
+    return aliases
+
+
+def _trim_usd_name_suffixes(object_key: str) -> list[str]:
+    candidates: list[str] = []
+    current = object_key
+    for _ in range(4):
+        head, separator, tail = current.rpartition("_")
+        if not separator or not head or not tail:
+            break
+        if not (tail.isdigit() or (len(tail) <= 4 and tail.isalnum())):
+            break
+        current = head
+        candidates.append(current)
+    return candidates
+
+
+def _loose_object_token(value: str) -> str:
+    return "".join(ch.lower() for ch in str(value) if ch.isalnum())
+
+
 def _project_world_point(
     point: list[float],
     *,
@@ -1701,6 +2226,61 @@ def _project_world_point(
         "pixel": [pixel_x, pixel_y],
         "depth_m": depth,
         "inside_frame": 0.0 <= pixel_x <= width and 0.0 <= pixel_y <= height,
+    }
+
+
+def _bounds_corner_points(
+    minimum: Any,
+    maximum: Any,
+    *,
+    fallback_center: list[float],
+) -> list[list[float]]:
+    if not _is_vec3(minimum) or not _is_vec3(maximum):
+        return [fallback_center]
+    mins = [float(value) for value in minimum[:3]]
+    maxs = [float(value) for value in maximum[:3]]
+    return [
+        [x, y, z]
+        for x in (mins[0], maxs[0])
+        for y in (mins[1], maxs[1])
+        for z in (mins[2], maxs[2])
+    ]
+
+
+def _project_bounds_points(
+    points: list[list[float]],
+    *,
+    view: dict[str, Any],
+    width: float,
+    height: float,
+    vertical_fov_deg: float,
+) -> dict[str, Any]:
+    projections = []
+    for point in points:
+        projection = _project_world_point(
+            point,
+            eye=view.get("eye"),
+            target=view.get("target") or view.get("lookat"),
+            width=width,
+            height=height,
+            vertical_fov_deg=vertical_fov_deg,
+        )
+        if projection is not None:
+            projections.append(projection)
+    if not projections:
+        return {}
+    xs = [float(item["pixel"][0]) for item in projections]
+    ys = [float(item["pixel"][1]) for item in projections]
+    min_x = min(xs)
+    max_x = max(xs)
+    min_y = min(ys)
+    max_y = max(ys)
+    return {
+        "center_pixel": [(min_x + max_x) * 0.5, (min_y + max_y) * 0.5],
+        "pixel_bounds": [min_x, min_y, max_x, max_y],
+        "pixel_size": [max_x - min_x, max_y - min_y],
+        "min_depth_m": min(float(item["depth_m"]) for item in projections),
+        "inside_frame": min_x <= width and max_x >= 0.0 and min_y <= height and max_y >= 0.0,
     }
 
 
@@ -1820,6 +2400,167 @@ def _contact_sheet_entries(manifest: dict[str, Any], *, output_dir: Path) -> lis
     return entries
 
 
+def _write_genesis_movable_object_crops(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    crop_size_px: int = 160,
+) -> None:
+    diagnostics = (
+        manifest.get("genesis_movable_object_visibility_diagnostics")
+        if isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return
+    entry_by_view = {
+        str(entry.get("view_id") or ""): entry
+        for entry in _contact_sheet_entries(manifest, output_dir=output_dir)
+    }
+    crop_dir = output_dir / "genesis_movable_object_crops"
+    crop_records = []
+    for item in diagnostics.get("objects") or []:
+        if not isinstance(item, dict):
+            continue
+        nearest = [
+            view for view in item.get("nearest_in_frame_views") or [] if isinstance(view, dict)
+        ]
+        if not nearest:
+            item["crop_status"] = "not_in_frame"
+            item["crops"] = {}
+            continue
+        focus_view = nearest[0]
+        view_id = str(focus_view.get("view_id") or "")
+        entry = entry_by_view.get(view_id)
+        pixel = focus_view.get("pixel") if isinstance(focus_view.get("pixel"), list) else []
+        pixel_bounds = (
+            focus_view.get("pixel_bounds")
+            if isinstance(focus_view.get("pixel_bounds"), list)
+            else []
+        )
+        if entry is None or len(pixel) < 2:
+            item["crop_status"] = "missing_view_image"
+            item["crops"] = {}
+            continue
+        crops: dict[str, dict[str, Any]] = {}
+        for lane_id, image_path in entry.get("images", {}).items():
+            if not isinstance(image_path, Path) or not image_path.is_file():
+                continue
+            crop = _write_image_center_crop(
+                image_path,
+                target_dir=crop_dir,
+                object_key=str(item.get("object_key") or "object"),
+                lane_id=str(lane_id),
+                view_id=view_id,
+                pixel_x=float(pixel[0]),
+                pixel_y=float(pixel[1]),
+                pixel_bounds=pixel_bounds,
+                crop_size_px=crop_size_px,
+                output_dir=output_dir,
+            )
+            if crop:
+                crops[str(lane_id)] = crop
+        item["focus_view_id"] = view_id
+        item["focus_view_label"] = focus_view.get("label") or ""
+        item["focus_pixel"] = [float(pixel[0]), float(pixel[1])]
+        if isinstance(focus_view.get("pixel_bounds"), list):
+            item["focus_pixel_bounds"] = focus_view.get("pixel_bounds")
+        if isinstance(focus_view.get("pixel_size"), list):
+            item["focus_pixel_size"] = focus_view.get("pixel_size")
+        item["crop_status"] = "written" if crops else "missing_lane_images"
+        item["crops"] = crops
+        crop_records.append(
+            {
+                "object_key": item.get("object_key"),
+                "category": item.get("category"),
+                "view_id": view_id,
+                "crop_status": item["crop_status"],
+                "geometry_status": item.get("geometry_status"),
+                "geometry_delta_m": item.get("geometry_delta_m"),
+                "lanes": sorted(crops),
+            }
+        )
+    diagnostics["crop_artifacts"] = {
+        "schema": "genesis_movable_object_crop_artifacts_v1",
+        "crop_size_px": crop_size_px,
+        "crop_dir": _relpath(crop_dir, output_dir) if crop_dir.is_dir() else "",
+        "object_count": len(crop_records),
+        "objects": crop_records,
+    }
+
+
+def _write_image_center_crop(
+    image_path: Path,
+    *,
+    target_dir: Path,
+    object_key: str,
+    lane_id: str,
+    view_id: str,
+    pixel_x: float,
+    pixel_y: float,
+    pixel_bounds: list[Any],
+    crop_size_px: int,
+    output_dir: Path,
+) -> dict[str, Any]:
+    with Image.open(image_path).convert("RGB") as image:
+        left, upper, right, lower = _crop_box_from_pixel_bounds(
+            image,
+            pixel_x=pixel_x,
+            pixel_y=pixel_y,
+            pixel_bounds=pixel_bounds,
+            crop_size_px=crop_size_px,
+        )
+        if right <= left or lower <= upper:
+            return {}
+        crop = image.crop((left, upper, right, lower))
+        target_dir.mkdir(parents=True, exist_ok=True)
+        filename = (
+            f"{_safe_report_token(object_key)}__{_safe_report_token(view_id)}__"
+            f"{_safe_report_token(lane_id)}.png"
+        )
+        target = target_dir / filename
+        crop.save(target)
+        return {
+            "path": _relpath(target, output_dir),
+            "source_path": _relpath(image_path, output_dir),
+            "view_id": view_id,
+            "pixel": [pixel_x, pixel_y],
+            "crop_box": [left, upper, right, lower],
+            "dimensions": {"width": crop.width, "height": crop.height, "channels": 3},
+        }
+
+
+def _crop_box_from_pixel_bounds(
+    image: Image.Image,
+    *,
+    pixel_x: float,
+    pixel_y: float,
+    pixel_bounds: list[Any],
+    crop_size_px: int,
+) -> tuple[int, int, int, int]:
+    half = max(8, int(crop_size_px) // 2)
+    if len(pixel_bounds) >= 4:
+        try:
+            min_x, min_y, max_x, max_y = [float(value) for value in pixel_bounds[:4]]
+        except (TypeError, ValueError):
+            min_x = max_x = float(pixel_x)
+            min_y = max_y = float(pixel_y)
+    else:
+        min_x = max_x = float(pixel_x)
+        min_y = max_y = float(pixel_y)
+    bbox_width = max_x - min_x
+    bbox_height = max_y - min_y
+    pad = max(32.0, max(bbox_width, bbox_height) * 1.25)
+    center_x = (min_x + max_x) * 0.5
+    center_y = (min_y + max_y) * 0.5
+    crop_half = max(float(half), bbox_width * 0.5 + pad, bbox_height * 0.5 + pad)
+    left = max(0, min(image.width, int(math.floor(center_x - crop_half))))
+    upper = max(0, min(image.height, int(math.floor(center_y - crop_half))))
+    right = max(0, min(image.width, int(math.ceil(center_x + crop_half))))
+    lower = max(0, min(image.height, int(math.ceil(center_y + crop_half))))
+    return left, upper, right, lower
+
+
 def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[str, Any]:
     entries = _contact_sheet_entries(manifest, output_dir=output_dir)
     view_results = []
@@ -1936,11 +2677,7 @@ def _room_wall_light_diagnostics(manifest: dict[str, Any], *, output_dir: Path) 
         manifest.get("lane_registry") if isinstance(manifest.get("lane_registry"), dict) else {}
     )
     baseline_id = str(registry.get("baseline") or MOLMOSPACES_LANE_ID)
-    candidate_ids = [
-        lane_id
-        for lane_id in _lane_order(manifest)
-        if lane_id != baseline_id
-    ]
+    candidate_ids = [lane_id for lane_id in _lane_order(manifest) if lane_id != baseline_id]
     pairs = []
     for entry in entries:
         view_id = str(entry.get("view_id") or "")
@@ -1961,13 +2698,11 @@ def _room_wall_light_diagnostics(manifest: dict[str, Any], *, output_dir: Path) 
                 candidate_path,
                 region_id="upper_center_wall_proxy",
             )
-            image_delta = (
-                float(candidate_image["mean_luminance"])
-                - float(baseline_image["mean_luminance"])
+            image_delta = float(candidate_image["mean_luminance"]) - float(
+                baseline_image["mean_luminance"]
             )
-            wall_delta = (
-                float(candidate_wall["mean_luminance"])
-                - float(baseline_wall["mean_luminance"])
+            wall_delta = float(candidate_wall["mean_luminance"]) - float(
+                baseline_wall["mean_luminance"]
             )
             pairs.append(
                 {
@@ -2002,8 +2737,7 @@ def _room_wall_light_diagnostics(manifest: dict[str, Any], *, output_dir: Path) 
             "candidate_count": len(candidate_ids),
             "region_id": "upper_center_wall_proxy",
             "interpretation": (
-                "No room-view baseline/candidate image pairs were available for wall-light "
-                "review."
+                "No room-view baseline/candidate image pairs were available for wall-light review."
             ),
             "pairs": [],
         }
@@ -2166,8 +2900,7 @@ def _candidate_visual_summary(
                 "delta": {
                     **diff_metrics,
                     "mean_luminance_delta": (
-                        candidate_metrics["mean_luminance"]
-                        - baseline_metrics["mean_luminance"]
+                        candidate_metrics["mean_luminance"] - baseline_metrics["mean_luminance"]
                     ),
                     "mean_rgb_abs_delta": [
                         abs(
@@ -2184,9 +2917,7 @@ def _candidate_visual_summary(
         for item in view_results
         if isinstance(item.get("delta"), dict)
     ]
-    scene_load = (
-        lane.get("scene_load") if isinstance(lane.get("scene_load"), dict) else {}
-    )
+    scene_load = lane.get("scene_load") if isinstance(lane.get("scene_load"), dict) else {}
     warning_reasons = _candidate_visual_warning_reasons(
         scene_load=scene_load,
         mae_values=mae_values,
@@ -2788,6 +3519,470 @@ def _native_setting_group_summary(group: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
+def _lighting_tone_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    rows = []
+    missing_environment_light = []
+    tone_adjusted_lanes = []
+    for lane_id, lane in lanes.items():
+        if not isinstance(lane, dict):
+            continue
+        row = _lane_lighting_tone_provenance(str(lane_id), lane, manifest=manifest)
+        rows.append(row)
+        if row["environment_light_status"] == "missing_environment_light":
+            missing_environment_light.append(str(lane_id))
+        if row["tone_adjustment_status"] == "post_render_tone_adjustment_applied":
+            tone_adjusted_lanes.append(str(lane_id))
+    if missing_environment_light:
+        status = "missing_environment_light"
+        next_action = (
+            "Fix the backend lighting configuration before tuning exposure, gain, or material "
+            "response."
+        )
+    elif tone_adjusted_lanes:
+        status = "environment_light_configured_tone_adjusted"
+        next_action = (
+            "Lighting is configured for all successful lanes. Treat remaining Genesis/Isaac "
+            "visual differences as tone, exposure, material, or renderer-response residuals."
+        )
+    else:
+        status = "environment_light_configured"
+        next_action = (
+            "Lighting is configured; inspect render-domain residual diagnostics before changing "
+            "lighting defaults."
+        )
+    return {
+        "schema": "scene_camera_lighting_tone_provenance_v1",
+        "status": status,
+        "missing_environment_light_lanes": missing_environment_light,
+        "tone_adjusted_lanes": tone_adjusted_lanes,
+        "lane_count": len(rows),
+        "interpretation": (
+            "This normalizes backend-specific light and color-management diagnostics. It "
+            "separates configured environment/fill lighting from post-render tone, exposure, "
+            "and material-response residuals."
+        ),
+        "recommended_next_action": next_action,
+        "lanes": rows,
+    }
+
+
+def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
+    camera = (
+        manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
+    )
+    lighting = (
+        camera.get("lighting_profile") if isinstance(camera.get("lighting_profile"), dict) else {}
+    )
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
+    genesis = lanes.get(GENESIS_LANE_ID) if isinstance(lanes.get(GENESIS_LANE_ID), dict) else {}
+    isaac_lighting = (
+        isaac.get("lighting_diagnostics")
+        if isinstance(isaac.get("lighting_diagnostics"), dict)
+        else {}
+    )
+    genesis_lighting = (
+        genesis.get("lighting_diagnostics")
+        if isinstance(genesis.get("lighting_diagnostics"), dict)
+        else {}
+    )
+    genesis_profile = (
+        genesis_lighting.get("genesis_lighting_profile")
+        if isinstance(genesis_lighting.get("genesis_lighting_profile"), dict)
+        else {}
+    )
+    render_probe = (
+        manifest.get("render_domain_contract_probe")
+        if isinstance(manifest.get("render_domain_contract_probe"), dict)
+        else {}
+    )
+    candidate_visual = (
+        manifest.get("candidate_visual_diagnostics")
+        if isinstance(manifest.get("candidate_visual_diagnostics"), dict)
+        else {}
+    )
+    candidate_warning_reasons = sorted(
+        {
+            str(reason)
+            for candidate in (
+                candidate_visual.get("candidates")
+                if isinstance(candidate_visual.get("candidates"), list)
+                else []
+            )
+            if isinstance(candidate, dict)
+            for reason in (
+                candidate.get("warning_reasons")
+                if isinstance(candidate.get("warning_reasons"), list)
+                else []
+            )
+        }
+    )
+    genesis_shadow = bool(genesis_profile.get("shadow", lighting.get("genesis_shadow", False)))
+    isaac_dome_intensity = _optional_float(
+        isaac_lighting.get("requested_dome_intensity", lighting.get("isaac_dome_intensity"))
+    )
+    isaac_key_intensity = _optional_float(
+        isaac_lighting.get("requested_key_intensity", lighting.get("isaac_key_intensity"))
+    )
+    shadow_disabled_count = _optional_int(render_probe.get("isaac_shadow_disabled_prim_count")) or 0
+    profile_id = str(lighting.get("profile_id") or "")
+    is_shadow_probe = profile_id == "scene_probe_shadow_parity_probe_v1"
+    isaac_probe_ready = (
+        isaac_dome_intensity is not None
+        and isaac_dome_intensity <= 20.0
+        and isaac_key_intensity is not None
+        and isaac_key_intensity > 0.0
+    )
+    if is_shadow_probe and genesis_shadow and isaac_probe_ready:
+        status = "shadow_parity_probe_configured"
+        if comparison_successful(manifest):
+            next_action = (
+                "Review bed/object views for cast-shadow return, then check room views remain "
+                "bright enough before promoting any default."
+            )
+        else:
+            next_action = (
+                "Shadow lighting is configured, but the visual comparison gate did not pass. "
+                "Treat this as probe evidence only; do not promote it as the default."
+            )
+    elif is_shadow_probe:
+        status = "shadow_parity_probe_partially_configured"
+        next_action = (
+            "Inspect per-lane lighting diagnostics before trusting visual shadow evidence."
+        )
+    else:
+        status = "default_fill_profile_not_shadow_parity"
+        next_action = (
+            "Run with lighting_profile=shadow-parity to test MuJoCo-like cast shadows without "
+            "changing the default fill profile."
+        )
+    return {
+        "schema": "scene_camera_shadow_parity_probe_v1",
+        "status": status,
+        "profile_id": profile_id,
+        "is_shadow_parity_profile": is_shadow_probe,
+        "genesis_shadow": genesis_shadow,
+        "isaac_dome_intensity": isaac_dome_intensity,
+        "isaac_key_intensity": isaac_key_intensity,
+        "isaac_added_light_paths": isaac_lighting.get("added_light_paths") or [],
+        "isaac_shadow_disabled_prim_count": shadow_disabled_count,
+        "mujoco_light_count": render_probe.get("mujoco_light_count"),
+        "isaac_light_count": render_probe.get("isaac_light_count"),
+        "comparison_successful": comparison_successful(manifest),
+        "candidate_visual_status": candidate_visual.get("status"),
+        "candidate_visual_degraded_candidates": candidate_visual.get("degraded_candidates") or [],
+        "candidate_visual_warning_reasons": candidate_warning_reasons,
+        "render_contract_high_priority_delta_count": render_probe.get("high_priority_delta_count"),
+        "interpretation": (
+            "This probe tracks whether the run is configured to test MuJoCo-like cast shadows. "
+            "It is configuration and report evidence; visual acceptance still requires "
+            "reviewing the bed view and room views."
+        ),
+        "recommended_next_action": next_action,
+    }
+
+
+def _lane_lighting_tone_provenance(
+    lane_id: str,
+    lane: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    lighting_profile = (
+        lane.get("lighting_profile") if isinstance(lane.get("lighting_profile"), dict) else {}
+    )
+    lighting_diagnostics = (
+        lane.get("lighting_diagnostics")
+        if isinstance(lane.get("lighting_diagnostics"), dict)
+        else {}
+    )
+    color_profile = lane.get("color_profile") if isinstance(lane.get("color_profile"), dict) else {}
+    native = (
+        lane.get("native_render_diagnostics")
+        if isinstance(lane.get("native_render_diagnostics"), dict)
+        else {}
+    )
+    if lane_id == GENESIS_LANE_ID:
+        lighting_summary = _genesis_lighting_summary(lighting_diagnostics, lighting_profile)
+    elif lane_id == ISAAC_LANE_ID:
+        lighting_summary = _isaac_lighting_summary(lighting_diagnostics, lighting_profile)
+    elif lane_id == MOLMOSPACES_LANE_ID:
+        lighting_summary = _mujoco_lighting_summary(manifest, lighting_profile)
+    else:
+        lighting_summary = _generic_lighting_summary(lighting_diagnostics, lighting_profile)
+    color_summary = _color_tone_summary(lane_id, color_profile, native)
+    return {
+        "lane_id": lane_id,
+        "environment_light_status": lighting_summary["status"],
+        "environment_light_summary": lighting_summary["summary"],
+        "environment_light_source": lighting_summary.get("source") or "",
+        "tone_adjustment_status": color_summary["status"],
+        "tone_adjustment_summary": color_summary["summary"],
+        "tone_adjustment_source": color_summary.get("source") or "",
+        "native_render_summary": _native_render_summary(native),
+    }
+
+
+def _genesis_lighting_summary(
+    diagnostics: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    profile = (
+        diagnostics.get("genesis_lighting_profile")
+        if isinstance(diagnostics.get("genesis_lighting_profile"), dict)
+        else {}
+    )
+    ambient = profile.get("ambient_light") or lighting_profile.get("genesis_ambient_light")
+    background = profile.get("background_color") or lighting_profile.get("genesis_background_color")
+    lights = profile.get("lights") or lighting_profile.get("genesis_directional_lights") or []
+    light_count = len(lights) if isinstance(lights, list) else 0
+    shadow = profile.get("shadow")
+    if shadow is None:
+        shadow = lighting_profile.get("genesis_shadow")
+    has_environment = bool(ambient or background or light_count)
+    status = "environment_light_configured" if has_environment else "missing_environment_light"
+    intensities = _light_intensity_text(lights)
+    summary = (
+        f"{diagnostics.get('status') or 'genesis_lighting_profile'}; "
+        f"ambient={_cell_text(ambient)}; background={_cell_text(background)}; "
+        f"directional_lights={light_count}; intensities={intensities}; shadow={shadow}"
+    )
+    return {
+        "status": status,
+        "summary": summary,
+        "source": str(profile.get("source") or lighting_profile.get("source") or ""),
+    }
+
+
+def _isaac_lighting_summary(
+    diagnostics: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    existing = _optional_int(diagnostics.get("existing_light_count"))
+    added = _optional_int(diagnostics.get("added_light_count"))
+    dome_intensity = diagnostics.get("requested_dome_intensity")
+    if dome_intensity is None:
+        dome_intensity = lighting_profile.get("isaac_dome_intensity")
+    key_intensity = diagnostics.get("requested_key_intensity")
+    if key_intensity is None:
+        key_intensity = lighting_profile.get("isaac_key_intensity")
+    existing_count = existing or 0
+    added_count = added or 0
+    has_environment = existing_count + added_count > 0 or _positive_number(dome_intensity)
+    status = "environment_light_configured" if has_environment else "missing_environment_light"
+    summary = (
+        f"{diagnostics.get('status') or 'isaac_lighting_profile'}; "
+        f"existing={existing_count}; added={added_count}; "
+        f"dome_intensity={_float_text(dome_intensity)}; "
+        f"key_intensity={_float_text(key_intensity)}; "
+        f"added_paths={_cell_text(diagnostics.get('added_light_paths'))}"
+    )
+    return {
+        "status": status,
+        "summary": summary,
+        "source": str(diagnostics.get("profile_source") or lighting_profile.get("source") or ""),
+    }
+
+
+def _mujoco_lighting_summary(
+    manifest: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    probe = (
+        manifest.get("render_domain_contract_probe")
+        if isinstance(manifest.get("render_domain_contract_probe"), dict)
+        else {}
+    )
+    light_count = _optional_int(probe.get("mujoco_light_count"))
+    ambient = lighting_profile.get("mujoco_headlight_ambient")
+    diffuse = lighting_profile.get("mujoco_headlight_diffuse")
+    has_environment = bool(ambient or diffuse or (light_count or 0) > 0)
+    status = "environment_light_configured" if has_environment else "missing_environment_light"
+    scene_lights = light_count if light_count is not None else ""
+    summary = (
+        f"mujoco_headlight_fill; ambient={_cell_text(ambient)}; "
+        f"diffuse={_cell_text(diffuse)}; scene_lights={scene_lights}"
+    )
+    return {
+        "status": status,
+        "summary": summary,
+        "source": str(lighting_profile.get("source") or ""),
+    }
+
+
+def _generic_lighting_summary(
+    diagnostics: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    status = str(diagnostics.get("status") or "")
+    profile_id = str(lighting_profile.get("profile_id") or diagnostics.get("profile_id") or "")
+    return {
+        "status": "environment_light_configured" if status or profile_id else "unknown",
+        "summary": f"{status}; profile={profile_id}".strip("; "),
+        "source": str(lighting_profile.get("source") or diagnostics.get("profile_source") or ""),
+    }
+
+
+def _color_tone_summary(
+    lane_id: str,
+    color_profile: dict[str, Any],
+    native_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    gains = (
+        color_profile.get("backend_luminance_gain")
+        if isinstance(color_profile.get("backend_luminance_gain"), dict)
+        else {}
+    )
+    rgb_gains = (
+        color_profile.get("backend_rgb_gain")
+        if isinstance(color_profile.get("backend_rgb_gain"), dict)
+        else {}
+    )
+    tone_adjustments = (
+        color_profile.get("backend_tone_adjustment")
+        if isinstance(color_profile.get("backend_tone_adjustment"), dict)
+        else {}
+    )
+    view_tone_adjustments = (
+        color_profile.get("backend_view_tone_adjustment")
+        if isinstance(color_profile.get("backend_view_tone_adjustment"), dict)
+        else {}
+    )
+    gain = gains.get(lane_id)
+    rgb_gain = rgb_gains.get(lane_id)
+    tone = tone_adjustments.get(lane_id)
+    view_tone = view_tone_adjustments.get(lane_id)
+    view_tone_count = len(view_tone) if isinstance(view_tone, dict) else 0
+    has_post_tone = tone is not None or view_tone_count > 0 or rgb_gain is not None
+    has_gain = gain is not None
+    if has_post_tone:
+        status = "post_render_tone_adjustment_applied"
+    elif _non_unity_gain(gain):
+        status = "post_render_luminance_gain_applied"
+    elif has_gain:
+        status = "baseline_color_profile_reference"
+    else:
+        status = "no_backend_tone_adjustment"
+    summary = (
+        f"profile={color_profile.get('profile_id') or ''}; "
+        f"luminance_gain={_float_text(gain)}; rgb_gain={_cell_text(rgb_gain)}; "
+        f"tone={_cell_text(tone)}; view_tone_overrides={view_tone_count}"
+    )
+    native_summary = _native_render_summary(native_diagnostics)
+    if native_summary:
+        summary = f"{summary}; native={native_summary}"
+    return {
+        "status": status,
+        "summary": summary,
+        "source": _tone_source_text(lane_id, color_profile),
+    }
+
+
+def _tone_source_text(lane_id: str, color_profile: dict[str, Any]) -> str:
+    backend_prefix = _backend_source_prefix(lane_id)
+    lane_specific_sources = _unique_source_values(
+        color_profile,
+        (
+            f"{backend_prefix}_backend_tone_adjustment_source",
+            f"{backend_prefix}_backend_luminance_gain_source",
+            f"{backend_prefix}_backend_rgb_gain_source",
+        ),
+    )
+    if lane_specific_sources:
+        return "; ".join(lane_specific_sources)
+    return "; ".join(
+        _unique_source_values(
+            color_profile,
+            (
+                "backend_tone_adjustment_source",
+                "backend_view_tone_adjustment_source",
+                "backend_luminance_gain_source",
+                "backend_rgb_gain_source",
+            ),
+        )
+    )
+
+
+def _unique_source_values(color_profile: dict[str, Any], keys: tuple[str, ...]) -> list[str]:
+    sources = []
+    for key in keys:
+        value = str(color_profile.get(key) or "")
+        if value and value not in sources:
+            sources.append(value)
+    return sources
+
+
+def _backend_source_prefix(lane_id: str) -> str:
+    if lane_id == GENESIS_LANE_ID:
+        return "genesis"
+    if lane_id == ISAAC_LANE_ID:
+        return "isaac"
+    if lane_id == MOLMOSPACES_LANE_ID:
+        return "mujoco"
+    return lane_id.split("-", 1)[0].replace("-", "_")
+
+
+def _native_render_summary(diagnostics: dict[str, Any]) -> str:
+    if not diagnostics:
+        return ""
+    tone_mapping = (
+        diagnostics.get("tone_mapping") if isinstance(diagnostics.get("tone_mapping"), dict) else {}
+    )
+    exposure = (
+        diagnostics.get("camera_exposure")
+        if isinstance(diagnostics.get("camera_exposure"), dict)
+        else {}
+    )
+    tonemap_operator = _native_setting_value(tone_mapping.get("operator"))
+    exposure_bias = _native_setting_value(tone_mapping.get("exposure_bias"))
+    auto_exposure = _native_setting_value(exposure.get("auto_exposure_enabled"))
+    parts = [
+        f"status={diagnostics.get('status') or ''}",
+        f"tonemap_operator={tonemap_operator}",
+        f"exposure_bias={_cell_text(exposure_bias)}",
+        f"auto_exposure={auto_exposure}",
+    ]
+    return "; ".join(part for part in parts if not part.endswith("="))
+
+
+def _native_setting_value(raw: Any) -> Any:
+    return raw.get("value") if isinstance(raw, dict) else None
+
+
+def _light_intensity_text(lights: Any) -> str:
+    if not isinstance(lights, list):
+        return ""
+    intensities = []
+    for item in lights:
+        if isinstance(item, dict) and item.get("intensity") is not None:
+            intensities.append(item.get("intensity"))
+    return _cell_text(intensities)
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _positive_number(value: Any) -> bool:
+    try:
+        return float(value) > 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _non_unity_gain(value: Any) -> bool:
+    try:
+        return abs(float(value) - 1.0) > 1e-6
+    except (TypeError, ValueError):
+        return False
+
+
 def _backend_swap_geometry_contract(manifest: dict[str, Any]) -> dict[str, Any]:
     camera = (
         manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
@@ -3215,6 +4410,21 @@ def _render_domain_contract_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "mujoco_light_count": len(mujoco.get("lights") or []),
         "isaac_light_count": len(isaac.get("lights") or []),
         "isaac_shadow_disabled_prim_count": len(isaac.get("shadow_disabled_prims") or []),
+        "visual_physics_status": isaac.get("visual_physics_status"),
+        "mujoco_visual_joint_endpoint_pose_status": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_status"
+        ),
+        "mujoco_visual_joint_endpoint_pose_corrected_count": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
+        "visual_physics_joint_removed_count": isaac.get("visual_physics_joint_removed_count"),
+        "visual_physics_api_schema_removed_count": isaac.get(
+            "visual_physics_api_schema_removed_count"
+        ),
+        "visual_physics_property_removed_count": isaac.get("visual_physics_property_removed_count"),
         "views": views,
         "recommended_next_action": _render_domain_contract_probe_next_action(views),
         "interpretation": (
@@ -3358,7 +4568,18 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         "mujoco_visual_joint_endpoint_pose_missing_count": prepared_summary.get(
             "mujoco_visual_joint_endpoint_pose_missing_count"
         ),
+        "visual_physics_joint_removed_count": prepared_summary.get(
+            "visual_physics_joint_removed_count"
+        ),
+        "visual_physics_api_schema_removed_count": prepared_summary.get(
+            "visual_physics_api_schema_removed_count"
+        ),
+        "visual_physics_property_removed_count": prepared_summary.get(
+            "visual_physics_property_removed_count"
+        ),
         **physics_contract,
+        "visual_physics_status": prepared_summary.get("visual_physics_status")
+        or physics_contract.get("visual_physics_status"),
     }
 
 
@@ -3698,6 +4919,11 @@ def _isaac_view_render_contract(
         "mujoco_visual_joint_endpoint_pose_missing_count": isaac.get(
             "mujoco_visual_joint_endpoint_pose_missing_count"
         ),
+        "visual_physics_joint_removed_count": isaac.get("visual_physics_joint_removed_count"),
+        "visual_physics_api_schema_removed_count": isaac.get(
+            "visual_physics_api_schema_removed_count"
+        ),
+        "visual_physics_property_removed_count": isaac.get("visual_physics_property_removed_count"),
     }
 
 
@@ -4211,6 +5437,12 @@ def _safe_id(value: Any) -> str:
     return safe or "scene"
 
 
+def _safe_report_token(value: Any) -> str:
+    text = str(value or "item").lower()
+    safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in text).strip("_")
+    return safe[:96] or "item"
+
+
 def _optional_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -4236,7 +5468,11 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _visual_diagnostics_section(manifest),
             _room_wall_light_diagnostics_section(manifest),
             _candidate_visual_diagnostics_section(manifest),
+            _genesis_movable_object_visibility_section(manifest),
+            _genesis_visual_object_audit_section(manifest),
             _native_isaac_render_diagnostics_section(manifest),
+            _lighting_tone_provenance_section(manifest),
+            _shadow_parity_probe_section(manifest),
             _render_domain_source_section(manifest),
             _render_domain_view_triage_section(manifest),
             _render_domain_contract_probe_section(manifest),
@@ -4353,6 +5589,26 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
       background: transparent;
       cursor: zoom-in;
       text-align: inherit;
+    }}
+    .crop-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, 72px);
+      gap: 6px;
+      align-items: start;
+    }}
+    .crop-thumb {{
+      display: grid;
+      gap: 3px;
+      font-size: 10px;
+      color: #647083;
+    }}
+    .crop-image {{
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border: 1px solid #d9dde6;
+      border-radius: 4px;
+      background: #f8fafc;
     }}
     .image-modal {{
       width: min(96vw, 1440px);
@@ -5238,6 +6494,232 @@ def _candidate_visual_diagnostics_section(manifest: dict[str, Any]) -> str:
 """
 
 
+def _genesis_movable_object_visibility_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("genesis_movable_object_visibility_diagnostics")
+        if isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in list(diagnostics.get("objects") or [])[:30]:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_key', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('asset_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('parent', '')))}</td>"
+            f"<td>{html.escape(str(item.get('geometry_status', '')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('geometry_delta_m')))}</td>"
+            f"<td>{html.escape(str(item.get('articulation_apply_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('articulation_joint_count', '')))}</td>"
+            f"<td>{html.escape(_articulation_joint_text(item.get('articulation_joints')))}</td>"
+            f"<td>{html.escape(str(item.get('seeded_start_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('in_frame_view_count', '')))}</td>"
+            f"<td>{html.escape(_nearest_view_text(item.get('nearest_in_frame_views')))}</td>"
+            f"<td>{_crop_buttons_html(item.get('crops'), item.get('object_key'))}</td>"
+            f"<td>{html.escape(_cell_text(item.get('bounds_center')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Object",
+            "Category",
+            "Asset",
+            "Parent",
+            "Geometry status",
+            "Pose delta",
+            "Articulation apply",
+            "Joints",
+            "Joint state",
+            "Runtime start",
+            "In-frame views",
+            "Nearest views",
+            "Crops",
+            "Bounds center",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"objects={diagnostics.get('object_count')}; "
+        f"in_frame={diagnostics.get('in_frame_object_count')}; "
+        f"dynamic_pose_mismatch={diagnostics.get('dynamic_pose_mismatch_count')}; "
+        "articulated_unsupported="
+        f"{diagnostics.get('articulated_runtime_state_unsupported_count')}; "
+        f"articulated_static_baked={diagnostics.get('articulated_static_baked_count')}; "
+        f"articulated_objects={diagnostics.get('articulated_object_count')}; "
+        f"resolution={diagnostics.get('resolution')}; "
+        f"vertical_fov={_float_text(diagnostics.get('vertical_fov_deg'))} deg. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Genesis Movable Object Visibility</h2>
+  <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _articulation_joint_text(value: Any) -> str:
+    parts = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("joint_name") or "")
+        if not name:
+            continue
+        qpos = item.get("qpos") if isinstance(item.get("qpos"), list) else []
+        qpos_text = ",".join(_float_text(part) for part in qpos[:2])
+        parts.append(f"{name}={qpos_text}" if qpos_text else name)
+    return "; ".join(parts[:4])
+
+
+def _nearest_view_text(value: Any) -> str:
+    parts = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        view_id = str(item.get("view_id") or "")
+        if not view_id:
+            continue
+        distance = _pixels_text(item.get("distance_to_image_center_px"))
+        parts.append(f"{view_id} ({distance})")
+    return ", ".join(parts)
+
+
+def _crop_buttons_html(value: Any, object_key: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return ""
+    parts = []
+    for lane_id in _ordered_crop_lanes(value):
+        item = value.get(lane_id) if isinstance(value.get(lane_id), dict) else {}
+        src = str(item.get("path") or "")
+        if not src:
+            continue
+        title = f"{object_key} {lane_id} crop"
+        parts.append(
+            '<div class="crop-thumb">'
+            f"<span>{html.escape(str(lane_id))}</span>"
+            + _image_button(src, title, css_class="crop-image")
+            + "</div>"
+        )
+    return '<div class="crop-grid">' + "".join(parts) + "</div>" if parts else ""
+
+
+def _ordered_crop_lanes(value: dict[str, Any]) -> list[str]:
+    ordered = [
+        lane_id
+        for lane_id in (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID)
+        if lane_id in value
+    ]
+    ordered.extend(sorted(lane_id for lane_id in value if lane_id not in ordered))
+    return ordered
+
+
+def _lighting_tone_provenance_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("lighting_tone_provenance")
+        if isinstance(manifest.get("lighting_tone_provenance"), dict)
+        else _lighting_tone_provenance(manifest)
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("lanes") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('lane_id') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('environment_light_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('environment_light_summary') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('tone_adjustment_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('tone_adjustment_summary') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('native_render_summary') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('tone_adjustment_source') or ''))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Lane",
+            "Environment status",
+            "Environment / fill evidence",
+            "Tone status",
+            "Tone / exposure evidence",
+            "Native render",
+            "Tone source",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; lanes={diagnostics.get('lane_count')}; "
+        f"missing_environment_light_lanes="
+        f"{_cell_text(diagnostics.get('missing_environment_light_lanes'))}; "
+        f"tone_adjusted_lanes={_cell_text(diagnostics.get('tone_adjusted_lanes'))}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Lighting &amp; Tone Provenance</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _shadow_parity_probe_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("shadow_parity_probe")
+        if isinstance(manifest.get("shadow_parity_probe"), dict)
+        else _shadow_parity_probe(manifest)
+    )
+    if not diagnostics:
+        return ""
+    rows = [
+        ("Profile", diagnostics.get("profile_id")),
+        ("Status", diagnostics.get("status")),
+        ("Genesis shadow", diagnostics.get("genesis_shadow")),
+        ("Isaac dome intensity", diagnostics.get("isaac_dome_intensity")),
+        ("Isaac key intensity", diagnostics.get("isaac_key_intensity")),
+        ("Isaac added light paths", diagnostics.get("isaac_added_light_paths")),
+        ("MuJoCo light count", diagnostics.get("mujoco_light_count")),
+        ("Isaac light count", diagnostics.get("isaac_light_count")),
+        ("Isaac shadow-off prims", diagnostics.get("isaac_shadow_disabled_prim_count")),
+    ]
+    row_html = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(_cell_text(value))}</td></tr>"
+        for label, value in rows
+    )
+    note = (
+        f"profile={diagnostics.get('profile_id')}; status={diagnostics.get('status')}; "
+        f"shadow_profile={diagnostics.get('is_shadow_parity_profile')}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Shadow Parity Probe</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+    <tbody>{row_html}</tbody>
+  </table></div>
+</section>
+"""
+
+
 def _render_domain_source_section(manifest: dict[str, Any]) -> str:
     diagnostics = (
         manifest.get("render_domain_source_diagnostics")
@@ -5291,6 +6773,194 @@ def _render_domain_source_section(manifest: dict[str, Any]) -> str:
   </table></div>
 </section>
 """
+
+
+def _genesis_visual_object_audit_section(manifest: dict[str, Any]) -> str:
+    audit = _genesis_visual_object_audit(manifest)
+    if not audit:
+        return ""
+    note = (
+        f"objects={audit.get('object_count')}; "
+        f"render_mesh_objects={audit.get('render_mesh_object_count')}; "
+        f"texture_conversion_objects={audit.get('texture_conversion_object_count')}; "
+        f"non_static_render_objects={audit.get('non_static_render_object_count')}; "
+        f"collision_mesh_objects={audit.get('collision_mesh_object_count')}; "
+        f"runtime_pose_overlay_objects={audit.get('runtime_pose_overlay_object_count')}; "
+        "runtime_pose_overlay_threshold="
+        f"{_meters_text(audit.get('runtime_pose_overlay_threshold_m'))}. "
+        f"{audit.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Genesis Visual Object Audit</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">metadata_source={html.escape(str(audit.get("metadata_source") or ""))}</p>
+  {_genesis_visual_object_audit_summary(audit)}
+  {
+        _genesis_visual_object_audit_table(
+            "Converted Texture Objects",
+            audit.get("texture_conversion_objects"),
+            columns=(
+                "object_key",
+                "category",
+                "asset_id",
+                "metadata_match",
+                "texture_modes",
+                "converted_texture_names",
+            ),
+        )
+    }
+  {
+        _genesis_visual_object_audit_table(
+            "Non-Static Render Objects",
+            audit.get("non_static_render_objects"),
+            columns=("object_key", "category", "asset_id", "metadata_match", "parent", "room_id"),
+        )
+    }
+  {
+        _genesis_visual_object_audit_table(
+            "Collision Mesh Objects",
+            audit.get("collision_mesh_objects"),
+            columns=(
+                "object_key",
+                "category",
+                "asset_id",
+                "metadata_match",
+                "render_mesh_count",
+                "collision_mesh_count",
+            ),
+        )
+    }
+  {
+        _genesis_visual_object_audit_table(
+            "Runtime Pose Overlay Objects",
+            audit.get("runtime_pose_overlay_objects"),
+            columns=(
+                "object_key",
+                "category",
+                "asset_id",
+                "metadata_match",
+                "runtime_pose_overlay_geometry_delta_m",
+                "runtime_pose_overlay_translation",
+            ),
+        )
+    }
+</section>
+"""
+
+
+def _genesis_visual_object_audit(manifest: dict[str, Any]) -> dict[str, Any]:
+    lane = (
+        (manifest.get("lanes") or {}).get(GENESIS_LANE_ID)
+        if isinstance(manifest.get("lanes"), dict)
+        else {}
+    )
+    if not isinstance(lane, dict):
+        return ""
+    scene_load = lane.get("scene_load") if isinstance(lane.get("scene_load"), dict) else {}
+    visual_asset = (
+        scene_load.get("render_only_visual_asset")
+        if isinstance(scene_load.get("render_only_visual_asset"), dict)
+        else {}
+    )
+    audit = (
+        visual_asset.get("visual_object_audit")
+        if isinstance(visual_asset.get("visual_object_audit"), dict)
+        else {}
+    )
+    return audit
+
+
+def _genesis_visual_object_audit_summary(audit: dict[str, Any]) -> str:
+    rows = []
+    for title, key, meaning in (
+        (
+            "Texture conversion",
+            "texture_conversion_objects",
+            "Objects with non-RGB/RGBA textures normalized before Genesis import.",
+        ),
+        (
+            "Movable clutter",
+            "non_static_render_objects",
+            "Real non-static objects whose visibility can differ by renderer view, tone, "
+            "or occlusion.",
+        ),
+        (
+            "Collision meshes",
+            "collision_mesh_objects",
+            "Objects that had collider geometry filtered out of the Genesis visual package.",
+        ),
+        (
+            "Runtime pose overlay",
+            "runtime_pose_overlay_objects",
+            "Non-static objects translated to MuJoCo runtime pose before Genesis rendering.",
+        ),
+    ):
+        items = audit.get(key)
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(title)}</td>"
+            f"<td>{html.escape(_category_count_text(items))}</td>"
+            f"<td>{html.escape(meaning)}</td>"
+            "</tr>"
+        )
+    return (
+        """
+  <h3>Alike Object Risk Summary</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Risk group</th><th>Categories</th><th>Meaning</th></tr></thead>
+    <tbody>"""
+        + "".join(rows)
+        + """</tbody>
+  </table></div>
+"""
+    )
+
+
+def _genesis_visual_object_audit_table(
+    title: str,
+    items: Any,
+    *,
+    columns: tuple[str, ...],
+    limit: int = 24,
+) -> str:
+    rows = []
+    for item in list(items or [])[:limit]:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            + "".join(f"<td>{html.escape(_cell_text(item.get(column)))}</td>" for column in columns)
+            + "</tr>"
+        )
+    if not rows:
+        return f'<h3>{html.escape(title)}</h3><p class="note">None recorded.</p>'
+    headers = "".join(f"<th>{html.escape(column)}</th>" for column in columns)
+    return f"""
+  <h3>{html.escape(title)}</h3>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+"""
+
+
+def _category_count_text(items: Any, *, limit: int = 12) -> str:
+    counts: dict[str, int] = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        category = str(item.get("category") or "Uncategorized")
+        counts[category] = counts.get(category, 0) + 1
+    if not counts:
+        return "None"
+    parts = [
+        f"{category} ({count})"
+        for category, count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0]))
+    ]
+    if len(parts) <= limit:
+        return ", ".join(parts)
+    return f"{', '.join(parts[:limit])}, ... (+{len(parts) - limit})"
 
 
 def _native_isaac_render_diagnostics_section(manifest: dict[str, Any]) -> str:
@@ -5901,6 +7571,15 @@ def _pixels_text(value: Any) -> str:
         return str(value)
 
 
+def _meters_text(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value):.3f} m"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _short_list_text(value: Any, *, limit: int = 4) -> str:
     if not isinstance(value, list):
         return ""
@@ -5908,6 +7587,14 @@ def _short_list_text(value: Any, *, limit: int = 4) -> str:
     if len(items) <= limit:
         return ", ".join(items)
     return f"{', '.join(items[:limit])}, ... (+{len(items) - limit})"
+
+
+def _cell_text(value: Any) -> str:
+    if isinstance(value, list):
+        return _short_list_text(value, limit=6)
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True)
+    return "" if value is None else str(value)
 
 
 def _badges(items: list[tuple[str, Any]]) -> str:
@@ -5958,6 +7645,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--genesis-python", type=Path, default=Path(".venv-genesis/bin/python"))
     parser.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
     parser.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
+    parser.add_argument(
+        "--lighting-profile",
+        default="default",
+        choices=tuple(sorted(SCENE_PROBE_LIGHTING_PROFILES)),
+        help=(
+            "Scene-camera lighting profile. Use shadow-parity for a probe run; "
+            "default keeps the current fill profile."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.scene_usd_path.is_file():
@@ -5976,6 +7672,7 @@ def main(argv: list[str] | None = None) -> int:
             genesis_python=args.genesis_python,
             render_width=args.render_width,
             render_height=args.render_height,
+            lighting_profile_id=args.lighting_profile,
         )
     )
     print(f"scene camera comparison manifest: {args.output_dir / 'comparison_manifest.json'}")

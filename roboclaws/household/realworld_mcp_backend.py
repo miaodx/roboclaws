@@ -66,10 +66,18 @@ def tool_handlers_for_call(
     server: Any,
     kwargs: dict[str, Any],
 ) -> dict[str, Callable[[], dict[str, Any]]]:
+    def done() -> dict[str, Any]:
+        readiness_evidence = getattr(server, "done_readiness_evidence", None)
+        evidence = readiness_evidence() if callable(readiness_evidence) else {}
+        return server.contract.done(
+            str(kwargs.get("reason", "")),
+            semantic_cleanup_evidence=evidence,
+        )
+
     return {
         **semantic_cleanup_handlers(server, kwargs),
         **atomic_cleanup_handlers(server, kwargs),
-        "done": lambda: server.contract.done(str(kwargs.get("reason", ""))),
+        "done": done,
     }
 
 
