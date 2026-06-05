@@ -38,6 +38,7 @@ from roboclaws.household.scene_camera_comparison import (
     _image_visual_metrics,
     _isaac_view_specs,
     _key_light_direction_diagnostics,
+    _material_response_diagnostics,
     _molmospaces_view_specs,
     _mujoco_render_contract_from_xml,
     _native_isaac_render_diagnostics,
@@ -201,6 +202,180 @@ def Xform "val_1"
     manifest["lanes"][ISAAC_LANE_ID]["views"][1]["anchor_id"] = "bed_01"  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["views"][1]["usd_prim_path"] = (  # type: ignore[index]
         "/val_1/Geometry/bed_01"
+    )
+
+
+def _write_material_response_fixtures(
+    tmp_path: Path,
+    manifest: dict[str, object],
+) -> None:
+    xml_path = tmp_path / "scene.xml"
+    xml_path.write_text(
+        """
+<mujoco>
+  <asset>
+    <texture type="2d" name="BasketballTex" file="textures/Basketball.png" />
+    <texture type="2d" name="ClothTex" file="textures/Cloth.png" />
+    <material name="material_BasketBall" texture="BasketballTex" rgba="1 1 1 1" />
+    <material name="material_Cloth" texture="ClothTex" rgba="1 1 1 1" />
+  </asset>
+  <worldbody>
+    <body name="basketball_01">
+      <geom name="basketball_01_visual_0" class="__VISUAL_MJT__" type="mesh"
+            material="material_BasketBall" mesh="BasketballMesh" />
+    </body>
+    <body name="cloth_01">
+      <geom name="cloth_01_visual_0" class="__VISUAL_MJT__" type="mesh"
+            material="material_Cloth" mesh="ClothMesh" />
+    </body>
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+    usd_path = tmp_path / "scene.usda"
+    usd_path.write_text(
+        """
+#usda 1.0
+def Xform "val_1"
+{
+  def Scope "Geometry"
+  {
+    def Xform "basketball_01"
+    {
+      def Mesh "BasketballMesh"
+      {
+        rel material:binding = </val_1/Geometry/basketball_01/Materials/material_BasketBall>
+      }
+      def Scope "Materials"
+      {
+        def Material "material_BasketBall"
+        {
+          def Shader "PreviewSurface"
+          {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect =
+                </val_1/Geometry/basketball_01/Materials/material_BasketBall/DiffuseTexture.outputs:rgb>
+          }
+          def Shader "DiffuseTexture"
+          {
+            asset inputs:file = @textures/Basketball.png@
+          }
+        }
+      }
+    }
+    def Xform "cloth_01"
+    {
+      def Mesh "ClothMesh"
+      {
+        rel material:binding = </val_1/Geometry/cloth_01/Materials/material_Cloth>
+      }
+      def Scope "Materials"
+      {
+        def Material "material_Cloth"
+        {
+          def Shader "PreviewSurface"
+          {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor.connect =
+                </val_1/Geometry/cloth_01/Materials/material_Cloth/DiffuseTexture.outputs:rgb>
+          }
+          def Shader "DiffuseTexture"
+          {
+            asset inputs:file = @textures/Cloth.png@
+          }
+        }
+      }
+    }
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    manifest["lanes"][MOLMOSPACES_LANE_ID]["scene_xml"] = str(xml_path)  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["scene_usd"] = str(usd_path)  # type: ignore[index]
+    manifest["lanes"][GENESIS_LANE_ID] = _genesis_lane_fixture()  # type: ignore[index]
+    manifest["genesis_movable_object_visibility_diagnostics"] = {
+        "schema": "genesis_movable_object_visibility_diagnostics_v1",
+        "status": "computed",
+        "object_count": 2,
+        "in_frame_object_count": 2,
+        "objects": [],
+        "crop_artifacts": {
+            "schema": "genesis_movable_object_crop_artifacts_v1",
+            "crop_size_px": 16,
+            "crop_dir": "genesis_movable_object_crops",
+            "object_count": 2,
+            "objects": [
+                {
+                    "object_key": "basketball_01",
+                    "category": "BasketBall",
+                    "view_id": "view_03_diningtable",
+                    "crop_status": "written",
+                    "geometry_status": "runtime_pose_match",
+                    "geometry_delta_m": 0.0,
+                    "lanes": [MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID],
+                },
+                {
+                    "object_key": "cloth_01",
+                    "category": "Cloth",
+                    "view_id": "view_04_sink",
+                    "crop_status": "written",
+                    "geometry_status": "runtime_pose_match",
+                    "geometry_delta_m": 0.0,
+                    "lanes": [MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID],
+                },
+            ],
+        },
+    }
+    crop_dir = tmp_path / "genesis_movable_object_crops"
+    _write_image(
+        crop_dir / f"basketball_01__view_03_diningtable__{MOLMOSPACES_LANE_ID}.png",
+        color=(180, 180, 180),
+    )
+    _write_image(
+        crop_dir / f"basketball_01__view_03_diningtable__{ISAAC_LANE_ID}.png",
+        color=(90, 90, 90),
+    )
+    _write_image(
+        crop_dir / f"basketball_01__view_03_diningtable__{GENESIS_LANE_ID}.png",
+        color=(80, 80, 80),
+    )
+    _write_image(
+        crop_dir / f"cloth_01__view_04_sink__{MOLMOSPACES_LANE_ID}.png",
+        color=(80, 120, 80),
+    )
+    _write_image(
+        crop_dir / f"cloth_01__view_04_sink__{ISAAC_LANE_ID}.png",
+        color=(200, 80, 100),
+    )
+    _write_image(
+        crop_dir / f"cloth_01__view_04_sink__{GENESIS_LANE_ID}.png",
+        color=(200, 80, 100),
+    )
+    asset_dir = tmp_path / "genesis" / "camera_views" / "prepared_usd_visual_asset"
+    asset_dir.mkdir(parents=True)
+    (asset_dir / "prepared_usd_visual_asset.obj").write_text(
+        """
+mtllib prepared_usd_visual_asset.mtl
+usemtl material_BasketBall_BASKETBALL_AlbedoTransparency
+f 1 2 3
+usemtl material_Cloth_8_Mat
+f 1 3 4
+""",
+        encoding="utf-8",
+    )
+    (asset_dir / "prepared_usd_visual_asset.mtl").write_text(
+        """
+newmtl material_BasketBall_BASKETBALL_AlbedoTransparency
+Kd 1.0 1.0 1.0
+map_Kd textures/BasketBall_BASKETBALL_AlbedoTransparency.png
+
+newmtl material_Cloth_8_Mat
+Kd 1.0 1.0 1.0
+map_Kd textures/Cloth1AO.png
+""",
+        encoding="utf-8",
     )
 
 
@@ -1292,6 +1467,51 @@ def test_render_domain_contract_probe_reads_mjcf_and_usda_contracts(tmp_path: Pa
     assert room["contract_delta"]["mujoco_light_count"] == 1
     assert room["contract_delta"]["isaac_light_count"] == 2
     assert probe["isaac_shadow_disabled_prim_count"] == 1
+
+
+def test_material_response_diagnostics_samples_crop_material_evidence(tmp_path: Path) -> None:
+    manifest = _manifest()
+    _write_material_response_fixtures(tmp_path, manifest)
+
+    diagnostics = _material_response_diagnostics(manifest, output_dir=tmp_path)
+
+    rows = {item["object_key"]: item for item in diagnostics["objects"]}
+    basketball = rows["basketball_01"]
+    cloth = rows["cloth_01"]
+    assert diagnostics["schema"] == "scene_camera_material_response_diagnostics_v1"
+    assert diagnostics["status"] == "computed"
+    assert diagnostics["sample_count"] == 2
+    assert diagnostics["conclusion"] == "mixed"
+    assert diagnostics["mujoco_parse_status"] == "parsed"
+    assert diagnostics["isaac_parse_status"] == "parsed"
+    assert diagnostics["genesis_material_parse_status"] == "parsed"
+    assert basketball["signal"] == "shared_brightness_tone_drift"
+    assert cloth["signal"] == "material_texture_or_local_shadow_residual"
+    assert basketball["mujoco"]["materials"] == ["material_BasketBall"]
+    assert basketball["isaac"]["materials"] == ["material_BasketBall"]
+    assert basketball["genesis"]["status"] == "matched_by_material_name"
+    assert basketball["genesis"]["texture_files"] == [
+        "textures/BasketBall_BASKETBALL_AlbedoTransparency.png"
+    ]
+    assert cloth["genesis"]["materials"] == ["material_Cloth_8_Mat"]
+    assert "material evidence" in diagnostics["recommended_next_action"]
+
+
+def test_material_response_diagnostics_renders_report_section(tmp_path: Path) -> None:
+    manifest = _manifest()
+    _write_material_response_fixtures(tmp_path, manifest)
+    manifest["material_response_diagnostics"] = _material_response_diagnostics(
+        manifest,
+        output_dir=tmp_path,
+    )
+
+    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
+    html = report.read_text(encoding="utf-8")
+
+    assert "Material Response Diagnostics" in html
+    assert "conclusion=mixed" in html
+    assert "shared_brightness_tone_drift" in html
+    assert "material_Cloth_8_Mat" in html
 
 
 def test_scene_camera_contact_sheet_entries_require_existing_lane_images(tmp_path: Path) -> None:

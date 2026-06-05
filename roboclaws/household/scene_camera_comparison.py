@@ -346,6 +346,10 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    manifest["material_response_diagnostics"] = _material_response_diagnostics(
+        manifest,
+        output_dir=output_dir,
+    )
     manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
     manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
     manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
@@ -388,6 +392,11 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     if not isinstance(manifest.get("render_domain_contract_probe"), dict):
         manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    if not isinstance(manifest.get("material_response_diagnostics"), dict):
+        manifest["material_response_diagnostics"] = _material_response_diagnostics(
+            manifest,
+            output_dir=output_dir,
+        )
     if not isinstance(manifest.get("lighting_tone_provenance"), dict):
         manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
     if not isinstance(manifest.get("shadow_parity_probe"), dict):
@@ -5207,6 +5216,412 @@ def _render_domain_contract_probe_next_action(views: list[dict[str, Any]]) -> st
     )
 
 
+def _material_response_diagnostics(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    sample_limit: int = 10,
+) -> dict[str, Any]:
+    visibility = (
+        manifest.get("genesis_movable_object_visibility_diagnostics")
+        if isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict)
+        else {}
+    )
+    crop_artifacts = (
+        visibility.get("crop_artifacts")
+        if isinstance(visibility.get("crop_artifacts"), dict)
+        else {}
+    )
+    crop_objects = [item for item in crop_artifacts.get("objects") or [] if isinstance(item, dict)]
+    crop_objects = [
+        item
+        for item in crop_objects
+        if item.get("crop_status") == "written"
+        and MOLMOSPACES_LANE_ID in set(item.get("lanes") or [])
+        and (
+            ISAAC_LANE_ID in set(item.get("lanes") or [])
+            or GENESIS_LANE_ID in set(item.get("lanes") or [])
+        )
+    ]
+    if not crop_objects:
+        return {
+            "schema": "scene_camera_material_response_diagnostics_v1",
+            "status": "missing_crop_artifacts",
+            "sample_count": 0,
+            "objects": [],
+            "conclusion": "insufficient_evidence",
+            "recommended_next_action": (
+                "Generate movable-object crops before deciding whether to tune materials or lights."
+            ),
+        }
+
+    artifacts = _render_domain_artifact_paths(manifest)
+    mujoco = _mujoco_render_contract_from_xml(artifacts.get("mujoco_scene_xml"))
+    isaac = _isaac_render_contract_from_usda(artifacts.get("isaac_scene_usd"))
+    genesis = _genesis_materialized_render_contract(output_dir)
+    visual_audit_by_object = _genesis_visual_audit_by_object(manifest)
+    selected = _select_material_response_sample(crop_objects, sample_limit=sample_limit)
+    objects: list[dict[str, Any]] = []
+    for item in selected:
+        object_key = str(item.get("object_key") or "")
+        view_id = str(item.get("view_id") or "")
+        crop_metrics = _crop_material_response_metrics(
+            object_key=object_key,
+            view_id=view_id,
+            output_dir=output_dir,
+        )
+        mujoco_contract = _mujoco_view_render_contract(mujoco, anchor_id=object_key)
+        isaac_contract = _isaac_view_render_contract(
+            isaac,
+            usd_prim_path=f"/val_1/Geometry/{object_key}" if object_key else "",
+        )
+        genesis_contract = _genesis_object_material_contract(
+            genesis,
+            object_key=object_key,
+            category=str(item.get("category") or ""),
+            visual_audit=visual_audit_by_object.get(object_key, {}),
+        )
+        signal = _material_response_signal(crop_metrics)
+        objects.append(
+            {
+                "object_key": object_key,
+                "category": item.get("category"),
+                "view_id": view_id,
+                "selection_reason": _material_response_selection_reason(item),
+                "geometry_status": item.get("geometry_status"),
+                "geometry_delta_m": item.get("geometry_delta_m"),
+                "crop_metrics": crop_metrics,
+                "signal": signal,
+                "mujoco": mujoco_contract,
+                "isaac": isaac_contract,
+                "genesis": genesis_contract,
+            }
+        )
+    conclusion = _material_response_conclusion(objects)
+    material_like_count = sum(
+        1 for item in objects if "material" in str(item.get("signal") or "")
+    )
+    shared_tone_count = sum(
+        1 for item in objects if str(item.get("signal") or "") == "shared_brightness_tone_drift"
+    )
+    return {
+        "schema": "scene_camera_material_response_diagnostics_v1",
+        "status": "computed" if objects else "missing_sample_objects",
+        "sample_count": len(objects),
+        "sample_limit": sample_limit,
+        "object_crop_source": "genesis_movable_object_visibility_diagnostics.crop_artifacts",
+        "artifact_paths": {
+            **artifacts,
+            "genesis_materialized_obj": genesis.get("obj_path"),
+            "genesis_materialized_mtl": genesis.get("mtl_path"),
+        },
+        "mujoco_parse_status": mujoco.get("status"),
+        "isaac_parse_status": isaac.get("status"),
+        "genesis_material_parse_status": genesis.get("status"),
+        "material_like_signal_count": material_like_count,
+        "shared_brightness_tone_signal_count": shared_tone_count,
+        "conclusion": conclusion,
+        "recommended_next_action": _material_response_next_action(conclusion),
+        "interpretation": (
+            "This diagnostic samples crop-backed movable objects and keeps material/texture "
+            "evidence separate from backend light/tone evidence. It should guide the next "
+            "slice; it is not a default-light tuning table."
+        ),
+        "objects": objects,
+    }
+
+
+def _select_material_response_sample(
+    crop_objects: list[dict[str, Any]],
+    *,
+    sample_limit: int,
+) -> list[dict[str, Any]]:
+    high_priority_views = {"view_03_diningtable", "view_02_bed"}
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_matching(predicate: Any, *, limit: int | None = None) -> None:
+        added = 0
+        for item in crop_objects:
+            object_key = str(item.get("object_key") or "")
+            if not object_key or object_key in seen or not predicate(item):
+                continue
+            selected.append(item)
+            seen.add(object_key)
+            added += 1
+            if len(selected) >= sample_limit or (limit is not None and added >= limit):
+                return
+
+    add_matching(lambda item: str(item.get("view_id") or "") in high_priority_views, limit=7)
+    add_matching(lambda item: str(item.get("view_id") or "") not in high_priority_views)
+    add_matching(lambda _item: True)
+    return selected[:sample_limit]
+
+
+def _material_response_selection_reason(item: dict[str, Any]) -> str:
+    view_id = str(item.get("view_id") or "")
+    category = str(item.get("category") or "")
+    reasons = []
+    if view_id in {"view_03_diningtable", "view_02_bed"}:
+        reasons.append("high_residual_view")
+    else:
+        reasons.append("held_out_room_view")
+    if category:
+        reasons.append(category)
+    return "; ".join(reasons)
+
+
+def _crop_material_response_metrics(
+    *,
+    object_key: str,
+    view_id: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    crop_dir = output_dir / "genesis_movable_object_crops"
+    paths = {
+        lane_id: crop_dir
+        / (
+            f"{_safe_report_token(object_key)}__{_safe_report_token(view_id)}__"
+            f"{_safe_report_token(lane_id)}.png"
+        )
+        for lane_id in (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID)
+    }
+    baseline_path = paths[MOLMOSPACES_LANE_ID]
+    if not baseline_path.is_file():
+        return {"status": "missing_baseline_crop", "lanes": {}, "deltas": {}}
+    lanes: dict[str, dict[str, Any]] = {
+        MOLMOSPACES_LANE_ID: _image_visual_metrics(baseline_path),
+    }
+    deltas: dict[str, dict[str, Any]] = {}
+    for lane_id in (ISAAC_LANE_ID, GENESIS_LANE_ID):
+        path = paths[lane_id]
+        if not path.is_file():
+            continue
+        metrics = _image_visual_metrics(path)
+        lanes[lane_id] = metrics
+        delta = _image_pair_visual_delta(baseline_path, path)
+        delta["mean_luminance_delta"] = (
+            float(metrics.get("mean_luminance") or 0.0)
+            - float(lanes[MOLMOSPACES_LANE_ID].get("mean_luminance") or 0.0)
+        )
+        deltas[lane_id] = delta
+    return {
+        "status": "computed" if deltas else "missing_candidate_crops",
+        "lanes": lanes,
+        "deltas": deltas,
+    }
+
+
+def _material_response_signal(crop_metrics: dict[str, Any]) -> str:
+    deltas = crop_metrics.get("deltas") if isinstance(crop_metrics.get("deltas"), dict) else {}
+    isaac = deltas.get(ISAAC_LANE_ID) if isinstance(deltas.get(ISAAC_LANE_ID), dict) else {}
+    genesis = deltas.get(GENESIS_LANE_ID) if isinstance(deltas.get(GENESIS_LANE_ID), dict) else {}
+    isaac_luma = _optional_float(isaac.get("mean_luminance_delta"))
+    genesis_luma = _optional_float(genesis.get("mean_luminance_delta"))
+    isaac_mad = _optional_float(isaac.get("mean_absolute_pixel_delta"))
+    genesis_mad = _optional_float(genesis.get("mean_absolute_pixel_delta"))
+    luma_values = [value for value in (isaac_luma, genesis_luma) if value is not None]
+    mad_values = [value for value in (isaac_mad, genesis_mad) if value is not None]
+    if len(luma_values) >= 2 and all(abs(value) >= 20.0 for value in luma_values):
+        if all(value < 0 for value in luma_values) or all(value > 0 for value in luma_values):
+            return "shared_brightness_tone_drift"
+    if mad_values and max(mad_values) >= 45.0 and all(abs(value) <= 8.0 for value in luma_values):
+        return "material_texture_or_local_shadow_residual"
+    if mad_values and max(mad_values) >= 45.0:
+        return "mixed_material_tone_residual"
+    if luma_values and max(abs(value) for value in luma_values) >= 15.0:
+        return "backend_tone_residual"
+    return "low_or_unclassified_residual"
+
+
+def _material_response_conclusion(objects: list[dict[str, Any]]) -> str:
+    if not objects:
+        return "insufficient_evidence"
+    signals = [str(item.get("signal") or "") for item in objects]
+    material_like = sum(1 for signal in signals if "material" in signal)
+    shared_tone = sum(1 for signal in signals if signal == "shared_brightness_tone_drift")
+    if material_like > 0 and shared_tone > 0:
+        return "mixed"
+    if material_like > 0:
+        return "material_issue"
+    if shared_tone > 0:
+        return "light_tone_issue"
+    return "insufficient_evidence"
+
+
+def _material_response_next_action(conclusion: str) -> str:
+    if conclusion == "material_issue":
+        return (
+            "Inspect and fix backend material/texture conversion before changing light defaults."
+        )
+    if conclusion == "light_tone_issue":
+        return (
+            "Run a controlled backend light/tone sweep with held-out views before changing "
+            "defaults."
+        )
+    if conclusion == "mixed":
+        return (
+            "Add per-object material evidence across MuJoCo, Isaac, and Genesis first; then run "
+            "a small held-out light/tone sweep only if material evidence is clean."
+        )
+    return "Collect crop and material-binding evidence before deciding the next tuning target."
+
+
+def _genesis_materialized_render_contract(output_dir: Path) -> dict[str, Any]:
+    asset_dir = output_dir / "genesis" / "camera_views" / "prepared_usd_visual_asset"
+    obj_path = asset_dir / "prepared_usd_visual_asset.obj"
+    mtl_path = asset_dir / "prepared_usd_visual_asset.mtl"
+    if not obj_path.is_file() or not mtl_path.is_file():
+        return {
+            "status": "missing_materialized_asset",
+            "obj_path": str(obj_path),
+            "mtl_path": str(mtl_path),
+            "materials": {},
+        }
+    materials = _parse_mtl_materials(mtl_path)
+    use_counts: dict[str, int] = {}
+    try:
+        for line in obj_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("usemtl "):
+                name = line.split(maxsplit=1)[1].strip()
+                use_counts[name] = use_counts.get(name, 0) + 1
+    except OSError:
+        return {
+            "status": "parse_failed",
+            "obj_path": str(obj_path),
+            "mtl_path": str(mtl_path),
+            "materials": materials,
+        }
+    return {
+        "status": "parsed",
+        "obj_path": str(obj_path),
+        "mtl_path": str(mtl_path),
+        "material_count": len(materials),
+        "used_material_count": len(use_counts),
+        "materials": materials,
+        "use_counts": use_counts,
+    }
+
+
+def _parse_mtl_materials(path: Path) -> dict[str, dict[str, Any]]:
+    materials: dict[str, dict[str, Any]] = {}
+    current: str | None = None
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return materials
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("newmtl "):
+            current = stripped.split(maxsplit=1)[1]
+            materials[current] = {"material_name": current, "texture_files": []}
+            continue
+        if current is None:
+            continue
+        if stripped.startswith("Kd "):
+            materials[current]["diffuse_color"] = _float_list(stripped[3:])
+        elif stripped.startswith("map_Kd "):
+            materials[current].setdefault("texture_files", []).append(
+                stripped.split(maxsplit=1)[1]
+            )
+    for material in materials.values():
+        material["has_diffuse_texture"] = bool(material.get("texture_files"))
+    return materials
+
+
+def _genesis_visual_audit_by_object(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    audit = _genesis_visual_object_audit(manifest)
+    rows: dict[str, dict[str, Any]] = {}
+    if not isinstance(audit, dict):
+        return rows
+    for key in (
+        "texture_conversion_objects",
+        "non_static_render_objects",
+        "collision_mesh_objects",
+        "runtime_pose_overlay_objects",
+    ):
+        for item in audit.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            object_key = str(item.get("object_key") or "")
+            if not object_key:
+                continue
+            rows.setdefault(object_key, {}).update(item)
+    return rows
+
+
+def _genesis_object_material_contract(
+    genesis: dict[str, Any],
+    *,
+    object_key: str,
+    category: str,
+    visual_audit: dict[str, Any],
+) -> dict[str, Any]:
+    if genesis.get("status") != "parsed":
+        return {"status": genesis.get("status"), "materials": [], "texture_files": []}
+    materials = genesis.get("materials") if isinstance(genesis.get("materials"), dict) else {}
+    category_tokens = _genesis_material_search_tokens(category, visual_audit)
+    matches = []
+    for name, material in materials.items():
+        lowered = str(name).lower()
+        if any(token in lowered for token in category_tokens):
+            matches.append({"material_path": name, **material})
+    texture_files = sorted(
+        {
+            str(texture)
+            for item in matches
+            for texture in item.get("texture_files") or []
+            if str(texture)
+        }
+    )
+    return {
+        "status": "matched_by_material_name" if matches else "no_category_material_match",
+        "object_key": object_key,
+        "category": category,
+        "search_tokens": category_tokens,
+        "material_count": len(matches),
+        "materials": sorted(
+            str(item.get("material_name") or item.get("material_path") or "")
+            for item in matches
+        ),
+        "texture_files": texture_files,
+        "has_diffuse_texture_count": sum(1 for item in matches if item.get("has_diffuse_texture")),
+        "material_evidence": matches[:8],
+        "visual_audit": visual_audit,
+    }
+
+
+def _genesis_material_search_tokens(category: str, visual_audit: dict[str, Any]) -> list[str]:
+    tokens = []
+    for value in (
+        category,
+        visual_audit.get("category") if isinstance(visual_audit, dict) else "",
+        visual_audit.get("asset_id") if isinstance(visual_audit, dict) else "",
+    ):
+        for token in re.findall(r"[A-Za-z0-9]+", str(value or "").lower()):
+            if len(token) >= 3 and token not in tokens:
+                tokens.append(token)
+    aliases = {
+        "alarmclock": ["alarm", "clock"],
+        "basketball": ["basketball"],
+        "box": ["cardboard", "box"],
+        "cellphone": ["cellphone", "phone"],
+        "cellulartelephone": ["cellphone", "phone"],
+        "cloth": ["cloth", "fabric"],
+        "dishsponge": ["sponge"],
+        "remotecontrol": ["remote"],
+        "spraybottle": ["spray", "bottle"],
+        "toiletpaper": ["toilet", "paper"],
+    }
+    compact = "".join(re.findall(r"[A-Za-z0-9]+", str(category or "").lower()))
+    for alias in aliases.get(compact, []):
+        if alias not in tokens:
+            tokens.append(alias)
+    return tokens[:8]
+
+
 def _view_anchor_id(manifest: dict[str, Any], view_id: str) -> str:
     for view in manifest.get("canonical_camera_views") or []:
         if isinstance(view, dict) and str(view.get("view_id") or "") == view_id:
@@ -5676,6 +6091,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _shadow_parity_probe_section(manifest),
             _render_domain_source_section(manifest),
             _render_domain_view_triage_section(manifest),
+            _material_response_diagnostics_section(manifest),
             _render_domain_contract_probe_section(manifest),
             _anchor_section(manifest),
             _runtime_section(manifest),
@@ -7312,6 +7728,92 @@ def _render_domain_view_triage_section(manifest: dict[str, Any]) -> str:
   <h2>Render Domain View Triage</h2>
   <p class="note">{html.escape(note)}</p>
   <p class="note">{html.escape(str(triage.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _material_response_diagnostics_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("material_response_diagnostics")
+        if isinstance(manifest.get("material_response_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("objects") or []:
+        if not isinstance(item, dict):
+            continue
+        crop_metrics = (
+            item.get("crop_metrics") if isinstance(item.get("crop_metrics"), dict) else {}
+        )
+        deltas = crop_metrics.get("deltas") if isinstance(crop_metrics.get("deltas"), dict) else {}
+        isaac_delta = (
+            deltas.get(ISAAC_LANE_ID) if isinstance(deltas.get(ISAAC_LANE_ID), dict) else {}
+        )
+        genesis_delta = (
+            deltas.get(GENESIS_LANE_ID) if isinstance(deltas.get(GENESIS_LANE_ID), dict) else {}
+        )
+        mujoco = item.get("mujoco") if isinstance(item.get("mujoco"), dict) else {}
+        isaac = item.get("isaac") if isinstance(item.get("isaac"), dict) else {}
+        genesis = item.get("genesis") if isinstance(item.get("genesis"), dict) else {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('signal', '')))}</td>"
+            f"<td>{html.escape(_float_text(isaac_delta.get('mean_luminance_delta')))}</td>"
+            f"<td>{html.escape(_float_text(isaac_delta.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(_float_text(genesis_delta.get('mean_luminance_delta')))}</td>"
+            f"<td>{html.escape(_float_text(genesis_delta.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(str(mujoco.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(mujoco.get('materials')))}</td>"
+            f"<td>{html.escape(str(isaac.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(isaac.get('materials')))}</td>"
+            f"<td>{html.escape(str(genesis.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(genesis.get('materials')))}</td>"
+            f"<td>{html.escape(_short_list_text(genesis.get('texture_files')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Object",
+            "View",
+            "Signal",
+            "Isaac deltaY",
+            "Isaac MAD",
+            "Genesis deltaY",
+            "Genesis MAD",
+            "MuJoCo status",
+            "MuJoCo materials",
+            "Isaac status",
+            "Isaac materials",
+            "Genesis status",
+            "Genesis materials",
+            "Genesis textures",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"conclusion={diagnostics.get('conclusion')}; "
+        f"samples={diagnostics.get('sample_count')}; "
+        f"material_like={diagnostics.get('material_like_signal_count')}; "
+        f"shared_brightness_tone={diagnostics.get('shared_brightness_tone_signal_count')}; "
+        f"mujoco_parse={diagnostics.get('mujoco_parse_status')}; "
+        f"isaac_parse={diagnostics.get('isaac_parse_status')}; "
+        f"genesis_material_parse={diagnostics.get('genesis_material_parse_status')}. "
+        f"{diagnostics.get('recommended_next_action') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Material Response Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get('interpretation') or ''))}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>
