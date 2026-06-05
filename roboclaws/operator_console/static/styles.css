@@ -49,11 +49,29 @@ button:disabled {
   opacity: 0.55;
 }
 
-button:focus,
-input:focus,
-textarea:focus {
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+button:not(:disabled):hover {
+  border-color: var(--accent);
+}
+
+.primary:not(:disabled):hover,
+.danger:not(:disabled):hover,
+.emergency:not(:disabled):hover,
+.view-mode.active:hover {
+  filter: brightness(0.92);
+}
+
+.route-card:not(:disabled):hover,
+.view-mode:not(.active):hover,
+.artifact-list a:hover {
+  border-color: var(--accent);
+  background: var(--bg);
 }
 
 .primary {
