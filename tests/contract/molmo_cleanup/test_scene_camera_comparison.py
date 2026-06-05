@@ -10,6 +10,7 @@ import pytest
 from PIL import Image
 
 from roboclaws.household.camera_control import (
+    BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
     CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
@@ -2121,9 +2122,60 @@ def test_scene_camera_shadow_parity_lighting_profile_is_probe_only() -> None:
     assert profile["genesis_shadow"] is True
     assert profile["isaac_dome_intensity"] == pytest.approx(12.0)
     assert profile["isaac_key_intensity"] == pytest.approx(1200.0)
-    assert SCENE_PROBE_LIGHTING_PROFILES["default"] is default
+    assert SCENE_PROBE_LIGHTING_PROFILES["fill"] is default
     assert SCENE_PROBE_LIGHTING_PROFILES["shadow-parity"] is profile
     assert _scene_camera_lighting_profile("shadow-parity") == profile
+
+
+def test_scene_camera_balanced_review_lighting_profile_is_default_candidate() -> None:
+    default = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
+    profile = BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE
+
+    assert default["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
+    assert SCENE_PROBE_LIGHTING_PROFILES["fill"] is default
+    assert profile["profile_id"] == "scene_probe_balanced_review_light_v1"
+    assert profile["genesis_shadow"] is True
+    assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
+    assert profile["isaac_key_intensity"] == pytest.approx(300.0)
+    assert SCENE_PROBE_LIGHTING_PROFILES["default"] is profile
+    assert SCENE_PROBE_LIGHTING_PROFILES["balanced-review"] is profile
+    assert _scene_camera_lighting_profile("default") == profile
+    assert _scene_camera_lighting_profile("balanced-review") == profile
+
+
+def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_status() -> None:
+    manifest = _manifest()
+    profile = dict(BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE)
+    manifest["camera_control"]["lighting_profile"] = profile  # type: ignore[index]
+    manifest["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"].update(  # type: ignore[index]
+        {
+            "requested_dome_intensity": profile["isaac_dome_intensity"],
+            "requested_key_intensity": profile["isaac_key_intensity"],
+            "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
+        }
+    )
+    genesis = _genesis_lane_fixture()
+    genesis["lighting_diagnostics"]["genesis_lighting_profile"]["shadow"] = True  # type: ignore[index]
+    manifest["lanes"][GENESIS_LANE_ID] = genesis  # type: ignore[index]
+    manifest["candidate_visual_diagnostics"] = {
+        "status": "computed",
+        "degraded_candidates": [],
+        "candidates": [],
+    }
+    manifest["render_domain_contract_probe"] = {
+        "status": "computed",
+        "high_priority_delta_count": 0,
+        "mujoco_light_count": 1,
+        "isaac_light_count": 2,
+        "isaac_shadow_disabled_prim_count": 18,
+    }
+
+    diagnostics = _shadow_parity_probe(manifest)
+
+    assert diagnostics["status"] == "shadow_capable_profile_accepted"
+    assert diagnostics["is_shadow_capable_profile"] is True
+    assert diagnostics["comparison_successful"] is True
+    assert "passes the visual comparison gate" in diagnostics["recommended_next_action"]
 
 
 def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path: Path) -> None:

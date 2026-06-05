@@ -3628,11 +3628,18 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
     shadow_disabled_count = _optional_int(render_probe.get("isaac_shadow_disabled_prim_count")) or 0
     profile_id = str(lighting.get("profile_id") or "")
     is_shadow_probe = profile_id == "scene_probe_shadow_parity_probe_v1"
+    is_shadow_capable_profile = bool(genesis_shadow) or is_shadow_probe
     isaac_probe_ready = (
         isaac_dome_intensity is not None
         and isaac_dome_intensity <= 20.0
         and isaac_key_intensity is not None
         and isaac_key_intensity > 0.0
+    )
+    isaac_lighting_ready = (
+        isaac_dome_intensity is not None
+        and isaac_dome_intensity > 0.0
+        and isaac_key_intensity is not None
+        and isaac_key_intensity >= 0.0
     )
     if is_shadow_probe and genesis_shadow and isaac_probe_ready:
         status = "shadow_parity_probe_configured"
@@ -3651,6 +3658,19 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         next_action = (
             "Inspect per-lane lighting diagnostics before trusting visual shadow evidence."
         )
+    elif is_shadow_capable_profile and isaac_lighting_ready:
+        if comparison_successful(manifest):
+            status = "shadow_capable_profile_accepted"
+            next_action = (
+                "Lighting profile is shadow-capable and passes the visual comparison gate; "
+                "review contact sheets before treating it as the default."
+            )
+        else:
+            status = "shadow_capable_profile_visual_gate_failed"
+            next_action = (
+                "Lighting profile is shadow-capable, but the visual comparison gate did not "
+                "pass. Keep it opt-in until candidate diagnostics improve."
+            )
     else:
         status = "default_fill_profile_not_shadow_parity"
         next_action = (
@@ -3662,6 +3682,7 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "status": status,
         "profile_id": profile_id,
         "is_shadow_parity_profile": is_shadow_probe,
+        "is_shadow_capable_profile": is_shadow_capable_profile,
         "genesis_shadow": genesis_shadow,
         "isaac_dome_intensity": isaac_dome_intensity,
         "isaac_key_intensity": isaac_key_intensity,

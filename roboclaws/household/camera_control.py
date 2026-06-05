@@ -71,10 +71,29 @@ SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE = {
     "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
     "genesis_shadow": True,
 }
+BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE = {
+    **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    "profile_id": "scene_probe_balanced_review_light_v1",
+    "source": (
+        "Default-candidate scene-camera profile for MuJoCo/Isaac/Genesis review. "
+        "It preserves the accepted Isaac fill level, adds a modest Isaac key light, "
+        "and enables Genesis shadows so all lanes remain reviewable while showing "
+        "useful cast-shadow evidence."
+    ),
+    "isaac_dome_intensity": 60.0,
+    "isaac_key_intensity": 300.0,
+    "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
+    "genesis_shadow": True,
+}
 SCENE_PROBE_LIGHTING_PROFILES = {
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["profile_id"]: DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
-    "default": DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    "default": BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
     "fill": DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE[
+        "profile_id"
+    ]: BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
+    "balanced": BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
+    "balanced-review": BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
     SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE[
         "profile_id"
     ]: SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE,
