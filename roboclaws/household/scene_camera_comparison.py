@@ -26,6 +26,8 @@ from roboclaws.household.camera_control import (
     SCENE_PROBE_LIGHTING_PROFILES,
     canonical_scene_camera_control_request,
     normalize_camera_control_request,
+    scene_light_rig,
+    scene_light_rig_roles,
     write_camera_control_request,
 )
 from roboclaws.household.genesis_backend import GenesisSubprocessBackend
@@ -3618,7 +3620,12 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
             )
         }
     )
-    genesis_shadow = bool(genesis_profile.get("shadow", lighting.get("genesis_shadow", False)))
+    rig = _lighting_rig(lighting)
+    rig_roles = scene_light_rig_roles(rig)
+    key = _rig_key(lighting)
+    ambient = _rig_ambient(lighting)
+    isaac_override = _rig_backend_override(lighting, "isaac")
+    genesis_shadow = bool(genesis_profile.get("shadow", key.get("shadow", False)))
     key_light_direction = _key_light_direction_diagnostics(
         lighting_profile=lighting,
         render_probe=render_probe,
@@ -3626,10 +3633,10 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         genesis_profile=genesis_profile,
     )
     isaac_dome_intensity = _optional_float(
-        isaac_lighting.get("requested_dome_intensity", lighting.get("isaac_dome_intensity"))
+        isaac_lighting.get("requested_dome_intensity", ambient.get("isaac_dome_intensity"))
     )
     isaac_key_intensity = _optional_float(
-        isaac_lighting.get("requested_key_intensity", lighting.get("isaac_key_intensity"))
+        isaac_lighting.get("requested_key_intensity", isaac_override.get("key_intensity"))
     )
     shadow_disabled_count = _optional_int(render_probe.get("isaac_shadow_disabled_prim_count")) or 0
     profile_id = str(lighting.get("profile_id") or "")
@@ -3687,6 +3694,8 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "schema": "scene_camera_shadow_parity_probe_v1",
         "status": status,
         "profile_id": profile_id,
+        "scene_light_rig_schema": rig.get("schema"),
+        "scene_light_rig_roles": rig_roles,
         "is_shadow_parity_profile": is_shadow_probe,
         "is_shadow_capable_profile": is_shadow_capable_profile,
         "genesis_shadow": genesis_shadow,
@@ -3763,23 +3772,32 @@ def _genesis_lighting_summary(
     diagnostics: dict[str, Any],
     lighting_profile: dict[str, Any],
 ) -> dict[str, str]:
+    rig = _lighting_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
     profile = (
         diagnostics.get("genesis_lighting_profile")
         if isinstance(diagnostics.get("genesis_lighting_profile"), dict)
         else {}
     )
-    ambient = profile.get("ambient_light") or lighting_profile.get("genesis_ambient_light")
-    background = profile.get("background_color") or lighting_profile.get("genesis_background_color")
-    lights = profile.get("lights") or lighting_profile.get("genesis_directional_lights") or []
+    ambient = profile.get("ambient_light") or _rig_ambient(lighting_profile).get(
+        "genesis_ambient_light"
+    )
+    background = profile.get("background_color") or _rig_ambient(lighting_profile).get(
+        "genesis_background_color"
+    )
+    lights = profile.get("lights") or []
     light_count = len(lights) if isinstance(lights, list) else 0
     shadow = profile.get("shadow")
     if shadow is None:
-        shadow = lighting_profile.get("genesis_shadow")
+        shadow = _rig_key(lighting_profile).get("shadow")
     has_environment = bool(ambient or background or light_count)
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     intensities = _light_intensity_text(lights)
     summary = (
         f"{diagnostics.get('status') or 'genesis_lighting_profile'}; "
+        f"rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
+        f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
+        f"authored={roles.get('authored_scene_lights_policy')}; "
         f"ambient={_cell_text(ambient)}; background={_cell_text(background)}; "
         f"directional_lights={light_count}; intensities={intensities}; shadow={shadow}"
     )
@@ -3794,20 +3812,25 @@ def _isaac_lighting_summary(
     diagnostics: dict[str, Any],
     lighting_profile: dict[str, Any],
 ) -> dict[str, str]:
+    rig = _lighting_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
     existing = _optional_int(diagnostics.get("existing_light_count"))
     added = _optional_int(diagnostics.get("added_light_count"))
     dome_intensity = diagnostics.get("requested_dome_intensity")
     if dome_intensity is None:
-        dome_intensity = lighting_profile.get("isaac_dome_intensity")
+        dome_intensity = _rig_ambient(lighting_profile).get("isaac_dome_intensity")
     key_intensity = diagnostics.get("requested_key_intensity")
     if key_intensity is None:
-        key_intensity = lighting_profile.get("isaac_key_intensity")
+        key_intensity = _rig_backend_override(lighting_profile, "isaac").get("key_intensity")
     existing_count = existing or 0
     added_count = added or 0
     has_environment = existing_count + added_count > 0 or _positive_number(dome_intensity)
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     summary = (
         f"{diagnostics.get('status') or 'isaac_lighting_profile'}; "
+        f"rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
+        f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
+        f"authored={roles.get('authored_scene_lights_policy')}; "
         f"existing={existing_count}; added={added_count}; "
         f"dome_intensity={_float_text(dome_intensity)}; "
         f"key_intensity={_float_text(key_intensity)}; "
@@ -3824,19 +3847,24 @@ def _mujoco_lighting_summary(
     manifest: dict[str, Any],
     lighting_profile: dict[str, Any],
 ) -> dict[str, str]:
+    rig = _lighting_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
     probe = (
         manifest.get("render_domain_contract_probe")
         if isinstance(manifest.get("render_domain_contract_probe"), dict)
         else {}
     )
     light_count = _optional_int(probe.get("mujoco_light_count"))
-    ambient = lighting_profile.get("mujoco_headlight_ambient")
-    diffuse = lighting_profile.get("mujoco_headlight_diffuse")
+    ambient = _rig_ambient(lighting_profile).get("mujoco_headlight_ambient")
+    diffuse = _rig_ambient(lighting_profile).get("mujoco_headlight_diffuse")
     has_environment = bool(ambient or diffuse or (light_count or 0) > 0)
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     scene_lights = light_count if light_count is not None else ""
     summary = (
-        f"mujoco_headlight_fill; ambient={_cell_text(ambient)}; "
+        f"scene_light_rig; rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
+        f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
+        f"authored={roles.get('authored_scene_lights_policy')}; "
+        f"headlight_ambient={_cell_text(ambient)}; "
         f"diffuse={_cell_text(diffuse)}; scene_lights={scene_lights}"
     )
     return {
@@ -3857,6 +3885,28 @@ def _generic_lighting_summary(
         "summary": f"{status}; profile={profile_id}".strip("; "),
         "source": str(lighting_profile.get("source") or diagnostics.get("profile_source") or ""),
     }
+
+
+def _lighting_rig(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    return scene_light_rig(lighting_profile)
+
+
+def _rig_key(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    rig = _lighting_rig(lighting_profile)
+    return rig.get("key") if isinstance(rig.get("key"), dict) else {}
+
+
+def _rig_ambient(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    rig = _lighting_rig(lighting_profile)
+    return rig.get("ambient") if isinstance(rig.get("ambient"), dict) else {}
+
+
+def _rig_backend_override(lighting_profile: dict[str, Any], backend: str) -> dict[str, Any]:
+    rig = _lighting_rig(lighting_profile)
+    overrides = (
+        rig.get("backend_overrides") if isinstance(rig.get("backend_overrides"), dict) else {}
+    )
+    return overrides.get(backend) if isinstance(overrides.get(backend), dict) else {}
 
 
 def _color_tone_summary(
@@ -4682,7 +4732,9 @@ def _key_light_direction_diagnostics(
     isaac_lighting: dict[str, Any],
     genesis_profile: dict[str, Any],
 ) -> dict[str, Any]:
-    canonical = _normalized_vec3(lighting_profile.get("scene_key_light_direction"))
+    rig = _lighting_rig(lighting_profile)
+    key = _rig_key(lighting_profile)
+    canonical = _normalized_vec3(key.get("direction"))
     mujoco = _primary_mujoco_key_light_direction(render_probe)
     isaac = _normalized_vec3(isaac_lighting.get("applied_key_light_direction"))
     genesis = _primary_genesis_key_light_direction(genesis_profile)
@@ -4702,7 +4754,7 @@ def _key_light_direction_diagnostics(
         "schema": "scene_camera_key_light_direction_diagnostics_v1",
         "status": status,
         "threshold_deg": threshold,
-        "scene_key_light_frame": lighting_profile.get("scene_key_light_frame"),
+        "scene_key_light_frame": rig.get("frame"),
         "canonical_scene_key_light_direction": canonical,
         "mujoco_key_light_direction": mujoco,
         "isaac_key_light_direction": isaac,
@@ -6819,6 +6871,7 @@ def _shadow_parity_probe_section(manifest: dict[str, Any]) -> str:
     rows = [
         ("Profile", diagnostics.get("profile_id")),
         ("Status", diagnostics.get("status")),
+        ("Light rig schema", diagnostics.get("scene_light_rig_schema")),
         ("Genesis shadow", diagnostics.get("genesis_shadow")),
         ("Isaac dome intensity", diagnostics.get("isaac_dome_intensity")),
         ("Isaac key intensity", diagnostics.get("isaac_key_intensity")),
@@ -6828,6 +6881,21 @@ def _shadow_parity_probe_section(manifest: dict[str, Any]) -> str:
         ("Isaac light count", diagnostics.get("isaac_light_count")),
         ("Isaac shadow-off prims", diagnostics.get("isaac_shadow_disabled_prim_count")),
     ]
+    rig_roles = (
+        diagnostics.get("scene_light_rig_roles")
+        if isinstance(diagnostics.get("scene_light_rig_roles"), dict)
+        else {}
+    )
+    if rig_roles:
+        rows.extend(
+            [
+                ("Rig key role", rig_roles.get("key_enabled")),
+                ("Rig ambient role", rig_roles.get("ambient_enabled")),
+                ("Rig fill role", rig_roles.get("fill_enabled")),
+                ("Authored scene lights policy", rig_roles.get("authored_scene_lights_policy")),
+                ("Rig key direction", rig_roles.get("key_direction")),
+            ]
+        )
     key_light = (
         diagnostics.get("key_light_direction")
         if isinstance(diagnostics.get("key_light_direction"), dict)
@@ -7799,7 +7867,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=tuple(sorted(SCENE_PROBE_LIGHTING_PROFILES)),
         help=(
             "Scene-camera lighting profile. Use shadow-parity for a probe run; "
-            "default keeps the current fill profile."
+            "default uses the shared scene_light_rig_v1 single-key review profile."
         ),
     )
     args = parser.parse_args(argv)

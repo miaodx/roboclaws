@@ -14,8 +14,11 @@ from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    SCENE_LIGHT_RIG_SCHEMA,
     SCENE_PROBE_LIGHTING_PROFILES,
     SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE,
+    scene_light_rig,
+    scene_light_rig_roles,
     scene_probe_camera_control_request,
 )
 from roboclaws.household.scene_camera_comparison import (
@@ -247,9 +250,21 @@ def _native_isaac_diagnostics() -> dict[str, object]:
 
 def _genesis_lane_fixture() -> dict[str, object]:
     lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
-    genesis_lights = [dict(item) for item in lighting_profile["genesis_directional_lights"]]
-    genesis_lights[0]["dir"] = list(lighting_profile["scene_key_light_direction"])
-    genesis_lights[0]["source"] = "scene_key_light_direction"
+    rig = scene_light_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
+    key = rig["key"]
+    ambient = rig["ambient"]
+    genesis = rig["backend_overrides"]["genesis"]
+    genesis_lights = [
+        {
+            "type": "directional",
+            "dir": list(key["direction"]),
+            "color": list(key["color"]),
+            "intensity": genesis["key_intensity"],
+            "role": "key",
+            "source": "scene_light_rig.key.direction",
+        }
+    ]
     return {
         "status": "success",
         "python_executable": ".venv-genesis/bin/python",
@@ -260,16 +275,19 @@ def _genesis_lane_fixture() -> dict[str, object]:
         "calibration_status": "canonical_scene_frame_similarity_fit_v1",
         "lighting_profile": lighting_profile,
         "lighting_diagnostics": {
-            "status": "genesis_environment_fill_profile_applied",
+            "status": "genesis_scene_light_rig_applied",
             "source": "prepared_usd_plus_genesis_rasterizer",
             "genesis_lighting_profile": {
                 "profile_id": lighting_profile["profile_id"],
                 "source": lighting_profile["source"],
-                "ambient_light": lighting_profile["genesis_ambient_light"],
-                "background_color": lighting_profile["genesis_background_color"],
-                "shadow": lighting_profile["genesis_shadow"],
-                "scene_key_light_direction": lighting_profile["scene_key_light_direction"],
-                "scene_key_light_frame": lighting_profile["scene_key_light_frame"],
+                "scene_light_rig": rig,
+                "scene_light_rig_schema": rig["schema"],
+                "scene_light_rig_roles": roles,
+                "ambient_light": ambient["genesis_ambient_light"],
+                "background_color": ambient["genesis_background_color"],
+                "shadow": key["shadow"],
+                "scene_key_light_direction": key["direction"],
+                "scene_key_light_frame": rig["frame"],
                 "lights": genesis_lights,
             },
         },
@@ -669,11 +687,22 @@ def _manifest() -> dict[str, object]:
                 "color_profile": {"profile_id": "display_srgb_soft_highlight_v1"},
                 "lighting_diagnostics": {
                     "status": "added_capture_lights",
+                    "scene_light_rig": scene_light_rig(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
+                    "scene_light_rig_schema": SCENE_LIGHT_RIG_SCHEMA,
+                    "scene_light_rig_roles": scene_light_rig_roles(
+                        scene_light_rig(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
+                    ),
+                    "authored_scene_lights_policy": "disabled_for_comparison",
                     "existing_light_count": 2,
-                    "added_light_count": 1,
-                    "added_light_paths": ["/RoboclawsSmokeDomeLight"],
-                    "requested_dome_intensity": 60.0,
-                    "requested_key_intensity": 0.0,
+                    "existing_light_intensity_scale": 0.0,
+                    "added_light_count": 2,
+                    "added_light_paths": [
+                        "/RoboclawsSmokeDomeLight",
+                        "/RoboclawsSmokeKeyLight",
+                    ],
+                    "requested_dome_intensity": 120.0,
+                    "requested_key_intensity": 900.0,
+                    "applied_key_light_direction": [-0.57735, 0.57735, -0.57735],
                 },
                 "native_render_diagnostics": _native_isaac_diagnostics(),
                 "images": {
@@ -794,9 +823,11 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "environment_light_configured_tone_adjusted" in html
     assert "missing_environment_light_lanes=" in html
     assert "tone_adjusted_lanes=genesis-prepared-usd" in html
-    assert "genesis_environment_fill_profile_applied" in html
+    assert "genesis_scene_light_rig_applied" in html
+    assert "scene_light_rig_v1" in html
     assert "ambient=0.37, 0.37, 0.37" in html
-    assert "directional_lights=3" in html
+    assert "directional_lights=1" in html
+    assert "authored=disabled_for_comparison" in html
     assert "background=0.04, 0.08, 0.12" in html
     assert "post_render_tone_adjustment_applied" in html
     assert "view_tone_overrides=1" in html
@@ -829,10 +860,11 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "display_srgb_soft_highlight_v1" in html
     assert "canonical_eye_target_camera_v1" in html
     assert "backend eye=" in html
-    assert "scene_probe_mujoco_headlight_fill_v1" in html
+    assert "scene_probe_balanced_review_light_v1" in html
     assert "added_capture_lights" in html
     assert _manifest()["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"]["added_light_paths"] == [
-        "/RoboclawsSmokeDomeLight"
+        "/RoboclawsSmokeDomeLight",
+        "/RoboclawsSmokeKeyLight",
     ]
     assert "Candidate color calibrations" in html
     assert "best=" in html
@@ -2105,57 +2137,57 @@ def test_scene_camera_comparison_default_color_profile_contract() -> None:
 
 def test_scene_camera_comparison_default_lighting_profile_contract() -> None:
     profile = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
+    rig = scene_light_rig(profile)
+    roles = scene_light_rig_roles(rig)
 
-    assert profile["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
-    assert profile["scene_key_light_direction"] == pytest.approx(
-        [-0.57735, 0.57735, -0.57735]
+    assert profile["profile_id"] == "scene_probe_balanced_review_light_v1"
+    assert rig["schema"] == SCENE_LIGHT_RIG_SCHEMA
+    assert rig["frame"] == "molmospaces_scene_frame_v1"
+    assert rig["key"]["enabled"] is True
+    assert rig["key"]["shadow"] is True
+    assert rig["key"]["direction"] == pytest.approx([-0.57735, 0.57735, -0.57735])
+    assert rig["ambient"]["enabled"] is True
+    assert rig["ambient"]["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
+    assert rig["ambient"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(120.0)
+    assert rig["ambient"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
+    assert rig["fill"]["enabled"] is False
+    assert rig["authored_scene_lights_policy"] == "disabled_for_comparison"
+    assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(900.0)
+    assert rig["backend_overrides"]["isaac"]["existing_light_intensity_scale"] == pytest.approx(
+        0.0
     )
-    assert profile["scene_key_light_frame"] == "molmospaces_scene_frame_v1"
-    assert profile["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
-    assert profile["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
-    assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
-    assert profile["isaac_key_intensity"] == pytest.approx(0.0)
-    assert profile["isaac_key_rotation_deg"] == pytest.approx([-45.0, 0.0, 35.0])
-    assert profile["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
-    assert profile["genesis_shadow"] is False
-    assert len(profile["genesis_directional_lights"]) == 3
+    assert roles["key_enabled"] is True
+    assert roles["ambient_enabled"] is True
+    assert roles["fill_enabled"] is False
 
 
-def test_scene_camera_shadow_parity_lighting_profile_is_probe_only() -> None:
+def test_scene_camera_shadow_parity_lighting_profile_is_probe_profile() -> None:
     default = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
     profile = SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE
+    rig = scene_light_rig(profile)
 
-    assert default["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
-    assert default["genesis_shadow"] is False
-    assert default["isaac_dome_intensity"] == pytest.approx(60.0)
-    assert default["isaac_key_intensity"] == pytest.approx(0.0)
+    assert default["profile_id"] == "scene_probe_balanced_review_light_v1"
     assert profile["profile_id"] == "scene_probe_shadow_parity_probe_v1"
-    assert profile["genesis_shadow"] is True
-    assert profile["isaac_dome_intensity"] == pytest.approx(12.0)
-    assert profile["isaac_key_intensity"] == pytest.approx(1200.0)
-    assert SCENE_PROBE_LIGHTING_PROFILES["fill"] is default
+    assert rig["schema"] == SCENE_LIGHT_RIG_SCHEMA
+    assert rig["key"]["shadow"] is True
+    assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(12.0)
+    assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(1200.0)
+    assert rig["fill"]["enabled"] is False
     assert SCENE_PROBE_LIGHTING_PROFILES["shadow-parity"] is profile
     assert _scene_camera_lighting_profile("shadow-parity") == profile
 
 
-def test_scene_camera_balanced_review_lighting_profile_is_default_candidate() -> None:
+def test_scene_camera_balanced_review_lighting_profile_is_default() -> None:
     default = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
     profile = BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE
+    rig = scene_light_rig(profile)
 
-    assert default["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
-    assert SCENE_PROBE_LIGHTING_PROFILES["fill"] is default
+    assert default is profile
     assert profile["profile_id"] == "scene_probe_balanced_review_light_v1"
-    assert profile["genesis_shadow"] is True
-    assert profile["isaac_dome_intensity"] == pytest.approx(120.0)
-    assert profile["isaac_key_intensity"] == pytest.approx(900.0)
-    assert profile["isaac_existing_light_intensity_scale"] == pytest.approx(0.0)
-    assert profile["scene_key_light_direction"] == pytest.approx(
-        [-0.57735, 0.57735, -0.57735]
-    )
-    assert len(profile["genesis_directional_lights"]) == 1
-    assert profile["genesis_directional_lights"][0]["dir"] == pytest.approx(
-        [-0.57735, 0.57735, -0.57735]
-    )
+    assert rig["key"]["enabled"] is True
+    assert rig["key"]["direction"] == pytest.approx([-0.57735, 0.57735, -0.57735])
+    assert rig["fill"]["enabled"] is False
     assert SCENE_PROBE_LIGHTING_PROFILES["default"] is profile
     assert SCENE_PROBE_LIGHTING_PROFILES["balanced-review"] is profile
     assert _scene_camera_lighting_profile("default") == profile
@@ -2221,13 +2253,16 @@ def test_scene_camera_key_light_direction_diagnostics_accepts_aligned_vectors() 
 def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_status() -> None:
     manifest = _manifest()
     profile = dict(BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(profile)
     manifest["camera_control"]["lighting_profile"] = profile  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"].update(  # type: ignore[index]
         {
-            "requested_dome_intensity": profile["isaac_dome_intensity"],
-            "requested_key_intensity": profile["isaac_key_intensity"],
-            "existing_light_intensity_scale": profile["isaac_existing_light_intensity_scale"],
-            "applied_key_light_direction": profile["scene_key_light_direction"],
+            "requested_dome_intensity": rig["ambient"]["isaac_dome_intensity"],
+            "requested_key_intensity": rig["backend_overrides"]["isaac"]["key_intensity"],
+            "existing_light_intensity_scale": rig["backend_overrides"]["isaac"][
+                "existing_light_intensity_scale"
+            ],
+            "applied_key_light_direction": rig["key"]["direction"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
@@ -2264,15 +2299,18 @@ def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_st
 def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path: Path) -> None:
     manifest = _manifest()
     profile = dict(SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(profile)
     manifest["camera_control"]["lighting_profile"] = profile  # type: ignore[index]
     manifest["scene"]["lighting_profile_id"] = profile["profile_id"]  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["lighting_profile"] = profile  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"].update(  # type: ignore[index]
         {
-            "requested_dome_intensity": profile["isaac_dome_intensity"],
-            "requested_key_intensity": profile["isaac_key_intensity"],
-            "existing_light_intensity_scale": profile["isaac_existing_light_intensity_scale"],
-            "applied_key_light_direction": profile["scene_key_light_direction"],
+            "requested_dome_intensity": rig["ambient"]["isaac_dome_intensity"],
+            "requested_key_intensity": rig["backend_overrides"]["isaac"]["key_intensity"],
+            "existing_light_intensity_scale": rig["backend_overrides"]["isaac"][
+                "existing_light_intensity_scale"
+            ],
+            "applied_key_light_direction": rig["key"]["direction"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
@@ -2324,11 +2362,12 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
 def test_scene_camera_shadow_parity_probe_reports_visual_gate_failure() -> None:
     manifest = _manifest()
     profile = dict(SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(profile)
     manifest["camera_control"]["lighting_profile"] = profile  # type: ignore[index]
     manifest["lanes"][ISAAC_LANE_ID]["lighting_diagnostics"].update(  # type: ignore[index]
         {
-            "requested_dome_intensity": profile["isaac_dome_intensity"],
-            "requested_key_intensity": profile["isaac_key_intensity"],
+            "requested_dome_intensity": rig["ambient"]["isaac_dome_intensity"],
+            "requested_key_intensity": rig["backend_overrides"]["isaac"]["key_intensity"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )

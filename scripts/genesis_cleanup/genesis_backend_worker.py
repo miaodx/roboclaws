@@ -24,45 +24,16 @@ from PIL import Image, ImageDraw
 
 from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
+    DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     load_camera_control_request,
+    scene_light_rig,
+    scene_light_rig_roles,
 )
 from roboclaws.household.color_management import apply_camera_color_profile
 from roboclaws.household.genesis_backend import GENESIS_SCENE_CAMERA_VIEW_VARIANT
 
 GENESIS_LANE_ID = "genesis-prepared-usd"
-GENESIS_RENDER_LIGHTING_PROFILE = {
-    "profile_id": "scene_probe_mujoco_headlight_fill_v1",
-    "source": (
-        "MuJoCo-headlight-inspired Genesis environment fill for prepared USD visual assets."
-    ),
-    "scene_key_light_direction": [-0.57735, 0.57735, -0.57735],
-    "scene_key_light_frame": "molmospaces_scene_frame_v1",
-    "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
-    "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
-    "ambient_light": [0.37, 0.37, 0.37],
-    "background_color": [0.04, 0.08, 0.12],
-    "shadow": False,
-    "lights": [
-        {
-            "type": "directional",
-            "dir": [-1.0, -1.0, -1.0],
-            "color": [1.0, 1.0, 1.0],
-            "intensity": 3.0,
-        },
-        {
-            "type": "directional",
-            "dir": [1.0, 1.0, -0.6],
-            "color": [1.0, 0.96, 0.9],
-            "intensity": 0.8,
-        },
-        {
-            "type": "directional",
-            "dir": [0.0, -1.0, -0.35],
-            "color": [0.9, 0.95, 1.0],
-            "intensity": 0.45,
-        },
-    ],
-}
+GENESIS_RENDER_LIGHTING_PROFILE = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
 GENESIS_COLOR_PROFILE_LUMINANCE_GAIN = 0.94
 GENESIS_COLOR_PROFILE_RGB_GAIN = [1.04, 1.0, 0.97]
 GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT = {
@@ -318,7 +289,7 @@ def _write_real_camera_views(
         "calibration_status": request.get("calibration_status"),
         "lighting_profile": request.get("lighting_profile") or {},
         "lighting_diagnostics": {
-            "status": "genesis_environment_fill_profile_applied",
+            "status": "genesis_scene_light_rig_applied",
             "source": "prepared_usd_plus_genesis_rasterizer",
             "requested_lighting_profile": request.get("lighting_profile") or {},
             "genesis_lighting_profile": genesis_lighting_profile,
@@ -359,7 +330,7 @@ def _genesis_scene(
 
 
 def _genesis_vis_options(gs: Any, *, lighting_profile: dict[str, Any] | None = None) -> Any:
-    profile = (
+    profile = _genesis_lighting_profile(
         lighting_profile if isinstance(lighting_profile, dict) else GENESIS_RENDER_LIGHTING_PROFILE
     )
     return gs.options.VisOptions(
@@ -379,50 +350,66 @@ def _genesis_vis_options(gs: Any, *, lighting_profile: dict[str, Any] | None = N
 
 
 def _genesis_lighting_profile(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    profile = (
+        lighting_profile if isinstance(lighting_profile, dict) else GENESIS_RENDER_LIGHTING_PROFILE
+    )
+    rig = scene_light_rig(profile)
+    key = _dict(rig.get("key"))
+    ambient = _dict(rig.get("ambient"))
+    fill = _dict(rig.get("fill"))
+    genesis_overrides = _dict(_dict(rig.get("backend_overrides")).get("genesis"))
+    lights = _genesis_rig_lights(rig)
     return {
         "profile_id": str(
-            lighting_profile.get("profile_id") or GENESIS_RENDER_LIGHTING_PROFILE["profile_id"]
+            profile.get("profile_id") or GENESIS_RENDER_LIGHTING_PROFILE["profile_id"]
         ),
-        "source": str(lighting_profile.get("source") or GENESIS_RENDER_LIGHTING_PROFILE["source"]),
-        "scene_key_light_direction": _vec3(
-            lighting_profile.get("scene_key_light_direction"),
-            fallback=GENESIS_RENDER_LIGHTING_PROFILE["scene_key_light_direction"],
-        ),
-        "scene_key_light_frame": str(
-            lighting_profile.get("scene_key_light_frame")
-            or GENESIS_RENDER_LIGHTING_PROFILE["scene_key_light_frame"]
-        ),
-        "mujoco_headlight_ambient": _vec3(
-            lighting_profile.get("mujoco_headlight_ambient"),
-            fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_ambient"],
-        ),
-        "mujoco_headlight_diffuse": _vec3(
-            lighting_profile.get("mujoco_headlight_diffuse"),
-            fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_diffuse"],
-        ),
+        "source": str(profile.get("source") or GENESIS_RENDER_LIGHTING_PROFILE["source"]),
+        "scene_light_rig": rig,
+        "scene_light_rig_schema": rig.get("schema"),
+        "scene_light_rig_roles": scene_light_rig_roles(rig),
+        "authored_scene_lights_policy": rig.get("authored_scene_lights_policy"),
+        "scene_key_light_direction": key.get("direction"),
+        "scene_key_light_frame": rig.get("frame"),
+        "mujoco_headlight_ambient": ambient.get("mujoco_headlight_ambient"),
+        "mujoco_headlight_diffuse": ambient.get("mujoco_headlight_diffuse"),
         "ambient_light": _vec3(
-            lighting_profile.get("genesis_ambient_light"),
-            fallback=GENESIS_RENDER_LIGHTING_PROFILE["ambient_light"],
+            ambient.get("genesis_ambient_light") if ambient.get("enabled") else [0.0, 0.0, 0.0],
+            fallback=[0.0, 0.0, 0.0],
         ),
         "background_color": _vec3(
-            lighting_profile.get("genesis_background_color"),
-            fallback=GENESIS_RENDER_LIGHTING_PROFILE["background_color"],
+            ambient.get("genesis_background_color"),
+            fallback=[0.04, 0.08, 0.12],
         ),
-        "shadow": bool(
-            lighting_profile.get("genesis_shadow", GENESIS_RENDER_LIGHTING_PROFILE["shadow"])
-        ),
-        "lights": _genesis_directional_lights(lighting_profile),
+        "shadow": bool(key.get("shadow")) if key.get("enabled") else False,
+        "key_intensity": float(genesis_overrides.get("key_intensity", 0.0)),
+        "fill_enabled": bool(fill.get("enabled", False)),
+        "lights": lights,
     }
 
 
-def _genesis_directional_lights(lighting_profile: dict[str, Any]) -> list[dict[str, Any]]:
-    raw_lights = (
-        lighting_profile.get("genesis_directional_lights")
-        if isinstance(lighting_profile.get("genesis_directional_lights"), list)
+def _genesis_rig_lights(rig: dict[str, Any]) -> list[dict[str, Any]]:
+    key = _dict(rig.get("key"))
+    fill = _dict(rig.get("fill"))
+    overrides = _dict(rig.get("backend_overrides"))
+    genesis = _dict(overrides.get("genesis"))
+    parsed: list[dict[str, Any]] = []
+    if key.get("enabled"):
+        parsed.append(
+            {
+                "type": "directional",
+                "dir": _vec3(key.get("direction"), fallback=[-0.57735, 0.57735, -0.57735]),
+                "color": _vec3(key.get("color"), fallback=[1.0, 1.0, 1.0]),
+                "intensity": float(genesis.get("key_intensity", 3.0)),
+                "role": "key",
+                "source": "scene_light_rig.key.direction",
+            }
+        )
+    raw_fill_lights = (
+        fill.get("genesis_directional_lights")
+        if fill.get("enabled") and isinstance(fill.get("genesis_directional_lights"), list)
         else []
     )
-    parsed: list[dict[str, Any]] = []
-    for raw_light in raw_lights:
+    for raw_light in raw_fill_lights:
         if not isinstance(raw_light, dict):
             continue
         parsed.append(
@@ -431,14 +418,9 @@ def _genesis_directional_lights(lighting_profile: dict[str, Any]) -> list[dict[s
                 "dir": _vec3(raw_light.get("dir"), fallback=[-1.0, -1.0, -1.0]),
                 "color": _vec3(raw_light.get("color"), fallback=[1.0, 1.0, 1.0]),
                 "intensity": float(raw_light.get("intensity", 1.0)),
+                "role": "fill",
             }
         )
-    if not parsed:
-        parsed = [dict(item) for item in GENESIS_RENDER_LIGHTING_PROFILE["lights"]]
-    key_direction = _normalized_vec3(lighting_profile.get("scene_key_light_direction"))
-    if key_direction is not None and parsed:
-        parsed[0]["dir"] = key_direction
-        parsed[0]["source"] = "scene_key_light_direction"
     return parsed
 
 
@@ -453,6 +435,10 @@ def _normalized_vec3(value: Any) -> list[float] | None:
     if magnitude <= 0.0:
         return None
     return [component / magnitude for component in vector]
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _genesis_color_profile(color_profile: dict[str, Any]) -> dict[str, Any]:

@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from roboclaws.household import subprocess_backend
+from roboclaws.household.camera_control import scene_light_rig
 from roboclaws.household.generated_mess import (
     build_generated_mess_manifest,
     generated_mess_success_threshold,
@@ -1277,14 +1278,18 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert request["api_name"] == "roboclaws.camera_control.render_views"
     assert request["camera_model"] == "canonical_eye_target_camera_v1"
     assert request["render_resolution"] == {"width": 320, "height": 240}
-    assert request["lighting_profile"]["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
-    assert request["lighting_profile"]["isaac_dome_intensity"] == pytest.approx(60.0)
-    assert request["lighting_profile"]["isaac_key_intensity"] == 0.0
-    assert request["lighting_profile"]["mujoco_headlight_ambient"] == pytest.approx(
+    assert request["lighting_profile"]["profile_id"] == "scene_probe_balanced_review_light_v1"
+    rig = scene_light_rig(request["lighting_profile"])
+    assert rig["schema"] == "scene_light_rig_v1"
+    assert rig["key"]["enabled"] is True
+    assert rig["fill"]["enabled"] is False
+    assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(900.0)
+    assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(120.0)
+    assert rig["ambient"]["mujoco_headlight_ambient"] == pytest.approx(
         [0.35, 0.35, 0.35]
     )
-    assert request["lighting_profile"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
-    assert request["lighting_profile"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
+    assert rig["ambient"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
+    assert rig["ambient"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
     assert request["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"
     assert request["color_profile"]["highlight_knee"] == pytest.approx(225.0)
     assert request["color_profile"]["backend_luminance_gain"]["molmospaces-mujoco"] == (

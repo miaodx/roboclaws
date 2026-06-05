@@ -29,6 +29,8 @@ from roboclaws.household.camera_control import (
     MOLMOSPACES_SCENE_FRAME,
     load_camera_control_request,
     normalize_camera_control_request,
+    scene_light_rig,
+    scene_light_rig_roles,
 )
 from roboclaws.household.color_management import apply_camera_color_profile
 from roboclaws.household.generated_mess import (
@@ -3344,22 +3346,28 @@ def _ensure_capture_lighting(
     stage = get_current_stage()
     if stage is None:
         return {"status": "missing_stage", "existing_light_count": 0, "added_light_count": 0}
-    profile = profile if isinstance(profile, dict) else {}
-    dome_intensity = float(profile.get("isaac_dome_intensity", 1500.0))
-    key_intensity = float(profile.get("isaac_key_intensity", 7000.0))
+    profile = profile if isinstance(profile, dict) else dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
+    rig = scene_light_rig(profile)
+    ambient = _dict(rig.get("ambient"))
+    key = _dict(rig.get("key"))
+    isaac_overrides = _dict(_dict(rig.get("backend_overrides")).get("isaac"))
+    ambient_enabled = bool(ambient.get("enabled", False))
+    key_enabled = bool(key.get("enabled", False))
+    dome_intensity = float(ambient.get("isaac_dome_intensity", 0.0)) if ambient_enabled else 0.0
+    key_intensity = float(isaac_overrides.get("key_intensity", 0.0)) if key_enabled else 0.0
     existing_light_intensity_scale = float(
-        profile.get("isaac_existing_light_intensity_scale", 1.0)
+        isaac_overrides.get("existing_light_intensity_scale", 1.0)
     )
-    key_direction = _normalized_vec3(profile.get("scene_key_light_direction"))
-    key_rotation_source = "scene_key_light_direction"
+    key_direction = _normalized_vec3(key.get("direction"))
+    key_rotation_source = "scene_light_rig.key.direction"
     key_rotation = (
         _isaac_distant_light_rotation_from_direction(key_direction)
         if key_direction is not None
         else None
     )
     if key_rotation is None:
-        key_rotation_source = "isaac_key_rotation_deg"
-        key_rotation = profile.get("isaac_key_rotation_deg")
+        key_rotation_source = "scene_light_rig.backend_overrides.isaac.key_rotation_deg"
+        key_rotation = isaac_overrides.get("key_rotation_deg")
     if not isinstance(key_rotation, (list, tuple)) or len(key_rotation) < 3:
         key_rotation_source = "fallback"
         key_rotation = [-55.0, 0.0, 35.0]
@@ -3386,10 +3394,14 @@ def _ensure_capture_lighting(
         "status": "using_existing_stage_lights" if not added_lights else "added_capture_lights",
         "profile_id": str(profile.get("profile_id") or ""),
         "profile_source": str(profile.get("source") or ""),
+        "scene_light_rig": rig,
+        "scene_light_rig_schema": rig.get("schema"),
+        "scene_light_rig_roles": scene_light_rig_roles(rig),
+        "authored_scene_lights_policy": rig.get("authored_scene_lights_policy"),
         "scene_key_light_direction": key_direction,
-        "scene_key_light_frame": profile.get("scene_key_light_frame"),
-        "mujoco_headlight_ambient": profile.get("mujoco_headlight_ambient"),
-        "mujoco_headlight_diffuse": profile.get("mujoco_headlight_diffuse"),
+        "scene_key_light_frame": rig.get("frame"),
+        "mujoco_headlight_ambient": ambient.get("mujoco_headlight_ambient"),
+        "mujoco_headlight_diffuse": ambient.get("mujoco_headlight_diffuse"),
         "existing_light_count": len(existing_lights),
         "existing_light_paths": existing_lights,
         "existing_light_intensity_scale": existing_light_intensity_scale,
@@ -3405,7 +3417,7 @@ def _ensure_capture_lighting(
         ],
         "requested_key_rotation_source": key_rotation_source,
         "applied_key_light_direction": key_direction if key_intensity > 0.0 else None,
-        "applied_key_light_frame": profile.get("scene_key_light_frame"),
+        "applied_key_light_frame": rig.get("frame"),
     }
 
 

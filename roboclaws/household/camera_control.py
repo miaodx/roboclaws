@@ -12,6 +12,9 @@ WORLD_Z_UP_ORBIT_CONVENTION = "world_z_up_anchor_orbit_v1"
 MOLMOSPACES_SCENE_FRAME = "molmospaces_scene_frame_v1"
 ANCHOR_ORBIT_CALIBRATION = "anchor_orbit_relative_calibrated_v1"
 CANONICAL_POSE_CALIBRATION = "canonical_scene_frame_similarity_fit_v1"
+SCENE_LIGHT_RIG_SCHEMA = "scene_light_rig_v1"
+CANONICAL_SCENE_KEY_LIGHT_DIRECTION = [-0.57735, 0.57735, -0.57735]
+CANONICAL_SCENE_KEY_LIGHT_ROTATION_DEG = [-45.0, 0.0, 35.0]
 
 DEFAULT_SCENE_PROBE_CAMERA_ORBIT = {
     "distance_m": 4.4,
@@ -23,43 +26,42 @@ DEFAULT_SCENE_PROBE_LENS = {
     "focal_length_mm": 24.0,
 }
 DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
-    "profile_id": "scene_probe_mujoco_headlight_fill_v1",
+    "profile_id": "scene_probe_balanced_review_light_v1",
     "source": (
-        "MuJoCo MolmoSpaces base MJCF uses a headlight with ambient=0.35 and "
-        "diffuse=0.4 plus a default directional light when no house lights are exported."
+        "Default scene-camera light rig for MuJoCo/Isaac/Genesis review. It uses one "
+        "canonical shadow-casting key role plus low ambient readability light, disables "
+        "authored candidate-lane scene lights for comparison, and keeps fill off by default."
     ),
-    "scene_key_light_direction": [-0.57735, 0.57735, -0.57735],
-    "scene_key_light_frame": MOLMOSPACES_SCENE_FRAME,
-    "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
-    "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
-    "isaac_dome_intensity": 60.0,
-    "isaac_key_intensity": 0.0,
-    "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
-    "isaac_existing_light_intensity_scale": 1.0,
-    "genesis_ambient_light": [0.37, 0.37, 0.37],
-    "genesis_background_color": [0.04, 0.08, 0.12],
-    "genesis_shadow": False,
-    "genesis_directional_lights": [
-        {
-            "type": "directional",
-            "dir": [-1.0, -1.0, -1.0],
+    "scene_light_rig": {
+        "schema": SCENE_LIGHT_RIG_SCHEMA,
+        "frame": MOLMOSPACES_SCENE_FRAME,
+        "key": {
+            "enabled": True,
+            "direction": CANONICAL_SCENE_KEY_LIGHT_DIRECTION,
             "color": [1.0, 1.0, 1.0],
-            "intensity": 3.0,
+            "shadow": True,
         },
-        {
-            "type": "directional",
-            "dir": [1.0, 1.0, -0.6],
-            "color": [1.0, 0.96, 0.9],
-            "intensity": 0.8,
+        "ambient": {
+            "enabled": True,
+            "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
+            "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
+            "isaac_dome_intensity": 120.0,
+            "genesis_ambient_light": [0.37, 0.37, 0.37],
+            "genesis_background_color": [0.04, 0.08, 0.12],
         },
-        {
-            "type": "directional",
-            "dir": [0.0, -1.0, -0.35],
-            "color": [0.9, 0.95, 1.0],
-            "intensity": 0.45,
+        "fill": {"enabled": False},
+        "authored_scene_lights_policy": "disabled_for_comparison",
+        "backend_overrides": {
+            "isaac": {
+                "key_intensity": 900.0,
+                "key_rotation_deg": CANONICAL_SCENE_KEY_LIGHT_ROTATION_DEG,
+                "existing_light_intensity_scale": 0.0,
+            },
+            "genesis": {"key_intensity": 3.0},
         },
-    ],
+    },
 }
+BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
 SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE = {
     **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     "profile_id": "scene_probe_shadow_parity_probe_v1",
@@ -69,47 +71,33 @@ SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE = {
         "dome fill, and adds an Isaac key light so bed/floor/wall cast-shadow "
         "behavior can be reviewed against MuJoCo."
     ),
-    "isaac_dome_intensity": 12.0,
-    "isaac_key_intensity": 1200.0,
-    "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
-    "isaac_existing_light_intensity_scale": 0.0,
-    "genesis_shadow": True,
-    "genesis_directional_lights": [
-        {
-            "type": "directional",
-            "dir": [-0.57735, 0.57735, -0.57735],
+    "scene_light_rig": {
+        **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["scene_light_rig"],
+        "key": {
+            "enabled": True,
+            "direction": CANONICAL_SCENE_KEY_LIGHT_DIRECTION,
             "color": [1.0, 1.0, 1.0],
-            "intensity": 3.0,
+            "shadow": True,
         },
-    ],
-}
-BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE = {
-    **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
-    "profile_id": "scene_probe_balanced_review_light_v1",
-    "source": (
-        "Default-candidate scene-camera profile for MuJoCo/Isaac/Genesis review. "
-        "It preserves the accepted Isaac fill level, adds a modest Isaac key light, "
-        "and enables Genesis shadows so all lanes remain reviewable while showing "
-        "useful cast-shadow evidence."
-    ),
-    "isaac_dome_intensity": 120.0,
-    "isaac_key_intensity": 900.0,
-    "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
-    "isaac_existing_light_intensity_scale": 0.0,
-    "genesis_shadow": True,
-    "genesis_directional_lights": [
-        {
-            "type": "directional",
-            "dir": [-0.57735, 0.57735, -0.57735],
-            "color": [1.0, 1.0, 1.0],
-            "intensity": 3.0,
+        "ambient": {
+            **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["scene_light_rig"]["ambient"],
+            "isaac_dome_intensity": 12.0,
         },
-    ],
+        "fill": {"enabled": False},
+        "authored_scene_lights_policy": "disabled_for_comparison",
+        "backend_overrides": {
+            "isaac": {
+                "key_intensity": 1200.0,
+                "key_rotation_deg": CANONICAL_SCENE_KEY_LIGHT_ROTATION_DEG,
+                "existing_light_intensity_scale": 0.0,
+            },
+            "genesis": {"key_intensity": 3.0},
+        },
+    },
 }
 SCENE_PROBE_LIGHTING_PROFILES = {
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["profile_id"]: DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     "default": BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
-    "fill": DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE[
         "profile_id"
     ]: BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE,
@@ -310,6 +298,46 @@ def camera_request_resolution(request: dict[str, Any]) -> tuple[int, int]:
     return int(resolution["width"]), int(resolution["height"])
 
 
+def scene_light_rig(lighting_profile: dict[str, Any] | None) -> dict[str, Any]:
+    """Return the canonical role-based scene light rig for a lighting profile."""
+
+    profile = lighting_profile if isinstance(lighting_profile, dict) else {}
+    return _scene_light_rig(profile.get("scene_light_rig"))
+
+
+def scene_light_rig_roles(rig: dict[str, Any]) -> dict[str, Any]:
+    """Summarize role intent without comparing backend-native light counts."""
+
+    key = rig.get("key") if isinstance(rig.get("key"), dict) else {}
+    ambient = rig.get("ambient") if isinstance(rig.get("ambient"), dict) else {}
+    fill = rig.get("fill") if isinstance(rig.get("fill"), dict) else {}
+    overrides = (
+        rig.get("backend_overrides") if isinstance(rig.get("backend_overrides"), dict) else {}
+    )
+    isaac = overrides.get("isaac") if isinstance(overrides.get("isaac"), dict) else {}
+    genesis = overrides.get("genesis") if isinstance(overrides.get("genesis"), dict) else {}
+    fill_lights = (
+        fill.get("genesis_directional_lights")
+        if isinstance(fill.get("genesis_directional_lights"), list)
+        else []
+    )
+    return {
+        "schema": rig.get("schema"),
+        "frame": rig.get("frame"),
+        "key_enabled": bool(key.get("enabled")),
+        "key_shadow": bool(key.get("shadow")),
+        "key_direction": key.get("direction"),
+        "ambient_enabled": bool(ambient.get("enabled")),
+        "fill_enabled": bool(fill.get("enabled")),
+        "fill_directional_light_count": len(fill_lights),
+        "authored_scene_lights_policy": rig.get("authored_scene_lights_policy"),
+        "isaac_key_intensity": isaac.get("key_intensity"),
+        "isaac_dome_intensity": ambient.get("isaac_dome_intensity"),
+        "isaac_existing_light_intensity_scale": isaac.get("existing_light_intensity_scale"),
+        "genesis_key_intensity": genesis.get("key_intensity"),
+    }
+
+
 def _normalize_view(
     raw_view: dict[str, Any],
     *,
@@ -356,65 +384,95 @@ def _camera_lens(value: Any) -> dict[str, float]:
 
 def _lighting_profile(value: Any) -> dict[str, Any]:
     raw = value if isinstance(value, dict) else {}
+    default = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
     return {
-        "profile_id": str(
-            raw.get("profile_id") or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["profile_id"]
+        "profile_id": str(raw.get("profile_id") or default["profile_id"]),
+        "source": str(raw.get("source") or default["source"]),
+        "scene_light_rig": _scene_light_rig(raw.get("scene_light_rig")),
+    }
+
+
+def _scene_light_rig(value: Any) -> dict[str, Any]:
+    raw = value if isinstance(value, dict) else {}
+    default = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["scene_light_rig"]
+    key = raw.get("key") if isinstance(raw.get("key"), dict) else {}
+    ambient = raw.get("ambient") if isinstance(raw.get("ambient"), dict) else {}
+    fill = raw.get("fill") if isinstance(raw.get("fill"), dict) else {}
+    overrides = (
+        raw.get("backend_overrides") if isinstance(raw.get("backend_overrides"), dict) else {}
+    )
+    isaac = overrides.get("isaac") if isinstance(overrides.get("isaac"), dict) else {}
+    genesis = overrides.get("genesis") if isinstance(overrides.get("genesis"), dict) else {}
+    default_ambient = default["ambient"]
+    default_key = default["key"]
+    default_fill = default["fill"]
+    default_overrides = default["backend_overrides"]
+    default_isaac = default_overrides["isaac"]
+    default_genesis = default_overrides["genesis"]
+    return {
+        "schema": str(raw.get("schema") or SCENE_LIGHT_RIG_SCHEMA),
+        "frame": str(raw.get("frame") or default["frame"]),
+        "key": {
+            "enabled": bool(key.get("enabled", default_key["enabled"])),
+            "direction": _vec3(key.get("direction"), default=default_key["direction"]),
+            "color": _vec3(key.get("color"), default=default_key["color"]),
+            "shadow": bool(key.get("shadow", default_key["shadow"])),
+        },
+        "ambient": {
+            "enabled": bool(ambient.get("enabled", default_ambient["enabled"])),
+            "mujoco_headlight_ambient": _vec3(
+                ambient.get("mujoco_headlight_ambient"),
+                default=default_ambient["mujoco_headlight_ambient"],
+            ),
+            "mujoco_headlight_diffuse": _vec3(
+                ambient.get("mujoco_headlight_diffuse"),
+                default=default_ambient["mujoco_headlight_diffuse"],
+            ),
+            "isaac_dome_intensity": float(
+                ambient.get("isaac_dome_intensity", default_ambient["isaac_dome_intensity"])
+            ),
+            "genesis_ambient_light": _vec3(
+                ambient.get("genesis_ambient_light"),
+                default=default_ambient["genesis_ambient_light"],
+            ),
+            "genesis_background_color": _vec3(
+                ambient.get("genesis_background_color"),
+                default=default_ambient["genesis_background_color"],
+            ),
+        },
+        "fill": {
+            "enabled": bool(fill.get("enabled", default_fill["enabled"])),
+            "genesis_directional_lights": _directional_lights(
+                fill.get("genesis_directional_lights"),
+                default=default_fill.get("genesis_directional_lights") or [],
+            ),
+        },
+        "authored_scene_lights_policy": str(
+            raw.get("authored_scene_lights_policy")
+            or default["authored_scene_lights_policy"]
         ),
-        "source": str(raw.get("source") or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["source"]),
-        "scene_key_light_direction": _vec3(
-            raw.get("scene_key_light_direction"),
-            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["scene_key_light_direction"],
-        ),
-        "scene_key_light_frame": str(
-            raw.get("scene_key_light_frame")
-            or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["scene_key_light_frame"]
-        ),
-        "mujoco_headlight_ambient": _vec3(
-            raw.get("mujoco_headlight_ambient"),
-            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["mujoco_headlight_ambient"],
-        ),
-        "mujoco_headlight_diffuse": _vec3(
-            raw.get("mujoco_headlight_diffuse"),
-            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["mujoco_headlight_diffuse"],
-        ),
-        "isaac_dome_intensity": float(
-            raw.get(
-                "isaac_dome_intensity",
-                DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["isaac_dome_intensity"],
-            )
-        ),
-        "isaac_key_intensity": float(
-            raw.get(
-                "isaac_key_intensity",
-                DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["isaac_key_intensity"],
-            )
-        ),
-        "isaac_key_rotation_deg": _vec3(
-            raw.get("isaac_key_rotation_deg"),
-            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["isaac_key_rotation_deg"],
-        ),
-        "isaac_existing_light_intensity_scale": float(
-            raw.get(
-                "isaac_existing_light_intensity_scale",
-                DEFAULT_SCENE_PROBE_LIGHTING_PROFILE[
-                    "isaac_existing_light_intensity_scale"
-                ],
-            )
-        ),
-        "genesis_ambient_light": _vec3(
-            raw.get("genesis_ambient_light"),
-            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_ambient_light"],
-        ),
-        "genesis_background_color": _vec3(
-            raw.get("genesis_background_color"),
-            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_background_color"],
-        ),
-        "genesis_shadow": bool(
-            raw.get("genesis_shadow", DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_shadow"])
-        ),
-        "genesis_directional_lights": _genesis_directional_lights(
-            raw.get("genesis_directional_lights")
-        ),
+        "backend_overrides": {
+            "isaac": {
+                "key_intensity": float(
+                    isaac.get("key_intensity", default_isaac["key_intensity"])
+                ),
+                "key_rotation_deg": _vec3(
+                    isaac.get("key_rotation_deg"),
+                    default=default_isaac["key_rotation_deg"],
+                ),
+                "existing_light_intensity_scale": float(
+                    isaac.get(
+                        "existing_light_intensity_scale",
+                        default_isaac["existing_light_intensity_scale"],
+                    )
+                ),
+            },
+            "genesis": {
+                "key_intensity": float(
+                    genesis.get("key_intensity", default_genesis["key_intensity"])
+                ),
+            },
+        },
     }
 
 
@@ -593,8 +651,8 @@ def _tone_adjustment(value: Any) -> dict[str, float] | None:
     return parsed
 
 
-def _genesis_directional_lights(value: Any) -> list[dict[str, Any]]:
-    raw_lights = value if isinstance(value, list) else []
+def _directional_lights(value: Any, *, default: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    raw_lights = value if isinstance(value, list) else default
     parsed: list[dict[str, Any]] = []
     for raw_light in raw_lights:
         if not isinstance(raw_light, dict):
@@ -607,11 +665,7 @@ def _genesis_directional_lights(value: Any) -> list[dict[str, Any]]:
                 "intensity": float(raw_light.get("intensity", 1.0)),
             }
         )
-    if parsed:
-        return parsed
-    return [
-        dict(item) for item in DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["genesis_directional_lights"]
-    ]
+    return parsed
 
 
 def _vec3(value: Any, *, default: list[float]) -> list[float]:

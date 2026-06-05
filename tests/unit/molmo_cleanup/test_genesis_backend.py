@@ -7,12 +7,12 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from roboclaws.household.camera_control import DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
 from roboclaws.household.genesis_backend import GenesisSubprocessBackend
 from scripts.genesis_cleanup.genesis_backend_worker import (
     GENESIS_COLOR_PROFILE_RGB_GAIN,
     GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT,
     GENESIS_COLOR_PROFILE_VIEW_TONE_ADJUSTMENT,
-    GENESIS_RENDER_LIGHTING_PROFILE,
     _copy_usd_texture,
     _extract_materialized_usd_visual_asset,
     _extract_render_only_visual_mesh,
@@ -624,56 +624,37 @@ def test_genesis_scene_applies_visual_lighting_options() -> None:
         "camera_lookat": (0.0, 0.0, 1.0),
         "camera_fov": 45.0,
     }
+    default_lighting = _genesis_lighting_profile(dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE))
     assert captured["vis_options"] == {
-        "ambient_light": tuple(GENESIS_RENDER_LIGHTING_PROFILE["ambient_light"]),
-        "background_color": tuple(GENESIS_RENDER_LIGHTING_PROFILE["background_color"]),
-        "shadow": GENESIS_RENDER_LIGHTING_PROFILE["shadow"],
+        "ambient_light": tuple(default_lighting["ambient_light"]),
+        "background_color": tuple(default_lighting["background_color"]),
+        "shadow": default_lighting["shadow"],
         "lights": [
             {
                 "type": "directional",
-                "dir": (-1.0, -1.0, -1.0),
+                "dir": (-0.57735, 0.57735, -0.57735),
                 "color": (1.0, 1.0, 1.0),
                 "intensity": 3.0,
-            },
-            {
-                "type": "directional",
-                "dir": (1.0, 1.0, -0.6),
-                "color": (1.0, 0.96, 0.9),
-                "intensity": 0.8,
-            },
-            {
-                "type": "directional",
-                "dir": (0.0, -1.0, -0.35),
-                "color": (0.9, 0.95, 1.0),
-                "intensity": 0.45,
             },
         ],
     }
 
 
-def test_genesis_lighting_profile_uses_request_environment_fill() -> None:
-    profile = _genesis_lighting_profile(
-        {
-            "profile_id": "scene_probe_mujoco_headlight_fill_v1",
-            "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
-            "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
-            "genesis_ambient_light": [0.37, 0.37, 0.37],
-            "genesis_background_color": [0.04, 0.08, 0.12],
-            "genesis_shadow": False,
-            "genesis_directional_lights": [
-                {"dir": [-1.0, -1.0, -1.0], "color": [1.0, 1.0, 1.0], "intensity": 3.0},
-                {"dir": [1.0, 1.0, -0.6], "color": [1.0, 0.96, 0.9], "intensity": 0.8},
-            ],
-        }
-    )
+def test_genesis_lighting_profile_uses_scene_light_rig_roles() -> None:
+    profile = _genesis_lighting_profile(dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE))
 
-    assert profile["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
+    assert profile["profile_id"] == "scene_probe_balanced_review_light_v1"
+    assert profile["scene_light_rig_schema"] == "scene_light_rig_v1"
+    assert profile["scene_light_rig_roles"]["key_enabled"] is True
+    assert profile["scene_light_rig_roles"]["fill_enabled"] is False
     assert profile["ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
     assert profile["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
     assert profile["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
-    assert profile["shadow"] is False
-    assert len(profile["lights"]) == 2
-    assert profile["lights"][1]["intensity"] == pytest.approx(0.8)
+    assert profile["shadow"] is True
+    assert len(profile["lights"]) == 1
+    assert profile["lights"][0]["role"] == "key"
+    assert profile["lights"][0]["dir"] == pytest.approx([-0.57735, 0.57735, -0.57735])
+    assert profile["lights"][0]["intensity"] == pytest.approx(3.0)
 
 
 def test_genesis_color_profile_adds_explicit_luminance_calibration() -> None:
