@@ -1126,6 +1126,34 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
     _assert_no_forbidden_keys(done)
 
 
+def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() -> None:
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    observation = _first_non_empty_observation(contract)
+    detection = next(
+        item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
+    )
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+
+    done = contract.done("finished while holding a public candidate")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    assert done["required_tool"] == "navigate_to_receptacle"
+    pending = next(
+        item
+        for item in done["pending_cleanup_candidates"]
+        if item["object_id"] == detection["object_id"]
+    )
+    assert pending["state"] == "held"
+    assert pending["required_tool"] == "navigate_to_receptacle"
+    assert pending["candidate_fixture_id"] == detection["candidate_fixture_id"]
+    blocker = done["completion"]["blockers"][0]
+    assert blocker["required_tool"] == "navigate_to_receptacle"
+    _assert_no_forbidden_keys(done)
+
+
 def test_world_labels_sanitized_done_rejects_held_policy_required_object() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
