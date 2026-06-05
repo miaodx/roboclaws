@@ -52,6 +52,8 @@ const els = {
   rawEvidence: document.getElementById("raw-evidence"),
   toggleRawButton: document.getElementById("toggle-raw-button"),
   confirmDialog: document.getElementById("confirm-dialog"),
+  confirmTitle: document.getElementById("confirm-title"),
+  confirmAction: document.getElementById("confirm-action"),
   confirmBody: document.getElementById("confirm-body"),
 };
 
@@ -89,18 +91,22 @@ function bindEvents() {
   els.startButton.addEventListener("click", confirmLaunch);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
-    const copy =
-      "Stop this run? The console will terminate the active process and preserve the current artifacts.";
-    if (window.confirm(copy)) {
-      postRunAction("stop");
-    }
+    confirmAction({
+      title: "Stop Run",
+      cta: "Stop Run",
+      body:
+        "Stop this run? The console will terminate the active process and preserve the current artifacts.",
+      onConfirm: () => postRunAction("stop"),
+    });
   });
   els.emergencyButton.addEventListener("click", () => {
-    const copy =
-      "Trigger the real-robot emergency stop path now. This ends the run and requires human takeover before another run.";
-    if (window.confirm(copy)) {
-      postRunAction("emergency-stop");
-    }
+    confirmAction({
+      title: "Emergency Stop",
+      cta: "Trigger Emergency Stop",
+      body:
+        "Trigger the real-robot emergency stop path now. This ends the run and requires human takeover before another run.",
+      onConfirm: () => postRunAction("emergency-stop"),
+    });
   });
   els.toggleRawButton.addEventListener("click", toggleRawEvidence);
   document.querySelectorAll(".view-mode").forEach((button) => {
@@ -321,7 +327,7 @@ function confirmLaunch() {
         els.realMovementGate.checked ? "enabled" : "dry-run"
       )}</dd>`
     : "";
-  els.confirmBody.innerHTML = `
+  const summary = `
     <dl class="state-list">
       <dt>Route</dt><dd>${escapeHtml(route.label)}</dd>
       <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver)}</dd>
@@ -333,14 +339,38 @@ function confirmLaunch() {
       <dt>Output</dt><dd>output/operator-console/runs/...</dd>
     </dl>
   `;
-  els.confirmDialog.showModal();
-  els.confirmDialog.addEventListener("close", onConfirmClose, { once: true });
+  confirmAction({
+    title: "Launch Run",
+    cta: "Launch Run",
+    bodyHtml: summary,
+    onConfirm: launchRun,
+  });
 }
 
-async function onConfirmClose() {
-  if (els.confirmDialog.returnValue !== "confirm") {
-    return;
+// Shared confirmation modal. Pass `body` for plain text or `bodyHtml` for
+// pre-escaped markup. Routes the styled <dialog> for every destructive or
+// launch action instead of a native browser prompt.
+function confirmAction({ title, cta, body, bodyHtml, onConfirm }) {
+  els.confirmTitle.textContent = title;
+  els.confirmAction.textContent = cta;
+  if (bodyHtml != null) {
+    els.confirmBody.innerHTML = bodyHtml;
+  } else {
+    els.confirmBody.textContent = body || "";
   }
+  els.confirmDialog.showModal();
+  els.confirmDialog.addEventListener(
+    "close",
+    () => {
+      if (els.confirmDialog.returnValue === "confirm") {
+        onConfirm();
+      }
+    },
+    { once: true }
+  );
+}
+
+async function launchRun() {
   const body = {
     route_id: state.selectedRoute.id,
     prompt: els.taskPrompt.value,
@@ -408,6 +438,7 @@ async function pollState() {
 
 function renderRunState(payload) {
   const route = payload.route || state.selectedRoute || {};
+  document.querySelector(".top-run-bar").classList.add("run-active");
   els.runTitle.textContent = `${route.label || "Agent run"} / ${payload.run_id}`;
   els.routeStatus.textContent = payload.phase || payload.status || "Running";
   els.routeStatus.className = `badge ${statusClass(payload.phase || payload.status)}`;

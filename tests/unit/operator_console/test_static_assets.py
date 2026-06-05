@@ -55,3 +55,29 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert ".mode-overview.no-grounding" in css
     assert "[hidden]" in css
     assert "display: none !important" in css
+
+
+def test_static_app_announces_run_state_via_live_region() -> None:
+    html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+
+    # The event strip is the live region operators monitor peripherally; it
+    # must announce terminal state and safety blockers without focus.
+    assert 'id="event-log"' in html
+    assert 'role="status"' in html
+    assert 'aria-live="polite"' in html
+
+
+def test_static_app_routes_destructive_actions_through_styled_dialog() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+    # Stop and Emergency Stop must use the themed <dialog>, not native
+    # window.confirm, and carry the contract CTA labels.
+    assert "window.confirm" not in app
+    assert "confirmAction(" in app
+    assert "Trigger Emergency Stop" in app
+    assert "Stop Run" in app
+
+    # Run title reaches the 28px display role only once a run is active.
+    assert ".top-run-bar.run-active #run-title" in css
+    assert "font-variant-numeric: tabular-nums" in css
