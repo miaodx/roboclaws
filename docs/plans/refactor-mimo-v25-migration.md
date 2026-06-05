@@ -14,6 +14,16 @@ last_verified: 2026-05-30
 
 DONE
 
+> **Superseded 2026-06-04:** A later change standardized on the vision-capable
+> `mimo-v2.5` as the single supported MiMo route and **removed** the text-only
+> `mimo-v2.5-pro` route together with its text-bridge foundation
+> (`roboclaws/mcp/text_bridge.py` and `tests/contract/mcp/test_mcp_text_bridge.py`
+> were deleted; Phase 2.8 split-model navigation was cancelled). References below
+> to keeping `mimo-v2.5-pro` for text-only routes and to
+> `test_mcp_text_bridge.py` are **historical** — they describe the state on
+> 2026-05-30 and no longer reflect active code. See `.planning/ROADMAP.md`
+> (Phase 2.8) and the `d5f0131` migration commit.
+
 ## Target
 
 Migrate active Roboclaws MiMo model surfaces away from deprecated v2 Omni names
@@ -30,12 +40,13 @@ Vendor notice checked 2026-05-30:
 Canonical target models:
 
 - Full-modal/image route: `mimo-v2.5`.
-- Text-only coding route: keep `mimo-v2.5-pro` where image input is not needed.
+- Text-only coding route: `mimo-v2.5` (originally planned as `mimo-v2.5-pro`;
+  superseded 2026-06-04 — see note above, the pro route was removed).
 - Mify/internal aggregation route: `xiaomi/mimo-v2.5`.
 - OpenClaw OpenAI-compatible route: `mimo_openai/mimo-v2.5`.
-- OpenClaw Anthropic-compatible route: `mimo_anthropic/mimo-v2.5` only when that
-  path is explicitly image-capable in the local Gateway route; otherwise keep
-  `mimo-v2.5-pro` as text-only.
+- OpenClaw Anthropic-compatible route: `mimo_anthropic/mimo-v2.5` (originally
+  conditional on image capability with a `mimo-v2.5-pro` text-only fallback;
+  superseded 2026-06-04 — `mimo-v2.5` is now the single route).
 
 ## Accepted Severities
 
@@ -161,7 +172,7 @@ paid/local-only.
   - Provider/catalog defaults now use `mimo-v2.5`; active `mimo-omni` /
     `mimo-v2-omni` aliases were removed from the catalog.
   - OpenClaw/appliance image defaults now use `mimo_openai/mimo-v2.5`; text-only
-    routes keep `mimo-v2.5-pro`.
+    routes keep `mimo-v2.5-pro` (superseded 2026-06-04 — pro route later removed).
   - Mify coding-agent default now uses `xiaomi/mimo-v2.5`.
   - Molmo live CI entries now publish `mimo-v2.5` and
     `mimo-v2.5-camera-raw`.
