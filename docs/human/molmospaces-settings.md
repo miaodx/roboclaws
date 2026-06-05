@@ -586,8 +586,14 @@ records camera-pose, camera-intrinsics, room-scale, lighting, color profile,
 and USD-bounds residuals separately. MuJoCo canonical views convert the explicit
 `eye`/`target` request into MuJoCo's free-camera azimuth/elevation convention
 before rendering; the manifest records the backend pose used for the parity
-check. Isaac uses the prepared USD's scene lights by default and reports the
-existing light count instead of adding extra fill lights. Target-vs-USD
+check. The camera request also carries MuJoCo runtime render state separately
+from legacy object-center positions, including articulated child joint names
+and `qpos` values when MolmoSpaces exposes them. Genesis movable-object
+diagnostics treat translation-only object overlays as insufficient for
+articulated objects such as box flaps and report unsupported articulation
+instead of a false `runtime_pose_match`. Isaac uses the prepared USD's scene
+lights plus the configured soft fill profile and reports both existing and
+added light counts. Target-vs-USD
 diagnostics are bounds-aware: large receptacles may aim the camera above a
 surface, so the report treats a target inside the USD XY footprint and within
 the configured surface-aim height allowance separately from a true target/scene

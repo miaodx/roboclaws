@@ -208,8 +208,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         "view_specs": {},
         "lane_registry": {
             "baseline": MOLMOSPACES_LANE_ID,
-            "candidates": [ISAAC_LANE_ID]
-            + ([GENESIS_LANE_ID] if config.genesis_enabled else []),
+            "candidates": [ISAAC_LANE_ID] + ([GENESIS_LANE_ID] if config.genesis_enabled else []),
             "diagnostic_baseline": MOLMOSPACES_LANE_ID,
             "pairwise_diagnostic_candidate": ISAAC_LANE_ID,
             "candidate_diagnostic_note": (
@@ -230,6 +229,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     molmo_state = molmo.pop("_state", {}) if isinstance(molmo, dict) else {}
     if isinstance(molmo, dict) and isinstance(molmo_state, dict):
         molmo["runtime_object_positions"] = _runtime_object_positions(molmo_state)
+        molmo["runtime_render_state"] = _runtime_render_state(molmo_state)
     anchors = _scene_anchors(molmo_state, limit=4)
     manifest["anchors"] = anchors
     room_views = _room_camera_control_views(molmo_state)
@@ -259,6 +259,9 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     if isinstance(molmo.get("runtime_object_positions"), dict):
         camera_request["runtime_object_positions"] = molmo["runtime_object_positions"]
         camera_request["runtime_object_position_source"] = MOLMOSPACES_LANE_ID
+    if isinstance(molmo.get("runtime_render_state"), dict):
+        camera_request["runtime_render_state"] = molmo["runtime_render_state"]
+        camera_request["runtime_render_state_source"] = MOLMOSPACES_LANE_ID
     camera_request_path = write_camera_control_request(
         output_dir / "camera_control_request.json",
         camera_request,
@@ -405,13 +408,9 @@ def failed_lane_summaries(manifest: dict[str, Any]) -> list[str]:
     )
     if candidate_visual.get("status") == "degraded_visual_fidelity":
         next_action = (
-            candidate_visual.get("recommended_next_action")
-            or "review candidate render quality"
+            candidate_visual.get("recommended_next_action") or "review candidate render quality"
         )
-        summaries.append(
-            "candidate visual fidelity: "
-            f"{next_action}"
-        )
+        summaries.append(f"candidate visual fidelity: {next_action}")
     return summaries
 
 
@@ -483,6 +482,35 @@ def _runtime_object_positions(state: dict[str, Any]) -> dict[str, dict[str, Any]
             "upstream_object_id": item.get("upstream_object_id") or "",
         }
     return result
+
+
+def _runtime_render_state(state: dict[str, Any]) -> dict[str, Any]:
+    runtime_state = (
+        state.get("runtime_render_state")
+        if isinstance(state.get("runtime_render_state"), dict)
+        else {}
+    )
+    if runtime_state:
+        return runtime_state
+    positions = _runtime_object_positions(state)
+    return {
+        "schema": "molmospaces_runtime_render_state_v1",
+        "status": "positions_only_legacy_state",
+        "source": "legacy_runtime_object_positions_without_articulation",
+        "object_count": len(positions),
+        "articulated_object_count": 0,
+        "objects": {
+            object_key: {
+                "object_key": object_key,
+                "category": value.get("category") or "",
+                "position": value.get("position") or [],
+                "subtree_joint_count": 0,
+                "articulation_status": "unknown_legacy_state",
+                "articulation_joints": [],
+            }
+            for object_key, value in positions.items()
+        },
+    }
 
 
 def _capture_molmospaces_lane(config: SceneCameraComparisonConfig) -> dict[str, Any]:
@@ -1723,6 +1751,7 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
         item for item in manifest.get("canonical_camera_views") or [] if isinstance(item, dict)
     ]
     molmo_positions = _molmospaces_runtime_object_positions(manifest)
+    runtime_render_objects = _molmospaces_runtime_render_objects(manifest)
     diagnostics = []
     for item in audit.get("non_static_render_objects") or []:
         if not isinstance(item, dict):
@@ -1766,15 +1795,27 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
                     "distance_to_image_center_px": distance_to_center,
                 }
             )
-        inside = [
-            projection for projection in projections if bool(projection.get("inside_frame"))
-        ]
+        inside = [projection for projection in projections if bool(projection.get("inside_frame"))]
         nearest = sorted(
             inside,
             key=lambda value: float(value.get("distance_to_image_center_px") or 1e12),
         )[:3]
         object_key = str(item.get("object_key") or "")
         molmo_position = _runtime_pose_for_object_key(object_key, molmo_positions)
+        runtime_render_state = _runtime_render_state_for_object_key(
+            object_key,
+            runtime_render_objects,
+        )
+        articulation_joints = (
+            runtime_render_state.get("articulation_joints")
+            if isinstance(runtime_render_state, dict)
+            and isinstance(runtime_render_state.get("articulation_joints"), list)
+            else []
+        )
+        articulation_joint_count = len(
+            [joint for joint in articulation_joints if isinstance(joint, dict)]
+        )
+        articulation_required = articulation_joint_count > 0
         geometry_delta_m = (
             _distance_3d([float(value) for value in center[:3]], molmo_position["position"])
             if molmo_position and _is_vec3(molmo_position.get("position"))
@@ -1786,18 +1827,10 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
             else {}
         )
         runtime_pose_overlay_applied = bool(item.get("runtime_pose_overlay_applied"))
-        geometry_status = (
-            "runtime_pose_overlay_applied"
-            if (
-                runtime_pose_overlay_applied
-                and geometry_delta_m is not None
-                and geometry_delta_m <= 0.25
-            )
-            else "dynamic_pose_mismatch"
-            if geometry_delta_m is not None and geometry_delta_m > 0.25
-            else "runtime_pose_match"
-            if geometry_delta_m is not None
-            else "missing_molmospaces_runtime_pose"
+        geometry_status = _runtime_geometry_status(
+            articulation_required=articulation_required,
+            runtime_pose_overlay_applied=runtime_pose_overlay_applied,
+            geometry_delta_m=geometry_delta_m,
         )
         diagnostics.append(
             {
@@ -1837,6 +1870,19 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
                     if isinstance(runtime_pose_overlay, dict)
                     else []
                 ),
+                "runtime_render_state_status": (
+                    runtime_render_state.get("articulation_status")
+                    if isinstance(runtime_render_state, dict)
+                    else "missing_runtime_render_state"
+                ),
+                "articulation_required": articulation_required,
+                "articulation_joint_count": articulation_joint_count,
+                "articulation_joints": articulation_joints,
+                "articulation_apply_status": (
+                    "unsupported_translation_only_visual_package"
+                    if articulation_required
+                    else "not_required"
+                ),
                 "in_frame_view_count": len(inside),
                 "projected_view_count": len(projections),
                 "nearest_in_frame_views": nearest,
@@ -1867,6 +1913,14 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
         "dynamic_pose_mismatch_count": sum(
             1 for item in diagnostics if item.get("geometry_status") == "dynamic_pose_mismatch"
         ),
+        "articulated_runtime_state_unsupported_count": sum(
+            1
+            for item in diagnostics
+            if item.get("geometry_status") == "articulated_runtime_state_unsupported"
+        ),
+        "articulated_object_count": sum(
+            1 for item in diagnostics if bool(item.get("articulation_required"))
+        ),
         "runtime_pose_overlay_object_count": sum(
             1
             for item in diagnostics
@@ -1876,12 +1930,27 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
     }
 
 
+def _runtime_geometry_status(
+    *,
+    articulation_required: bool,
+    runtime_pose_overlay_applied: bool,
+    geometry_delta_m: float | None,
+) -> str:
+    if articulation_required:
+        return "articulated_runtime_state_unsupported"
+    if runtime_pose_overlay_applied and geometry_delta_m is not None and geometry_delta_m <= 0.25:
+        return "runtime_pose_overlay_applied"
+    if geometry_delta_m is not None and geometry_delta_m > 0.25:
+        return "dynamic_pose_mismatch"
+    if geometry_delta_m is not None:
+        return "runtime_pose_match"
+    return "missing_molmospaces_runtime_pose"
+
+
 def _molmospaces_runtime_object_positions(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
     lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
     molmo = (
-        lanes.get(MOLMOSPACES_LANE_ID)
-        if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict)
-        else {}
+        lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict) else {}
     )
     positions = (
         molmo.get("runtime_object_positions")
@@ -1897,6 +1966,43 @@ def _molmospaces_runtime_object_positions(manifest: dict[str, Any]) -> dict[str,
         for alias in _runtime_pose_index_aliases(str(key)):
             indexed.setdefault(alias, payload)
     return indexed
+
+
+def _molmospaces_runtime_render_objects(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    molmo = (
+        lanes.get(MOLMOSPACES_LANE_ID) if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict) else {}
+    )
+    runtime_state = (
+        molmo.get("runtime_render_state")
+        if isinstance(molmo.get("runtime_render_state"), dict)
+        else {}
+    )
+    objects = runtime_state.get("objects") if isinstance(runtime_state.get("objects"), dict) else {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for key, value in objects.items():
+        if not isinstance(value, dict):
+            continue
+        payload = dict(value)
+        payload.setdefault("object_key", str(key))
+        for alias in _runtime_pose_index_aliases(str(key)):
+            indexed.setdefault(alias, payload)
+        body_name = str(payload.get("body_name") or "")
+        if body_name:
+            for alias in _runtime_pose_index_aliases(body_name):
+                indexed.setdefault(alias, payload)
+    return indexed
+
+
+def _runtime_render_state_for_object_key(
+    object_key: str,
+    objects: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    for alias in _runtime_pose_lookup_aliases(object_key):
+        state = objects.get(alias)
+        if state is not None:
+            return state
+    return None
 
 
 def _runtime_pose_for_object_key(
@@ -2448,11 +2554,7 @@ def _room_wall_light_diagnostics(manifest: dict[str, Any], *, output_dir: Path) 
         manifest.get("lane_registry") if isinstance(manifest.get("lane_registry"), dict) else {}
     )
     baseline_id = str(registry.get("baseline") or MOLMOSPACES_LANE_ID)
-    candidate_ids = [
-        lane_id
-        for lane_id in _lane_order(manifest)
-        if lane_id != baseline_id
-    ]
+    candidate_ids = [lane_id for lane_id in _lane_order(manifest) if lane_id != baseline_id]
     pairs = []
     for entry in entries:
         view_id = str(entry.get("view_id") or "")
@@ -2473,13 +2575,11 @@ def _room_wall_light_diagnostics(manifest: dict[str, Any], *, output_dir: Path) 
                 candidate_path,
                 region_id="upper_center_wall_proxy",
             )
-            image_delta = (
-                float(candidate_image["mean_luminance"])
-                - float(baseline_image["mean_luminance"])
+            image_delta = float(candidate_image["mean_luminance"]) - float(
+                baseline_image["mean_luminance"]
             )
-            wall_delta = (
-                float(candidate_wall["mean_luminance"])
-                - float(baseline_wall["mean_luminance"])
+            wall_delta = float(candidate_wall["mean_luminance"]) - float(
+                baseline_wall["mean_luminance"]
             )
             pairs.append(
                 {
@@ -2514,8 +2614,7 @@ def _room_wall_light_diagnostics(manifest: dict[str, Any], *, output_dir: Path) 
             "candidate_count": len(candidate_ids),
             "region_id": "upper_center_wall_proxy",
             "interpretation": (
-                "No room-view baseline/candidate image pairs were available for wall-light "
-                "review."
+                "No room-view baseline/candidate image pairs were available for wall-light review."
             ),
             "pairs": [],
         }
@@ -2678,8 +2777,7 @@ def _candidate_visual_summary(
                 "delta": {
                     **diff_metrics,
                     "mean_luminance_delta": (
-                        candidate_metrics["mean_luminance"]
-                        - baseline_metrics["mean_luminance"]
+                        candidate_metrics["mean_luminance"] - baseline_metrics["mean_luminance"]
                     ),
                     "mean_rgb_abs_delta": [
                         abs(
@@ -2696,9 +2794,7 @@ def _candidate_visual_summary(
         for item in view_results
         if isinstance(item.get("delta"), dict)
     ]
-    scene_load = (
-        lane.get("scene_load") if isinstance(lane.get("scene_load"), dict) else {}
-    )
+    scene_load = lane.get("scene_load") if isinstance(lane.get("scene_load"), dict) else {}
     warning_reasons = _candidate_visual_warning_reasons(
         scene_load=scene_load,
         mae_values=mae_values,
@@ -5798,6 +5894,9 @@ def _genesis_movable_object_visibility_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(item.get('parent', '')))}</td>"
             f"<td>{html.escape(str(item.get('geometry_status', '')))}</td>"
             f"<td>{html.escape(_meters_text(item.get('geometry_delta_m')))}</td>"
+            f"<td>{html.escape(str(item.get('articulation_apply_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('articulation_joint_count', '')))}</td>"
+            f"<td>{html.escape(_articulation_joint_text(item.get('articulation_joints')))}</td>"
             f"<td>{html.escape(str(item.get('seeded_start_receptacle_id', '')))}</td>"
             f"<td>{html.escape(str(item.get('in_frame_view_count', '')))}</td>"
             f"<td>{html.escape(_nearest_view_text(item.get('nearest_in_frame_views')))}</td>"
@@ -5814,6 +5913,9 @@ def _genesis_movable_object_visibility_section(manifest: dict[str, Any]) -> str:
             "Parent",
             "Geometry status",
             "Pose delta",
+            "Articulation apply",
+            "Joints",
+            "Joint state",
             "Runtime start",
             "In-frame views",
             "Nearest views",
@@ -5826,6 +5928,9 @@ def _genesis_movable_object_visibility_section(manifest: dict[str, Any]) -> str:
         f"objects={diagnostics.get('object_count')}; "
         f"in_frame={diagnostics.get('in_frame_object_count')}; "
         f"dynamic_pose_mismatch={diagnostics.get('dynamic_pose_mismatch_count')}; "
+        "articulated_unsupported="
+        f"{diagnostics.get('articulated_runtime_state_unsupported_count')}; "
+        f"articulated_objects={diagnostics.get('articulated_object_count')}; "
         f"resolution={diagnostics.get('resolution')}; "
         f"vertical_fov={_float_text(diagnostics.get('vertical_fov_deg'))} deg. "
         f"{diagnostics.get('interpretation') or ''}"
@@ -5840,6 +5945,20 @@ def _genesis_movable_object_visibility_section(manifest: dict[str, Any]) -> str:
   </table></div>
 </section>
 """
+
+
+def _articulation_joint_text(value: Any) -> str:
+    parts = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("joint_name") or "")
+        if not name:
+            continue
+        qpos = item.get("qpos") if isinstance(item.get("qpos"), list) else []
+        qpos_text = ",".join(_float_text(part) for part in qpos[:2])
+        parts.append(f"{name}={qpos_text}" if qpos_text else name)
+    return "; ".join(parts[:4])
 
 
 def _nearest_view_text(value: Any) -> str:
@@ -5960,47 +6079,55 @@ def _genesis_visual_object_audit_section(manifest: dict[str, Any]) -> str:
   <p class="note">{html.escape(note)}</p>
   <p class="note">metadata_source={html.escape(str(audit.get("metadata_source") or ""))}</p>
   {_genesis_visual_object_audit_summary(audit)}
-  {_genesis_visual_object_audit_table(
-        "Converted Texture Objects",
-        audit.get("texture_conversion_objects"),
-        columns=(
-            "object_key",
-            "category",
-            "asset_id",
-            "metadata_match",
-            "texture_modes",
-            "converted_texture_names",
-        ),
-    )}
-  {_genesis_visual_object_audit_table(
-        "Non-Static Render Objects",
-        audit.get("non_static_render_objects"),
-        columns=("object_key", "category", "asset_id", "metadata_match", "parent", "room_id"),
-    )}
-  {_genesis_visual_object_audit_table(
-        "Collision Mesh Objects",
-        audit.get("collision_mesh_objects"),
-        columns=(
-            "object_key",
-            "category",
-            "asset_id",
-            "metadata_match",
-            "render_mesh_count",
-            "collision_mesh_count",
-        ),
-    )}
-  {_genesis_visual_object_audit_table(
-        "Runtime Pose Overlay Objects",
-        audit.get("runtime_pose_overlay_objects"),
-        columns=(
-            "object_key",
-            "category",
-            "asset_id",
-            "metadata_match",
-            "runtime_pose_overlay_geometry_delta_m",
-            "runtime_pose_overlay_translation",
-        ),
-    )}
+  {
+        _genesis_visual_object_audit_table(
+            "Converted Texture Objects",
+            audit.get("texture_conversion_objects"),
+            columns=(
+                "object_key",
+                "category",
+                "asset_id",
+                "metadata_match",
+                "texture_modes",
+                "converted_texture_names",
+            ),
+        )
+    }
+  {
+        _genesis_visual_object_audit_table(
+            "Non-Static Render Objects",
+            audit.get("non_static_render_objects"),
+            columns=("object_key", "category", "asset_id", "metadata_match", "parent", "room_id"),
+        )
+    }
+  {
+        _genesis_visual_object_audit_table(
+            "Collision Mesh Objects",
+            audit.get("collision_mesh_objects"),
+            columns=(
+                "object_key",
+                "category",
+                "asset_id",
+                "metadata_match",
+                "render_mesh_count",
+                "collision_mesh_count",
+            ),
+        )
+    }
+  {
+        _genesis_visual_object_audit_table(
+            "Runtime Pose Overlay Objects",
+            audit.get("runtime_pose_overlay_objects"),
+            columns=(
+                "object_key",
+                "category",
+                "asset_id",
+                "metadata_match",
+                "runtime_pose_overlay_geometry_delta_m",
+                "runtime_pose_overlay_translation",
+            ),
+        )
+    }
 </section>
 """
 
@@ -6060,13 +6187,17 @@ def _genesis_visual_object_audit_summary(audit: dict[str, Any]) -> str:
             f"<td>{html.escape(meaning)}</td>"
             "</tr>"
         )
-    return """
+    return (
+        """
   <h3>Alike Object Risk Summary</h3>
   <div class="table-wrap"><table>
     <thead><tr><th>Risk group</th><th>Categories</th><th>Meaning</th></tr></thead>
-    <tbody>""" + "".join(rows) + """</tbody>
+    <tbody>"""
+        + "".join(rows)
+        + """</tbody>
   </table></div>
 """
+    )
 
 
 def _genesis_visual_object_audit_table(
@@ -6086,7 +6217,7 @@ def _genesis_visual_object_audit_table(
             + "</tr>"
         )
     if not rows:
-        return f"<h3>{html.escape(title)}</h3><p class=\"note\">None recorded.</p>"
+        return f'<h3>{html.escape(title)}</h3><p class="note">None recorded.</p>'
     headers = "".join(f"<th>{html.escape(column)}</th>" for column in columns)
     return f"""
   <h3>{html.escape(title)}</h3>

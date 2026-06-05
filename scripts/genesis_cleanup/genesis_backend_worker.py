@@ -357,9 +357,7 @@ def _genesis_scene(
 
 def _genesis_vis_options(gs: Any, *, lighting_profile: dict[str, Any] | None = None) -> Any:
     profile = (
-        lighting_profile
-        if isinstance(lighting_profile, dict)
-        else GENESIS_RENDER_LIGHTING_PROFILE
+        lighting_profile if isinstance(lighting_profile, dict) else GENESIS_RENDER_LIGHTING_PROFILE
     )
     return gs.options.VisOptions(
         ambient_light=tuple(profile["ambient_light"]),
@@ -382,9 +380,7 @@ def _genesis_lighting_profile(lighting_profile: dict[str, Any]) -> dict[str, Any
         "profile_id": str(
             lighting_profile.get("profile_id") or GENESIS_RENDER_LIGHTING_PROFILE["profile_id"]
         ),
-        "source": str(
-            lighting_profile.get("source") or GENESIS_RENDER_LIGHTING_PROFILE["source"]
-        ),
+        "source": str(lighting_profile.get("source") or GENESIS_RENDER_LIGHTING_PROFILE["source"]),
         "mujoco_headlight_ambient": _vec3(
             lighting_profile.get("mujoco_headlight_ambient"),
             fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_ambient"],
@@ -404,9 +400,7 @@ def _genesis_lighting_profile(lighting_profile: dict[str, Any]) -> dict[str, Any
         "shadow": bool(
             lighting_profile.get("genesis_shadow", GENESIS_RENDER_LIGHTING_PROFILE["shadow"])
         ),
-        "lights": _genesis_directional_lights(
-            lighting_profile.get("genesis_directional_lights")
-        ),
+        "lights": _genesis_directional_lights(lighting_profile.get("genesis_directional_lights")),
     }
 
 
@@ -444,9 +438,7 @@ def _genesis_color_profile(color_profile: dict[str, Any]) -> dict[str, Any]:
             if source
             else GENESIS_COLOR_PROFILE_LUMINANCE_GAIN_SOURCE
         )
-    profile["genesis_backend_luminance_gain_source"] = (
-        GENESIS_COLOR_PROFILE_LUMINANCE_GAIN_SOURCE
-    )
+    profile["genesis_backend_luminance_gain_source"] = GENESIS_COLOR_PROFILE_LUMINANCE_GAIN_SOURCE
     rgb_gains = profile.get("backend_rgb_gain")
     if isinstance(rgb_gains, dict):
         profile["backend_rgb_gain"] = dict(rgb_gains)
@@ -476,17 +468,13 @@ def _genesis_color_profile(color_profile: dict[str, Any]) -> dict[str, Any]:
             if tone_source
             else GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE
         )
-    profile["genesis_backend_tone_adjustment_source"] = (
-        GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE
-    )
+    profile["genesis_backend_tone_adjustment_source"] = GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE
     view_tone_adjustments = profile.get("backend_view_tone_adjustment")
     if isinstance(view_tone_adjustments, dict):
         profile["backend_view_tone_adjustment"] = dict(view_tone_adjustments)
     else:
         profile["backend_view_tone_adjustment"] = {}
-    backend_view_tone_adjustments = profile["backend_view_tone_adjustment"].get(
-        GENESIS_LANE_ID
-    )
+    backend_view_tone_adjustments = profile["backend_view_tone_adjustment"].get(GENESIS_LANE_ID)
     if isinstance(backend_view_tone_adjustments, dict):
         profile["backend_view_tone_adjustment"][GENESIS_LANE_ID] = dict(
             backend_view_tone_adjustments
@@ -741,16 +729,19 @@ def _extract_materialized_usd_visual_asset(
             subset_face_ids = [int(value) for value in list(subset.GetIndicesAttr().Get() or [])]
             if not subset_face_ids:
                 continue
-            subset_material = _usd_material_name_for_prim(
-                subset_prim,
-                scene_usd=scene_usd,
-                material_cache=material_cache,
-                materials=materials,
-                texture_dir=texture_dir,
-                copied_textures=copied_textures,
-                used_texture_names=used_texture_names,
-                fallback_label=str(subset_prim.GetPath()),
-            ) or mesh_material
+            subset_material = (
+                _usd_material_name_for_prim(
+                    subset_prim,
+                    scene_usd=scene_usd,
+                    material_cache=material_cache,
+                    materials=materials,
+                    texture_dir=texture_dir,
+                    copied_textures=copied_textures,
+                    used_texture_names=used_texture_names,
+                    fallback_label=str(subset_prim.GetPath()),
+                )
+                or mesh_material
+            )
             for face_id in subset_face_ids:
                 if 0 <= face_id < len(face_materials):
                     face_materials[face_id] = subset_material
@@ -762,9 +753,7 @@ def _extract_materialized_usd_visual_asset(
             materials=materials,
         )
 
-        transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
-            Usd.TimeCode.Default()
-        )
+        transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
         transform_matrix = np.asarray(transform, dtype=np.float64)
         reverse_winding = bool(np.linalg.det(transform_matrix[:3, :3]) < 0)
         base_vertex_index = len(vertices)
@@ -1086,11 +1075,7 @@ def _index_runtime_object_positions(
     runtime_object_positions: dict[str, dict[str, Any]] | None,
 ) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
-    positions = (
-        runtime_object_positions
-        if isinstance(runtime_object_positions, dict)
-        else {}
-    )
+    positions = runtime_object_positions if isinstance(runtime_object_positions, dict) else {}
     for object_key, item in positions.items():
         if not isinstance(item, dict) or not _is_numeric_vec3(item.get("position")):
             continue
@@ -1192,10 +1177,7 @@ def _runtime_pose_overlay_for_object(
     delta_m = _distance_3d(source_center, target_center)
     if delta_m <= GENESIS_RUNTIME_POSE_OVERLAY_THRESHOLD_M:
         return None
-    translation = [
-        target_center[index] - source_center[index]
-        for index in range(3)
-    ]
+    translation = [target_center[index] - source_center[index] for index in range(3)]
     return {
         "status": "applied",
         "method": "translation_only_bounds_center_to_molmospaces_runtime_position",
@@ -1229,9 +1211,7 @@ def _is_numeric_vec3(value: Any) -> bool:
 
 
 def _distance_3d(left: list[float], right: list[float]) -> float:
-    return float(
-        sum((float(left[index]) - float(right[index])) ** 2 for index in range(3)) ** 0.5
-    )
+    return float(sum((float(left[index]) - float(right[index])) ** 2 for index in range(3)) ** 0.5)
 
 
 def _scene_metadata_for_object_key(
@@ -1370,6 +1350,16 @@ def _finalize_visual_object_audit(
         "non_static_render_objects": non_static,
         "collision_mesh_objects": collision,
         "runtime_pose_overlay_objects": runtime_pose_overlay,
+        "runtime_state_application": {
+            "schema": "genesis_runtime_state_application_v1",
+            "pose_overlay_method": "translation_only_bounds_center_to_molmospaces_runtime_position",
+            "articulation_apply_status": "unsupported",
+            "articulation_note": (
+                "The prepared-USD visual package can translate grouped object vertices to "
+                "MuJoCo runtime centers, but it does not currently apply child joint or "
+                "articulation qpos such as box flaps."
+            ),
+        },
         "risk_groups": risk_groups,
         "objects": objects,
         "interpretation": (
@@ -1378,7 +1368,8 @@ def _finalize_visual_object_audit(
             "can produce renderer-dependent visibility, confirms collision meshes are not "
             "imported as visual geometry, and records render-only runtime pose overlays for "
             "non-static objects whose prepared-USD pose diverges materially from the "
-            "MolmoSpaces runtime pose."
+            "MolmoSpaces runtime pose. Runtime pose overlays are translation-only and are "
+            "not articulation-state application."
         ),
     }
 
@@ -1410,9 +1401,7 @@ def _usd_material_name_for_prim(
     material_cache: dict[tuple[Any, ...], str],
     materials: dict[str, dict[str, Any]],
     texture_dir: Path,
-    copied_textures: dict[
-        tuple[str, tuple[float, float, float], tuple[float, float, float]], str
-    ],
+    copied_textures: dict[tuple[str, tuple[float, float, float], tuple[float, float, float]], str],
     used_texture_names: set[str],
     fallback_label: str,
 ) -> str | None:
@@ -1459,9 +1448,7 @@ def _usd_material_info(
     *,
     scene_usd: Path,
     texture_dir: Path,
-    copied_textures: dict[
-        tuple[str, tuple[float, float, float], tuple[float, float, float]], str
-    ],
+    copied_textures: dict[tuple[str, tuple[float, float, float], tuple[float, float, float]], str],
     used_texture_names: set[str],
 ) -> dict[str, Any]:
     from pxr import Sdf
@@ -1580,9 +1567,7 @@ def _copy_usd_texture(
     texture_path: Path,
     *,
     texture_dir: Path,
-    copied_textures: dict[
-        tuple[str, tuple[float, float, float], tuple[float, float, float]], str
-    ],
+    copied_textures: dict[tuple[str, tuple[float, float, float], tuple[float, float, float]], str],
     used_texture_names: set[str],
     color_scale: tuple[float, float, float] = (1.0, 1.0, 1.0),
     color_bias: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -1607,8 +1592,8 @@ def _copy_usd_texture(
         filename = f"{stem}{suffix}"
     counter = 2
     while filename in used_texture_names:
-        filename = f"{stem}_baked_{digest}_{counter}.png" if should_bake else (
-            f"{stem}_{counter}{suffix}"
+        filename = (
+            f"{stem}_baked_{digest}_{counter}.png" if should_bake else (f"{stem}_{counter}{suffix}")
         )
         counter += 1
     used_texture_names.add(filename)
@@ -1901,9 +1886,7 @@ def _extract_render_only_visual_mesh(scene_usd: Path, output_path: Path) -> dict
         face_indices = list(mesh.GetFaceVertexIndicesAttr().Get() or [])
         if not face_counts or not face_indices:
             continue
-        transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
-            Usd.TimeCode.Default()
-        )
+        transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(Usd.TimeCode.Default())
         base_index = len(vertices)
         for point in points:
             world = transform.Transform(point)
