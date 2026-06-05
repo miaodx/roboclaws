@@ -496,7 +496,7 @@ dialog pre {
   gap: 8px;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1360px) {
   .app-shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto minmax(0, 1fr) auto auto;
