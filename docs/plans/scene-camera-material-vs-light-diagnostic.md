@@ -282,3 +282,38 @@ Implementation boundaries preserved:
 - Final focused closeout:
   `./scripts/dev/run_pytest_standalone.sh -q tests/contract/molmo_cleanup/test_scene_camera_comparison.py -k "material_response_diagnostics or render_domain_contract or render_domain_view_triage or lighting or shadow_parity or scene_light_rig"`
   passed.
+
+## 2026-06-05 Default-Setting Gate
+
+After implementation, refreshed the real comparison report in place:
+
+`output/molmo/scene-camera-comparison/0605_scene_light_report_rerun/0605_1656/`
+
+The refreshed `material_response_diagnostics` result is:
+
+- `status == "computed"`
+- `sample_count == 10`
+- `conclusion == "mixed"`
+- `material_like_signal_count == 1`
+- `shared_brightness_tone_signal_count == 6`
+- MuJoCo, Isaac, and Genesis material parsers all reported `parsed`.
+
+Object-level split:
+
+- Shared brightness/tone drift:
+  AlarmClock, BasketBall, Box, CellPhone, GarbageCan, Pen.
+- Backend tone residual:
+  Pillow, BaseballBat, Bowl.
+- Material/texture or local-shadow residual:
+  Cloth.
+
+Decision:
+
+- Do not promote a new default light/tone/exposure setting from this evidence.
+- Do not run a held-out light/tone sweep yet; the precondition from this plan
+  was "only if material evidence is clean", and the refreshed report still has
+  a material/local-shadow residual.
+- Keep `scene_light_rig_v1` as the default light abstraction for now.
+- The next default-improving slice should inspect material/local-shadow response
+  for the Cloth/sink residual and the BaseballBat Genesis material-name miss
+  before changing global backend light or exposure defaults.
