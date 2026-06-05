@@ -119,8 +119,9 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    closeout probe before starting another optional cleanup chain; when `done`
    returns pending candidates, clean exactly those listed handles using their
    `candidate_fixture_id` or `destination_options`, then call `done` again. If
-   a tool returns `required_tool`, call that public tool next for the same
-   object or fixture before choosing new optional work. Re-observed
+   a tool returns top-level `required_tool` or
+   `completion.blockers[*].required_tool`, call that public tool next for the
+   same object or fixture before choosing new optional work. Re-observed
    visible objects can be stale evidence after a
    successful placement; do not retry handles that tool recovery marks
    `already_handled`, and do not switch to another handle from the same stale

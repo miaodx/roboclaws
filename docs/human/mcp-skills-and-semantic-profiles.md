@@ -232,6 +232,16 @@ capabilities when they need to move objects:
   `pick`, `place`, `place_inside`, `open_receptacle`, and `close_receptacle`.
 - `household_episode_v1` owns explicit task completion through `done`.
 
+`done` is also the authoritative completion-readiness checkpoint. When public
+run state shows that closeout is premature, the server returns a structured
+`completion.blockers` payload with public recovery hints while preserving the
+older top-level `error_reason` / `required_tool` fields during migration.
+Readiness policies may use Agent View, public tool traces, public worklists,
+semantic substeps, and public run acceptance configuration; they must not use
+hidden mess membership, acceptable destination sets, private manifests, or
+scorer truth. Do not add a separate default MCP tool just to ask whether `done`
+is ready.
+
 Physical backends may expose these tools as structured `blocked_capability`
 responses until manipulation is proven.
 

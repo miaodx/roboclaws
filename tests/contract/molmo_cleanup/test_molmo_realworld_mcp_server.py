@@ -577,12 +577,21 @@ def test_realworld_mcp_raw_fpv_camera_raw_done_requires_complete_live_chains(
 
     assert done["ok"] is False
     assert done["tool"] == "done"
+    assert done["status"] == "blocked"
     assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
     assert done["required_tool"] == "navigate_to_visual_candidate"
     assert done["complete_semantic_substep_objects"] == 0
     assert done["required_complete_semantic_substep_objects"] == 4
+    assert done["completion"]["status"] == "blocked"
+    blocker = done["completion"]["blockers"][0]
+    assert blocker["type"] == "insufficient_grounded_cleanup_chains"
+    assert blocker["current"] == 0
+    assert blocker["required"] == 4
+    assert blocker["required_tool"] == "navigate_to_visual_candidate"
     assert "score" not in done
     assert "cleanup_status" not in done
+    assert "target_receptacle_id" not in str(done)
+    assert "private_manifest" not in str(done)
     assert not (tmp_path / "run_result.json").exists()
 
 
@@ -791,12 +800,13 @@ def test_realworld_mcp_raw_fpv_trace_records_agent_facing_compact_state(
     compact_state = trace_observe["response"]["agent_facing_compact_state"]
 
     assert compact_state["schema"] == "raw_fpv_mcp_observe_state_v1"
-    assert compact_state["cleanup_worklist_summary"] == observation_state[
-        "cleanup_worklist_summary"
-    ]
-    assert compact_state["raw_fpv_observation"]["observation_id"] == observation_state[
-        "raw_fpv_observation"
-    ]["observation_id"]
+    assert (
+        compact_state["cleanup_worklist_summary"] == observation_state["cleanup_worklist_summary"]
+    )
+    assert (
+        compact_state["raw_fpv_observation"]["observation_id"]
+        == observation_state["raw_fpv_observation"]["observation_id"]
+    )
     assert "camera_control_contract" not in compact_state["raw_fpv_observation"]
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -67,6 +68,7 @@ CAMERA_MODEL_POLICY_SCHEMA = "camera_model_policy_v1"
 CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
+DONE_READINESS_SCHEMA = "done_readiness_v1"
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
@@ -201,6 +203,7 @@ class RealWorldCleanupContract:
         runtime_map_prior: dict[str, Any] | None = None,
         map_mode: str = DEFAULT_MAP_MODE,
         cleanup_profile: str | None = None,
+        public_acceptance_config: dict[str, Any] | None = None,
     ) -> None:
         if fixture_hint_mode not in {"room_only", "exact_fixtures"}:
             raise ValueError("fixture_hint_mode must be room_only or exact_fixtures")
@@ -220,6 +223,7 @@ class RealWorldCleanupContract:
         self.cleanup_profile = (
             str(cleanup_profile or "").strip().lower().replace("_", "-") if cleanup_profile else ""
         )
+        self.public_acceptance_config = _public_acceptance_config(public_acceptance_config)
         self.sanitize_world_labels = self.cleanup_profile == WORLD_LABELS_SANITIZED_PROFILE
         self.visible_detection_exposure_policy = (
             SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
@@ -1366,60 +1370,17 @@ class RealWorldCleanupContract:
             object_id=handle,
         )
 
-    def done(self, reason: str = "") -> dict[str, Any]:
-        pending = self._pending_cleanup_candidates()
-        if pending:
-            required_tool = "navigate_to_object"
-            if any(str(item.get("state") or "") == "held" for item in pending):
-                required_tool = "navigate_to_receptacle"
-            return self._error(
-                "done",
-                "pending_cleanup_candidates",
-                required_tool=required_tool,
-                pending_observed_handles=[str(item["object_id"]) for item in pending],
-                pending_cleanup_candidates=pending,
-                recovery_hint=(
-                    "Clean pending observed handles before done. For held objects, select a "
-                    "public destination_options.candidate_fixture_id and call "
-                    "navigate_to_receptacle -> open? -> place/place_inside. For pending "
-                    "objects, call navigate_to_object -> pick first. Use "
-                    "destination_options.recommended_tool when candidate_fixture_id is empty."
-                ),
-            )
-        coverage = self._sweep_coverage()
-        if coverage["unvisited_waypoint_ids"]:
-            next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
-            return self._error(
-                "done",
-                "insufficient_sweep_coverage",
-                required_tool="navigate_to_waypoint",
-                next_waypoint_id=next_waypoint_id,
-                sweep_coverage_rate=coverage["sweep_coverage_rate"],
-                observed_waypoint_count=coverage["observed_waypoint_count"],
-                total_waypoints=coverage["total_waypoints"],
-                unvisited_waypoint_ids=coverage["unvisited_waypoint_ids"],
-                recovery_hint=(
-                    "Continue the public sweep before done: call navigate_to_waypoint("
-                    f"{next_waypoint_id}) and observe. Do not use done as a system "
-                    "assessment while static-map inspection waypoints remain unvisited."
-                ),
-            )
-        if self.perception_mode == RAW_FPV_ONLY_MODE:
-            declaration_count = len(self._model_declared_observations)
-            required_declaration_count = min(7, len(self.scenario.private_manifest.targets))
-            if declaration_count < required_declaration_count:
-                return self._error(
-                    "done",
-                    "insufficient_model_declared_observations",
-                    model_declared_observations=declaration_count,
-                    raw_fpv_observations=len(self._raw_fpv_observations),
-                    required_model_declared_observations=required_declaration_count,
-                    recovery_hint=(
-                        "Continue sweeping public waypoints and use "
-                        "navigate_to_visual_candidate for plausible cleanup objects "
-                        "seen in raw FPV images before calling done."
-                    ),
-                )
+    def done(
+        self,
+        reason: str = "",
+        *,
+        semantic_cleanup_evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        readiness = self.evaluate_done_readiness(
+            semantic_cleanup_evidence=semantic_cleanup_evidence,
+        )
+        if readiness["status"] == "blocked":
+            return self._done_readiness_blocked_response(readiness)
         done = self.contract.done(reason=reason)
         if not done.get("ok"):
             return done
@@ -1438,6 +1399,163 @@ class RealWorldCleanupContract:
             contract=REALWORLD_CONTRACT,
             policy_uses_private_truth=False,
         )
+
+    def evaluate_done_readiness(
+        self,
+        *,
+        semantic_cleanup_evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        blockers: list[dict[str, Any]] = []
+        pending = self._pending_cleanup_candidates()
+        if pending:
+            required_tool = "navigate_to_object"
+            if any(str(item.get("state") or "") == "held" for item in pending):
+                required_tool = "navigate_to_receptacle"
+            blockers.append(
+                {
+                    "type": "pending_cleanup_candidates",
+                    "required_tool": required_tool,
+                    "pending_observed_handles": [str(item["object_id"]) for item in pending],
+                    "pending_cleanup_candidates": pending,
+                    "recovery_hint": (
+                        "Clean pending observed handles before done. For held objects, select a "
+                        "public destination_options.candidate_fixture_id and call "
+                        "navigate_to_receptacle -> open? -> place/place_inside. For pending "
+                        "objects, call navigate_to_object -> pick first. Use "
+                        "destination_options.recommended_tool when candidate_fixture_id is empty."
+                    ),
+                }
+            )
+
+        coverage = self._sweep_coverage()
+        if coverage["unvisited_waypoint_ids"]:
+            next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
+            blockers.append(
+                {
+                    "type": "insufficient_sweep_coverage",
+                    "required_tool": "navigate_to_waypoint",
+                    "next_waypoint_id": next_waypoint_id,
+                    "sweep_coverage_rate": coverage["sweep_coverage_rate"],
+                    "observed_waypoint_count": coverage["observed_waypoint_count"],
+                    "total_waypoints": coverage["total_waypoints"],
+                    "unvisited_waypoint_ids": coverage["unvisited_waypoint_ids"],
+                    "recovery_hint": (
+                        "Continue the public sweep before done: call navigate_to_waypoint("
+                        f"{next_waypoint_id}) and observe. Do not use done as a system "
+                        "assessment while static-map inspection waypoints remain unvisited."
+                    ),
+                }
+            )
+
+        if self.perception_mode == RAW_FPV_ONLY_MODE:
+            required_declaration_count = self._required_model_declared_observations()
+            declaration_count = len(self._model_declared_observations)
+            if declaration_count < required_declaration_count:
+                blockers.append(
+                    {
+                        "type": "insufficient_model_declared_observations",
+                        "required_tool": "navigate_to_visual_candidate",
+                        "current": declaration_count,
+                        "required": required_declaration_count,
+                        "model_declared_observations": declaration_count,
+                        "raw_fpv_observations": len(self._raw_fpv_observations),
+                        "required_model_declared_observations": required_declaration_count,
+                        "recovery_hint": (
+                            "Continue sweeping public waypoints and use "
+                            "navigate_to_visual_candidate for plausible cleanup objects "
+                            "seen in raw FPV images before calling done."
+                        ),
+                    }
+                )
+
+        grounded_chain_blocker = self._grounded_cleanup_chain_blocker(semantic_cleanup_evidence)
+        if grounded_chain_blocker is not None:
+            blockers.append(grounded_chain_blocker)
+
+        readiness = {
+            "schema": DONE_READINESS_SCHEMA,
+            "status": "blocked" if blockers else "ready",
+            "blockers": blockers,
+            "policy_uses_private_truth": False,
+            "public_contract_note": (
+                "Done readiness is evaluated from public Agent View state, public tool "
+                "trace evidence, and public run acceptance configuration. It does not "
+                "use private generated mess membership, hidden destinations, or scorer truth."
+            ),
+        }
+        _assert_no_forbidden_agent_view_keys(readiness)
+        return readiness
+
+    def _done_readiness_blocked_response(self, readiness: dict[str, Any]) -> dict[str, Any]:
+        blockers = [dict(item) for item in readiness.get("blockers") or []]
+        first = blockers[0] if blockers else {"type": "done_readiness_blocked"}
+        error_reason = str(first.get("type") or "done_readiness_blocked")
+        payload = {
+            key: value for key, value in first.items() if key not in {"type", "recovery_hint"}
+        }
+        if "recovery_hint" in first:
+            payload["recovery_hint"] = first["recovery_hint"]
+        payload["completion"] = {
+            "schema": readiness.get("schema", DONE_READINESS_SCHEMA),
+            "status": "blocked",
+            "blockers": blockers,
+            "policy_uses_private_truth": False,
+        }
+        return self._error("done", error_reason, status="blocked", **payload)
+
+    def _required_model_declared_observations(self) -> int:
+        configured = _positive_int(
+            self.public_acceptance_config.get("required_model_declared_observations")
+        )
+        if configured is not None:
+            return configured
+        requested = _positive_int(self.public_acceptance_config.get("requested_run_size"))
+        if requested is not None:
+            return min(7, requested)
+        return 0
+
+    def _grounded_cleanup_chain_blocker(
+        self,
+        semantic_cleanup_evidence: dict[str, Any] | None,
+    ) -> dict[str, Any] | None:
+        required_count = _positive_int(
+            self.public_acceptance_config.get("required_grounded_cleanup_chains")
+        )
+        if required_count is None:
+            requested = _positive_int(self.public_acceptance_config.get("requested_run_size"))
+            required_count = _public_success_threshold(requested) if requested is not None else 0
+        if required_count <= 0:
+            return None
+        evidence = semantic_cleanup_evidence or {}
+        complete_handles = [
+            str(item)
+            for item in evidence.get("complete_semantic_substep_object_ids") or []
+            if str(item)
+        ]
+        complete_count = _positive_int(evidence.get("complete_semantic_substep_objects"))
+        if complete_count is None:
+            complete_count = len(complete_handles)
+        if complete_count >= required_count:
+            return None
+        blocker = {
+            "type": "insufficient_grounded_cleanup_chains",
+            "current": complete_count,
+            "required": required_count,
+            "required_tool": "navigate_to_visual_candidate",
+            "complete_semantic_substep_objects": complete_count,
+            "complete_semantic_substep_object_ids": complete_handles,
+            "required_complete_semantic_substep_objects": required_count,
+            "semantic_substep_count": _nonnegative_int(evidence.get("semantic_substep_count")),
+            "recovery_hint": (
+                "Continue the cleanup loop before done. For each plausible object in a "
+                "public observation, call navigate_to_visual_candidate when required; "
+                "when it returns ok=true, call pick, navigate_to_receptacle with the "
+                "public candidate fixture, then the recommended placement tool. Call "
+                "done only after enough grounded cleanup chains have completed."
+            ),
+        }
+        _assert_no_forbidden_agent_view_keys(blocker)
+        return blocker
 
     def _sweep_coverage(self) -> dict[str, Any]:
         waypoints = self._public_waypoints
@@ -2303,14 +2421,17 @@ class RealWorldCleanupContract:
                 row["destination_policy"] = destination_policy
             if not self.sanitize_world_labels:
                 row["cleanup_recommended"] = cleanup_recommended
-                internal_candidate_fixture_id = (
-                    self.internal_fixture_id_for_public_reference(public_candidate_fixture_id)
-                    or str(candidate_fixture_id)
+                internal_candidate_fixture_id = self.internal_fixture_id_for_public_reference(
+                    public_candidate_fixture_id
+                ) or str(candidate_fixture_id)
+                row["recommended_tool"] = (
+                    _recommended_place_tool(
+                        internal_candidate_fixture_id,
+                        self._fixtures,
+                    )
+                    if public_candidate_fixture_id
+                    else ""
                 )
-                row["recommended_tool"] = _recommended_place_tool(
-                    internal_candidate_fixture_id,
-                    self._fixtures,
-                ) if public_candidate_fixture_id else ""
             lifecycle_rows.append(row)
         waypoint_rows = []
         for waypoint in self._public_waypoints:
@@ -5399,3 +5520,40 @@ def _strip_forbidden_agent_view_keys(payload: Any) -> Any:
     if isinstance(payload, list):
         return [_strip_forbidden_agent_view_keys(value) for value in payload]
     return payload
+
+
+def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
+    source = dict(config or {})
+    accepted: dict[str, Any] = {}
+    for key in (
+        "requested_run_size",
+        "required_grounded_cleanup_chains",
+        "required_model_declared_observations",
+    ):
+        value = _positive_int(source.get(key))
+        if value is not None:
+            accepted[key] = value
+    _assert_no_forbidden_agent_view_keys(accepted)
+    return accepted
+
+
+def _public_success_threshold(count: int | None) -> int:
+    if count is None or count <= 0:
+        return 0
+    return max(1, math.ceil(count * 0.70))
+
+
+def _positive_int(value: Any) -> int | None:
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        return None
+    return result if result > 0 else None
+
+
+def _nonnegative_int(value: Any) -> int:
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, result)

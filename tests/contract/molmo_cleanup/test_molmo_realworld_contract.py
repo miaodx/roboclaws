@@ -1112,10 +1112,14 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
     done = contract.done("finished sweep")
 
     assert done["ok"] is False
+    assert done["status"] == "blocked"
     assert done["error_reason"] == "pending_cleanup_candidates"
     assert done["required_tool"] == "navigate_to_object"
     assert recommended["object_id"] in done["pending_observed_handles"]
     assert done["pending_cleanup_candidates"][0]["candidate_fixture_id"]
+    assert done["completion"]["status"] == "blocked"
+    assert done["completion"]["blockers"][0]["type"] == "pending_cleanup_candidates"
+    assert done["completion"]["blockers"][0]["required_tool"] == "navigate_to_object"
     assert "target_receptacle_id" not in str(done)
     _assert_no_forbidden_keys(done)
 
@@ -1329,6 +1333,7 @@ def test_realworld_raw_fpv_done_gate_scales_to_small_generated_mess_count() -> N
     contract = _contract(
         CleanupBackendSession(scenario),
         perception_mode=RAW_FPV_ONLY_MODE,
+        public_acceptance_config={"required_model_declared_observations": 3},
     )
 
     waypoints = contract.metric_map()["inspection_waypoints"]
@@ -1342,8 +1347,13 @@ def test_realworld_raw_fpv_done_gate_scales_to_small_generated_mess_count() -> N
     done = contract.done("small raw-fpv rehearsal complete")
 
     assert shortfall["ok"] is False
+    assert shortfall["status"] == "blocked"
     assert shortfall["error_reason"] == "insufficient_model_declared_observations"
     assert shortfall["required_model_declared_observations"] == 3
+    assert shortfall["completion"]["status"] == "blocked"
+    assert shortfall["completion"]["blockers"][0]["type"] == (
+        "insufficient_model_declared_observations"
+    )
     assert done["ok"] is True
     assert done["cleanup_status"] == "failed"
 
@@ -1603,11 +1613,13 @@ def test_realworld_done_rejects_one_missing_public_waypoint() -> None:
     early_done = contract.done("finished after almost all waypoints")
 
     assert early_done["ok"] is False
+    assert early_done["status"] == "blocked"
     assert early_done["error_reason"] == "insufficient_sweep_coverage"
     assert early_done["required_tool"] == "navigate_to_waypoint"
     assert early_done["next_waypoint_id"] == waypoints[-1]["waypoint_id"]
     assert early_done["observed_waypoint_count"] == len(waypoints) - 1
     assert early_done["total_waypoints"] == len(waypoints)
+    assert early_done["completion"]["blockers"][0]["type"] == "insufficient_sweep_coverage"
 
 
 def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> None:
