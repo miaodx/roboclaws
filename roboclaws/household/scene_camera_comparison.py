@@ -5275,6 +5275,10 @@ def _material_response_diagnostics(
             isaac,
             usd_prim_path=f"/val_1/Geometry/{object_key}" if object_key else "",
         )
+        material_scale_response = _material_texture_scale_response(
+            mujoco=mujoco_contract,
+            isaac=isaac_contract,
+        )
         genesis_contract = _genesis_object_material_contract(
             genesis,
             object_key=object_key,
@@ -5294,6 +5298,7 @@ def _material_response_diagnostics(
                 "signal": signal,
                 "mujoco": mujoco_contract,
                 "isaac": isaac_contract,
+                "material_scale_response": material_scale_response,
                 "genesis": genesis_contract,
             }
         )
@@ -5303,6 +5308,12 @@ def _material_response_diagnostics(
     )
     shared_tone_count = sum(
         1 for item in objects if str(item.get("signal") or "") == "shared_brightness_tone_drift"
+    )
+    squared_scale_count = sum(
+        1
+        for item in objects
+        if (item.get("material_scale_response") or {}).get("status")
+        == "likely_squared_texture_scale"
     )
     return {
         "schema": "scene_camera_material_response_diagnostics_v1",
@@ -5320,6 +5331,7 @@ def _material_response_diagnostics(
         "genesis_material_parse_status": genesis.get("status"),
         "material_like_signal_count": material_like_count,
         "shared_brightness_tone_signal_count": shared_tone_count,
+        "likely_squared_texture_scale_count": squared_scale_count,
         "conclusion": conclusion,
         "recommended_next_action": _material_response_next_action(conclusion),
         "interpretation": (
@@ -5467,6 +5479,118 @@ def _material_response_next_action(conclusion: str) -> str:
     return "Collect crop and material-binding evidence before deciding the next tuning target."
 
 
+def _material_texture_scale_response(
+    *,
+    mujoco: dict[str, Any],
+    isaac: dict[str, Any],
+) -> dict[str, Any]:
+    mujoco_visuals = [item for item in mujoco.get("visuals") or [] if isinstance(item, dict)]
+    isaac_bindings = [item for item in isaac.get("bindings") or [] if isinstance(item, dict)]
+    pairs: list[dict[str, Any]] = []
+    for visual in mujoco_visuals:
+        material_name = str(visual.get("material") or "")
+        if not material_name:
+            continue
+        rgba = _first_rgb_triplet(visual.get("rgba"))
+        if rgba is None:
+            continue
+        matching_bindings = [
+            binding
+            for binding in isaac_bindings
+            if str(binding.get("material_name") or "") == material_name
+        ]
+        for binding in matching_bindings[:3]:
+            scale = _first_rgb_triplet(binding.get("texture_scale"))
+            fallback = _first_rgb_triplet(binding.get("texture_fallback"))
+            if scale is None and fallback is None:
+                continue
+            scale_delta = _rgb_max_abs_delta(scale, rgba) if scale is not None else None
+            fallback_delta = _rgb_max_abs_delta(fallback, rgba) if fallback is not None else None
+            squared = [component * component for component in rgba]
+            squared_scale_delta = (
+                _rgb_max_abs_delta(scale, squared) if scale is not None else None
+            )
+            squared_fallback_delta = (
+                _rgb_max_abs_delta(fallback, squared) if fallback is not None else None
+            )
+            pairs.append(
+                {
+                    "material_name": material_name,
+                    "mujoco_rgba_rgb": rgba,
+                    "isaac_texture_scale_rgb": scale,
+                    "isaac_texture_fallback_rgb": fallback,
+                    "max_abs_scale_vs_rgba_delta": scale_delta,
+                    "max_abs_fallback_vs_rgba_delta": fallback_delta,
+                    "max_abs_scale_vs_rgba_squared_delta": squared_scale_delta,
+                    "max_abs_fallback_vs_rgba_squared_delta": squared_fallback_delta,
+                    "status": _material_texture_scale_pair_status(
+                        scale_delta=scale_delta,
+                        fallback_delta=fallback_delta,
+                        squared_scale_delta=squared_scale_delta,
+                        squared_fallback_delta=squared_fallback_delta,
+                    ),
+                }
+            )
+    likely_squared = [item for item in pairs if item.get("status") == "likely_squared"]
+    source_matched = [item for item in pairs if item.get("status") == "source_rgba_matched"]
+    if likely_squared:
+        status = "likely_squared_texture_scale"
+    elif source_matched:
+        status = "source_rgba_texture_scale"
+    elif pairs:
+        status = "unclassified_texture_scale"
+    else:
+        status = "missing_comparable_texture_scale"
+    return {
+        "status": status,
+        "pair_count": len(pairs),
+        "likely_squared_pair_count": len(likely_squared),
+        "source_rgba_pair_count": len(source_matched),
+        "pairs": pairs[:8],
+        "interpretation": (
+            "Compares MuJoCo material RGB against Isaac UsdUVTexture scale/fallback. "
+            "A squared match means the prepared USD darkened texture response before "
+            "the backend rendered it."
+        ),
+    }
+
+
+def _material_texture_scale_pair_status(
+    *,
+    scale_delta: float | None,
+    fallback_delta: float | None,
+    squared_scale_delta: float | None,
+    squared_fallback_delta: float | None,
+) -> str:
+    direct_values = [value for value in (scale_delta, fallback_delta) if value is not None]
+    squared_values = [
+        value for value in (squared_scale_delta, squared_fallback_delta) if value is not None
+    ]
+    direct_delta = max(direct_values) if direct_values else None
+    squared_delta = max(squared_values) if squared_values else None
+    if squared_delta is not None and squared_delta <= 0.001:
+        if direct_delta is None or direct_delta > 0.01:
+            return "likely_squared"
+    if direct_delta is not None and direct_delta <= 0.001:
+        return "source_rgba_matched"
+    return "unclassified"
+
+
+def _first_rgb_triplet(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        return [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
+
+
+def _rgb_max_abs_delta(left: list[float] | None, right: list[float] | None) -> float | None:
+    if left is None or right is None or len(left) < 3 or len(right) < 3:
+        return None
+    return max(abs(float(left[index]) - float(right[index])) for index in range(3))
+
+
 def _genesis_materialized_render_contract(output_dir: Path) -> dict[str, Any]:
     asset_dir = output_dir / "genesis" / "camera_views" / "prepared_usd_visual_asset"
     obj_path = asset_dir / "prepared_usd_visual_asset.obj"
@@ -5563,8 +5687,11 @@ def _genesis_object_material_contract(
         return {"status": genesis.get("status"), "materials": [], "texture_files": []}
     materials = genesis.get("materials") if isinstance(genesis.get("materials"), dict) else {}
     category_tokens = _genesis_material_search_tokens(category, visual_audit)
-    matches = []
+    matches = _genesis_visual_audit_material_matches(materials, visual_audit)
+    match_source = "visual_audit_material_names" if matches else "material_search_tokens"
     for name, material in materials.items():
+        if matches:
+            break
         lowered = str(name).lower()
         if any(token in lowered for token in category_tokens):
             matches.append({"material_path": name, **material})
@@ -5580,6 +5707,7 @@ def _genesis_object_material_contract(
         "status": "matched_by_material_name" if matches else "no_category_material_match",
         "object_key": object_key,
         "category": category,
+        "match_source": match_source if matches else "none",
         "search_tokens": category_tokens,
         "material_count": len(matches),
         "materials": sorted(
@@ -5591,6 +5719,26 @@ def _genesis_object_material_contract(
         "material_evidence": matches[:8],
         "visual_audit": visual_audit,
     }
+
+
+def _genesis_visual_audit_material_matches(
+    materials: dict[str, Any],
+    visual_audit: dict[str, Any],
+) -> list[dict[str, Any]]:
+    names = [
+        str(name)
+        for name in visual_audit.get("material_names") or []
+        if isinstance(name, str) and name
+    ]
+    matches = []
+    seen: set[str] = set()
+    for name in names:
+        material = materials.get(name)
+        if not isinstance(material, dict) or name in seen:
+            continue
+        seen.add(name)
+        matches.append({"material_path": name, **material})
+    return matches
 
 
 def _genesis_material_search_tokens(category: str, visual_audit: dict[str, Any]) -> list[str]:
@@ -7760,6 +7908,11 @@ def _material_response_diagnostics_section(manifest: dict[str, Any]) -> str:
         )
         mujoco = item.get("mujoco") if isinstance(item.get("mujoco"), dict) else {}
         isaac = item.get("isaac") if isinstance(item.get("isaac"), dict) else {}
+        scale_response = (
+            item.get("material_scale_response")
+            if isinstance(item.get("material_scale_response"), dict)
+            else {}
+        )
         genesis = item.get("genesis") if isinstance(item.get("genesis"), dict) else {}
         rows.append(
             "<tr>"
@@ -7774,6 +7927,7 @@ def _material_response_diagnostics_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(_short_list_text(mujoco.get('materials')))}</td>"
             f"<td>{html.escape(str(isaac.get('status', '')))}</td>"
             f"<td>{html.escape(_short_list_text(isaac.get('materials')))}</td>"
+            f"<td>{html.escape(str(scale_response.get('status', '')))}</td>"
             f"<td>{html.escape(str(genesis.get('status', '')))}</td>"
             f"<td>{html.escape(_short_list_text(genesis.get('materials')))}</td>"
             f"<td>{html.escape(_short_list_text(genesis.get('texture_files')))}</td>"
@@ -7793,6 +7947,7 @@ def _material_response_diagnostics_section(manifest: dict[str, Any]) -> str:
             "MuJoCo materials",
             "Isaac status",
             "Isaac materials",
+            "Texture scale",
             "Genesis status",
             "Genesis materials",
             "Genesis textures",
@@ -7804,6 +7959,7 @@ def _material_response_diagnostics_section(manifest: dict[str, Any]) -> str:
         f"samples={diagnostics.get('sample_count')}; "
         f"material_like={diagnostics.get('material_like_signal_count')}; "
         f"shared_brightness_tone={diagnostics.get('shared_brightness_tone_signal_count')}; "
+        f"squared_scale={diagnostics.get('likely_squared_texture_scale_count')}; "
         f"mujoco_parse={diagnostics.get('mujoco_parse_status')}; "
         f"isaac_parse={diagnostics.get('isaac_parse_status')}; "
         f"genesis_material_parse={diagnostics.get('genesis_material_parse_status')}. "
