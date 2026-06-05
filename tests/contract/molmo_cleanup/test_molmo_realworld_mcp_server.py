@@ -550,7 +550,7 @@ def _clean_raw_fpv_candidate(
         source_observation_id=observation_id,
         category=category,
         evidence_note=f"{category} visible item for cleanup",
-        image_region={"type": "verbal_region", "value": f"visible {category} item"},
+        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
     )
     if not candidate.get("ok"):
         return None
@@ -810,7 +810,7 @@ def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(
             source_observation_id=observation["raw_fpv_observation"]["observation_id"],
             category="tomato",
             evidence_note="round produce item on the desk",
-            image_region={"type": "verbal_region", "value": "front of desk"},
+            image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         )
         assert candidate["ok"] is True
         assert server.call_tool("pick", object_id=candidate["object_id"])["ok"] is True
@@ -904,7 +904,7 @@ def test_realworld_mcp_raw_fpv_compact_state_lists_actionable_pending_handles(
             source_observation_id=observation["raw_fpv_observation"]["observation_id"],
             category="tomato",
             evidence_note="round produce item on the desk",
-            image_region={"type": "verbal_region", "value": "front of desk"},
+            image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         )
         assert candidate["ok"] is True
         assert candidate["required_next_tool"] == "pick"

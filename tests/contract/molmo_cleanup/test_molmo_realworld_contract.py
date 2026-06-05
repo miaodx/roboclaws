@@ -146,6 +146,42 @@ def test_realworld_public_tools_do_not_expose_private_targets_or_global_inventor
     _assert_no_forbidden_keys(observation)
 
 
+def test_world_label_candidate_without_reviewable_fpv_bbox_is_not_actionable() -> None:
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    observation = _first_non_empty_observation(contract)
+    detection = next(
+        item for item in observation["visible_object_detections"] if item["cleanup_recommended"]
+    )
+    handle = detection["object_id"]
+    contract._detections_by_handle[handle].pop("image_bbox", None)  # noqa: SLF001
+    contract._detections_by_handle[handle]["image_region"] = {  # noqa: SLF001
+        "type": "verbal_region",
+        "value": "unclear object near the center",
+    }
+    contract._detections_by_handle[handle].pop("visual_grounding_evidence", None)  # noqa: SLF001
+    contract._detections_by_handle[handle]["actionability_status"] = (  # noqa: SLF001
+        "needs_visual_evidence"
+    )
+
+    navigation = contract.navigate_to_object(handle)
+    picked = contract.pick(handle)
+    worklist_item = next(
+        item
+        for item in contract.cleanup_worklist_payload()["objects"]
+        if item["object_id"] == handle
+    )
+
+    assert navigation["ok"] is False
+    assert navigation["error_reason"] == "visual_evidence_not_reviewable"
+    assert navigation["required_next_tool"] == "observe"
+    assert navigation["visual_grounding_evidence"]["reviewability_status"] == "not_reviewable"
+    assert picked["ok"] is False
+    assert picked["error_reason"] == "visual_evidence_not_reviewable"
+    assert worklist_item["cleanup_recommended"] is False
+    assert worklist_item["actionability_status"] == "needs_visual_evidence"
+    _assert_no_forbidden_keys(navigation)
+
+
 def test_world_labels_sanitized_observations_omit_destination_oracle_fields() -> None:
     rich_contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     rich_observation = _first_non_empty_observation(rich_contract)
@@ -1320,7 +1356,7 @@ def test_realworld_raw_fpv_mode_suppresses_structured_detections() -> None:
     assert "navigate_to_visual_candidate" in observation["instruction"]
     assert "omit target_fixture_id" in observation["instruction"]
     assert "candidate_fixture_id/recommended_tool" in observation["instruction"]
-    assert "image_region={type:verbal_region,value:front of desk}" in observation["instruction"]
+    assert "image_region={type:bbox,value:[x,y,width,height]}" in observation["instruction"]
     assert "declare_visual_candidates" not in observation["instruction"]
     assert agent_view["perception_mode"] == RAW_FPV_ONLY_MODE
     assert agent_view["structured_detections_available"] is False
@@ -1749,7 +1785,7 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
         category="tomato",
         target_fixture_id="fridge_01",
         evidence_note="round produce item on the desk",
-        image_region={"type": "verbal_region", "value": "front of desk"},
+        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -1760,7 +1796,59 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
     assert response["declaration_strategy"] == "inline_on_navigate"
     assert response["required_next_tool"] == "pick"
     assert response["model_declared_observation"]["grounding_status"] == "resolved"
+    assert response["actionability_status"] == "actionable"
+    assert (
+        response["visual_grounding_evidence"]["reviewability_status"]
+        == "reviewable"
+    )
+    assert response["visual_grounding_evidence"]["bbox_coordinate_space"] == "normalized_xywh"
     assert contract.pick(response["object_id"])["ok"] is True
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_raw_fpv_visual_candidate_requires_reviewable_fpv_bbox() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["room_id"] == "work_area"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="tomato",
+        target_fixture_id="fridge_01",
+        evidence_note="round produce item on the desk",
+        image_region={"type": "verbal_region", "value": "front of desk"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    declaration = response["model_declared_observation"]
+    evidence = response["visual_grounding_evidence"]
+    assert response["ok"] is False
+    assert response["error_reason"] == "visual_evidence_not_reviewable"
+    assert response["required_next_tool"] == "observe"
+    assert response["actionability_status"] == "needs_visual_evidence"
+    assert declaration["grounding_status"] == "resolved"
+    assert declaration["actionability_status"] == "needs_visual_evidence"
+    assert evidence["schema"] == "visual_grounding_evidence_v1"
+    assert evidence["camera_frame"] == "agent_facing_fpv"
+    assert evidence["reviewability_status"] == "not_reviewable"
+    assert evidence["reviewability_reason"] == "missing_bbox"
+    assert contract.pick(response["object_id"])["error_reason"] == "visual_evidence_not_reviewable"
+    worklist_item = next(
+        item
+        for item in contract.cleanup_worklist_payload()["objects"]
+        if item["object_id"] == response["object_id"]
+    )
+    assert worklist_item["cleanup_recommended"] is False
+    assert worklist_item["actionability_status"] == "needs_visual_evidence"
     _assert_no_forbidden_keys(response)
 
 
@@ -1795,7 +1883,7 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
         evidence_note="round produce item on the desk",
-        image_region={"type": "verbal_region", "value": "front of desk"},
+        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -1814,6 +1902,7 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
         item for item in worklist["objects"] if item["object_id"] == response["object_id"]
     )
     assert worklist_item["cleanup_recommended"] is True
+    assert worklist_item["actionability_status"] == "actionable"
     assert worklist_item["candidate_fixture_id"] == target_anchor_id
     assert worklist_item["recommended_tool"] == "place_inside"
     assert contract.pick(response["object_id"])["ok"] is True
@@ -1838,7 +1927,7 @@ def test_minimal_raw_fpv_visual_candidate_requires_public_destination() -> None:
         observation["raw_fpv_observation"]["observation_id"],
         category="book",
         evidence_note="book visible on nearby surface",
-        image_region={"type": "verbal_region", "value": "center"},
+        image_region={"type": "bbox", "value": [0.2, 0.2, 0.2, 0.2]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -1874,7 +1963,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
         category="tomato",
         target_fixture_id="fridge_01",
         evidence_note="round produce item on the desk",
-        image_region={"type": "verbal_region", "value": "front of desk"},
+        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -1883,7 +1972,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
         category="tomato",
         target_fixture_id="fridge_01",
         evidence_note="same produce item before pick",
-        image_region={"type": "verbal_region", "value": "front of desk"},
+        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -1909,7 +1998,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
         category="food",
         target_fixture_id="fridge_01",
         evidence_note="produce-like object already in the fridge area",
-        image_region={"type": "verbal_region", "value": "inside fridge area"},
+        image_region={"type": "bbox", "value": [0.2, 0.2, 0.2, 0.2]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -1965,8 +2054,8 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
     )
     assert "target_fixture_id" not in recovery["valid_example"]
     assert {
-        "type": "verbal_region",
-        "value": "front of desk",
+        "type": "bbox",
+        "value": [0.1, 0.2, 0.3, 0.4],
     } in recovery["accepted_image_region_forms"]
     assert (
         contract.agent_view_payload()["model_declared_observation_evidence"]["observation_count"]
@@ -1992,8 +2081,8 @@ def test_realworld_rejects_malformed_model_declared_candidate() -> None:
     assert missing_region["candidate_error"]["field"] == "image_region"
     assert "valid navigate_to_visual_candidate example" in missing_region["recovery_hint"]
     assert missing_region["raw_fpv_candidate_recovery"]["valid_example"]["image_region"] == {
-        "type": "verbal_region",
-        "value": "front of desk",
+        "type": "bbox",
+        "value": [0.1, 0.2, 0.3, 0.4],
     }
     _assert_no_forbidden_keys(missing_region)
 
@@ -2064,7 +2153,7 @@ def test_realworld_model_declared_grounding_accepts_public_category_families() -
                 "category": "tomato",
                 "target_fixture_id": "fridge_01",
                 "evidence_note": "round produce item on the desk",
-                "image_region": {"type": "verbal_region", "value": "front of desk"},
+                "image_region": {"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
             }
         ],
         producer_type="main_cleanup_agent",
@@ -2097,7 +2186,7 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
                 "category": "toy",
                 "target_fixture_id": "bookshelf_01",
                 "evidence_note": "toy-like object on the coffee table",
-                "image_region": {"type": "verbal_region", "value": "coffee table"},
+                "image_region": {"type": "bbox", "value": [0.2, 0.2, 0.2, 0.2]},
             }
         ],
         producer_type="main_cleanup_agent",
@@ -2127,7 +2216,7 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
         target_fixture_id="tvstand_01",
         source_fixture_id="tvstand_01",
         evidence_note="black laptop on the sofa cushion",
-        image_region={"type": "point", "value": [390, 230]},
+        image_region={"type": "bbox", "value": [0.18, 0.22, 0.22, 0.18]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -2136,7 +2225,7 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
         category="toy",
         target_fixture_id="toybin_01",
         evidence_note="teddy bear plush on the sofa",
-        image_region={"type": "verbal_region", "value": "sofa cushion"},
+        image_region={"type": "bbox", "value": [0.48, 0.34, 0.22, 0.2]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -2180,7 +2269,7 @@ def test_realworld_raw_fpv_grounding_uses_same_room_fallback() -> None:
         category="book",
         target_fixture_id="shelf_01",
         evidence_note="book visible on a neighboring shelf in the same room",
-        image_region={"type": "verbal_region", "value": "right side shelf"},
+        image_region={"type": "bbox", "value": [0.62, 0.28, 0.16, 0.18]},
         producer_type="main_cleanup_agent",
         producer_id="test_agent",
     )
@@ -2357,11 +2446,11 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
             },
             "candidates": [
                 {
-                    "category": "dish",
+                    "category": "mug",
                     "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
                     "confidence": 0.8,
-                    "evidence_note": "fake dish on public camera frame",
-                    "source_fixture_id": "counter_01",
+                    "evidence_note": "fake mug on sofa from public camera frame",
+                    "source_fixture_id": "sofa_01",
                     "destination_hint": {
                         "candidate_fixture_id": "bookshelf_01",
                         "confidence": 0.9,
@@ -2380,7 +2469,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "kitchen"
+        if item["room_id"] == "living_area"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
 
@@ -2403,6 +2492,11 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     assert client.last_request["image"]["height"] == 10
     assert declaration["producer_type"] == "external_visual_grounding_service"
     assert declaration["visual_grounding_pipeline"]["pipeline_id"] == "fake-http"
+    assert declaration["visual_grounding_evidence"]["schema"] == "visual_grounding_evidence_v1"
+    assert declaration["visual_grounding_evidence"]["producer_id"] == "fake-http"
+    assert declaration["visual_grounding_evidence"]["reviewability_status"] == "reviewable"
+    assert declaration["visual_grounding_evidence"]["bbox_coordinate_space"] == "normalized_xywh"
+    assert declaration["actionability_status"] == "actionable"
     assert declaration["visual_grounding_destination_hint"]["candidate_fixture_id"] == (
         "bookshelf_01"
     )
@@ -2422,6 +2516,8 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     assert runtime_observed["producer_id"] == "fake-http"
     assert runtime_observed["source_observation_id"] == declaration["source_observation_id"]
     assert runtime_observed["image_region"]["type"] == "bbox"
+    assert runtime_observed["visual_grounding_evidence"]["reviewability_status"] == "reviewable"
+    assert runtime_observed["actionability"] == "actionable"
     _assert_no_forbidden_keys(response)
 
 

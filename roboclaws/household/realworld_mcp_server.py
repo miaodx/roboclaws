@@ -921,6 +921,7 @@ def _compact_model_declared_observation(item: dict[str, Any]) -> dict[str, Any]:
             "grounding_basis",
             "recovery_hint",
             "actionability_status",
+            "visual_grounding_evidence",
             "visual_grounding_destination_hint",
             "image_dimensions",
             "visual_grounding_overlay",
@@ -960,6 +961,8 @@ def _compact_camera_model_candidate(item: dict[str, Any]) -> dict[str, Any]:
             "grounding_status",
             "grounding_confidence",
             "grounding_basis",
+            "actionability_status",
+            "visual_grounding_evidence",
         ),
     )
     support_estimate = item.get("support_estimate")
@@ -1108,8 +1111,10 @@ def _compact_worklist_object(item: dict[str, Any]) -> dict[str, Any]:
             "last_waypoint_id",
             "candidate_fixture_id",
             "candidate_source",
+            "actionability_status",
             "cleanup_recommended",
             "recommended_tool",
+            "visual_grounding_evidence",
         ),
     )
 
