@@ -91,6 +91,7 @@ GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT_SOURCE = (
     "lift and gamma correction so room views remain reviewable after material "
     "albedo baking."
 )
+GENESIS_RUNTIME_POSE_OVERLAY_THRESHOLD_M = 0.25
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -248,6 +249,7 @@ def _write_real_camera_views(
                 scene_usd=scene_usd,
                 output_dir=args.output_dir,
                 native_error=exc,
+                runtime_object_positions=_runtime_object_positions_from_request(request),
             )
         cameras = []
         for view in request.get("views") or []:
@@ -511,11 +513,13 @@ def _add_prepared_usd_visual_fallback(
     scene_usd: Path,
     output_dir: Path,
     native_error: Exception,
+    runtime_object_positions: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     try:
         visual_asset = _extract_materialized_usd_visual_asset(
             scene_usd,
             output_dir / "prepared_usd_visual_asset",
+            runtime_object_positions=runtime_object_positions,
         )
         scene.add_entity(
             morph=gs.morphs.Mesh(
@@ -632,7 +636,12 @@ def _write_fake_camera_views(
     }
 
 
-def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) -> dict[str, Any]:
+def _extract_materialized_usd_visual_asset(
+    scene_usd: Path,
+    output_dir: Path,
+    *,
+    runtime_object_positions: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     try:
         from pxr import Gf, Usd, UsdGeom
     except Exception as exc:
@@ -656,6 +665,10 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
     face_lines: list[str] = []
     materials: dict[str, dict[str, Any]] = {}
     material_cache: dict[tuple[Any, ...], str] = {}
+    metadata_objects = _load_scene_metadata_objects(scene_usd)
+    runtime_pose_index = _index_runtime_object_positions(runtime_object_positions)
+    object_audit_records: dict[str, dict[str, Any]] = {}
+    object_vertex_indices: dict[str, list[int]] = {}
     copied_textures: dict[
         tuple[str, tuple[float, float, float], tuple[float, float, float]], str
     ] = {}
@@ -664,6 +677,7 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
     source_mesh_count = 0
     skipped_mesh_count = 0
     skipped_guide_mesh_count = 0
+    skipped_collision_mesh_count = 0
     skipped_invisible_mesh_count = 0
     bound_material_count = 0
     textured_material_count = 0
@@ -677,6 +691,16 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
         mesh = UsdGeom.Mesh(prim)
         gprim = UsdGeom.Gprim(prim)
         purpose = str(gprim.GetPurposeAttr().Get() or "default")
+        object_key = _usd_object_key_for_prim(prim)
+        if _usd_mesh_is_collision_guide(prim):
+            skipped_collision_mesh_count += 1
+            _record_visual_object_audit_mesh(
+                object_audit_records,
+                object_key=object_key,
+                metadata_objects=metadata_objects,
+                collision_mesh=True,
+            )
+            continue
         if purpose == "guide":
             skipped_guide_mesh_count += 1
             continue
@@ -730,6 +754,13 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
             for face_id in subset_face_ids:
                 if 0 <= face_id < len(face_materials):
                     face_materials[face_id] = subset_material
+        _record_visual_object_audit_mesh(
+            object_audit_records,
+            object_key=object_key,
+            metadata_objects=metadata_objects,
+            material_names=face_materials,
+            materials=materials,
+        )
 
         transform = UsdGeom.Xformable(prim).ComputeLocalToWorldTransform(
             Usd.TimeCode.Default()
@@ -737,9 +768,20 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
         transform_matrix = np.asarray(transform, dtype=np.float64)
         reverse_winding = bool(np.linalg.det(transform_matrix[:3, :3]) < 0)
         base_vertex_index = len(vertices)
+        world_points: list[tuple[float, float, float]] = []
         for point in points:
             world = transform.Transform(Gf.Vec3d(float(point[0]), float(point[1]), float(point[2])))
-            vertices.append((float(world[0]), float(world[1]), float(world[2])))
+            world_point = (float(world[0]), float(world[1]), float(world[2]))
+            world_points.append(world_point)
+        _record_visual_object_audit_bounds(
+            object_audit_records,
+            object_key=object_key,
+            world_points=world_points,
+        )
+        vertices.extend(world_points)
+        object_vertex_indices.setdefault(object_key, []).extend(
+            range(base_vertex_index, base_vertex_index + len(world_points))
+        )
 
         uv_cache: dict[str, dict[str, Any] | None] = {}
         cursor = 0
@@ -790,6 +832,13 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
     if not vertices or not face_lines:
         raise RuntimeError("prepared USD contains no visible renderable UsdGeom.Mesh geometry")
 
+    runtime_pose_overlay_count = _apply_runtime_pose_overlays(
+        vertices,
+        object_audit_records=object_audit_records,
+        object_vertex_indices=object_vertex_indices,
+        runtime_pose_index=runtime_pose_index,
+    )
+
     for material in materials.values():
         if material.get("texture_relpath"):
             textured_material_count += 1
@@ -830,18 +879,527 @@ def _extract_materialized_usd_visual_asset(scene_usd: Path, output_dir: Path) ->
         "source_mesh_count": source_mesh_count,
         "skipped_mesh_count": skipped_mesh_count,
         "skipped_guide_mesh_count": skipped_guide_mesh_count,
+        "skipped_collision_mesh_count": skipped_collision_mesh_count,
         "skipped_invisible_mesh_count": skipped_invisible_mesh_count,
         "bound_material_count": bound_material_count,
         "material_count": len(materials),
         "textured_material_count": textured_material_count,
         "texture_count": len(copied_textures),
         "baked_texture_count": baked_texture_count,
+        "runtime_pose_overlay_count": runtime_pose_overlay_count,
+        "runtime_pose_overlay_threshold_m": GENESIS_RUNTIME_POSE_OVERLAY_THRESHOLD_M,
+        "converted_texture_count": sum(
+            1 for material in materials.values() if material.get("texture_converted")
+        ),
         "vertex_count": len(vertices),
         "uv_count": len(texcoords),
         "triangle_count": triangle_count,
         "textured_triangle_count": textured_triangle_count,
         "format": "obj_mtl",
-        "visual_filter": "visible_usd_meshes_excluding_guide_purpose",
+        "visual_filter": "visible_render_meshes_excluding_guide_and_collision_meshes",
+        "visual_object_audit": _finalize_visual_object_audit(
+            object_audit_records,
+            metadata_source=scene_usd.with_name("scene_metadata.json"),
+            runtime_pose_overlay_threshold_m=GENESIS_RUNTIME_POSE_OVERLAY_THRESHOLD_M,
+        ),
+    }
+
+
+def _load_scene_metadata_objects(scene_usd: Path) -> dict[str, dict[str, Any]]:
+    metadata_path = scene_usd.with_name("scene_metadata.json")
+    try:
+        payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    objects = payload.get("objects") if isinstance(payload, dict) else {}
+    if not isinstance(objects, dict):
+        return {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for key, value in objects.items():
+        if not isinstance(value, dict):
+            continue
+        text_key = str(key)
+        indexed[text_key] = value
+        _index_scene_metadata_alias(indexed, text_key, value)
+    return indexed
+
+
+def _index_scene_metadata_alias(
+    indexed: dict[str, dict[str, Any]],
+    object_key: str,
+    metadata: dict[str, Any],
+) -> None:
+    aliases = {
+        object_key,
+        str(metadata.get("hash_name") or ""),
+        _safe_obj_token(object_key),
+        _safe_obj_token(str(metadata.get("hash_name") or "")),
+        _loose_obj_token(object_key),
+        _loose_obj_token(str(metadata.get("hash_name") or "")),
+    }
+    name_map = metadata.get("name_map") if isinstance(metadata.get("name_map"), dict) else {}
+    bodies = name_map.get("bodies") if isinstance(name_map.get("bodies"), dict) else {}
+    for body_key in bodies:
+        aliases.add(str(body_key))
+        aliases.add(_safe_obj_token(str(body_key)))
+        aliases.add(_loose_obj_token(str(body_key)))
+    for alias in aliases:
+        if alias:
+            indexed.setdefault(alias, metadata)
+
+
+def _usd_object_key_for_prim(prim: Any) -> str:
+    parts = [part for part in str(prim.GetPath()).split("/") if part]
+    if "Geometry" in parts:
+        index = parts.index("Geometry")
+        if index + 1 < len(parts):
+            return parts[index + 1]
+    return parts[0] if parts else str(prim.GetPath())
+
+
+def _usd_mesh_is_collision_guide(prim: Any) -> bool:
+    path_text = str(prim.GetPath())
+    if "MeshCollider" in path_text or "collision" in path_text.lower():
+        return True
+    applied_schemas = {str(schema) for schema in prim.GetAppliedSchemas()}
+    return bool(
+        applied_schemas
+        & {
+            "PhysicsCollisionAPI",
+            "PhysicsMeshCollisionAPI",
+            "PhysicsMassAPI",
+        }
+    )
+
+
+def _record_visual_object_audit_mesh(
+    records: dict[str, dict[str, Any]],
+    *,
+    object_key: str,
+    metadata_objects: dict[str, dict[str, Any]],
+    material_names: list[str | None] | None = None,
+    materials: dict[str, dict[str, Any]] | None = None,
+    collision_mesh: bool = False,
+) -> dict[str, Any]:
+    record = records.get(object_key)
+    if record is None:
+        metadata = _scene_metadata_for_object_key(object_key, metadata_objects)
+        category = metadata.get("category") or _scene_structure_category(object_key)
+        record = {
+            "object_key": object_key,
+            "category": category,
+            "asset_id": metadata.get("asset_id") or "",
+            "object_id": metadata.get("object_id") or "",
+            "is_static": (
+                metadata.get("is_static")
+                if "is_static" in metadata
+                else _scene_structure_static_flag(object_key)
+            ),
+            "parent": metadata.get("parent") or "",
+            "room_id": metadata.get("room_id"),
+            "render_mesh_count": 0,
+            "collision_mesh_count": 0,
+            "material_names": [],
+            "texture_relpaths": [],
+            "converted_texture_relpaths": [],
+            "converted_texture_names": [],
+            "texture_modes": [],
+            "metadata_match": metadata.get("_audit_match")
+            or ("synthetic_scene_structure" if category else "unmatched"),
+        }
+        records[object_key] = record
+    if collision_mesh:
+        record["collision_mesh_count"] = int(record.get("collision_mesh_count") or 0) + 1
+        return record
+    record["render_mesh_count"] = int(record.get("render_mesh_count") or 0) + 1
+    for name in sorted({str(item) for item in material_names or [] if item}):
+        _append_unique(record["material_names"], name)
+        material = materials.get(name, {}) if isinstance(materials, dict) else {}
+        relpath = material.get("texture_relpath")
+        if relpath:
+            _append_unique(record["texture_relpaths"], str(relpath))
+        mode = material.get("texture_mode")
+        if mode:
+            _append_unique(record["texture_modes"], str(mode))
+        if material.get("texture_converted") and relpath:
+            _append_unique(record["converted_texture_relpaths"], str(relpath))
+            source_name = material.get("source_texture_name") or Path(str(relpath)).name
+            _append_unique(record["converted_texture_names"], str(source_name))
+    return record
+
+
+def _append_unique(items: list[Any], value: Any) -> None:
+    if value not in items:
+        items.append(value)
+
+
+def _record_visual_object_audit_bounds(
+    records: dict[str, dict[str, Any]],
+    *,
+    object_key: str,
+    world_points: list[tuple[float, float, float]],
+    replace: bool = False,
+) -> None:
+    if not world_points:
+        return
+    record = records.get(object_key)
+    if record is None:
+        return
+    mins = [min(point[index] for point in world_points) for index in range(3)]
+    maxs = [max(point[index] for point in world_points) for index in range(3)]
+    existing_min = record.get("bounds_min")
+    existing_max = record.get("bounds_max")
+    if not replace and _is_numeric_vec3(existing_min) and _is_numeric_vec3(existing_max):
+        mins = [min(float(existing_min[index]), mins[index]) for index in range(3)]
+        maxs = [max(float(existing_max[index]), maxs[index]) for index in range(3)]
+    record["bounds_min"] = mins
+    record["bounds_max"] = maxs
+    record["bounds_center"] = [(mins[index] + maxs[index]) * 0.5 for index in range(3)]
+    record["bounds_size"] = [maxs[index] - mins[index] for index in range(3)]
+
+
+def _runtime_object_positions_from_request(request: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    raw_positions = (
+        request.get("runtime_object_positions")
+        if isinstance(request.get("runtime_object_positions"), dict)
+        else {}
+    )
+    positions: dict[str, dict[str, Any]] = {}
+    for object_key, item in raw_positions.items():
+        if not isinstance(item, dict) or not _is_numeric_vec3(item.get("position")):
+            continue
+        positions[str(object_key)] = {
+            "object_key": str(object_key),
+            "category": item.get("category") or "",
+            "position": [float(value) for value in item["position"][:3]],
+            "seeded_start_receptacle_id": item.get("seeded_start_receptacle_id") or "",
+            "target_receptacle_id": item.get("target_receptacle_id") or "",
+            "location_id": item.get("location_id") or "",
+            "location_relation": item.get("location_relation") or "",
+            "contained_in": item.get("contained_in"),
+            "upstream_object_id": item.get("upstream_object_id") or "",
+        }
+    return positions
+
+
+def _index_runtime_object_positions(
+    runtime_object_positions: dict[str, dict[str, Any]] | None,
+) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    positions = (
+        runtime_object_positions
+        if isinstance(runtime_object_positions, dict)
+        else {}
+    )
+    for object_key, item in positions.items():
+        if not isinstance(item, dict) or not _is_numeric_vec3(item.get("position")):
+            continue
+        payload = dict(item)
+        payload.setdefault("object_key", str(object_key))
+        for alias in _runtime_pose_index_aliases(str(object_key)):
+            if alias:
+                index.setdefault(alias, payload)
+    return index
+
+
+def _runtime_pose_index_aliases(object_key: str) -> set[str]:
+    aliases = {object_key, _safe_obj_token(object_key), _loose_obj_token(object_key)}
+    return {alias for alias in aliases if alias}
+
+
+def _runtime_pose_lookup_aliases(object_key: str) -> list[str]:
+    candidates = [object_key]
+    if object_key.startswith("tn__"):
+        candidates.append(object_key[4:])
+    candidates.extend(_trim_usd_name_suffixes(object_key))
+    for candidate in list(candidates):
+        if candidate.startswith("tn__"):
+            candidates.append(candidate[4:])
+        candidates.extend(_trim_usd_name_suffixes(candidate))
+    aliases: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        for alias in (candidate, _safe_obj_token(candidate), _loose_obj_token(candidate)):
+            if alias and alias not in seen:
+                seen.add(alias)
+                aliases.append(alias)
+    return aliases
+
+
+def _apply_runtime_pose_overlays(
+    vertices: list[tuple[float, float, float]],
+    *,
+    object_audit_records: dict[str, dict[str, Any]],
+    object_vertex_indices: dict[str, list[int]],
+    runtime_pose_index: dict[str, dict[str, Any]],
+) -> int:
+    overlay_count = 0
+    for object_key, record in object_audit_records.items():
+        pose_overlay = _runtime_pose_overlay_for_object(
+            object_key=object_key,
+            record=record,
+            runtime_pose_index=runtime_pose_index,
+        )
+        if pose_overlay is None:
+            continue
+        vertex_indices = object_vertex_indices.get(object_key) or []
+        if not vertex_indices:
+            continue
+        _record_runtime_pose_overlay(record, pose_overlay)
+        translation = pose_overlay["translation"]
+        adjusted_points: list[tuple[float, float, float]] = []
+        for vertex_index in vertex_indices:
+            vertex = vertices[vertex_index]
+            adjusted = (
+                vertex[0] + translation[0],
+                vertex[1] + translation[1],
+                vertex[2] + translation[2],
+            )
+            vertices[vertex_index] = adjusted
+            adjusted_points.append(adjusted)
+        _record_visual_object_audit_bounds(
+            object_audit_records,
+            object_key=object_key,
+            world_points=adjusted_points,
+            replace=True,
+        )
+        overlay_count += 1
+    return overlay_count
+
+
+def _runtime_pose_overlay_for_object(
+    *,
+    object_key: str,
+    record: dict[str, Any],
+    runtime_pose_index: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    if record.get("is_static") is not False:
+        return None
+    center = record.get("bounds_center")
+    if not _is_numeric_vec3(center):
+        return None
+    runtime_pose: dict[str, Any] | None = None
+    runtime_match = ""
+    for alias in _runtime_pose_lookup_aliases(object_key):
+        runtime_pose = runtime_pose_index.get(alias)
+        if runtime_pose is not None:
+            runtime_match = alias
+            break
+    if runtime_pose is None or not _is_numeric_vec3(runtime_pose.get("position")):
+        return None
+    source_center = [float(value) for value in center[:3]]
+    target_center = [float(value) for value in runtime_pose["position"][:3]]
+    delta_m = _distance_3d(source_center, target_center)
+    if delta_m <= GENESIS_RUNTIME_POSE_OVERLAY_THRESHOLD_M:
+        return None
+    translation = [
+        target_center[index] - source_center[index]
+        for index in range(3)
+    ]
+    return {
+        "status": "applied",
+        "method": "translation_only_bounds_center_to_molmospaces_runtime_position",
+        "runtime_match": runtime_match,
+        "runtime_object_key": runtime_pose.get("object_key") or "",
+        "threshold_m": GENESIS_RUNTIME_POSE_OVERLAY_THRESHOLD_M,
+        "geometry_delta_m": delta_m,
+        "source_bounds_center": source_center,
+        "target_runtime_position": target_center,
+        "translation": translation,
+        "seeded_start_receptacle_id": runtime_pose.get("seeded_start_receptacle_id") or "",
+        "target_receptacle_id": runtime_pose.get("target_receptacle_id") or "",
+    }
+
+
+def _record_runtime_pose_overlay(record: dict[str, Any], pose_overlay: dict[str, Any]) -> None:
+    record["runtime_pose_overlay"] = pose_overlay
+    record["runtime_pose_overlay_applied"] = True
+    record["runtime_pose_overlay_geometry_delta_m"] = pose_overlay.get("geometry_delta_m")
+    record["runtime_pose_overlay_translation"] = pose_overlay.get("translation")
+
+
+def _is_numeric_vec3(value: Any) -> bool:
+    if not isinstance(value, list) or len(value) < 3:
+        return False
+    try:
+        [float(item) for item in value[:3]]
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
+def _distance_3d(left: list[float], right: list[float]) -> float:
+    return float(
+        sum((float(left[index]) - float(right[index])) ** 2 for index in range(3)) ** 0.5
+    )
+
+
+def _scene_metadata_for_object_key(
+    object_key: str,
+    metadata_objects: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    metadata = metadata_objects.get(object_key)
+    if metadata is not None:
+        return {**metadata, "_audit_match": "exact"}
+    token = _safe_obj_token(object_key)
+    metadata = metadata_objects.get(token)
+    if metadata is not None:
+        return {**metadata, "_audit_match": "normalized_token"}
+    loose_token = _loose_obj_token(object_key)
+    metadata = metadata_objects.get(loose_token)
+    if metadata is not None:
+        return {**metadata, "_audit_match": "loose_token"}
+    if object_key.startswith("tn__"):
+        stripped = object_key[4:]
+        metadata = (
+            metadata_objects.get(stripped)
+            or metadata_objects.get(_safe_obj_token(stripped))
+            or metadata_objects.get(_loose_obj_token(stripped))
+        )
+        if metadata is not None:
+            return {**metadata, "_audit_match": "usd_tn_prefix_alias"}
+        for candidate in _trim_usd_name_suffixes(stripped):
+            metadata = (
+                metadata_objects.get(candidate)
+                or metadata_objects.get(_safe_obj_token(candidate))
+                or metadata_objects.get(_loose_obj_token(candidate))
+            )
+            if metadata is not None:
+                return {**metadata, "_audit_match": "usd_tn_prefix_alias"}
+    for candidate in _trim_usd_name_suffixes(object_key):
+        metadata = (
+            metadata_objects.get(candidate)
+            or metadata_objects.get(_safe_obj_token(candidate))
+            or metadata_objects.get(_loose_obj_token(candidate))
+        )
+        if metadata is not None:
+            return {**metadata, "_audit_match": "usd_suffix_alias"}
+    return {}
+
+
+def _trim_usd_name_suffixes(object_key: str) -> list[str]:
+    candidates: list[str] = []
+    current = object_key
+    for _ in range(4):
+        head, separator, tail = current.rpartition("_")
+        if not separator or not head or not tail:
+            break
+        if not (tail.isdigit() or (len(tail) <= 4 and tail.isalnum())):
+            break
+        current = head
+        candidates.append(current)
+    return candidates
+
+
+def _scene_structure_category(object_key: str) -> str:
+    if object_key.startswith("wall_"):
+        return "RoomWall"
+    if object_key.startswith("room_"):
+        return "RoomShell"
+    if object_key.startswith("floor_"):
+        return "RoomFloor"
+    if object_key.startswith("ceiling_"):
+        return "RoomCeiling"
+    return ""
+
+
+def _scene_structure_static_flag(object_key: str) -> bool | None:
+    if _scene_structure_category(object_key):
+        return True
+    return None
+
+
+def _finalize_visual_object_audit(
+    records: dict[str, dict[str, Any]],
+    *,
+    metadata_source: Path,
+    runtime_pose_overlay_threshold_m: float = GENESIS_RUNTIME_POSE_OVERLAY_THRESHOLD_M,
+) -> dict[str, Any]:
+    objects = []
+    for record in sorted(records.values(), key=lambda item: str(item.get("object_key") or "")):
+        item = dict(record)
+        item["material_count"] = len(item.get("material_names") or [])
+        item["texture_count"] = len(item.get("texture_relpaths") or [])
+        item["converted_texture_count"] = len(item.get("converted_texture_relpaths") or [])
+        objects.append(item)
+    converted = [item for item in objects if int(item.get("converted_texture_count") or 0) > 0]
+    non_static = [
+        item
+        for item in objects
+        if item.get("is_static") is False and int(item.get("render_mesh_count") or 0) > 0
+    ]
+    collision = [item for item in objects if int(item.get("collision_mesh_count") or 0) > 0]
+    runtime_pose_overlay = [
+        item for item in objects if bool(item.get("runtime_pose_overlay_applied"))
+    ]
+    risk_groups = [
+        _visual_object_risk_group(
+            "texture_conversion",
+            converted,
+            meaning="non_rgb_texture_normalized_for_genesis_import",
+        ),
+        _visual_object_risk_group(
+            "non_static_render_object",
+            non_static,
+            meaning="real_movable_clutter_renderer_visibility_parity_risk",
+        ),
+        _visual_object_risk_group(
+            "collision_mesh_filtered",
+            collision,
+            meaning="collider_geometry_removed_from_genesis_visual_package",
+        ),
+        _visual_object_risk_group(
+            "runtime_pose_overlay",
+            runtime_pose_overlay,
+            meaning="non_static_object_translated_to_molmospaces_runtime_pose_for_rendering",
+        ),
+    ]
+    return {
+        "schema": "genesis_visual_asset_object_audit_v1",
+        "metadata_source": str(metadata_source) if metadata_source.is_file() else "",
+        "object_count": len(objects),
+        "render_mesh_object_count": sum(
+            1 for item in objects if int(item.get("render_mesh_count") or 0) > 0
+        ),
+        "texture_conversion_object_count": len(converted),
+        "non_static_render_object_count": len(non_static),
+        "collision_mesh_object_count": len(collision),
+        "runtime_pose_overlay_object_count": len(runtime_pose_overlay),
+        "runtime_pose_overlay_threshold_m": runtime_pose_overlay_threshold_m,
+        "texture_conversion_objects": converted,
+        "non_static_render_objects": non_static,
+        "collision_mesh_objects": collision,
+        "runtime_pose_overlay_objects": runtime_pose_overlay,
+        "risk_groups": risk_groups,
+        "objects": objects,
+        "interpretation": (
+            "Genesis visual package audit groups renderable USD meshes by source object, "
+            "records palette/indexed texture normalization, lists non-static clutter that "
+            "can produce renderer-dependent visibility, confirms collision meshes are not "
+            "imported as visual geometry, and records render-only runtime pose overlays for "
+            "non-static objects whose prepared-USD pose diverges materially from the "
+            "MolmoSpaces runtime pose."
+        ),
+    }
+
+
+def _visual_object_risk_group(
+    risk: str,
+    objects: list[dict[str, Any]],
+    *,
+    meaning: str,
+) -> dict[str, Any]:
+    category_counts: dict[str, int] = {}
+    for item in objects:
+        category = str(item.get("category") or "Uncategorized")
+        category_counts[category] = category_counts.get(category, 0) + 1
+    return {
+        "risk": risk,
+        "meaning": meaning,
+        "object_count": len(objects),
+        "category_counts": dict(
+            sorted(category_counts.items(), key=lambda entry: (-entry[1], entry[0]))
+        ),
     }
 
 
@@ -879,6 +1437,7 @@ def _usd_material_name_for_prim(
         material_info.get("texture_relpath"),
         material_info.get("opacity"),
         material_info.get("uv_name"),
+        material_info.get("texture_converted"),
     )
     if key in material_cache:
         return material_cache[key]
@@ -913,6 +1472,9 @@ def _usd_material_info(
         "uv_name": "st",
         "texture_relpath": None,
         "texture_color_baked": False,
+        "texture_converted": False,
+        "texture_mode": "",
+        "source_texture_name": "",
     }
     for surface_output in material.GetSurfaceOutputs():
         if not surface_output.HasConnectedSource():
@@ -946,6 +1508,8 @@ def _usd_material_info(
                 texture_file = texture_shader.GetInput("file").Get()
                 if isinstance(texture_file, Sdf.AssetPath):
                     texture_path = _resolved_usd_asset_path(texture_file, scene_usd=scene_usd)
+                    material_info["texture_mode"] = _texture_mode(texture_path)
+                    material_info["source_texture_name"] = texture_path.name
                     texture_relpath = _copy_usd_texture(
                         texture_path,
                         texture_dir=texture_dir,
@@ -959,6 +1523,9 @@ def _usd_material_info(
                         material_info["texture_color_baked"] = _texture_color_adjustment_needed(
                             texture_color_scale,
                             texture_color_bias,
+                        )
+                        material_info["texture_converted"] = _texture_conversion_needed(
+                            texture_path,
                         )
                 material_info["uv_name"] = _usd_texture_uv_name(texture_shader) or "st"
         elif diffuse_input:
@@ -1056,6 +1623,8 @@ def _copy_usd_texture(
             )
         except Exception:
             shutil.copy2(texture_path, target)
+    elif _texture_conversion_needed(texture_path):
+        _write_genesis_compatible_texture(texture_path, target=target)
     else:
         shutil.copy2(texture_path, target)
     relpath = f"textures/{filename}"
@@ -1079,6 +1648,29 @@ def _write_color_baked_texture(
         bias = np.asarray(color_bias, dtype="float32").reshape(1, 1, 3)
         array[..., :3] = np.clip(rgb * scale + bias, 0.0, 1.0) * 255.0
         Image.fromarray(np.clip(array, 0, 255).astype("uint8"), mode=converted.mode).save(target)
+
+
+def _texture_conversion_needed(texture_path: Path) -> bool:
+    try:
+        with Image.open(texture_path) as image:
+            return image.mode not in {"RGB", "RGBA"}
+    except Exception:
+        return False
+
+
+def _texture_mode(texture_path: Path) -> str:
+    try:
+        with Image.open(texture_path) as image:
+            return str(image.mode)
+    except Exception:
+        return ""
+
+
+def _write_genesis_compatible_texture(texture_path: Path, *, target: Path) -> None:
+    with Image.open(texture_path) as image:
+        has_alpha = image.mode in {"RGBA", "LA"} or "transparency" in image.info
+        converted = image.convert("RGBA" if has_alpha else "RGB")
+        converted.save(target)
 
 
 def _texture_color_adjustment_needed(
@@ -1221,6 +1813,10 @@ def _color3(value: Any, fallback: tuple[float, float, float]) -> tuple[float, fl
 
 def _safe_obj_token(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in value).strip("_")
+
+
+def _loose_obj_token(value: str) -> str:
+    return "".join(ch.lower() for ch in value if ch.isalnum())
 
 
 def _unique_obj_name(value: str, *, existing: set[str], prefix: str) -> str:

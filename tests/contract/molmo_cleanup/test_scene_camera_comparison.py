@@ -27,6 +27,7 @@ from roboclaws.household.scene_camera_comparison import (
     _candidate_visual_diagnostics,
     _canonical_camera_control_views,
     _contact_sheet_entries,
+    _genesis_movable_object_visibility_diagnostics,
     _image_pair_visual_delta,
     _image_visual_metrics,
     _isaac_view_specs,
@@ -1161,6 +1162,10 @@ def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> N
             "request_artifact": "camera_control_request.json",
             "same_pose_contract": True,
         },
+        "camera_intrinsics_contract": {
+            "resolution": {"width": 64, "height": 48},
+            "requested_lens": {"vertical_fov_deg": 45.0},
+        },
         "lane_registry": {
             "baseline": MOLMOSPACES_LANE_ID,
             "candidates": [ISAAC_LANE_ID, GENESIS_LANE_ID],
@@ -1171,11 +1176,21 @@ def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> N
                 "label": "test view",
                 "room_id": "room_1",
                 "category": "Table",
+                "eye": [0.0, -2.0, 1.0],
+                "target": [0.0, 0.0, 1.0],
             }
         ],
         "lanes": {
             MOLMOSPACES_LANE_ID: {
                 "status": "success",
+                "runtime_object_positions": {
+                    "bowl_01": {
+                        "category": "Bowl",
+                        "position": [0.0, 0.0, 1.0],
+                        "seeded_start_receptacle_id": "diningtable_01",
+                        "target_receptacle_id": "sink_01",
+                    }
+                },
                 "images": {
                     "view_01": {
                         "path": "molmo.png",
@@ -1198,6 +1213,56 @@ def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> N
                 "status": "success",
                 "runtime": {"runtime_mode": "fake"},
                 "scene_usd": "scene.usda",
+                "scene_load": {
+                    "render_only_visual_asset": {
+                        "visual_object_audit": {
+                            "schema": "genesis_visual_asset_object_audit_v1",
+                            "object_count": 2,
+                            "render_mesh_object_count": 2,
+                            "texture_conversion_object_count": 1,
+                            "non_static_render_object_count": 1,
+                            "collision_mesh_object_count": 1,
+                            "metadata_source": "scene_metadata.json",
+                            "interpretation": "audit fixture",
+                            "texture_conversion_objects": [
+                                {
+                                    "object_key": "toilet_01",
+                                    "category": "Toilet",
+                                    "asset_id": "Toilet_1",
+                                    "metadata_match": "exact",
+                                    "texture_modes": ["P"],
+                                    "converted_texture_names": [
+                                        "Toilet1_DefaultMaterial_AlbedoTransparency.png"
+                                    ],
+                                }
+                            ],
+                            "non_static_render_objects": [
+                                {
+                                    "object_key": "bowl_01",
+                                    "category": "Bowl",
+                                    "asset_id": "Bowl_12",
+                                    "metadata_match": "exact",
+                                    "parent": "diningtable_01",
+                                    "room_id": 2,
+                                    "bounds_min": [-0.1, -0.1, 0.95],
+                                    "bounds_max": [0.1, 0.1, 1.05],
+                                    "bounds_center": [0.0, 0.0, 1.0],
+                                    "bounds_size": [0.2, 0.2, 0.1],
+                                }
+                            ],
+                            "collision_mesh_objects": [
+                                {
+                                    "object_key": "bowl_01",
+                                    "category": "Bowl",
+                                    "asset_id": "Bowl_12",
+                                    "metadata_match": "exact",
+                                    "render_mesh_count": 2,
+                                    "collision_mesh_count": 50,
+                                }
+                            ],
+                        }
+                    }
+                },
                 "visual_artifact_provenance": "genesis_real_rgb_render",
                 "images": {
                     "view_01": {
@@ -1224,6 +1289,275 @@ def test_scene_camera_report_includes_optional_genesis_lane(tmp_path: Path) -> N
     assert 'data-image-src="genesis.png"' in html
     assert '<dialog class="image-modal"' in html
     assert "modal.showModal()" in html
+    assert "Genesis Visual Object Audit" in html
+    assert "Alike Object Risk Summary" in html
+    assert "Texture conversion" in html
+    assert "Toilet (1)" in html
+    assert "Movable clutter" in html
+    assert "Bowl (1)" in html
+    assert "Converted Texture Objects" in html
+    assert "Toilet1_DefaultMaterial_AlbedoTransparency.png" in html
+    assert "metadata_match" in html
+    assert "Non-Static Render Objects" in html
+    assert "Genesis Movable Object Visibility" in html
+    assert "In-frame views" in html
+    assert "view_01" in html
+    assert "genesis_movable_object_crops" in html
+    assert "crop-image" in html
+    assert "bowl_01" in html
+    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
+    assert visibility["status"] == "computed"
+    assert visibility["in_frame_object_count"] == 1
+    assert visibility["objects"][0]["object_key"] == "bowl_01"
+    assert visibility["objects"][0]["geometry_status"] == "runtime_pose_match"
+    assert visibility["objects"][0]["geometry_delta_m"] == 0.0
+    assert visibility["objects"][0]["crop_status"] == "written"
+    assert set(visibility["objects"][0]["crops"]) == {
+        MOLMOSPACES_LANE_ID,
+        ISAAC_LANE_ID,
+        GENESIS_LANE_ID,
+    }
+    for crop in visibility["objects"][0]["crops"].values():
+        assert (tmp_path / crop["path"]).is_file()
+
+
+def test_scene_camera_genesis_movable_visibility_flags_dynamic_pose_mismatch(
+    tmp_path: Path,
+) -> None:
+    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
+    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
+    manifest = {
+        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
+        "purpose": "render-only test",
+        "camera_intrinsics_contract": {
+            "resolution": {"width": 64, "height": 48},
+            "requested_lens": {"vertical_fov_deg": 45.0},
+        },
+        "lane_registry": {
+            "baseline": MOLMOSPACES_LANE_ID,
+            "candidates": [GENESIS_LANE_ID],
+        },
+        "canonical_camera_views": [
+            {
+                "view_id": "view_01",
+                "label": "test view",
+                "eye": [0.0, -2.0, 1.0],
+                "target": [0.0, 0.0, 1.0],
+            }
+        ],
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {
+                "status": "success",
+                "runtime_object_positions": {
+                    "bowl_01": {
+                        "category": "Bowl",
+                        "position": [0.0, 4.0, 1.0],
+                        "seeded_start_receptacle_id": "bed_01",
+                        "target_receptacle_id": "sink_01",
+                    }
+                },
+                "images": {
+                    "view_01": {
+                        "path": "molmo.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+            GENESIS_LANE_ID: {
+                "status": "success",
+                "scene_load": {
+                    "render_only_visual_asset": {
+                        "visual_object_audit": {
+                            "schema": "genesis_visual_asset_object_audit_v1",
+                            "non_static_render_objects": [
+                                {
+                                    "object_key": "bowl_01",
+                                    "category": "Bowl",
+                                    "asset_id": "Bowl_12",
+                                    "bounds_min": [-0.1, -0.1, 0.95],
+                                    "bounds_max": [0.1, 0.1, 1.05],
+                                    "bounds_center": [0.0, 0.0, 1.0],
+                                    "bounds_size": [0.2, 0.2, 0.1],
+                                }
+                            ],
+                        }
+                    }
+                },
+                "images": {
+                    "view_01": {
+                        "path": "genesis.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+        },
+    }
+
+    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
+
+    html = report.read_text(encoding="utf-8")
+    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
+    assert visibility["dynamic_pose_mismatch_count"] == 1
+    assert visibility["objects"][0]["geometry_status"] == "dynamic_pose_mismatch"
+    assert visibility["objects"][0]["geometry_delta_m"] == 4.0
+    assert "dynamic_pose_mismatch" in html
+    assert "4.000 m" in html
+
+
+def test_scene_camera_genesis_movable_visibility_matches_sanitized_runtime_alias(
+    tmp_path: Path,
+) -> None:
+    manifest = {
+        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
+        "purpose": "render-only test",
+        "camera_intrinsics_contract": {
+            "resolution": {"width": 64, "height": 48},
+            "requested_lens": {"vertical_fov_deg": 45.0},
+        },
+        "canonical_camera_views": [],
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {
+                "status": "success",
+                "runtime_object_positions": {
+                    "plumber'shelper_d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3": {
+                        "category": "Plunger",
+                        "position": [6.0, 4.0, 0.25],
+                    }
+                },
+            },
+            GENESIS_LANE_ID: {
+                "status": "success",
+                "scene_load": {
+                    "render_only_visual_asset": {
+                        "visual_object_audit": {
+                            "schema": "genesis_visual_asset_object_audit_v1",
+                            "non_static_render_objects": [
+                                {
+                                    "object_key": (
+                                        "tn__plumbershelper_"
+                                        "d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3_aa1"
+                                    ),
+                                    "category": "Plunger",
+                                    "asset_id": "Plunger_3",
+                                    "bounds_min": [5.9, 3.9, 0.2],
+                                    "bounds_max": [6.1, 4.1, 0.3],
+                                    "bounds_center": [6.0, 4.0, 0.25],
+                                    "bounds_size": [0.2, 0.2, 0.1],
+                                }
+                            ],
+                        }
+                    }
+                },
+            },
+        },
+    }
+
+    diagnostics = _genesis_movable_object_visibility_diagnostics(manifest)
+
+    assert diagnostics["objects"][0]["geometry_status"] == "runtime_pose_match"
+    assert diagnostics["objects"][0]["geometry_delta_m"] == 0.0
+
+
+def test_scene_camera_genesis_movable_visibility_accepts_runtime_pose_overlay(
+    tmp_path: Path,
+) -> None:
+    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
+    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
+    manifest = {
+        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
+        "purpose": "render-only test",
+        "camera_intrinsics_contract": {
+            "resolution": {"width": 64, "height": 48},
+            "requested_lens": {"vertical_fov_deg": 45.0},
+        },
+        "lane_registry": {
+            "baseline": MOLMOSPACES_LANE_ID,
+            "candidates": [GENESIS_LANE_ID],
+        },
+        "canonical_camera_views": [
+            {
+                "view_id": "view_01",
+                "label": "test view",
+                "eye": [0.0, -2.0, 1.0],
+                "target": [0.0, 4.0, 1.0],
+            }
+        ],
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {
+                "status": "success",
+                "runtime_object_positions": {
+                    "bowl_01": {
+                        "category": "Bowl",
+                        "position": [0.0, 4.0, 1.0],
+                        "seeded_start_receptacle_id": "bed_01",
+                        "target_receptacle_id": "sink_01",
+                    }
+                },
+                "images": {
+                    "view_01": {
+                        "path": "molmo.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+            GENESIS_LANE_ID: {
+                "status": "success",
+                "scene_load": {
+                    "render_only_visual_asset": {
+                        "visual_object_audit": {
+                            "schema": "genesis_visual_asset_object_audit_v1",
+                            "runtime_pose_overlay_object_count": 1,
+                            "runtime_pose_overlay_threshold_m": 0.25,
+                            "runtime_pose_overlay_objects": [
+                                {
+                                    "object_key": "bowl_01",
+                                    "category": "Bowl",
+                                    "asset_id": "Bowl_12",
+                                    "metadata_match": "exact",
+                                    "runtime_pose_overlay_geometry_delta_m": 4.0,
+                                    "runtime_pose_overlay_translation": [0.0, 4.0, 0.0],
+                                }
+                            ],
+                            "non_static_render_objects": [
+                                {
+                                    "object_key": "bowl_01",
+                                    "category": "Bowl",
+                                    "asset_id": "Bowl_12",
+                                    "bounds_min": [-0.1, 3.9, 0.95],
+                                    "bounds_max": [0.1, 4.1, 1.05],
+                                    "bounds_center": [0.0, 4.0, 1.0],
+                                    "bounds_size": [0.2, 0.2, 0.1],
+                                    "runtime_pose_overlay_applied": True,
+                                    "runtime_pose_overlay": {
+                                        "geometry_delta_m": 4.0,
+                                        "translation": [0.0, 4.0, 0.0],
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                },
+                "images": {
+                    "view_01": {
+                        "path": "genesis.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+        },
+    }
+
+    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
+
+    html = report.read_text(encoding="utf-8")
+    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
+    assert visibility["dynamic_pose_mismatch_count"] == 0
+    assert visibility["runtime_pose_overlay_object_count"] == 1
+    assert visibility["objects"][0]["geometry_status"] == "runtime_pose_overlay_applied"
+    assert visibility["objects"][0]["geometry_delta_m"] == 0.0
+    assert visibility["objects"][0]["runtime_pose_overlay_geometry_delta_m"] == 4.0
+    assert "Runtime pose overlay" in html
+    assert "runtime_pose_overlay_applied" in html
 
 
 def test_scene_camera_genesis_visual_mesh_fallback_is_degraded_visual_evidence(

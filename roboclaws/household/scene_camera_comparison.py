@@ -228,6 +228,8 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     molmo = _capture_molmospaces_lane(config)
     manifest["lanes"][MOLMOSPACES_LANE_ID] = molmo
     molmo_state = molmo.pop("_state", {}) if isinstance(molmo, dict) else {}
+    if isinstance(molmo, dict) and isinstance(molmo_state, dict):
+        molmo["runtime_object_positions"] = _runtime_object_positions(molmo_state)
     anchors = _scene_anchors(molmo_state, limit=4)
     manifest["anchors"] = anchors
     room_views = _room_camera_control_views(molmo_state)
@@ -254,6 +256,9 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
         color_profile=DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     )
+    if isinstance(molmo.get("runtime_object_positions"), dict):
+        camera_request["runtime_object_positions"] = molmo["runtime_object_positions"]
+        camera_request["runtime_object_position_source"] = MOLMOSPACES_LANE_ID
     camera_request_path = write_camera_control_request(
         output_dir / "camera_control_request.json",
         camera_request,
@@ -311,6 +316,10 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         output_dir=output_dir,
     )
     manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
+    manifest["genesis_movable_object_visibility_diagnostics"] = (
+        _genesis_movable_object_visibility_diagnostics(manifest)
+    )
+    _write_genesis_movable_object_crops(manifest, output_dir=output_dir)
     manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     manifest["room_wall_light_diagnostics"] = _room_wall_light_diagnostics(
         manifest,
@@ -340,6 +349,11 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         )
     if not isinstance(manifest.get("projection_diagnostics"), dict):
         manifest["projection_diagnostics"] = _projection_diagnostics(manifest)
+    if not isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict):
+        manifest["genesis_movable_object_visibility_diagnostics"] = (
+            _genesis_movable_object_visibility_diagnostics(manifest)
+        )
+    _write_genesis_movable_object_crops(manifest, output_dir=output_dir)
     if not isinstance(manifest.get("visual_diagnostics"), dict):
         manifest["visual_diagnostics"] = _visual_diagnostics(manifest, output_dir=output_dir)
     if not isinstance(manifest.get("room_wall_light_diagnostics"), dict):
@@ -447,6 +461,28 @@ def _official_molmospaces_source() -> dict[str, Any]:
         if isinstance(vcs_info, dict)
         else "",
     }
+
+
+def _runtime_object_positions(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    objects = state.get("objects") if isinstance(state.get("objects"), dict) else {}
+    result: dict[str, dict[str, Any]] = {}
+    for object_key, item in objects.items():
+        if not isinstance(item, dict):
+            continue
+        position = item.get("position")
+        if not _is_vec3(position):
+            continue
+        result[str(object_key)] = {
+            "category": item.get("category") or "",
+            "position": [float(value) for value in position[:3]],
+            "seeded_start_receptacle_id": item.get("seeded_start_receptacle_id") or "",
+            "target_receptacle_id": item.get("target_receptacle_id") or "",
+            "location_id": item.get("location_id") or "",
+            "location_relation": item.get("location_relation") or "",
+            "contained_in": item.get("contained_in"),
+            "upstream_object_id": item.get("upstream_object_id") or "",
+        }
+    return result
 
 
 def _capture_molmospaces_lane(config: SceneCameraComparisonConfig) -> dict[str, Any]:
@@ -1656,6 +1692,266 @@ def _projection_sample_points(
     return deduped
 
 
+def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> dict[str, Any]:
+    audit = _genesis_visual_object_audit(manifest)
+    intrinsics = (
+        manifest.get("camera_intrinsics_contract")
+        if isinstance(manifest.get("camera_intrinsics_contract"), dict)
+        else {}
+    )
+    resolution = (
+        intrinsics.get("resolution") if isinstance(intrinsics.get("resolution"), dict) else {}
+    )
+    width = _optional_float(resolution.get("width"))
+    height = _optional_float(resolution.get("height"))
+    vertical_fov = _projection_vertical_fov(intrinsics)
+    if not audit:
+        return {
+            "schema": "genesis_movable_object_visibility_diagnostics_v1",
+            "status": "missing_genesis_visual_object_audit",
+            "object_count": 0,
+            "objects": [],
+        }
+    if width is None or height is None or vertical_fov is None:
+        return {
+            "schema": "genesis_movable_object_visibility_diagnostics_v1",
+            "status": "missing_intrinsics",
+            "object_count": 0,
+            "objects": [],
+        }
+    canonical_views = [
+        item for item in manifest.get("canonical_camera_views") or [] if isinstance(item, dict)
+    ]
+    molmo_positions = _molmospaces_runtime_object_positions(manifest)
+    diagnostics = []
+    for item in audit.get("non_static_render_objects") or []:
+        if not isinstance(item, dict):
+            continue
+        center = item.get("bounds_center")
+        if not _is_vec3(center):
+            continue
+        bounds_points = _bounds_corner_points(
+            item.get("bounds_min"),
+            item.get("bounds_max"),
+            fallback_center=[float(value) for value in center[:3]],
+        )
+        projections = []
+        for view in canonical_views:
+            view_id = str(view.get("view_id") or "")
+            if not view_id:
+                continue
+            projected_bounds = _project_bounds_points(
+                bounds_points,
+                view=view,
+                width=width,
+                height=height,
+                vertical_fov_deg=vertical_fov,
+            )
+            if not projected_bounds:
+                continue
+            pixel = projected_bounds["center_pixel"]
+            distance_to_center = math.hypot(
+                float(pixel[0]) - width * 0.5,
+                float(pixel[1]) - height * 0.5,
+            )
+            projections.append(
+                {
+                    "view_id": view_id,
+                    "label": view.get("label") or "",
+                    "inside_frame": bool(projected_bounds.get("inside_frame")),
+                    "pixel": pixel,
+                    "pixel_bounds": projected_bounds.get("pixel_bounds"),
+                    "pixel_size": projected_bounds.get("pixel_size"),
+                    "depth_m": projected_bounds.get("min_depth_m"),
+                    "distance_to_image_center_px": distance_to_center,
+                }
+            )
+        inside = [
+            projection for projection in projections if bool(projection.get("inside_frame"))
+        ]
+        nearest = sorted(
+            inside,
+            key=lambda value: float(value.get("distance_to_image_center_px") or 1e12),
+        )[:3]
+        object_key = str(item.get("object_key") or "")
+        molmo_position = _runtime_pose_for_object_key(object_key, molmo_positions)
+        geometry_delta_m = (
+            _distance_3d([float(value) for value in center[:3]], molmo_position["position"])
+            if molmo_position and _is_vec3(molmo_position.get("position"))
+            else None
+        )
+        runtime_pose_overlay = (
+            item.get("runtime_pose_overlay")
+            if isinstance(item.get("runtime_pose_overlay"), dict)
+            else {}
+        )
+        runtime_pose_overlay_applied = bool(item.get("runtime_pose_overlay_applied"))
+        geometry_status = (
+            "runtime_pose_overlay_applied"
+            if (
+                runtime_pose_overlay_applied
+                and geometry_delta_m is not None
+                and geometry_delta_m <= 0.25
+            )
+            else "dynamic_pose_mismatch"
+            if geometry_delta_m is not None and geometry_delta_m > 0.25
+            else "runtime_pose_match"
+            if geometry_delta_m is not None
+            else "missing_molmospaces_runtime_pose"
+        )
+        diagnostics.append(
+            {
+                "object_key": object_key,
+                "category": item.get("category"),
+                "asset_id": item.get("asset_id"),
+                "parent": item.get("parent"),
+                "room_id": item.get("room_id"),
+                "bounds_center": [float(value) for value in center[:3]],
+                "bounds_size": item.get("bounds_size") if _is_vec3(item.get("bounds_size")) else [],
+                "molmospaces_runtime_position": (
+                    molmo_position.get("position") if isinstance(molmo_position, dict) else []
+                ),
+                "runtime_location_id": (
+                    molmo_position.get("location_id") if isinstance(molmo_position, dict) else ""
+                ),
+                "seeded_start_receptacle_id": (
+                    molmo_position.get("seeded_start_receptacle_id")
+                    if isinstance(molmo_position, dict)
+                    else ""
+                ),
+                "target_receptacle_id": (
+                    molmo_position.get("target_receptacle_id")
+                    if isinstance(molmo_position, dict)
+                    else ""
+                ),
+                "geometry_delta_m": geometry_delta_m,
+                "geometry_status": geometry_status,
+                "runtime_pose_overlay_applied": runtime_pose_overlay_applied,
+                "runtime_pose_overlay_geometry_delta_m": (
+                    runtime_pose_overlay.get("geometry_delta_m")
+                    if isinstance(runtime_pose_overlay, dict)
+                    else None
+                ),
+                "runtime_pose_overlay_translation": (
+                    runtime_pose_overlay.get("translation")
+                    if isinstance(runtime_pose_overlay, dict)
+                    else []
+                ),
+                "in_frame_view_count": len(inside),
+                "projected_view_count": len(projections),
+                "nearest_in_frame_views": nearest,
+                "visibility_status": "projected_in_frame" if inside else "not_in_frame",
+            }
+        )
+    diagnostics.sort(
+        key=lambda value: (
+            str(value.get("category") or ""),
+            str(value.get("object_key") or ""),
+        )
+    )
+    return {
+        "schema": "genesis_movable_object_visibility_diagnostics_v1",
+        "status": "computed",
+        "interpretation": (
+            "Projects Genesis-audited non-static render object bounds into the shared "
+            "scene-camera views. This proves whether a bowl-like object is expected to enter "
+            "the review frame and provides object-focused crops, but it does not prove final "
+            "occlusion or material parity."
+        ),
+        "resolution": {"width": int(width), "height": int(height)},
+        "vertical_fov_deg": vertical_fov,
+        "object_count": len(diagnostics),
+        "in_frame_object_count": sum(
+            1 for item in diagnostics if int(item.get("in_frame_view_count") or 0) > 0
+        ),
+        "dynamic_pose_mismatch_count": sum(
+            1 for item in diagnostics if item.get("geometry_status") == "dynamic_pose_mismatch"
+        ),
+        "runtime_pose_overlay_object_count": sum(
+            1
+            for item in diagnostics
+            if item.get("geometry_status") == "runtime_pose_overlay_applied"
+        ),
+        "objects": diagnostics,
+    }
+
+
+def _molmospaces_runtime_object_positions(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    molmo = (
+        lanes.get(MOLMOSPACES_LANE_ID)
+        if isinstance(lanes.get(MOLMOSPACES_LANE_ID), dict)
+        else {}
+    )
+    positions = (
+        molmo.get("runtime_object_positions")
+        if isinstance(molmo.get("runtime_object_positions"), dict)
+        else {}
+    )
+    indexed: dict[str, dict[str, Any]] = {}
+    for key, value in positions.items():
+        if not isinstance(value, dict):
+            continue
+        payload = dict(value)
+        payload.setdefault("object_key", str(key))
+        for alias in _runtime_pose_index_aliases(str(key)):
+            indexed.setdefault(alias, payload)
+    return indexed
+
+
+def _runtime_pose_for_object_key(
+    object_key: str,
+    positions: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    for alias in _runtime_pose_lookup_aliases(object_key):
+        pose = positions.get(alias)
+        if pose is not None:
+            return pose
+    return None
+
+
+def _runtime_pose_index_aliases(object_key: str) -> set[str]:
+    aliases = {object_key, _safe_id(object_key), _loose_object_token(object_key)}
+    return {alias for alias in aliases if alias}
+
+
+def _runtime_pose_lookup_aliases(object_key: str) -> list[str]:
+    candidates = [object_key]
+    if object_key.startswith("tn__"):
+        candidates.append(object_key[4:])
+    candidates.extend(_trim_usd_name_suffixes(object_key))
+    for candidate in list(candidates):
+        if candidate.startswith("tn__"):
+            candidates.append(candidate[4:])
+        candidates.extend(_trim_usd_name_suffixes(candidate))
+    aliases: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        for alias in (candidate, _safe_id(candidate), _loose_object_token(candidate)):
+            if alias and alias not in seen:
+                seen.add(alias)
+                aliases.append(alias)
+    return aliases
+
+
+def _trim_usd_name_suffixes(object_key: str) -> list[str]:
+    candidates: list[str] = []
+    current = object_key
+    for _ in range(4):
+        head, separator, tail = current.rpartition("_")
+        if not separator or not head or not tail:
+            break
+        if not (tail.isdigit() or (len(tail) <= 4 and tail.isalnum())):
+            break
+        current = head
+        candidates.append(current)
+    return candidates
+
+
+def _loose_object_token(value: str) -> str:
+    return "".join(ch.lower() for ch in str(value) if ch.isalnum())
+
+
 def _project_world_point(
     point: list[float],
     *,
@@ -1701,6 +1997,61 @@ def _project_world_point(
         "pixel": [pixel_x, pixel_y],
         "depth_m": depth,
         "inside_frame": 0.0 <= pixel_x <= width and 0.0 <= pixel_y <= height,
+    }
+
+
+def _bounds_corner_points(
+    minimum: Any,
+    maximum: Any,
+    *,
+    fallback_center: list[float],
+) -> list[list[float]]:
+    if not _is_vec3(minimum) or not _is_vec3(maximum):
+        return [fallback_center]
+    mins = [float(value) for value in minimum[:3]]
+    maxs = [float(value) for value in maximum[:3]]
+    return [
+        [x, y, z]
+        for x in (mins[0], maxs[0])
+        for y in (mins[1], maxs[1])
+        for z in (mins[2], maxs[2])
+    ]
+
+
+def _project_bounds_points(
+    points: list[list[float]],
+    *,
+    view: dict[str, Any],
+    width: float,
+    height: float,
+    vertical_fov_deg: float,
+) -> dict[str, Any]:
+    projections = []
+    for point in points:
+        projection = _project_world_point(
+            point,
+            eye=view.get("eye"),
+            target=view.get("target") or view.get("lookat"),
+            width=width,
+            height=height,
+            vertical_fov_deg=vertical_fov_deg,
+        )
+        if projection is not None:
+            projections.append(projection)
+    if not projections:
+        return {}
+    xs = [float(item["pixel"][0]) for item in projections]
+    ys = [float(item["pixel"][1]) for item in projections]
+    min_x = min(xs)
+    max_x = max(xs)
+    min_y = min(ys)
+    max_y = max(ys)
+    return {
+        "center_pixel": [(min_x + max_x) * 0.5, (min_y + max_y) * 0.5],
+        "pixel_bounds": [min_x, min_y, max_x, max_y],
+        "pixel_size": [max_x - min_x, max_y - min_y],
+        "min_depth_m": min(float(item["depth_m"]) for item in projections),
+        "inside_frame": min_x <= width and max_x >= 0.0 and min_y <= height and max_y >= 0.0,
     }
 
 
@@ -1818,6 +2169,167 @@ def _contact_sheet_entries(manifest: dict[str, Any], *, output_dir: Path) -> lis
                 }
             )
     return entries
+
+
+def _write_genesis_movable_object_crops(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    crop_size_px: int = 160,
+) -> None:
+    diagnostics = (
+        manifest.get("genesis_movable_object_visibility_diagnostics")
+        if isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return
+    entry_by_view = {
+        str(entry.get("view_id") or ""): entry
+        for entry in _contact_sheet_entries(manifest, output_dir=output_dir)
+    }
+    crop_dir = output_dir / "genesis_movable_object_crops"
+    crop_records = []
+    for item in diagnostics.get("objects") or []:
+        if not isinstance(item, dict):
+            continue
+        nearest = [
+            view for view in item.get("nearest_in_frame_views") or [] if isinstance(view, dict)
+        ]
+        if not nearest:
+            item["crop_status"] = "not_in_frame"
+            item["crops"] = {}
+            continue
+        focus_view = nearest[0]
+        view_id = str(focus_view.get("view_id") or "")
+        entry = entry_by_view.get(view_id)
+        pixel = focus_view.get("pixel") if isinstance(focus_view.get("pixel"), list) else []
+        pixel_bounds = (
+            focus_view.get("pixel_bounds")
+            if isinstance(focus_view.get("pixel_bounds"), list)
+            else []
+        )
+        if entry is None or len(pixel) < 2:
+            item["crop_status"] = "missing_view_image"
+            item["crops"] = {}
+            continue
+        crops: dict[str, dict[str, Any]] = {}
+        for lane_id, image_path in entry.get("images", {}).items():
+            if not isinstance(image_path, Path) or not image_path.is_file():
+                continue
+            crop = _write_image_center_crop(
+                image_path,
+                target_dir=crop_dir,
+                object_key=str(item.get("object_key") or "object"),
+                lane_id=str(lane_id),
+                view_id=view_id,
+                pixel_x=float(pixel[0]),
+                pixel_y=float(pixel[1]),
+                pixel_bounds=pixel_bounds,
+                crop_size_px=crop_size_px,
+                output_dir=output_dir,
+            )
+            if crop:
+                crops[str(lane_id)] = crop
+        item["focus_view_id"] = view_id
+        item["focus_view_label"] = focus_view.get("label") or ""
+        item["focus_pixel"] = [float(pixel[0]), float(pixel[1])]
+        if isinstance(focus_view.get("pixel_bounds"), list):
+            item["focus_pixel_bounds"] = focus_view.get("pixel_bounds")
+        if isinstance(focus_view.get("pixel_size"), list):
+            item["focus_pixel_size"] = focus_view.get("pixel_size")
+        item["crop_status"] = "written" if crops else "missing_lane_images"
+        item["crops"] = crops
+        crop_records.append(
+            {
+                "object_key": item.get("object_key"),
+                "category": item.get("category"),
+                "view_id": view_id,
+                "crop_status": item["crop_status"],
+                "geometry_status": item.get("geometry_status"),
+                "geometry_delta_m": item.get("geometry_delta_m"),
+                "lanes": sorted(crops),
+            }
+        )
+    diagnostics["crop_artifacts"] = {
+        "schema": "genesis_movable_object_crop_artifacts_v1",
+        "crop_size_px": crop_size_px,
+        "crop_dir": _relpath(crop_dir, output_dir) if crop_dir.is_dir() else "",
+        "object_count": len(crop_records),
+        "objects": crop_records,
+    }
+
+
+def _write_image_center_crop(
+    image_path: Path,
+    *,
+    target_dir: Path,
+    object_key: str,
+    lane_id: str,
+    view_id: str,
+    pixel_x: float,
+    pixel_y: float,
+    pixel_bounds: list[Any],
+    crop_size_px: int,
+    output_dir: Path,
+) -> dict[str, Any]:
+    with Image.open(image_path).convert("RGB") as image:
+        left, upper, right, lower = _crop_box_from_pixel_bounds(
+            image,
+            pixel_x=pixel_x,
+            pixel_y=pixel_y,
+            pixel_bounds=pixel_bounds,
+            crop_size_px=crop_size_px,
+        )
+        if right <= left or lower <= upper:
+            return {}
+        crop = image.crop((left, upper, right, lower))
+        target_dir.mkdir(parents=True, exist_ok=True)
+        filename = (
+            f"{_safe_report_token(object_key)}__{_safe_report_token(view_id)}__"
+            f"{_safe_report_token(lane_id)}.png"
+        )
+        target = target_dir / filename
+        crop.save(target)
+        return {
+            "path": _relpath(target, output_dir),
+            "source_path": _relpath(image_path, output_dir),
+            "view_id": view_id,
+            "pixel": [pixel_x, pixel_y],
+            "crop_box": [left, upper, right, lower],
+            "dimensions": {"width": crop.width, "height": crop.height, "channels": 3},
+        }
+
+
+def _crop_box_from_pixel_bounds(
+    image: Image.Image,
+    *,
+    pixel_x: float,
+    pixel_y: float,
+    pixel_bounds: list[Any],
+    crop_size_px: int,
+) -> tuple[int, int, int, int]:
+    half = max(8, int(crop_size_px) // 2)
+    if len(pixel_bounds) >= 4:
+        try:
+            min_x, min_y, max_x, max_y = [float(value) for value in pixel_bounds[:4]]
+        except (TypeError, ValueError):
+            min_x = max_x = float(pixel_x)
+            min_y = max_y = float(pixel_y)
+    else:
+        min_x = max_x = float(pixel_x)
+        min_y = max_y = float(pixel_y)
+    bbox_width = max_x - min_x
+    bbox_height = max_y - min_y
+    pad = max(32.0, max(bbox_width, bbox_height) * 1.25)
+    center_x = (min_x + max_x) * 0.5
+    center_y = (min_y + max_y) * 0.5
+    crop_half = max(float(half), bbox_width * 0.5 + pad, bbox_height * 0.5 + pad)
+    left = max(0, min(image.width, int(math.floor(center_x - crop_half))))
+    upper = max(0, min(image.height, int(math.floor(center_y - crop_half))))
+    right = max(0, min(image.width, int(math.ceil(center_x + crop_half))))
+    lower = max(0, min(image.height, int(math.ceil(center_y + crop_half))))
+    return left, upper, right, lower
 
 
 def _visual_diagnostics(manifest: dict[str, Any], *, output_dir: Path) -> dict[str, Any]:
@@ -4211,6 +4723,12 @@ def _safe_id(value: Any) -> str:
     return safe or "scene"
 
 
+def _safe_report_token(value: Any) -> str:
+    text = str(value or "item").lower()
+    safe = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in text).strip("_")
+    return safe[:96] or "item"
+
+
 def _optional_float(value: Any) -> float | None:
     if value is None:
         return None
@@ -4236,6 +4754,8 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _visual_diagnostics_section(manifest),
             _room_wall_light_diagnostics_section(manifest),
             _candidate_visual_diagnostics_section(manifest),
+            _genesis_movable_object_visibility_section(manifest),
+            _genesis_visual_object_audit_section(manifest),
             _native_isaac_render_diagnostics_section(manifest),
             _render_domain_source_section(manifest),
             _render_domain_view_triage_section(manifest),
@@ -4353,6 +4873,26 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
       background: transparent;
       cursor: zoom-in;
       text-align: inherit;
+    }}
+    .crop-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, 72px);
+      gap: 6px;
+      align-items: start;
+    }}
+    .crop-thumb {{
+      display: grid;
+      gap: 3px;
+      font-size: 10px;
+      color: #647083;
+    }}
+    .crop-image {{
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border: 1px solid #d9dde6;
+      border-radius: 4px;
+      background: #f8fafc;
     }}
     .image-modal {{
       width: min(96vw, 1440px);
@@ -5238,6 +5778,112 @@ def _candidate_visual_diagnostics_section(manifest: dict[str, Any]) -> str:
 """
 
 
+def _genesis_movable_object_visibility_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("genesis_movable_object_visibility_diagnostics")
+        if isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in list(diagnostics.get("objects") or [])[:30]:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('object_key', '')))}</td>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('asset_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('parent', '')))}</td>"
+            f"<td>{html.escape(str(item.get('geometry_status', '')))}</td>"
+            f"<td>{html.escape(_meters_text(item.get('geometry_delta_m')))}</td>"
+            f"<td>{html.escape(str(item.get('seeded_start_receptacle_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('in_frame_view_count', '')))}</td>"
+            f"<td>{html.escape(_nearest_view_text(item.get('nearest_in_frame_views')))}</td>"
+            f"<td>{_crop_buttons_html(item.get('crops'), item.get('object_key'))}</td>"
+            f"<td>{html.escape(_cell_text(item.get('bounds_center')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Object",
+            "Category",
+            "Asset",
+            "Parent",
+            "Geometry status",
+            "Pose delta",
+            "Runtime start",
+            "In-frame views",
+            "Nearest views",
+            "Crops",
+            "Bounds center",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"objects={diagnostics.get('object_count')}; "
+        f"in_frame={diagnostics.get('in_frame_object_count')}; "
+        f"dynamic_pose_mismatch={diagnostics.get('dynamic_pose_mismatch_count')}; "
+        f"resolution={diagnostics.get('resolution')}; "
+        f"vertical_fov={_float_text(diagnostics.get('vertical_fov_deg'))} deg. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Genesis Movable Object Visibility</h2>
+  <p class="note">{html.escape(note)}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
+def _nearest_view_text(value: Any) -> str:
+    parts = []
+    for item in value or []:
+        if not isinstance(item, dict):
+            continue
+        view_id = str(item.get("view_id") or "")
+        if not view_id:
+            continue
+        distance = _pixels_text(item.get("distance_to_image_center_px"))
+        parts.append(f"{view_id} ({distance})")
+    return ", ".join(parts)
+
+
+def _crop_buttons_html(value: Any, object_key: Any) -> str:
+    if not isinstance(value, dict) or not value:
+        return ""
+    parts = []
+    for lane_id in _ordered_crop_lanes(value):
+        item = value.get(lane_id) if isinstance(value.get(lane_id), dict) else {}
+        src = str(item.get("path") or "")
+        if not src:
+            continue
+        title = f"{object_key} {lane_id} crop"
+        parts.append(
+            '<div class="crop-thumb">'
+            f"<span>{html.escape(str(lane_id))}</span>"
+            + _image_button(src, title, css_class="crop-image")
+            + "</div>"
+        )
+    return '<div class="crop-grid">' + "".join(parts) + "</div>" if parts else ""
+
+
+def _ordered_crop_lanes(value: dict[str, Any]) -> list[str]:
+    ordered = [
+        lane_id
+        for lane_id in (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID)
+        if lane_id in value
+    ]
+    ordered.extend(sorted(lane_id for lane_id in value if lane_id not in ordered))
+    return ordered
+
+
 def _render_domain_source_section(manifest: dict[str, Any]) -> str:
     diagnostics = (
         manifest.get("render_domain_source_diagnostics")
@@ -5291,6 +5937,182 @@ def _render_domain_source_section(manifest: dict[str, Any]) -> str:
   </table></div>
 </section>
 """
+
+
+def _genesis_visual_object_audit_section(manifest: dict[str, Any]) -> str:
+    audit = _genesis_visual_object_audit(manifest)
+    if not audit:
+        return ""
+    note = (
+        f"objects={audit.get('object_count')}; "
+        f"render_mesh_objects={audit.get('render_mesh_object_count')}; "
+        f"texture_conversion_objects={audit.get('texture_conversion_object_count')}; "
+        f"non_static_render_objects={audit.get('non_static_render_object_count')}; "
+        f"collision_mesh_objects={audit.get('collision_mesh_object_count')}; "
+        f"runtime_pose_overlay_objects={audit.get('runtime_pose_overlay_object_count')}; "
+        "runtime_pose_overlay_threshold="
+        f"{_meters_text(audit.get('runtime_pose_overlay_threshold_m'))}. "
+        f"{audit.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Genesis Visual Object Audit</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">metadata_source={html.escape(str(audit.get("metadata_source") or ""))}</p>
+  {_genesis_visual_object_audit_summary(audit)}
+  {_genesis_visual_object_audit_table(
+        "Converted Texture Objects",
+        audit.get("texture_conversion_objects"),
+        columns=(
+            "object_key",
+            "category",
+            "asset_id",
+            "metadata_match",
+            "texture_modes",
+            "converted_texture_names",
+        ),
+    )}
+  {_genesis_visual_object_audit_table(
+        "Non-Static Render Objects",
+        audit.get("non_static_render_objects"),
+        columns=("object_key", "category", "asset_id", "metadata_match", "parent", "room_id"),
+    )}
+  {_genesis_visual_object_audit_table(
+        "Collision Mesh Objects",
+        audit.get("collision_mesh_objects"),
+        columns=(
+            "object_key",
+            "category",
+            "asset_id",
+            "metadata_match",
+            "render_mesh_count",
+            "collision_mesh_count",
+        ),
+    )}
+  {_genesis_visual_object_audit_table(
+        "Runtime Pose Overlay Objects",
+        audit.get("runtime_pose_overlay_objects"),
+        columns=(
+            "object_key",
+            "category",
+            "asset_id",
+            "metadata_match",
+            "runtime_pose_overlay_geometry_delta_m",
+            "runtime_pose_overlay_translation",
+        ),
+    )}
+</section>
+"""
+
+
+def _genesis_visual_object_audit(manifest: dict[str, Any]) -> dict[str, Any]:
+    lane = (
+        (manifest.get("lanes") or {}).get(GENESIS_LANE_ID)
+        if isinstance(manifest.get("lanes"), dict)
+        else {}
+    )
+    if not isinstance(lane, dict):
+        return ""
+    scene_load = lane.get("scene_load") if isinstance(lane.get("scene_load"), dict) else {}
+    visual_asset = (
+        scene_load.get("render_only_visual_asset")
+        if isinstance(scene_load.get("render_only_visual_asset"), dict)
+        else {}
+    )
+    audit = (
+        visual_asset.get("visual_object_audit")
+        if isinstance(visual_asset.get("visual_object_audit"), dict)
+        else {}
+    )
+    return audit
+
+
+def _genesis_visual_object_audit_summary(audit: dict[str, Any]) -> str:
+    rows = []
+    for title, key, meaning in (
+        (
+            "Texture conversion",
+            "texture_conversion_objects",
+            "Objects with non-RGB/RGBA textures normalized before Genesis import.",
+        ),
+        (
+            "Movable clutter",
+            "non_static_render_objects",
+            "Real non-static objects whose visibility can differ by renderer view, tone, "
+            "or occlusion.",
+        ),
+        (
+            "Collision meshes",
+            "collision_mesh_objects",
+            "Objects that had collider geometry filtered out of the Genesis visual package.",
+        ),
+        (
+            "Runtime pose overlay",
+            "runtime_pose_overlay_objects",
+            "Non-static objects translated to MuJoCo runtime pose before Genesis rendering.",
+        ),
+    ):
+        items = audit.get(key)
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(title)}</td>"
+            f"<td>{html.escape(_category_count_text(items))}</td>"
+            f"<td>{html.escape(meaning)}</td>"
+            "</tr>"
+        )
+    return """
+  <h3>Alike Object Risk Summary</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Risk group</th><th>Categories</th><th>Meaning</th></tr></thead>
+    <tbody>""" + "".join(rows) + """</tbody>
+  </table></div>
+"""
+
+
+def _genesis_visual_object_audit_table(
+    title: str,
+    items: Any,
+    *,
+    columns: tuple[str, ...],
+    limit: int = 24,
+) -> str:
+    rows = []
+    for item in list(items or [])[:limit]:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            + "".join(f"<td>{html.escape(_cell_text(item.get(column)))}</td>" for column in columns)
+            + "</tr>"
+        )
+    if not rows:
+        return f"<h3>{html.escape(title)}</h3><p class=\"note\">None recorded.</p>"
+    headers = "".join(f"<th>{html.escape(column)}</th>" for column in columns)
+    return f"""
+  <h3>{html.escape(title)}</h3>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+"""
+
+
+def _category_count_text(items: Any, *, limit: int = 12) -> str:
+    counts: dict[str, int] = {}
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        category = str(item.get("category") or "Uncategorized")
+        counts[category] = counts.get(category, 0) + 1
+    if not counts:
+        return "None"
+    parts = [
+        f"{category} ({count})"
+        for category, count in sorted(counts.items(), key=lambda entry: (-entry[1], entry[0]))
+    ]
+    if len(parts) <= limit:
+        return ", ".join(parts)
+    return f"{', '.join(parts[:limit])}, ... (+{len(parts) - limit})"
 
 
 def _native_isaac_render_diagnostics_section(manifest: dict[str, Any]) -> str:
@@ -5901,6 +6723,15 @@ def _pixels_text(value: Any) -> str:
         return str(value)
 
 
+def _meters_text(value: Any) -> str:
+    if value is None or value == "":
+        return ""
+    try:
+        return f"{float(value):.3f} m"
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _short_list_text(value: Any, *, limit: int = 4) -> str:
     if not isinstance(value, list):
         return ""
@@ -5908,6 +6739,14 @@ def _short_list_text(value: Any, *, limit: int = 4) -> str:
     if len(items) <= limit:
         return ", ".join(items)
     return f"{', '.join(items[:limit])}, ... (+{len(items) - limit})"
+
+
+def _cell_text(value: Any) -> str:
+    if isinstance(value, list):
+        return _short_list_text(value, limit=6)
+    if isinstance(value, dict):
+        return json.dumps(value, sort_keys=True)
+    return "" if value is None else str(value)
 
 
 def _badges(items: list[tuple[str, Any]]) -> str:
