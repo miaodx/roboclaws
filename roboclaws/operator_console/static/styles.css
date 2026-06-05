@@ -121,6 +121,7 @@ button:not(:disabled):hover {
 }
 
 .app-title {
+  margin: 0;
   font-size: 20px;
   font-weight: 500;
   line-height: 1.25;
