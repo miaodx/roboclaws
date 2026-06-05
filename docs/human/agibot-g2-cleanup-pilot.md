@@ -152,7 +152,35 @@ operator 必须确认：
 
 ### 2. 采集 map context
 
-在可信本地工作站或 Agibot GDK 机器上采集 map、pose 和 `head_color` camera evidence：
+先做不移动的 RAW_FPV preflight，确认 `head_color` 能读到真实图片：
+
+```bash
+cd vendors/agibot_sdk
+uv run python tools/check_raw_fpv_status.py --cameras default-open
+```
+
+通过条件：
+
+- `raw_fpv_status=head_color_available`
+- `checks[].camera=head_color` 里 `ok=true`
+- `shape=[640, 400]` 或现场 GDK 报告的有效尺寸
+- `fps>0`
+- `head_color_latest.jpg` 是有效现场图片
+- `motion_or_write_calls_used=[]`
+- `navigation_submission=false`
+
+已知失败模式：
+
+- repo 根目录 `.venv` 是 Python 3.12，不能 import CPython 3.10 的
+  `agibot_gdk`。
+- 某些 Python 3.10 GDK 环境能 import `agibot_gdk`，但缺 `numpy`；
+  `get_latest_image()` 在 materialize `image.data` 时会直接抛出 import error。
+  这是环境错误，不要记录成 `head_color_unavailable`。用 `vendors/agibot_sdk`
+  下的 `uv run python ...` 跑 preflight，或把 numpy 安装到当前 Python 3.10
+  GDK 环境。
+
+然后在可信本地工作站或 Agibot GDK 机器上采集 map、pose 和 `head_color`
+camera evidence：
 
 ```bash
 .venv/bin/python scripts/agibot/capture_map_context_views.py \
@@ -415,6 +443,8 @@ arbitrary coordinate navigation 或额外 local nudge。
 ## 不作为当前步骤
 
 - `household-cleanup` 真机验收：manipulation 未证明，当前不跑。
-- `camera-raw` / RAW_FPV-only lane：当前 Agibot 硬件验收使用 `camera-labels`。
+- `camera-raw` / RAW_FPV-only cleanup lane：当前 Agibot 硬件验收使用
+  `camera-labels`。但 `head_color` RAW_FPV preflight 是现场前置检查，用来证明
+  policy camera 本身可读。
 - fake visual-grounding service：只能做 HTTP contract 验证，不能作为 hardware evidence。
 - synthetic cleanup 消费 Agibot snapshot：这是后续合约清理项，不是现场前置条件。
