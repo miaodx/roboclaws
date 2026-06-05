@@ -327,6 +327,37 @@ pre,
   color: var(--accent);
 }
 
+.meta-label,
+.field-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.artifact-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.state-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.state-list dt {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.state-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .command-preview {
   min-height: 72px;
   white-space: pre-wrap;
