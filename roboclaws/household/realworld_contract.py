@@ -2562,8 +2562,12 @@ class RealWorldCleanupContract:
                 {
                     "object_id": str(item.get("object_id") or ""),
                     "category": str(item.get("category") or ""),
+                    "state": state,
                     "source_fixture_id": source_fixture_id,
                     "candidate_fixture_id": candidate_fixture_id,
+                    "required_tool": "navigate_to_receptacle"
+                    if state == "held"
+                    else "navigate_to_object",
                     "recommended_tool": _recommended_place_tool(
                         internal_candidate_fixture_id,
                         self._fixtures,
