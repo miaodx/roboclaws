@@ -1722,6 +1722,154 @@ def test_scene_camera_genesis_movable_visibility_blocks_articulated_pose_false_g
     assert "box_01/flap_inner_1" in html
 
 
+def test_scene_camera_genesis_movable_visibility_accepts_static_baked_articulation(
+    tmp_path: Path,
+) -> None:
+    _write_image(tmp_path / "molmo.png", color=(20, 40, 80))
+    _write_image(tmp_path / "genesis.png", color=(40, 80, 20))
+    usd_path = tmp_path / "scene_semantic.usda"
+    usd_path.write_text(
+        """
+#usda 1.0
+def Xform "val_1"
+{
+  def Scope "Geometry"
+  {
+    def Xform "box_01" {}
+  }
+}
+""",
+        encoding="utf-8",
+    )
+    (tmp_path / "summary.json").write_text(
+        json.dumps(
+            {
+                "status": "ready",
+                "mujoco_visual_joint_endpoint_pose_status": (
+                    "mujoco_visual_joint_endpoint_pose_applied"
+                ),
+                "mujoco_visual_joint_endpoint_pose_corrected_count": 2,
+                "mujoco_visual_joint_endpoint_pose_missing_count": 0,
+                "visual_physics_status": "frozen_static_visual_usd",
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = {
+        "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
+        "purpose": "render-only test",
+        "camera_intrinsics_contract": {
+            "resolution": {"width": 64, "height": 48},
+            "requested_lens": {"vertical_fov_deg": 45.0},
+        },
+        "lane_registry": {
+            "baseline": MOLMOSPACES_LANE_ID,
+            "candidates": [GENESIS_LANE_ID],
+        },
+        "canonical_camera_views": [
+            {
+                "view_id": "view_01",
+                "label": "box view",
+                "eye": [0.0, -2.0, 1.0],
+                "target": [0.0, 0.0, 1.0],
+            }
+        ],
+        "lanes": {
+            MOLMOSPACES_LANE_ID: {
+                "status": "success",
+                "runtime_object_positions": {
+                    "box_01": {
+                        "category": "Box",
+                        "position": [0.0, 0.0, 1.0],
+                    }
+                },
+                "runtime_render_state": {
+                    "schema": "molmospaces_runtime_render_state_v1",
+                    "status": "computed",
+                    "articulated_object_count": 1,
+                    "objects": {
+                        "box_01": {
+                            "object_key": "box_01",
+                            "category": "Box",
+                            "body_name": "box_01",
+                            "position": [0.0, 0.0, 1.0],
+                            "subtree_joint_count": 2,
+                            "articulation_status": "articulated",
+                            "articulation_joints": [
+                                {
+                                    "joint_name": "box_01/flap_inner_1",
+                                    "joint_type": "hinge",
+                                    "qposadr": 41,
+                                    "qpos": [2.91219],
+                                    "range": [0.0, 2.91219],
+                                },
+                                {
+                                    "joint_name": "box_01/flap_outer_1",
+                                    "joint_type": "hinge",
+                                    "qposadr": 42,
+                                    "qpos": [-2.93938],
+                                    "range": [-2.93938, 0.0],
+                                },
+                            ],
+                        }
+                    },
+                },
+                "images": {
+                    "view_01": {
+                        "path": "molmo.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+            ISAAC_LANE_ID: {
+                "status": "success",
+                "scene_usd": str(usd_path),
+            },
+            GENESIS_LANE_ID: {
+                "status": "success",
+                "scene_load": {
+                    "render_only_visual_asset": {
+                        "visual_object_audit": {
+                            "schema": "genesis_visual_asset_object_audit_v1",
+                            "non_static_render_objects": [
+                                {
+                                    "object_key": "box_01",
+                                    "category": "Box",
+                                    "asset_id": "Box_10",
+                                    "bounds_min": [-0.1, -0.1, 0.95],
+                                    "bounds_max": [0.1, 0.1, 1.05],
+                                    "bounds_center": [0.0, 0.0, 1.0],
+                                    "bounds_size": [0.2, 0.2, 0.1],
+                                }
+                            ],
+                        }
+                    }
+                },
+                "images": {
+                    "view_01": {
+                        "path": "genesis.png",
+                        "dimensions": {"width": 64, "height": 48, "channels": 3},
+                    }
+                },
+            },
+        },
+    }
+
+    report = render_scene_camera_comparison_report(manifest, output_dir=tmp_path)
+
+    html = report.read_text(encoding="utf-8")
+    visibility = manifest["genesis_movable_object_visibility_diagnostics"]
+    box = visibility["objects"][0]
+    assert box["geometry_delta_m"] == 0.0
+    assert box["geometry_status"] == "articulated_static_baked_match"
+    assert box["articulation_apply_status"] == "prepared_usd_static_endpoint_baked"
+    assert visibility["articulated_static_baked_count"] == 1
+    assert visibility["articulated_runtime_state_unsupported_count"] == 0
+    assert "articulated_static_baked_match" in html
+    assert "prepared_usd_static_endpoint_baked" in html
+    assert "articulated_static_baked=1" in html
+
+
 def test_scene_camera_genesis_visual_mesh_fallback_is_degraded_visual_evidence(
     tmp_path: Path,
 ) -> None:

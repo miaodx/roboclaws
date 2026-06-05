@@ -1752,6 +1752,7 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
     ]
     molmo_positions = _molmospaces_runtime_object_positions(manifest)
     runtime_render_objects = _molmospaces_runtime_render_objects(manifest)
+    prepared_articulation = _prepared_articulation_state_contract(manifest)
     diagnostics = []
     for item in audit.get("non_static_render_objects") or []:
         if not isinstance(item, dict):
@@ -1827,8 +1828,14 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
             else {}
         )
         runtime_pose_overlay_applied = bool(item.get("runtime_pose_overlay_applied"))
+        articulation_apply_status = _prepared_articulation_status_for_object(
+            object_key=object_key,
+            articulation_joints=articulation_joints,
+            prepared_articulation=prepared_articulation,
+        )
         geometry_status = _runtime_geometry_status(
             articulation_required=articulation_required,
+            articulation_apply_status=articulation_apply_status,
             runtime_pose_overlay_applied=runtime_pose_overlay_applied,
             geometry_delta_m=geometry_delta_m,
         )
@@ -1878,11 +1885,7 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
                 "articulation_required": articulation_required,
                 "articulation_joint_count": articulation_joint_count,
                 "articulation_joints": articulation_joints,
-                "articulation_apply_status": (
-                    "unsupported_translation_only_visual_package"
-                    if articulation_required
-                    else "not_required"
-                ),
+                "articulation_apply_status": articulation_apply_status,
                 "in_frame_view_count": len(inside),
                 "projected_view_count": len(projections),
                 "nearest_in_frame_views": nearest,
@@ -1918,6 +1921,11 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
             for item in diagnostics
             if item.get("geometry_status") == "articulated_runtime_state_unsupported"
         ),
+        "articulated_static_baked_count": sum(
+            1
+            for item in diagnostics
+            if item.get("geometry_status") == "articulated_static_baked_match"
+        ),
         "articulated_object_count": sum(
             1 for item in diagnostics if bool(item.get("articulation_required"))
         ),
@@ -1933,10 +1941,13 @@ def _genesis_movable_object_visibility_diagnostics(manifest: dict[str, Any]) -> 
 def _runtime_geometry_status(
     *,
     articulation_required: bool,
+    articulation_apply_status: str,
     runtime_pose_overlay_applied: bool,
     geometry_delta_m: float | None,
 ) -> str:
     if articulation_required:
+        if articulation_apply_status == "prepared_usd_static_endpoint_baked":
+            return "articulated_static_baked_match"
         return "articulated_runtime_state_unsupported"
     if runtime_pose_overlay_applied and geometry_delta_m is not None and geometry_delta_m <= 0.25:
         return "runtime_pose_overlay_applied"
@@ -1945,6 +1956,100 @@ def _runtime_geometry_status(
     if geometry_delta_m is not None:
         return "runtime_pose_match"
     return "missing_molmospaces_runtime_pose"
+
+
+def _prepared_articulation_state_contract(manifest: dict[str, Any]) -> dict[str, Any]:
+    probe = (
+        manifest.get("render_domain_contract_probe")
+        if isinstance(manifest.get("render_domain_contract_probe"), dict)
+        else {}
+    )
+    if not probe:
+        artifacts = _render_domain_artifact_paths(manifest)
+        probe = _isaac_render_contract_from_usda(artifacts.get("isaac_scene_usd"))
+    status = "missing_prepared_usd_articulation_contract"
+    endpoint_pose_status = probe.get("mujoco_visual_joint_endpoint_pose_status")
+    visual_physics_status = probe.get("visual_physics_status")
+    corrected_count = _optional_float(
+        probe.get("mujoco_visual_joint_endpoint_pose_corrected_count")
+    )
+    missing_count = _optional_float(probe.get("mujoco_visual_joint_endpoint_pose_missing_count"))
+    if (
+        endpoint_pose_status == "mujoco_visual_joint_endpoint_pose_applied"
+        and visual_physics_status == "frozen_static_visual_usd"
+        and (corrected_count or 0.0) > 0.0
+        and (missing_count or 0.0) == 0.0
+    ):
+        status = "prepared_usd_static_endpoint_baked"
+    elif visual_physics_status == "frozen_static_visual_usd":
+        status = "prepared_usd_static_without_endpoint_bake"
+    elif visual_physics_status == "physics_articulation_preserved":
+        status = "prepared_usd_physics_articulation_preserved"
+    elif endpoint_pose_status:
+        status = "prepared_usd_endpoint_bake_unverified"
+    return {
+        "status": status,
+        "mujoco_visual_joint_endpoint_pose_status": endpoint_pose_status,
+        "mujoco_visual_joint_endpoint_pose_corrected_count": probe.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": probe.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
+        "visual_physics_status": visual_physics_status,
+    }
+
+
+def _prepared_articulation_status_for_object(
+    *,
+    object_key: str,
+    articulation_joints: Any,
+    prepared_articulation: dict[str, Any],
+) -> str:
+    joints = [joint for joint in articulation_joints or [] if isinstance(joint, dict)]
+    if not joints:
+        return "not_required"
+    if prepared_articulation.get("status") != "prepared_usd_static_endpoint_baked":
+        return "unsupported_translation_only_visual_package"
+    if not _articulation_joints_match_prepared_endpoint_refs(joints, object_key=object_key):
+        return "unsupported_runtime_qpos_not_endpoint_baked"
+    return "prepared_usd_static_endpoint_baked"
+
+
+def _articulation_joints_match_prepared_endpoint_refs(
+    joints: list[dict[str, Any]],
+    *,
+    object_key: str,
+) -> bool:
+    relevant = [
+        joint
+        for joint in joints
+        if _joint_belongs_to_object(joint, object_key=object_key)
+        and str(joint.get("joint_type") or "").lower() == "hinge"
+    ]
+    if not relevant:
+        return False
+    for joint in relevant:
+        qpos = joint.get("qpos") if isinstance(joint.get("qpos"), list) else []
+        joint_range = joint.get("range") if isinstance(joint.get("range"), list) else []
+        if not qpos or len(joint_range) < 2:
+            return False
+        value = _optional_float(qpos[0])
+        low = _optional_float(joint_range[0])
+        high = _optional_float(joint_range[1])
+        if value is None or low is None or high is None:
+            return False
+        if not (math.isclose(value, low, abs_tol=1e-3) or math.isclose(value, high, abs_tol=1e-3)):
+            return False
+    return True
+
+
+def _joint_belongs_to_object(joint: dict[str, Any], *, object_key: str) -> bool:
+    aliases = _runtime_pose_lookup_aliases(object_key)
+    haystack = " ".join(
+        str(joint.get(key) or "") for key in ("joint_name", "body_name", "object_key")
+    )
+    return any(alias and alias in haystack for alias in aliases)
 
 
 def _molmospaces_runtime_object_positions(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -3823,6 +3928,21 @@ def _render_domain_contract_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "mujoco_light_count": len(mujoco.get("lights") or []),
         "isaac_light_count": len(isaac.get("lights") or []),
         "isaac_shadow_disabled_prim_count": len(isaac.get("shadow_disabled_prims") or []),
+        "visual_physics_status": isaac.get("visual_physics_status"),
+        "mujoco_visual_joint_endpoint_pose_status": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_status"
+        ),
+        "mujoco_visual_joint_endpoint_pose_corrected_count": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_corrected_count"
+        ),
+        "mujoco_visual_joint_endpoint_pose_missing_count": isaac.get(
+            "mujoco_visual_joint_endpoint_pose_missing_count"
+        ),
+        "visual_physics_joint_removed_count": isaac.get("visual_physics_joint_removed_count"),
+        "visual_physics_api_schema_removed_count": isaac.get(
+            "visual_physics_api_schema_removed_count"
+        ),
+        "visual_physics_property_removed_count": isaac.get("visual_physics_property_removed_count"),
         "views": views,
         "recommended_next_action": _render_domain_contract_probe_next_action(views),
         "interpretation": (
@@ -3966,7 +4086,18 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         "mujoco_visual_joint_endpoint_pose_missing_count": prepared_summary.get(
             "mujoco_visual_joint_endpoint_pose_missing_count"
         ),
+        "visual_physics_joint_removed_count": prepared_summary.get(
+            "visual_physics_joint_removed_count"
+        ),
+        "visual_physics_api_schema_removed_count": prepared_summary.get(
+            "visual_physics_api_schema_removed_count"
+        ),
+        "visual_physics_property_removed_count": prepared_summary.get(
+            "visual_physics_property_removed_count"
+        ),
         **physics_contract,
+        "visual_physics_status": prepared_summary.get("visual_physics_status")
+        or physics_contract.get("visual_physics_status"),
     }
 
 
@@ -4306,6 +4437,11 @@ def _isaac_view_render_contract(
         "mujoco_visual_joint_endpoint_pose_missing_count": isaac.get(
             "mujoco_visual_joint_endpoint_pose_missing_count"
         ),
+        "visual_physics_joint_removed_count": isaac.get("visual_physics_joint_removed_count"),
+        "visual_physics_api_schema_removed_count": isaac.get(
+            "visual_physics_api_schema_removed_count"
+        ),
+        "visual_physics_property_removed_count": isaac.get("visual_physics_property_removed_count"),
     }
 
 
@@ -5930,6 +6066,7 @@ def _genesis_movable_object_visibility_section(manifest: dict[str, Any]) -> str:
         f"dynamic_pose_mismatch={diagnostics.get('dynamic_pose_mismatch_count')}; "
         "articulated_unsupported="
         f"{diagnostics.get('articulated_runtime_state_unsupported_count')}; "
+        f"articulated_static_baked={diagnostics.get('articulated_static_baked_count')}; "
         f"articulated_objects={diagnostics.get('articulated_object_count')}; "
         f"resolution={diagnostics.get('resolution')}; "
         f"vertical_fov={_float_text(diagnostics.get('vertical_fov_deg'))} deg. "

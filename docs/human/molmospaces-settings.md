@@ -572,7 +572,7 @@ Add the opt-in Genesis candidate lane when reviewing Genesis visual parity:
 ```bash
 ROBOCLAWS_GENESIS_PYTHON=.venv-genesis/bin/python \
   just molmo::scene-camera-comparison genesis=on \
-  scene_usd_path=output/isaaclab/flattened-semantic-usd/val_1_material_scale_square_prepared_gate/scene_semantic.usda
+  scene_usd_path=output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda
 ```
 
 This probe uses `roboclaws.camera_control.render_views` to drive MuJoCo, a
@@ -591,9 +591,11 @@ from legacy object-center positions, including articulated child joint names
 and `qpos` values when MolmoSpaces exposes them. Genesis movable-object
 diagnostics treat translation-only object overlays as insufficient for
 articulated objects such as box flaps and report unsupported articulation
-instead of a false `runtime_pose_match`. Isaac uses the prepared USD's scene
-lights plus the configured soft fill profile and reports both existing and
-added light counts. Target-vs-USD
+instead of a false `runtime_pose_match`; when the prepared USD summary proves
+MuJoCo visual joint endpoint-pose baking and frozen visual physics, the report
+classifies those objects as `articulated_static_baked_match`. Isaac uses the
+prepared USD's scene lights plus the configured soft fill profile and reports
+both existing and added light counts. Target-vs-USD
 diagnostics are bounds-aware: large receptacles may aim the camera above a
 surface, so the report treats a target inside the USD XY footprint and within
 the configured surface-aim height allowance separately from a true target/scene
