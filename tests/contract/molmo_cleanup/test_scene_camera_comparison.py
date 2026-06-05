@@ -825,10 +825,13 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "tone_adjusted_lanes=genesis-prepared-usd" in html
     assert "genesis_scene_light_rig_applied" in html
     assert "scene_light_rig_v1" in html
+    assert "active_roles=ambient_light, background_color, directional_key" in html
     assert "ambient=0.37, 0.37, 0.37" in html
     assert "directional_lights=1" in html
     assert "authored=disabled_for_comparison" in html
     assert "background=0.04, 0.08, 0.12" in html
+    assert "active_authored_usd_lights=0" in html
+    assert "active_roles=dome_environment, directional_key" in html
     assert "post_render_tone_adjustment_applied" in html
     assert "view_tone_overrides=1" in html
     assert "Genesis baked-texture visual probe" in html

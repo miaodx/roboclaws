@@ -3787,6 +3787,13 @@ def _genesis_lighting_summary(
     )
     lights = profile.get("lights") or []
     light_count = len(lights) if isinstance(lights, list) else 0
+    active_environment_roles = []
+    if ambient:
+        active_environment_roles.append("ambient_light")
+    if background:
+        active_environment_roles.append("background_color")
+    if light_count:
+        active_environment_roles.append("directional_key")
     shadow = profile.get("shadow")
     if shadow is None:
         shadow = _rig_key(lighting_profile).get("shadow")
@@ -3798,6 +3805,7 @@ def _genesis_lighting_summary(
         f"rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
         f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
         f"authored={roles.get('authored_scene_lights_policy')}; "
+        f"active_roles={_cell_text(active_environment_roles)}; "
         f"ambient={_cell_text(ambient)}; background={_cell_text(background)}; "
         f"directional_lights={light_count}; intensities={intensities}; shadow={shadow}"
     )
@@ -3816,6 +3824,7 @@ def _isaac_lighting_summary(
     roles = scene_light_rig_roles(rig)
     existing = _optional_int(diagnostics.get("existing_light_count"))
     added = _optional_int(diagnostics.get("added_light_count"))
+    existing_scale = _optional_float(diagnostics.get("existing_light_intensity_scale"))
     dome_intensity = diagnostics.get("requested_dome_intensity")
     if dome_intensity is None:
         dome_intensity = _rig_ambient(lighting_profile).get("isaac_dome_intensity")
@@ -3824,16 +3833,27 @@ def _isaac_lighting_summary(
         key_intensity = _rig_backend_override(lighting_profile, "isaac").get("key_intensity")
     existing_count = existing or 0
     added_count = added or 0
-    has_environment = existing_count + added_count > 0 or _positive_number(dome_intensity)
+    active_existing_count = existing_count if existing_scale is None or existing_scale > 0.0 else 0
+    active_capture_roles = []
+    if _positive_number(dome_intensity):
+        active_capture_roles.append("dome_environment")
+    if _positive_number(key_intensity):
+        active_capture_roles.append("directional_key")
+    has_environment = active_existing_count + added_count > 0 or _positive_number(
+        dome_intensity
+    )
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     summary = (
         f"{diagnostics.get('status') or 'isaac_lighting_profile'}; "
         f"rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
         f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
         f"authored={roles.get('authored_scene_lights_policy')}; "
-        f"existing={existing_count}; added={added_count}; "
+        f"authored_usd_lights={existing_count}; "
+        f"active_authored_usd_lights={active_existing_count}; "
+        f"added_capture_lights={added_count}; active_roles={_cell_text(active_capture_roles)}; "
         f"dome_intensity={_float_text(dome_intensity)}; "
         f"key_intensity={_float_text(key_intensity)}; "
+        f"existing_scale={_float_text(existing_scale)}; "
         f"added_paths={_cell_text(diagnostics.get('added_light_paths'))}"
     )
     return {
@@ -7387,7 +7407,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(lane.get('view_variant', '')))}</td>"
             f"<td>{html.escape(str(lane.get('calibration_status', '')))}</td>"
             f"<td>{html.escape(str(_lighting_profile_id(lane)))}</td>"
-            f"<td>{html.escape(str(_lighting_diagnostics_text(lane)))}</td>"
+            f"<td>{html.escape(str(_lighting_diagnostics_text(lane, lane_id=str(lane_id))))}</td>"
             f"<td>{html.escape(str(_color_profile_id(lane)))}</td>"
             f"<td>{html.escape(str(_native_render_status(lane)))}</td>"
             "</tr>"
@@ -7453,7 +7473,7 @@ def _native_render_status(lane: dict[str, Any]) -> str:
     return str(diagnostics.get("status") or "")
 
 
-def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:
+def _lighting_diagnostics_text(lane: dict[str, Any], *, lane_id: str = "") -> str:
     diagnostics = (
         lane.get("lighting_diagnostics")
         if isinstance(lane.get("lighting_diagnostics"), dict)
@@ -7461,11 +7481,16 @@ def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:
     )
     if not diagnostics:
         return ""
-    return (
-        f"{diagnostics.get('status')}; "
-        f"existing={diagnostics.get('existing_light_count')}; "
-        f"added={diagnostics.get('added_light_count')}"
+    lighting = (
+        lane.get("lighting_profile") if isinstance(lane.get("lighting_profile"), dict) else {}
     )
+    if lane_id == GENESIS_LANE_ID:
+        return _genesis_lighting_summary(diagnostics, lighting)["summary"]
+    if lane_id == ISAAC_LANE_ID:
+        return _isaac_lighting_summary(diagnostics, lighting)["summary"]
+    if lane_id == MOLMOSPACES_LANE_ID:
+        return _mujoco_lighting_summary({"lanes": {lane_id: lane}}, lighting)["summary"]
+    return _generic_lighting_summary(diagnostics, lighting)["summary"]
 
 
 def _failure_section(manifest: dict[str, Any]) -> str:
