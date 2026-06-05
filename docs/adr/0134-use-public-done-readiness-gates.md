@@ -36,6 +36,11 @@ cleanup contract boundary:
 - public cleanup worklists or semantic substeps derived from traces;
 - public run acceptance configuration such as the requested run size or profile.
 
+The first run-size-derived grounded-cleanup-chain policy is scoped to
+`camera-raw` / RAW_FPV runs. Structured `world-labels` lanes may still opt into
+an explicit grounded-chain requirement, but they must use world-label recovery
+tooling such as `navigate_to_object`, not RAW_FPV-only visual-candidate recovery.
+
 They must not use or expose private generated mess membership, acceptable
 destination sets, hidden target lists, private manifests, hidden target
 receptacles, `is_misplaced`, or scorer object truth.

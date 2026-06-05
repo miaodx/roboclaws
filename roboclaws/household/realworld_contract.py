@@ -69,6 +69,8 @@ CAMERA_MODEL_POLICY_NAME = "camera_model_policy_baseline"
 MODEL_DECLARED_OBSERVATION_SCHEMA = "model_declared_observation_v1"
 MODEL_DECLARED_OBSERVATIONS_SCHEMA = "model_declared_observations_v1"
 DONE_READINESS_SCHEMA = "done_readiness_v1"
+DONE_READINESS_POLICY_RAW_FPV = "raw_fpv_grounded_cleanup_chains"
+DONE_READINESS_POLICY_EXPLICIT = "explicit_grounded_cleanup_chains"
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
@@ -1518,12 +1520,7 @@ class RealWorldCleanupContract:
         self,
         semantic_cleanup_evidence: dict[str, Any] | None,
     ) -> dict[str, Any] | None:
-        required_count = _positive_int(
-            self.public_acceptance_config.get("required_grounded_cleanup_chains")
-        )
-        if required_count is None:
-            requested = _positive_int(self.public_acceptance_config.get("requested_run_size"))
-            required_count = _public_success_threshold(requested) if requested is not None else 0
+        required_count, policy_id = self._grounded_cleanup_chain_requirement()
         if required_count <= 0:
             return None
         evidence = semantic_cleanup_evidence or {}
@@ -1537,25 +1534,58 @@ class RealWorldCleanupContract:
             complete_count = len(complete_handles)
         if complete_count >= required_count:
             return None
+        required_tool = self._grounded_cleanup_chain_required_tool()
         blocker = {
             "type": "insufficient_grounded_cleanup_chains",
+            "policy_id": policy_id,
             "current": complete_count,
             "required": required_count,
-            "required_tool": "navigate_to_visual_candidate",
+            "required_tool": required_tool,
             "complete_semantic_substep_objects": complete_count,
             "complete_semantic_substep_object_ids": complete_handles,
             "required_complete_semantic_substep_objects": required_count,
             "semantic_substep_count": _nonnegative_int(evidence.get("semantic_substep_count")),
-            "recovery_hint": (
+            "recovery_hint": self._grounded_cleanup_chain_recovery_hint(required_tool),
+        }
+        _assert_no_forbidden_agent_view_keys(blocker)
+        return blocker
+
+    def _grounded_cleanup_chain_requirement(self) -> tuple[int, str]:
+        explicit_count = _positive_int(
+            self.public_acceptance_config.get("required_grounded_cleanup_chains")
+        )
+        if explicit_count is not None:
+            return explicit_count, str(
+                self.public_acceptance_config.get("done_readiness_policy")
+                or DONE_READINESS_POLICY_EXPLICIT
+            )
+        if self.perception_mode != RAW_FPV_ONLY_MODE:
+            return 0, ""
+        requested = _positive_int(self.public_acceptance_config.get("requested_run_size"))
+        if requested is None:
+            return 0, ""
+        return _public_success_threshold(requested), DONE_READINESS_POLICY_RAW_FPV
+
+    def _grounded_cleanup_chain_required_tool(self) -> str:
+        if self.perception_mode == RAW_FPV_ONLY_MODE:
+            return "navigate_to_visual_candidate"
+        return "navigate_to_object"
+
+    def _grounded_cleanup_chain_recovery_hint(self, required_tool: str) -> str:
+        if required_tool == "navigate_to_visual_candidate":
+            return (
                 "Continue the cleanup loop before done. For each plausible object in a "
                 "public observation, call navigate_to_visual_candidate when required; "
                 "when it returns ok=true, call pick, navigate_to_receptacle with the "
                 "public candidate fixture, then the recommended placement tool. Call "
                 "done only after enough grounded cleanup chains have completed."
-            ),
-        }
-        _assert_no_forbidden_agent_view_keys(blocker)
-        return blocker
+            )
+        return (
+            "Continue the cleanup loop before done. For each pending public observed "
+            "handle, call navigate_to_object, pick, navigate_to_receptacle with a public "
+            "candidate fixture, then the recommended placement tool. Call done only after "
+            "enough grounded cleanup chains have completed."
+        )
 
     def _sweep_coverage(self) -> dict[str, Any]:
         waypoints = self._public_waypoints
@@ -5533,6 +5563,9 @@ def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
         value = _positive_int(source.get(key))
         if value is not None:
             accepted[key] = value
+    policy = str(source.get("done_readiness_policy") or "").strip()
+    if policy:
+        accepted["done_readiness_policy"] = policy
     _assert_no_forbidden_agent_view_keys(accepted)
     return accepted
 

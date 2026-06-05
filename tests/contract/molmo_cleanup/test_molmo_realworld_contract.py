@@ -9,6 +9,8 @@ from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     CAMERA_MODEL_POLICY_SCHEMA,
     CLEANUP_WORKLIST_SCHEMA,
+    DONE_READINESS_POLICY_EXPLICIT,
+    DONE_READINESS_POLICY_RAW_FPV,
     MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
@@ -1622,6 +1624,85 @@ def test_realworld_done_rejects_one_missing_public_waypoint() -> None:
     assert early_done["completion"]["blockers"][0]["type"] == "insufficient_sweep_coverage"
 
 
+def test_world_labels_requested_run_size_does_not_enable_raw_fpv_grounded_chain_gate() -> None:
+    contract = _contract(
+        CleanupBackendSession(_empty_cleanup_scenario("world-labels-readiness-policy-test")),
+        public_acceptance_config={"requested_run_size": 5},
+    )
+
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    done = contract.done("world-labels run completed after public sweep")
+
+    assert done["ok"] is True
+    assert done["tool"] == "done"
+    _assert_no_forbidden_keys(done)
+
+
+def test_camera_raw_requested_run_size_enables_grounded_chain_gate_after_sweep() -> None:
+    contract = _contract(
+        CleanupBackendSession(_empty_cleanup_scenario("camera-raw-readiness-policy-test")),
+        perception_mode=RAW_FPV_ONLY_MODE,
+        public_acceptance_config={"requested_run_size": 5},
+    )
+
+    observation = {}
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        observation = contract.observe()
+    for index in range(5):
+        declared = contract.declare_visual_candidates(
+            observation["raw_fpv_observation"]["observation_id"],
+            candidates=[
+                {
+                    "category": f"imaginary widget {index}",
+                    "target_fixture_id": "sink_01",
+                    "evidence_note": "unresolved visual guess for readiness policy",
+                    "image_region": {"type": "verbal_region", "value": f"empty area {index}"},
+                }
+            ],
+            producer_type="main_cleanup_agent",
+            producer_id="test_agent",
+        )
+        assert declared["model_declared_observations"][0]["grounding_status"] == "unresolved"
+
+    done = contract.done("camera-raw run finished without grounded cleanup chains")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
+    assert done["required_tool"] == "navigate_to_visual_candidate"
+    blocker = done["completion"]["blockers"][0]
+    assert blocker["type"] == "insufficient_grounded_cleanup_chains"
+    assert blocker["policy_id"] == DONE_READINESS_POLICY_RAW_FPV
+    assert blocker["required"] == 4
+    assert blocker["required_tool"] == "navigate_to_visual_candidate"
+    _assert_no_forbidden_keys(done)
+
+
+def test_world_labels_explicit_grounded_chain_gate_uses_world_label_tooling() -> None:
+    contract = _contract(
+        CleanupBackendSession(_empty_cleanup_scenario("world-labels-explicit-readiness-test")),
+        public_acceptance_config={"required_grounded_cleanup_chains": 2},
+    )
+
+    for waypoint in contract.metric_map()["inspection_waypoints"]:
+        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+        contract.observe()
+
+    done = contract.done("world-labels run explicitly requires public chains")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
+    assert done["required_tool"] == "navigate_to_object"
+    blocker = done["completion"]["blockers"][0]
+    assert blocker["policy_id"] == DONE_READINESS_POLICY_EXPLICIT
+    assert blocker["required_tool"] == "navigate_to_object"
+    assert "navigate_to_visual_candidate" not in blocker["recovery_hint"]
+    _assert_no_forbidden_keys(done)
+
+
 def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -2424,6 +2505,24 @@ def _first_detection_by_category(
             if detection["category"] == category:
                 return detection
     raise AssertionError(f"expected visible detection with category {category}")
+
+
+def _empty_cleanup_scenario(scenario_id: str) -> CleanupScenario:
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task="check done readiness policy",
+        seed=7,
+        objects=(),
+        receptacles=(
+            CleanupReceptacle("sink_01", "Sink", "kitchen", category="Sink"),
+            CleanupReceptacle("desk_01", "Desk", "office", category="Desk"),
+        ),
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
+        ),
+    )
 
 
 def _live_style_alias_scenario() -> CleanupScenario:
