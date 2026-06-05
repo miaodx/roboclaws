@@ -3347,6 +3347,9 @@ def _ensure_capture_lighting(
     profile = profile if isinstance(profile, dict) else {}
     dome_intensity = float(profile.get("isaac_dome_intensity", 1500.0))
     key_intensity = float(profile.get("isaac_key_intensity", 7000.0))
+    existing_light_intensity_scale = float(
+        profile.get("isaac_existing_light_intensity_scale", 1.0)
+    )
     key_direction = _normalized_vec3(profile.get("scene_key_light_direction"))
     key_rotation_source = "scene_key_light_direction"
     key_rotation = (
@@ -3361,6 +3364,11 @@ def _ensure_capture_lighting(
         key_rotation_source = "fallback"
         key_rotation = [-55.0, 0.0, 35.0]
     existing_lights = _stage_light_paths(stage, exclude_prefix="/RoboclawsSmoke")
+    existing_light_adjustments = _scale_stage_light_intensities(
+        stage,
+        existing_lights,
+        scale=existing_light_intensity_scale,
+    )
     added_lights = []
     if dome_intensity > 0.0:
         dome = UsdLux.DomeLight.Define(stage, "/RoboclawsSmokeDomeLight")
@@ -3384,6 +3392,8 @@ def _ensure_capture_lighting(
         "mujoco_headlight_diffuse": profile.get("mujoco_headlight_diffuse"),
         "existing_light_count": len(existing_lights),
         "existing_light_paths": existing_lights,
+        "existing_light_intensity_scale": existing_light_intensity_scale,
+        "existing_light_intensity_adjustments": existing_light_adjustments,
         "added_light_count": len(added_lights),
         "added_light_paths": added_lights,
         "requested_dome_intensity": dome_intensity,
@@ -3419,6 +3429,49 @@ def _isaac_distant_light_rotation_from_direction(direction: list[float]) -> list
     pitch = math.degrees(math.asin(max(-1.0, min(1.0, y))))
     yaw = math.degrees(math.atan2(-x, -z))
     return [pitch, yaw, 0.0]
+
+
+def _scale_stage_light_intensities(
+    stage: Any,
+    light_paths: list[str],
+    *,
+    scale: float,
+) -> list[dict[str, Any]]:
+    if scale == 1.0:
+        return []
+    from pxr import UsdLux
+
+    adjustments: list[dict[str, Any]] = []
+    for path in light_paths:
+        prim = stage.GetPrimAtPath(path)
+        if not prim or not prim.IsValid():
+            adjustments.append({"path": path, "status": "missing_prim"})
+            continue
+        try:
+            light_api = UsdLux.LightAPI(prim)
+            intensity_attr = light_api.GetIntensityAttr()
+        except Exception as exc:  # pragma: no cover - defensive against USD schema drift.
+            adjustments.append({"path": path, "status": "missing_intensity_api", "error": str(exc)})
+            continue
+        if not intensity_attr:
+            adjustments.append({"path": path, "status": "missing_intensity_attr"})
+            continue
+        try:
+            previous = float(intensity_attr.Get() or 0.0)
+            updated = previous * scale
+            intensity_attr.Set(updated)
+            adjustments.append(
+                {
+                    "path": path,
+                    "status": "scaled",
+                    "previous_intensity": previous,
+                    "updated_intensity": updated,
+                    "scale": scale,
+                }
+            )
+        except Exception as exc:  # pragma: no cover - defensive against USD value errors.
+            adjustments.append({"path": path, "status": "scale_failed", "error": str(exc)})
+    return adjustments
 
 
 def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -3692,6 +3692,13 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "genesis_shadow": genesis_shadow,
         "isaac_dome_intensity": isaac_dome_intensity,
         "isaac_key_intensity": isaac_key_intensity,
+        "isaac_existing_light_intensity_scale": isaac_lighting.get(
+            "existing_light_intensity_scale"
+        ),
+        "isaac_existing_light_intensity_adjustments": isaac_lighting.get(
+            "existing_light_intensity_adjustments"
+        )
+        or [],
         "isaac_added_light_paths": isaac_lighting.get("added_light_paths") or [],
         "isaac_shadow_disabled_prim_count": shadow_disabled_count,
         "mujoco_light_count": render_probe.get("mujoco_light_count"),
@@ -6815,6 +6822,7 @@ def _shadow_parity_probe_section(manifest: dict[str, Any]) -> str:
         ("Genesis shadow", diagnostics.get("genesis_shadow")),
         ("Isaac dome intensity", diagnostics.get("isaac_dome_intensity")),
         ("Isaac key intensity", diagnostics.get("isaac_key_intensity")),
+        ("Isaac existing light scale", diagnostics.get("isaac_existing_light_intensity_scale")),
         ("Isaac added light paths", diagnostics.get("isaac_added_light_paths")),
         ("MuJoCo light count", diagnostics.get("mujoco_light_count")),
         ("Isaac light count", diagnostics.get("isaac_light_count")),

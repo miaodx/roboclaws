@@ -35,6 +35,7 @@ DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
     "isaac_dome_intensity": 60.0,
     "isaac_key_intensity": 0.0,
     "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
+    "isaac_existing_light_intensity_scale": 1.0,
     "genesis_ambient_light": [0.37, 0.37, 0.37],
     "genesis_background_color": [0.04, 0.08, 0.12],
     "genesis_shadow": False,
@@ -71,7 +72,16 @@ SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE = {
     "isaac_dome_intensity": 12.0,
     "isaac_key_intensity": 1200.0,
     "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
+    "isaac_existing_light_intensity_scale": 0.0,
     "genesis_shadow": True,
+    "genesis_directional_lights": [
+        {
+            "type": "directional",
+            "dir": [-0.57735, 0.57735, -0.57735],
+            "color": [1.0, 1.0, 1.0],
+            "intensity": 3.0,
+        },
+    ],
 }
 BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE = {
     **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
@@ -82,10 +92,19 @@ BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE = {
         "and enables Genesis shadows so all lanes remain reviewable while showing "
         "useful cast-shadow evidence."
     ),
-    "isaac_dome_intensity": 60.0,
-    "isaac_key_intensity": 300.0,
+    "isaac_dome_intensity": 120.0,
+    "isaac_key_intensity": 900.0,
     "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
+    "isaac_existing_light_intensity_scale": 0.0,
     "genesis_shadow": True,
+    "genesis_directional_lights": [
+        {
+            "type": "directional",
+            "dir": [-0.57735, 0.57735, -0.57735],
+            "color": [1.0, 1.0, 1.0],
+            "intensity": 3.0,
+        },
+    ],
 }
 SCENE_PROBE_LIGHTING_PROFILES = {
     DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["profile_id"]: DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
@@ -373,6 +392,14 @@ def _lighting_profile(value: Any) -> dict[str, Any]:
         "isaac_key_rotation_deg": _vec3(
             raw.get("isaac_key_rotation_deg"),
             default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["isaac_key_rotation_deg"],
+        ),
+        "isaac_existing_light_intensity_scale": float(
+            raw.get(
+                "isaac_existing_light_intensity_scale",
+                DEFAULT_SCENE_PROBE_LIGHTING_PROFILE[
+                    "isaac_existing_light_intensity_scale"
+                ],
+            )
         ),
         "genesis_ambient_light": _vec3(
             raw.get("genesis_ambient_light"),

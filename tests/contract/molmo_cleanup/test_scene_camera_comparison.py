@@ -2146,9 +2146,14 @@ def test_scene_camera_balanced_review_lighting_profile_is_default_candidate() ->
     assert SCENE_PROBE_LIGHTING_PROFILES["fill"] is default
     assert profile["profile_id"] == "scene_probe_balanced_review_light_v1"
     assert profile["genesis_shadow"] is True
-    assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
-    assert profile["isaac_key_intensity"] == pytest.approx(300.0)
+    assert profile["isaac_dome_intensity"] == pytest.approx(120.0)
+    assert profile["isaac_key_intensity"] == pytest.approx(900.0)
+    assert profile["isaac_existing_light_intensity_scale"] == pytest.approx(0.0)
     assert profile["scene_key_light_direction"] == pytest.approx(
+        [-0.57735, 0.57735, -0.57735]
+    )
+    assert len(profile["genesis_directional_lights"]) == 1
+    assert profile["genesis_directional_lights"][0]["dir"] == pytest.approx(
         [-0.57735, 0.57735, -0.57735]
     )
     assert SCENE_PROBE_LIGHTING_PROFILES["default"] is profile
@@ -2221,6 +2226,7 @@ def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_st
         {
             "requested_dome_intensity": profile["isaac_dome_intensity"],
             "requested_key_intensity": profile["isaac_key_intensity"],
+            "existing_light_intensity_scale": profile["isaac_existing_light_intensity_scale"],
             "applied_key_light_direction": profile["scene_key_light_direction"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
@@ -2265,6 +2271,7 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
         {
             "requested_dome_intensity": profile["isaac_dome_intensity"],
             "requested_key_intensity": profile["isaac_key_intensity"],
+            "existing_light_intensity_scale": profile["isaac_existing_light_intensity_scale"],
             "applied_key_light_direction": profile["scene_key_light_direction"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
