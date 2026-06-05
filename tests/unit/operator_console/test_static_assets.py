@@ -23,8 +23,11 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert 'id="isaac-fields"' in html
     assert 'id="agibot-fields"' in html
     assert 'id="agibot-gate-fields"' in html
+    assert 'id="real-movement-gate"' in html
     assert "renderRouteFields" in app
     assert "field_groups" in app
+    assert "real_movement_enabled" in app
+    assert "Movement" in app
     assert "NEEDS PREFLIGHT" in app
     assert "NEEDS OPERATOR GATES" in app
     assert "PORT IN USE" in app

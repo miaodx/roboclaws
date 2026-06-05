@@ -29,6 +29,7 @@ const els = {
   localizationGate: document.getElementById("localization-gate"),
   enablementGate: document.getElementById("enablement-gate"),
   estopGate: document.getElementById("estop-gate"),
+  realMovementGate: document.getElementById("real-movement-gate"),
   gateList: document.getElementById("gate-list"),
   commandPreview: document.getElementById("command-preview"),
   startButton: document.getElementById("start-button"),
@@ -76,6 +77,7 @@ function bindEvents() {
     els.localizationGate,
     els.enablementGate,
     els.estopGate,
+    els.realMovementGate,
   ].forEach((input) => {
     input.addEventListener("input", renderSelection);
     input.addEventListener("input", renderRoutes);
@@ -314,6 +316,11 @@ async function refreshSelectedRouteReadiness() {
 function confirmLaunch() {
   const route = state.selectedRoute;
   const promptSource = els.taskPrompt.value.trim() ? "custom" : "default";
+  const movementRows = isAgibotRoute(route)
+    ? `<dt>Movement</dt><dd>${escapeHtml(
+        els.realMovementGate.checked ? "enabled" : "dry-run"
+      )}</dd>`
+    : "";
   els.confirmBody.innerHTML = `
     <dl class="state-list">
       <dt>Route</dt><dd>${escapeHtml(route.label)}</dd>
@@ -321,6 +328,7 @@ function confirmLaunch() {
       <dt>Backend</dt><dd>${escapeHtml(route.backend)}</dd>
       <dt>Profile</dt><dd>${escapeHtml(route.profile)}</dd>
       <dt>Lock</dt><dd>${escapeHtml(route.lock_name)}</dd>
+      ${movementRows}
       <dt>Prompt</dt><dd>${promptSource}</dd>
       <dt>Output</dt><dd>output/operator-console/runs/...</dd>
     </dl>
@@ -353,6 +361,9 @@ async function onConfirmClose() {
   }
   if (els.contextInput.value) {
     body.overrides.context_json = els.contextInput.value;
+  }
+  if (isAgibotRoute(state.selectedRoute)) {
+    body.overrides.real_movement_enabled = els.realMovementGate.checked ? "true" : "false";
   }
   if (els.isaacSceneInput.value) {
     body.overrides.isaac_scene_usd_path = els.isaacSceneInput.value;
@@ -512,6 +523,11 @@ function ensureActiveViewAvailable(route = state.selectedRoute) {
 
 function routeViewModes(route) {
   return new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
+}
+
+function isAgibotRoute(route) {
+  const groups = new Set((route && route.field_groups) || []);
+  return Boolean(route && (route.backend === "agibot_gdk" || groups.has("agibot_gates")));
 }
 
 function visiblePanelsForView(view, modes) {

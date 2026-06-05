@@ -43,12 +43,12 @@ def test_launcher_builds_route_specific_overrides(tmp_path: Path) -> None:
         overrides={
             "context_json": str(tmp_path / "context.json"),
             "visual_grounding": "grounding-dino",
-            "real_movement_enabled": "false",
+            "real_movement_enabled": "true",
         },
     )
     assert f"output_dir={tmp_path / 'output' / 'operator-console' / 'runs' / 'run-1'}" in argv
     assert f"context_json={tmp_path / 'context.json'}" in argv
-    assert "real_movement_enabled=false" in argv
+    assert "real_movement_enabled=true" in argv
 
 
 def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
