@@ -19,13 +19,14 @@ from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.cleanup_primitive_evidence import (
     cleanup_primitive_evidence_from_substeps,
 )
+from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.manipulation_provenance import (
     api_semantic_manipulation_evidence,
 )
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.planner_proof_attachment import attach_planner_proof
 from roboclaws.household.planner_proof_requests import write_planner_proof_requests
-from roboclaws.household.profiles import cleanup_profile_metadata_for_run
+from roboclaws.household.profiles import CAMERA_RAW_PROFILE, cleanup_profile_metadata_for_run
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
@@ -53,13 +54,16 @@ from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
     ROBOT_VIEW_VARIANT,
     SEMANTIC_LOOP_VARIANT,
+    camera_offsets_from_raw_fpv_observation,
     cleanup_plan_from_semantic_substeps,
+    has_complete_semantic_sequence,
     primitive_provenance_counts,
     record_robot_view_step,
     robot_view_camera_control_summary,
     robot_view_capture_for_tool,
     semantic_diagnostics,
     semantic_substeps,
+    successful_semantic_phases,
 )
 from roboclaws.household.skill_scratchpad import read_or_create_skill_scratchpad
 from roboclaws.household.types import CleanupScenario
@@ -261,11 +265,63 @@ class RealWorldMolmoCleanupMCPServer:
             }
         response = self._augment_response(name, request, response)
         response = self._attach_raw_fpv_artifact_if_needed(name, response)
+        if name == "done" and response.get("ok"):
+            response = self._guard_raw_fpv_live_done(response) or response
         self._write_tool_response(name, response)
         if name == "done" and response.get("ok"):
             return self._finalize_done(str(kwargs.get("reason", "")), response)
         self._record_tool_robot_view(name, request, response)
         return response
+
+    def _guard_raw_fpv_live_done(self, done_response: dict[str, Any]) -> dict[str, Any] | None:
+        if (
+            not self.agent_driven
+            or self.perception_mode != RAW_FPV_ONLY_MODE
+            or self.cleanup_profile != CAMERA_RAW_PROFILE
+        ):
+            return None
+        required_count = self._required_raw_fpv_live_cleanup_count()
+        if required_count <= 0:
+            return None
+        trace_events = self._read_trace_events()
+        substeps = semantic_substeps(trace_events, self.contract.public_receptacles_by_id())
+        complete_handles = _complete_semantic_substep_handles(substeps)
+        if len(complete_handles) >= required_count:
+            return None
+        return {
+            "ok": False,
+            "tool": "done",
+            "status": "error",
+            "error_reason": "insufficient_grounded_cleanup_chains",
+            "required_tool": "navigate_to_visual_candidate",
+            "complete_semantic_substep_objects": len(complete_handles),
+            "complete_semantic_substep_object_ids": complete_handles,
+            "required_complete_semantic_substep_objects": required_count,
+            "semantic_substep_count": len(substeps),
+            "recovery_hint": (
+                "Continue the RAW_FPV cleanup loop before done. For each plausible "
+                "object in a raw FPV observation, call navigate_to_visual_candidate; "
+                "when it returns ok=true, immediately call pick, navigate_to_receptacle "
+                "with candidate_fixture_id, then the recommended placement tool. Call "
+                "done only after enough grounded cleanup chains have completed."
+            ),
+            "contract": REALWORLD_CONTRACT,
+            "agent_driven": self.agent_driven,
+        }
+
+    def _required_raw_fpv_live_cleanup_count(self) -> int:
+        requested_count = getattr(
+            self.base_contract.backend,
+            "requested_generated_mess_count",
+            None,
+        )
+        try:
+            target_count = int(requested_count)
+        except (TypeError, ValueError):
+            target_count = len(self.scenario.private_manifest.targets)
+        if target_count <= 0:
+            target_count = len(self.scenario.private_manifest.targets)
+        return generated_mess_success_threshold(target_count)
 
     def _agent_view_payload(self) -> dict[str, Any]:
         agent_view = self.contract.agent_view_payload()
@@ -568,6 +624,7 @@ class RealWorldMolmoCleanupMCPServer:
         step = self._record_robot_view(
             f"observe {observation_id}",
             label_suffix=observation_id,
+            **camera_offsets_from_raw_fpv_observation(raw),
         )
         if step is None:
             return response
@@ -601,7 +658,13 @@ class RealWorldMolmoCleanupMCPServer:
         resolved = _resolve_artifact_path(self.run_dir, str(fpv_path))
         if not resolved.is_file():
             return response
-        state_text = json.dumps(response, sort_keys=True)
+        state_text = json.dumps(
+            _compact_raw_fpv_mcp_observe_state(
+                response,
+                cleanup_worklist=self.contract.cleanup_worklist_payload(),
+            ),
+            sort_keys=True,
+        )
         return [state_text, MCPImage(data=resolved.read_bytes(), format="png")]
 
     def write_runtime_event(self, event: str, **data: Any) -> None:
@@ -714,6 +777,8 @@ class RealWorldMolmoCleanupMCPServer:
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
         semantic_phase: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
     ) -> dict[str, Any] | None:
         if not self.record_robot_views:
             return None
@@ -733,6 +798,8 @@ class RealWorldMolmoCleanupMCPServer:
                 focus_object_id=focus_object_id,
                 focus_receptacle_id=self._internal_fixture_id(focus_receptacle_id),
                 semantic_phase=semantic_phase,
+                camera_yaw_offset_deg=camera_yaw_offset_deg,
+                camera_pitch_offset_deg=camera_pitch_offset_deg,
             )
         except Exception as exc:
             self.write_runtime_event(
@@ -766,7 +833,16 @@ class RealWorldMolmoCleanupMCPServer:
         self._tool_event_counts[f"{tool}:response"] = (
             self._tool_event_counts.get(f"{tool}:response", 0) + 1
         )
-        self._write_trace(tool=tool, event="response", response=response)
+        trace_response = response
+        if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
+            trace_response = dict(response)
+            trace_response["agent_facing_compact_state"] = (
+                _compact_raw_fpv_mcp_observe_state(
+                    response,
+                    cleanup_worklist=self.contract.cleanup_worklist_payload(),
+                )
+            )
+        self._write_trace(tool=tool, event="response", response=trace_response)
 
     def _write_trace(self, *, tool: str, event: str, **payload: Any) -> None:
         trace_event = {
@@ -825,6 +901,15 @@ def _compact_declare_visual_candidates_response(response: dict[str, Any]) -> dic
         "visible_object_detections": [],
         "private_target_truth_included": False,
     }
+
+
+def _complete_semantic_substep_handles(substeps: list[dict[str, Any]]) -> list[str]:
+    handles = []
+    for item in substeps:
+        phases = successful_semantic_phases(item.get("steps", []))
+        if has_complete_semantic_sequence(phases):
+            handles.append(str(item.get("object_id") or ""))
+    return [handle for handle in handles if handle]
 
 
 def _compact_visual_grounding_pipeline(pipeline: dict[str, Any]) -> dict[str, Any]:
@@ -926,6 +1011,149 @@ def _compact_camera_model_candidate(item: dict[str, Any]) -> dict[str, Any]:
             ("fixture_id", "relation", "confidence", "source", "perception_source"),
         )
     return compact
+
+
+def _compact_raw_fpv_mcp_observe_state(
+    response: dict[str, Any],
+    *,
+    cleanup_worklist: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    raw = response.get("raw_fpv_observation") if isinstance(response, dict) else {}
+    raw = raw if isinstance(raw, dict) else {}
+    return {
+        "schema": "raw_fpv_mcp_observe_state_v1",
+        "ok": response.get("ok"),
+        "tool": response.get("tool"),
+        "status": response.get("status"),
+        "contract": response.get("contract"),
+        "perception_mode": response.get("perception_mode"),
+        "waypoint_id": response.get("waypoint_id") or raw.get("waypoint_id"),
+        "current_room_id": response.get("current_room_id") or raw.get("room_id"),
+        "held_object_id": response.get("held_object_id") or raw.get("held_object_id"),
+        "visible_object_detections": response.get("visible_object_detections") or [],
+        "raw_fpv_observation": _compact_raw_fpv_observation(raw),
+        "cleanup_worklist_summary": _compact_cleanup_worklist_summary(cleanup_worklist),
+        "instruction": response.get("instruction"),
+    }
+
+
+def _compact_raw_fpv_observation(raw: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "observation_id": raw.get("observation_id"),
+        "waypoint_id": raw.get("waypoint_id"),
+        "room_id": raw.get("room_id"),
+        "held_object_id": raw.get("held_object_id"),
+        "perception_mode": raw.get("perception_mode"),
+        "structured_detections_available": raw.get("structured_detections_available"),
+        "camera_offset": raw.get("camera_offset"),
+        "image_artifacts": raw.get("image_artifacts") or {},
+        "artifact_status": raw.get("artifact_status"),
+        "robot_view_label": raw.get("robot_view_label"),
+        "public_contract_note": raw.get("public_contract_note"),
+        "camera_control_summary": _compact_camera_control_contract(
+            raw.get("camera_control_contract")
+        ),
+    }
+
+
+def _compact_camera_control_contract(contract: Any) -> dict[str, Any]:
+    if not isinstance(contract, dict):
+        return {
+            "schema": "robot_view_camera_control_contract_summary_v1",
+            "status": "missing_camera_control_contract",
+            "same_pose_api": False,
+        }
+    agent_facing_fpv = contract.get("agent_facing_fpv")
+    agent_facing_fpv = agent_facing_fpv if isinstance(agent_facing_fpv, dict) else {}
+    return {
+        "schema": "robot_view_camera_control_contract_summary_v1",
+        "contract_schema": contract.get("schema"),
+        "status": contract.get("status"),
+        "camera_model": contract.get("camera_model"),
+        "same_pose_api": contract.get("same_pose_api") is True,
+        "agent_facing_fpv_source": agent_facing_fpv.get("source"),
+        "canonical_camera_control": agent_facing_fpv.get("canonical_camera_control") is True,
+    }
+
+
+def _compact_cleanup_worklist_summary(worklist: dict[str, Any] | None) -> dict[str, Any]:
+    worklist = worklist if isinstance(worklist, dict) else {}
+    objects = [item for item in worklist.get("objects") or [] if isinstance(item, dict)]
+    next_actions = _compact_worklist_next_actions(objects)
+    return {
+        "schema": "cleanup_worklist_summary_v1",
+        "object_count": len(objects),
+        "handled_object_handles": [
+            str(item.get("object_id") or "")
+            for item in objects
+            if str(item.get("state") or "") in {"placed", "placed_closed", "skipped"}
+        ],
+        "pending_object_handles": [
+            str(item.get("object_id") or "")
+            for item in objects
+            if str(item.get("state") or "") == "pending"
+        ],
+        "objects": [_compact_worklist_object(item) for item in objects],
+        "next_actions": next_actions,
+        "next_action_count": len(next_actions),
+        "held_object_id": worklist.get("held_object_id"),
+    }
+
+
+def _compact_worklist_next_actions(objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    actions = []
+    for item in objects:
+        state = str(item.get("state") or "")
+        object_id = str(item.get("object_id") or "")
+        candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
+        if (
+            state not in {"pending", "navigating_to_object", "held"}
+            or not object_id
+            or not candidate_fixture_id
+            or not bool(item.get("cleanup_recommended"))
+        ):
+            continue
+        recommended_tool = str(item.get("recommended_tool") or "place")
+        if state == "held":
+            tool_sequence = ["navigate_to_receptacle", recommended_tool]
+        elif state == "navigating_to_object":
+            tool_sequence = ["pick", "navigate_to_receptacle", recommended_tool]
+        else:
+            tool_sequence = [
+                "navigate_to_object",
+                "pick",
+                "navigate_to_receptacle",
+                recommended_tool,
+            ]
+        actions.append(
+            {
+                "object_id": object_id,
+                "category": str(item.get("category") or ""),
+                "candidate_fixture_id": candidate_fixture_id,
+                "recommended_tool": recommended_tool,
+                "state": state,
+                "tool_sequence": tool_sequence,
+                "source": "cleanup_worklist_summary",
+            }
+        )
+    return actions
+
+
+def _compact_worklist_object(item: dict[str, Any]) -> dict[str, Any]:
+    return _select_keys(
+        item,
+        (
+            "object_id",
+            "state",
+            "category",
+            "room_id",
+            "last_waypoint_id",
+            "candidate_fixture_id",
+            "candidate_source",
+            "cleanup_recommended",
+            "recommended_tool",
+        ),
+    )
 
 
 def _select_keys(source: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:

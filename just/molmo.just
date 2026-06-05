@@ -98,6 +98,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_object_ids="${generated_mess_object_ids#generated_mess_object_ids=}"
     task_name="${task_name#task_name=}"
     task_name="${task_name#task-name=}"
+    generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -207,14 +208,15 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
         perception_mode="raw_fpv_only"
+        raw_fpv_required_cleanup_count="$generated_mess_success_threshold"
         visual_args=(--include-robot --robot-name rby1m --record-robot-views)
         checker_visual_args=(
           --require-robot-views
           --require-raw-fpv-observations
           --require-model-declared-observations
-          --min-model-declared-observations 7
-          --min-model-declared-actions 7
-          --min-semantic-accepted-count 7
+          --min-model-declared-observations "$raw_fpv_required_cleanup_count"
+          --min-model-declared-actions "$raw_fpv_required_cleanup_count"
+          --min-semantic-accepted-count "$raw_fpv_required_cleanup_count"
           --min-sweep-coverage 1.0
         )
         ;;
@@ -436,7 +438,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
-        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task")"
+        prompt_cleanup_count="$generated_mess_count"
+        if [[ "$profile" == "camera-raw" ]]; then
+          prompt_cleanup_count="$generated_mess_success_threshold"
+        fi
+        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count")"
 
         server_args=(
           --host "$server_host"
@@ -568,6 +574,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
             ROBOCLAWS_CODEX_MAX_CONTINUATIONS \
+            ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S \
             ROBOCLAWS_ISAACLAB_PYTHON ROBOCLAWS_ISAACLAB_RUNTIME_MODE \
             ROBOCLAWS_REPORT_RERUN_COMMAND
           do

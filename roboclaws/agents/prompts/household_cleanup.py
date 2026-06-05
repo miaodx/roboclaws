@@ -90,42 +90,47 @@ CAMERA_LABELS_PROMPT = (
     "has been observed so the report is generated."
 )
 
-CAMERA_RAW_PROMPT = (
-    "Use the bundled molmo-realworld-cleanup skill instructions. This is the "
-    "trace-preserving RAW_FPV skill lane. Use the cleanup MCP tool entries exactly "
-    "as exposed by Codex; in text, refer to unprefixed tool names, and if the tool "
-    "protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or "
-    "roboclaws__. Call metric_map and fixture_hints first, build an exact waypoint "
-    "checklist from metric_map.inspection_waypoints, sweep every inspection "
-    "waypoint with navigate_to_waypoint then observe, and mark a waypoint complete "
-    "only after that waypoint_id has an observe response. Inspect each raw FPV "
-    "image block returned by observe, do not expect structured labels. "
-    + raw_fpv_inline_candidate_instruction()
-    + " "
-    "Omit source_fixture_id unless you are confident. If visual candidate grounding "
-    "is unresolved, continue the waypoint sweep instead of calling done; if your "
-    "successful cleanup count is still below seven, reobserve from another public "
-    "waypoint or retry the candidate at most once with a broader category or "
-    "clearer verbal_region. When grounding succeeds, pick the returned object and "
-    "place it using candidate_fixture_id and recommended_tool from the response "
-    "when present, use place_inside for shelf/bookshelf/bookcase/shelving/fridge "
-    "targets, and increment your successful cleanup count only after the "
-    "place/place_inside succeeds. Do not pre-register raw-FPV candidates with "
-    "declare_visual_candidates. Clean at least seven grounded visual candidates "
-    "with navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->"
-    "place/place_inside when grounding succeeds, do not call scene_objects or "
-    "read private scoring artifacts, compare the checklist before done, visit any "
-    "missing waypoint_id, and call done only after every "
-    "metric_map.inspection_waypoints waypoint_id has been observed and at least "
-    "seven grounded cleanup chains have succeeded so the report is generated."
-)
+
+def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
+    cleanup_count = max(1, int(target_cleanup_count))
+    cleanup_count_text = str(cleanup_count)
+    return (
+        "Use the bundled molmo-realworld-cleanup skill instructions. This is the "
+        "trace-preserving RAW_FPV skill lane. Use the cleanup MCP tool entries exactly "
+        "as exposed by Codex; in text, refer to unprefixed tool names, and if the tool "
+        "protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or "
+        "roboclaws__. Call metric_map and fixture_hints first, build an exact waypoint "
+        "checklist from metric_map.inspection_waypoints, sweep every inspection "
+        "waypoint with navigate_to_waypoint then observe, and mark a waypoint complete "
+        "only after that waypoint_id has an observe response. Inspect each raw FPV "
+        "image block returned by observe, do not expect structured labels. "
+        + raw_fpv_inline_candidate_instruction()
+        + " "
+        "Omit source_fixture_id unless you are confident. If visual candidate grounding "
+        "is unresolved, continue the waypoint sweep instead of calling done; if your "
+        f"successful cleanup count is still below {cleanup_count_text}, reobserve from "
+        "another public waypoint or retry the candidate at most once with a broader "
+        "category or clearer verbal_region. When grounding succeeds, pick the returned "
+        "object and place it using candidate_fixture_id and recommended_tool from the "
+        "response when present, use place_inside for shelf/bookshelf/bookcase/shelving/"
+        "fridge targets, and increment your successful cleanup count only after the "
+        "place/place_inside succeeds. Do not pre-register raw-FPV candidates with "
+        "declare_visual_candidates. "
+        f"Clean at least {cleanup_count_text} grounded visual candidates with "
+        "navigate_to_visual_candidate->pick->navigate_to_receptacle->open?->"
+        "place/place_inside when grounding succeeds, do not call scene_objects or "
+        "read private scoring artifacts, compare the checklist before done, visit any "
+        "missing waypoint_id, and call done only after every "
+        "metric_map.inspection_waypoints waypoint_id has been observed and at least "
+        f"{cleanup_count_text} grounded cleanup chains have succeeded so the report is generated."
+    )
 
 
-def render_kickoff_prompt(profile: str) -> str:
+def render_kickoff_prompt(profile: str, *, target_cleanup_count: int = 7) -> str:
     """Render the live-agent kickoff prompt for a cleanup input lane."""
 
     if profile == "camera-raw":
-        return CAMERA_RAW_PROMPT
+        return _camera_raw_prompt(target_cleanup_count=target_cleanup_count)
     if profile == "camera-labels":
         return CAMERA_LABELS_PROMPT
     if profile == "world-labels-sanitized":
@@ -156,12 +161,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--profile", default="world-labels")
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default="")
+    parser.add_argument("--target-cleanup-count", type=int, default=7)
     args = parser.parse_args(argv)
     if args.task_name == "semantic-map-build":
         task = args.task or "build a semantic map of this room"
         print(render_semantic_map_build_prompt(args.profile, task))
     else:
-        print(render_kickoff_prompt(args.profile))
+        print(render_kickoff_prompt(args.profile, target_cleanup_count=args.target_cleanup_count))
     return 0
 
 

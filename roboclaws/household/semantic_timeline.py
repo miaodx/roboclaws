@@ -106,6 +106,8 @@ def record_robot_view_step(
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
     semantic_phase: str | None = None,
+    camera_yaw_offset_deg: float = 0.0,
+    camera_pitch_offset_deg: float = 0.0,
 ) -> int:
     writer = getattr(backend, "write_robot_views", None)
     if not callable(writer):
@@ -116,6 +118,8 @@ def record_robot_view_step(
         label=label,
         focus_object_id=focus_object_id,
         focus_receptacle_id=focus_receptacle_id,
+        camera_yaw_offset_deg=camera_yaw_offset_deg,
+        camera_pitch_offset_deg=camera_pitch_offset_deg,
     )
     if not result.get("ok"):
         raise RuntimeError(f"robot view capture failed: {result}")
@@ -135,6 +139,23 @@ def record_robot_view_step(
         }
     )
     return index + 1
+
+
+def camera_offsets_from_raw_fpv_observation(raw: dict[str, Any]) -> dict[str, float]:
+    offset = raw.get("camera_offset")
+    if not isinstance(offset, dict):
+        offset = {}
+    return {
+        "camera_yaw_offset_deg": _float_or_zero(offset.get("yaw_delta_deg")),
+        "camera_pitch_offset_deg": _float_or_zero(offset.get("pitch_delta_deg")),
+    }
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def robot_view_camera_control_summary(steps: list[dict[str, Any]]) -> dict[str, Any]:
@@ -186,12 +207,15 @@ def robot_view_capture_for_tool(
 ) -> dict[str, str | None] | None:
     transform_object_id = object_id_transform or _identity_optional_str
     if tool == "observe":
+        raw = response.get("raw_fpv_observation") if isinstance(response, dict) else {}
+        raw = raw if isinstance(raw, dict) else {}
         return {
             "action": "observe",
             "label_suffix": "observe",
             "focus_object_id": None,
             "focus_receptacle_id": None,
             "semantic_phase": None,
+            **camera_offsets_from_raw_fpv_observation(raw),
         }
     if tool == "scene_objects":
         return {
