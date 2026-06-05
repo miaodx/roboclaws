@@ -317,3 +317,35 @@ Decision:
 - The next default-improving slice should inspect material/local-shadow response
   for the Cloth/sink residual and the BaseballBat Genesis material-name miss
   before changing global backend light or exposure defaults.
+
+## 2026-06-05 Material Default Tweak
+
+Implemented the next bounded material slice without changing lighting, tone,
+exposure, camera geometry, or `scene_light_rig_v1`.
+
+Changes:
+
+- Prepared semantic USD default `combined-material-light` now keeps source
+  `UsdUVTexture` `scale`/`fallback` values (`material_texture_scale_mode=none`)
+  while still applying the existing `DistantLight rotateX=+25` setting. The
+  previous material scale-squaring path remains available only through the
+  explicit `material_texture_scale_mode="square"` override for comparison
+  probes.
+- Material-response diagnostics now compare MuJoCo material RGB against Isaac
+  `UsdUVTexture` scale/fallback values and report
+  `likely_squared_texture_scale_count`.
+- Genesis material diagnostics now use exact `visual_object_audit.material_names`
+  before falling back to category-token matching. This fixes the BaseballBat
+  false `no_category_material_match` case where the real material is
+  `material_LightWoodCounters3`.
+
+Expected effect:
+
+- This is an all-textured-object material response default, not a `Box`-only
+  tweak.
+- Cloth-like residuals caused by squared texture scale should stop being baked
+  into the default prepared USD path for both Isaac and Genesis, because Genesis
+  materialization reads the prepared USD.
+- Lighting remains intentionally unchanged; any remaining residual after a real
+  rerun should be reviewed as material/shader/texture filtering before another
+  light sweep.
