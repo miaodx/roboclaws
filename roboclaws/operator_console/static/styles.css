@@ -307,17 +307,24 @@ pre,
   color: var(--muted);
 }
 
-.badge.ready {
+.badge.ready,
+.badge.passed {
   color: var(--success);
 }
 
 .badge.blocked,
+.badge.failed,
 .inline-error {
   color: var(--danger);
 }
 
-.badge.needs_action {
+.badge.needs_action,
+.badge.warning {
   color: var(--warning);
+}
+
+.badge.running {
+  color: var(--accent);
 }
 
 .command-preview {
