@@ -3619,6 +3619,12 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         }
     )
     genesis_shadow = bool(genesis_profile.get("shadow", lighting.get("genesis_shadow", False)))
+    key_light_direction = _key_light_direction_diagnostics(
+        lighting_profile=lighting,
+        render_probe=render_probe,
+        isaac_lighting=isaac_lighting,
+        genesis_profile=genesis_profile,
+    )
     isaac_dome_intensity = _optional_float(
         isaac_lighting.get("requested_dome_intensity", lighting.get("isaac_dome_intensity"))
     )
@@ -3690,6 +3696,7 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "isaac_shadow_disabled_prim_count": shadow_disabled_count,
         "mujoco_light_count": render_probe.get("mujoco_light_count"),
         "isaac_light_count": render_probe.get("isaac_light_count"),
+        "key_light_direction": key_light_direction,
         "comparison_successful": comparison_successful(manifest),
         "candidate_visual_status": candidate_visual.get("status"),
         "candidate_visual_degraded_candidates": candidate_visual.get("degraded_candidates") or [],
@@ -4429,7 +4436,9 @@ def _render_domain_contract_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "view_count": len(views),
         "high_priority_delta_count": len(high_priority),
         "mujoco_light_count": len(mujoco.get("lights") or []),
+        "mujoco_lights": mujoco.get("lights") or [],
         "isaac_light_count": len(isaac.get("lights") or []),
+        "isaac_lights": isaac.get("lights") or [],
         "isaac_shadow_disabled_prim_count": len(isaac.get("shadow_disabled_prims") or []),
         "visual_physics_status": isaac.get("visual_physics_status"),
         "mujoco_visual_joint_endpoint_pose_status": isaac.get(
@@ -4503,7 +4512,10 @@ def _mujoco_render_contract_from_xml(path_text: str | None) -> dict[str, Any]:
                 else None,
             }
     for light in root.findall(".//light"):
-        lights.append(dict(light.attrib))
+        light_contract = dict(light.attrib)
+        light_contract["dir_vector"] = _normalized_vec3(_float_list(light.attrib.get("dir")))
+        light_contract["pos_vector"] = _float_list(light.attrib.get("pos"))
+        lights.append(light_contract)
     for body in root.findall(".//body"):
         body_name = str(body.attrib.get("name") or "")
         if not body_name:
@@ -4601,6 +4613,95 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         **physics_contract,
         "visual_physics_status": prepared_summary.get("visual_physics_status")
         or physics_contract.get("visual_physics_status"),
+    }
+
+
+def _normalized_vec3(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        vector = [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
+    magnitude = math.sqrt(sum(component * component for component in vector))
+    if magnitude <= 0.0:
+        return None
+    return [component / magnitude for component in vector]
+
+
+def _angle_deg_between(left: Any, right: Any) -> float | None:
+    left_vec = _normalized_vec3(left)
+    right_vec = _normalized_vec3(right)
+    if left_vec is None or right_vec is None:
+        return None
+    dot = sum(left_item * right_item for left_item, right_item in zip(left_vec, right_vec))
+    return math.degrees(math.acos(max(-1.0, min(1.0, dot))))
+
+
+def _primary_mujoco_key_light_direction(render_probe: dict[str, Any]) -> list[float] | None:
+    lights = (
+        render_probe.get("mujoco_lights")
+        if isinstance(render_probe.get("mujoco_lights"), list)
+        else []
+    )
+    for light in lights:
+        if not isinstance(light, dict):
+            continue
+        direction = _normalized_vec3(light.get("dir_vector") or _float_list(light.get("dir")))
+        if direction is not None:
+            return direction
+    return None
+
+
+def _primary_genesis_key_light_direction(genesis_profile: dict[str, Any]) -> list[float] | None:
+    lights = (
+        genesis_profile.get("lights")
+        if isinstance(genesis_profile.get("lights"), list)
+        else []
+    )
+    for light in lights:
+        if not isinstance(light, dict):
+            continue
+        direction = _normalized_vec3(light.get("dir"))
+        if direction is not None:
+            return direction
+    return None
+
+
+def _key_light_direction_diagnostics(
+    *,
+    lighting_profile: dict[str, Any],
+    render_probe: dict[str, Any],
+    isaac_lighting: dict[str, Any],
+    genesis_profile: dict[str, Any],
+) -> dict[str, Any]:
+    canonical = _normalized_vec3(lighting_profile.get("scene_key_light_direction"))
+    mujoco = _primary_mujoco_key_light_direction(render_probe)
+    isaac = _normalized_vec3(isaac_lighting.get("applied_key_light_direction"))
+    genesis = _primary_genesis_key_light_direction(genesis_profile)
+    isaac_angle = _angle_deg_between(mujoco, isaac)
+    genesis_angle = _angle_deg_between(mujoco, genesis)
+    threshold = 15.0
+    deltas = [value for value in (isaac_angle, genesis_angle) if value is not None]
+    status = (
+        "key_light_direction_aligned"
+        if mujoco is not None
+        and isaac is not None
+        and genesis is not None
+        and all(value <= threshold for value in deltas)
+        else "key_light_direction_delta"
+    )
+    return {
+        "schema": "scene_camera_key_light_direction_diagnostics_v1",
+        "status": status,
+        "threshold_deg": threshold,
+        "scene_key_light_frame": lighting_profile.get("scene_key_light_frame"),
+        "canonical_scene_key_light_direction": canonical,
+        "mujoco_key_light_direction": mujoco,
+        "isaac_key_light_direction": isaac,
+        "genesis_key_light_direction": genesis,
+        "isaac_angle_delta_deg": isaac_angle,
+        "genesis_angle_delta_deg": genesis_angle,
     }
 
 
@@ -6719,6 +6820,24 @@ def _shadow_parity_probe_section(manifest: dict[str, Any]) -> str:
         ("Isaac light count", diagnostics.get("isaac_light_count")),
         ("Isaac shadow-off prims", diagnostics.get("isaac_shadow_disabled_prim_count")),
     ]
+    key_light = (
+        diagnostics.get("key_light_direction")
+        if isinstance(diagnostics.get("key_light_direction"), dict)
+        else {}
+    )
+    if key_light:
+        rows.extend(
+            [
+                ("Key light status", key_light.get("status")),
+                ("Key light frame", key_light.get("scene_key_light_frame")),
+                ("Canonical key direction", key_light.get("canonical_scene_key_light_direction")),
+                ("MuJoCo key direction", key_light.get("mujoco_key_light_direction")),
+                ("Isaac key direction", key_light.get("isaac_key_light_direction")),
+                ("Genesis key direction", key_light.get("genesis_key_light_direction")),
+                ("Isaac angle delta deg", _float_text(key_light.get("isaac_angle_delta_deg"))),
+                ("Genesis angle delta deg", _float_text(key_light.get("genesis_angle_delta_deg"))),
+            ]
+        )
     row_html = "".join(
         f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(_cell_text(value))}</td></tr>"
         for label, value in rows

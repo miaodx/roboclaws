@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import shutil
 import sys
@@ -34,6 +35,8 @@ GENESIS_RENDER_LIGHTING_PROFILE = {
     "source": (
         "MuJoCo-headlight-inspired Genesis environment fill for prepared USD visual assets."
     ),
+    "scene_key_light_direction": [-0.57735, 0.57735, -0.57735],
+    "scene_key_light_frame": "molmospaces_scene_frame_v1",
     "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
     "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
     "ambient_light": [0.37, 0.37, 0.37],
@@ -381,6 +384,14 @@ def _genesis_lighting_profile(lighting_profile: dict[str, Any]) -> dict[str, Any
             lighting_profile.get("profile_id") or GENESIS_RENDER_LIGHTING_PROFILE["profile_id"]
         ),
         "source": str(lighting_profile.get("source") or GENESIS_RENDER_LIGHTING_PROFILE["source"]),
+        "scene_key_light_direction": _vec3(
+            lighting_profile.get("scene_key_light_direction"),
+            fallback=GENESIS_RENDER_LIGHTING_PROFILE["scene_key_light_direction"],
+        ),
+        "scene_key_light_frame": str(
+            lighting_profile.get("scene_key_light_frame")
+            or GENESIS_RENDER_LIGHTING_PROFILE["scene_key_light_frame"]
+        ),
         "mujoco_headlight_ambient": _vec3(
             lighting_profile.get("mujoco_headlight_ambient"),
             fallback=GENESIS_RENDER_LIGHTING_PROFILE["mujoco_headlight_ambient"],
@@ -400,12 +411,16 @@ def _genesis_lighting_profile(lighting_profile: dict[str, Any]) -> dict[str, Any
         "shadow": bool(
             lighting_profile.get("genesis_shadow", GENESIS_RENDER_LIGHTING_PROFILE["shadow"])
         ),
-        "lights": _genesis_directional_lights(lighting_profile.get("genesis_directional_lights")),
+        "lights": _genesis_directional_lights(lighting_profile),
     }
 
 
-def _genesis_directional_lights(value: Any) -> list[dict[str, Any]]:
-    raw_lights = value if isinstance(value, list) else []
+def _genesis_directional_lights(lighting_profile: dict[str, Any]) -> list[dict[str, Any]]:
+    raw_lights = (
+        lighting_profile.get("genesis_directional_lights")
+        if isinstance(lighting_profile.get("genesis_directional_lights"), list)
+        else []
+    )
     parsed: list[dict[str, Any]] = []
     for raw_light in raw_lights:
         if not isinstance(raw_light, dict):
@@ -418,9 +433,26 @@ def _genesis_directional_lights(value: Any) -> list[dict[str, Any]]:
                 "intensity": float(raw_light.get("intensity", 1.0)),
             }
         )
-    if parsed:
-        return parsed
-    return [dict(item) for item in GENESIS_RENDER_LIGHTING_PROFILE["lights"]]
+    if not parsed:
+        parsed = [dict(item) for item in GENESIS_RENDER_LIGHTING_PROFILE["lights"]]
+    key_direction = _normalized_vec3(lighting_profile.get("scene_key_light_direction"))
+    if key_direction is not None and parsed:
+        parsed[0]["dir"] = key_direction
+        parsed[0]["source"] = "scene_key_light_direction"
+    return parsed
+
+
+def _normalized_vec3(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        vector = [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
+    magnitude = math.sqrt(sum(component * component for component in vector))
+    if magnitude <= 0.0:
+        return None
+    return [component / magnitude for component in vector]
 
 
 def _genesis_color_profile(color_profile: dict[str, Any]) -> dict[str, Any]:

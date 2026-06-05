@@ -28,6 +28,8 @@ DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
         "MuJoCo MolmoSpaces base MJCF uses a headlight with ambient=0.35 and "
         "diffuse=0.4 plus a default directional light when no house lights are exported."
     ),
+    "scene_key_light_direction": [-0.57735, 0.57735, -0.57735],
+    "scene_key_light_frame": MOLMOSPACES_SCENE_FRAME,
     "mujoco_headlight_ambient": [0.35, 0.35, 0.35],
     "mujoco_headlight_diffuse": [0.4, 0.4, 0.4],
     "isaac_dome_intensity": 60.0,
@@ -340,6 +342,14 @@ def _lighting_profile(value: Any) -> dict[str, Any]:
             raw.get("profile_id") or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["profile_id"]
         ),
         "source": str(raw.get("source") or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["source"]),
+        "scene_key_light_direction": _vec3(
+            raw.get("scene_key_light_direction"),
+            default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["scene_key_light_direction"],
+        ),
+        "scene_key_light_frame": str(
+            raw.get("scene_key_light_frame")
+            or DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["scene_key_light_frame"]
+        ),
         "mujoco_headlight_ambient": _vec3(
             raw.get("mujoco_headlight_ambient"),
             default=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["mujoco_headlight_ambient"],

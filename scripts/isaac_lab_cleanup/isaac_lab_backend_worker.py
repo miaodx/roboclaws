@@ -3347,8 +3347,18 @@ def _ensure_capture_lighting(
     profile = profile if isinstance(profile, dict) else {}
     dome_intensity = float(profile.get("isaac_dome_intensity", 1500.0))
     key_intensity = float(profile.get("isaac_key_intensity", 7000.0))
-    key_rotation = profile.get("isaac_key_rotation_deg")
+    key_direction = _normalized_vec3(profile.get("scene_key_light_direction"))
+    key_rotation_source = "scene_key_light_direction"
+    key_rotation = (
+        _isaac_distant_light_rotation_from_direction(key_direction)
+        if key_direction is not None
+        else None
+    )
+    if key_rotation is None:
+        key_rotation_source = "isaac_key_rotation_deg"
+        key_rotation = profile.get("isaac_key_rotation_deg")
     if not isinstance(key_rotation, (list, tuple)) or len(key_rotation) < 3:
+        key_rotation_source = "fallback"
         key_rotation = [-55.0, 0.0, 35.0]
     existing_lights = _stage_light_paths(stage, exclude_prefix="/RoboclawsSmoke")
     added_lights = []
@@ -3368,6 +3378,8 @@ def _ensure_capture_lighting(
         "status": "using_existing_stage_lights" if not added_lights else "added_capture_lights",
         "profile_id": str(profile.get("profile_id") or ""),
         "profile_source": str(profile.get("source") or ""),
+        "scene_key_light_direction": key_direction,
+        "scene_key_light_frame": profile.get("scene_key_light_frame"),
         "mujoco_headlight_ambient": profile.get("mujoco_headlight_ambient"),
         "mujoco_headlight_diffuse": profile.get("mujoco_headlight_diffuse"),
         "existing_light_count": len(existing_lights),
@@ -3381,7 +3393,32 @@ def _ensure_capture_lighting(
             float(key_rotation[1]),
             float(key_rotation[2]),
         ],
+        "requested_key_rotation_source": key_rotation_source,
+        "applied_key_light_direction": key_direction if key_intensity > 0.0 else None,
+        "applied_key_light_frame": profile.get("scene_key_light_frame"),
     }
+
+
+def _normalized_vec3(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        vector = [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
+    magnitude = math.sqrt(sum(component * component for component in vector))
+    if magnitude <= 0.0:
+        return None
+    return [component / magnitude for component in vector]
+
+
+def _isaac_distant_light_rotation_from_direction(direction: list[float]) -> list[float]:
+    """Return XYZ Euler degrees rotating the USD DistantLight -Z axis to direction."""
+
+    x, y, z = direction
+    pitch = math.degrees(math.asin(max(-1.0, min(1.0, y))))
+    yaw = math.degrees(math.atan2(-x, -z))
+    return [pitch, yaw, 0.0]
 
 
 def _robot_view_color_profile(override: dict[str, Any] | None = None) -> dict[str, Any]:

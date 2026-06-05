@@ -34,7 +34,9 @@ from roboclaws.household.scene_camera_comparison import (
     _image_pair_visual_delta,
     _image_visual_metrics,
     _isaac_view_specs,
+    _key_light_direction_diagnostics,
     _molmospaces_view_specs,
+    _mujoco_render_contract_from_xml,
     _native_isaac_render_diagnostics,
     _normalize_color_profile_for_replay,
     _offline_color_profile_replay,
@@ -245,6 +247,9 @@ def _native_isaac_diagnostics() -> dict[str, object]:
 
 def _genesis_lane_fixture() -> dict[str, object]:
     lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
+    genesis_lights = [dict(item) for item in lighting_profile["genesis_directional_lights"]]
+    genesis_lights[0]["dir"] = list(lighting_profile["scene_key_light_direction"])
+    genesis_lights[0]["source"] = "scene_key_light_direction"
     return {
         "status": "success",
         "python_executable": ".venv-genesis/bin/python",
@@ -263,7 +268,9 @@ def _genesis_lane_fixture() -> dict[str, object]:
                 "ambient_light": lighting_profile["genesis_ambient_light"],
                 "background_color": lighting_profile["genesis_background_color"],
                 "shadow": lighting_profile["genesis_shadow"],
-                "lights": lighting_profile["genesis_directional_lights"],
+                "scene_key_light_direction": lighting_profile["scene_key_light_direction"],
+                "scene_key_light_frame": lighting_profile["scene_key_light_frame"],
+                "lights": genesis_lights,
             },
         },
         "color_profile": {
@@ -2100,6 +2107,10 @@ def test_scene_camera_comparison_default_lighting_profile_contract() -> None:
     profile = DEFAULT_SCENE_PROBE_LIGHTING_PROFILE
 
     assert profile["profile_id"] == "scene_probe_mujoco_headlight_fill_v1"
+    assert profile["scene_key_light_direction"] == pytest.approx(
+        [-0.57735, 0.57735, -0.57735]
+    )
+    assert profile["scene_key_light_frame"] == "molmospaces_scene_frame_v1"
     assert profile["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
     assert profile["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
     assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
@@ -2137,10 +2148,69 @@ def test_scene_camera_balanced_review_lighting_profile_is_default_candidate() ->
     assert profile["genesis_shadow"] is True
     assert profile["isaac_dome_intensity"] == pytest.approx(60.0)
     assert profile["isaac_key_intensity"] == pytest.approx(300.0)
+    assert profile["scene_key_light_direction"] == pytest.approx(
+        [-0.57735, 0.57735, -0.57735]
+    )
     assert SCENE_PROBE_LIGHTING_PROFILES["default"] is profile
     assert SCENE_PROBE_LIGHTING_PROFILES["balanced-review"] is profile
     assert _scene_camera_lighting_profile("default") == profile
     assert _scene_camera_lighting_profile("balanced-review") == profile
+
+
+def test_scene_camera_mujoco_render_contract_reports_light_direction(tmp_path: Path) -> None:
+    scene_xml = tmp_path / "scene.xml"
+    scene_xml.write_text(
+        """
+<mujoco>
+  <worldbody>
+    <light pos="1 -1 1.5" dir="-0.57735 0.57735 -0.57735"
+           directional="true" diffuse="0.5 0.5 0.5" />
+  </worldbody>
+</mujoco>
+""",
+        encoding="utf-8",
+    )
+
+    contract = _mujoco_render_contract_from_xml(str(scene_xml))
+
+    assert contract["status"] == "parsed"
+    assert contract["lights"][0]["dir_vector"] == pytest.approx(
+        [-0.577350269, 0.577350269, -0.577350269]
+    )
+
+
+def test_scene_camera_key_light_direction_diagnostics_accepts_aligned_vectors() -> None:
+    profile = dict(BALANCED_REVIEW_SCENE_PROBE_LIGHTING_PROFILE)
+    render_probe = {
+        "mujoco_lights": [
+            {
+                "dir": "-0.57735 0.57735 -0.57735",
+                "dir_vector": [-0.577350269, 0.577350269, -0.577350269],
+            }
+        ]
+    }
+    genesis_profile = {
+        "lights": [
+            {
+                "dir": [-0.577350269, 0.577350269, -0.577350269],
+                "intensity": 3.0,
+            }
+        ]
+    }
+    isaac_lighting = {
+        "applied_key_light_direction": [-0.577350269, 0.577350269, -0.577350269]
+    }
+
+    diagnostics = _key_light_direction_diagnostics(
+        lighting_profile=profile,
+        render_probe=render_probe,
+        isaac_lighting=isaac_lighting,
+        genesis_profile=genesis_profile,
+    )
+
+    assert diagnostics["status"] == "key_light_direction_aligned"
+    assert diagnostics["isaac_angle_delta_deg"] == pytest.approx(0.0)
+    assert diagnostics["genesis_angle_delta_deg"] == pytest.approx(0.0)
 
 
 def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_status() -> None:
@@ -2151,6 +2221,7 @@ def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_st
         {
             "requested_dome_intensity": profile["isaac_dome_intensity"],
             "requested_key_intensity": profile["isaac_key_intensity"],
+            "applied_key_light_direction": profile["scene_key_light_direction"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
@@ -2166,6 +2237,12 @@ def test_scene_camera_balanced_review_profile_reports_accepted_shadow_capable_st
         "status": "computed",
         "high_priority_delta_count": 0,
         "mujoco_light_count": 1,
+        "mujoco_lights": [
+            {
+                "dir": "-0.57735 0.57735 -0.57735",
+                "dir_vector": [-0.577350269, 0.577350269, -0.577350269],
+            }
+        ],
         "isaac_light_count": 2,
         "isaac_shadow_disabled_prim_count": 18,
     }
@@ -2188,6 +2265,7 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
         {
             "requested_dome_intensity": profile["isaac_dome_intensity"],
             "requested_key_intensity": profile["isaac_key_intensity"],
+            "applied_key_light_direction": profile["scene_key_light_direction"],
             "added_light_paths": ["/RoboclawsSmokeDomeLight", "/RoboclawsSmokeKeyLight"],
         }
     )
@@ -2203,6 +2281,12 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
         "status": "computed",
         "high_priority_delta_count": 0,
         "mujoco_light_count": 1,
+        "mujoco_lights": [
+            {
+                "dir": "-0.57735 0.57735 -0.57735",
+                "dir_vector": [-0.577350269, 0.577350269, -0.577350269],
+            }
+        ],
         "isaac_light_count": 2,
         "isaac_shadow_disabled_prim_count": 18,
     }
@@ -2221,10 +2305,12 @@ def test_scene_camera_shadow_parity_probe_reports_shadow_configuration(tmp_path:
     assert diagnostics["isaac_key_intensity"] == pytest.approx(1200.0)
     assert diagnostics["isaac_shadow_disabled_prim_count"] == 18
     assert diagnostics["comparison_successful"] is True
+    assert diagnostics["key_light_direction"]["status"] == "key_light_direction_aligned"  # type: ignore[index]
     assert diagnostics["render_contract_high_priority_delta_count"] == 0
     assert "Shadow Parity Probe" in html
     assert "scene_probe_shadow_parity_probe_v1" in html
     assert "shadow_parity_probe_configured" in html
+    assert "key_light_direction_aligned" in html
     assert "Review bed/object views for cast-shadow return" in html
 
 
