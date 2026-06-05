@@ -372,6 +372,8 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     if not isinstance(manifest.get("render_domain_contract_probe"), dict):
         manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    if not isinstance(manifest.get("lighting_tone_provenance"), dict):
+        manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
     if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
         manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     report_path = output_dir / "report.html"
@@ -3501,6 +3503,354 @@ def _native_setting_group_summary(group: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
+def _lighting_tone_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    rows = []
+    missing_environment_light = []
+    tone_adjusted_lanes = []
+    for lane_id, lane in lanes.items():
+        if not isinstance(lane, dict):
+            continue
+        row = _lane_lighting_tone_provenance(str(lane_id), lane, manifest=manifest)
+        rows.append(row)
+        if row["environment_light_status"] == "missing_environment_light":
+            missing_environment_light.append(str(lane_id))
+        if row["tone_adjustment_status"] == "post_render_tone_adjustment_applied":
+            tone_adjusted_lanes.append(str(lane_id))
+    if missing_environment_light:
+        status = "missing_environment_light"
+        next_action = (
+            "Fix the backend lighting configuration before tuning exposure, gain, or material "
+            "response."
+        )
+    elif tone_adjusted_lanes:
+        status = "environment_light_configured_tone_adjusted"
+        next_action = (
+            "Lighting is configured for all successful lanes. Treat remaining Genesis/Isaac "
+            "visual differences as tone, exposure, material, or renderer-response residuals."
+        )
+    else:
+        status = "environment_light_configured"
+        next_action = (
+            "Lighting is configured; inspect render-domain residual diagnostics before changing "
+            "lighting defaults."
+        )
+    return {
+        "schema": "scene_camera_lighting_tone_provenance_v1",
+        "status": status,
+        "missing_environment_light_lanes": missing_environment_light,
+        "tone_adjusted_lanes": tone_adjusted_lanes,
+        "lane_count": len(rows),
+        "interpretation": (
+            "This normalizes backend-specific light and color-management diagnostics. It "
+            "separates configured environment/fill lighting from post-render tone, exposure, "
+            "and material-response residuals."
+        ),
+        "recommended_next_action": next_action,
+        "lanes": rows,
+    }
+
+
+def _lane_lighting_tone_provenance(
+    lane_id: str,
+    lane: dict[str, Any],
+    *,
+    manifest: dict[str, Any],
+) -> dict[str, Any]:
+    lighting_profile = (
+        lane.get("lighting_profile") if isinstance(lane.get("lighting_profile"), dict) else {}
+    )
+    lighting_diagnostics = (
+        lane.get("lighting_diagnostics")
+        if isinstance(lane.get("lighting_diagnostics"), dict)
+        else {}
+    )
+    color_profile = lane.get("color_profile") if isinstance(lane.get("color_profile"), dict) else {}
+    native = (
+        lane.get("native_render_diagnostics")
+        if isinstance(lane.get("native_render_diagnostics"), dict)
+        else {}
+    )
+    if lane_id == GENESIS_LANE_ID:
+        lighting_summary = _genesis_lighting_summary(lighting_diagnostics, lighting_profile)
+    elif lane_id == ISAAC_LANE_ID:
+        lighting_summary = _isaac_lighting_summary(lighting_diagnostics, lighting_profile)
+    elif lane_id == MOLMOSPACES_LANE_ID:
+        lighting_summary = _mujoco_lighting_summary(manifest, lighting_profile)
+    else:
+        lighting_summary = _generic_lighting_summary(lighting_diagnostics, lighting_profile)
+    color_summary = _color_tone_summary(lane_id, color_profile, native)
+    return {
+        "lane_id": lane_id,
+        "environment_light_status": lighting_summary["status"],
+        "environment_light_summary": lighting_summary["summary"],
+        "environment_light_source": lighting_summary.get("source") or "",
+        "tone_adjustment_status": color_summary["status"],
+        "tone_adjustment_summary": color_summary["summary"],
+        "tone_adjustment_source": color_summary.get("source") or "",
+        "native_render_summary": _native_render_summary(native),
+    }
+
+
+def _genesis_lighting_summary(
+    diagnostics: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    profile = (
+        diagnostics.get("genesis_lighting_profile")
+        if isinstance(diagnostics.get("genesis_lighting_profile"), dict)
+        else {}
+    )
+    ambient = profile.get("ambient_light") or lighting_profile.get("genesis_ambient_light")
+    background = profile.get("background_color") or lighting_profile.get("genesis_background_color")
+    lights = profile.get("lights") or lighting_profile.get("genesis_directional_lights") or []
+    light_count = len(lights) if isinstance(lights, list) else 0
+    shadow = profile.get("shadow")
+    if shadow is None:
+        shadow = lighting_profile.get("genesis_shadow")
+    has_environment = bool(ambient or background or light_count)
+    status = "environment_light_configured" if has_environment else "missing_environment_light"
+    intensities = _light_intensity_text(lights)
+    summary = (
+        f"{diagnostics.get('status') or 'genesis_lighting_profile'}; "
+        f"ambient={_cell_text(ambient)}; background={_cell_text(background)}; "
+        f"directional_lights={light_count}; intensities={intensities}; shadow={shadow}"
+    )
+    return {
+        "status": status,
+        "summary": summary,
+        "source": str(profile.get("source") or lighting_profile.get("source") or ""),
+    }
+
+
+def _isaac_lighting_summary(
+    diagnostics: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    existing = _optional_int(diagnostics.get("existing_light_count"))
+    added = _optional_int(diagnostics.get("added_light_count"))
+    dome_intensity = diagnostics.get("requested_dome_intensity")
+    if dome_intensity is None:
+        dome_intensity = lighting_profile.get("isaac_dome_intensity")
+    key_intensity = diagnostics.get("requested_key_intensity")
+    if key_intensity is None:
+        key_intensity = lighting_profile.get("isaac_key_intensity")
+    existing_count = existing or 0
+    added_count = added or 0
+    has_environment = existing_count + added_count > 0 or _positive_number(dome_intensity)
+    status = "environment_light_configured" if has_environment else "missing_environment_light"
+    summary = (
+        f"{diagnostics.get('status') or 'isaac_lighting_profile'}; "
+        f"existing={existing_count}; added={added_count}; "
+        f"dome_intensity={_float_text(dome_intensity)}; "
+        f"key_intensity={_float_text(key_intensity)}; "
+        f"added_paths={_cell_text(diagnostics.get('added_light_paths'))}"
+    )
+    return {
+        "status": status,
+        "summary": summary,
+        "source": str(diagnostics.get("profile_source") or lighting_profile.get("source") or ""),
+    }
+
+
+def _mujoco_lighting_summary(
+    manifest: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    probe = (
+        manifest.get("render_domain_contract_probe")
+        if isinstance(manifest.get("render_domain_contract_probe"), dict)
+        else {}
+    )
+    light_count = _optional_int(probe.get("mujoco_light_count"))
+    ambient = lighting_profile.get("mujoco_headlight_ambient")
+    diffuse = lighting_profile.get("mujoco_headlight_diffuse")
+    has_environment = bool(ambient or diffuse or (light_count or 0) > 0)
+    status = "environment_light_configured" if has_environment else "missing_environment_light"
+    scene_lights = light_count if light_count is not None else ""
+    summary = (
+        f"mujoco_headlight_fill; ambient={_cell_text(ambient)}; "
+        f"diffuse={_cell_text(diffuse)}; scene_lights={scene_lights}"
+    )
+    return {
+        "status": status,
+        "summary": summary,
+        "source": str(lighting_profile.get("source") or ""),
+    }
+
+
+def _generic_lighting_summary(
+    diagnostics: dict[str, Any],
+    lighting_profile: dict[str, Any],
+) -> dict[str, str]:
+    status = str(diagnostics.get("status") or "")
+    profile_id = str(lighting_profile.get("profile_id") or diagnostics.get("profile_id") or "")
+    return {
+        "status": "environment_light_configured" if status or profile_id else "unknown",
+        "summary": f"{status}; profile={profile_id}".strip("; "),
+        "source": str(lighting_profile.get("source") or diagnostics.get("profile_source") or ""),
+    }
+
+
+def _color_tone_summary(
+    lane_id: str,
+    color_profile: dict[str, Any],
+    native_diagnostics: dict[str, Any],
+) -> dict[str, str]:
+    gains = (
+        color_profile.get("backend_luminance_gain")
+        if isinstance(color_profile.get("backend_luminance_gain"), dict)
+        else {}
+    )
+    rgb_gains = (
+        color_profile.get("backend_rgb_gain")
+        if isinstance(color_profile.get("backend_rgb_gain"), dict)
+        else {}
+    )
+    tone_adjustments = (
+        color_profile.get("backend_tone_adjustment")
+        if isinstance(color_profile.get("backend_tone_adjustment"), dict)
+        else {}
+    )
+    view_tone_adjustments = (
+        color_profile.get("backend_view_tone_adjustment")
+        if isinstance(color_profile.get("backend_view_tone_adjustment"), dict)
+        else {}
+    )
+    gain = gains.get(lane_id)
+    rgb_gain = rgb_gains.get(lane_id)
+    tone = tone_adjustments.get(lane_id)
+    view_tone = view_tone_adjustments.get(lane_id)
+    view_tone_count = len(view_tone) if isinstance(view_tone, dict) else 0
+    has_post_tone = tone is not None or view_tone_count > 0 or rgb_gain is not None
+    has_gain = gain is not None
+    if has_post_tone:
+        status = "post_render_tone_adjustment_applied"
+    elif _non_unity_gain(gain):
+        status = "post_render_luminance_gain_applied"
+    elif has_gain:
+        status = "baseline_color_profile_reference"
+    else:
+        status = "no_backend_tone_adjustment"
+    summary = (
+        f"profile={color_profile.get('profile_id') or ''}; "
+        f"luminance_gain={_float_text(gain)}; rgb_gain={_cell_text(rgb_gain)}; "
+        f"tone={_cell_text(tone)}; view_tone_overrides={view_tone_count}"
+    )
+    native_summary = _native_render_summary(native_diagnostics)
+    if native_summary:
+        summary = f"{summary}; native={native_summary}"
+    return {
+        "status": status,
+        "summary": summary,
+        "source": _tone_source_text(lane_id, color_profile),
+    }
+
+
+def _tone_source_text(lane_id: str, color_profile: dict[str, Any]) -> str:
+    backend_prefix = _backend_source_prefix(lane_id)
+    lane_specific_sources = _unique_source_values(
+        color_profile,
+        (
+            f"{backend_prefix}_backend_tone_adjustment_source",
+            f"{backend_prefix}_backend_luminance_gain_source",
+            f"{backend_prefix}_backend_rgb_gain_source",
+        ),
+    )
+    if lane_specific_sources:
+        return "; ".join(lane_specific_sources)
+    return "; ".join(
+        _unique_source_values(
+            color_profile,
+            (
+                "backend_tone_adjustment_source",
+                "backend_view_tone_adjustment_source",
+                "backend_luminance_gain_source",
+                "backend_rgb_gain_source",
+            ),
+        )
+    )
+
+
+def _unique_source_values(color_profile: dict[str, Any], keys: tuple[str, ...]) -> list[str]:
+    sources = []
+    for key in keys:
+        value = str(color_profile.get(key) or "")
+        if value and value not in sources:
+            sources.append(value)
+    return sources
+
+
+def _backend_source_prefix(lane_id: str) -> str:
+    if lane_id == GENESIS_LANE_ID:
+        return "genesis"
+    if lane_id == ISAAC_LANE_ID:
+        return "isaac"
+    if lane_id == MOLMOSPACES_LANE_ID:
+        return "mujoco"
+    return lane_id.split("-", 1)[0].replace("-", "_")
+
+
+def _native_render_summary(diagnostics: dict[str, Any]) -> str:
+    if not diagnostics:
+        return ""
+    tone_mapping = (
+        diagnostics.get("tone_mapping") if isinstance(diagnostics.get("tone_mapping"), dict) else {}
+    )
+    exposure = (
+        diagnostics.get("camera_exposure")
+        if isinstance(diagnostics.get("camera_exposure"), dict)
+        else {}
+    )
+    tonemap_operator = _native_setting_value(tone_mapping.get("operator"))
+    exposure_bias = _native_setting_value(tone_mapping.get("exposure_bias"))
+    auto_exposure = _native_setting_value(exposure.get("auto_exposure_enabled"))
+    parts = [
+        f"status={diagnostics.get('status') or ''}",
+        f"tonemap_operator={tonemap_operator}",
+        f"exposure_bias={_cell_text(exposure_bias)}",
+        f"auto_exposure={auto_exposure}",
+    ]
+    return "; ".join(part for part in parts if not part.endswith("="))
+
+
+def _native_setting_value(raw: Any) -> Any:
+    return raw.get("value") if isinstance(raw, dict) else None
+
+
+def _light_intensity_text(lights: Any) -> str:
+    if not isinstance(lights, list):
+        return ""
+    intensities = []
+    for item in lights:
+        if isinstance(item, dict) and item.get("intensity") is not None:
+            intensities.append(item.get("intensity"))
+    return _cell_text(intensities)
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _positive_number(value: Any) -> bool:
+    try:
+        return float(value) > 0.0
+    except (TypeError, ValueError):
+        return False
+
+
+def _non_unity_gain(value: Any) -> bool:
+    try:
+        return abs(float(value) - 1.0) > 1e-6
+    except (TypeError, ValueError):
+        return False
+
+
 def _backend_swap_geometry_contract(manifest: dict[str, Any]) -> dict[str, Any]:
     camera = (
         manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
@@ -4989,6 +5339,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _genesis_movable_object_visibility_section(manifest),
             _genesis_visual_object_audit_section(manifest),
             _native_isaac_render_diagnostics_section(manifest),
+            _lighting_tone_provenance_section(manifest),
             _render_domain_source_section(manifest),
             _render_domain_view_triage_section(manifest),
             _render_domain_contract_probe_section(manifest),
@@ -6138,6 +6489,61 @@ def _ordered_crop_lanes(value: dict[str, Any]) -> list[str]:
     ]
     ordered.extend(sorted(lane_id for lane_id in value if lane_id not in ordered))
     return ordered
+
+
+def _lighting_tone_provenance_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("lighting_tone_provenance")
+        if isinstance(manifest.get("lighting_tone_provenance"), dict)
+        else _lighting_tone_provenance(manifest)
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("lanes") or []:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('lane_id') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('environment_light_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('environment_light_summary') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('tone_adjustment_status') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('tone_adjustment_summary') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('native_render_summary') or ''))}</td>"
+            f"<td>{html.escape(str(item.get('tone_adjustment_source') or ''))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Lane",
+            "Environment status",
+            "Environment / fill evidence",
+            "Tone status",
+            "Tone / exposure evidence",
+            "Native render",
+            "Tone source",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; lanes={diagnostics.get('lane_count')}; "
+        f"missing_environment_light_lanes="
+        f"{_cell_text(diagnostics.get('missing_environment_light_lanes'))}; "
+        f"tone_adjusted_lanes={_cell_text(diagnostics.get('tone_adjusted_lanes'))}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Lighting &amp; Tone Provenance</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
 
 
 def _render_domain_source_section(manifest: dict[str, Any]) -> str:

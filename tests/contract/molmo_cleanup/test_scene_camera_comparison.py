@@ -238,6 +238,95 @@ def _native_isaac_diagnostics() -> dict[str, object]:
     }
 
 
+def _genesis_lane_fixture() -> dict[str, object]:
+    lighting_profile = dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE)
+    return {
+        "status": "success",
+        "python_executable": ".venv-genesis/bin/python",
+        "runtime": {"python_version": "3.12.9", "genesis_version": "1.0.0"},
+        "scene_usd": "/tmp/scene_semantic.usda",
+        "visual_artifact_provenance": "genesis_real_rgb_render",
+        "camera_control_api": CAMERA_CONTROL_API_NAME,
+        "calibration_status": "canonical_scene_frame_similarity_fit_v1",
+        "lighting_profile": lighting_profile,
+        "lighting_diagnostics": {
+            "status": "genesis_environment_fill_profile_applied",
+            "source": "prepared_usd_plus_genesis_rasterizer",
+            "genesis_lighting_profile": {
+                "profile_id": lighting_profile["profile_id"],
+                "source": lighting_profile["source"],
+                "ambient_light": lighting_profile["genesis_ambient_light"],
+                "background_color": lighting_profile["genesis_background_color"],
+                "shadow": lighting_profile["genesis_shadow"],
+                "lights": lighting_profile["genesis_directional_lights"],
+            },
+        },
+        "color_profile": {
+            "profile_id": "display_srgb_soft_highlight_v1",
+            "backend_luminance_gain": {GENESIS_LANE_ID: 0.94},
+            "backend_rgb_gain": {GENESIS_LANE_ID: [1.04, 1.0, 0.97]},
+            "backend_tone_adjustment": {
+                GENESIS_LANE_ID: {
+                    "shadow_lift": 8.0,
+                    "shadow_floor": 135.0,
+                    "gamma": 1.1,
+                    "saturation": 1.0,
+                    "gain": 1.0,
+                }
+            },
+            "backend_view_tone_adjustment": {
+                GENESIS_LANE_ID: {
+                    "room_01_room_2": {
+                        "shadow_lift": 8.0,
+                        "shadow_floor": 135.0,
+                        "gamma": 1.1,
+                        "saturation": 1.0,
+                        "gain": 1.2,
+                    }
+                }
+            },
+            "genesis_backend_tone_adjustment_source": "Genesis baked-texture visual probe",
+        },
+        "images": {
+            "room_01_room_2": {
+                "path": "genesis/camera_views/room_01_room_2.png",
+                "dimensions": {"width": 64, "height": 48, "channels": 3},
+            },
+            "view_01_bed": {
+                "path": "genesis/camera_views/view_01_bed.png",
+                "dimensions": {"width": 64, "height": 48, "channels": 3},
+            },
+            "view_02_sink": {
+                "path": "genesis/camera_views/view_02_sink.png",
+                "dimensions": {"width": 64, "height": 48, "channels": 3},
+            },
+        },
+        "views": [
+            {
+                "view_id": "room_01_room_2",
+                "eye": [1.0, 2.0, 1.45],
+                "target": [2.0, 3.0, 1.45],
+                "backend_eye": [1.0, 2.0, 1.45],
+                "backend_target": [2.0, 3.0, 1.45],
+            },
+            {
+                "view_id": "view_01_bed",
+                "eye": [0.2, 6.4, 2.6],
+                "target": [2.8, 9.0, 0.8],
+                "backend_eye": [0.2, 6.4, 2.6],
+                "backend_target": [2.8, 9.0, 0.8],
+            },
+            {
+                "view_id": "view_02_sink",
+                "eye": [7.0, -1.4, 2.6],
+                "target": [9.6, 1.8, 0.6],
+                "backend_eye": [7.0, -1.4, 2.6],
+                "backend_target": [9.6, 1.8, 0.6],
+            },
+        ],
+    }
+
+
 def _manifest() -> dict[str, object]:
     return {
         "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
@@ -624,6 +713,12 @@ def _manifest() -> dict[str, object]:
 
 def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path: Path) -> None:
     manifest = _manifest()
+    manifest["lanes"][GENESIS_LANE_ID] = _genesis_lane_fixture()  # type: ignore[index]
+    manifest["lane_registry"] = {  # type: ignore[index]
+        "baseline": MOLMOSPACES_LANE_ID,
+        "candidates": [ISAAC_LANE_ID, GENESIS_LANE_ID],
+    }
+    manifest["view_specs"][GENESIS_LANE_ID] = []  # type: ignore[index]
     _write_render_contract_probe_fixtures(tmp_path, manifest)
     for lane in manifest["lanes"].values():  # type: ignore[index,union-attr]
         for image in lane["images"].values():  # type: ignore[index,union-attr]
@@ -636,6 +731,10 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
                 color = (180, 180, 180)
             elif "isaaclab" in path and "view_01" in path:
                 color = (80, 80, 80)
+            elif "genesis" in path and "room_01" in path:
+                color = (150, 145, 135)
+            elif "genesis" in path:
+                color = (130, 110, 90)
             elif "molmospaces" in path:
                 color = (120, 70, 50)
             else:
@@ -676,6 +775,21 @@ def test_scene_camera_comparison_report_is_render_only_and_side_by_side(tmp_path
     assert "vs baseline lum_delta=" in html
     assert "Candidate Visual Acceptance" in html
     assert "Native Isaac Render Diagnostics" in html
+    assert "Lighting &amp; Tone Provenance" in html
+    assert manifest["lighting_tone_provenance"]["status"] == (  # type: ignore[index]
+        "environment_light_configured_tone_adjusted"
+    )
+    assert "environment_light_configured_tone_adjusted" in html
+    assert "missing_environment_light_lanes=" in html
+    assert "tone_adjusted_lanes=genesis-prepared-usd" in html
+    assert "genesis_environment_fill_profile_applied" in html
+    assert "ambient=0.37, 0.37, 0.37" in html
+    assert "directional_lights=3" in html
+    assert "background=0.04, 0.08, 0.12" in html
+    assert "post_render_tone_adjustment_applied" in html
+    assert "view_tone_overrides=1" in html
+    assert "Genesis baked-texture visual probe" in html
+    assert "Lighting is configured for all successful lanes" in html
     assert "Render Domain Source Diagnostics" in html
     assert "Render Domain View Triage" in html
     assert "Render Domain Contract Probe" in html
