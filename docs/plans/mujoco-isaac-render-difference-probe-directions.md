@@ -127,6 +127,23 @@ contract execution and does not promote renderer defaults.
   color-space or partial-scale directions without a new target-specific
   mechanism. Summary:
   `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_material_bed_probe_summary/report.html`.
+- A follow-up bed-only roughness probe on the same latest-code val_0
+  four-location held-out slice is also rejected. The comparison-only USD at
+  `output/isaaclab/flattened-semantic-usd/0604_val0_bed_roughness1_combined_probe/scene_semantic.usda`
+  rewrites 12 `/val_0/Geometry/bed_` PreviewSurface roughness fields to `1.0`
+  without changing source color space or texture scale. The real MuJoCo+Isaac
+  rerun completed 4/4 locations at
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_5mess_4loc_bed_roughness1_combined_skipaudit/report.html`.
+  It improves average FPV only from `32.8863 -> 32.4920` (`-0.3943`), below the
+  promotion threshold, while regressing chase `37.6759 -> 37.8638` (`+0.1879`)
+  and keeping the same FPV/chase residual class distributions
+  (`2 geometry_or_texture_edge_residual + 2 low_residual`). The refreshed
+  material summary ranks it behind `settle_16_540` and classifies it as
+  rejected:
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_material_bed_probe_summary_with_roughness/report.html`.
+  Close bed/fabric roughness, raw color-space, and partial texture-scale probes
+  for this held-out slice unless a new material mechanism explains the remaining
+  bed edge residuals better than these single-axis results.
 - A native Isaac color-correction gain probe is rejected. The gain fitted from
   the val_0 FPV baseline (`1.088088,1.06136,1.099827`) was applied through
   `/rtx/post/colorcorr/enabled` and `/rtx/post/colorcorr/gain`; the worker
@@ -136,6 +153,18 @@ contract execution and does not promote renderer defaults.
   and do not expand it without a new non-global, target-specific hypothesis.
   Summary:
   `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_native_colorcorr_gain_summary/report.html`.
+- The DistantLight angle micro-grid is rejected on the latest-code val_0
+  four-location held-out slice. `rotateX=15` completed a real rerun and
+  changed FPV/chase versus baseline by `+0.4188` / `-0.0292`, so it failed FPV.
+  `rotateX=30` initially exposed a worker interface regression
+  (`camera_yaw_offset_deg` / `camera_pitch_offset_deg` not accepted by the
+  MuJoCo robot-view worker path); after fixing that execution blocker, a fresh
+  real MuJoCo+Isaac rerun completed 4/4 locations and changed FPV/chase by
+  `-0.0465` / `+0.2345`, still below the FPV improvement threshold and with a
+  chase regression. Both rows keep the same residual class distribution. Close
+  the light-angle axis for this slice unless a new mechanism targets material
+  or shadow response directly. Summary:
+  `output/molmo/robot-camera-apple2apple/0604_latest_code_val0_seed6_4loc_light_angle_probe_summary/report.html`.
 
 ## Target
 
@@ -229,6 +258,9 @@ Rules:
 
 - Do not promote simple DomeLight removal or broad shadow enabling without new
   held-out evidence.
+- The latest val_0 `rotateX=15/30` micro-grid is already closed as rejected;
+  do not continue angle-only probes without a new, target-specific light/shadow
+  mechanism.
 - Keep light probes separate from native tone/exposure probes first, then test
   one combined best candidate only after each axis has an individual result.
 

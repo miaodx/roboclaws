@@ -126,6 +126,10 @@ def test_subprocess_backend_worker_payload_parses_cli_style_args() -> None:
             "Apple_1",
             "--focus-receptacle-id",
             "Fridge_1",
+            "--camera-yaw-offset-deg",
+            "12.5",
+            "--camera-pitch-offset-deg",
+            "-7.0",
         ),
     )
 
@@ -134,7 +138,42 @@ def test_subprocess_backend_worker_payload_parses_cli_style_args() -> None:
         "label": "0001_pick",
         "focus_object_id": "Apple_1",
         "focus_receptacle_id": "Fridge_1",
+        "camera_yaw_offset_deg": "12.5",
+        "camera_pitch_offset_deg": "-7.0",
     }
+
+
+def test_subprocess_backend_navigate_to_waypoint_passes_full_waypoint_json(
+    tmp_path: Path,
+) -> None:
+    fake_python = tmp_path / "python"
+    fake_python.write_text("", encoding="utf-8")
+    backend = MolmoSpacesSubprocessBackend.__new__(MolmoSpacesSubprocessBackend)
+    backend.state_path = tmp_path / "state.json"
+    backend.python_executable = fake_python
+    captured: dict[str, object] = {}
+
+    def fake_run_worker(command: str, *args: str) -> dict[str, object]:
+        captured["command"] = command
+        captured["args"] = args
+        return {"ok": True, "tool": command}
+
+    backend._run_worker = fake_run_worker
+    waypoint = {
+        "waypoint_id": "wp_1",
+        "room_id": "room_2",
+        "x": 4.0,
+        "y": 7.0,
+        "source_room_bounds": {"min_x": 1.0, "max_x": 7.0, "min_y": 2.0, "max_y": 8.0},
+    }
+
+    result = backend.navigate_to_waypoint(waypoint=waypoint)
+
+    assert result["ok"] is True
+    assert captured["command"] == "navigate_to_waypoint"
+    args = captured["args"]
+    assert args[0] == "--waypoint-json"
+    assert json.loads(args[1]) == waypoint
 
 
 def test_worker_frame_comparison_object_uses_object_target_pose(
@@ -203,6 +242,89 @@ def test_worker_frame_comparison_object_uses_object_target_pose(
     assert result["robot_pose"]["pose_source"] == "roboclaws_comparison_object_pose"
     assert state["robot_pose"]["target_object_id"] == "box_1"
     assert state["robot_trajectory"][-1]["target_object_id"] == "box_1"
+
+
+def test_worker_navigate_to_waypoint_projects_bundle_room_to_scene_outline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker_module()
+    state_path = tmp_path / "state.json"
+    state_path.write_text(
+        json.dumps(
+            {
+                "robot_included": True,
+                "robot_name": "rby1m",
+                "qpos": [0.0, 0.0, 0.0],
+                "objects": {},
+                "receptacles": {},
+                "room_outlines": [
+                    {
+                        "room_id": "room_2",
+                        "center": [10.0, 20.0],
+                        "half_extents": [4.0, 6.0],
+                    }
+                ],
+                "robot_trajectory": [],
+                "tool_event_counts": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    sentinel_model = object()
+    sentinel_data = SimpleNamespace(qpos=[0.0, 0.0, 0.0, 0.0, 0.0])
+    applied_poses: list[dict[str, float]] = []
+
+    monkeypatch.setattr(
+        worker, "_load_model_data_for_state", lambda state: (sentinel_model, sentinel_data)
+    )
+    monkeypatch.setattr(worker, "_apply_qpos", lambda data, qpos: None)
+    monkeypatch.setattr(worker.mujoco, "mj_forward", lambda model, data: None)
+    monkeypatch.setattr(worker, "_refresh_object_positions", lambda model, data, state: None)
+    monkeypatch.setattr(worker, "_sync_held_object_to_robot_pose", lambda *_args: None)
+
+    def fake_set_robot_pose(model, data, pose):
+        applied_poses.append(pose)
+        data.qpos[:] = [pose["x"], pose["y"], pose["theta"], pose["head_pitch"], 1.0]
+
+    monkeypatch.setattr(worker, "_set_robot_pose", fake_set_robot_pose)
+
+    result = worker.run_state_command(
+        state_path,
+        "navigate_to_waypoint",
+        {
+            "waypoint_json": json.dumps(
+                {
+                    "waypoint_id": "wp_2",
+                    "room_id": "room_2",
+                    "x": 4.0,
+                    "y": 5.0,
+                    "source_room_bounds": {
+                        "min_x": 0.0,
+                        "max_x": 8.0,
+                        "min_y": 0.0,
+                        "max_y": 10.0,
+                    },
+                }
+            )
+        },
+    )
+
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert result["ok"] is True
+    assert result["tool"] == "navigate_to_waypoint"
+    assert result["state_mutation"] == "robot_base_qpos"
+    assert result["qpos_changed"] is True
+    assert result["robot_pose"]["pose_source"] == "waypoint_room_outline_projection"
+    assert result["robot_pose"]["target_waypoint_id"] == "wp_2"
+    assert applied_poses[0]["x"] == pytest.approx(10.0)
+    assert applied_poses[0]["y"] == pytest.approx(20.0)
+    assert state["current_waypoint_id"] == "wp_2"
+    assert state["robot_pose"]["target_waypoint_id"] == "wp_2"
+    assert state["robot_trajectory"][-1]["target_waypoint_id"] == "wp_2"
+    assert state["qpos"] == pytest.approx(
+        [10.0, 20.0, applied_poses[0]["theta"], applied_poses[0]["head_pitch"], 1.0]
+    )
 
 
 def test_worker_model_data_cache_reuses_loaded_scene(
@@ -1378,10 +1500,22 @@ def test_worker_robot_views_uses_robot_head_camera_for_fpv(
         "tool_event_counts": {},
     }
 
-    monkeypatch.setattr(worker, "_load_model_data_for_state", lambda _state: (object(), object()))
+    fake_model = SimpleNamespace(jnt_qposadr=[0, 1])
+    fake_data = SimpleNamespace(qpos=[0.0, 0.0])
+    joint_ids = {"robot_0/head_0": 0, "robot_0/head_1": 1}
+    monkeypatch.setattr(
+        worker,
+        "_load_model_data_for_state",
+        lambda _state: (fake_model, fake_data),
+    )
     monkeypatch.setattr(worker, "_apply_qpos", lambda *_args: None)
     monkeypatch.setattr(worker, "_refresh_object_positions", lambda *_args: None)
     monkeypatch.setattr(worker.mujoco, "mj_forward", lambda *_args: None)
+    monkeypatch.setattr(
+        worker.mujoco,
+        "mj_name2id",
+        lambda _model, _obj_type, name: joint_ids.get(name, -1),
+    )
     fixed_camera_calls: list[str] = []
 
     def fake_render_fixed_camera(_model, _data, camera_name: str, **_kwargs):
@@ -1403,7 +1537,15 @@ def test_worker_robot_views_uses_robot_head_camera_for_fpv(
         raise AssertionError("MuJoCo robot FPV must use robot_0/head_camera")
 
     monkeypatch.setattr(worker, "_render_camera_views_with_model_data", fail_canonical_render)
-    result = worker.write_robot_views(state, tmp_path, "0001_observe", width=16, height=12)
+    result = worker.write_robot_views(
+        state,
+        tmp_path,
+        "0001_observe",
+        camera_yaw_offset_deg=12.5,
+        camera_pitch_offset_deg=-7.0,
+        width=16,
+        height=12,
+    )
 
     assert result["ok"] is True
     assert state["tool_event_counts"] == {"robot_views:request": 1}
@@ -1415,13 +1557,49 @@ def test_worker_robot_views_uses_robot_head_camera_for_fpv(
         "robot_0/head_camera"
     )
     assert result["camera_control_contract"]["agent_facing_fpv"]["robot_mounted"] is True
+    assert result["camera_control_contract"]["camera_adjustment"]["requested"] is True
+    assert result["camera_control_contract"]["camera_adjustment"]["applied"] is True
+    assert result["camera_control_contract"]["camera_adjustment"]["yaw_delta_deg"] == 12.5
+    assert result["camera_control_contract"]["camera_adjustment"]["pitch_delta_deg"] == -7.0
     assert result["camera_diagnostics"]["schema"] == "mujoco_robot_view_camera_diagnostics_v1"
     assert result["camera_diagnostics"]["render_resolution"] == {"width": 16, "height": 12}
+    assert result["camera_diagnostics"]["camera_adjustment"]["apply_status"] == (
+        "robot_head_joints_render_only"
+    )
     assert result["camera_diagnostics"]["views"]["fpv"]["camera_name"] == "robot_0/head_camera"
     assert result["camera_diagnostics"]["views"]["chase"]["camera_name"] == (
         "robot_0/camera_follower"
     )
+    assert result["camera_adjustment"]["applied"] is True
+    assert fake_data.qpos[0] == pytest.approx(np.deg2rad(12.5))
+    assert fake_data.qpos[1] == pytest.approx(np.deg2rad(-7.0))
     assert Path(result["views"]["fpv"]).is_file()
+
+
+def test_worker_robot_view_camera_offset_updates_head_joints_for_render(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = _load_worker_module()
+    model = SimpleNamespace(jnt_qposadr=[3, 4])
+    data = SimpleNamespace(qpos=[0.0, 0.0, 0.0, 0.25, -0.1])
+    joint_ids = {"robot_0/head_0": 0, "robot_0/head_1": 1}
+
+    def fake_name2id(_model, _obj_type, name: str) -> int:
+        return joint_ids.get(name, -1)
+
+    monkeypatch.setattr(worker.mujoco, "mj_name2id", fake_name2id)
+
+    adjustment = worker._apply_robot_view_camera_offset(
+        model,
+        data,
+        yaw_offset_deg=30.0,
+        pitch_offset_deg=-15.0,
+    )
+
+    assert adjustment["applied"] is True
+    assert adjustment["applied_joints"] == ["robot_0/head_0", "robot_0/head_1"]
+    assert data.qpos[3] == pytest.approx(0.25 + np.deg2rad(30.0))
+    assert data.qpos[4] == pytest.approx(-0.1 + np.deg2rad(-15.0))
 
 
 def test_worker_grows_mujoco_offscreen_buffer_for_high_res_render() -> None:

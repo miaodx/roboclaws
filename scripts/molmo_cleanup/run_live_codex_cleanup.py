@@ -8,6 +8,7 @@ import fcntl
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -18,6 +19,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.report import runtime_timing_from_trace
 
@@ -25,6 +27,9 @@ FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 CODEX_CLEANUP_MCP_SERVER_NAME = "cleanup"
+CODEX_TURN_IDLE_TIMEOUT_ENV = "ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S"
+CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS = 124
+DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S = 300.0
 CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION = (
     "Live MCP route constraint: do not call update_plan, do not create todo/checklist "
     "tool items, and do not use any planning tool. In this Docker Codex live MCP "
@@ -76,6 +81,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--codex-model", default="")
     parser.add_argument("--codex-provider-summary", default="system defaults")
     parser.add_argument("--codex-max-continuations", type=int, default=8)
+    parser.add_argument(
+        "--codex-turn-idle-timeout-s",
+        type=float,
+        default=None,
+        help=(
+            "Maximum quiet time for one Codex exec turn before killing it and "
+            "starting the next continuation. Set to 0 to disable."
+        ),
+    )
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
@@ -270,6 +284,9 @@ class LiveCodexCleanupRunner:
             profile=self.args.profile,
             requested_continuations=self.args.codex_max_continuations,
         )
+        turn_idle_timeout_s = _codex_turn_idle_timeout_s(
+            getattr(self.args, "codex_turn_idle_timeout_s", None)
+        )
         for turn_index in range(max_turns):
             is_initial_turn = turn_index == 0
             prompt = (
@@ -333,6 +350,7 @@ class LiveCodexCleanupRunner:
                 stdout_path=codex_events_path,
                 stderr_path=stderr_path,
                 env=env,
+                idle_timeout_s=turn_idle_timeout_s,
             )
             event_paths.append(codex_events_path)
             if turn_last_message_host_path.is_file():
@@ -342,6 +360,20 @@ class LiveCodexCleanupRunner:
                     break
                 if (self.run_dir / "run_result.json").is_file():
                     break
+                if (
+                    status == CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS
+                    and turn_index + 1 < max_turns
+                ):
+                    print("==> Codex turn went idle before done; starting continuation")
+                    recoveries = self.live_timing.setdefault("codex_recoverable_errors", [])
+                    if isinstance(recoveries, list):
+                        recoveries.append(
+                            {
+                                "turn": turn_index + 1,
+                                "type": "codex_turn_idle_timeout",
+                            }
+                        )
+                    continue
                 recoverable_error = _recoverable_provider_tool_error(codex_events_path, stderr_path)
                 if turn_index + 1 < max_turns and recoverable_error:
                     if recoverable_error == "provider_rate_limit":
@@ -437,11 +469,26 @@ class LiveCodexCleanupRunner:
                 _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
+            raw_fpv_required_cleanup_count = str(
+                generated_mess_success_threshold(int(self.args.min_generated_mess_count))
+            )
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
-            _append_missing_checker_value(checker_args, "--min-model-declared-observations", "7")
-            _append_missing_checker_value(checker_args, "--min-model-declared-actions", "7")
+            _append_missing_checker_value(
+                checker_args,
+                "--min-model-declared-observations",
+                raw_fpv_required_cleanup_count,
+            )
+            _append_missing_checker_value(
+                checker_args,
+                "--min-model-declared-actions",
+                raw_fpv_required_cleanup_count,
+            )
             if task_name == "household-cleanup":
-                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "7")
+                _append_missing_checker_value(
+                    checker_args,
+                    "--min-semantic-accepted-count",
+                    raw_fpv_required_cleanup_count,
+                )
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         checker_args.append(str(run_result))
 
@@ -536,13 +583,27 @@ def _run_and_tee(
     stdout_path: Path,
     stderr_path: Path,
     env: dict[str, str],
+    idle_timeout_s: float | None = None,
 ) -> int:
+    last_output_monotonic = time.monotonic()
+    output_lock = threading.Lock()
+
+    def mark_output() -> None:
+        nonlocal last_output_monotonic
+        with output_lock:
+            last_output_monotonic = time.monotonic()
+
+    def idle_elapsed_s() -> float:
+        with output_lock:
+            return time.monotonic() - last_output_monotonic
+
     proc = subprocess.Popen(
         command,
         cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         env=env,
+        start_new_session=True,
     )
     assert proc.stdout is not None
     assert proc.stderr is not None
@@ -553,16 +614,23 @@ def _run_and_tee(
             stderr_thread = threading.Thread(
                 target=_tee_stream,
                 args=(proc.stderr, [stderr_file_context, sys.stderr.buffer]),
+                kwargs={"on_chunk": mark_output},
                 daemon=True,
             )
             stdout_thread = threading.Thread(
                 target=_tee_stream,
                 args=(proc.stdout, [stdout_file, sys.stdout.buffer]),
+                kwargs={"on_chunk": mark_output},
                 daemon=True,
             )
             stdout_thread.start()
             stderr_thread.start()
-            status = proc.wait()
+            status = _wait_for_process_with_idle_timeout(
+                proc,
+                idle_timeout_s=idle_timeout_s,
+                idle_elapsed_s=idle_elapsed_s,
+                timeout_log=stderr_file_context,
+            )
             stdout_thread.join()
             stderr_thread.join()
             return status
@@ -571,19 +639,71 @@ def _run_and_tee(
             stdout_thread = threading.Thread(
                 target=_tee_stream,
                 args=(proc.stdout, [stdout_file, sys.stdout.buffer]),
+                kwargs={"on_chunk": mark_output},
                 daemon=True,
             )
             stderr_thread = threading.Thread(
                 target=_tee_stream,
                 args=(proc.stderr, [stderr_file, sys.stderr.buffer]),
+                kwargs={"on_chunk": mark_output},
                 daemon=True,
             )
             stdout_thread.start()
             stderr_thread.start()
-            status = proc.wait()
+            status = _wait_for_process_with_idle_timeout(
+                proc,
+                idle_timeout_s=idle_timeout_s,
+                idle_elapsed_s=idle_elapsed_s,
+                timeout_log=stderr_file,
+            )
             stdout_thread.join()
             stderr_thread.join()
             return status
+
+
+def _wait_for_process_with_idle_timeout(
+    proc: subprocess.Popen[bytes],
+    *,
+    idle_timeout_s: float | None,
+    idle_elapsed_s,
+    timeout_log: BinaryIO,
+) -> int:
+    if idle_timeout_s is None or idle_timeout_s <= 0:
+        return proc.wait()
+    while True:
+        try:
+            return proc.wait(timeout=1.0)
+        except subprocess.TimeoutExpired:
+            if idle_elapsed_s() < idle_timeout_s:
+                continue
+            timeout_log.write(
+                (
+                    f"codex turn idle timeout after {idle_timeout_s:g}s; "
+                    "terminating process group for continuation\n"
+                ).encode("utf-8")
+            )
+            timeout_log.flush()
+            _terminate_process_group(proc)
+            return CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS
+
+
+def _terminate_process_group(proc: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except OSError:
+        proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        except OSError:
+            proc.kill()
+        proc.wait(timeout=10)
 
 
 def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict[str, Any]:
@@ -739,7 +859,14 @@ def _codex_continuation_prompt(
             "For camera-raw observations, inspect the raw FPV image block yourself. "
             "Do not call declare_visual_candidates. "
             + raw_fpv_inline_candidate_instruction()
-            + " Continue with pick -> navigate_to_receptacle -> open? -> "
+            + " If navigate_to_visual_candidate returns ok=true, object_id, "
+            "candidate_fixture_id, and required_next_tool=pick, immediately call "
+            "pick with that object_id, then navigate_to_receptacle with that "
+            "candidate_fixture_id, then the response's recommended_tool. "
+            "Do not re-check fixture_hints, do not infer that minimal-map hidden "
+            "fixtures make the target impossible, and do not continue the sweep "
+            "until that grounded chain either succeeds or a cleanup tool rejects it. "
+            "Continue with pick -> navigate_to_receptacle -> open? -> "
             "place/place_inside only after visual grounding resolves."
         )
     elif profile == "camera-labels":
@@ -822,6 +949,18 @@ def _codex_max_turns(*, profile: str, requested_continuations: int) -> int:
         # coverage and done-recovery loops without changing cleanup policy.
         continuations = max(continuations, 14)
     return max(1, continuations + 1)
+
+
+def _codex_turn_idle_timeout_s(configured: float | None) -> float | None:
+    if configured is not None:
+        return configured
+    env_value = os.environ.get(CODEX_TURN_IDLE_TIMEOUT_ENV)
+    if env_value:
+        try:
+            return float(env_value)
+        except ValueError:
+            return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
+    return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
 
 
 def _recoverable_provider_tool_error(*paths: Path) -> str | None:
@@ -910,8 +1049,10 @@ def _round_duration(value: float) -> float:
     return round(max(0.0, value), 3)
 
 
-def _tee_stream(stream: BinaryIO, outputs: list[BinaryIO]) -> None:
+def _tee_stream(stream: BinaryIO, outputs: list[BinaryIO], *, on_chunk=None) -> None:
     for chunk in iter(lambda: stream.readline(), b""):
+        if on_chunk is not None:
+            on_chunk()
         for output in outputs:
             try:
                 output.write(chunk)

@@ -1106,6 +1106,9 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
     assert "trace-preserving RAW_FPV skill lane" in prompt
+    assert "Use the exact visual class when the image makes it clear" in prompt
+    assert "Use broader cleanup categories" in prompt
+    assert "only when the exact object class is uncertain" in prompt
     assert "Prefer image_region={type:verbal_region,value:front of desk}" in prompt
     assert "image_region={type:bbox,value:[x,y,width,height]} only when" in prompt
     assert "Never send bbox_normalized" in prompt
@@ -1113,9 +1116,58 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert 'target_fixture_id="None"' in prompt
     assert "target_fixture_id=null" in prompt
     assert "bare x/y/width/height fields" in prompt
-    assert "at least seven grounded cleanup chains have succeeded" in prompt
+    assert "at least 7 grounded cleanup chains have succeeded" in prompt
     assert "place/place_inside" in prompt
     assert "use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets" in prompt
+
+
+def test_molmo_camera_raw_prompt_scales_to_requested_cleanup_count() -> None:
+    prompt = render_kickoff_prompt("camera-raw", target_cleanup_count=5)
+
+    assert "successful cleanup count is still below 5" in prompt
+    assert "Clean at least 5 grounded visual candidates" in prompt
+    assert "at least 5 grounded cleanup chains have succeeded" in prompt
+    assert "at least seven grounded cleanup chains have succeeded" not in prompt
+
+
+def test_molmo_camera_raw_live_gate_uses_generated_mess_success_threshold() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+    match = re.search(r"camera-raw\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    assert match is not None
+    body = match.group("body")
+
+    assert "generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))" in text
+    assert 'raw_fpv_required_cleanup_count="$generated_mess_success_threshold"' in body
+    assert '--min-model-declared-observations "$raw_fpv_required_cleanup_count"' in body
+    assert '--min-model-declared-actions "$raw_fpv_required_cleanup_count"' in body
+    assert '--min-semantic-accepted-count "$raw_fpv_required_cleanup_count"' in body
+
+
+def test_molmo_live_kickoff_prompt_receives_success_threshold_for_camera_raw() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert 'prompt_cleanup_count="$generated_mess_count"' in text
+    assert 'prompt_cleanup_count="$generated_mess_success_threshold"' in text
+    assert '--target-cleanup-count "$prompt_cleanup_count"' in text
+
+
+def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshold() -> None:
+    text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
+
+    assert "from roboclaws.household.generated_mess import generated_mess_success_threshold" in text
+    assert "generated_mess_success_threshold(int(self.args.min_generated_mess_count))" in text
+    assert "def _raw_fpv_required_cleanup_count" not in text
+    assert "math.ceil(generated_mess_count * 0.70)" not in text
+    assert (
+        '"--min-model-declared-observations",\n                raw_fpv_required_cleanup_count'
+        in text
+    )
+    assert '"--min-model-declared-actions",\n                raw_fpv_required_cleanup_count' in text
+    assert (
+        '"--min-semantic-accepted-count",\n                    raw_fpv_required_cleanup_count'
+        in text
+    )
+    assert '"--min-semantic-accepted-count", "7"' not in text
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
@@ -1743,7 +1795,7 @@ def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checke
 
     assert server_args_match is not None
     assert '--task-name "$task_name"' in server_args_match.group("body")
-    assert '--server-arg=--task-name' not in molmo_text
+    assert "--server-arg=--task-name" not in molmo_text
     assert '--task-name "$task_name"' in molmo_text
     assert '"--expect-task-name",' in runner_text
     assert 'task_name = getattr(self.args, "task_name", "household-cleanup")' in runner_text

@@ -90,6 +90,9 @@ REALWORLD_PERCEPTION_MODES = frozenset(
     }
 )
 _NON_ACTIONABLE_HANDLE_STATES = frozenset({"placed", "placed_closed", "skipped", "stale"})
+_EXACT_VISUAL_CATEGORY_ALIASES = frozenset(
+    {"cup", "mug", "plate", "bowl", "utensil", "fork", "knife", "spoon"}
+)
 
 
 _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
@@ -707,16 +710,21 @@ class RealWorldCleanupContract:
             )
         self._current_waypoint_id = waypoint_id
         self._reset_camera_adjustment()
-        fixture_id = _first_fixture_for_waypoint(waypoint)
-        navigation = None
-        if fixture_id is not None:
-            navigation = self.contract.navigate_to_receptacle(fixture_id)
+        navigation_waypoint = self._private_waypoint_for_public_waypoint(waypoint)
+        navigation_waypoint = self._backend_navigation_waypoint(navigation_waypoint)
+        navigation = self.contract.navigate_to_waypoint(navigation_waypoint)
         return self._ok(
             "navigate_to_waypoint",
             navigation_backend=SIM_COSTMAP_PLANNER,
             primitive_provenance=API_SEMANTIC_PROVENANCE,
             route_validation=route.as_dict(),
             goal_pose={"frame_id": "map", **self._waypoint_pose(waypoint)},
+            backend_goal_pose={
+                "frame_id": "map",
+                **self._waypoint_pose(navigation_waypoint),
+                "room_id": str(navigation_waypoint.get("room_id") or waypoint["room_id"]),
+                "waypoint_id": str(navigation_waypoint.get("waypoint_id") or waypoint_id),
+            },
             pose_source="inspection_waypoint",
             staleness_s=0.0,
             pose_confidence=1.0,
@@ -725,6 +733,7 @@ class RealWorldCleanupContract:
             waypoint_id=waypoint_id,
             room_id=waypoint["room_id"],
             coverage_estimate=waypoint["coverage_estimate"],
+            backend_pose_mutation=navigation,
             navigation_status=(navigation or {}).get("status", "ok"),
         )
 
@@ -1040,9 +1049,36 @@ class RealWorldCleanupContract:
                 object_id=handle,
                 grounding_status=declaration.get("grounding_status", "unresolved"),
                 grounding_confidence=declaration.get("grounding_confidence", 0.0),
+                required_next_tool="observe",
                 recovery_hint=declaration.get(
                     "recovery_hint",
-                    "Declare a tighter image_region or include a source_fixture_id.",
+                    "If one retry with a tighter image_region still does not resolve, "
+                    "treat this visible item as non-actionable public clutter and "
+                    "continue to another waypoint.",
+                ),
+            )
+        detection = self._detections_by_handle.get(handle, {})
+        candidate_fixture_id = self._public_fixture_reference_id(
+            str(detection.get("candidate_fixture_id") or "")
+        )
+        cleanup_recommended = bool(detection.get("cleanup_recommended", False))
+        recommended_tool = str(detection.get("recommended_tool") or "")
+        if not candidate_fixture_id or not recommended_tool:
+            return self._error(
+                "navigate_to_visual_candidate",
+                "visual_candidate_not_actionable",
+                model_declared_observation=self._public_fixture_reference_payload(declaration),
+                object_id=handle,
+                candidate_fixture_id=candidate_fixture_id,
+                candidate_fixture_category=detection.get("candidate_fixture_category", ""),
+                cleanup_recommended=cleanup_recommended,
+                recommended_tool=recommended_tool,
+                grounding_status=declaration.get("grounding_status", "resolved"),
+                required_next_tool="observe",
+                recovery_hint=(
+                    "This grounded object has no public cleanup destination from the current "
+                    "map context. Do not pick it; continue the waypoint sweep and observe for "
+                    "other cleanup objects."
                 ),
             )
         navigation = self.navigate_to_object(handle)
@@ -1069,8 +1105,8 @@ class RealWorldCleanupContract:
                 str(detection.get("candidate_fixture_id") or "")
             ),
             candidate_fixture_category=detection.get("candidate_fixture_category", ""),
-            cleanup_recommended=bool(detection.get("cleanup_recommended", False)),
-            recommended_tool=detection.get("recommended_tool", ""),
+            cleanup_recommended=cleanup_recommended,
+            recommended_tool=recommended_tool,
             declaration_strategy=RAW_FPV_DECLARATION_STRATEGY,
             required_next_tool="pick",
         )
@@ -2267,6 +2303,14 @@ class RealWorldCleanupContract:
                 row["destination_policy"] = destination_policy
             if not self.sanitize_world_labels:
                 row["cleanup_recommended"] = cleanup_recommended
+                internal_candidate_fixture_id = (
+                    self.internal_fixture_id_for_public_reference(public_candidate_fixture_id)
+                    or str(candidate_fixture_id)
+                )
+                row["recommended_tool"] = _recommended_place_tool(
+                    internal_candidate_fixture_id,
+                    self._fixtures,
+                ) if public_candidate_fixture_id else ""
             lifecycle_rows.append(row)
         waypoint_rows = []
         for waypoint in self._public_waypoints:
@@ -2460,7 +2504,7 @@ class RealWorldCleanupContract:
         acted_handles = {
             handle
             for handle, lifecycle in self._object_lifecycle.items()
-            if lifecycle.get("state") not in {None, "pending"}
+            if lifecycle.get("state") in {"navigating_to_object", "held", "placed", "placed_closed"}
         }
         for item in observations:
             item["acted_on"] = str(item.get("object_id") or "") in acted_handles
@@ -3064,7 +3108,6 @@ class RealWorldCleanupContract:
         declaration = self._declaration_from_resolution(normalized, match)
         handle = str(declaration["object_id"])
         if match["status"] == "already_handled":
-            self._model_declared_observations.append(declaration)
             return dict(declaration)
         if match["status"] == "resolved":
             obj = match["objects"][0]
@@ -3329,7 +3372,11 @@ class RealWorldCleanupContract:
             recovery_hint = (
                 "Provide a tighter bbox/point or source_fixture_id before picking."
                 if status == "ambiguous"
-                else "Reobserve from another waypoint or declare a clearer category/source fixture."
+                else (
+                    "No public actionable object matched this declaration. Retry at most once "
+                    "with a tighter image_region or clearer category, then continue the "
+                    "waypoint sweep instead of looping on this visible item."
+                )
             )
             grounding_status = status
             actionability_status = "needs_clarification"
@@ -3830,6 +3877,21 @@ class RealWorldCleanupContract:
             self._private_waypoint_by_public_id.get(str(waypoint.get("waypoint_id") or ""))
             or waypoint
         )
+
+    def _backend_navigation_waypoint(self, waypoint: dict[str, Any]) -> dict[str, Any]:
+        navigation_waypoint = dict(waypoint)
+        room = next(
+            (
+                item
+                for item in self._rooms
+                if str(item.get("room_id") or "") == str(waypoint.get("room_id") or "")
+            ),
+            None,
+        )
+        bounds = _room_polygon_bounds(room) if room is not None else None
+        if bounds is not None:
+            navigation_waypoint["source_room_bounds"] = bounds
+        return navigation_waypoint
 
     def _handle_for_object(self, object_id: str) -> str:
         existing = self._observed_handles_by_object_id.get(object_id)
@@ -4724,6 +4786,27 @@ def _room_outline_metadata(outline: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _room_polygon_bounds(room: dict[str, Any] | None) -> dict[str, float] | None:
+    if room is None:
+        return None
+    polygon = room.get("polygon") or []
+    xs = [float(point.get("x", 0.0)) for point in polygon if isinstance(point, dict)]
+    ys = [float(point.get("y", 0.0)) for point in polygon if isinstance(point, dict)]
+    if not xs or not ys:
+        center = room.get("map_center") or {}
+        if "x" not in center or "y" not in center:
+            return None
+        x = float(center.get("x", 0.0))
+        y = float(center.get("y", 0.0))
+        return {"min_x": x - 1.0, "max_x": x + 1.0, "min_y": y - 1.0, "max_y": y + 1.0}
+    return {
+        "min_x": round(min(xs), 6),
+        "max_x": round(max(xs), 6),
+        "min_y": round(min(ys), 6),
+        "max_y": round(max(ys), 6),
+    }
+
+
 def _waypoint_slots_for_room(
     room: dict[str, Any],
     count: int,
@@ -5245,6 +5328,8 @@ def _declared_category_matches_object(category_norm: str, obj: Any) -> bool:
     object_norm = _norm(f"{getattr(obj, 'category', '')} {getattr(obj, 'name', '')}")
     if not category_norm or category_norm in object_norm or object_norm in category_norm:
         return True
+    if category_norm in _EXACT_VISUAL_CATEGORY_ALIASES:
+        return False
     declared_families = _category_alias_families(category_norm)
     object_families = _category_alias_families(object_norm)
     return bool(declared_families.intersection(object_families))

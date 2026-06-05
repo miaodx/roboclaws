@@ -21,6 +21,7 @@ from roboclaws.household.realworld_contract import (
     VISUAL_CANDIDATE_ALREADY_HANDLED_REASON,
     VISUAL_GROUNDING_CATEGORY_HINTS,
     RealWorldCleanupContract,
+    _declared_category_matches_object,
     cleanup_policy_trace_from_events,
     forbidden_agent_view_keys,
     infer_target_fixture_for_detection,
@@ -43,6 +44,69 @@ def _contract(
 ) -> RealWorldCleanupContract:
     kwargs.setdefault("map_mode", RICH_MAP_MODE)
     return RealWorldCleanupContract(session, **kwargs)
+
+
+def test_visual_candidate_exact_category_matching_does_not_cross_broad_family() -> None:
+    plate = CleanupObject("plate_01", "Plate", "Plate", "table_01")
+    mug = CleanupObject("mug_01", "ceramic mug", "dish", "sofa_01")
+
+    assert _declared_category_matches_object("plate", plate) is True
+    assert _declared_category_matches_object("dish", plate) is True
+    assert _declared_category_matches_object("cup", plate) is False
+    assert _declared_category_matches_object("plate", mug) is False
+    assert _declared_category_matches_object("dish", mug) is True
+
+
+class _PoseRecordingBackend:
+    def __init__(self, scenario: CleanupScenario) -> None:
+        self.scenario = scenario
+        self._locations = scenario.object_locations()
+        self.current_receptacle_id = ""
+        self.navigation_targets: list[str] = []
+        self.view_poses: list[dict[str, object]] = []
+        self.robot_view_camera_offsets: list[dict[str, float]] = []
+
+    def object_locations(self) -> dict[str, str]:
+        return dict(self._locations)
+
+    def navigate_to_receptacle(self, receptacle_id: str) -> dict[str, object]:
+        self.current_receptacle_id = receptacle_id
+        self.navigation_targets.append(receptacle_id)
+        return {"ok": True, "tool": "navigate_to_receptacle", "status": "ok"}
+
+    def write_robot_views(
+        self,
+        output_dir: Path,
+        *,
+        label: str,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
+    ) -> dict[str, object]:
+        del focus_object_id, focus_receptacle_id
+        self.robot_view_camera_offsets.append(
+            {
+                "yaw_delta_deg": camera_yaw_offset_deg,
+                "pitch_delta_deg": camera_pitch_offset_deg,
+            }
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        current = self.current_receptacle_id or "unknown"
+        views = {}
+        for key in ("fpv", "chase", "map", "verify"):
+            path = output_dir / f"{label}.{current}.{key}.png"
+            path.write_bytes(b"fake png")
+            views[key] = str(path)
+        pose = {"receptacle_id": current}
+        self.view_poses.append(pose)
+        return {
+            "ok": True,
+            "robot_pose": pose,
+            "robot_trajectory": [pose],
+            "view_variant": "test-fpv-map-chase-verify",
+            "views": views,
+        }
 
 
 def test_realworld_contract_defaults_to_minimal_map_mode() -> None:
@@ -1305,6 +1369,69 @@ def test_realworld_raw_fpv_camera_adjustment_is_bounded_and_resets() -> None:
     }
 
 
+def test_minimal_raw_fpv_waypoint_navigation_moves_backend_before_capture(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _PoseRecordingBackend(scenario)
+    contract = RealWorldCleanupContract(
+        CleanupBackendSession(scenario, backend=backend),
+        perception_mode=RAW_FPV_ONLY_MODE,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    waypoints = contract.metric_map()["inspection_waypoints"]
+    first_waypoint = waypoints[0]
+    second_waypoint = next(
+        waypoint
+        for waypoint in waypoints[1:]
+        if contract._private_waypoint_for_public_waypoint(waypoint).get("fixture_ids")  # noqa: SLF001
+        != contract._private_waypoint_for_public_waypoint(first_waypoint).get("fixture_ids")  # noqa: SLF001
+    )
+    first_fixture_id = contract._private_waypoint_for_public_waypoint(first_waypoint)[  # noqa: SLF001
+        "fixture_ids"
+    ][0]
+    second_fixture_id = contract._private_waypoint_for_public_waypoint(second_waypoint)[  # noqa: SLF001
+        "fixture_ids"
+    ][0]
+
+    first_nav = contract.navigate_to_waypoint(str(first_waypoint["waypoint_id"]))
+    first_observation = contract.observe()
+    first_raw = first_observation["raw_fpv_observation"]
+    first_views = backend.write_robot_views(
+        tmp_path,
+        label=str(first_raw["observation_id"]),
+    )["views"]
+    first_artifact = contract.attach_raw_fpv_observation_artifact(
+        first_raw["observation_id"],
+        views=first_views,
+    )
+
+    second_nav = contract.navigate_to_waypoint(str(second_waypoint["waypoint_id"]))
+    second_observation = contract.observe()
+    second_raw = second_observation["raw_fpv_observation"]
+    second_views = backend.write_robot_views(
+        tmp_path,
+        label=str(second_raw["observation_id"]),
+    )["views"]
+    second_artifact = contract.attach_raw_fpv_observation_artifact(
+        second_raw["observation_id"],
+        views=second_views,
+    )
+
+    assert first_nav["waypoint_id"] == first_waypoint["waypoint_id"]
+    assert second_nav["waypoint_id"] == second_waypoint["waypoint_id"]
+    assert backend.navigation_targets[:2] == [first_fixture_id, second_fixture_id]
+    assert backend.view_poses[0] == {"receptacle_id": first_fixture_id}
+    assert backend.view_poses[1] == {"receptacle_id": second_fixture_id}
+    assert first_artifact is not None
+    assert second_artifact is not None
+    assert first_artifact["image_artifacts"]["fpv"] != second_artifact["image_artifacts"]["fpv"]
+    assert first_views["verify"] != second_views["verify"]
+    assert first_views["map"] != second_views["map"]
+    assert first_fixture_id in first_artifact["image_artifacts"]["fpv"]
+    assert second_fixture_id in second_artifact["image_artifacts"]["fpv"]
+
+
 def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -1331,6 +1458,7 @@ def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
     picked = contract.pick(candidate["object_id"])
 
     assert candidate["grounding_status"] == "unresolved"
+    assert "No public actionable object matched" in candidate["recovery_hint"]
     assert picked["ok"] is False
     assert picked["error_reason"] == "visual_candidate_not_resolved"
     worklist_item = next(
@@ -1343,6 +1471,61 @@ def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
     assert candidate["private_truth_included"] is False
     _assert_no_forbidden_keys(declared)
     _assert_no_forbidden_keys(picked)
+
+
+def test_realworld_navigate_to_unresolved_visual_candidate_says_continue_sweep() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="imaginary widget",
+        target_fixture_id="sink_01",
+        evidence_note="ambiguous tiny object in the far corner",
+        image_region={"type": "verbal_region", "value": "far corner"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "visual_candidate_not_resolved"
+    assert response["required_next_tool"] == "observe"
+    assert "No public actionable object matched" in response["recovery_hint"]
+    assert "instead of looping" in response["recovery_hint"]
+    _assert_no_forbidden_keys(response)
+
+
+def test_realworld_unresolved_visual_candidates_do_not_count_as_model_declared_actions() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+    )
+
+    waypoint = contract.metric_map()["inspection_waypoints"][0]
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="imaginary widget",
+        target_fixture_id="sink_01",
+        evidence_note="ambiguous tiny object in the far corner",
+        image_region={"type": "verbal_region", "value": "far corner"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+    evidence = contract.model_declared_observations_payload()
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "visual_candidate_not_resolved"
+    assert evidence["observation_count"] == 1
+    assert evidence["acted_count"] == 0
+    assert evidence["observations"][0]["grounding_status"] == "unresolved"
+    assert evidence["observations"][0]["acted_on"] is False
 
 
 def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
@@ -1505,7 +1688,49 @@ def test_minimal_raw_fpv_visual_candidate_can_omit_target_fixture_id() -> None:
     assert declaration["target_fixture_category"] == "fridge"
     assert declaration["target_plausibility"]["status"] == "plausible"
     assert declaration["target_plausibility"]["expected_fixture_id"] == target_anchor_id
+    worklist = contract.cleanup_worklist_payload()
+    worklist_item = next(
+        item for item in worklist["objects"] if item["object_id"] == response["object_id"]
+    )
+    assert worklist_item["cleanup_recommended"] is True
+    assert worklist_item["candidate_fixture_id"] == target_anchor_id
+    assert worklist_item["recommended_tool"] == "place_inside"
     assert contract.pick(response["object_id"])["ok"] is True
+    _assert_no_forbidden_keys(response)
+
+
+def test_minimal_raw_fpv_visual_candidate_requires_public_destination() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        perception_mode=RAW_FPV_ONLY_MODE,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+
+    waypoint = next(
+        item
+        for item in contract.metric_map()["inspection_waypoints"]
+        if item["waypoint_id"] == "generated_exploration_001"
+    )
+    contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
+    observation = contract.observe()
+    response = contract.navigate_to_visual_candidate(
+        observation["raw_fpv_observation"]["observation_id"],
+        category="book",
+        evidence_note="book visible on nearby surface",
+        image_region={"type": "verbal_region", "value": "center"},
+        producer_type="main_cleanup_agent",
+        producer_id="test_agent",
+    )
+
+    assert response["ok"] is False
+    assert response["error_reason"] == "visual_candidate_not_actionable"
+    assert response["object_id"].startswith("observed_")
+    assert response["cleanup_recommended"] is False
+    assert response["candidate_fixture_id"] == ""
+    assert response["recommended_tool"] == ""
+    assert response["required_next_tool"] == "observe"
+    assert "Do not pick it" in response["recovery_hint"]
+    assert contract.pick(response["object_id"])["ok"] is False
     _assert_no_forbidden_keys(response)
 
 
@@ -1546,6 +1771,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     assert first["ok"] is True
     assert retry_before_place["ok"] is True
     assert retry_before_place["object_id"] == handle
+    declared_before_place = contract.model_declared_observations_payload()["observation_count"]
     assert contract.pick(handle)["ok"] is True
     assert contract.navigate_to_receptacle("fridge_01")["ok"] is True
     assert contract.open_receptacle("fridge_01")["ok"] is True
@@ -1572,6 +1798,9 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     assert duplicate["object_id"] == handle
     assert duplicate["required_next_tool"] == "observe"
     assert duplicate["model_declared_observation"]["actionability_status"] == "already_handled"
+    assert contract.model_declared_observations_payload()["observation_count"] == (
+        declared_before_place
+    )
     assert contract._current_object_handle == current_handle_before
     assert contract._held_handle == held_handle_before
     assert contract._object_lifecycle[handle] == lifecycle_before
