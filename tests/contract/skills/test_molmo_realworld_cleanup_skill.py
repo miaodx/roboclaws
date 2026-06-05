@@ -44,7 +44,7 @@ def test_cleanup_skill_prioritizes_done_over_optional_reclean_loops() -> None:
     assert "call `done` as the authoritative closeout probe" in compact
     assert "clean exactly those listed handles using their `candidate_fixture_id`" in compact
     assert "or `destination_options`, then call `done` again" in compact
-    assert "If a tool returns `required_tool`, call that public tool next" in compact
+    assert "top-level `required_tool` or `completion.blockers[*].required_tool`" in compact
     assert "continue the waypoint sweep rather than inventing fixture ids" in compact
     assert "first complete an anchor discovery sweep" not in compact
     assert "before the first pick" not in compact

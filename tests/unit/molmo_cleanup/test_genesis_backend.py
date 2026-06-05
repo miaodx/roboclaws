@@ -13,6 +13,7 @@ from scripts.genesis_cleanup.genesis_backend_worker import (
     GENESIS_COLOR_PROFILE_TONE_ADJUSTMENT,
     GENESIS_COLOR_PROFILE_VIEW_TONE_ADJUSTMENT,
     GENESIS_RENDER_LIGHTING_PROFILE,
+    _copy_usd_texture,
     _extract_materialized_usd_visual_asset,
     _extract_render_only_visual_mesh,
     _genesis_color_profile,
@@ -229,6 +230,359 @@ def Xform "World"
     baked_texture = next((tmp_path / "visual_asset" / "textures").glob("floor_baked_*.png"))
     assert baked_texture.is_file()
     assert Image.open(baked_texture).convert("RGB").getpixel((0, 0)) == (120, 100, 80)
+
+
+def test_genesis_texture_copy_converts_palette_png_for_genesis(tmp_path: Path) -> None:
+    source = tmp_path / "toilet.png"
+    palette_texture = Image.new("P", (2, 1))
+    palette = [0] * 768
+    palette[0:3] = [250, 250, 250]
+    palette[3:6] = [90, 90, 90]
+    palette_texture.putpalette(palette)
+    palette_texture.putdata([0, 1])
+    palette_texture.save(source)
+
+    relpath = _copy_usd_texture(
+        source,
+        texture_dir=tmp_path / "visual_asset" / "textures",
+        copied_textures={},
+        used_texture_names=set(),
+    )
+
+    assert relpath == "textures/toilet.png"
+    exported = tmp_path / "visual_asset" / relpath
+    assert exported.is_file()
+    assert Image.open(exported).mode == "RGB"
+    assert Image.open(exported).getpixel((0, 0)) == (250, 250, 250)
+    assert Image.open(exported).getpixel((1, 0)) == (90, 90, 90)
+
+
+def test_genesis_materialized_visual_asset_converts_palette_textures(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("pxr")
+    texture_dir = tmp_path / "textures"
+    texture_dir.mkdir()
+    palette_texture = Image.new("P", (2, 1))
+    palette = [0] * 768
+    palette[0:3] = [250, 250, 250]
+    palette[3:6] = [90, 90, 90]
+    palette_texture.putpalette(palette)
+    palette_texture.putdata([0, 1])
+    palette_texture.save(texture_dir / "toilet.png")
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text(
+        """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Mesh "Triangle"
+    {
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+        texCoord2f[] primvars:st = [(0, 0), (1, 0), (0, 1)] (
+            interpolation = "vertex"
+        )
+        rel material:binding = </World/Looks/Material_01>
+    }
+
+    def Scope "Looks"
+    {
+        def Material "Material_01"
+        {
+            token outputs:surface.connect =
+                </World/Looks/Material_01/PreviewSurface.outputs:surface>
+
+            def Shader "PreviewSurface"
+            {
+                uniform token info:id = "UsdPreviewSurface"
+                color3f inputs:diffuseColor.connect =
+                    </World/Looks/Material_01/DiffuseTexture.outputs:rgb>
+                token outputs:surface
+            }
+
+            def Shader "DiffuseTexture"
+            {
+                uniform token info:id = "UsdUVTexture"
+                asset inputs:file = @textures/toilet.png@
+                float2 inputs:st.connect = </World/Looks/Material_01/StReader.outputs:result>
+                float3 outputs:rgb
+            }
+
+            def Shader "StReader"
+            {
+                uniform token info:id = "UsdPrimvarReader_float2"
+                token inputs:varname = "st"
+                float2 outputs:result
+            }
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    scene_usd.with_name("scene_metadata.json").write_text(
+        json.dumps(
+            {
+                "objects": {
+                    "Triangle": {
+                        "category": "Toilet",
+                        "asset_id": "Toilet_1",
+                        "object_id": "Toilet|1|0",
+                        "is_static": True,
+                        "room_id": 1,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _extract_materialized_usd_visual_asset(scene_usd, tmp_path / "visual_asset")
+
+    exported_texture = tmp_path / "visual_asset" / "textures" / "toilet.png"
+    assert exported_texture.is_file()
+    assert Image.open(exported_texture).mode == "RGB"
+    assert result["converted_texture_count"] == 1
+    audit = result["visual_object_audit"]
+    assert audit["texture_conversion_object_count"] == 1
+    assert audit["texture_conversion_objects"][0]["object_key"] == "Triangle"
+    assert audit["texture_conversion_objects"][0]["category"] == "Toilet"
+    assert audit["texture_conversion_objects"][0]["converted_texture_names"] == ["toilet.png"]
+    assert audit["texture_conversion_objects"][0]["bounds_center"] == [0.5, 0.5, 0.0]
+    assert audit["texture_conversion_objects"][0]["bounds_size"] == [1.0, 1.0, 0.0]
+
+
+def test_genesis_materialized_visual_asset_skips_collision_meshes(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("pxr")
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text(
+        """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Mesh "VisibleTriangle"
+    {
+        point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+    }
+
+    def Mesh "VisibleTriangle_MeshCollider_0" (
+        prepend apiSchemas = ["PhysicsCollisionAPI"]
+    )
+    {
+        point3f[] points = [(0, 0, 1), (1, 0, 1), (0, 1, 1)]
+        int[] faceVertexCounts = [3]
+        int[] faceVertexIndices = [0, 1, 2]
+    }
+}
+""",
+        encoding="utf-8",
+    )
+
+    result = _extract_materialized_usd_visual_asset(scene_usd, tmp_path / "visual_asset")
+    obj_text = Path(str(result["mesh_path"])).read_text(encoding="utf-8")
+
+    assert result["source_mesh_count"] == 1
+    assert result["skipped_collision_mesh_count"] == 1
+    assert obj_text.count("\nf ") == 1
+    assert obj_text.count("\nv ") == 3
+    audit = result["visual_object_audit"]
+    assert audit["collision_mesh_object_count"] == 1
+    assert audit["collision_mesh_objects"][0]["object_key"] == "VisibleTriangle_MeshCollider_0"
+    assert audit["collision_mesh_objects"][0]["collision_mesh_count"] == 1
+
+
+def test_genesis_visual_object_audit_matches_sanitized_usd_metadata_aliases(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("pxr")
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text(
+        """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Xform "Geometry"
+    {
+        def Xform "tn__plumbershelper_d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3_aa1"
+        {
+            def Mesh "Plunger_3_plunger_0"
+            {
+                point3f[] points = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
+                int[] faceVertexCounts = [3]
+                int[] faceVertexIndices = [0, 1, 2]
+            }
+            def Mesh "Plunger_3_plunger_Plunger_3_plunger_0_MeshCollider_0" (
+                prepend apiSchemas = ["PhysicsCollisionAPI"]
+            )
+            {
+                point3f[] points = [(0, 0, 1), (1, 0, 1), (0, 1, 1)]
+                int[] faceVertexCounts = [3]
+                int[] faceVertexIndices = [0, 1, 2]
+            }
+        }
+        def Mesh "wall_0_10_visual_0"
+        {
+            point3f[] points = [(0, 0, -1), (1, 0, -1), (0, 1, -1)]
+            int[] faceVertexCounts = [3]
+            int[] faceVertexIndices = [0, 1, 2]
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+    scene_usd.with_name("scene_metadata.json").write_text(
+        json.dumps(
+            {
+                "objects": {
+                    "plumber'shelper_d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3": {
+                        "hash_name": "plumber'shelper_d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3",
+                        "category": "Plunger",
+                        "asset_id": "Plunger_3",
+                        "object_id": "Plunger|3|3",
+                        "is_static": False,
+                        "room_id": 3,
+                        "name_map": {
+                            "bodies": {
+                                "plumber'shelper_d3f01572ae5fcc46e47a7837bfb4bb40_1_0_3": (
+                                    "Plunger_3"
+                                )
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _extract_materialized_usd_visual_asset(scene_usd, tmp_path / "visual_asset")
+
+    audit = result["visual_object_audit"]
+    plunger = next(
+        item for item in audit["objects"] if item["object_key"].startswith("tn__plumbershelper")
+    )
+    wall = next(item for item in audit["objects"] if item["object_key"] == "wall_0_10_visual_0")
+    movable_group = next(
+        group for group in audit["risk_groups"] if group["risk"] == "non_static_render_object"
+    )
+    collision_group = next(
+        group for group in audit["risk_groups"] if group["risk"] == "collision_mesh_filtered"
+    )
+
+    assert plunger["category"] == "Plunger"
+    assert plunger["asset_id"] == "Plunger_3"
+    assert plunger["metadata_match"] == "usd_tn_prefix_alias"
+    assert plunger["is_static"] is False
+    assert plunger["collision_mesh_count"] == 1
+    assert plunger["bounds_center"] == [0.5, 0.5, 0.0]
+    assert wall["category"] == "RoomWall"
+    assert wall["metadata_match"] == "synthetic_scene_structure"
+    assert movable_group["category_counts"]["Plunger"] == 1
+    assert collision_group["category_counts"]["Plunger"] == 1
+
+
+def test_genesis_materialized_visual_asset_applies_runtime_pose_overlay(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("pxr")
+    scene_usd = tmp_path / "scene.usda"
+    scene_usd.write_text(
+        """#usda 1.0
+(
+    defaultPrim = "World"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "World"
+{
+    def Xform "Geometry"
+    {
+        def Xform "bowl_01"
+        {
+            def Mesh "BowlMesh"
+            {
+                point3f[] points = [(0, 0, 0.95), (0.2, 0, 0.95), (0, 0.2, 1.05)]
+                int[] faceVertexCounts = [3]
+                int[] faceVertexIndices = [0, 1, 2]
+            }
+        }
+    }
+}
+""",
+        encoding="utf-8",
+    )
+    scene_usd.with_name("scene_metadata.json").write_text(
+        json.dumps(
+            {
+                "objects": {
+                    "bowl_01": {
+                        "category": "Bowl",
+                        "asset_id": "Bowl_12",
+                        "object_id": "Bowl|surface|2|4",
+                        "is_static": False,
+                        "room_id": 2,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = _extract_materialized_usd_visual_asset(
+        scene_usd,
+        tmp_path / "visual_asset",
+        runtime_object_positions={
+            "bowl_01": {
+                "category": "Bowl",
+                "position": [2.0, 4.0, 1.0],
+                "seeded_start_receptacle_id": "bed_01",
+                "target_receptacle_id": "sink_01",
+            }
+        },
+    )
+
+    obj_text = Path(str(result["mesh_path"])).read_text(encoding="utf-8")
+    vertices = [
+        [float(value) for value in line.split()[1:4]]
+        for line in obj_text.splitlines()
+        if line.startswith("v ")
+    ]
+    assert vertices[0] == pytest.approx([1.9, 3.9, 0.95])
+    assert result["runtime_pose_overlay_count"] == 1
+    audit = result["visual_object_audit"]
+    assert audit["runtime_pose_overlay_object_count"] == 1
+    assert audit["runtime_pose_overlay_threshold_m"] == pytest.approx(0.25)
+    bowl = audit["runtime_pose_overlay_objects"][0]
+    assert bowl["object_key"] == "bowl_01"
+    assert bowl["bounds_center"] == pytest.approx([2.0, 4.0, 1.0])
+    assert bowl["runtime_pose_overlay_geometry_delta_m"] == pytest.approx(4.338202392696772)
+    assert bowl["runtime_pose_overlay_translation"] == pytest.approx([1.9, 3.9, 0.0])
+    assert bowl["runtime_pose_overlay"]["seeded_start_receptacle_id"] == "bed_01"
+    assert bowl["runtime_pose_overlay"]["target_receptacle_id"] == "sink_01"
 
 
 def test_genesis_scene_applies_visual_lighting_options() -> None:
