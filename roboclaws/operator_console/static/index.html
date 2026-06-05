@@ -10,7 +10,7 @@
     <div class="app-shell">
       <header class="top-run-bar">
         <div>
-          <div class="app-title">Agent Operator Console</div>
+          <h1 class="app-title">Agent Operator Console</h1>
           <div class="run-meta">
             <span id="run-title">No run selected</span>
             <span id="route-status" class="badge">idle</span>
@@ -84,6 +84,10 @@
           <label class="check-row">
             <input id="estop-gate" type="checkbox" />
             E-stop readiness visible
+          </label>
+          <label class="check-row">
+            <input id="real-movement-gate" type="checkbox" />
+            Real movement enabled
           </label>
           </div>
           <label>
@@ -161,7 +165,7 @@
       </aside>
 
       <footer class="event-strip">
-        <div id="event-log">Choose an agent route on the left. The console will show required gates before launch.</div>
+        <div id="event-log" role="status" aria-live="polite">Choose an agent route on the left. The console will show required gates before launch.</div>
       </footer>
     </div>
 

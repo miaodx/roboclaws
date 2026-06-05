@@ -737,6 +737,7 @@ class RealWorldMolmoCleanupMCPServer:
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
         semantic_phase: str | None = None,
+        action_evidence: dict[str, Any] | None = None,
         camera_yaw_offset_deg: float = 0.0,
         camera_pitch_offset_deg: float = 0.0,
     ) -> dict[str, Any] | None:
@@ -758,6 +759,7 @@ class RealWorldMolmoCleanupMCPServer:
                 focus_object_id=focus_object_id,
                 focus_receptacle_id=self._internal_fixture_id(focus_receptacle_id),
                 semantic_phase=semantic_phase,
+                action_evidence=action_evidence,
                 camera_yaw_offset_deg=camera_yaw_offset_deg,
                 camera_pitch_offset_deg=camera_pitch_offset_deg,
             )
@@ -921,6 +923,7 @@ def _compact_model_declared_observation(item: dict[str, Any]) -> dict[str, Any]:
             "grounding_basis",
             "recovery_hint",
             "actionability_status",
+            "visual_grounding_evidence",
             "visual_grounding_destination_hint",
             "image_dimensions",
             "visual_grounding_overlay",
@@ -960,6 +963,8 @@ def _compact_camera_model_candidate(item: dict[str, Any]) -> dict[str, Any]:
             "grounding_status",
             "grounding_confidence",
             "grounding_basis",
+            "actionability_status",
+            "visual_grounding_evidence",
         ),
     )
     support_estimate = item.get("support_estimate")
@@ -1108,8 +1113,10 @@ def _compact_worklist_object(item: dict[str, Any]) -> dict[str, Any]:
             "last_waypoint_id",
             "candidate_fixture_id",
             "candidate_source",
+            "actionability_status",
             "cleanup_recommended",
             "recommended_tool",
+            "visual_grounding_evidence",
         ),
     )
 

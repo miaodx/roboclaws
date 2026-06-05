@@ -209,7 +209,11 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         checker_id="runtime_metric_map",
         task_prompt_default="帮我建立这个房间的语义地图",
         required_overrides=("context_json",),
-        default_overrides=("visual_grounding=grounding-dino",),
+        default_overrides=(
+            "policy=codex_agibot_semantic_map_build_pilot",
+            "visual_grounding=grounding-dino",
+            "visual_grounding_timeout_s=20",
+        ),
         gates=(
             PROVIDER_KEY_GATE,
             MCP_PORT_FREE_GATE,

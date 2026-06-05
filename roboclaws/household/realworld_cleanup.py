@@ -1010,6 +1010,7 @@ def _clean_visible_object(
                 capture.get("focus_receptacle_id")
             ),
             semantic_phase=capture.get("semantic_phase"),
+            action_evidence=capture.get("action_evidence"),
         )
 
     loop_contract = _cleanup_loop_contract_for_target(

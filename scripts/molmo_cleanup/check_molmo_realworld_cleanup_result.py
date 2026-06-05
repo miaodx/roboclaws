@@ -65,6 +65,7 @@ from roboclaws.household.semantic_timeline import (
     CANONICAL_SURFACE_CLEANUP_PHASES,
     CLOSE_RECEPTACLE_PHASE,
     FOCUSED_SEMANTIC_ACTION_PREFIXES,
+    NAVIGATE_TO_VISUAL_CANDIDATE_TOOL,
     OPEN_RECEPTACLE_PHASE,
     PLACE_INSIDE_PHASE,
     SEMANTIC_LOOP_VARIANT,
@@ -1281,7 +1282,7 @@ def _assert_robot_views(
             assert path.stat().st_size > 0, path
         action = str(step.get("action", ""))
         if _is_focused_robot_action(action):
-            focused_actions.add(action.split(" ", 1)[0])
+            focused_actions.add(_canonical_robot_view_phase(step, action))
             if not action.startswith("observe "):
                 _assert_focused_robot_step(step)
     if require_complete_actions:
@@ -2834,8 +2835,25 @@ def _assert_planner_proof_requests(data: dict[str, Any], base: Path, report_text
 
 def _is_focused_robot_action(action: str) -> bool:
     return action.startswith(
-        ("navigate_to_waypoint ", "observe ", *FOCUSED_SEMANTIC_ACTION_PREFIXES)
+        (
+            "navigate_to_waypoint ",
+            "observe ",
+            f"{NAVIGATE_TO_VISUAL_CANDIDATE_TOOL} ",
+            *FOCUSED_SEMANTIC_ACTION_PREFIXES,
+        )
     )
+
+
+def _canonical_robot_view_phase(step: dict[str, Any], action: str) -> str:
+    semantic_phase = step.get("semantic_phase")
+    if isinstance(semantic_phase, str) and semantic_phase:
+        return semantic_phase
+    action_evidence = step.get("action_evidence")
+    if isinstance(action_evidence, dict):
+        backend_primitive = action_evidence.get("backend_primitive")
+        if isinstance(backend_primitive, str) and backend_primitive:
+            return backend_primitive
+    return action.split(" ", 1)[0]
 
 
 def _assert_focused_robot_step(step: dict[str, Any]) -> None:

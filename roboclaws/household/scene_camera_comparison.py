@@ -26,6 +26,8 @@ from roboclaws.household.camera_control import (
     SCENE_PROBE_LIGHTING_PROFILES,
     canonical_scene_camera_control_request,
     normalize_camera_control_request,
+    scene_light_rig,
+    scene_light_rig_roles,
     write_camera_control_request,
 )
 from roboclaws.household.genesis_backend import GenesisSubprocessBackend
@@ -344,6 +346,10 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    manifest["material_response_diagnostics"] = _material_response_diagnostics(
+        manifest,
+        output_dir=output_dir,
+    )
     manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
     manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
     manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
@@ -386,6 +392,11 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     if not isinstance(manifest.get("render_domain_contract_probe"), dict):
         manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    if not isinstance(manifest.get("material_response_diagnostics"), dict):
+        manifest["material_response_diagnostics"] = _material_response_diagnostics(
+            manifest,
+            output_dir=output_dir,
+        )
     if not isinstance(manifest.get("lighting_tone_provenance"), dict):
         manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
     if not isinstance(manifest.get("shadow_parity_probe"), dict):
@@ -3618,21 +3629,39 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
             )
         }
     )
-    genesis_shadow = bool(genesis_profile.get("shadow", lighting.get("genesis_shadow", False)))
+    rig = _lighting_rig(lighting)
+    rig_roles = scene_light_rig_roles(rig)
+    key = _rig_key(lighting)
+    ambient = _rig_ambient(lighting)
+    isaac_override = _rig_backend_override(lighting, "isaac")
+    genesis_shadow = bool(genesis_profile.get("shadow", key.get("shadow", False)))
+    key_light_direction = _key_light_direction_diagnostics(
+        lighting_profile=lighting,
+        render_probe=render_probe,
+        isaac_lighting=isaac_lighting,
+        genesis_profile=genesis_profile,
+    )
     isaac_dome_intensity = _optional_float(
-        isaac_lighting.get("requested_dome_intensity", lighting.get("isaac_dome_intensity"))
+        isaac_lighting.get("requested_dome_intensity", ambient.get("isaac_dome_intensity"))
     )
     isaac_key_intensity = _optional_float(
-        isaac_lighting.get("requested_key_intensity", lighting.get("isaac_key_intensity"))
+        isaac_lighting.get("requested_key_intensity", isaac_override.get("key_intensity"))
     )
     shadow_disabled_count = _optional_int(render_probe.get("isaac_shadow_disabled_prim_count")) or 0
     profile_id = str(lighting.get("profile_id") or "")
     is_shadow_probe = profile_id == "scene_probe_shadow_parity_probe_v1"
+    is_shadow_capable_profile = bool(genesis_shadow) or is_shadow_probe
     isaac_probe_ready = (
         isaac_dome_intensity is not None
         and isaac_dome_intensity <= 20.0
         and isaac_key_intensity is not None
         and isaac_key_intensity > 0.0
+    )
+    isaac_lighting_ready = (
+        isaac_dome_intensity is not None
+        and isaac_dome_intensity > 0.0
+        and isaac_key_intensity is not None
+        and isaac_key_intensity >= 0.0
     )
     if is_shadow_probe and genesis_shadow and isaac_probe_ready:
         status = "shadow_parity_probe_configured"
@@ -3651,6 +3680,19 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         next_action = (
             "Inspect per-lane lighting diagnostics before trusting visual shadow evidence."
         )
+    elif is_shadow_capable_profile and isaac_lighting_ready:
+        if comparison_successful(manifest):
+            status = "shadow_capable_profile_accepted"
+            next_action = (
+                "Lighting profile is shadow-capable and passes the visual comparison gate; "
+                "review contact sheets before treating it as the default."
+            )
+        else:
+            status = "shadow_capable_profile_visual_gate_failed"
+            next_action = (
+                "Lighting profile is shadow-capable, but the visual comparison gate did not "
+                "pass. Keep it opt-in until candidate diagnostics improve."
+            )
     else:
         status = "default_fill_profile_not_shadow_parity"
         next_action = (
@@ -3661,14 +3703,25 @@ def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "schema": "scene_camera_shadow_parity_probe_v1",
         "status": status,
         "profile_id": profile_id,
+        "scene_light_rig_schema": rig.get("schema"),
+        "scene_light_rig_roles": rig_roles,
         "is_shadow_parity_profile": is_shadow_probe,
+        "is_shadow_capable_profile": is_shadow_capable_profile,
         "genesis_shadow": genesis_shadow,
         "isaac_dome_intensity": isaac_dome_intensity,
         "isaac_key_intensity": isaac_key_intensity,
+        "isaac_existing_light_intensity_scale": isaac_lighting.get(
+            "existing_light_intensity_scale"
+        ),
+        "isaac_existing_light_intensity_adjustments": isaac_lighting.get(
+            "existing_light_intensity_adjustments"
+        )
+        or [],
         "isaac_added_light_paths": isaac_lighting.get("added_light_paths") or [],
         "isaac_shadow_disabled_prim_count": shadow_disabled_count,
         "mujoco_light_count": render_probe.get("mujoco_light_count"),
         "isaac_light_count": render_probe.get("isaac_light_count"),
+        "key_light_direction": key_light_direction,
         "comparison_successful": comparison_successful(manifest),
         "candidate_visual_status": candidate_visual.get("status"),
         "candidate_visual_degraded_candidates": candidate_visual.get("degraded_candidates") or [],
@@ -3728,23 +3781,40 @@ def _genesis_lighting_summary(
     diagnostics: dict[str, Any],
     lighting_profile: dict[str, Any],
 ) -> dict[str, str]:
+    rig = _lighting_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
     profile = (
         diagnostics.get("genesis_lighting_profile")
         if isinstance(diagnostics.get("genesis_lighting_profile"), dict)
         else {}
     )
-    ambient = profile.get("ambient_light") or lighting_profile.get("genesis_ambient_light")
-    background = profile.get("background_color") or lighting_profile.get("genesis_background_color")
-    lights = profile.get("lights") or lighting_profile.get("genesis_directional_lights") or []
+    ambient = profile.get("ambient_light") or _rig_ambient(lighting_profile).get(
+        "genesis_ambient_light"
+    )
+    background = profile.get("background_color") or _rig_ambient(lighting_profile).get(
+        "genesis_background_color"
+    )
+    lights = profile.get("lights") or []
     light_count = len(lights) if isinstance(lights, list) else 0
+    active_environment_roles = []
+    if ambient:
+        active_environment_roles.append("ambient_light")
+    if background:
+        active_environment_roles.append("background_color")
+    if light_count:
+        active_environment_roles.append("directional_key")
     shadow = profile.get("shadow")
     if shadow is None:
-        shadow = lighting_profile.get("genesis_shadow")
+        shadow = _rig_key(lighting_profile).get("shadow")
     has_environment = bool(ambient or background or light_count)
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     intensities = _light_intensity_text(lights)
     summary = (
         f"{diagnostics.get('status') or 'genesis_lighting_profile'}; "
+        f"rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
+        f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
+        f"authored={roles.get('authored_scene_lights_policy')}; "
+        f"active_roles={_cell_text(active_environment_roles)}; "
         f"ambient={_cell_text(ambient)}; background={_cell_text(background)}; "
         f"directional_lights={light_count}; intensities={intensities}; shadow={shadow}"
     )
@@ -3759,23 +3829,40 @@ def _isaac_lighting_summary(
     diagnostics: dict[str, Any],
     lighting_profile: dict[str, Any],
 ) -> dict[str, str]:
+    rig = _lighting_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
     existing = _optional_int(diagnostics.get("existing_light_count"))
     added = _optional_int(diagnostics.get("added_light_count"))
+    existing_scale = _optional_float(diagnostics.get("existing_light_intensity_scale"))
     dome_intensity = diagnostics.get("requested_dome_intensity")
     if dome_intensity is None:
-        dome_intensity = lighting_profile.get("isaac_dome_intensity")
+        dome_intensity = _rig_ambient(lighting_profile).get("isaac_dome_intensity")
     key_intensity = diagnostics.get("requested_key_intensity")
     if key_intensity is None:
-        key_intensity = lighting_profile.get("isaac_key_intensity")
+        key_intensity = _rig_backend_override(lighting_profile, "isaac").get("key_intensity")
     existing_count = existing or 0
     added_count = added or 0
-    has_environment = existing_count + added_count > 0 or _positive_number(dome_intensity)
+    active_existing_count = existing_count if existing_scale is None or existing_scale > 0.0 else 0
+    active_capture_roles = []
+    if _positive_number(dome_intensity):
+        active_capture_roles.append("dome_environment")
+    if _positive_number(key_intensity):
+        active_capture_roles.append("directional_key")
+    has_environment = active_existing_count + added_count > 0 or _positive_number(
+        dome_intensity
+    )
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     summary = (
         f"{diagnostics.get('status') or 'isaac_lighting_profile'}; "
-        f"existing={existing_count}; added={added_count}; "
+        f"rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
+        f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
+        f"authored={roles.get('authored_scene_lights_policy')}; "
+        f"authored_usd_lights={existing_count}; "
+        f"active_authored_usd_lights={active_existing_count}; "
+        f"added_capture_lights={added_count}; active_roles={_cell_text(active_capture_roles)}; "
         f"dome_intensity={_float_text(dome_intensity)}; "
         f"key_intensity={_float_text(key_intensity)}; "
+        f"existing_scale={_float_text(existing_scale)}; "
         f"added_paths={_cell_text(diagnostics.get('added_light_paths'))}"
     )
     return {
@@ -3789,19 +3876,24 @@ def _mujoco_lighting_summary(
     manifest: dict[str, Any],
     lighting_profile: dict[str, Any],
 ) -> dict[str, str]:
+    rig = _lighting_rig(lighting_profile)
+    roles = scene_light_rig_roles(rig)
     probe = (
         manifest.get("render_domain_contract_probe")
         if isinstance(manifest.get("render_domain_contract_probe"), dict)
         else {}
     )
     light_count = _optional_int(probe.get("mujoco_light_count"))
-    ambient = lighting_profile.get("mujoco_headlight_ambient")
-    diffuse = lighting_profile.get("mujoco_headlight_diffuse")
+    ambient = _rig_ambient(lighting_profile).get("mujoco_headlight_ambient")
+    diffuse = _rig_ambient(lighting_profile).get("mujoco_headlight_diffuse")
     has_environment = bool(ambient or diffuse or (light_count or 0) > 0)
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     scene_lights = light_count if light_count is not None else ""
     summary = (
-        f"mujoco_headlight_fill; ambient={_cell_text(ambient)}; "
+        f"scene_light_rig; rig={roles.get('schema')}; key={roles.get('key_enabled')}; "
+        f"ambient={roles.get('ambient_enabled')}; fill={roles.get('fill_enabled')}; "
+        f"authored={roles.get('authored_scene_lights_policy')}; "
+        f"headlight_ambient={_cell_text(ambient)}; "
         f"diffuse={_cell_text(diffuse)}; scene_lights={scene_lights}"
     )
     return {
@@ -3822,6 +3914,28 @@ def _generic_lighting_summary(
         "summary": f"{status}; profile={profile_id}".strip("; "),
         "source": str(lighting_profile.get("source") or diagnostics.get("profile_source") or ""),
     }
+
+
+def _lighting_rig(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    return scene_light_rig(lighting_profile)
+
+
+def _rig_key(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    rig = _lighting_rig(lighting_profile)
+    return rig.get("key") if isinstance(rig.get("key"), dict) else {}
+
+
+def _rig_ambient(lighting_profile: dict[str, Any]) -> dict[str, Any]:
+    rig = _lighting_rig(lighting_profile)
+    return rig.get("ambient") if isinstance(rig.get("ambient"), dict) else {}
+
+
+def _rig_backend_override(lighting_profile: dict[str, Any], backend: str) -> dict[str, Any]:
+    rig = _lighting_rig(lighting_profile)
+    overrides = (
+        rig.get("backend_overrides") if isinstance(rig.get("backend_overrides"), dict) else {}
+    )
+    return overrides.get(backend) if isinstance(overrides.get(backend), dict) else {}
 
 
 def _color_tone_summary(
@@ -4408,7 +4522,9 @@ def _render_domain_contract_probe(manifest: dict[str, Any]) -> dict[str, Any]:
         "view_count": len(views),
         "high_priority_delta_count": len(high_priority),
         "mujoco_light_count": len(mujoco.get("lights") or []),
+        "mujoco_lights": mujoco.get("lights") or [],
         "isaac_light_count": len(isaac.get("lights") or []),
+        "isaac_lights": isaac.get("lights") or [],
         "isaac_shadow_disabled_prim_count": len(isaac.get("shadow_disabled_prims") or []),
         "visual_physics_status": isaac.get("visual_physics_status"),
         "mujoco_visual_joint_endpoint_pose_status": isaac.get(
@@ -4482,7 +4598,10 @@ def _mujoco_render_contract_from_xml(path_text: str | None) -> dict[str, Any]:
                 else None,
             }
     for light in root.findall(".//light"):
-        lights.append(dict(light.attrib))
+        light_contract = dict(light.attrib)
+        light_contract["dir_vector"] = _normalized_vec3(_float_list(light.attrib.get("dir")))
+        light_contract["pos_vector"] = _float_list(light.attrib.get("pos"))
+        lights.append(light_contract)
     for body in root.findall(".//body"):
         body_name = str(body.attrib.get("name") or "")
         if not body_name:
@@ -4580,6 +4699,97 @@ def _isaac_render_contract_from_usda(path_text: str | None) -> dict[str, Any]:
         **physics_contract,
         "visual_physics_status": prepared_summary.get("visual_physics_status")
         or physics_contract.get("visual_physics_status"),
+    }
+
+
+def _normalized_vec3(value: Any) -> list[float] | None:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        return None
+    try:
+        vector = [float(value[0]), float(value[1]), float(value[2])]
+    except (TypeError, ValueError):
+        return None
+    magnitude = math.sqrt(sum(component * component for component in vector))
+    if magnitude <= 0.0:
+        return None
+    return [component / magnitude for component in vector]
+
+
+def _angle_deg_between(left: Any, right: Any) -> float | None:
+    left_vec = _normalized_vec3(left)
+    right_vec = _normalized_vec3(right)
+    if left_vec is None or right_vec is None:
+        return None
+    dot = sum(left_item * right_item for left_item, right_item in zip(left_vec, right_vec))
+    return math.degrees(math.acos(max(-1.0, min(1.0, dot))))
+
+
+def _primary_mujoco_key_light_direction(render_probe: dict[str, Any]) -> list[float] | None:
+    lights = (
+        render_probe.get("mujoco_lights")
+        if isinstance(render_probe.get("mujoco_lights"), list)
+        else []
+    )
+    for light in lights:
+        if not isinstance(light, dict):
+            continue
+        direction = _normalized_vec3(light.get("dir_vector") or _float_list(light.get("dir")))
+        if direction is not None:
+            return direction
+    return None
+
+
+def _primary_genesis_key_light_direction(genesis_profile: dict[str, Any]) -> list[float] | None:
+    lights = (
+        genesis_profile.get("lights")
+        if isinstance(genesis_profile.get("lights"), list)
+        else []
+    )
+    for light in lights:
+        if not isinstance(light, dict):
+            continue
+        direction = _normalized_vec3(light.get("dir"))
+        if direction is not None:
+            return direction
+    return None
+
+
+def _key_light_direction_diagnostics(
+    *,
+    lighting_profile: dict[str, Any],
+    render_probe: dict[str, Any],
+    isaac_lighting: dict[str, Any],
+    genesis_profile: dict[str, Any],
+) -> dict[str, Any]:
+    rig = _lighting_rig(lighting_profile)
+    key = _rig_key(lighting_profile)
+    canonical = _normalized_vec3(key.get("direction"))
+    mujoco = _primary_mujoco_key_light_direction(render_probe)
+    isaac = _normalized_vec3(isaac_lighting.get("applied_key_light_direction"))
+    genesis = _primary_genesis_key_light_direction(genesis_profile)
+    isaac_angle = _angle_deg_between(mujoco, isaac)
+    genesis_angle = _angle_deg_between(mujoco, genesis)
+    threshold = 15.0
+    deltas = [value for value in (isaac_angle, genesis_angle) if value is not None]
+    status = (
+        "key_light_direction_aligned"
+        if mujoco is not None
+        and isaac is not None
+        and genesis is not None
+        and all(value <= threshold for value in deltas)
+        else "key_light_direction_delta"
+    )
+    return {
+        "schema": "scene_camera_key_light_direction_diagnostics_v1",
+        "status": status,
+        "threshold_deg": threshold,
+        "scene_key_light_frame": rig.get("frame"),
+        "canonical_scene_key_light_direction": canonical,
+        "mujoco_key_light_direction": mujoco,
+        "isaac_key_light_direction": isaac,
+        "genesis_key_light_direction": genesis,
+        "isaac_angle_delta_deg": isaac_angle,
+        "genesis_angle_delta_deg": genesis_angle,
     }
 
 
@@ -5004,6 +5214,412 @@ def _render_domain_contract_probe_next_action(views: list[dict[str, Any]]) -> st
     return (
         "Use this probe to choose the next renderer parity edit; geometry remains a separate pass."
     )
+
+
+def _material_response_diagnostics(
+    manifest: dict[str, Any],
+    *,
+    output_dir: Path,
+    sample_limit: int = 10,
+) -> dict[str, Any]:
+    visibility = (
+        manifest.get("genesis_movable_object_visibility_diagnostics")
+        if isinstance(manifest.get("genesis_movable_object_visibility_diagnostics"), dict)
+        else {}
+    )
+    crop_artifacts = (
+        visibility.get("crop_artifacts")
+        if isinstance(visibility.get("crop_artifacts"), dict)
+        else {}
+    )
+    crop_objects = [item for item in crop_artifacts.get("objects") or [] if isinstance(item, dict)]
+    crop_objects = [
+        item
+        for item in crop_objects
+        if item.get("crop_status") == "written"
+        and MOLMOSPACES_LANE_ID in set(item.get("lanes") or [])
+        and (
+            ISAAC_LANE_ID in set(item.get("lanes") or [])
+            or GENESIS_LANE_ID in set(item.get("lanes") or [])
+        )
+    ]
+    if not crop_objects:
+        return {
+            "schema": "scene_camera_material_response_diagnostics_v1",
+            "status": "missing_crop_artifacts",
+            "sample_count": 0,
+            "objects": [],
+            "conclusion": "insufficient_evidence",
+            "recommended_next_action": (
+                "Generate movable-object crops before deciding whether to tune materials or lights."
+            ),
+        }
+
+    artifacts = _render_domain_artifact_paths(manifest)
+    mujoco = _mujoco_render_contract_from_xml(artifacts.get("mujoco_scene_xml"))
+    isaac = _isaac_render_contract_from_usda(artifacts.get("isaac_scene_usd"))
+    genesis = _genesis_materialized_render_contract(output_dir)
+    visual_audit_by_object = _genesis_visual_audit_by_object(manifest)
+    selected = _select_material_response_sample(crop_objects, sample_limit=sample_limit)
+    objects: list[dict[str, Any]] = []
+    for item in selected:
+        object_key = str(item.get("object_key") or "")
+        view_id = str(item.get("view_id") or "")
+        crop_metrics = _crop_material_response_metrics(
+            object_key=object_key,
+            view_id=view_id,
+            output_dir=output_dir,
+        )
+        mujoco_contract = _mujoco_view_render_contract(mujoco, anchor_id=object_key)
+        isaac_contract = _isaac_view_render_contract(
+            isaac,
+            usd_prim_path=f"/val_1/Geometry/{object_key}" if object_key else "",
+        )
+        genesis_contract = _genesis_object_material_contract(
+            genesis,
+            object_key=object_key,
+            category=str(item.get("category") or ""),
+            visual_audit=visual_audit_by_object.get(object_key, {}),
+        )
+        signal = _material_response_signal(crop_metrics)
+        objects.append(
+            {
+                "object_key": object_key,
+                "category": item.get("category"),
+                "view_id": view_id,
+                "selection_reason": _material_response_selection_reason(item),
+                "geometry_status": item.get("geometry_status"),
+                "geometry_delta_m": item.get("geometry_delta_m"),
+                "crop_metrics": crop_metrics,
+                "signal": signal,
+                "mujoco": mujoco_contract,
+                "isaac": isaac_contract,
+                "genesis": genesis_contract,
+            }
+        )
+    conclusion = _material_response_conclusion(objects)
+    material_like_count = sum(
+        1 for item in objects if "material" in str(item.get("signal") or "")
+    )
+    shared_tone_count = sum(
+        1 for item in objects if str(item.get("signal") or "") == "shared_brightness_tone_drift"
+    )
+    return {
+        "schema": "scene_camera_material_response_diagnostics_v1",
+        "status": "computed" if objects else "missing_sample_objects",
+        "sample_count": len(objects),
+        "sample_limit": sample_limit,
+        "object_crop_source": "genesis_movable_object_visibility_diagnostics.crop_artifacts",
+        "artifact_paths": {
+            **artifacts,
+            "genesis_materialized_obj": genesis.get("obj_path"),
+            "genesis_materialized_mtl": genesis.get("mtl_path"),
+        },
+        "mujoco_parse_status": mujoco.get("status"),
+        "isaac_parse_status": isaac.get("status"),
+        "genesis_material_parse_status": genesis.get("status"),
+        "material_like_signal_count": material_like_count,
+        "shared_brightness_tone_signal_count": shared_tone_count,
+        "conclusion": conclusion,
+        "recommended_next_action": _material_response_next_action(conclusion),
+        "interpretation": (
+            "This diagnostic samples crop-backed movable objects and keeps material/texture "
+            "evidence separate from backend light/tone evidence. It should guide the next "
+            "slice; it is not a default-light tuning table."
+        ),
+        "objects": objects,
+    }
+
+
+def _select_material_response_sample(
+    crop_objects: list[dict[str, Any]],
+    *,
+    sample_limit: int,
+) -> list[dict[str, Any]]:
+    high_priority_views = {"view_03_diningtable", "view_02_bed"}
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add_matching(predicate: Any, *, limit: int | None = None) -> None:
+        added = 0
+        for item in crop_objects:
+            object_key = str(item.get("object_key") or "")
+            if not object_key or object_key in seen or not predicate(item):
+                continue
+            selected.append(item)
+            seen.add(object_key)
+            added += 1
+            if len(selected) >= sample_limit or (limit is not None and added >= limit):
+                return
+
+    add_matching(lambda item: str(item.get("view_id") or "") in high_priority_views, limit=7)
+    add_matching(lambda item: str(item.get("view_id") or "") not in high_priority_views)
+    add_matching(lambda _item: True)
+    return selected[:sample_limit]
+
+
+def _material_response_selection_reason(item: dict[str, Any]) -> str:
+    view_id = str(item.get("view_id") or "")
+    category = str(item.get("category") or "")
+    reasons = []
+    if view_id in {"view_03_diningtable", "view_02_bed"}:
+        reasons.append("high_residual_view")
+    else:
+        reasons.append("held_out_room_view")
+    if category:
+        reasons.append(category)
+    return "; ".join(reasons)
+
+
+def _crop_material_response_metrics(
+    *,
+    object_key: str,
+    view_id: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    crop_dir = output_dir / "genesis_movable_object_crops"
+    paths = {
+        lane_id: crop_dir
+        / (
+            f"{_safe_report_token(object_key)}__{_safe_report_token(view_id)}__"
+            f"{_safe_report_token(lane_id)}.png"
+        )
+        for lane_id in (MOLMOSPACES_LANE_ID, ISAAC_LANE_ID, GENESIS_LANE_ID)
+    }
+    baseline_path = paths[MOLMOSPACES_LANE_ID]
+    if not baseline_path.is_file():
+        return {"status": "missing_baseline_crop", "lanes": {}, "deltas": {}}
+    lanes: dict[str, dict[str, Any]] = {
+        MOLMOSPACES_LANE_ID: _image_visual_metrics(baseline_path),
+    }
+    deltas: dict[str, dict[str, Any]] = {}
+    for lane_id in (ISAAC_LANE_ID, GENESIS_LANE_ID):
+        path = paths[lane_id]
+        if not path.is_file():
+            continue
+        metrics = _image_visual_metrics(path)
+        lanes[lane_id] = metrics
+        delta = _image_pair_visual_delta(baseline_path, path)
+        delta["mean_luminance_delta"] = (
+            float(metrics.get("mean_luminance") or 0.0)
+            - float(lanes[MOLMOSPACES_LANE_ID].get("mean_luminance") or 0.0)
+        )
+        deltas[lane_id] = delta
+    return {
+        "status": "computed" if deltas else "missing_candidate_crops",
+        "lanes": lanes,
+        "deltas": deltas,
+    }
+
+
+def _material_response_signal(crop_metrics: dict[str, Any]) -> str:
+    deltas = crop_metrics.get("deltas") if isinstance(crop_metrics.get("deltas"), dict) else {}
+    isaac = deltas.get(ISAAC_LANE_ID) if isinstance(deltas.get(ISAAC_LANE_ID), dict) else {}
+    genesis = deltas.get(GENESIS_LANE_ID) if isinstance(deltas.get(GENESIS_LANE_ID), dict) else {}
+    isaac_luma = _optional_float(isaac.get("mean_luminance_delta"))
+    genesis_luma = _optional_float(genesis.get("mean_luminance_delta"))
+    isaac_mad = _optional_float(isaac.get("mean_absolute_pixel_delta"))
+    genesis_mad = _optional_float(genesis.get("mean_absolute_pixel_delta"))
+    luma_values = [value for value in (isaac_luma, genesis_luma) if value is not None]
+    mad_values = [value for value in (isaac_mad, genesis_mad) if value is not None]
+    if len(luma_values) >= 2 and all(abs(value) >= 20.0 for value in luma_values):
+        if all(value < 0 for value in luma_values) or all(value > 0 for value in luma_values):
+            return "shared_brightness_tone_drift"
+    if mad_values and max(mad_values) >= 45.0 and all(abs(value) <= 8.0 for value in luma_values):
+        return "material_texture_or_local_shadow_residual"
+    if mad_values and max(mad_values) >= 45.0:
+        return "mixed_material_tone_residual"
+    if luma_values and max(abs(value) for value in luma_values) >= 15.0:
+        return "backend_tone_residual"
+    return "low_or_unclassified_residual"
+
+
+def _material_response_conclusion(objects: list[dict[str, Any]]) -> str:
+    if not objects:
+        return "insufficient_evidence"
+    signals = [str(item.get("signal") or "") for item in objects]
+    material_like = sum(1 for signal in signals if "material" in signal)
+    shared_tone = sum(1 for signal in signals if signal == "shared_brightness_tone_drift")
+    if material_like > 0 and shared_tone > 0:
+        return "mixed"
+    if material_like > 0:
+        return "material_issue"
+    if shared_tone > 0:
+        return "light_tone_issue"
+    return "insufficient_evidence"
+
+
+def _material_response_next_action(conclusion: str) -> str:
+    if conclusion == "material_issue":
+        return (
+            "Inspect and fix backend material/texture conversion before changing light defaults."
+        )
+    if conclusion == "light_tone_issue":
+        return (
+            "Run a controlled backend light/tone sweep with held-out views before changing "
+            "defaults."
+        )
+    if conclusion == "mixed":
+        return (
+            "Add per-object material evidence across MuJoCo, Isaac, and Genesis first; then run "
+            "a small held-out light/tone sweep only if material evidence is clean."
+        )
+    return "Collect crop and material-binding evidence before deciding the next tuning target."
+
+
+def _genesis_materialized_render_contract(output_dir: Path) -> dict[str, Any]:
+    asset_dir = output_dir / "genesis" / "camera_views" / "prepared_usd_visual_asset"
+    obj_path = asset_dir / "prepared_usd_visual_asset.obj"
+    mtl_path = asset_dir / "prepared_usd_visual_asset.mtl"
+    if not obj_path.is_file() or not mtl_path.is_file():
+        return {
+            "status": "missing_materialized_asset",
+            "obj_path": str(obj_path),
+            "mtl_path": str(mtl_path),
+            "materials": {},
+        }
+    materials = _parse_mtl_materials(mtl_path)
+    use_counts: dict[str, int] = {}
+    try:
+        for line in obj_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("usemtl "):
+                name = line.split(maxsplit=1)[1].strip()
+                use_counts[name] = use_counts.get(name, 0) + 1
+    except OSError:
+        return {
+            "status": "parse_failed",
+            "obj_path": str(obj_path),
+            "mtl_path": str(mtl_path),
+            "materials": materials,
+        }
+    return {
+        "status": "parsed",
+        "obj_path": str(obj_path),
+        "mtl_path": str(mtl_path),
+        "material_count": len(materials),
+        "used_material_count": len(use_counts),
+        "materials": materials,
+        "use_counts": use_counts,
+    }
+
+
+def _parse_mtl_materials(path: Path) -> dict[str, dict[str, Any]]:
+    materials: dict[str, dict[str, Any]] = {}
+    current: str | None = None
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return materials
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if stripped.startswith("newmtl "):
+            current = stripped.split(maxsplit=1)[1]
+            materials[current] = {"material_name": current, "texture_files": []}
+            continue
+        if current is None:
+            continue
+        if stripped.startswith("Kd "):
+            materials[current]["diffuse_color"] = _float_list(stripped[3:])
+        elif stripped.startswith("map_Kd "):
+            materials[current].setdefault("texture_files", []).append(
+                stripped.split(maxsplit=1)[1]
+            )
+    for material in materials.values():
+        material["has_diffuse_texture"] = bool(material.get("texture_files"))
+    return materials
+
+
+def _genesis_visual_audit_by_object(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    audit = _genesis_visual_object_audit(manifest)
+    rows: dict[str, dict[str, Any]] = {}
+    if not isinstance(audit, dict):
+        return rows
+    for key in (
+        "texture_conversion_objects",
+        "non_static_render_objects",
+        "collision_mesh_objects",
+        "runtime_pose_overlay_objects",
+    ):
+        for item in audit.get(key) or []:
+            if not isinstance(item, dict):
+                continue
+            object_key = str(item.get("object_key") or "")
+            if not object_key:
+                continue
+            rows.setdefault(object_key, {}).update(item)
+    return rows
+
+
+def _genesis_object_material_contract(
+    genesis: dict[str, Any],
+    *,
+    object_key: str,
+    category: str,
+    visual_audit: dict[str, Any],
+) -> dict[str, Any]:
+    if genesis.get("status") != "parsed":
+        return {"status": genesis.get("status"), "materials": [], "texture_files": []}
+    materials = genesis.get("materials") if isinstance(genesis.get("materials"), dict) else {}
+    category_tokens = _genesis_material_search_tokens(category, visual_audit)
+    matches = []
+    for name, material in materials.items():
+        lowered = str(name).lower()
+        if any(token in lowered for token in category_tokens):
+            matches.append({"material_path": name, **material})
+    texture_files = sorted(
+        {
+            str(texture)
+            for item in matches
+            for texture in item.get("texture_files") or []
+            if str(texture)
+        }
+    )
+    return {
+        "status": "matched_by_material_name" if matches else "no_category_material_match",
+        "object_key": object_key,
+        "category": category,
+        "search_tokens": category_tokens,
+        "material_count": len(matches),
+        "materials": sorted(
+            str(item.get("material_name") or item.get("material_path") or "")
+            for item in matches
+        ),
+        "texture_files": texture_files,
+        "has_diffuse_texture_count": sum(1 for item in matches if item.get("has_diffuse_texture")),
+        "material_evidence": matches[:8],
+        "visual_audit": visual_audit,
+    }
+
+
+def _genesis_material_search_tokens(category: str, visual_audit: dict[str, Any]) -> list[str]:
+    tokens = []
+    for value in (
+        category,
+        visual_audit.get("category") if isinstance(visual_audit, dict) else "",
+        visual_audit.get("asset_id") if isinstance(visual_audit, dict) else "",
+    ):
+        for token in re.findall(r"[A-Za-z0-9]+", str(value or "").lower()):
+            if len(token) >= 3 and token not in tokens:
+                tokens.append(token)
+    aliases = {
+        "alarmclock": ["alarm", "clock"],
+        "basketball": ["basketball"],
+        "box": ["cardboard", "box"],
+        "cellphone": ["cellphone", "phone"],
+        "cellulartelephone": ["cellphone", "phone"],
+        "cloth": ["cloth", "fabric"],
+        "dishsponge": ["sponge"],
+        "remotecontrol": ["remote"],
+        "spraybottle": ["spray", "bottle"],
+        "toiletpaper": ["toilet", "paper"],
+    }
+    compact = "".join(re.findall(r"[A-Za-z0-9]+", str(category or "").lower()))
+    for alias in aliases.get(compact, []):
+        if alias not in tokens:
+            tokens.append(alias)
+    return tokens[:8]
 
 
 def _view_anchor_id(manifest: dict[str, Any], view_id: str) -> str:
@@ -5475,6 +6091,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _shadow_parity_probe_section(manifest),
             _render_domain_source_section(manifest),
             _render_domain_view_triage_section(manifest),
+            _material_response_diagnostics_section(manifest),
             _render_domain_contract_probe_section(manifest),
             _anchor_section(manifest),
             _runtime_section(manifest),
@@ -6690,14 +7307,49 @@ def _shadow_parity_probe_section(manifest: dict[str, Any]) -> str:
     rows = [
         ("Profile", diagnostics.get("profile_id")),
         ("Status", diagnostics.get("status")),
+        ("Light rig schema", diagnostics.get("scene_light_rig_schema")),
         ("Genesis shadow", diagnostics.get("genesis_shadow")),
         ("Isaac dome intensity", diagnostics.get("isaac_dome_intensity")),
         ("Isaac key intensity", diagnostics.get("isaac_key_intensity")),
+        ("Isaac existing light scale", diagnostics.get("isaac_existing_light_intensity_scale")),
         ("Isaac added light paths", diagnostics.get("isaac_added_light_paths")),
         ("MuJoCo light count", diagnostics.get("mujoco_light_count")),
         ("Isaac light count", diagnostics.get("isaac_light_count")),
         ("Isaac shadow-off prims", diagnostics.get("isaac_shadow_disabled_prim_count")),
     ]
+    rig_roles = (
+        diagnostics.get("scene_light_rig_roles")
+        if isinstance(diagnostics.get("scene_light_rig_roles"), dict)
+        else {}
+    )
+    if rig_roles:
+        rows.extend(
+            [
+                ("Rig key role", rig_roles.get("key_enabled")),
+                ("Rig ambient role", rig_roles.get("ambient_enabled")),
+                ("Rig fill role", rig_roles.get("fill_enabled")),
+                ("Authored scene lights policy", rig_roles.get("authored_scene_lights_policy")),
+                ("Rig key direction", rig_roles.get("key_direction")),
+            ]
+        )
+    key_light = (
+        diagnostics.get("key_light_direction")
+        if isinstance(diagnostics.get("key_light_direction"), dict)
+        else {}
+    )
+    if key_light:
+        rows.extend(
+            [
+                ("Key light status", key_light.get("status")),
+                ("Key light frame", key_light.get("scene_key_light_frame")),
+                ("Canonical key direction", key_light.get("canonical_scene_key_light_direction")),
+                ("MuJoCo key direction", key_light.get("mujoco_key_light_direction")),
+                ("Isaac key direction", key_light.get("isaac_key_light_direction")),
+                ("Genesis key direction", key_light.get("genesis_key_light_direction")),
+                ("Isaac angle delta deg", _float_text(key_light.get("isaac_angle_delta_deg"))),
+                ("Genesis angle delta deg", _float_text(key_light.get("genesis_angle_delta_deg"))),
+            ]
+        )
     row_html = "".join(
         f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(_cell_text(value))}</td></tr>"
         for label, value in rows
@@ -7084,6 +7736,92 @@ def _render_domain_view_triage_section(manifest: dict[str, Any]) -> str:
 """
 
 
+def _material_response_diagnostics_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("material_response_diagnostics")
+        if isinstance(manifest.get("material_response_diagnostics"), dict)
+        else {}
+    )
+    if not diagnostics:
+        return ""
+    rows = []
+    for item in diagnostics.get("objects") or []:
+        if not isinstance(item, dict):
+            continue
+        crop_metrics = (
+            item.get("crop_metrics") if isinstance(item.get("crop_metrics"), dict) else {}
+        )
+        deltas = crop_metrics.get("deltas") if isinstance(crop_metrics.get("deltas"), dict) else {}
+        isaac_delta = (
+            deltas.get(ISAAC_LANE_ID) if isinstance(deltas.get(ISAAC_LANE_ID), dict) else {}
+        )
+        genesis_delta = (
+            deltas.get(GENESIS_LANE_ID) if isinstance(deltas.get(GENESIS_LANE_ID), dict) else {}
+        )
+        mujoco = item.get("mujoco") if isinstance(item.get("mujoco"), dict) else {}
+        isaac = item.get("isaac") if isinstance(item.get("isaac"), dict) else {}
+        genesis = item.get("genesis") if isinstance(item.get("genesis"), dict) else {}
+        rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('category', '')))}</td>"
+            f"<td>{html.escape(str(item.get('view_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('signal', '')))}</td>"
+            f"<td>{html.escape(_float_text(isaac_delta.get('mean_luminance_delta')))}</td>"
+            f"<td>{html.escape(_float_text(isaac_delta.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(_float_text(genesis_delta.get('mean_luminance_delta')))}</td>"
+            f"<td>{html.escape(_float_text(genesis_delta.get('mean_absolute_pixel_delta')))}</td>"
+            f"<td>{html.escape(str(mujoco.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(mujoco.get('materials')))}</td>"
+            f"<td>{html.escape(str(isaac.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(isaac.get('materials')))}</td>"
+            f"<td>{html.escape(str(genesis.get('status', '')))}</td>"
+            f"<td>{html.escape(_short_list_text(genesis.get('materials')))}</td>"
+            f"<td>{html.escape(_short_list_text(genesis.get('texture_files')))}</td>"
+            "</tr>"
+        )
+    headers = "".join(
+        f"<th>{html.escape(label)}</th>"
+        for label in (
+            "Object",
+            "View",
+            "Signal",
+            "Isaac deltaY",
+            "Isaac MAD",
+            "Genesis deltaY",
+            "Genesis MAD",
+            "MuJoCo status",
+            "MuJoCo materials",
+            "Isaac status",
+            "Isaac materials",
+            "Genesis status",
+            "Genesis materials",
+            "Genesis textures",
+        )
+    )
+    note = (
+        f"status={diagnostics.get('status')}; "
+        f"conclusion={diagnostics.get('conclusion')}; "
+        f"samples={diagnostics.get('sample_count')}; "
+        f"material_like={diagnostics.get('material_like_signal_count')}; "
+        f"shared_brightness_tone={diagnostics.get('shared_brightness_tone_signal_count')}; "
+        f"mujoco_parse={diagnostics.get('mujoco_parse_status')}; "
+        f"isaac_parse={diagnostics.get('isaac_parse_status')}; "
+        f"genesis_material_parse={diagnostics.get('genesis_material_parse_status')}. "
+        f"{diagnostics.get('recommended_next_action') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Material Response Diagnostics</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get('interpretation') or ''))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr>{headers}</tr></thead>
+    <tbody>{"".join(rows)}</tbody>
+  </table></div>
+</section>
+"""
+
+
 def _render_domain_contract_probe_section(manifest: dict[str, Any]) -> str:
     probe = (
         manifest.get("render_domain_contract_probe")
@@ -7171,7 +7909,7 @@ def _runtime_section(manifest: dict[str, Any]) -> str:
             f"<td>{html.escape(str(lane.get('view_variant', '')))}</td>"
             f"<td>{html.escape(str(lane.get('calibration_status', '')))}</td>"
             f"<td>{html.escape(str(_lighting_profile_id(lane)))}</td>"
-            f"<td>{html.escape(str(_lighting_diagnostics_text(lane)))}</td>"
+            f"<td>{html.escape(str(_lighting_diagnostics_text(lane, lane_id=str(lane_id))))}</td>"
             f"<td>{html.escape(str(_color_profile_id(lane)))}</td>"
             f"<td>{html.escape(str(_native_render_status(lane)))}</td>"
             "</tr>"
@@ -7237,7 +7975,7 @@ def _native_render_status(lane: dict[str, Any]) -> str:
     return str(diagnostics.get("status") or "")
 
 
-def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:
+def _lighting_diagnostics_text(lane: dict[str, Any], *, lane_id: str = "") -> str:
     diagnostics = (
         lane.get("lighting_diagnostics")
         if isinstance(lane.get("lighting_diagnostics"), dict)
@@ -7245,11 +7983,16 @@ def _lighting_diagnostics_text(lane: dict[str, Any]) -> str:
     )
     if not diagnostics:
         return ""
-    return (
-        f"{diagnostics.get('status')}; "
-        f"existing={diagnostics.get('existing_light_count')}; "
-        f"added={diagnostics.get('added_light_count')}"
+    lighting = (
+        lane.get("lighting_profile") if isinstance(lane.get("lighting_profile"), dict) else {}
     )
+    if lane_id == GENESIS_LANE_ID:
+        return _genesis_lighting_summary(diagnostics, lighting)["summary"]
+    if lane_id == ISAAC_LANE_ID:
+        return _isaac_lighting_summary(diagnostics, lighting)["summary"]
+    if lane_id == MOLMOSPACES_LANE_ID:
+        return _mujoco_lighting_summary({"lanes": {lane_id: lane}}, lighting)["summary"]
+    return _generic_lighting_summary(diagnostics, lighting)["summary"]
 
 
 def _failure_section(manifest: dict[str, Any]) -> str:
@@ -7651,7 +8394,7 @@ def main(argv: list[str] | None = None) -> int:
         choices=tuple(sorted(SCENE_PROBE_LIGHTING_PROFILES)),
         help=(
             "Scene-camera lighting profile. Use shadow-parity for a probe run; "
-            "default keeps the current fill profile."
+            "default uses the shared scene_light_rig_v1 single-key review profile."
         ),
     )
     args = parser.parse_args(argv)
