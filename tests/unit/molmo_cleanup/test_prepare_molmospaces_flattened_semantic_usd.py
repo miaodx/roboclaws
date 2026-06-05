@@ -158,9 +158,9 @@ def test_prepare_flattened_semantic_usd_material_scale_candidate_is_opt_in(
 
     default_text = output_usd.read_text(encoding="utf-8")
     assert default_summary["rendering_parity_preset"] == "combined-material-light"
-    assert default_summary["material_texture_scale_mode"] == "square"
-    assert default_summary["material_texture_scale_rewrite_count"] == 2
-    assert default_summary["material_texture_scale_default_candidate"] is True
+    assert default_summary["material_texture_scale_mode"] == "none"
+    assert default_summary["material_texture_scale_rewrite_count"] == 0
+    assert default_summary["material_texture_scale_default_candidate"] is False
     assert default_summary["distant_light_rotate_x"] == 25.0
     assert default_summary["distant_light_rotate_x_rewrite_count"] == 1
     assert default_summary["distant_light_rotate_x_default_candidate"] is True
@@ -168,8 +168,8 @@ def test_prepare_flattened_semantic_usd_material_scale_candidate_is_opt_in(
         "default_rendering_path_uses_combined_material_light"
     )
     assert default_summary["default_rendering_path_uses_combined_material_light"] is True
-    assert "float4 inputs:fallback = (0.25, 0.0625, 0.01, 1)" in default_text
-    assert "float4 inputs:scale = (0.25, 0.0625, 0.01, 1)" in default_text
+    assert "float4 inputs:fallback = (0.5, 0.25, 0.1, 1)" in default_text
+    assert "float4 inputs:scale = (0.5, 0.25, 0.1, 1)" in default_text
     assert "float xformOp:rotateX = 25" in default_text
 
     source_preserving_summary = prepare_flattened_semantic_usd(

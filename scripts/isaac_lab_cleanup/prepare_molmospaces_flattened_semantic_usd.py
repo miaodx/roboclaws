@@ -78,8 +78,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_RENDERING_PARITY_PRESET,
         help=(
             "Prepared-USD rendering preset. The default applies the validated "
-            "scale-square material conversion plus DistantLight rotateX=+25; "
-            "'source-preserving' keeps source USD material and light settings."
+            "DistantLight rotateX=+25 while preserving source USD material texture "
+            "scale/fallback values; 'source-preserving' keeps source USD material "
+            "and light settings."
         ),
     )
     parser.add_argument(
@@ -638,7 +639,7 @@ def _is_physics_property_name(name: str) -> bool:
 def _rendering_parity_preset(name: str) -> dict[str, str | float | None]:
     if name == "combined-material-light":
         return {
-            "material_texture_scale_mode": "square",
+            "material_texture_scale_mode": "none",
             "distant_light_rotate_x": COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG,
         }
     if name == "source-preserving":
@@ -707,14 +708,11 @@ def _default_rendering_path_status(
     if rendering_parity_preset == "source-preserving":
         return "source_preserving_rendering_path"
     material_ready = (
-        material_conversion_summary.get("mode") == "square"
-        and int(material_conversion_summary.get("texture_scale_rewrite_count") or 0) > 0
+        material_conversion_summary.get("mode") == "none"
+        and int(material_conversion_summary.get("texture_scale_rewrite_count") or 0) == 0
     )
-    light_ready = light_conversion_summary.get(
-        "rotate_x"
-    ) == COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG and (
-        int(light_conversion_summary.get("rewrite_count") or 0) > 0
-        or int(light_conversion_summary.get("insert_count") or 0) > 0
+    light_ready = (
+        light_conversion_summary.get("rotate_x") == COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG
     )
     if material_ready and light_ready:
         return "default_rendering_path_uses_combined_material_light"
