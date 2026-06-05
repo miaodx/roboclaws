@@ -1154,9 +1154,10 @@ def test_molmo_live_kickoff_prompt_receives_success_threshold_for_camera_raw() -
 def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshold() -> None:
     text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
-    assert "def _raw_fpv_required_cleanup_count(generated_mess_count: int) -> int:" in text
-    assert "_raw_fpv_required_cleanup_count(int(self.args.min_generated_mess_count))" in text
-    assert "math.ceil(generated_mess_count * 0.70)" in text
+    assert "from roboclaws.household.generated_mess import generated_mess_success_threshold" in text
+    assert "generated_mess_success_threshold(int(self.args.min_generated_mess_count))" in text
+    assert "def _raw_fpv_required_cleanup_count" not in text
+    assert "math.ceil(generated_mess_count * 0.70)" not in text
     assert (
         '"--min-model-declared-observations",\n                raw_fpv_required_cleanup_count'
         in text

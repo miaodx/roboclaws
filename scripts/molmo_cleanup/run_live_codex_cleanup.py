@@ -6,7 +6,6 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
-import math
 import os
 import shutil
 import signal
@@ -20,6 +19,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.report import runtime_timing_from_trace
 
@@ -62,10 +62,6 @@ CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION = (
 
 class ProviderRateLimitError(RuntimeError):
     """Raised when Codex provider rate limiting should be retried by the caller."""
-
-
-def _raw_fpv_required_cleanup_count(generated_mess_count: int) -> int:
-    return max(1, math.ceil(generated_mess_count * 0.70))
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -474,7 +470,7 @@ class LiveCodexCleanupRunner:
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw":
             raw_fpv_required_cleanup_count = str(
-                _raw_fpv_required_cleanup_count(int(self.args.min_generated_mess_count))
+                generated_mess_success_threshold(int(self.args.min_generated_mess_count))
             )
             _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
             _append_missing_checker_value(
