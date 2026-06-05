@@ -106,6 +106,7 @@ def record_robot_view_step(
     focus_object_id: str | None = None,
     focus_receptacle_id: str | None = None,
     semantic_phase: str | None = None,
+    action_evidence: dict[str, Any] | None = None,
     camera_yaw_offset_deg: float = 0.0,
     camera_pitch_offset_deg: float = 0.0,
 ) -> int:
@@ -123,21 +124,22 @@ def record_robot_view_step(
     )
     if not result.get("ok"):
         raise RuntimeError(f"robot view capture failed: {result}")
-    steps.append(
-        {
-            "label": label,
-            "action": action,
-            "robot_pose": result.get("robot_pose"),
-            "robot_trajectory_count": len(result.get("robot_trajectory", [])),
-            "view_variant": result.get("view_variant"),
-            "view_provenance": result.get("view_provenance"),
-            "camera_control_contract": result.get("camera_control_contract"),
-            "focus": annotate_focus_visual_grounding(result.get("focus")),
-            "semantic_phase": semantic_phase,
-            "room_outline_count": result.get("room_outline_count"),
-            "views": relative_view_paths(output_dir, result["views"]),
-        }
-    )
+    step = {
+        "label": label,
+        "action": action,
+        "robot_pose": result.get("robot_pose"),
+        "robot_trajectory_count": len(result.get("robot_trajectory", [])),
+        "view_variant": result.get("view_variant"),
+        "view_provenance": result.get("view_provenance"),
+        "camera_control_contract": result.get("camera_control_contract"),
+        "focus": annotate_focus_visual_grounding(result.get("focus")),
+        "semantic_phase": semantic_phase,
+        "room_outline_count": result.get("room_outline_count"),
+        "views": relative_view_paths(output_dir, result["views"]),
+    }
+    if action_evidence:
+        step["action_evidence"] = action_evidence
+    steps.append(step)
     return index + 1
 
 
@@ -204,7 +206,7 @@ def robot_view_capture_for_tool(
     response: dict[str, Any],
     *,
     object_id_transform: Callable[[str | None], str | None] | None = None,
-) -> dict[str, str | None] | None:
+) -> dict[str, Any] | None:
     transform_object_id = object_id_transform or _identity_optional_str
     if tool == "observe":
         raw = response.get("raw_fpv_observation") if isinstance(response, dict) else {}
@@ -225,7 +227,19 @@ def robot_view_capture_for_tool(
             "focus_receptacle_id": None,
             "semantic_phase": None,
         }
-    if tool in {NAVIGATE_TO_OBJECT_PHASE, NAVIGATE_TO_VISUAL_CANDIDATE_TOOL}:
+    if tool == NAVIGATE_TO_VISUAL_CANDIDATE_TOOL:
+        object_id = optional_str(response.get("object_id") or request.get("object_id"))
+        return {
+            "action": f"navigate_to_visual_candidate {object_id}",
+            "label_suffix": label_suffix("navigate_visual_candidate", object_id),
+            "focus_object_id": transform_object_id(object_id),
+            "focus_receptacle_id": optional_str(
+                response.get("source_receptacle_id") or response.get("location_id")
+            ),
+            "semantic_phase": NAVIGATE_TO_OBJECT_PHASE,
+            "action_evidence": visual_candidate_action_evidence(tool, request, response),
+        }
+    if tool == NAVIGATE_TO_OBJECT_PHASE:
         object_id = optional_str(response.get("object_id") or request.get("object_id"))
         return {
             "action": f"navigate_to_object {object_id}",
@@ -235,6 +249,7 @@ def robot_view_capture_for_tool(
                 response.get("source_receptacle_id") or response.get("location_id")
             ),
             "semantic_phase": NAVIGATE_TO_OBJECT_PHASE,
+            "action_evidence": object_navigation_action_evidence(tool, request, response),
         }
     if tool == PICK_PHASE:
         object_id = optional_str(response.get("object_id") or request.get("object_id"))
@@ -288,6 +303,109 @@ def robot_view_capture_for_tool(
             "semantic_phase": tool,
         }
     return None
+
+
+def visual_candidate_action_evidence(
+    tool: str,
+    request: dict[str, Any],
+    response: dict[str, Any],
+) -> dict[str, Any]:
+    observation = response.get("model_declared_observation")
+    if not isinstance(observation, dict):
+        observation = {}
+    evidence = visual_grounding_evidence_from_response(response, observation)
+    source_observation_id = optional_str(
+        evidence.get("source_observation_id")
+        or observation.get("source_observation_id")
+        or request.get("source_observation_id")
+    )
+    image_bbox = image_bbox_from_visual_grounding(evidence, observation)
+    return _drop_empty_action_evidence(
+        {
+            "schema": "robot_timeline_action_evidence_v1",
+            "agent_tool": tool,
+            "agent_action": f"{tool} {optional_str(response.get('object_id'))}",
+            "backend_primitive": NAVIGATE_TO_OBJECT_PHASE,
+            "resolved_object_id": optional_str(response.get("object_id")),
+            "source_observation_id": source_observation_id,
+            "source_image_bbox": image_bbox,
+            "bbox_coordinate_space": evidence.get("bbox_coordinate_space"),
+            "camera_frame": evidence.get("camera_frame"),
+            "reviewability_status": evidence.get("reviewability_status"),
+            "reviewability_reason": evidence.get("reviewability_reason"),
+            "grounding_status": observation.get("grounding_status")
+            or evidence.get("grounding_status"),
+            "grounding_confidence": observation.get("grounding_confidence"),
+            "grounding_basis": observation.get("grounding_basis"),
+            "declared_category": observation.get("category") or request.get("category"),
+            "evidence_note": observation.get("evidence_note") or request.get("evidence_note"),
+            "target_fixture_id": observation.get("target_fixture_id")
+            or request.get("target_fixture_id"),
+            "source_fixture_id": observation.get("source_fixture_id")
+            or request.get("source_fixture_id"),
+        }
+    )
+
+
+def object_navigation_action_evidence(
+    tool: str,
+    request: dict[str, Any],
+    response: dict[str, Any],
+) -> dict[str, Any]:
+    object_id = optional_str(response.get("object_id") or request.get("object_id"))
+    evidence = visual_grounding_evidence_from_response(response)
+    source_observation_id = optional_str(
+        evidence.get("source_observation_id") or response.get("source_observation_id")
+    )
+    return _drop_empty_action_evidence(
+        {
+            "schema": "robot_timeline_action_evidence_v1",
+            "agent_tool": tool,
+            "agent_action": f"{tool} {object_id}",
+            "backend_primitive": NAVIGATE_TO_OBJECT_PHASE,
+            "resolved_object_id": object_id,
+            "source_observation_id": source_observation_id,
+            "source_image_bbox": image_bbox_from_visual_grounding(evidence),
+            "bbox_coordinate_space": evidence.get("bbox_coordinate_space"),
+            "camera_frame": evidence.get("camera_frame"),
+            "reviewability_status": evidence.get("reviewability_status"),
+            "reviewability_reason": evidence.get("reviewability_reason"),
+            "grounding_status": evidence.get("grounding_status"),
+        }
+    )
+
+
+def visual_grounding_evidence_from_response(
+    response: dict[str, Any],
+    observation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    evidence = response.get("visual_grounding_evidence")
+    if not isinstance(evidence, dict) and observation:
+        evidence = observation.get("visual_grounding_evidence")
+    return evidence if isinstance(evidence, dict) else {}
+
+
+def image_bbox_from_visual_grounding(
+    evidence: dict[str, Any],
+    observation: dict[str, Any] | None = None,
+) -> Any:
+    image_bbox = evidence.get("image_bbox")
+    if image_bbox is not None:
+        return image_bbox
+    image_region = evidence.get("image_region")
+    if not isinstance(image_region, dict) and observation:
+        image_region = observation.get("image_region")
+    if isinstance(image_region, dict):
+        return image_region.get("value")
+    return None
+
+
+def _drop_empty_action_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in evidence.items()
+        if value is not None and value != "" and value != []
+    }
 
 
 def semantic_substeps(

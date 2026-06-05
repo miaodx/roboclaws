@@ -737,6 +737,7 @@ class RealWorldMolmoCleanupMCPServer:
         focus_object_id: str | None = None,
         focus_receptacle_id: str | None = None,
         semantic_phase: str | None = None,
+        action_evidence: dict[str, Any] | None = None,
         camera_yaw_offset_deg: float = 0.0,
         camera_pitch_offset_deg: float = 0.0,
     ) -> dict[str, Any] | None:
@@ -758,6 +759,7 @@ class RealWorldMolmoCleanupMCPServer:
                 focus_object_id=focus_object_id,
                 focus_receptacle_id=self._internal_fixture_id(focus_receptacle_id),
                 semantic_phase=semantic_phase,
+                action_evidence=action_evidence,
                 camera_yaw_offset_deg=camera_yaw_offset_deg,
                 camera_pitch_offset_deg=camera_pitch_offset_deg,
             )

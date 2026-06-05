@@ -162,22 +162,59 @@ def test_robot_view_capture_records_close_receptacle_focus() -> None:
 def test_visual_candidate_navigation_counts_as_object_navigation() -> None:
     capture = robot_view_capture_for_tool(
         "navigate_to_visual_candidate",
-        {"source_observation_id": "raw_fpv_001"},
+        {
+            "source_observation_id": "raw_fpv_001",
+            "category": "dish",
+            "image_region": {"type": "bbox", "value": [10, 20, 30, 40]},
+        },
         {
             "ok": True,
             "tool": "navigate_to_visual_candidate",
             "object_id": "observed_001",
             "source_receptacle_id": "counter_01",
+            "visual_grounding_evidence": {
+                "source_observation_id": "raw_fpv_001",
+                "image_bbox": [10, 20, 30, 40],
+                "bbox_coordinate_space": "pixel_xywh",
+                "camera_frame": "agent_facing_fpv",
+                "reviewability_status": "reviewable",
+                "grounding_status": "resolved",
+            },
+            "model_declared_observation": {
+                "category": "dish",
+                "evidence_note": "white dish on table",
+                "grounding_status": "resolved",
+                "grounding_confidence": 0.72,
+                "grounding_basis": "single public object matched category",
+                "source_observation_id": "raw_fpv_001",
+            },
         },
         object_id_transform=lambda value: "apple_01" if value == "observed_001" else value,
     )
 
     assert capture is not None
-    assert capture["action"] == "navigate_to_object observed_001"
-    assert capture["label_suffix"] == "navigate_object_observed_001"
+    assert capture["action"] == "navigate_to_visual_candidate observed_001"
+    assert capture["label_suffix"] == "navigate_visual_candidate_observed_001"
     assert capture["focus_object_id"] == "apple_01"
     assert capture["focus_receptacle_id"] == "counter_01"
     assert capture["semantic_phase"] == "navigate_to_object"
+    assert capture["action_evidence"] == {
+        "schema": "robot_timeline_action_evidence_v1",
+        "agent_tool": "navigate_to_visual_candidate",
+        "agent_action": "navigate_to_visual_candidate observed_001",
+        "backend_primitive": "navigate_to_object",
+        "resolved_object_id": "observed_001",
+        "source_observation_id": "raw_fpv_001",
+        "source_image_bbox": [10, 20, 30, 40],
+        "bbox_coordinate_space": "pixel_xywh",
+        "camera_frame": "agent_facing_fpv",
+        "reviewability_status": "reviewable",
+        "grounding_status": "resolved",
+        "grounding_confidence": 0.72,
+        "grounding_basis": "single public object matched category",
+        "declared_category": "dish",
+        "evidence_note": "white dish on table",
+    }
 
     substeps = semantic_substeps(
         [
