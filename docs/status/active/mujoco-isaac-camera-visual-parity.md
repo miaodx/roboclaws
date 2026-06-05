@@ -505,16 +505,12 @@ RAW_FPV and world-labels as separate evidence lanes: world-labels uses images as
 report evidence only, while camera-raw uses the head-camera FPV images as agent
 input.
 
-The current visual-parity summary is now `passed`. The old single-axis
-scale-square gate remains useful history but is no longer the promotion target:
-prepared scale-square alone is still `comparison_only_not_default` because of a
-`val_1` seed-6 auxiliary chase luminance side effect. Default-rendering parity is
-ready through the combined material plus directional-light path instead:
-`combined_material_light_default_gate.status=combined_material_light_default_ready`
-and `default_rendering_visual_parity.status=default_rendering_visual_parity_ready`.
-The prepared semantic USD default path now uses
-`rendering_parity_preset=combined-material-light`, which applies texture
-scale/fallback squaring and `DistantLight rotateX=+25`.
+The old single-axis scale-square gate remains useful history but is no longer
+the promotion target: scene-camera material diagnostics showed squared texture
+scale was still an active material-response residual. The current prepared
+semantic USD default path now uses `rendering_parity_preset=combined-material-light`
+with source-preserving material texture scale/fallback values and
+`DistantLight rotateX=+25`.
 
 Do not promote the older negative or neutral probes as defaults: global raw
 colorspace, combined raw+roughness, global roughness-only, target-specific
@@ -685,23 +681,21 @@ The summary now exposes that boundary directly as
 now `passed`: report-side evidence is aligned, and default-rendering parity is
 ready through the combined material plus directional-light prepared-USD path.
 
-Default-rendering parity now has its own machine layer:
-`default_rendering_visual_parity.status=default_rendering_visual_parity_ready`,
-with `promotion_candidate_ready=true`, `ready=true`, and
-`promotion_path=combined_material_light_default_gate`. The
-`default_rendering_path` check now passes from a real prepared-USD summary:
-`output/isaaclab/flattened-semantic-usd/val_1_combined_material_light_default_path/summary.json`
+Default-rendering parity has its own machine layer, but the material default was
+revised on 2026-06-05 after scene-camera material diagnostics showed squared
+texture scale was still a material-response residual. The current prepared USD
+default keeps source `UsdUVTexture` scale/fallback values while preserving the
+existing `DistantLight rotateX=+25` path:
+`output/isaaclab/flattened-semantic-usd/0605_val1_material_source_preserving_default/summary.json`
 reports `rendering_parity_preset=combined-material-light`,
-`material_texture_scale_mode=square`,
-`material_texture_scale_rewrite_count=106`, `distant_light_rotate_x=25.0`, and
+`material_texture_scale_mode=none`, `material_texture_scale_rewrite_count=0`,
+`distant_light_rotate_x=25.0`, and
 `default_rendering_path_status=default_rendering_path_uses_combined_material_light`.
-The calibration gate is no longer the active default blocker: it has one
-default-rendering candidate at
-`output/molmo/scene-camera-comparison/0602_val0_scale_square_dirlight_rotx_p25_calibration/0603_0022/comparison_manifest.json`
-with residual `7.4522` and
-`render_domain_calibration_status=global_luminance_gain_sufficient`. The older
-baseline, scale-square-only, no-dome, no-shadow, `rotateX=-35`, `rotateX=+15`,
-and `rotateX=+5` calibration probes remain non-default history.
+The fresh scene-camera comparison at
+`output/molmo/scene-camera-comparison/0605_material_source_preserving_default/0605_1838/report.html`
+keeps the light invariants aligned and improves the same 10-object material
+sample versus the prior squared-scale report. Older scale-square, no-dome,
+no-shadow, and `rotateX` probes remain non-default history.
 
 The combined material+light robot-camera evidence is now tracked explicitly
 instead of only living in report notes. The first probe was
