@@ -107,15 +107,16 @@ mimo-v2-omni
 mimo-v2-pro                ← exists upstream; NOT advertised in our bootstrap
 mimo-v2-tts
 mimo-v2.5
-mimo-v2.5-pro
+mimo-v2.5-pro              ← exists upstream; retired 2026-06-04, NOT a route we use
 mimo-v2.5-tts
 mimo-v2.5-tts-voiceclone
 mimo-v2.5-tts-voicedesign
 ```
 
-`mimo-v2-pro` ≠ `mimo-v2.5-pro`. Do not add new active v2-line routes, and do
-not re-add the text-only `mimo-v2.5-pro` route — the single supported MiMo
-route is the vision-capable `mimo-v2.5`.
+The single supported MiMo route is the vision-capable `mimo-v2.5`. Everything
+else above is an upstream-catalog id, not an active route: `mimo-v2-pro` ≠
+`mimo-v2.5-pro`; do not add new v2-line routes, and do not re-add the text-only
+`mimo-v2.5-pro` route (it and its text-bridge foundation were removed 2026-06-04).
 
 ## Vendor links (authoritative)
 

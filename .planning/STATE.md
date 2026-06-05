@@ -23,7 +23,8 @@ See: .planning/PROJECT.md (updated 2026-05-19)
 **Core value:** First public demonstration of multiple OpenClaw agent instances simultaneously controlling multiple simulated robots in competition and cooperation, with visible output for every feature.
 **Current focus:** GSD history through Phase 136 is archived under
 `.planning/milestones/v1.98-phases/`; `.planning/phases/` now holds only
-planned follow-ups 02.7 and 02.8. The repo-level follow-up is the runtime
+the planned follow-up 02.7 (Phase 02.8 was cancelled 2026-06-04 and its
+directory removed). The repo-level follow-up is the runtime
 boundary called out in `STATUS.md`: local Codex/Claude use repo-local `.env`,
 local non-work-network also supports OpenClaw, and hosted CI does not support
 Codex.
@@ -39,8 +40,9 @@ Codex.
 
 Archive milestone `v1.98 Planning Archive` moved completed, superseded, and
 historical GSD phase directories to `.planning/milestones/v1.98-phases/` and
-historical pre-GSD plan documents to `docs/retrospectives/plans/`. Current
-planned phase directories left in `.planning/phases/` are 02.7 and 02.8.
+historical pre-GSD plan documents to `docs/retrospectives/plans/`. The only
+planned phase directory left in `.planning/phases/` is 02.7 (Phase 02.8 was
+cancelled 2026-06-04 — see `.planning/ROADMAP.md` — and its directory removed).
 
 Phase: 136 (generic-mcp-entrypoint-and-semantic-capability-profiles) - COMPLETE
 Plan: 1 of 1 complete - `136-01` added semantic MCP contract profiles, built-in

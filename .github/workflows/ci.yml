@@ -597,7 +597,6 @@ jobs:
       matrix:
         model_entry:
           - kimi-k2.6
-          - mimo-v2.5-pro
           - mimo-v2.5
           - kimi-k2.6-camera-raw
           - mimo-v2.5-camera-raw
@@ -759,14 +758,6 @@ jobs:
           path: molmo-live-src/kimi-k2.6
 
       - name: Download Molmo live MiMo v2.5 artifact (best-effort)
-        id: download_molmo_live_mimo_pro
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: report-molmo-live-mimo-v2.5-pro
-          path: molmo-live-src/mimo-v2.5-pro
-
-      - name: Download Molmo live MiMo v2.5 artifact (best-effort)
         id: download_molmo_live_mimo_v25
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -799,7 +790,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -f molmo-live-src/kimi-k2.6/status.json ] \
-             || [ -f molmo-live-src/mimo-v2.5-pro/status.json ] \
              || [ -f molmo-live-src/mimo-v2.5/status.json ] \
              || [ -f molmo-live-src/kimi-k2.6-camera-raw/status.json ] \
              || [ -f molmo-live-src/mimo-v2.5-camera-raw/status.json ]; then
@@ -824,9 +814,6 @@ jobs:
           gh run download "$run_id" \
             --name report-molmo-live-kimi-k2.6 \
             --dir molmo-live-src/kimi-k2.6 || true
-          gh run download "$run_id" \
-            --name report-molmo-live-mimo-v2.5-pro \
-            --dir molmo-live-src/mimo-v2.5-pro || true
           gh run download "$run_id" \
             --name report-molmo-live-mimo-v2.5 \
             --dir molmo-live-src/mimo-v2.5 || true
