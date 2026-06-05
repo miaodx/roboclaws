@@ -57,6 +57,29 @@ DEFAULT_SCENE_PROBE_LIGHTING_PROFILE = {
         },
     ],
 }
+SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE = {
+    **DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    "profile_id": "scene_probe_shadow_parity_probe_v1",
+    "source": (
+        "Shadow-parity probe for MuJoCo/Isaac/Genesis scene-camera review. This is "
+        "not the default fill profile: it enables Genesis shadows, reduces Isaac "
+        "dome fill, and adds an Isaac key light so bed/floor/wall cast-shadow "
+        "behavior can be reviewed against MuJoCo."
+    ),
+    "isaac_dome_intensity": 12.0,
+    "isaac_key_intensity": 1200.0,
+    "isaac_key_rotation_deg": [-45.0, 0.0, 35.0],
+    "genesis_shadow": True,
+}
+SCENE_PROBE_LIGHTING_PROFILES = {
+    DEFAULT_SCENE_PROBE_LIGHTING_PROFILE["profile_id"]: DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    "default": DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    "fill": DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+    SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE[
+        "profile_id"
+    ]: SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE,
+    "shadow-parity": SHADOW_PARITY_SCENE_PROBE_LIGHTING_PROFILE,
+}
 DEFAULT_SCENE_PROBE_COLOR_PROFILE = {
     "profile_id": "display_srgb_soft_highlight_v1",
     "input_transfer": "renderer_rgb",

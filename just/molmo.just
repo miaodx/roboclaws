@@ -1125,7 +1125,7 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
       --render-height "$render_height"
 
 # Render-only scene identity probe: same MolmoSpaces scene anchors through MuJoCo and Isaac.
-scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda" render_width="960" render_height="640" genesis="off":
+scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/molmo/scene-camera-comparison" scene_source="procthor-10k-val" scene_index="1" scene_usd_path="output/isaaclab/flattened-semantic-usd/0604_val1_mujoco_body_pose_fix/scene_semantic.usda" render_width="960" render_height="640" genesis="off" lighting_profile="default":
     #!/usr/bin/env bash
     set -euo pipefail
     seed="{{seed}}"
@@ -1137,6 +1137,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     render_width="{{render_width}}"
     render_height="{{render_height}}"
     genesis="{{genesis}}"
+    lighting_profile="{{lighting_profile}}"
     raw_args=(
       "$seed"
       "$generated_mess_count"
@@ -1147,6 +1148,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
       "$render_width"
       "$render_height"
       "$genesis"
+      "$lighting_profile"
     )
     seed="${seed#seed=}"
     generated_mess_count="${generated_mess_count#generated_mess_count=}"
@@ -1157,6 +1159,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     render_width="${render_width#render_width=}"
     render_height="${render_height#render_height=}"
     genesis="${genesis#genesis=}"
+    lighting_profile="${lighting_profile#lighting_profile=}"
     for override in "${raw_args[@]}"; do
       case "$override" in
         seed=*) seed="${override#seed=}" ;;
@@ -1168,6 +1171,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
         render_width=*) render_width="${override#render_width=}" ;;
         render_height=*) render_height="${override#render_height=}" ;;
         genesis=*) genesis="${override#genesis=}" ;;
+        lighting_profile=*) lighting_profile="${override#lighting_profile=}" ;;
       esac
     done
     if [[ "$seed" == *=* && "${seed%%=*}" != "seed" ]]; then seed="7"; fi
@@ -1179,6 +1183,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     if [[ "$render_width" == *=* && "${render_width%%=*}" != "render_width" ]]; then render_width="960"; fi
     if [[ "$render_height" == *=* && "${render_height%%=*}" != "render_height" ]]; then render_height="640"; fi
     if [[ "$genesis" == *=* && "${genesis%%=*}" != "genesis" ]]; then genesis="off"; fi
+    if [[ "$lighting_profile" == *=* && "${lighting_profile%%=*}" != "lighting_profile" ]]; then lighting_profile="default"; fi
 
     molmospaces_python="${ROBOCLAWS_MOLMOSPACES_PYTHON:-.venv/bin/python}"
     isaac_python="${ROBOCLAWS_ISAACLAB_PYTHON:-.venv-isaaclab/bin/python}"
@@ -1219,4 +1224,5 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
       --genesis "$genesis" \
       --genesis-python "$genesis_python" \
       --render-width "$render_width" \
-      --render-height "$render_height"
+      --render-height "$render_height" \
+      --lighting-profile "$lighting_profile"

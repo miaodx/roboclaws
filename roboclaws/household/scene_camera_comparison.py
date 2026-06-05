@@ -22,8 +22,8 @@ from roboclaws.household.camera_control import (
     DEFAULT_SCENE_PROBE_CAMERA_ORBIT,
     DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     DEFAULT_SCENE_PROBE_LENS,
-    DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
     MOLMOSPACES_SCENE_FRAME,
+    SCENE_PROBE_LIGHTING_PROFILES,
     canonical_scene_camera_control_request,
     normalize_camera_control_request,
     write_camera_control_request,
@@ -156,11 +156,22 @@ class SceneCameraComparisonConfig:
     genesis_python: Path = Path(".venv-genesis/bin/python")
     render_width: int = DEFAULT_RENDER_WIDTH
     render_height: int = DEFAULT_RENDER_HEIGHT
+    lighting_profile_id: str = "default"
+
+
+def _scene_camera_lighting_profile(profile_id: str) -> dict[str, Any]:
+    key = str(profile_id or "default")
+    profile = SCENE_PROBE_LIGHTING_PROFILES.get(key)
+    if not isinstance(profile, dict):
+        available = ", ".join(sorted(SCENE_PROBE_LIGHTING_PROFILES))
+        raise ValueError(f"unknown scene-camera lighting profile {key!r}; available: {available}")
+    return dict(profile)
 
 
 def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str, Any]:
     output_dir = config.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
+    lighting_profile = _scene_camera_lighting_profile(config.lighting_profile_id)
     manifest: dict[str, Any] = {
         "schema": SCENE_CAMERA_COMPARISON_SCHEMA,
         "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
@@ -177,13 +188,14 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
             "render_width": config.render_width,
             "render_height": config.render_height,
             "genesis_enabled": config.genesis_enabled,
+            "lighting_profile_id": str(lighting_profile.get("profile_id") or ""),
         },
         "camera_control": {
             "api_name": CAMERA_CONTROL_API_NAME,
             "camera_model": CANONICAL_CAMERA_MODEL,
             "coordinate_frame": MOLMOSPACES_SCENE_FRAME,
             "lens": dict(DEFAULT_SCENE_PROBE_LENS),
-            "lighting_profile": dict(DEFAULT_SCENE_PROBE_LIGHTING_PROFILE),
+            "lighting_profile": dict(lighting_profile),
             "color_profile": dict(DEFAULT_SCENE_PROBE_COLOR_PROFILE),
             "calibration_status": CANONICAL_POSE_CALIBRATION,
             "calibration_note": (
@@ -253,7 +265,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         width=config.render_width,
         height=config.render_height,
         lens=DEFAULT_SCENE_PROBE_LENS,
-        lighting_profile=DEFAULT_SCENE_PROBE_LIGHTING_PROFILE,
+        lighting_profile=lighting_profile,
         color_profile=DEFAULT_SCENE_PROBE_COLOR_PROFILE,
     )
     if isinstance(molmo.get("runtime_object_positions"), dict):
@@ -332,6 +344,8 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
     manifest["render_domain_source_diagnostics"] = _render_domain_source_diagnostics(manifest)
     manifest["render_domain_view_triage"] = _render_domain_view_triage(manifest)
     manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
+    manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
+    manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
     manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     _write_contact_sheet(manifest, output_dir=output_dir)
     manifest_path = output_dir / "comparison_manifest.json"
@@ -374,6 +388,8 @@ def render_scene_camera_comparison_report(manifest: dict[str, Any], *, output_di
         manifest["render_domain_contract_probe"] = _render_domain_contract_probe(manifest)
     if not isinstance(manifest.get("lighting_tone_provenance"), dict):
         manifest["lighting_tone_provenance"] = _lighting_tone_provenance(manifest)
+    if not isinstance(manifest.get("shadow_parity_probe"), dict):
+        manifest["shadow_parity_probe"] = _shadow_parity_probe(manifest)
     if not isinstance(manifest.get("backend_swap_geometry_contract"), dict):
         manifest["backend_swap_geometry_contract"] = _backend_swap_geometry_contract(manifest)
     report_path = output_dir / "report.html"
@@ -3551,6 +3567,122 @@ def _lighting_tone_provenance(manifest: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _shadow_parity_probe(manifest: dict[str, Any]) -> dict[str, Any]:
+    camera = (
+        manifest.get("camera_control") if isinstance(manifest.get("camera_control"), dict) else {}
+    )
+    lighting = (
+        camera.get("lighting_profile") if isinstance(camera.get("lighting_profile"), dict) else {}
+    )
+    lanes = manifest.get("lanes") if isinstance(manifest.get("lanes"), dict) else {}
+    isaac = lanes.get(ISAAC_LANE_ID) if isinstance(lanes.get(ISAAC_LANE_ID), dict) else {}
+    genesis = lanes.get(GENESIS_LANE_ID) if isinstance(lanes.get(GENESIS_LANE_ID), dict) else {}
+    isaac_lighting = (
+        isaac.get("lighting_diagnostics")
+        if isinstance(isaac.get("lighting_diagnostics"), dict)
+        else {}
+    )
+    genesis_lighting = (
+        genesis.get("lighting_diagnostics")
+        if isinstance(genesis.get("lighting_diagnostics"), dict)
+        else {}
+    )
+    genesis_profile = (
+        genesis_lighting.get("genesis_lighting_profile")
+        if isinstance(genesis_lighting.get("genesis_lighting_profile"), dict)
+        else {}
+    )
+    render_probe = (
+        manifest.get("render_domain_contract_probe")
+        if isinstance(manifest.get("render_domain_contract_probe"), dict)
+        else {}
+    )
+    candidate_visual = (
+        manifest.get("candidate_visual_diagnostics")
+        if isinstance(manifest.get("candidate_visual_diagnostics"), dict)
+        else {}
+    )
+    candidate_warning_reasons = sorted(
+        {
+            str(reason)
+            for candidate in (
+                candidate_visual.get("candidates")
+                if isinstance(candidate_visual.get("candidates"), list)
+                else []
+            )
+            if isinstance(candidate, dict)
+            for reason in (
+                candidate.get("warning_reasons")
+                if isinstance(candidate.get("warning_reasons"), list)
+                else []
+            )
+        }
+    )
+    genesis_shadow = bool(genesis_profile.get("shadow", lighting.get("genesis_shadow", False)))
+    isaac_dome_intensity = _optional_float(
+        isaac_lighting.get("requested_dome_intensity", lighting.get("isaac_dome_intensity"))
+    )
+    isaac_key_intensity = _optional_float(
+        isaac_lighting.get("requested_key_intensity", lighting.get("isaac_key_intensity"))
+    )
+    shadow_disabled_count = _optional_int(render_probe.get("isaac_shadow_disabled_prim_count")) or 0
+    profile_id = str(lighting.get("profile_id") or "")
+    is_shadow_probe = profile_id == "scene_probe_shadow_parity_probe_v1"
+    isaac_probe_ready = (
+        isaac_dome_intensity is not None
+        and isaac_dome_intensity <= 20.0
+        and isaac_key_intensity is not None
+        and isaac_key_intensity > 0.0
+    )
+    if is_shadow_probe and genesis_shadow and isaac_probe_ready:
+        status = "shadow_parity_probe_configured"
+        if comparison_successful(manifest):
+            next_action = (
+                "Review bed/object views for cast-shadow return, then check room views remain "
+                "bright enough before promoting any default."
+            )
+        else:
+            next_action = (
+                "Shadow lighting is configured, but the visual comparison gate did not pass. "
+                "Treat this as probe evidence only; do not promote it as the default."
+            )
+    elif is_shadow_probe:
+        status = "shadow_parity_probe_partially_configured"
+        next_action = (
+            "Inspect per-lane lighting diagnostics before trusting visual shadow evidence."
+        )
+    else:
+        status = "default_fill_profile_not_shadow_parity"
+        next_action = (
+            "Run with lighting_profile=shadow-parity to test MuJoCo-like cast shadows without "
+            "changing the default fill profile."
+        )
+    return {
+        "schema": "scene_camera_shadow_parity_probe_v1",
+        "status": status,
+        "profile_id": profile_id,
+        "is_shadow_parity_profile": is_shadow_probe,
+        "genesis_shadow": genesis_shadow,
+        "isaac_dome_intensity": isaac_dome_intensity,
+        "isaac_key_intensity": isaac_key_intensity,
+        "isaac_added_light_paths": isaac_lighting.get("added_light_paths") or [],
+        "isaac_shadow_disabled_prim_count": shadow_disabled_count,
+        "mujoco_light_count": render_probe.get("mujoco_light_count"),
+        "isaac_light_count": render_probe.get("isaac_light_count"),
+        "comparison_successful": comparison_successful(manifest),
+        "candidate_visual_status": candidate_visual.get("status"),
+        "candidate_visual_degraded_candidates": candidate_visual.get("degraded_candidates") or [],
+        "candidate_visual_warning_reasons": candidate_warning_reasons,
+        "render_contract_high_priority_delta_count": render_probe.get("high_priority_delta_count"),
+        "interpretation": (
+            "This probe tracks whether the run is configured to test MuJoCo-like cast shadows. "
+            "It is configuration and report evidence; visual acceptance still requires "
+            "reviewing the bed view and room views."
+        ),
+        "recommended_next_action": next_action,
+    }
+
+
 def _lane_lighting_tone_provenance(
     lane_id: str,
     lane: dict[str, Any],
@@ -5340,6 +5472,7 @@ def _report_html(manifest: dict[str, Any], *, output_dir: Path) -> str:
             _genesis_visual_object_audit_section(manifest),
             _native_isaac_render_diagnostics_section(manifest),
             _lighting_tone_provenance_section(manifest),
+            _shadow_parity_probe_section(manifest),
             _render_domain_source_section(manifest),
             _render_domain_view_triage_section(manifest),
             _render_domain_contract_probe_section(manifest),
@@ -6546,6 +6679,47 @@ def _lighting_tone_provenance_section(manifest: dict[str, Any]) -> str:
 """
 
 
+def _shadow_parity_probe_section(manifest: dict[str, Any]) -> str:
+    diagnostics = (
+        manifest.get("shadow_parity_probe")
+        if isinstance(manifest.get("shadow_parity_probe"), dict)
+        else _shadow_parity_probe(manifest)
+    )
+    if not diagnostics:
+        return ""
+    rows = [
+        ("Profile", diagnostics.get("profile_id")),
+        ("Status", diagnostics.get("status")),
+        ("Genesis shadow", diagnostics.get("genesis_shadow")),
+        ("Isaac dome intensity", diagnostics.get("isaac_dome_intensity")),
+        ("Isaac key intensity", diagnostics.get("isaac_key_intensity")),
+        ("Isaac added light paths", diagnostics.get("isaac_added_light_paths")),
+        ("MuJoCo light count", diagnostics.get("mujoco_light_count")),
+        ("Isaac light count", diagnostics.get("isaac_light_count")),
+        ("Isaac shadow-off prims", diagnostics.get("isaac_shadow_disabled_prim_count")),
+    ]
+    row_html = "".join(
+        f"<tr><td>{html.escape(str(label))}</td><td>{html.escape(_cell_text(value))}</td></tr>"
+        for label, value in rows
+    )
+    note = (
+        f"profile={diagnostics.get('profile_id')}; status={diagnostics.get('status')}; "
+        f"shadow_profile={diagnostics.get('is_shadow_parity_profile')}. "
+        f"{diagnostics.get('interpretation') or ''}"
+    )
+    return f"""
+<section class="panel">
+  <h2>Shadow Parity Probe</h2>
+  <p class="note">{html.escape(note)}</p>
+  <p class="note">{html.escape(str(diagnostics.get("recommended_next_action") or ""))}</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Setting</th><th>Value</th></tr></thead>
+    <tbody>{row_html}</tbody>
+  </table></div>
+</section>
+"""
+
+
 def _render_domain_source_section(manifest: dict[str, Any]) -> str:
     diagnostics = (
         manifest.get("render_domain_source_diagnostics")
@@ -7471,6 +7645,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--genesis-python", type=Path, default=Path(".venv-genesis/bin/python"))
     parser.add_argument("--render-width", type=int, default=DEFAULT_RENDER_WIDTH)
     parser.add_argument("--render-height", type=int, default=DEFAULT_RENDER_HEIGHT)
+    parser.add_argument(
+        "--lighting-profile",
+        default="default",
+        choices=tuple(sorted(SCENE_PROBE_LIGHTING_PROFILES)),
+        help=(
+            "Scene-camera lighting profile. Use shadow-parity for a probe run; "
+            "default keeps the current fill profile."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.scene_usd_path.is_file():
@@ -7489,6 +7672,7 @@ def main(argv: list[str] | None = None) -> int:
             genesis_python=args.genesis_python,
             render_width=args.render_width,
             render_height=args.render_height,
+            lighting_profile_id=args.lighting_profile,
         )
     )
     print(f"scene camera comparison manifest: {args.output_dir / 'comparison_manifest.json'}")
