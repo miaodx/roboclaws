@@ -326,8 +326,9 @@ def test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance(
         server.close()
 
     assert skipped["ok"] is False
-    assert skipped["error_reason"] == "semantic_order"
-    assert skipped["required_tool"] == "navigate_to_object"
+    assert skipped["error_reason"] == "visual_evidence_not_reviewable"
+    assert skipped["required_next_tool"] == "adjust_camera"
+    assert skipped["candidate_state"] == "visual_scan_required"
     assert "generated_mess_set" not in json.dumps(skipped)
     assert "target_receptacle_id" not in json.dumps(skipped)
 
@@ -358,6 +359,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["advisory_evaluation"]["object_reviews"]
     assert run_result["agent_view"]["observed_objects"]
     assert run_result["cleanup_policy_trace"]["loop_style"] == "interleaved_cleanup_loop"
+    assert run_result["cleanup_policy_trace"]["first_cleanup_before_full_survey"] is True
     assert run_result["cleanup_policy_trace"]["post_place_observe_complete"] is True
     assert run_result["real_robot_readiness"]["schema"] == "real_robot_readiness_v1"
     assert run_result["real_robot_readiness"]["semantic_navigation_only"] is True
@@ -543,14 +545,16 @@ def _clean_raw_fpv_candidate(
     server: Any,
     *,
     observation_id: str,
-    category: str,
+    candidate_input: dict[str, Any],
 ) -> str | None:
     candidate = server.call_tool(
         "navigate_to_visual_candidate",
         source_observation_id=observation_id,
-        category=category,
-        evidence_note=f"{category} visible item for cleanup",
-        image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
+        category=str(candidate_input["category"]),
+        source_fixture_id=str(candidate_input.get("source_fixture_id") or ""),
+        evidence_note=str(candidate_input.get("evidence_note") or ""),
+        image_region=candidate_input.get("image_region")
+        or {"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
     )
     if not candidate.get("ok"):
         return None
@@ -560,6 +564,15 @@ def _clean_raw_fpv_candidate(
     assert server.call_tool("navigate_to_receptacle", fixture_id=fixture_id)["ok"] is True
     if candidate["recommended_tool"] == "place_inside":
         placed = server.call_tool("place_inside", fixture_id=fixture_id)
+        if (
+            not placed.get("ok")
+            and placed.get("error_reason") == "semantic_order"
+            and placed.get("required_tool") == "open_receptacle"
+        ):
+            assert server.call_tool("open_receptacle", fixture_id=fixture_id)["ok"] is True
+            placed = server.call_tool("place_inside", fixture_id=fixture_id)
+            assert placed["ok"] is True
+            assert server.call_tool("close_receptacle", fixture_id=fixture_id)["ok"] is True
     else:
         placed = server.call_tool("place", fixture_id=fixture_id)
     assert placed["ok"] is True
@@ -574,21 +587,29 @@ def _complete_raw_fpv_cleanup_chains(
 ) -> set[str]:
     metric_map = server.call_tool("metric_map")
     handled: set[str] = set()
-    categories = ("food", "book", "dish", "linen", "toy", "electronics", "tomato")
     for waypoint in metric_map["inspection_waypoints"]:
-        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+        waypoint_id = str(waypoint["waypoint_id"])
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
         observation = server.call_tool("observe")
         observation_id = observation["raw_fpv_observation"]["observation_id"]
-        for category in categories:
+        public_waypoint = server.contract._waypoint_by_id(waypoint_id)  # noqa: SLF001
+        if public_waypoint is None:
+            continue
+        candidate_inputs = server.contract._simulated_declaration_inputs_for_waypoint(  # noqa: SLF001
+            public_waypoint,
+            observation_id=observation_id,
+        )
+        for candidate_input in candidate_inputs:
             object_id = _clean_raw_fpv_candidate(
                 server,
                 observation_id=observation_id,
-                category=category,
+                candidate_input=candidate_input,
             )
             if object_id is None or object_id in handled:
                 continue
             handled.add(object_id)
-            break
+            if len(handled) >= required_count:
+                break
         if len(handled) >= required_count:
             break
     assert len(handled) >= required_count
@@ -669,14 +690,14 @@ def test_realworld_mcp_raw_fpv_camera_raw_done_allows_complete_live_chains(
 ) -> None:
     server = _raw_fpv_camera_raw_server(tmp_path)
     try:
-        handled = _complete_raw_fpv_cleanup_chains(server, required_count=4)
+        handled = _complete_raw_fpv_cleanup_chains(server, required_count=5)
         done = server.call_tool("done", reason="enough grounded chains completed")
         run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
     finally:
         server.close()
 
     assert done["ok"] is True
-    assert len(handled) >= 4
+    assert len(handled) >= 5
     assert run_result["cleanup_profile"] == "camera-raw"
     assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] >= 4
 

@@ -1,0 +1,440 @@
+{
+  "schema": "roboclaws_visual_showcase_v1",
+  "source_run_dir": "/home/mi/ws/gogo/roboclaws/output/household/household-cleanup/codex-world-labels-sanitized/0606_1142/seed-7",
+  "profile": "household-cleanup",
+  "frame_count": 27,
+  "size": {
+    "width": 1280,
+    "height": 720
+  },
+  "context": {
+    "task": "household-cleanup",
+    "driver": "Codex agent",
+    "profile": "world-labels-sanitized",
+    "backend": "molmospaces_subprocess",
+    "seed": 7
+  },
+  "eval_summary": {
+    "cleanup_status": "success",
+    "completion_status": "success",
+    "semantic_accepted": 5,
+    "semantic_total": 5,
+    "exact_restored": 4,
+    "exact_total": 5,
+    "disturbance_count": 0,
+    "sweep_coverage_rate": 1.0
+  },
+  "public_private_boundary": "FPV is the agent-facing visual panel. RPV/chase/map panels are report-only evidence. Scores are post-run evaluation, not agent input.",
+  "outputs": {
+    "gif": "showcase.gif",
+    "contact_sheet": "contact_sheet.png",
+    "frames_dir": "frames"
+  },
+  "selected_frames": [
+    {
+      "index": 1,
+      "label": "0000_before",
+      "chapter": "Task",
+      "title": "Household cleanup starts",
+      "active_tool": "observe",
+      "duration_ms": 1400,
+      "frame": "frames/001_task_observe.png",
+      "source_views": {
+        "chase": "robot_views/0000_before.chase.png",
+        "fpv": "robot_views/0000_before.fpv.png",
+        "map": "robot_views/0000_before.map.png",
+        "verify": "robot_views/0000_before.verify.png"
+      }
+    },
+    {
+      "index": 2,
+      "label": "0001_observe",
+      "chapter": "Observe",
+      "title": "Agent observes the scene",
+      "active_tool": "observe",
+      "duration_ms": 900,
+      "frame": "frames/002_observe_observe.png",
+      "source_views": {
+        "chase": "robot_views/0001_observe.chase.png",
+        "fpv": "robot_views/0001_observe.fpv.png",
+        "map": "robot_views/0001_observe.map.png",
+        "verify": "robot_views/0001_observe.verify.png"
+      }
+    },
+    {
+      "index": 3,
+      "label": "0008_observe",
+      "chapter": "Observe",
+      "title": "Agent observes the scene",
+      "active_tool": "observe",
+      "duration_ms": 900,
+      "frame": "frames/003_observe_observe.png",
+      "source_views": {
+        "chase": "robot_views/0008_observe.chase.png",
+        "fpv": "robot_views/0008_observe.fpv.png",
+        "map": "robot_views/0008_observe.map.png",
+        "verify": "robot_views/0008_observe.verify.png"
+      }
+    },
+    {
+      "index": 4,
+      "label": "0018_observe",
+      "chapter": "Observe",
+      "title": "Agent observes the scene",
+      "active_tool": "observe",
+      "duration_ms": 900,
+      "frame": "frames/004_observe_observe.png",
+      "source_views": {
+        "chase": "robot_views/0018_observe.chase.png",
+        "fpv": "robot_views/0018_observe.fpv.png",
+        "map": "robot_views/0018_observe.map.png",
+        "verify": "robot_views/0018_observe.verify.png"
+      }
+    },
+    {
+      "index": 5,
+      "label": "0022_navigate_object_observed_005",
+      "chapter": "Pillow",
+      "title": "Pillow: Nav object",
+      "active_tool": "navigate_to_object",
+      "duration_ms": 900,
+      "frame": "frames/005_pillow_navigate-to-object.png",
+      "source_views": {
+        "chase": "robot_views/0022_navigate_object_observed_005.chase.png",
+        "fpv": "robot_views/0022_navigate_object_observed_005.fpv.png",
+        "map": "robot_views/0022_navigate_object_observed_005.map.png",
+        "verify": "robot_views/0022_navigate_object_observed_005.verify.png"
+      }
+    },
+    {
+      "index": 6,
+      "label": "0023_pick_observed_005",
+      "chapter": "Pillow",
+      "title": "Pillow: Pick",
+      "active_tool": "pick",
+      "duration_ms": 900,
+      "frame": "frames/006_pillow_pick.png",
+      "source_views": {
+        "chase": "robot_views/0023_pick_observed_005.chase.png",
+        "fpv": "robot_views/0023_pick_observed_005.fpv.png",
+        "map": "robot_views/0023_pick_observed_005.map.png",
+        "verify": "robot_views/0023_pick_observed_005.verify.png"
+      }
+    },
+    {
+      "index": 7,
+      "label": "0024_navigate_receptacle_anchor_fixture_007",
+      "chapter": "Pillow",
+      "title": "Pillow: Nav receptacle",
+      "active_tool": "navigate_to_receptacle",
+      "duration_ms": 900,
+      "frame": "frames/007_pillow_navigate-to-receptacle.png",
+      "source_views": {
+        "chase": "robot_views/0024_navigate_receptacle_anchor_fixture_007.chase.png",
+        "fpv": "robot_views/0024_navigate_receptacle_anchor_fixture_007.fpv.png",
+        "map": "robot_views/0024_navigate_receptacle_anchor_fixture_007.map.png",
+        "verify": "robot_views/0024_navigate_receptacle_anchor_fixture_007.verify.png"
+      }
+    },
+    {
+      "index": 8,
+      "label": "0025_place_observed_005",
+      "chapter": "Pillow",
+      "title": "Pillow: place at Sofa",
+      "active_tool": "place",
+      "duration_ms": 900,
+      "frame": "frames/008_pillow_place.png",
+      "source_views": {
+        "chase": "robot_views/0025_place_observed_005.chase.png",
+        "fpv": "robot_views/0025_place_observed_005.fpv.png",
+        "map": "robot_views/0025_place_observed_005.map.png",
+        "verify": "robot_views/0025_place_observed_005.verify.png"
+      }
+    },
+    {
+      "index": 9,
+      "label": "0029_navigate_object_observed_001",
+      "chapter": "Potato",
+      "title": "Potato: Nav object",
+      "active_tool": "navigate_to_object",
+      "duration_ms": 900,
+      "frame": "frames/009_potato_navigate-to-object.png",
+      "source_views": {
+        "chase": "robot_views/0029_navigate_object_observed_001.chase.png",
+        "fpv": "robot_views/0029_navigate_object_observed_001.fpv.png",
+        "map": "robot_views/0029_navigate_object_observed_001.map.png",
+        "verify": "robot_views/0029_navigate_object_observed_001.verify.png"
+      }
+    },
+    {
+      "index": 10,
+      "label": "0030_pick_observed_001",
+      "chapter": "Potato",
+      "title": "Potato: Pick",
+      "active_tool": "pick",
+      "duration_ms": 900,
+      "frame": "frames/010_potato_pick.png",
+      "source_views": {
+        "chase": "robot_views/0030_pick_observed_001.chase.png",
+        "fpv": "robot_views/0030_pick_observed_001.fpv.png",
+        "map": "robot_views/0030_pick_observed_001.map.png",
+        "verify": "robot_views/0030_pick_observed_001.verify.png"
+      }
+    },
+    {
+      "index": 11,
+      "label": "0031_navigate_receptacle_anchor_fixture_002",
+      "chapter": "Potato",
+      "title": "Potato: Nav receptacle",
+      "active_tool": "navigate_to_receptacle",
+      "duration_ms": 900,
+      "frame": "frames/011_potato_navigate-to-receptacle.png",
+      "source_views": {
+        "chase": "robot_views/0031_navigate_receptacle_anchor_fixture_002.chase.png",
+        "fpv": "robot_views/0031_navigate_receptacle_anchor_fixture_002.fpv.png",
+        "map": "robot_views/0031_navigate_receptacle_anchor_fixture_002.map.png",
+        "verify": "robot_views/0031_navigate_receptacle_anchor_fixture_002.verify.png"
+      }
+    },
+    {
+      "index": 12,
+      "label": "0032_open_receptacle_anchor_fixture_002",
+      "chapter": "Potato",
+      "title": "Potato: Open",
+      "active_tool": "open_receptacle",
+      "duration_ms": 900,
+      "frame": "frames/012_potato_open-receptacle.png",
+      "source_views": {
+        "chase": "robot_views/0032_open_receptacle_anchor_fixture_002.chase.png",
+        "fpv": "robot_views/0032_open_receptacle_anchor_fixture_002.fpv.png",
+        "map": "robot_views/0032_open_receptacle_anchor_fixture_002.map.png",
+        "verify": "robot_views/0032_open_receptacle_anchor_fixture_002.verify.png"
+      }
+    },
+    {
+      "index": 13,
+      "label": "0033_place_inside_observed_001",
+      "chapter": "Potato",
+      "title": "Potato: place at Fridge",
+      "active_tool": "place_inside",
+      "duration_ms": 900,
+      "frame": "frames/013_potato_place-inside.png",
+      "source_views": {
+        "chase": "robot_views/0033_place_inside_observed_001.chase.png",
+        "fpv": "robot_views/0033_place_inside_observed_001.fpv.png",
+        "map": "robot_views/0033_place_inside_observed_001.map.png",
+        "verify": "robot_views/0033_place_inside_observed_001.verify.png"
+      }
+    },
+    {
+      "index": 14,
+      "label": "0034_close_receptacle_anchor_fixture_002",
+      "chapter": "Potato",
+      "title": "Potato: Close",
+      "active_tool": "close_receptacle",
+      "duration_ms": 900,
+      "frame": "frames/014_potato_close-receptacle.png",
+      "source_views": {
+        "chase": "robot_views/0034_close_receptacle_anchor_fixture_002.chase.png",
+        "fpv": "robot_views/0034_close_receptacle_anchor_fixture_002.fpv.png",
+        "map": "robot_views/0034_close_receptacle_anchor_fixture_002.map.png",
+        "verify": "robot_views/0034_close_receptacle_anchor_fixture_002.verify.png"
+      }
+    },
+    {
+      "index": 15,
+      "label": "0037_navigate_object_observed_002",
+      "chapter": "Plate",
+      "title": "Plate: Nav object",
+      "active_tool": "navigate_to_object",
+      "duration_ms": 900,
+      "frame": "frames/015_plate_navigate-to-object.png",
+      "source_views": {
+        "chase": "robot_views/0037_navigate_object_observed_002.chase.png",
+        "fpv": "robot_views/0037_navigate_object_observed_002.fpv.png",
+        "map": "robot_views/0037_navigate_object_observed_002.map.png",
+        "verify": "robot_views/0037_navigate_object_observed_002.verify.png"
+      }
+    },
+    {
+      "index": 16,
+      "label": "0038_pick_observed_002",
+      "chapter": "Plate",
+      "title": "Plate: Pick",
+      "active_tool": "pick",
+      "duration_ms": 900,
+      "frame": "frames/016_plate_pick.png",
+      "source_views": {
+        "chase": "robot_views/0038_pick_observed_002.chase.png",
+        "fpv": "robot_views/0038_pick_observed_002.fpv.png",
+        "map": "robot_views/0038_pick_observed_002.map.png",
+        "verify": "robot_views/0038_pick_observed_002.verify.png"
+      }
+    },
+    {
+      "index": 17,
+      "label": "0039_navigate_receptacle_anchor_fixture_010",
+      "chapter": "Plate",
+      "title": "Plate: Nav receptacle",
+      "active_tool": "navigate_to_receptacle",
+      "duration_ms": 900,
+      "frame": "frames/017_plate_navigate-to-receptacle.png",
+      "source_views": {
+        "chase": "robot_views/0039_navigate_receptacle_anchor_fixture_010.chase.png",
+        "fpv": "robot_views/0039_navigate_receptacle_anchor_fixture_010.fpv.png",
+        "map": "robot_views/0039_navigate_receptacle_anchor_fixture_010.map.png",
+        "verify": "robot_views/0039_navigate_receptacle_anchor_fixture_010.verify.png"
+      }
+    },
+    {
+      "index": 18,
+      "label": "0040_place_observed_002",
+      "chapter": "Plate",
+      "title": "Plate: place at Sink",
+      "active_tool": "place",
+      "duration_ms": 900,
+      "frame": "frames/018_plate_place.png",
+      "source_views": {
+        "chase": "robot_views/0040_place_observed_002.chase.png",
+        "fpv": "robot_views/0040_place_observed_002.fpv.png",
+        "map": "robot_views/0040_place_observed_002.map.png",
+        "verify": "robot_views/0040_place_observed_002.verify.png"
+      }
+    },
+    {
+      "index": 19,
+      "label": "0043_navigate_object_observed_003",
+      "chapter": "Remote Control",
+      "title": "Remote Control: Nav object",
+      "active_tool": "navigate_to_object",
+      "duration_ms": 900,
+      "frame": "frames/019_remote-control_navigate-to-object.png",
+      "source_views": {
+        "chase": "robot_views/0043_navigate_object_observed_003.chase.png",
+        "fpv": "robot_views/0043_navigate_object_observed_003.fpv.png",
+        "map": "robot_views/0043_navigate_object_observed_003.map.png",
+        "verify": "robot_views/0043_navigate_object_observed_003.verify.png"
+      }
+    },
+    {
+      "index": 20,
+      "label": "0044_pick_observed_003",
+      "chapter": "Remote Control",
+      "title": "Remote Control: Pick",
+      "active_tool": "pick",
+      "duration_ms": 900,
+      "frame": "frames/020_remote-control_pick.png",
+      "source_views": {
+        "chase": "robot_views/0044_pick_observed_003.chase.png",
+        "fpv": "robot_views/0044_pick_observed_003.fpv.png",
+        "map": "robot_views/0044_pick_observed_003.map.png",
+        "verify": "robot_views/0044_pick_observed_003.verify.png"
+      }
+    },
+    {
+      "index": 21,
+      "label": "0045_navigate_receptacle_anchor_fixture_006",
+      "chapter": "Remote Control",
+      "title": "Remote Control: Nav receptacle",
+      "active_tool": "navigate_to_receptacle",
+      "duration_ms": 900,
+      "frame": "frames/021_remote-control_navigate-to-receptacle.png",
+      "source_views": {
+        "chase": "robot_views/0045_navigate_receptacle_anchor_fixture_006.chase.png",
+        "fpv": "robot_views/0045_navigate_receptacle_anchor_fixture_006.fpv.png",
+        "map": "robot_views/0045_navigate_receptacle_anchor_fixture_006.map.png",
+        "verify": "robot_views/0045_navigate_receptacle_anchor_fixture_006.verify.png"
+      }
+    },
+    {
+      "index": 22,
+      "label": "0046_place_observed_003",
+      "chapter": "Remote Control",
+      "title": "Remote Control: place at Tvstand",
+      "active_tool": "place",
+      "duration_ms": 900,
+      "frame": "frames/022_remote-control_place.png",
+      "source_views": {
+        "chase": "robot_views/0046_place_observed_003.chase.png",
+        "fpv": "robot_views/0046_place_observed_003.fpv.png",
+        "map": "robot_views/0046_place_observed_003.map.png",
+        "verify": "robot_views/0046_place_observed_003.verify.png"
+      }
+    },
+    {
+      "index": 23,
+      "label": "0049_navigate_object_observed_004",
+      "chapter": "Book",
+      "title": "Book: Nav object",
+      "active_tool": "navigate_to_object",
+      "duration_ms": 900,
+      "frame": "frames/023_book_navigate-to-object.png",
+      "source_views": {
+        "chase": "robot_views/0049_navigate_object_observed_004.chase.png",
+        "fpv": "robot_views/0049_navigate_object_observed_004.fpv.png",
+        "map": "robot_views/0049_navigate_object_observed_004.map.png",
+        "verify": "robot_views/0049_navigate_object_observed_004.verify.png"
+      }
+    },
+    {
+      "index": 24,
+      "label": "0050_pick_observed_004",
+      "chapter": "Book",
+      "title": "Book: Pick",
+      "active_tool": "pick",
+      "duration_ms": 900,
+      "frame": "frames/024_book_pick.png",
+      "source_views": {
+        "chase": "robot_views/0050_pick_observed_004.chase.png",
+        "fpv": "robot_views/0050_pick_observed_004.fpv.png",
+        "map": "robot_views/0050_pick_observed_004.map.png",
+        "verify": "robot_views/0050_pick_observed_004.verify.png"
+      }
+    },
+    {
+      "index": 25,
+      "label": "0051_navigate_receptacle_anchor_fixture_004",
+      "chapter": "Book",
+      "title": "Book: Nav receptacle",
+      "active_tool": "navigate_to_receptacle",
+      "duration_ms": 900,
+      "frame": "frames/025_book_navigate-to-receptacle.png",
+      "source_views": {
+        "chase": "robot_views/0051_navigate_receptacle_anchor_fixture_004.chase.png",
+        "fpv": "robot_views/0051_navigate_receptacle_anchor_fixture_004.fpv.png",
+        "map": "robot_views/0051_navigate_receptacle_anchor_fixture_004.map.png",
+        "verify": "robot_views/0051_navigate_receptacle_anchor_fixture_004.verify.png"
+      }
+    },
+    {
+      "index": 26,
+      "label": "0052_place_inside_observed_004",
+      "chapter": "Book",
+      "title": "Book: place at Shelving Unit",
+      "active_tool": "place_inside",
+      "duration_ms": 900,
+      "frame": "frames/026_book_place-inside.png",
+      "source_views": {
+        "chase": "robot_views/0052_place_inside_observed_004.chase.png",
+        "fpv": "robot_views/0052_place_inside_observed_004.fpv.png",
+        "map": "robot_views/0052_place_inside_observed_004.map.png",
+        "verify": "robot_views/0052_place_inside_observed_004.verify.png"
+      }
+    },
+    {
+      "index": 27,
+      "label": "0054_after",
+      "chapter": "Done",
+      "title": "Cleanup complete",
+      "active_tool": "done",
+      "duration_ms": 1400,
+      "frame": "frames/027_done_done.png",
+      "source_views": {
+        "chase": "robot_views/0054_after.chase.png",
+        "fpv": "robot_views/0054_after.fpv.png",
+        "map": "robot_views/0054_after.map.png",
+        "verify": "robot_views/0054_after.verify.png"
+      }
+    }
+  ]
+}

@@ -2859,6 +2859,8 @@ def _canonical_robot_view_phase(step: dict[str, Any], action: str) -> str:
 def _assert_focused_robot_step(step: dict[str, Any]) -> None:
     focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
     assert focus.get("has_focus") is True, step
+    if _has_reviewable_source_fpv_action_evidence(step):
+        return
     fpv_visibility = focus.get("fpv_visibility") or {}
     verify_visibility = focus.get("visibility") or {}
     visibility_states = [
@@ -2868,6 +2870,24 @@ def _assert_focused_robot_step(step: dict[str, Any]) -> None:
     assert any(state == "grounded" for state in visibility_states) or all(
         state == "unavailable" for state in visibility_states
     ), step
+
+
+def _has_reviewable_source_fpv_action_evidence(step: dict[str, Any]) -> bool:
+    action_evidence = step.get("action_evidence")
+    if not isinstance(action_evidence, dict):
+        return False
+    if action_evidence.get("backend_primitive") != "navigate_to_object":
+        return False
+    if action_evidence.get("candidate_state") != "navigation_authorized":
+        return False
+    if action_evidence.get("reviewability_status") != "reviewable":
+        return False
+    if action_evidence.get("locality_status") != "same_waypoint_source_observation":
+        return False
+    if not action_evidence.get("source_observation_id"):
+        return False
+    bbox = action_evidence.get("source_image_bbox")
+    return isinstance(bbox, list) and len(bbox) == 4
 
 
 def _focus_visibility_grounding_state(

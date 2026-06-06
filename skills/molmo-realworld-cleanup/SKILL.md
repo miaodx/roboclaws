@@ -33,24 +33,27 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `blocked_capability` as a real navigation failure and choose another public
    waypoint instead of inventing hidden targets or reading map images directly.
    In `camera-raw` runs, `observe()` returns raw FPV image evidence instead of
-   structured labels. Inspect the image, then call
+   structured labels. Inspect the image, select at most one fresh
+   high-confidence cleanup object from that source observation, then call
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
    evidence_note, image_region, ...)` only when you intend to act on a visual
    candidate. Omit `target_fixture_id` in minimal map mode until grounding
    returns a public `candidate_fixture_id`; do not invent fixture ids from empty
-   fixture hints. Do not pre-register raw-FPV candidates with
+   fixture hints. In minimal map mode, normally omit `source_fixture_id` too; do
+   not guess it from room context or from empty fixture hints. Do not pre-register raw-FPV candidates with
    `roboclaws__declare_visual_candidates`; that producer-registration path is
    for `camera-labels`. Prefer the exact visual class when the image makes it
    clear (`plate`, `cup`, `potato`, `remotecontrol`, `book`, `pillow`); use
    broad cleanup categories when uncertain (`food`, `dish`, `book`, `linen`,
    `toy`, `electronics`, `pillow`) instead of over-specific guesses that are
    likely to miss the public grounding resolver.
-   Use an `image_region` schema the tool accepts, such as
-   `{"type":"bbox","value":[x,y,width,height]}` or
-   `{"type":"verbal_region","value":"front of desk"}`; do not send a bare
-   `{x,y,width,height}` object.
-   Omit `source_fixture_id` when you are not confident which public fixture the
-   image object is resting on. When `navigate_to_visual_candidate` resolves, use
+   Prefer objects with most of the item visible in the frame. Skip permanent
+   fixtures, built-in appliances, wall decor, tiny slivers, reflections, and
+   regions already cleaned or already tried from that same source observation.
+   Use a reviewable bbox region for any candidate you need counted:
+   `{"type":"bbox","value":[x,y,width,height]}`. A verbal region can clarify a
+   bbox, but it is not enough for an actionable cleanup chain; do not send a bare
+   `{x,y,width,height}` object. When `navigate_to_visual_candidate` resolves, use
    its returned `candidate_fixture_id` and `recommended_tool` for placement if
    present.
    Maintain a count of successful grounded cleanup actions. In `camera-raw`
@@ -58,8 +61,9 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    public run configuration; do not call `done` before that many grounded visual
    candidates have been successfully cleaned. If grounding stays unresolved and
    the success count is still below that target, continue sweeping or reobserve
-   from another public waypoint; retry at most once with a broader category or
-   clearer verbal region before moving on.
+   from another public waypoint. You may `adjust_camera` once, observe again,
+   and retry with the fresh `source_observation_id` and a tighter bbox; do not
+   loop on the same source observation/category/region.
    After a successful pick/place for an observed handle, do not act on that same
    handle again. If a later raw-FPV declaration resolves to an already-handled
    object, continue the waypoint sweep and observe for other objects instead of
