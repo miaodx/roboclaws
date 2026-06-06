@@ -43,31 +43,31 @@ def test_ci_live_model_entries_match_provider_profiles() -> None:
     assert [entry.name for entry in MODEL_ENTRIES] == [
         "kimi-k2.6",
         "mimo-v2.5",
-        "kimi-k2.6-camera-raw",
-        "mimo-v2.5-camera-raw",
+        "kimi-k2.6-camera-raw-fpv",
+        "mimo-v2.5-camera-raw-fpv",
     ]
     assert {
         entry.name: (entry.provider_profile, entry.model, entry.secret_env, entry.profile)
         for entry in MODEL_ENTRIES
     } == {
-        "kimi-k2.6": ("kimi-anthropic", "kimi-k2.6", "KIMI_API_KEY", "world-labels"),
+        "kimi-k2.6": ("kimi-anthropic", "kimi-k2.6", "KIMI_API_KEY", "world-oracle-labels"),
         "mimo-v2.5": (
             "mimo-anthropic",
             "mimo-v2.5",
             "MIMO_TP_KEY",
-            "world-labels",
+            "world-oracle-labels",
         ),
-        "kimi-k2.6-camera-raw": (
+        "kimi-k2.6-camera-raw-fpv": (
             "kimi-anthropic",
             "kimi-k2.6",
             "KIMI_API_KEY",
-            "camera-raw",
+            "camera-raw-fpv",
         ),
-        "mimo-v2.5-camera-raw": (
+        "mimo-v2.5-camera-raw-fpv": (
             "mimo-anthropic",
             "mimo-v2.5",
             "MIMO_TP_KEY",
-            "camera-raw",
+            "camera-raw-fpv",
         ),
     }
 
@@ -98,19 +98,19 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
         "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
         "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
     }
-    assert payload["profile"] == "world-labels"
+    assert payload["profile"] == "world-oracle-labels"
     assert payload["generated_mess_count"] == 5
     assert payload["command"][:5] == [
         "just",
         "task::run",
         "household-cleanup",
         "claude",
-        "world-labels",
+        "world-oracle-labels",
     ]
     assert payload["rerun_command"].startswith(
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
-        "just task::run household-cleanup claude world-labels"
+        "just task::run household-cleanup claude world-oracle-labels"
     )
     manifest = json.loads(
         (tmp_path / "site" / "molmo" / "live" / "live-report-manifest.json").read_text(
@@ -127,7 +127,7 @@ def test_dry_run_camera_raw_entry_uses_entry_profile(tmp_path: Path) -> None:
     status = run_matrix.main(
         [
             "--entry",
-            "kimi-k2.6-camera-raw",
+            "kimi-k2.6-camera-raw-fpv",
             "--dry-run",
             "--skip-uv-sync",
             "--skip-prewarm",
@@ -140,23 +140,23 @@ def test_dry_run_camera_raw_entry_uses_entry_profile(tmp_path: Path) -> None:
     )
 
     assert status == 0
-    status_path = tmp_path / "site" / "molmo" / "live" / "kimi-k2.6-camera-raw" / "status.json"
+    status_path = tmp_path / "site" / "molmo" / "live" / "kimi-k2.6-camera-raw-fpv" / "status.json"
     payload = json.loads(status_path.read_text(encoding="utf-8"))
-    assert payload["entry"] == "kimi-k2.6-camera-raw"
+    assert payload["entry"] == "kimi-k2.6-camera-raw-fpv"
     assert payload["label"] == "Kimi K2.6 RAW_FPV"
     assert payload["model"] == "kimi-k2.6"
-    assert payload["profile"] == "camera-raw"
+    assert payload["profile"] == "camera-raw-fpv"
     assert payload["generated_mess_count"] == 10
     assert payload["command"][:5] == [
         "just",
         "task::run",
         "household-cleanup",
         "claude",
-        "camera-raw",
+        "camera-raw-fpv",
     ]
     assert "generated_mess_count=10" in payload["command"]
     assert "generated_mess_count=10" in payload["rerun_command"]
-    assert "just task::run household-cleanup claude camera-raw" in payload["rerun_command"]
+    assert "just task::run household-cleanup claude camera-raw-fpv" in payload["rerun_command"]
 
 
 def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> None:
@@ -165,7 +165,7 @@ def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> Non
     status = run_matrix.main(
         [
             "--entry",
-            "mimo-v2.5-camera-raw",
+            "mimo-v2.5-camera-raw-fpv",
             "--generated-mess-count",
             "12",
             "--dry-run",
@@ -180,7 +180,7 @@ def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> Non
     )
 
     assert status == 0
-    status_path = tmp_path / "site" / "molmo" / "live" / "mimo-v2.5-camera-raw" / "status.json"
+    status_path = tmp_path / "site" / "molmo" / "live" / "mimo-v2.5-camera-raw-fpv" / "status.json"
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["generated_mess_count"] == 12
     assert "generated_mess_count=12" in payload["command"]
@@ -195,7 +195,7 @@ def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, mo
         output_dir=output_dir,
         seed=7,
         generated_mess_count=5,
-        profile="world-labels",
+        profile="world-oracle-labels",
         task="帮我收拾这个房间",
         host="127.0.0.1",
         port=18788,
@@ -251,7 +251,7 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
         policy="claude_agent",
         task="帮我收拾这个房间",
         min_generated_mess_count="5",
-        profile="world-labels",
+        profile="world-oracle-labels",
         server_arg=[],
         claude_model_arg=["--model", "kimi-k2.6"],
         claude_env=[],
@@ -377,7 +377,7 @@ def test_live_agent_runners_default_to_longer_server_startup_timeout(tmp_path: P
             "--min-generated-mess-count",
             "5",
             "--profile",
-            "world-labels",
+            "world-oracle-labels",
         ]
     )
     claude_args = run_claude.parse_args(
@@ -409,7 +409,7 @@ def test_live_agent_runners_default_to_longer_server_startup_timeout(tmp_path: P
             "--min-generated-mess-count",
             "5",
             "--profile",
-            "world-labels",
+            "world-oracle-labels",
         ]
     )
 
@@ -501,7 +501,10 @@ def test_live_codex_prompts_block_plan_tool() -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
 
     initial = run_codex._codex_live_prompt("clean")
-    continuation = run_codex._codex_continuation_prompt(turn_index=1, profile="camera-labels")
+    continuation = run_codex._codex_continuation_prompt(
+        turn_index=1,
+        profile="camera-grounded-labels",
+    )
 
     for prompt in (initial, continuation):
         assert "do not call update_plan" in prompt
@@ -523,9 +526,9 @@ def test_live_codex_prompts_block_plan_tool() -> None:
 def test_live_codex_raw_continuation_prompt_blocks_label_declarations() -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
 
-    continuation = run_codex._codex_continuation_prompt(turn_index=1, profile="camera-raw")
+    continuation = run_codex._codex_continuation_prompt(turn_index=1, profile="camera-raw-fpv")
 
-    assert "For camera-raw observations" in continuation
+    assert "For camera-raw-fpv observations" in continuation
     assert "Do not call declare_visual_candidates" in continuation
     assert "call navigate_to_visual_candidate" in continuation
     assert "copied from fixture_hints" not in continuation
@@ -541,7 +544,7 @@ def test_live_codex_raw_continuation_prompt_blocks_label_declarations() -> None:
     assert 'target_fixture_id=""' in continuation
     assert 'target_fixture_id="None"' in continuation
     assert "target_fixture_id=null" in continuation
-    assert "For camera-labels observations" not in continuation
+    assert "For camera-grounded-labels observations" not in continuation
     assert "server named cleanup" not in continuation
     assert "never use mcp__cleanup__" in continuation
     assert "roboclaws__" in continuation
@@ -553,10 +556,10 @@ def test_live_codex_sanitized_continuation_prompt_uses_contract_first_recovery()
 
     continuation = run_codex._codex_continuation_prompt(
         turn_index=8,
-        profile="world-labels-sanitized",
+        profile="world-public-labels",
     )
 
-    assert "For world-labels-sanitized observations" in continuation
+    assert "For world-public-labels observations" in continuation
     assert "already_handled" in continuation
     assert "do not inspect, navigate to, or pick another handle from the same stale area" in (
         continuation
@@ -583,7 +586,7 @@ def test_live_codex_final_continuation_prompt_prioritizes_required_sweep() -> No
 
     continuation = run_codex._codex_continuation_prompt(
         turn_index=8,
-        profile="world-labels-sanitized",
+        profile="world-public-labels",
         final_turn=True,
     )
 
@@ -605,15 +608,15 @@ def test_live_codex_sanitized_lane_gets_larger_default_turn_budget() -> None:
 
     assert (
         run_codex._codex_max_turns(
-            profile="world-labels-sanitized",
+            profile="world-public-labels",
             requested_continuations=8,
         )
         == 15
     )
-    assert run_codex._codex_max_turns(profile="world-labels", requested_continuations=8) == 9
+    assert run_codex._codex_max_turns(profile="world-oracle-labels", requested_continuations=8) == 9
     assert (
         run_codex._codex_max_turns(
-            profile="world-labels-sanitized",
+            profile="world-public-labels",
             requested_continuations=20,
         )
         == 21
@@ -653,7 +656,7 @@ def test_live_codex_idle_turn_starts_continuation(tmp_path: Path, monkeypatch) -
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -719,7 +722,7 @@ def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-labels",
+        profile="world-oracle-labels",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -792,7 +795,7 @@ def test_live_codex_recovers_from_misrouted_read_mcp_resource_tool_error(
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -864,7 +867,7 @@ def test_live_codex_recovers_from_misrouted_mcp_namespace_tool_error(
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -931,7 +934,7 @@ def test_live_codex_recovers_from_missing_mcp_namespace_tool_error(
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="camera-labels",
+        profile="camera-grounded-labels",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -995,7 +998,7 @@ def test_live_codex_recovers_from_misrouted_undeclared_coding_tool_error(
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -1060,7 +1063,7 @@ def test_live_codex_provider_rate_limit_exits_for_row_retry(tmp_path: Path, monk
         codex_model_arg=[],
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
     )
     runner = run_codex.LiveCodexCleanupRunner(args)
     runner.server_proc = SimpleNamespace(poll=lambda: None)
@@ -1114,7 +1117,7 @@ def test_live_codex_world_labels_checker_defaults_to_official_nav2_floor(
         task="帮我收拾这个房间",
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-labels",
+        profile="world-oracle-labels",
         min_generated_mess_count="5",
         checker_visual_arg=[],
     )
@@ -1151,7 +1154,7 @@ def test_live_codex_world_labels_checker_does_not_duplicate_recipe_flags(
         task="帮我收拾这个房间",
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-labels",
+        profile="world-oracle-labels",
         min_generated_mess_count="5",
         checker_visual_arg=[
             "--require-waypoint-honesty",
@@ -1194,7 +1197,7 @@ def test_live_codex_camera_raw_checker_defaults_to_generated_mess_success_thresh
         task="帮我收拾这个房间",
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
         min_generated_mess_count="5",
         checker_visual_arg=[],
     )
@@ -1232,7 +1235,7 @@ def test_live_codex_semantic_map_build_checker_uses_map_task_identity(
         task="帮我建立这个房间的语义地图",
         backend="molmospaces_subprocess",
         policy="codex_agent",
-        profile="world-labels",
+        profile="world-oracle-labels",
         min_generated_mess_count="5",
         checker_visual_arg=["--require-runtime-metric-map"],
     )
@@ -1277,7 +1280,7 @@ def test_live_claude_camera_raw_checker_requires_all_generated_mess_actions(
         policy="claude_agent",
         task="帮我收拾这个房间",
         min_generated_mess_count="5",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
         server_arg=[],
         claude_model_arg=["--model", "kimi-k2.6"],
         claude_env=[],
@@ -1359,7 +1362,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     camera_raw_published = publish_seed_run(
         source_seed_dir=source_seed,
         publish_root=live_root,
-        entry_name="kimi-k2.6-camera-raw",
+        entry_name="kimi-k2.6-camera-raw-fpv",
         seed=7,
     )
     assert (camera_raw_published / "report.html").is_file()
@@ -1368,7 +1371,7 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         entry_by_name("kimi-k2.6"),
         seed=7,
         generated_mess_count=5,
-        profile="world-labels",
+        profile="world-oracle-labels",
         task="帮我收拾这个房间",
     )
     success.update(
@@ -1381,34 +1384,34 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
         entry_by_name("mimo-v2.5"),
         seed=7,
         generated_mess_count=5,
-        profile="world-labels",
+        profile="world-oracle-labels",
         task="帮我收拾这个房间",
     )
     skipped.update({"status": "skipped", "reason": "missing required secret/env MIMO_TP_KEY"})
     camera_raw = base_status(
-        entry_by_name("kimi-k2.6-camera-raw"),
+        entry_by_name("kimi-k2.6-camera-raw-fpv"),
         seed=7,
         generated_mess_count=5,
-        profile="camera-raw",
+        profile="camera-raw-fpv",
         task="帮我收拾这个房间",
     )
     camera_raw.update(
         {
             "status": "success",
-            "report_path": report_path_for_entry("kimi-k2.6-camera-raw", seed=7),
+            "report_path": report_path_for_entry("kimi-k2.6-camera-raw-fpv", seed=7),
         }
     )
     write_status(status_path_for_entry(live_root, "kimi-k2.6"), success)
     write_status(status_path_for_entry(live_root, "mimo-v2.5"), skipped)
-    write_status(status_path_for_entry(live_root, "kimi-k2.6-camera-raw"), camera_raw)
+    write_status(status_path_for_entry(live_root, "kimi-k2.6-camera-raw-fpv"), camera_raw)
     write_manifest(live_root)
     live_index = write_live_index(live_root)
     live_html = live_index.read_text(encoding="utf-8")
     assert "MolmoSpaces Live Cleanup Reports" in live_html
     assert "kimi-k2.6/seed-7/report.html" in live_html
-    assert "kimi-k2.6-camera-raw/seed-7/report.html" in live_html
+    assert "kimi-k2.6-camera-raw-fpv/seed-7/report.html" in live_html
     assert "Kimi K2.6 RAW_FPV" in live_html
-    assert "camera-raw" in live_html
+    assert "camera-raw-fpv" in live_html
     assert "Rerun locally" in live_html
 
     out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
@@ -1416,9 +1419,9 @@ def test_publish_seed_run_and_pages_index_render_molmo_live_tiles(tmp_path: Path
     assert "MolmoSpaces Live Cleanup (main-only / opt-in CI)" in html
     assert "molmo/live/" in html
     assert "molmo/live/kimi-k2.6/seed-7/report.html" in html
-    assert "molmo/live/kimi-k2.6-camera-raw/seed-7/report.html" in html
+    assert "molmo/live/kimi-k2.6-camera-raw-fpv/seed-7/report.html" in html
     assert "Kimi K2.6 RAW_FPV" in html
-    assert "camera-raw" in html
+    assert "camera-raw-fpv" in html
     assert "MiMo v2.5" in html
     assert "missing required secret/env MIMO_TP_KEY" in html
 
@@ -1444,7 +1447,7 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
         entry_by_name("kimi-k2.6"),
         seed=7,
         generated_mess_count=5,
-        profile="world-labels",
+        profile="world-oracle-labels",
         task="帮我收拾这个房间",
     )
     failed.update(
@@ -1492,7 +1495,7 @@ def test_assemble_ci_live_pages_runs_without_site_packages(tmp_path: Path) -> No
         entry_by_name("kimi-k2.6"),
         seed=7,
         generated_mess_count=5,
-        profile="world-labels",
+        profile="world-oracle-labels",
         task="帮我收拾这个房间",
     )
     status.update({"status": "skipped", "reason": "fixture"})

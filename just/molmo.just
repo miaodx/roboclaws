@@ -11,12 +11,12 @@
 # - claude-live     live Claude Code connected to the cleanup MCP server
 # - openclaw-live   live OpenClaw Gateway connected to the cleanup MCP server
 #
-# Cleanup input/evidence lanes:
-# - smoke           synthetic contract sanity with world labels and semantic report
-# - world-labels    structured labels to the agent; robot-view images are report evidence
-# - world-labels-sanitized structured labels without destination/tool oracle hints
-# - camera-raw      raw camera artifacts to the agent
-# - camera-labels   camera-derived labels to the agent
+# Cleanup evidence lanes:
+# - smoke                  cheap verification preset; uses world-oracle labels
+# - world-oracle-labels    privileged world labels; cleanup upper bound
+# - world-public-labels    public/sanitized world labels without oracle hints
+# - camera-raw-fpv         raw camera artifacts to the agent
+# - camera-grounded-labels camera-derived labels; requires camera_labeler
 #
 # Preferred entrypoints:
 # - just molmo::quick-check
@@ -37,9 +37,10 @@ claude_full_permission_args := "--dangerously-skip-permissions --permission-mode
 default:
     @just --list molmo
 
-# Explicit cleanup lane runner. The parameter remains named `profile` for
-# command compatibility with existing artifacts and recipes.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" visual_grounding="sim" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup":
+# Explicit cleanup evidence-lane runner. The recipe parameter remains named
+# `profile` for positional Just compatibility; public callers should pass the
+# new evidence lane names.
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -54,7 +55,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     map_bundle="{{map_bundle}}"
     cleanup_routine="{{cleanup_routine}}"
     robot_views="{{robot_views}}"
-    visual_grounding="{{visual_grounding}}"
+    camera_labeler="{{camera_labeler}}"
+    visual_grounding=""
     visual_grounding_timeout_s="{{visual_grounding_timeout_s}}"
     semantic_sweep="{{semantic_sweep}}"
     runtime_map_prior="{{runtime_map_prior}}"
@@ -82,7 +84,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     cleanup_routine="${cleanup_routine#cleanup_routine=}"
     robot_views="${robot_views#robot_views=}"
     robot_views="${robot_views#record_robot_views=}"
-    visual_grounding="${visual_grounding#visual_grounding=}"
+    profile="${profile#evidence_lane=}"
+    camera_labeler="${camera_labeler#camera_labeler=}"
+    camera_labeler="${camera_labeler#camera-labeler=}"
     visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout_s=}"
     visual_grounding_timeout_s="${visual_grounding_timeout_s#visual_grounding_timeout=}"
     semantic_sweep="${semantic_sweep#semantic_sweep=}"
@@ -99,6 +103,35 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_name="${task_name#task_name=}"
     task_name="${task_name#task-name=}"
     generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))
+
+    if [[ "$camera_labeler" == visual_grounding=* ]]; then
+      echo "error: visual_grounding is no longer a public task axis; use camera_labeler=<labeler> with evidence_lane=camera-grounded-labels" >&2
+      exit 1
+    fi
+    if [[ "$profile" == "camera-grounded-labels" ]]; then
+      if [[ -z "$camera_labeler" ]]; then
+        echo "error: evidence_lane=camera-grounded-labels requires camera_labeler" >&2
+        exit 1
+      fi
+      case "$camera_labeler" in
+        sim-projected-labels)
+          visual_grounding="sim"
+          ;;
+        grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake|grounding-dino+mimo-v2.5|grounding-dino+mimo-v2-omni|yoloe+mimo-v2.5|grounding-dino+qwen3-vl|mimo-v2.5-direct|qwen3-vl-direct)
+          visual_grounding="$camera_labeler"
+          ;;
+        *)
+          echo "error: unsupported camera_labeler '$camera_labeler'" >&2
+          exit 1
+          ;;
+      esac
+    else
+      if [[ -n "$camera_labeler" ]]; then
+        echo "error: camera_labeler is only valid for evidence_lane=camera-grounded-labels" >&2
+        exit 1
+      fi
+      visual_grounding="sim"
+    fi
 
     case "$driver" in
       direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
@@ -174,7 +207,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         backend="api_semantic_synthetic"
         min_generated_mess_count="5"
         ;;
-      world-labels)
+      world-oracle-labels)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
         visual_args=(--include-robot --robot-name rby1m)
@@ -189,7 +222,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           checker_visual_args=(--require-robot-views "${checker_visual_args[@]}")
         fi
         ;;
-      world-labels-sanitized)
+      world-public-labels)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
         visual_args=(--include-robot --robot-name rby1m)
@@ -204,7 +237,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           checker_visual_args=(--require-robot-views "${checker_visual_args[@]}")
         fi
         ;;
-      camera-raw)
+      camera-raw-fpv)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
         perception_mode="raw_fpv_only"
@@ -220,7 +253,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --min-sweep-coverage 1.0
         )
         ;;
-      camera-labels)
+      camera-grounded-labels)
         backend="molmospaces_subprocess"
         min_generated_mess_count="$generated_mess_count"
         perception_mode="camera_model_policy"
@@ -235,7 +268,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
         ;;
       *)
-        echo "error: unsupported cleanup lane '$profile' (expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)" >&2
+        echo "error: unsupported cleanup evidence_lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
         exit 1
         ;;
     esac
@@ -250,7 +283,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         exit 1
         ;;
     esac
-    if [[ "$profile" == "world-labels" && "$backend" == "isaaclab_subprocess" ]]; then
+    if [[ "$profile" == "world-oracle-labels" && "$backend" == "isaaclab_subprocess" ]]; then
       isaac_min_semantic_accepted_count="$generated_mess_count"
       if [[ "$min_generated_mess_count_override" != "auto" && -n "$min_generated_mess_count_override" ]]; then
         isaac_min_semantic_accepted_count="$min_generated_mess_count_override"
@@ -439,7 +472,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
         prompt_cleanup_count="$generated_mess_count"
-        if [[ "$profile" == "camera-raw" ]]; then
+        if [[ "$profile" == "camera-raw-fpv" ]]; then
           prompt_cleanup_count="$generated_mess_success_threshold"
         fi
         kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count")"
@@ -815,22 +848,22 @@ quick-check driver="mcp-smoke" profile="smoke" seed="7" output_dir="output/molmo
 
 # Canonical human review report: direct cleanup, real MolmoSpaces/RBY1M visuals.
 review-report seeds="1 2 3" output_dir="output/molmo/review-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "direct" "world-labels" "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::cleanup "direct" "world-oracle-labels" "{{seeds}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Deterministic ADR-0003 MCP tool smoke with real MolmoSpaces/RBY1M visuals.
 mcp-smoke-report seed="7" output_dir="output/molmo/mcp-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "mcp-smoke" "world-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::cleanup "mcp-smoke" "world-oracle-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # OpenClaw-shaped/policy-labeled smoke with real MolmoSpaces/RBY1M visuals.
 openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "openclaw-smoke" "world-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+    just molmo::cleanup "openclaw-smoke" "world-oracle-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Raw camera-input evidence report. This proves camera artifact plumbing, not cleanup success.
-camera-raw-report seed="7" output_dir="output/molmo/camera-raw-report" task="帮我收拾这个房间" generated_mess_count="10":
-    just molmo::cleanup "direct" "camera-raw" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
+camera-raw-report seed="7" output_dir="output/molmo/camera-raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
+    just molmo::cleanup "direct" "camera-raw-fpv" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
-codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" host="127.0.0.1" port="18788":
+codex-report seed="7" output_dir="output/molmo/codex-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
     just molmo::cleanup "codex-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Probe a detached live-agent run. Defaults to the latest Codex cleanup report.
@@ -843,7 +876,7 @@ status path="":
     exec .venv/bin/python scripts/molmo_cleanup/summarize_live_run.py
 
 # Live Claude Code report. Starts the cleanup MCP server and launches Claude Code.
-claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" host="127.0.0.1" port="18788":
+claude-report seed="7" output_dir="output/molmo/claude-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" host="127.0.0.1" port="18788":
     just molmo::cleanup "claude-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "{{host}}" "{{port}}"
 
 # Local rehearsal for the opt-in hosted Molmo live CI job.
@@ -1039,7 +1072,7 @@ codex-harness8 mode="dry-run" *overrides:
     "$python_bin" scripts/molmo_cleanup/run_codex_cleanup_harness8.py "${args[@]}"
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
-openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-labels" port="18788":
+openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" port="18788":
     just molmo::cleanup "openclaw-live" "{{profile}}" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}" "0.0.0.0" "{{port}}"
 
 # Fast render-only comparison: current MuJoCo vs Python 3.11 MolmoSpaces Filament.

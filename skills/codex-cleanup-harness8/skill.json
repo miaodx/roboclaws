@@ -2,7 +2,7 @@
   "schema": "roboclaws_skill_manifest_v1",
   "name": "codex-cleanup-harness8",
   "summary": "Run and review the eight-case live Codex household-cleanup regression grid.",
-  "abstraction_level": "harness_skill",
+  "abstraction_level": "agent_skill",
   "role": "cleanup_regression_evidence",
   "status": "active",
   "mcp": {
@@ -25,11 +25,11 @@
     "backend_variants": [
       "molmospaces_subprocess"
     ],
-    "notes": "The grid compares world-labels, sanitized world-labels, Grounding DINO camera labels, and RAW_FPV, with and without a DINO semantic-map-build prior."
+    "notes": "The grid compares world-oracle labels, world-public labels, Grounding DINO camera-grounded labels, and RAW_FPV, with and without a DINO semantic-map-build prior."
   },
   "scripts": [
     {
-      "path": "../../scripts/molmo_cleanup/run_codex_cleanup_harness8.py",
+      "path": "scripts/run_codex_cleanup_harness8.py",
       "kind": "harness",
       "summary": "Builds the eight-row manifest, executes selected rows through just task::run, and renders JSON/HTML summaries."
     }

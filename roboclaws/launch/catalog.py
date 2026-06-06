@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from roboclaws.ai2thor.tasks import AI2THOR_TASK_SPECS
 from roboclaws.games.tasks import GAME_TASK_SPECS
+from roboclaws.household.profiles import (
+    cleanup_profile_names,
+    validate_evidence_lane_camera_labeler,
+)
 from roboclaws.household.tasks import HOUSEHOLD_TASK_SPECS
 from roboclaws.launch.plans import LaunchPlan
 from roboclaws.launch.runners import build_agent_run_argv
@@ -98,6 +102,8 @@ def _split_mode_and_overrides(
         mode = mode.removeprefix("report=")
     elif mode.startswith("profile="):
         mode = mode.removeprefix("profile=")
+    elif mode.startswith("evidence_lane="):
+        mode = mode.removeprefix("evidence_lane=")
     elif "=" in mode:
         overrides.insert(0, mode)
         mode = ""
@@ -114,21 +120,40 @@ def _override_value(overrides: tuple[str, ...], key: str) -> str | None:
     return None
 
 
-def _resolve_evidence_mode(task: str, raw_mode: str) -> tuple[str, str | None, str | None]:
+def _resolve_evidence_mode(
+    task: str,
+    raw_mode: str,
+    overrides: tuple[str, ...],
+) -> tuple[str, str | None, str | None, tuple[str, ...]]:
     spec = TASK_SPECS[task]
     if spec.supported_profiles:
         profile = raw_mode or spec.default_profile
         if profile not in spec.supported_profiles:
             raise LaunchError(
                 f"unsupported household cleanup lane '{raw_mode}'",
-                "expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels",
+                f"expected {'|'.join(cleanup_profile_names())}",
             )
-        return profile, profile, None
+        camera_labeler = _override_value(overrides, "camera_labeler")
+        visual_grounding = _override_value(overrides, "visual_grounding")
+        if visual_grounding and not camera_labeler:
+            raise LaunchError(
+                "visual_grounding is no longer a public task axis",
+                "use camera_labeler=<labeler> with evidence_lane=camera-grounded-labels",
+            )
+        if profile != "smoke":
+            try:
+                validate_evidence_lane_camera_labeler(
+                    evidence_lane=profile,
+                    camera_labeler=camera_labeler,
+                )
+            except ValueError as exc:
+                raise LaunchError(str(exc)) from exc
+        return profile, profile, None, overrides
 
     report = raw_mode or spec.default_report
     if report not in spec.supported_reports:
         raise LaunchError(f"unsupported report '{report}'", "expected visual|minimal")
-    return report, None, report
+    return report, None, report, overrides
 
 
 def resolve_task_launch(args: list[str] | tuple[str, ...]) -> LaunchPlan:
@@ -149,7 +174,7 @@ def resolve_task_launch(args: list[str] | tuple[str, ...]) -> LaunchPlan:
         raise LaunchError(f"driver '{driver}' cannot run task '{task}'")
 
     spec = TASK_SPECS[task]
-    evidence_mode, profile, report = _resolve_evidence_mode(task, mode)
+    evidence_mode, profile, report, overrides = _resolve_evidence_mode(task, mode, overrides)
     backend = _override_value(overrides, "backend") or spec.default_backend
     argv = build_agent_run_argv(
         task=task,

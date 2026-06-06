@@ -41,9 +41,9 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
         "claude-kimi",
         "claude-mimo-v25",
     ]
-    assert [item["lane_id"] for item in grid["axes"]["perception_lanes"]] == [
-        "grounding-dino",
-        "raw-fpv",
+    assert [item["lane_id"] for item in grid["axes"]["evidence_lanes"]] == [
+        "camera-grounded-labels-grounding-dino",
+        "camera-raw-fpv",
     ]
     assert len(grid["setup_rows"]) == 1
     assert len(grid["rows"]) == 12
@@ -54,7 +54,7 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
         "task::run",
         "semantic-map-build",
         "direct",
-        "world-labels",
+        "evidence_lane=world-oracle-labels",
     ]
     assert "map_bundle=assets/maps/molmospaces-procthor-val-0-7" in setup_command
 
@@ -63,7 +63,7 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
     grid = build_apple2apple_test_grid(output_dir=tmp_path / "grid", task="clean")
     rows = _rows_by_id(grid)
 
-    codex_dino = rows["online-codex-api-router-grounding-dino"]
+    codex_dino = rows["online-codex-api-router-camera-grounded-labels-grounding-dino"]
     assert codex_dino["env"] == {"ROBOCLAWS_CODEX_PROVIDER": "codex-env"}
     assert codex_dino["required_env"] == ["CODEX_BASE_URL", "CODEX_API_KEY"]
     assert codex_dino["command"][:5] == [
@@ -71,12 +71,12 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
         "task::run",
         "household-cleanup",
         "codex",
-        "camera-labels",
+        "evidence_lane=camera-grounded-labels",
     ]
-    assert "visual_grounding=grounding-dino" in codex_dino["command"]
+    assert "camera_labeler=grounding-dino" in codex_dino["command"]
     assert not any(item.startswith("runtime_map_prior=") for item in codex_dino["command"])
 
-    offline_raw = rows["offline-claude-mimo-v25-raw-fpv"]
+    offline_raw = rows["offline-claude-mimo-v25-camera-raw-fpv"]
     assert offline_raw["env"] == {
         "ROBOCLAWS_CLAUDE_PROVIDER": "mimo-anthropic",
         "ROBOCLAWS_CLAUDE_MODEL": "mimo-v2.5",
@@ -86,12 +86,12 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
         "task::run",
         "household-cleanup",
         "claude",
-        "camera-raw",
+        "evidence_lane=camera-raw-fpv",
     ]
-    assert "visual_grounding=grounding-dino" in offline_raw["command"]
+    assert not any(item.startswith("camera_labeler=") for item in offline_raw["command"])
     assert f"runtime_map_prior={RUNTIME_MAP_PRIOR_PLACEHOLDER}" in offline_raw["command"]
 
-    claude_kimi = rows["online-claude-kimi-raw-fpv"]
+    claude_kimi = rows["online-claude-kimi-camera-raw-fpv"]
     assert claude_kimi["env"] == {
         "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
         "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
@@ -99,7 +99,7 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
     assert row_rerun_command(claude_kimi).startswith(
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
-        "just task::run household-cleanup claude camera-raw"
+        "just task::run household-cleanup claude evidence_lane=camera-raw-fpv"
     )
 
 
@@ -113,10 +113,11 @@ def test_apple2apple_grid_accepts_explicit_offline_runtime_map_prior(tmp_path: P
     rows = _rows_by_id(grid)
 
     assert (
-        f"runtime_map_prior={prior}" in rows["offline-codex-api-router-grounding-dino"]["command"]
+        f"runtime_map_prior={prior}"
+        in rows["offline-codex-api-router-camera-grounded-labels-grounding-dino"]["command"]
     )
     assert RUNTIME_MAP_PRIOR_PLACEHOLDER not in " ".join(
-        rows["offline-codex-api-router-grounding-dino"]["command"]
+        rows["offline-codex-api-router-camera-grounded-labels-grounding-dino"]["command"]
     )
 
 
@@ -133,7 +134,9 @@ def test_apple2apple_grid_script_dry_run_writes_manifest_and_report(tmp_path: Pa
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     assert manifest["schema"] == GRID_SCHEMA
     assert {row["status"] for row in manifest["rows"]} == {"dry_run"}
-    assert "online-codex-api-router-grounding-dino" in report_path.read_text(encoding="utf-8")
+    assert "online-codex-api-router-camera-grounded-labels-grounding-dino" in report_path.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Path) -> None:
@@ -141,7 +144,7 @@ def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Pat
     output_dir = tmp_path / "grid"
     existing = build_apple2apple_test_grid(output_dir=output_dir, task="clean")
     existing_rows = _rows_by_id(existing)
-    preserved_row = existing_rows["online-codex-api-router-grounding-dino"]
+    preserved_row = existing_rows["online-codex-api-router-camera-grounded-labels-grounding-dino"]
     preserved_row["status"] = "success"
     preserved_row["exit_status"] = 0
     preserved_row["run_result_path"] = str(output_dir / "online-codex" / "run_result.json")
@@ -163,19 +166,24 @@ def test_apple2apple_grid_filtered_execute_preserves_existing_rows(tmp_path: Pat
             "clean",
             "--execute",
             "--row",
-            "online-claude-kimi-raw-fpv",
+            "online-claude-kimi-camera-raw-fpv",
         ]
     )
 
     manifest = json.loads((output_dir / "apple2apple_test_grid.json").read_text(encoding="utf-8"))
     rows = _rows_by_id(manifest)
     assert status == 0
-    assert rows["online-codex-api-router-grounding-dino"]["status"] == "success"
-    assert rows["online-codex-api-router-grounding-dino"]["run_result_path"].endswith(
-        "run_result.json"
+    assert (
+        rows["online-codex-api-router-camera-grounded-labels-grounding-dino"]["status"] == "success"
     )
-    assert rows["online-claude-kimi-raw-fpv"]["status"] == "success"
-    assert rows["online-claude-mimo-v25-grounding-dino"]["status"] == "not_selected"
+    assert rows["online-codex-api-router-camera-grounded-labels-grounding-dino"][
+        "run_result_path"
+    ].endswith("run_result.json")
+    assert rows["online-claude-kimi-camera-raw-fpv"]["status"] == "success"
+    assert (
+        rows["online-claude-mimo-v25-camera-grounded-labels-grounding-dino"]["status"]
+        == "not_selected"
+    )
 
 
 def test_apple2apple_grid_accepts_prior_artifact_when_setup_exits_nonzero(

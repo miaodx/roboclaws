@@ -132,7 +132,7 @@ openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
     just harness::regression local-openclaw "" "" "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
 
 # Live Codex cleanup timing lane. This is the local Docker-backed Codex route
-# with the normal world-labels profile and per-tool robot-view timeline capture
+# with the normal world-oracle evidence lane and per-tool robot-view timeline capture
 # disabled explicitly.
 molmo-cleanup-codex-perf *overrides:
     #!/usr/bin/env bash
@@ -168,7 +168,7 @@ molmo-cleanup-codex-perf *overrides:
       fi
       printf -v "$key" '%s' "$value"
     done
-    cmd=(just molmo::cleanup "codex-live" "world-labels" "$seed" \
+    cmd=(just molmo::cleanup "codex-live" "world-oracle-labels" "$seed" \
       "$output_dir" "$task" "$generated_mess_count" "$host" "$port" "$map_bundle" "skill" "$robot_views")
     if [[ "${ROBOCLAWS_JUST_TRACE:-}" == "1" ]]; then
       printf 'just'
@@ -943,7 +943,7 @@ molmo-isaac-cleanup-smoke *overrides:
       --seed "$seed" \
       --task "$task" \
       --backend isaaclab_subprocess \
-      --cleanup-profile world-labels \
+      --cleanup-profile world-oracle-labels \
       --fixture-hint-mode room_only \
       --generated-mess-count "$generated_mess_count" \
       --scene-source "$scene_source" \
@@ -985,7 +985,7 @@ molmo-isaac-cleanup-smoke *overrides:
       "$run_dir" \
       --expect-backend isaaclab_subprocess \
       --expect-policy deterministic_sweep_baseline \
-      --expect-profile world-labels \
+      --expect-profile world-oracle-labels \
       --min-generated-mess-count "$generated_mess_count" \
       --require-robot-views \
       --require-advisory-scoring \

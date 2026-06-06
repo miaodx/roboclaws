@@ -15,6 +15,11 @@ from roboclaws.household.agibot_map_build_mcp_server import (
     MCP_SERVER_NAME,
     make_agibot_semantic_map_build_mcp,
 )
+from roboclaws.household.profiles import (
+    CAMERA_GROUNDED_LABELS_LANE,
+    camera_labeler_names,
+    cleanup_profile_names,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -36,10 +41,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--real-movement-enabled", action="store_true")
     parser.add_argument(
         "--evidence-lane",
-        choices=("smoke", "world-labels", "camera-raw", "camera-labels"),
-        default="camera-labels",
+        choices=cleanup_profile_names(),
+        default=CAMERA_GROUNDED_LABELS_LANE,
     )
-    parser.add_argument("--visual-grounding", default="grounding-dino")
+    parser.add_argument(
+        "--camera-labeler",
+        choices=camera_labeler_names(),
+        default="grounding-dino",
+    )
     parser.add_argument(
         "--visual-grounding-timeout-s",
         type=float,
@@ -68,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         agibot_map_artifact_dir=args.agibot_map_artifact_dir,
         real_movement_enabled=args.real_movement_enabled,
         evidence_lane=args.evidence_lane,
-        visual_grounding_pipeline_id=args.visual_grounding,
+        visual_grounding_pipeline_id=args.camera_labeler,
         visual_grounding_timeout_s=args.visual_grounding_timeout_s,
     )
     url = f"http://{args.host}:{args.port}/mcp"

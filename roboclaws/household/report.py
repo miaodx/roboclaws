@@ -1515,9 +1515,14 @@ def _cleanup_profile_badges(run_result: dict[str, Any]) -> str:
     metadata = run_result.get("cleanup_profile_metadata") or {}
     if not metadata:
         return ""
+    camera_labeler = metadata.get("camera_labeler", run_result.get("camera_labeler", ""))
     return "".join(
         (
-            _badge("Input lane", metadata.get("profile", run_result.get("cleanup_profile", ""))),
+            _badge(
+                "Evidence lane",
+                metadata.get("evidence_lane", run_result.get("evidence_lane", "")),
+            ),
+            _badge("Camera labeler", camera_labeler) if camera_labeler else "",
             _badge("Agent input", metadata.get("agent_input", "")),
             _badge("Input provenance", metadata.get("input_provenance", "")),
             _badge("Report", metadata.get("report", "")),
@@ -1576,13 +1581,21 @@ def _cleanup_profile_note(run_result: dict[str, Any]) -> str:
     metadata = run_result.get("cleanup_profile_metadata") or {}
     if not metadata:
         return ""
-    profile = metadata.get("profile", run_result.get("cleanup_profile", "unknown"))
+    evidence_lane = metadata.get("evidence_lane", run_result.get("evidence_lane", "unknown"))
+    camera_labeler = metadata.get("camera_labeler", run_result.get("camera_labeler", ""))
     verifiers = ", ".join(str(item) for item in metadata.get("verifiers") or [])
+    labeler_note = (
+        f"Camera labeler: {camera_labeler}. "
+        if camera_labeler
+        else "Camera labeler: not applicable. "
+    )
     note = (
-        f"Cleanup input/evidence lane {profile}: {metadata.get('summary', '')} "
-        "This lane selects what the agent receives and what evidence/report gates "
-        "the run produces; map shape and map priors are controlled separately by "
-        "map_mode and runtime_map_prior. "
+        f"Cleanup evidence lane {evidence_lane}: {metadata.get('summary', '')} "
+        "evidence_lane selects what the agent receives. camera_labeler applies only "
+        "to camera-grounded-labels and selects how camera labels are produced. "
+        f"{labeler_note}"
+        "Map shape and map priors are controlled separately by map_mode and "
+        "runtime_map_prior. "
         f"Agent input: {metadata.get('agent_input', 'unknown')}; "
         f"input provenance: {metadata.get('input_provenance', 'unknown')}; "
         f"report: {metadata.get('report', 'unknown')}; verifier gates: {verifiers}. "
@@ -6456,6 +6469,7 @@ def _camera_model_policy_section(run_result: dict[str, Any]) -> str:
             "<tr>"
             f"<td>{html.escape(str(event.get('observation_id', '')))}</td>"
             f"<td>{html.escape(str(event.get('room_id', '')))}</td>"
+            f"<td>{html.escape(str(evidence.get('camera_labeler') or run_result.get('camera_labeler') or pipeline.get('pipeline_id', '')))}</td>"  # noqa: E501
             f"<td>{html.escape(str(pipeline.get('pipeline_id', '')))}</td>"
             f"<td>{html.escape(str(pipeline.get('status', '')))}</td>"
             f"<td>{html.escape(stage_text)}</td>"
@@ -6465,12 +6479,13 @@ def _camera_model_policy_section(run_result: dict[str, Any]) -> str:
             "</tr>"
         )
     if not rows:
-        rows.append('<tr><td colspan="8">No camera-model candidate events recorded.</td></tr>')
+        rows.append('<tr><td colspan="9">No camera-labeler candidate events recorded.</td></tr>')
     metrics = (
         '<div class="metric-grid">'
         f"{_metric('Events', evidence.get('event_count', 0))}"
         f"{_metric('Candidates', evidence.get('candidate_count', 0))}"
-        f"{_metric('Pipeline', evidence.get('visual_grounding_pipeline_id', 'sim'))}"
+        f"{_metric('Camera labeler', evidence.get('camera_labeler', run_result.get('camera_labeler', '')))}"  # noqa: E501
+        f"{_metric('Service pipeline', evidence.get('visual_grounding_pipeline_id', 'sim'))}"
         f"{_metric('Failures', evidence.get('visual_grounding_failure_count', 0))}"
         f"{_metric('Duplicate rate', evidence.get('duplicate_rate', 0))}"
         f"{_metric('Model', evidence.get('model_provenance', 'unknown'))}"
@@ -6479,16 +6494,17 @@ def _camera_model_policy_section(run_result: dict[str, Any]) -> str:
     )
     table = (
         '<div class="table-wrap"><table><thead><tr><th>Observation</th>'
-        "<th>Room</th><th>Pipeline</th><th>Status</th><th>Stages</th>"
+        "<th>Room</th><th>Camera labeler</th><th>Service pipeline</th>"
+        "<th>Status</th><th>Stages</th>"
         "<th>Failure reason</th><th>Candidates</th><th>Handles</th>"
         "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
     note = evidence.get("policy_note") or (
-        "Camera-model policy candidates are model-labelled public observations, "
+        "Camera labeler candidates are model-labelled public observations, "
         "not private scoring truth."
     )
     return (
-        '<section class="panel camera-model-policy"><h2>Camera Model Policy</h2>'
+        '<section class="panel camera-model-policy"><h2>Camera Labeler Evidence</h2>'
         f'<p class="note">{html.escape(str(note))}</p>{metrics}{table}</section>'
     )
 

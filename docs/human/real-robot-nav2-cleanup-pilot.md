@@ -99,7 +99,7 @@ deterministic client with an operator-approved ROS/Nav2 action client.
 Use the MolmoSpaces world-label report before hardware:
 
 ```bash
-just task::run household-cleanup direct world-labels seed=7 generated_mess_count=10
+just task::run household-cleanup direct evidence_lane=world-oracle-labels seed=7 generated_mess_count=10
 ```
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
@@ -107,14 +107,14 @@ For a live Codex cleanup rehearsal with the supported local runtime, set
 (`xiaomi/mimo-v2.5`, Responses API), then run:
 
 ```bash
-just task::run household-cleanup codex world-labels seed=7 generated_mess_count=10
+just task::run household-cleanup codex evidence_lane=world-oracle-labels seed=7 generated_mess_count=10
 ```
 
 For a local Codex Nav2 acceptance rehearsal, write to a stable proof root and use
 the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
-just task::run household-cleanup codex world-labels \
+just task::run household-cleanup codex evidence_lane=world-oracle-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \
   generated_mess_count=5 \
@@ -141,7 +141,7 @@ uv run python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
   output/molmo/codex-gpt55-nav2-report/<stamp> \
   --expect-backend molmospaces_subprocess \
   --expect-policy codex_agent \
-  --expect-profile world-labels \
+  --expect-profile world-oracle-labels \
   --expect-seeds 7 \
   --min-generated-mess-count 5 \
   --require-agent-driven \

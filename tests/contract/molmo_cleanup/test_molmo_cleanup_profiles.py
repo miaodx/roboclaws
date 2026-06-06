@@ -8,6 +8,7 @@ from roboclaws.household.profiles import (
     ISAACLAB_SUBPROCESS_BACKEND,
     ROBOT_VIEW_REPORT,
     SEMANTIC_REPORT,
+    SIM_PROJECTED_LABELS_CAMERA_LABELER,
     SMOKE_PROFILE,
     WORLD_LABELS_PROFILE,
     WORLD_LABELS_SANITIZED_PROFILE,
@@ -16,6 +17,7 @@ from roboclaws.household.profiles import (
     cleanup_profile_metadata_for_run,
     cleanup_profile_names,
     validate_cleanup_profile_metadata,
+    validate_evidence_lane_camera_labeler,
 )
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
@@ -36,7 +38,16 @@ def test_cleanup_profile_registry_contains_public_profiles_only() -> None:
         CAMERA_LABELS_PROFILE,
     )
 
-    for legacy_name in ("visual", "semantic", "raw-fpv", "camera_model_policy"):
+    for legacy_name in (
+        "visual",
+        "semantic",
+        "raw-fpv",
+        "camera_model_policy",
+        "world-labels",
+        "world-labels-sanitized",
+        "camera-raw",
+        "camera-labels",
+    ):
         with pytest.raises(ValueError):
             cleanup_profile(legacy_name)
 
@@ -65,6 +76,10 @@ def test_cleanup_profile_expands_to_contract_metadata(
     metadata = cleanup_profile_metadata(profile_name)
 
     validate_cleanup_profile_metadata(metadata, expected_profile=profile_name)
+    assert "profile" not in metadata
+    assert metadata["mode"] == profile_name
+    expected_lane = "world-oracle-labels" if profile_name == SMOKE_PROFILE else profile_name
+    assert metadata["evidence_lane"] == expected_lane
     assert metadata["agent_input"] == agent_input
     assert metadata["perception_mode"] == perception_mode
     assert metadata["report"] == report
@@ -89,7 +104,7 @@ def test_world_labels_lane_is_not_image_reasoning_or_map_mode() -> None:
     assert metadata["agent_input"] == "world_labels"
     assert metadata["input_provenance"] == "simulator_state"
     assert metadata["detection_exposure_policy"] == WORLD_LABELS_DETECTION_POLICY
-    assert "input lane" in metadata["summary"].lower()
+    assert "evidence lane" in metadata["summary"].lower()
     assert "not model input for this lane" in metadata["model_input_note"]
     assert "map_mode" in metadata["model_input_note"]
     assert "runtime_map_prior" in metadata["model_input_note"]
@@ -140,3 +155,32 @@ def test_camera_raw_run_metadata_allows_isaac_head_camera_backend() -> None:
     assert metadata["agent_input"] == "raw_camera"
     assert "Isaac" in metadata["summary"]
     assert "robot-mounted head camera" in metadata["model_input_note"]
+
+
+def test_camera_grounded_labels_requires_camera_labeler() -> None:
+    with pytest.raises(ValueError, match="requires camera_labeler"):
+        cleanup_profile_metadata_for_run(
+            profile_name=CAMERA_LABELS_PROFILE,
+            backend=MOLMOSPACES_SUBPROCESS_BACKEND,
+            perception_mode=CAMERA_MODEL_POLICY_MODE,
+            record_robot_views=True,
+        )
+
+    metadata = cleanup_profile_metadata_for_run(
+        profile_name=CAMERA_LABELS_PROFILE,
+        backend=MOLMOSPACES_SUBPROCESS_BACKEND,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        record_robot_views=True,
+        camera_labeler=SIM_PROJECTED_LABELS_CAMERA_LABELER,
+    )
+
+    assert metadata["evidence_lane"] == CAMERA_LABELS_PROFILE
+    assert metadata["camera_labeler"] == SIM_PROJECTED_LABELS_CAMERA_LABELER
+
+
+def test_camera_labeler_rejected_on_world_or_raw_lanes() -> None:
+    with pytest.raises(ValueError, match="only valid"):
+        validate_evidence_lane_camera_labeler(
+            evidence_lane=WORLD_LABELS_PROFILE,
+            camera_labeler=SIM_PROJECTED_LABELS_CAMERA_LABELER,
+        )

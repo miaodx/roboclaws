@@ -78,7 +78,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--cleanup-profile",
         choices=cleanup_profile_names(),
-        help="Public Molmo cleanup profile selected by the command facade.",
+        help="Public cleanup evidence lane or smoke preset selected by the command facade.",
     )
     parser.add_argument(
         "--runtime-map-prior",

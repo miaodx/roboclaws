@@ -244,8 +244,7 @@ def route_readiness(
             ok = bool(override_map.get(gate.id))
             if not ok:
                 message = (
-                    "Attach context, localization, run enablement, and "
-                    "E-stop readiness evidence."
+                    "Attach context, localization, run enablement, and E-stop readiness evidence."
                 )
                 kind = "needs_agibot_context"
         elif gate.kind == "operator_gate":

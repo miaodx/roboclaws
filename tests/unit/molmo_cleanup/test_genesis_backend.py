@@ -678,12 +678,11 @@ def test_genesis_color_profile_adds_explicit_luminance_calibration() -> None:
         "room_01_room_2"
     ] == pytest.approx(GENESIS_COLOR_PROFILE_VIEW_TONE_ADJUSTMENT["room_01_room_2"])
     assert "existing-source" in profile["backend_luminance_gain_source"]
-    assert "Genesis materialized USD visual probe 2026-06-04" in profile[
-        "backend_luminance_gain_source"
-    ]
-    assert "Genesis materialized USD visual probe 2026-06-04" in profile[
-        "backend_rgb_gain_source"
-    ]
-    assert "Genesis baked-texture visual probe 2026-06-04" in profile[
-        "backend_tone_adjustment_source"
-    ]
+    assert (
+        "Genesis materialized USD visual probe 2026-06-04"
+        in profile["backend_luminance_gain_source"]
+    )
+    assert "Genesis materialized USD visual probe 2026-06-04" in profile["backend_rgb_gain_source"]
+    assert (
+        "Genesis baked-texture visual probe 2026-06-04" in profile["backend_tone_adjustment_source"]
+    )

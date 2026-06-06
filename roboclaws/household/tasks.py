@@ -2,15 +2,10 @@
 
 from __future__ import annotations
 
+from roboclaws.household.profiles import cleanup_profile_names
 from roboclaws.launch.task_specs import TaskSpec
 
-HOUSEHOLD_PROFILES: tuple[str, ...] = (
-    "smoke",
-    "world-labels",
-    "world-labels-sanitized",
-    "camera-raw",
-    "camera-labels",
-)
+HOUSEHOLD_PROFILES: tuple[str, ...] = cleanup_profile_names()
 
 HOUSEHOLD_TASK_SPECS: dict[str, TaskSpec] = {
     "semantic-map-build": TaskSpec(
@@ -19,7 +14,7 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSpec] = {
         supported_drivers=("direct", "codex"),
         supported_reports=(),
         default_report=None,
-        default_profile="world-labels",
+        default_profile="world-oracle-labels",
         supported_profiles=HOUSEHOLD_PROFILES,
         default_backend="molmospaces_subprocess",
         prompt_id="semantic_map_build",
@@ -32,7 +27,7 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSpec] = {
         supported_drivers=("direct", "mcp-smoke", "codex", "claude", "openclaw"),
         supported_reports=(),
         default_report=None,
-        default_profile="world-labels",
+        default_profile="world-oracle-labels",
         supported_profiles=HOUSEHOLD_PROFILES,
         default_backend="molmospaces_subprocess",
         prompt_id="household_cleanup",

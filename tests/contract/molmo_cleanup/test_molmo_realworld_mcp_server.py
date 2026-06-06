@@ -184,14 +184,14 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     smoke = _load_smoke_module()
     prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
     command = (
-        "just task::run household-cleanup codex world-labels seed=7 "
+        "just task::run household-cleanup codex world-oracle-labels seed=7 "
         "generated_mess_count=5 map_mode=minimal robot_views=on "
         f"runtime_map_prior={prior} "
         f"output_dir={tmp_path}"
     )
     monkeypatch.setenv(
         "ROBOCLAWS_REPORT_RERUN_COMMAND",
-        "just task::run household-cleanup direct world-labels seed=7",
+        "just task::run household-cleanup direct world-oracle-labels seed=7",
     )
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
@@ -209,7 +209,7 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert run_result["rerun_command"] == command
     assert command in report
-    assert "household-cleanup direct world-labels" not in report
+    assert "household-cleanup direct world-oracle-labels" not in report
 
 
 def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
@@ -513,7 +513,7 @@ def _raw_fpv_camera_raw_server(tmp_path: Path) -> Any:
         agent_driven=True,
         record_robot_views=True,
         perception_mode=RAW_FPV_ONLY_MODE,
-        cleanup_profile="camera-raw",
+        cleanup_profile="camera-raw-fpv",
     )
 
 
@@ -654,7 +654,7 @@ def test_realworld_mcp_raw_fpv_camera_raw_done_requires_complete_live_chains(
 def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chain_gate(
     tmp_path: Path,
 ) -> None:
-    scenario = _empty_cleanup_scenario("mcp-world-labels-readiness-policy-test")
+    scenario = _empty_cleanup_scenario("mcp-world-oracle-labels-readiness-policy-test")
     backend = MolmoSpacesSubprocessBackend(scenario)
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
@@ -673,7 +673,7 @@ def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chai
         for waypoint in metric_map["inspection_waypoints"]:
             server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
             server.call_tool("observe")
-        done = server.call_tool("done", reason="world-labels sweep complete")
+        done = server.call_tool("done", reason="world-oracle-labels sweep complete")
         run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
     finally:
         server.close()
@@ -698,7 +698,7 @@ def test_realworld_mcp_raw_fpv_camera_raw_done_allows_complete_live_chains(
 
     assert done["ok"] is True
     assert len(handled) >= 5
-    assert run_result["cleanup_profile"] == "camera-raw"
+    assert run_result["cleanup_profile"] == "camera-raw-fpv"
     assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] >= 4
 
 

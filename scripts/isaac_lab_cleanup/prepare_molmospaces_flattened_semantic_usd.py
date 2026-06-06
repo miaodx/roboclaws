@@ -711,9 +711,7 @@ def _default_rendering_path_status(
         material_conversion_summary.get("mode") == "none"
         and int(material_conversion_summary.get("texture_scale_rewrite_count") or 0) == 0
     )
-    light_ready = (
-        light_conversion_summary.get("rotate_x") == COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG
-    )
+    light_ready = light_conversion_summary.get("rotate_x") == COMBINED_MATERIAL_LIGHT_ROTATE_X_DEG
     if material_ready and light_ready:
         return "default_rendering_path_uses_combined_material_light"
     return "default_rendering_path_candidate_incomplete"

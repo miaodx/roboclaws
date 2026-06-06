@@ -303,7 +303,12 @@ class LiveClaudeCleanupRunner:
             "--require-advisory-scoring",
             *self.args.checker_visual_arg,
         ]
-        if self.args.profile in {"smoke", "world-labels", "camera-labels", "camera-raw"}:
+        if self.args.profile in {
+            "smoke",
+            "world-oracle-labels",
+            "camera-grounded-labels",
+            "camera-raw-fpv",
+        }:
             checker_args.append("--require-clean-agent-run")
         checker_args.append(str(run_result))
 

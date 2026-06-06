@@ -29,7 +29,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         provider_profile="kimi-anthropic",
         model="kimi-k2.6",
         secret_env="KIMI_API_KEY",
-        profile="world-labels",
+        profile="world-oracle-labels",
     ),
     MolmoLiveModelEntry(
         name="mimo-v2.5",
@@ -37,7 +37,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         provider_profile="mimo-anthropic",
         model="mimo-v2.5",
         secret_env="MIMO_TP_KEY",
-        profile="world-labels",
+        profile="world-oracle-labels",
     ),
     MolmoLiveModelEntry(
         name="kimi-k2.6-camera-raw",
@@ -45,7 +45,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         provider_profile="kimi-anthropic",
         model="kimi-k2.6",
         secret_env="KIMI_API_KEY",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
     ),
     MolmoLiveModelEntry(
         name="mimo-v2.5-camera-raw",
@@ -53,7 +53,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         provider_profile="mimo-anthropic",
         model="mimo-v2.5",
         secret_env="MIMO_TP_KEY",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
     ),
 )
 

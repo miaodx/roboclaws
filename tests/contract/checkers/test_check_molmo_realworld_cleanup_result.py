@@ -220,7 +220,7 @@ def test_checker_rejects_sim_visual_grounding_as_agibot_hardware_evidence(
         ("agent_driven", False),
         ("mcp_server", "molmo_cleanup_realworld"),
         ("policy", "semantic_sweep_baseline"),
-        ("evidence_lane", "world-labels"),
+        ("evidence_lane", "world-oracle-labels"),
         ("perception_mode", "visible_object_detections"),
     ],
 )
@@ -286,7 +286,7 @@ def test_checker_rejects_agibot_map_build_without_semantic_sweep_gate(
     server = agibot.make_agibot_semantic_map_build_mcp(
         run_dir=run_dir,
         context_json=AGIBOT_CONTEXT_FIXTURE,
-        evidence_lane="camera-labels",
+        evidence_lane="camera-grounded-labels",
         visual_grounding_pipeline_id="grounding-dino",
     )
     try:
@@ -2529,7 +2529,7 @@ def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: 
     checker._assert_camera_model_policy(
         result,
         tmp_path,
-        "Camera Model Policy Raw FPV Observations fake-http manual Overlay",
+        "Camera Labeler Evidence Raw FPV Observations fake-http manual Overlay",
         expect_pipeline_id="fake-http",
     )
 
@@ -2549,7 +2549,7 @@ def test_checker_requires_external_visual_grounding_bbox_overlay(tmp_path: Path)
     checker._assert_camera_model_policy(
         result,
         tmp_path,
-        "Camera Model Policy Raw FPV Observations fake-http Overlay",
+        "Camera Labeler Evidence Raw FPV Observations fake-http Overlay",
         expect_pipeline_id="fake-http",
     )
 
@@ -2567,7 +2567,7 @@ def test_checker_rejects_external_visual_grounding_bbox_without_overlay(
         checker._assert_camera_model_policy(
             result,
             tmp_path,
-            "Camera Model Policy Raw FPV Observations fake-http Overlay",
+            "Camera Labeler Evidence Raw FPV Observations fake-http Overlay",
             expect_pipeline_id="fake-http",
         )
 
@@ -3095,7 +3095,7 @@ def _write_agibot_map_build_fixture(tmp_path: Path) -> Path:
     server = agibot.make_agibot_semantic_map_build_mcp(
         run_dir=run_dir,
         context_json=AGIBOT_CONTEXT_FIXTURE,
-        evidence_lane="camera-labels",
+        evidence_lane="camera-grounded-labels",
         visual_grounding_pipeline_id="grounding-dino",
     )
     try:

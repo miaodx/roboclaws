@@ -48,7 +48,7 @@ def test_agibot_molmospaces_sim_route_passes_open_evidence_refresh_prompt() -> N
     route = _trace_task_run(
         "semantic-map-build",
         "direct",
-        "camera-labels",
+        "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "runtime=fixture",
         f"prompt={prompt}",
@@ -70,10 +70,10 @@ def test_agibot_molmospaces_sim_rehearsal_records_open_evidence_refresh_prompt(
     result = run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
         task_name=REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
-        profile="camera-labels",
+        profile="camera-grounded-labels",
         task_prompt=prompt,
         generated_mess_count=5,
-        visual_grounding="sim",
+        camera_labeler="sim",
     )
 
     run_result = json.loads((run_dir / "run_result.json").read_text(encoding="utf-8"))

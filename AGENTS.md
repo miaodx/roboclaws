@@ -352,13 +352,13 @@ just task::run <task> <driver> [report] [key=value ...]
 ```
 
 Use `visual` by default for non-Molmo tasks. For Molmo cleanup, use
-`world-labels` by default and `smoke` when the prompt asks for cheap,
+`world-oracle-labels` by default and `smoke` when the prompt asks for cheap,
 semantic, or fast AI-agent iteration evidence.
 
 Examples:
 
-- "run the semantic map build task" -> `just task::run semantic-map-build direct world-labels`
-- "run the household cleanup task with codex" -> `just task::run household-cleanup codex world-labels`
+- "run the semantic map build task" -> `just task::run semantic-map-build direct evidence_lane=world-oracle-labels`
+- "run the household cleanup task with codex" -> `just task::run household-cleanup codex evidence_lane=world-oracle-labels`
 - "run the household cleanup task with codex with smoke profile" -> `just task::run household-cleanup codex smoke`
 - "run the ai2thor nav task with openclaw" -> `just task::run ai2thor-nav openclaw visual`
 

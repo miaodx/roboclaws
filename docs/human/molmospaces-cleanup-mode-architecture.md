@@ -1,10 +1,21 @@
 # MolmoSpaces Cleanup Profile Architecture
 
-Status: implemented 2026-05-13
+Status: superseded by the two-axis evidence-lane model, 2026-06-06
 
-This note defines a reduced naming model for MolmoSpaces cleanup commands. It is
-intended to guide a later CLI/docs/test refactor without changing behavior by
-itself.
+This note records the older one-axis cleanup-profile model. Current public
+commands use `evidence_lane` plus `camera_labeler`:
+
+```text
+evidence_lane decides what the agent sees.
+camera_labeler only applies to evidence_lane=camera-grounded-labels and decides
+how camera labels are produced.
+```
+
+Current evidence lanes are `world-oracle-labels`, `world-public-labels`,
+`camera-grounded-labels`, and `camera-raw-fpv`. `smoke` remains a cheap
+synthetic verification preset, not a real evidence lane. The old names below
+are retained as historical rationale and should not be copied into new command
+examples.
 
 ## Problem
 
@@ -40,18 +51,18 @@ Do not expose `agent_input`, `report`, `world_backend`, `perception_provenance`,
 or `verifier` as first-class public knobs by default. Those remain profile
 metadata and report metadata.
 
-Preferred command shape:
+Current command shape:
 
 ```bash
-just task::run household-cleanup <driver> <profile>
+just task::run household-cleanup <driver> evidence_lane=<lane> [camera_labeler=<labeler>]
 ```
 
 Examples:
 
 ```bash
-just task::run household-cleanup claude world-labels
-just task::run household-cleanup claude camera-raw
-just task::run household-cleanup direct camera-labels
+just task::run household-cleanup claude evidence_lane=world-oracle-labels
+just task::run household-cleanup claude evidence_lane=camera-raw-fpv
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
 ```
 
 No backward compatibility is required for this refactor. The new names can

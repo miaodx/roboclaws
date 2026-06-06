@@ -10,7 +10,7 @@ set positional-arguments
 default:
     @just --list agent
 
-# Run a normalized task/driver/report-or-profile tuple.
+# Run a normalized task/driver/report-or-evidence-lane tuple.
 run task driver mode="" *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -29,6 +29,9 @@ run task driver mode="" *overrides:
         ;;
       profile=*)
         mode="${mode#profile=}"
+        ;;
+      evidence_lane=*)
+        mode="${mode#evidence_lane=}"
         ;;
       *=*)
         raw_overrides=("$mode" "${raw_overrides[@]}")
@@ -79,7 +82,7 @@ run task driver mode="" *overrides:
         host|max_moves|max_wall_seconds|min_generated_mess_count|\
         map_bundle|map_mode|mode|model|output_dir|personality_probe|photo_max_moves|\
         photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
-        profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
+        camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         scene|scene_index|scene_source|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
         isaac_scene_usd_path|\
@@ -144,12 +147,12 @@ run task driver mode="" *overrides:
     fi
 
     if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
-      profile="${mode:-$(get profile world-labels)}"
+      profile="${mode:-$(get profile "$(get evidence_lane world-oracle-labels)")}"
       case "$profile" in
-        smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)
+        smoke|world-oracle-labels|world-public-labels|camera-raw-fpv|camera-grounded-labels)
           ;;
         *)
-          echo "error: unsupported household cleanup lane '$profile' (expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels)" >&2
+          echo "error: unsupported household cleanup evidence_lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
           exit 1
           ;;
       esac
@@ -167,7 +170,7 @@ run task driver mode="" *overrides:
 
     report_rerun_parts=("just" "task::run" "$task" "$driver")
     if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
-      report_rerun_parts+=("$profile")
+      report_rerun_parts+=("evidence_lane=$profile")
     else
       report_rerun_parts+=("$report")
     fi
@@ -281,7 +284,7 @@ run task driver mode="" *overrides:
         fi
 
         case "$profile" in
-          world-labels)
+          world-oracle-labels)
             default_output_dir="output/household/${task}/${driver}-report"
             ;;
           smoke)
@@ -291,7 +294,7 @@ run task driver mode="" *overrides:
             default_output_dir="output/household/${task}/${driver}-${profile}"
             ;;
         esac
-        if [[ "$task" == "household-cleanup" && "$driver" == "direct" && "$profile" == "world-labels" ]]; then
+        if [[ "$task" == "household-cleanup" && "$driver" == "direct" && "$profile" == "world-oracle-labels" ]]; then
           default_seeds="1 2 3"
         else
           default_seeds="7"
@@ -317,7 +320,39 @@ run task driver mode="" *overrides:
             ;;
         esac
         robot_views="$(get robot_views "$(get record_robot_views auto)")"
-        visual_grounding="$(get visual_grounding sim)"
+        camera_labeler="$(get camera_labeler "")"
+        visual_grounding="$(get visual_grounding "")"
+        if [[ -n "$visual_grounding" ]]; then
+          echo "error: visual_grounding is no longer a public task axis; use camera_labeler=<labeler> with evidence_lane=camera-grounded-labels" >&2
+          exit 1
+        fi
+        case "$profile" in
+          camera-grounded-labels)
+            if [[ -z "$camera_labeler" ]]; then
+              echo "error: evidence_lane=camera-grounded-labels requires camera_labeler" >&2
+              exit 1
+            fi
+            case "$camera_labeler" in
+              sim-projected-labels)
+                visual_grounding="sim"
+                ;;
+              grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake|grounding-dino+mimo-v2.5|grounding-dino+mimo-v2-omni|yoloe+mimo-v2.5|grounding-dino+qwen3-vl|mimo-v2.5-direct|qwen3-vl-direct)
+                visual_grounding="$camera_labeler"
+                ;;
+              *)
+                echo "error: unsupported camera_labeler '$camera_labeler'" >&2
+                exit 1
+                ;;
+            esac
+            ;;
+          *)
+            if [[ -n "$camera_labeler" ]]; then
+              echo "error: camera_labeler is only valid for evidence_lane=camera-grounded-labels" >&2
+              exit 1
+            fi
+            visual_grounding="sim"
+            ;;
+        esac
         visual_grounding_timeout_s="$(get visual_grounding_timeout_s "$(get visual_grounding_timeout auto)")"
         semantic_sweep="$(get semantic_sweep off)"
         if [[ "$task" == "semantic-map-build" ]]; then
@@ -388,8 +423,8 @@ run task driver mode="" *overrides:
             --task-prompt "$prompt"
             --rehearsal-mode "$rehearsal_mode"
             --cleanup-object-count "$cleanup_object_count")
-          if [[ "$profile" == "camera-labels" ]]; then
-            sim_args+=(--visual-grounding "$visual_grounding")
+          if [[ "$profile" == "camera-grounded-labels" ]]; then
+            sim_args+=(--camera-labeler "$camera_labeler")
             if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
               sim_args+=(--visual-grounding-timeout-s "$visual_grounding_timeout_s")
             fi
@@ -423,7 +458,7 @@ run task driver mode="" *overrides:
               sim_args+=(--include-robot --record-robot-views)
               ;;
             auto|"")
-              if [[ "$runtime" == "molmospaces-subprocess" && "$profile" != "world-labels" ]]; then
+              if [[ "$runtime" == "molmospaces-subprocess" && "$profile" != "world-oracle-labels" ]]; then
                 sim_args+=(--include-robot --record-robot-views)
               fi
               ;;
@@ -467,8 +502,10 @@ run task driver mode="" *overrides:
               --policy "$policy"
               --task "$prompt"
               --evidence-lane "$profile"
-              --visual-grounding "$visual_grounding"
             )
+            if [[ "$profile" == "camera-grounded-labels" ]]; then
+              server_args+=(--camera-labeler "$camera_labeler")
+            fi
             if [[ "$visual_grounding_timeout_s" != "auto" && -n "$visual_grounding_timeout_s" ]]; then
               server_args+=(--visual-grounding-timeout-s "$visual_grounding_timeout_s")
             fi
@@ -666,7 +703,7 @@ run task driver mode="" *overrides:
         fi
         run_just molmo::cleanup "$impl_driver" "$profile" "$seeds" \
           "$output_dir" "$prompt" "$generated_mess_count" "$host" "$port" \
-          "$map_bundle" "$cleanup_routine" "$robot_views" "$visual_grounding" \
+          "$map_bundle" "$cleanup_routine" "$robot_views" "$camera_labeler" \
           "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend" \
           "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path" \
           "$min_generated_mess_count" "$generated_mess_object_ids" "$task"

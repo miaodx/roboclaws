@@ -42,7 +42,7 @@ for fast contract checks, but it has no robot camera timeline.
 | Backend | `molmospaces_subprocess` | Real upstream MolmoSpaces/MuJoCo scene. | Required for real visual evidence. |
 | Perception | `visible_object_detections` | Agent gets robot-local observed handles, categories, boxes, and support estimates. | Current best cleanup-success mode. |
 | Perception | `raw_fpv_only` | Agent gets FPV observation artifact, no structured detections before declaration. | Camera evidence contract plus Model-Declared Observation cleanup path for image-capable agents. |
-| Perception | `camera_model_policy` | Raw FPV observation first, then camera-derived candidates become observed handles. | Internal deterministic producer mode behind the `camera-labels` profile, using the shared Model-Declared Observation schema. |
+| Perception | `camera_model_policy` | Raw FPV observation first, then camera-derived candidates become observed handles. | Internal producer mode behind `evidence_lane=camera-grounded-labels`, using the shared Model-Declared Observation schema. |
 | Visuals | `--include-robot --record-robot-views` | Capture RBY1M robot-view timeline. | Required for FPV/chase/map/verification report. |
 | Visuals | omitted | No robot-view timeline. | Fast smoke only. |
 | Map bundle | `assets/maps/molmospaces-procthor-val-0-7` | Selected prebuilt Nav2-shaped static map bundle. | Default for non-smoke Molmo cleanup lanes. |
@@ -70,19 +70,19 @@ are not whole-task MCP tools.
 
 The Model-Declared Observation bridge lets a camera inference producer turn
 public FPV evidence into public `observed_*` handles without exposing private
-scoring truth. It applies to both camera profiles:
+scoring truth. It applies to both camera evidence lanes:
 
-| Profile | Producer | Declaration timing |
+| Evidence lane | Producer | Declaration timing |
 |---------|----------|--------------------|
-| `camera-raw` | Main cleanup agent reasoning over FPV image blocks. | Inline only: call `navigate_to_visual_candidate` when acting on a candidate. |
-| `camera-labels` | Separate camera inference producer, detector, or deterministic harness producer. | Producer registration: call `declare_visual_candidates` after an observation. |
+| `camera-raw-fpv` | Main cleanup agent reasoning over FPV image blocks. | Inline only: call `navigate_to_visual_candidate` when acting on a candidate. |
+| `camera-grounded-labels` | Separate camera inference producer, detector, or deterministic harness producer selected by `camera_labeler`. | Producer registration: call `declare_visual_candidates` after an observation. |
 
-`camera-raw` deliberately has no separate pre-registration strategy in normal
+`camera-raw-fpv` deliberately has no separate pre-registration strategy in normal
 agent runs. That keeps the live image-agent loop close to the operator's mental
 model: observe a raw camera frame, choose one plausible cleanup object, navigate
 to it, then pick and place it. Explicit registration remains useful for
-`camera-labels`, where perception and cleanup selection are separate roles.
-In minimal-map `camera-raw`, omit `target_fixture_id`; use the
+`camera-grounded-labels`, where perception and cleanup selection are separate roles.
+In minimal-map `camera-raw-fpv`, omit `target_fixture_id`; use the
 `candidate_fixture_id` and `recommended_tool` returned by
 `navigate_to_visual_candidate`.
 
@@ -91,14 +91,16 @@ fixture id, evidence note, image region, producer metadata, grounding status,
 and recovery hints. Unresolved declarations may appear in reports but should be
 blocked from `pick`.
 
-## Visual Grounding Pipeline Axis
+## Camera Labeler Axis
 
-`camera-labels` describes the input contract. It should not encode which model
-or detector produced the labels. Use pipeline provenance for that second axis:
+`evidence_lane=camera-grounded-labels` describes the input contract.
+`camera_labeler` is the public producer axis. It is translated at the runner or
+server boundary into the internal Visual Grounding Service pipeline id recorded
+as report provenance.
 
-| Pipeline | Meaning | Implementation Status |
+| Camera labeler | Meaning | Implementation Status |
 |----------|---------|-----------------------|
-| `sim` | Deterministic simulator-state visible-detection baseline. | Current control lane. |
+| `sim-projected-labels` | Deterministic simulator-state labels projected through camera visibility into reviewable camera candidates. | Current control producer. |
 | `fake-http` | Contract-test HTTP service that returns deterministic public candidates. | First implementation phase. |
 | `grounding-dino` | Bbox-first open-vocabulary proposer over RAW_FPV images. | Conservative first proposer target. |
 | `yoloe` | YOLO-family promptable/open-vocabulary proposer over RAW_FPV images. | Proposer speed/latency comparison target. |
@@ -113,13 +115,13 @@ or detector produced the labels. Use pipeline provenance for that second axis:
 Recommended command shape for the future pipeline comparison:
 
 ```bash
-just task::run household-cleanup direct camera-labels visual_grounding=sim
-just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
-just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino
-just task::run household-cleanup direct camera-labels visual_grounding=yoloe
-just task::run household-cleanup direct camera-labels visual_grounding=omdet-turbo
-just task::run household-cleanup direct camera-labels visual_grounding=grounding-dino+mimo-v2.5
-just task::run household-cleanup direct camera-labels visual_grounding=yoloe+mimo-v2.5
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just task::run household-cleanup mcp-smoke evidence_lane=camera-grounded-labels camera_labeler=fake-http
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=yoloe
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=omdet-turbo
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=grounding-dino+mimo-v2.5
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=yoloe+mimo-v2.5
 ```
 
 `yolo-custom` is not an active pipeline. Without a planned cleanup-ontology
@@ -130,10 +132,11 @@ For non-sim pipelines, Roboclaws should call an External Visual Grounding
 Service behind `declare_visual_candidates`. The agent should not receive service
 URLs, credentials, image filesystem paths, or model-host details. HTTP failures
 must be recorded as pipeline failures; they must not silently fall back to
-simulator labels unless `visual_grounding=sim` was selected.
+simulator labels unless `camera_labeler=sim-projected-labels` was selected.
 
-`visual_grounding` is selected when launching the runner/server, not passed as a
-cleanup MCP tool argument. Agents should continue to call
+`camera_labeler` is selected when launching the runner/server, not passed as a
+cleanup MCP tool argument. The runner/server records the internal
+`visual_grounding_pipeline_id` for service provenance. Agents should continue to call
 `declare_visual_candidates(observation_id)` after `observe`; the server decides
 whether empty candidate registration uses `sim` or the configured HTTP pipeline.
 Explicit candidate declarations remain manual Model-Declared Observations and
@@ -384,11 +387,11 @@ Intermediate proposals, rejected proposals, and overlays are diagnostic
 evidence. Benchmark reports may show them in detail; normal cleanup reports
 should show accepted candidates, pipeline summary, failure evidence, and overlay
 links. They must not become MCP response fields or Agent View cleanup
-candidates. For live `camera-labels` agents, prompts should only instruct the
-agent to call `declare_visual_candidates` after `observe`; they should not
+candidates. For live `camera-grounded-labels` agents, prompts should only
+instruct the agent to call `declare_visual_candidates` after `observe`; they should not
 mention service URLs, credentials, image paths, or model-host details.
 
-For the first live `camera-raw` agent gate, prefer semantic acceptability over
+For the first live `camera-raw-fpv` agent gate, prefer semantic acceptability over
 the exact hidden restoration score: require enough preferred/acceptable
 placements, full sweep coverage, declaration-driven actions, and no structured
 label leakage. Keep the exact private scorer in the report as diagnostic
@@ -424,11 +427,11 @@ just molmo::cleanup <driver> <profile>
 | Driver | `codex-live` | Live Codex CLI connected to the cleanup MCP server. |
 | Driver | `claude-live` | Live Claude Code connected to the cleanup MCP server. |
 | Driver | `openclaw-live` | Live OpenClaw Gateway connected to the cleanup MCP server. |
-| Profile | `smoke` | Synthetic contract sanity; world labels; semantic report. |
-| Profile | `world-labels` | MolmoSpaces/RBY1M report; agent receives structured world labels as semantic candidates, then must confirm source-FPV evidence before navigation. |
-| Profile | `world-labels-sanitized` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation authorization. |
-| Profile | `camera-raw` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
-| Profile | `camera-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates. |
+| Preset | `smoke` | Synthetic contract sanity; world labels; semantic report. |
+| Evidence lane | `world-oracle-labels` | MolmoSpaces/RBY1M report; agent receives privileged structured world labels as semantic candidates, then must confirm source-FPV evidence before navigation. |
+| Evidence lane | `world-public-labels` | MolmoSpaces/RBY1M report; agent receives structured detections without destination/tool oracle hints or pre-confirmed navigation authorization. |
+| Evidence lane | `camera-raw-fpv` | MolmoSpaces/RBY1M report; agent receives raw camera artifacts and no structured labels. |
+| Evidence lane | `camera-grounded-labels` | MolmoSpaces/RBY1M report; agent receives camera-derived structured candidates produced by `camera_labeler`. |
 
 `verify::*` remains the confidence-gate namespace: it runs focused tests and then
 delegates scenario execution to `harness::*`. `harness::*` remains the
@@ -443,13 +446,13 @@ Convenience report recipes:
 | Command | Expands To | Use It For |
 |---------|------------|------------|
 | `just molmo::quick-check` | `mcp-smoke smoke` | Cheap contract check; accepts `driver=` and `profile=` overrides. |
-| `just molmo::review-report` | `direct world-labels` | Canonical human review/status report. |
-| `just molmo::mcp-smoke-report` | `mcp-smoke world-labels` | Real visual MCP smoke without a live external agent. |
-| `just molmo::openclaw-smoke-report` | `openclaw-smoke world-labels` | OpenClaw-labeled visual artifact without live Gateway. |
-| `just molmo::camera-raw-report` | `direct camera-raw` | Camera-only observation evidence; not cleanup-success proof. |
-| `just molmo::codex-report` | `codex-live world-labels` | Live Codex agent report. |
-| `just molmo::claude-report` | `claude-live world-labels` | Live Claude Code agent report. |
-| `just molmo::openclaw-report` | `openclaw-live world-labels` | Live OpenClaw Gateway report. |
+| `just molmo::review-report` | `direct world-oracle-labels` | Canonical human review/status report. |
+| `just molmo::mcp-smoke-report` | `mcp-smoke world-oracle-labels` | Real visual MCP smoke without a live external agent. |
+| `just molmo::openclaw-smoke-report` | `openclaw-smoke world-oracle-labels` | OpenClaw-labeled visual artifact without live Gateway. |
+| `just molmo::camera-raw-report` | `direct camera-raw-fpv` | Camera-only observation evidence; not cleanup-success proof. |
+| `just molmo::codex-report` | `codex-live world-oracle-labels` | Live Codex agent report. |
+| `just molmo::claude-report` | `claude-live world-oracle-labels` | Live Claude Code agent report. |
+| `just molmo::openclaw-report` | `openclaw-live world-oracle-labels` | Live OpenClaw Gateway report. |
 
 For live Codex / Claude reports, repo-local `.env` keys are honored the same
 way as the direct navigation demos. Normal users configure keys only; command
@@ -482,7 +485,7 @@ support Codex, but may run supported Claude Code and OpenClaw routes. Use the
 same key set when comparing Kimi/MiMo results across machines:
 
 ```bash
-just task::run household-cleanup claude world-labels seed=7 generated_mess_count=5
+just task::run household-cleanup claude evidence_lane=world-oracle-labels seed=7 generated_mess_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.
@@ -525,9 +528,9 @@ sections.
 | Synthetic cleanup smoke | `api_semantic_synthetic` | Summary, before/after, semantic substeps, score, advisory/private sections where available. No robot timeline. |
 | Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, chase, map, verification. |
 | Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
-| Sanitized detector evidence | `profile=world-labels-sanitized` | Structured detections with producer/source/actionability fields. Destination, tool selection, and navigation authorization remain policy-required until source-FPV confirmation. |
-| Model-declared camera cleanup | `camera-raw` or `camera-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |
-| Camera-label producer evidence | `profile=camera-labels` or `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Model-Declared Observations with visual-grounding pipeline provenance. |
+| Sanitized detector evidence | `evidence_lane=world-public-labels` | Structured detections with producer/source/actionability fields. Destination, tool selection, and navigation authorization remain policy-required until source-FPV confirmation. |
+| Model-declared camera cleanup | `camera-raw-fpv` or `camera-grounded-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |
+| Camera-label producer evidence | `evidence_lane=camera-grounded-labels` or `perception_mode=camera_model_policy` | Raw FPV observation evidence plus Model-Declared Observations with camera-labeler and internal visual-grounding pipeline provenance. |
 | Planner proof attached | `--planner-proof-run-result ...` | Attached Planner Proof, Cleanup Primitive Gate, Planner Cleanup Bridge. |
 | Proof bundle runner | proof-bundle runner script | Separate runner report with selected commands, proof results, blockers, grasp/task-feasibility evidence. |
 
@@ -657,7 +660,7 @@ just harness::molmo-planner-proof-bundle-execute-rerun
 - `raw_fpv_only` proves camera artifact plumbing and, for image-capable agents,
   the Model-Declared Observation cleanup path from FPV evidence to public
   handles.
-- The `camera-raw` live success gate uses semantic acceptability because a tidy
+- The `camera-raw-fpv` live success gate uses semantic acceptability because a tidy
   camera-derived placement can be correct for review while missing the generated
   exact target fixture.
 - `camera_model_policy` remains internal metadata for deterministic simulated

@@ -448,14 +448,11 @@ def _scene_light_rig(value: Any) -> dict[str, Any]:
             ),
         },
         "authored_scene_lights_policy": str(
-            raw.get("authored_scene_lights_policy")
-            or default["authored_scene_lights_policy"]
+            raw.get("authored_scene_lights_policy") or default["authored_scene_lights_policy"]
         ),
         "backend_overrides": {
             "isaac": {
-                "key_intensity": float(
-                    isaac.get("key_intensity", default_isaac["key_intensity"])
-                ),
+                "key_intensity": float(isaac.get("key_intensity", default_isaac["key_intensity"])),
                 "key_rotation_deg": _vec3(
                     isaac.get("key_rotation_deg"),
                     default=default_isaac["key_rotation_deg"],

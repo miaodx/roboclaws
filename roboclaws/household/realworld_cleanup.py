@@ -47,6 +47,7 @@ from roboclaws.household.planner_proof_requests import (
     write_planner_proof_requests,
 )
 from roboclaws.household.profiles import (
+    camera_labeler_from_visual_grounding_pipeline,
     cleanup_profile_metadata_for_run,
     cleanup_profile_names,
 )
@@ -132,7 +133,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--visual-grounding",
         default=SIM_VISUAL_GROUNDING_PIPELINE_ID,
-        help="camera-labels producer pipeline id: sim, fake-http, or a sidecar pipeline id.",
+        help=(
+            "Internal External Visual Grounding Service pipeline id. Public task "
+            "commands should use camera_labeler instead."
+        ),
     )
     parser.add_argument(
         "--visual-grounding-base-url",
@@ -146,7 +150,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--cleanup-profile",
         choices=cleanup_profile_names(),
-        help="Public Molmo cleanup profile selected by the command facade.",
+        help="Public cleanup evidence lane or smoke preset selected by the command facade.",
     )
     parser.add_argument(
         "--semantic-sweep",
@@ -634,6 +638,11 @@ def run_realworld_cleanup(
             backend=backend,
             perception_mode=perception_mode,
             record_robot_views=record_robot_views,
+            camera_labeler=camera_labeler_from_visual_grounding_pipeline(
+                contract.visual_grounding_pipeline_id
+            )
+            if perception_mode == CAMERA_MODEL_POLICY_MODE
+            else None,
         )
         if cleanup_profile is not None
         else None
@@ -668,6 +677,11 @@ def run_realworld_cleanup(
             "source": str(runtime_map_prior_path or ""),
             "observed_object_count": len((runtime_map_prior or {}).get("observed_objects") or []),
         },
+        "camera_labeler": camera_labeler_from_visual_grounding_pipeline(
+            contract.visual_grounding_pipeline_id
+        )
+        if perception_mode == CAMERA_MODEL_POLICY_MODE
+        else "",
         "visual_grounding_pipeline_id": contract.visual_grounding_pipeline_id,
         "requested_generated_mess_count": generated_mess_count,
         "generated_mess_count": private_evaluation["generated_mess_count"],
@@ -719,7 +733,8 @@ def run_realworld_cleanup(
         },
     }
     if profile_metadata is not None:
-        run_result["cleanup_profile"] = profile_metadata["profile"]
+        run_result["evidence_lane"] = profile_metadata["evidence_lane"]
+        run_result["cleanup_profile"] = profile_metadata["evidence_lane"]
         run_result["cleanup_profile_metadata"] = profile_metadata
     attach_nav2_map_bundle_snapshot(
         run_result=run_result,

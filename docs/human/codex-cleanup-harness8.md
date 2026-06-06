@@ -4,7 +4,7 @@ This harness is the standard live Codex regression set for household cleanup
 source changes and cleanup-skill changes.
 
 Use it when a change can affect agent behavior, cleanup prompts, MCP recovery,
-public/private cleanup boundaries, perception lanes, semantic-map priors, or
+public/private cleanup boundaries, evidence lanes, semantic-map priors, or
 report scoring. It intentionally stays smaller than the older apple-to-apple
 grid: one Codex route, four evidence lanes, with and without a Runtime Metric
 Map prior.
@@ -15,20 +15,20 @@ The eight cleanup rows are:
 
 | Row | Cleanup input | Runtime map prior |
 | --- | --- | --- |
-| `direct-world-labels` | `world-labels` | none |
-| `direct-world-labels-sanitized` | `world-labels-sanitized` | none |
-| `direct-camera-labels-grounding-dino` | `camera-labels`, `visual_grounding=grounding-dino` | none |
-| `direct-camera-raw` | `camera-raw` | none |
-| `dino-prior-world-labels` | `world-labels` | DINO semantic-map-build prior |
-| `dino-prior-world-labels-sanitized` | `world-labels-sanitized` | DINO semantic-map-build prior |
-| `dino-prior-camera-labels-grounding-dino` | `camera-labels`, `visual_grounding=grounding-dino` | DINO semantic-map-build prior |
-| `dino-prior-camera-raw` | `camera-raw` | DINO semantic-map-build prior |
+| `direct-world-oracle-labels` | `world-oracle-labels` | none |
+| `direct-world-public-labels` | `world-public-labels` | none |
+| `direct-camera-grounded-labels-grounding-dino` | `camera-grounded-labels`, `camera_labeler=grounding-dino` | none |
+| `direct-camera-raw-fpv` | `camera-raw-fpv` | none |
+| `dino-prior-world-oracle-labels` | `world-oracle-labels` | DINO semantic-map-build prior |
+| `dino-prior-world-public-labels` | `world-public-labels` | DINO semantic-map-build prior |
+| `dino-prior-camera-grounded-labels-grounding-dino` | `camera-grounded-labels`, `camera_labeler=grounding-dino` | DINO semantic-map-build prior |
+| `dino-prior-camera-raw-fpv` | `camera-raw-fpv` | DINO semantic-map-build prior |
 
 The setup row builds the prior once with:
 
 ```bash
-just task::run semantic-map-build direct camera-labels \
-  seed=7 generated_mess_count=10 visual_grounding=grounding-dino
+just task::run semantic-map-build direct evidence_lane=camera-grounded-labels \
+  seed=7 generated_mess_count=10 camera_labeler=grounding-dino
 ```
 
 ## Preflight
@@ -106,7 +106,7 @@ Execute one row:
 ```bash
 just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/0603_refactor_check \
-  row=direct-world-labels-sanitized
+  row=direct-world-public-labels
 ```
 
 Execute a focused subset:
@@ -114,7 +114,7 @@ Execute a focused subset:
 ```bash
 just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/0603_refactor_check \
-  row=dino-prior-world-labels,dino-prior-camera-labels-grounding-dino
+  row=dino-prior-world-oracle-labels,dino-prior-camera-grounded-labels-grounding-dino
 ```
 
 Use an already-built prior:
@@ -154,7 +154,7 @@ run. Treat these as regression triggers:
 - sweep coverage below `1.0`;
 - disturbance count above `0`;
 - semantic accepted count dropping by more than one object in a structured lane;
-- `world-labels-sanitized` falling back to repeated `done`/held loops;
+- `world-public-labels` falling back to repeated `done`/held loops;
 - DINO rows failing due to service, timeout, or declaration contract errors;
 - large wall-time increases not explained by provider rate limits or sidecar
   latency.

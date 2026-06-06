@@ -209,7 +209,7 @@ def test_world_labels_sanitized_observations_omit_destination_oracle_fields() ->
 
     sanitized_contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        cleanup_profile="world-labels-sanitized",
+        cleanup_profile="world-public-labels",
     )
     sanitized_observation = _first_non_empty_observation(sanitized_contract)
     detection = sanitized_observation["visible_object_detections"][0]
@@ -243,7 +243,7 @@ def test_world_labels_sanitized_observations_omit_destination_oracle_fields() ->
 def test_world_labels_sanitized_destination_policy_is_public_category_guidance() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        cleanup_profile="world-labels-sanitized",
+        cleanup_profile="world-public-labels",
     )
 
     policies_by_category = {}
@@ -816,7 +816,7 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
 def test_world_labels_sanitized_runtime_map_keeps_detection_fields_without_destination() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        cleanup_profile="world-labels-sanitized",
+        cleanup_profile="world-public-labels",
     )
 
     _first_non_empty_observation(contract)
@@ -1239,7 +1239,7 @@ def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() 
 def test_world_labels_sanitized_done_rejects_held_policy_required_object() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        cleanup_profile="world-labels-sanitized",
+        cleanup_profile="world-public-labels",
         map_mode=MINIMAL_MAP_MODE,
     )
     detection = _confirm_world_label_detection(
@@ -1284,7 +1284,7 @@ def test_world_labels_sanitized_done_rejects_held_policy_required_object() -> No
 def test_world_labels_sanitized_done_rejects_policy_required_pending_objects() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        cleanup_profile="world-labels-sanitized",
+        cleanup_profile="world-public-labels",
         map_mode=MINIMAL_MAP_MODE,
     )
     observation = _first_non_empty_observation(contract)
@@ -1746,7 +1746,7 @@ def test_realworld_done_rejects_one_missing_public_waypoint() -> None:
 
 def test_world_labels_requested_run_size_does_not_enable_raw_fpv_grounded_chain_gate() -> None:
     contract = _contract(
-        CleanupBackendSession(_empty_cleanup_scenario("world-labels-readiness-policy-test")),
+        CleanupBackendSession(_empty_cleanup_scenario("world-oracle-labels-readiness-policy-test")),
         public_acceptance_config={"requested_run_size": 5},
     )
 
@@ -1754,7 +1754,7 @@ def test_world_labels_requested_run_size_does_not_enable_raw_fpv_grounded_chain_
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
         contract.observe()
 
-    done = contract.done("world-labels run completed after public sweep")
+    done = contract.done("world-oracle-labels run completed after public sweep")
 
     assert done["ok"] is True
     assert done["tool"] == "done"
@@ -1763,7 +1763,7 @@ def test_world_labels_requested_run_size_does_not_enable_raw_fpv_grounded_chain_
 
 def test_camera_raw_requested_run_size_enables_grounded_chain_gate_after_sweep() -> None:
     contract = _contract(
-        CleanupBackendSession(_empty_cleanup_scenario("camera-raw-readiness-policy-test")),
+        CleanupBackendSession(_empty_cleanup_scenario("camera-raw-fpv-readiness-policy-test")),
         perception_mode=RAW_FPV_ONLY_MODE,
         public_acceptance_config={"requested_run_size": 5},
     )
@@ -1788,7 +1788,7 @@ def test_camera_raw_requested_run_size_enables_grounded_chain_gate_after_sweep()
         )
         assert declared["model_declared_observations"][0]["grounding_status"] == "unresolved"
 
-    done = contract.done("camera-raw run finished without grounded cleanup chains")
+    done = contract.done("camera-raw-fpv run finished without grounded cleanup chains")
 
     assert done["ok"] is False
     assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
@@ -1803,7 +1803,9 @@ def test_camera_raw_requested_run_size_enables_grounded_chain_gate_after_sweep()
 
 def test_world_labels_explicit_grounded_chain_gate_uses_world_label_tooling() -> None:
     contract = _contract(
-        CleanupBackendSession(_empty_cleanup_scenario("world-labels-explicit-readiness-test")),
+        CleanupBackendSession(
+            _empty_cleanup_scenario("world-oracle-labels-explicit-readiness-test")
+        ),
         public_acceptance_config={"required_grounded_cleanup_chains": 2},
     )
 
@@ -1811,7 +1813,7 @@ def test_world_labels_explicit_grounded_chain_gate_uses_world_label_tooling() ->
         contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
         contract.observe()
 
-    done = contract.done("world-labels run explicitly requires public chains")
+    done = contract.done("world-oracle-labels run explicitly requires public chains")
 
     assert done["ok"] is False
     assert done["error_reason"] == "insufficient_grounded_cleanup_chains"
