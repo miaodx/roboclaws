@@ -1,0 +1,44 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "visual-result-showcase",
+  "summary": "Turn completed Roboclaws run artifacts into honest, publishable visual showcases.",
+  "abstraction_level": "agent_skill",
+  "role": "artifact_presentation",
+  "status": "active",
+  "mcp": {
+    "profiles": [],
+    "required_tools": [],
+    "optional_tools": [],
+    "privileged_tools": [],
+    "boundary_notes": "Post-run artifact renderer. It does not call MCP tools or robot backends, and must label report-only views and post-run evaluation explicitly."
+  },
+  "capability_requirements": {
+    "profiles": [],
+    "backend_variants": ["artifact_only"],
+    "notes": "Consumes completed run artifacts from any backend that writes robot_view_steps and image files."
+  },
+  "scripts": [
+    {
+      "path": "scripts/render_household_cleanup_showcase.py",
+      "kind": "renderer",
+      "summary": "Compose a chaptered household cleanup GIF, contact sheet, frames, and manifest from run_result.json, trace.jsonl, and robot_views."
+    }
+  ],
+  "evidence_outputs": [
+    "showcase.gif",
+    "contact_sheet.png",
+    "frames/*.png",
+    "manifest.json"
+  ],
+  "lifecycle": {
+    "refactor_signals": [
+      "multiple task-specific showcase renderers duplicate frame layout or trace-bar logic",
+      "blog and README visual outputs need a shared style profile",
+      "video or platform-specific exports become common enough to need reusable presets"
+    ],
+    "promote_to_mcp_when": [
+      "never by default; showcase rendering is post-run artifact presentation, not a robot capability"
+    ]
+  }
+}
+
