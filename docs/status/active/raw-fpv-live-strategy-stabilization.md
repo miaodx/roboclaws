@@ -2,7 +2,7 @@
 
 Owner/session: Codex active thread
 Started: 2026-06-06 Asia/Shanghai
-State: active
+State: PARTIAL stop reached
 
 ## Scope
 
@@ -112,17 +112,110 @@ destination agreement.
 
 ## Next Action
 
-Tune only the RAW-FPV live skill/prompt loop, then rerun:
+Do not continue pure `camera-raw` prompt/loop tuning for this slice. The
+2026-06-06 live gate reached the PARTIAL stop condition: prompt behavior
+improved, but pure RAW-FPV still completed only two grounded cleanup chains
+before low-yield post-sweep retries.
+
+The next justified slice is an explicitly labeled assisted RAW-FPV lane. It
+should preserve source-observation-local FPV evidence, reviewable bboxes, and
+`navigation_authorized` requirements while adding a non-privileged visual
+producer assist or pre-registration path. Do not claim that lane as pure
+`camera-raw` success.
+
+Reference live artifact:
+
+```bash
+output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7
+```
+
+No `run_result.json`, `checker.log`, or `report.html` exists for that row
+because it was manually stopped after ~26 minutes to avoid provider burn.
+
+## 2026-06-06 Prompt-Loop Iteration Result
+
+State: PARTIAL
+
+Changed only the pure RAW-FPV skill/prompt loop:
+
+- `roboclaws/household/raw_fpv_guidance.py`
+- `roboclaws/agents/prompts/household_cleanup.py`
+- `skills/molmo-realworld-cleanup/SKILL.md`
+- `tests/contract/dev_tools/test_task_agent_just_recipes.py`
+
+Prompt behavior now tells Codex to choose at most one fresh high-confidence
+cleanup object per source observation, prefer reviewable bboxes, avoid
+source-fixture guesses in minimal map mode, avoid stale/handled regions, and
+move to a fresh observation instead of looping on the same
+`source_observation_id/category/region`.
+
+Deterministic verification passed:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py
+ruff check roboclaws/agents/prompts/household_cleanup.py roboclaws/household/raw_fpv_guidance.py
+ruff format --check roboclaws/agents/prompts/household_cleanup.py roboclaws/household/raw_fpv_guidance.py
+git diff --check
+```
+
+Live Codex gate:
 
 ```bash
 ROBOCLAWS_CODEX_PROVIDER=codex-env \
 just task::run household-cleanup codex camera-raw seed=7 generated_mess_count=5
 ```
 
-Inspect `trace.jsonl`, `run_result.json`, `agent_view.json`, `checker.log`, and
-`report.html`. Classify any remaining failure as prompt/loop, image
-understanding, visual declaration schema, locality grounding, placement policy,
-or environment.
+Run artifact:
+
+`output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7`
+
+Observed outcome:
+
+- Full public waypoint sweep completed: 14/14 waypoints observed.
+- Two grounded cleanup chains completed:
+  - `observed_006`: `candidate_state=navigation_authorized`,
+    source FPV bbox from `raw_fpv_012`, placed on `anchor_fixture_006`.
+  - `observed_007`: `candidate_state=navigation_authorized`,
+    source FPV bbox from `raw_fpv_014`, placed inside `anchor_fixture_004`.
+- Eleven `navigate_to_visual_candidate` attempts were made; nine ended as
+  `visual_candidate_not_resolved` with reviewable bboxes but
+  `source_observation_locality_unresolved`.
+- No structured world labels, camera-label producer candidates, private target
+  truth, detector service, or fallback authorization was introduced.
+- The run did not call `done`; after full sweep and two chains it continued
+  post-sweep fresh-observation retries below the RAW-FPV success threshold. The
+  run was stopped manually with Ctrl-C after ~26 minutes to avoid provider burn,
+  so no `run_result.json`, `checker.log`, or `report.html` was produced for this
+  row.
+
+Classification:
+
+- Not visual declaration schema: tool calls used accepted bbox regions and
+  omitted minimal-map target/source fixture guesses.
+- Not placement policy: both authorized candidates completed pick and placement
+  chains.
+- Not environment/provider route: Codex, Docker, MCP, MuJoCo/MolmoSpaces, robot
+  views, and waypoint navigation were available.
+- Remaining failure is pure RAW-FPV visual grounding/image-understanding
+  reliability: Codex can now produce some source-observation-local authorized
+  chains, but prompt/loop tuning alone did not reliably find enough candidates
+  from raw FPV image blocks to satisfy the generated mess threshold.
+- Secondary loop issue: when below threshold after a full sweep, the pure
+  prompt keeps making low-yield fresh-observation retries instead of producing a
+  blocked closeout artifact.
+
+Decision:
+
+This satisfies the PARTIAL stop condition for the pure prompt/skill slice. The
+next justified slice should be explicitly labeled assisted RAW-FPV, using a
+non-privileged visual producer assist or pre-registration path while preserving
+the same source-FPV locality, bbox reviewability, and
+`navigation_authorized` requirements. Do not report that assisted lane as pure
+`camera-raw` success.
 
 ## Stop Condition
 

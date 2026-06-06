@@ -1106,11 +1106,17 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
     assert "trace-preserving RAW_FPV skill lane" in prompt
+    assert "at most one fresh high-confidence cleanup object" in prompt
+    assert "skip tiny slivers" in prompt
+    assert "already cleaned or already tried from that same source observation" in prompt
     assert "Use the exact visual class when the image makes it clear" in prompt
     assert "Use broader cleanup categories" in prompt
     assert "only when the exact object class is uncertain" in prompt
-    assert "Prefer image_region={type:verbal_region,value:front of desk}" in prompt
-    assert "image_region={type:bbox,value:[x,y,width,height]} only when" in prompt
+    assert "use image_region={type:bbox,value:[x,y,width,height]}" in prompt
+    assert "plain verbal_region" in prompt
+    assert "Do not retry the same source_observation_id/category/region combination" in prompt
+    assert "fresh source_observation_id and a tighter bbox" in prompt
+    assert "Omit source_fixture_id in minimal map mode" in prompt
     assert "Never send bbox_normalized" in prompt
     assert 'target_fixture_id=""' in prompt
     assert 'target_fixture_id="None"' in prompt
