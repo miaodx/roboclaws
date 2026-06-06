@@ -89,6 +89,11 @@ navigation.
 
 - Real Grounding DINO threshold tuning and GPU benchmark runs remain local
   provider/GPU gates.
+- Pure RAW-FPV live-agent strategy stabilization is tracked separately in
+  `docs/status/active/raw-fpv-live-strategy-stabilization.md`. That follow-up
+  must not weaken source-FPV locality authorization or reintroduce room,
+  source-fixture, broad-category, synthetic bbox, or synthetic observation
+  fallback authorization.
 - Broader report visual redesign is out of scope unless needed for the
   actionability evidence.
 - Planner-backed manipulation proof is a separate primitive gate.
