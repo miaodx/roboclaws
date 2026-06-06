@@ -2,8 +2,8 @@
   <title id="title">Two bad extremes and the skill loop middle path</title>
   <desc id="desc">A three-column comparison between a thin LLM loop, a heavy agent stack, and Roboclaws' skill loop first approach.</desc>
   <defs>
-    <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L9,5 L0,10 Z" fill="#2e3640"/>
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="10" refY="5.5" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L10,5.5 L0,11 Z" fill="#2e3640"/>
     </marker>
     <style>
       .bg { fill: #f7f4ef; }

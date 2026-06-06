@@ -44,7 +44,7 @@
     <text class="body ink" x="800" y="48">Real robot</text>
     <text class="small muted" x="782" y="92">operator gates</text>
     <text class="small muted" x="812" y="124">Nav2</text>
-    <text class="small muted" x="781" y="156">blocked caps</text>
+    <text class="small muted" x="762" y="156">blocked capabilities</text>
   </g>
 
   <text class="mono ink" x="316" y="558">skill should depend on capability profile, not private simulator APIs</text>
