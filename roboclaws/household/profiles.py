@@ -12,16 +12,48 @@ from roboclaws.household.realworld_contract import (
 )
 from roboclaws.household.subprocess_backend import MOLMOSPACES_SUBPROCESS_BACKEND
 
-CLEANUP_PROFILE_SCHEMA = "molmo_cleanup_profile_v1"
+CLEANUP_PROFILE_SCHEMA = "cleanup_evidence_lane_v1"
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
 ISAACLAB_SUBPROCESS_BACKEND = "isaaclab_subprocess"
 
 SMOKE_PROFILE = "smoke"
-WORLD_LABELS_PROFILE = "world-labels"
-WORLD_LABELS_SANITIZED_PROFILE = "world-labels-sanitized"
-CAMERA_RAW_PROFILE = "camera-raw"
-CAMERA_LABELS_PROFILE = "camera-labels"
+WORLD_ORACLE_LABELS_LANE = "world-oracle-labels"
+WORLD_PUBLIC_LABELS_LANE = "world-public-labels"
+CAMERA_GROUNDED_LABELS_LANE = "camera-grounded-labels"
+CAMERA_RAW_FPV_LANE = "camera-raw-fpv"
+
+# Compatibility names for existing Python call sites. The public values are the
+# evidence-lane names above.
+WORLD_LABELS_PROFILE = WORLD_ORACLE_LABELS_LANE
+WORLD_LABELS_SANITIZED_PROFILE = WORLD_PUBLIC_LABELS_LANE
+CAMERA_RAW_PROFILE = CAMERA_RAW_FPV_LANE
+CAMERA_LABELS_PROFILE = CAMERA_GROUNDED_LABELS_LANE
+
+SIM_PROJECTED_LABELS_CAMERA_LABELER = "sim-projected-labels"
+CAMERA_LABELERS: tuple[str, ...] = (
+    SIM_PROJECTED_LABELS_CAMERA_LABELER,
+    "grounding-dino",
+    "yoloe",
+    "omdet-turbo",
+    "yolo-world",
+    "fake-http",
+    "contract-fake",
+    "grounding-dino+mimo-v2.5",
+    "grounding-dino+mimo-v2-omni",
+    "yoloe+mimo-v2.5",
+    "grounding-dino+qwen3-vl",
+    "mimo-v2.5-direct",
+    "qwen3-vl-direct",
+)
+
+_CAMERA_LABELER_TO_VISUAL_GROUNDING_PIPELINE = {
+    SIM_PROJECTED_LABELS_CAMERA_LABELER: "sim",
+}
+_VISUAL_GROUNDING_PIPELINE_TO_CAMERA_LABELER = {
+    "sim": SIM_PROJECTED_LABELS_CAMERA_LABELER,
+}
+
 ISAAC_COMPATIBLE_PROFILES = frozenset(
     {WORLD_LABELS_PROFILE, WORLD_LABELS_SANITIZED_PROFILE, CAMERA_RAW_PROFILE}
 )
@@ -54,6 +86,8 @@ WAYPOINT_HONESTY_VERIFIER = "waypoint_honesty"
 @dataclass(frozen=True)
 class CleanupProfile:
     profile: str
+    evidence_lane: str
+    preset: str
     agent_input: str
     input_provenance: str
     world_backend: str
@@ -69,9 +103,10 @@ class CleanupProfile:
     model_input_note: str
 
     def metadata(self) -> dict[str, Any]:
-        return {
+        metadata = {
             "schema": CLEANUP_PROFILE_SCHEMA,
-            "profile": self.profile,
+            "mode": self.profile,
+            "evidence_lane": self.evidence_lane,
             "agent_input": self.agent_input,
             "input_provenance": self.input_provenance,
             "world_backend": self.world_backend,
@@ -86,11 +121,16 @@ class CleanupProfile:
             "summary": self.summary,
             "model_input_note": self.model_input_note,
         }
+        if self.preset:
+            metadata["preset"] = self.preset
+        return metadata
 
 
 _PROFILES: dict[str, CleanupProfile] = {
     SMOKE_PROFILE: CleanupProfile(
         profile=SMOKE_PROFILE,
+        evidence_lane=WORLD_ORACLE_LABELS_LANE,
+        preset=SMOKE_PROFILE,
         agent_input=WORLD_LABELS_INPUT,
         input_provenance=SYNTHETIC_CONTRACT_PROVENANCE,
         world_backend=SYNTHETIC_CONTRACT_BACKEND,
@@ -105,11 +145,13 @@ _PROFILES: dict[str, CleanupProfile] = {
         summary="Cheap deterministic contract sanity with synthetic world labels.",
         model_input_note=(
             "The agent receives structured world labels from the synthetic contract; "
-            "this profile is not a visual or image-reasoning claim."
+            "this preset is not a visual or image-reasoning claim."
         ),
     ),
     WORLD_LABELS_PROFILE: CleanupProfile(
         profile=WORLD_LABELS_PROFILE,
+        evidence_lane=WORLD_ORACLE_LABELS_LANE,
+        preset="",
         agent_input=WORLD_LABELS_INPUT,
         input_provenance=SIMULATOR_STATE_PROVENANCE,
         world_backend=MOLMOSPACES_SIM_BACKEND,
@@ -126,7 +168,7 @@ _PROFILES: dict[str, CleanupProfile] = {
         record_robot_views=True,
         requires_clean_success=True,
         summary=(
-            "Oracle structured-label cleanup input lane upper bound with RBY1M "
+            "World-oracle structured-label cleanup evidence lane upper bound with RBY1M "
             "robot-view report artifacts."
         ),
         model_input_note=(
@@ -139,6 +181,8 @@ _PROFILES: dict[str, CleanupProfile] = {
     ),
     WORLD_LABELS_SANITIZED_PROFILE: CleanupProfile(
         profile=WORLD_LABELS_SANITIZED_PROFILE,
+        evidence_lane=WORLD_PUBLIC_LABELS_LANE,
+        preset="",
         agent_input=SANITIZED_WORLD_LABELS_INPUT,
         input_provenance=SIMULATOR_STATE_PROVENANCE,
         world_backend=MOLMOSPACES_SIM_BACKEND,
@@ -155,7 +199,7 @@ _PROFILES: dict[str, CleanupProfile] = {
         record_robot_views=True,
         requires_clean_success=True,
         summary=(
-            "Perfect-detector structured-label ablation with destination and "
+            "World-public structured-label ablation with destination and "
             "cleanup oracle fields removed."
         ),
         model_input_note=(
@@ -168,6 +212,8 @@ _PROFILES: dict[str, CleanupProfile] = {
     ),
     CAMERA_RAW_PROFILE: CleanupProfile(
         profile=CAMERA_RAW_PROFILE,
+        evidence_lane=CAMERA_RAW_FPV_LANE,
+        preset="",
         agent_input=RAW_CAMERA_INPUT,
         input_provenance=CAMERA_ARTIFACT_PROVENANCE,
         world_backend=MOLMOSPACES_SIM_BACKEND,
@@ -184,7 +230,7 @@ _PROFILES: dict[str, CleanupProfile] = {
         record_robot_views=True,
         requires_clean_success=True,
         summary=(
-            "Raw camera-input cleanup via model-declared visual observations with "
+            "Camera raw-FPV cleanup via model-declared visual observations with "
             "structured object labels withheld before declaration."
         ),
         model_input_note=(
@@ -195,6 +241,8 @@ _PROFILES: dict[str, CleanupProfile] = {
     ),
     CAMERA_LABELS_PROFILE: CleanupProfile(
         profile=CAMERA_LABELS_PROFILE,
+        evidence_lane=CAMERA_GROUNDED_LABELS_LANE,
+        preset="",
         agent_input=CAMERA_LABELS_INPUT,
         input_provenance=SIMULATED_CAMERA_MODEL_PROVENANCE,
         world_backend=MOLMOSPACES_SIM_BACKEND,
@@ -210,18 +258,31 @@ _PROFILES: dict[str, CleanupProfile] = {
         include_robot=True,
         record_robot_views=True,
         requires_clean_success=True,
-        summary="Camera-derived structured-label cleanup with simulated camera-model provenance.",
+        summary="Camera-grounded structured-label cleanup from FPV observations.",
         model_input_note=(
             "The agent receives camera-derived object candidates registered from raw "
-            "FPV observations. Today those candidates come from deterministic "
-            "simulated camera-model evidence, not real VLM pixel inference."
+            "FPV observations. camera_labeler selects the producer that turns FPV "
+            "evidence into structured candidates."
         ),
     ),
 }
 
 
+def cleanup_evidence_lane_names() -> tuple[str, ...]:
+    return (
+        WORLD_ORACLE_LABELS_LANE,
+        WORLD_PUBLIC_LABELS_LANE,
+        CAMERA_GROUNDED_LABELS_LANE,
+        CAMERA_RAW_FPV_LANE,
+    )
+
+
 def cleanup_profile_names() -> tuple[str, ...]:
     return tuple(_PROFILES)
+
+
+def camera_labeler_names() -> tuple[str, ...]:
+    return CAMERA_LABELERS
 
 
 def cleanup_profile(name: str) -> CleanupProfile:
@@ -238,7 +299,49 @@ def cleanup_profile_metadata(name: str) -> dict[str, Any]:
 
 
 def normalize_cleanup_profile_name(name: str) -> str:
+    normalized = name.strip().lower().replace("_", "-")
+    return normalized
+
+
+def normalize_camera_labeler_name(name: str) -> str:
     return name.strip().lower().replace("_", "-")
+
+
+def camera_labeler_to_visual_grounding_pipeline(camera_labeler: str) -> str:
+    normalized = normalize_camera_labeler_name(camera_labeler)
+    if normalized not in CAMERA_LABELERS:
+        expected = "|".join(CAMERA_LABELERS)
+        raise ValueError(f"unsupported camera_labeler {camera_labeler!r} (expected {expected})")
+    return _CAMERA_LABELER_TO_VISUAL_GROUNDING_PIPELINE.get(normalized, normalized)
+
+
+def camera_labeler_from_visual_grounding_pipeline(pipeline_id: str) -> str:
+    normalized = normalize_camera_labeler_name(pipeline_id)
+    return _VISUAL_GROUNDING_PIPELINE_TO_CAMERA_LABELER.get(normalized, normalized)
+
+
+def validate_evidence_lane_camera_labeler(
+    *,
+    evidence_lane: str,
+    camera_labeler: str | None,
+) -> str:
+    lane = normalize_cleanup_profile_name(evidence_lane)
+    if lane not in cleanup_evidence_lane_names():
+        expected = "|".join(cleanup_evidence_lane_names())
+        raise ValueError(f"unsupported evidence_lane {evidence_lane!r} (expected {expected})")
+    selected_labeler = normalize_camera_labeler_name(camera_labeler or "")
+    if lane == CAMERA_GROUNDED_LABELS_LANE:
+        if not selected_labeler:
+            raise ValueError("evidence_lane=camera-grounded-labels requires camera_labeler")
+        if selected_labeler not in CAMERA_LABELERS:
+            expected = "|".join(CAMERA_LABELERS)
+            raise ValueError(f"unsupported camera_labeler {camera_labeler!r} (expected {expected})")
+        return selected_labeler
+    if selected_labeler:
+        raise ValueError(
+            f"camera_labeler is only valid for evidence_lane={CAMERA_GROUNDED_LABELS_LANE}"
+        )
+    return ""
 
 
 def infer_cleanup_profile_name(
@@ -264,6 +367,7 @@ def cleanup_profile_metadata_for_run(
     backend: str,
     perception_mode: str,
     record_robot_views: bool,
+    camera_labeler: str | None = None,
 ) -> dict[str, Any]:
     selected_name = profile_name or infer_cleanup_profile_name(
         backend=backend,
@@ -271,6 +375,10 @@ def cleanup_profile_metadata_for_run(
         record_robot_views=record_robot_views,
     )
     profile = cleanup_profile(selected_name)
+    selected_camera_labeler = validate_evidence_lane_camera_labeler(
+        evidence_lane=profile.evidence_lane,
+        camera_labeler=camera_labeler,
+    )
     _assert_profile_matches_run(
         profile,
         backend=backend,
@@ -278,6 +386,8 @@ def cleanup_profile_metadata_for_run(
         record_robot_views=record_robot_views,
     )
     metadata = profile.metadata()
+    if selected_camera_labeler:
+        metadata["camera_labeler"] = selected_camera_labeler
     if profile.profile in ISAAC_COMPATIBLE_PROFILES and backend == ISAACLAB_SUBPROCESS_BACKEND:
         metadata["backend"] = backend
         metadata["world_backend"] = ISAAC_SIM_BACKEND
@@ -334,7 +444,7 @@ def validate_cleanup_profile_metadata(
     expected_perception_mode: str | None = None,
 ) -> None:
     assert metadata.get("schema") == CLEANUP_PROFILE_SCHEMA, metadata
-    profile = cleanup_profile(str(metadata.get("profile", "")))
+    profile = cleanup_profile(str(metadata.get("mode") or metadata.get("evidence_lane") or ""))
     expected = profile.metadata()
     for key in (
         "agent_input",
@@ -364,7 +474,10 @@ def validate_cleanup_profile_metadata(
     assert isinstance(metadata.get("record_robot_views"), bool), metadata
     assert metadata.get("verifiers") == expected["verifiers"], metadata
     if expected_profile is not None:
-        assert metadata.get("profile") == normalize_cleanup_profile_name(expected_profile), metadata
+        expected_name = normalize_cleanup_profile_name(expected_profile)
+        expected_profile_obj = cleanup_profile(expected_name)
+        assert metadata.get("mode") == expected_profile_obj.profile, metadata
+        assert metadata.get("evidence_lane") == expected_profile_obj.evidence_lane, metadata
     if expected_backend is not None:
         assert metadata.get("backend") == expected_backend, metadata
     if expected_perception_mode is not None:

@@ -256,9 +256,9 @@ def test_agibot_molmospaces_prehardware_semantic_map_build_starts_from_minimal_m
     result = run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
         task_name=REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
-        profile="camera-labels",
+        profile="camera-grounded-labels",
         generated_mess_count=5,
-        visual_grounding="grounding-dino",
+        camera_labeler="grounding-dino",
         context_json=ROBOT_MAP_9_CONTEXT,
         agibot_map_artifact_dir=ROBOT_MAP_9_ARTIFACT,
     )
@@ -308,7 +308,7 @@ def test_agibot_molmospaces_prehardware_cleanup_uses_same_minimal_runtime_map(
     result = run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
         task_name="household-cleanup",
-        profile="camera-raw",
+        profile="camera-raw-fpv",
         generated_mess_count=5,
     )
 

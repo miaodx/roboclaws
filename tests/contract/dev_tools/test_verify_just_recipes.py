@@ -149,7 +149,7 @@ def test_molmo_operator_surface_exposes_axis_runner_and_aliases() -> None:
         r"^review-report seeds=\"1 2 3\"",
         r"^mcp-smoke-report seed=\"7\"",
         r"^openclaw-smoke-report seed=\"7\"",
-        r"^camera-raw-report seed=\"7\"",
+        r"^camera-raw-fpv-report seed=\"7\"",
         r"^codex-report seed=\"7\"",
         r"^claude-report seed=\"7\"",
         r"^openclaw-report seed=\"7\"",
@@ -163,10 +163,10 @@ def test_molmo_operator_aliases_map_to_truthful_axes() -> None:
 
     expected_calls = (
         'just molmo::cleanup "{{driver}}" "{{profile}}"',
-        'just molmo::cleanup "direct" "world-labels"',
-        'just molmo::cleanup "mcp-smoke" "world-labels"',
-        'just molmo::cleanup "openclaw-smoke" "world-labels"',
-        'just molmo::cleanup "direct" "camera-raw"',
+        'just molmo::cleanup "direct" "world-oracle-labels"',
+        'just molmo::cleanup "mcp-smoke" "world-oracle-labels"',
+        'just molmo::cleanup "openclaw-smoke" "world-oracle-labels"',
+        'just molmo::cleanup "direct" "camera-raw-fpv"',
         'just molmo::cleanup "codex-live" "{{profile}}"',
         'just molmo::cleanup "claude-live" "{{profile}}"',
         'just molmo::cleanup "openclaw-live" "{{profile}}"',

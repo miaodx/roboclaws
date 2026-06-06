@@ -763,7 +763,12 @@ def _run_context(run_result: dict[str, Any]) -> dict[str, Any]:
     return {
         "task": run_result.get("task_name") or "household-cleanup",
         "driver": _driver_name(run_result),
-        "profile": run_result.get("cleanup_profile") or run_result.get("perception_mode") or "run",
+        "profile": (
+            run_result.get("evidence_lane")
+            or run_result.get("cleanup_profile")
+            or run_result.get("perception_mode")
+            or "run"
+        ),
         "backend": run_result.get("backend") or run_result.get("robot", {}).get("backend"),
         "seed": run_result.get("seed"),
     }

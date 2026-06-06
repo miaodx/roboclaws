@@ -76,6 +76,6 @@ snapshot contract:
 For a downstream consumer proof, run a cleanup task with the generated snapshot:
 
 ```bash
-just task::run household-cleanup direct world-labels \
+just task::run household-cleanup direct evidence_lane=world-oracle-labels \
   seed=7 runtime_map_prior=output/maps/robot_map_12/actionable_semantic_map_snapshot.json
 ```

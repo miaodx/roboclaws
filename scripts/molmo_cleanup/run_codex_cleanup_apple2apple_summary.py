@@ -336,7 +336,9 @@ def _artifact_links(
             artifacts.get("before_snapshot") or "before.png",
             run_dir,
         ),
-        "after_snapshot": _resolve_artifact(artifacts.get("after_snapshot") or "after.png", run_dir),
+        "after_snapshot": _resolve_artifact(
+            artifacts.get("after_snapshot") or "after.png", run_dir
+        ),
         "robot_views": _resolve_artifact(artifacts.get("robot_views") or "robot_views", run_dir),
     }
     return {
@@ -631,7 +633,7 @@ def _summary_section(
     It is meant to separate simulator/camera contract evidence from cleanup
     outcome differences.
   </p>
-  <div class="metric-grid">{''.join(_metric(label, value) for label, value in metrics)}</div>
+  <div class="metric-grid">{"".join(_metric(label, value) for label, value in metrics)}</div>
 </section>
 """
 
@@ -662,7 +664,7 @@ def _comparability_section(comparison: dict[str, Any]) -> str:
   </p>
   <div class="table-wrap"><table>
     <thead><tr><th>Axis</th><th>Match</th><th>Values</th></tr></thead>
-    <tbody>{''.join(axis_rows)}</tbody>
+    <tbody>{"".join(axis_rows)}</tbody>
   </table></div>
   <ul>{notes}</ul>
 </section>
@@ -696,7 +698,7 @@ def _lane_result_section(lanes: dict[str, dict[str, Any]]) -> str:
         <th>Sweep</th><th>Disturbances</th><th>Mess count</th><th>Scenario</th>
       </tr>
     </thead>
-    <tbody>{''.join(rows)}</tbody>
+    <tbody>{"".join(rows)}</tbody>
   </table></div>
 </section>
 """
@@ -725,11 +727,11 @@ def _object_result_section(lanes: dict[str, dict[str, Any]]) -> str:
     <tr><th>Category</th><th>Object</th><th>Restored</th><th>Final receptacle</th>
     <th>Semantic</th><th>Reason</th></tr>
   </thead>
-  <tbody>{''.join(rows)}</tbody>
+  <tbody>{"".join(rows)}</tbody>
 </table></div>
 """
         )
-    return f"<section class=\"panel\"><h2>Private Score Objects</h2>{''.join(blocks)}</section>"
+    return f'<section class="panel"><h2>Private Score Objects</h2>{"".join(blocks)}</section>'
 
 
 def _camera_contract_section(lanes: dict[str, dict[str, Any]]) -> str:
@@ -762,7 +764,7 @@ def _camera_contract_section(lanes: dict[str, dict[str, Any]]) -> str:
         <th>Lens source</th><th>Robot import</th><th>Import note</th>
       </tr>
     </thead>
-    <tbody>{''.join(rows)}</tbody>
+    <tbody>{"".join(rows)}</tbody>
   </table></div>
 </section>
 """
@@ -780,7 +782,7 @@ def _snapshot_section(lanes: dict[str, dict[str, Any]]) -> str:
     return f"""
 <section class="panel">
   <h2>Before And After</h2>
-  <div class="image-grid">{''.join(figures)}</div>
+  <div class="image-grid">{"".join(figures)}</div>
 </section>
 """
 
@@ -797,7 +799,7 @@ def _robot_view_sample_section(lanes: dict[str, dict[str, Any]]) -> str:
                 caption = f"{lane_id} {sample.get('label')} {view_key}"
                 figures.append(_figure(views[view_key], caption))
         blocks.append(
-            f"<h3>{html.escape(lane_id)}</h3><div class=\"image-grid\">{''.join(figures)}</div>"
+            f'<h3>{html.escape(lane_id)}</h3><div class="image-grid">{"".join(figures)}</div>'
         )
     return f"""
 <section class="panel">
@@ -806,7 +808,7 @@ def _robot_view_sample_section(lanes: dict[str, dict[str, Any]]) -> str:
     Samples are first/middle/final within each run, so they are useful for
     camera inspection but are not timestep-aligned across lanes.
   </p>
-  {''.join(blocks)}
+  {"".join(blocks)}
 </section>
 """
 
@@ -817,11 +819,11 @@ def _agent_message_section(lanes: dict[str, dict[str, Any]]) -> str:
         blocks.append(
             f"""
 <h3>{html.escape(lane_id)}</h3>
-<p><strong>Terminate reason:</strong> {html.escape(str(lane.get('terminate_reason') or ''))}</p>
-<pre>{html.escape(str(lane.get('codex_last_message') or ''))}</pre>
+<p><strong>Terminate reason:</strong> {html.escape(str(lane.get("terminate_reason") or ""))}</p>
+<pre>{html.escape(str(lane.get("codex_last_message") or ""))}</pre>
 """
         )
-    return f"<section class=\"panel\"><h2>Agent Summaries</h2>{''.join(blocks)}</section>"
+    return f'<section class="panel"><h2>Agent Summaries</h2>{"".join(blocks)}</section>'
 
 
 def _artifact_section(lanes: dict[str, dict[str, Any]]) -> str:
@@ -839,7 +841,7 @@ def _artifact_section(lanes: dict[str, dict[str, Any]]) -> str:
   <h2>Artifacts</h2>
   <div class="table-wrap"><table>
     <thead><tr><th>Lane</th><th>Links</th></tr></thead>
-    <tbody>{''.join(rows)}</tbody>
+    <tbody>{"".join(rows)}</tbody>
   </table></div>
 </section>
 """
@@ -847,7 +849,7 @@ def _artifact_section(lanes: dict[str, dict[str, Any]]) -> str:
 
 def _metric(label: str, value: Any) -> str:
     return (
-        "<div class=\"metric\">"
+        '<div class="metric">'
         f"<span>{html.escape(str(label))}</span>"
         f"<strong>{html.escape(str(value))}</strong>"
         "</div>"
@@ -856,16 +858,16 @@ def _metric(label: str, value: Any) -> str:
 
 def _status_text(matches: bool) -> str:
     if matches:
-        return "<span class=\"good\">yes</span>"
-    return "<span class=\"warn\">no</span>"
+        return '<span class="good">yes</span>'
+    return '<span class="warn">no</span>'
 
 
 def _completion_status(value: Any) -> str:
     text = html.escape(str(value))
     if value == "success":
-        return f"<span class=\"good\">{text}</span>"
+        return f'<span class="good">{text}</span>'
     if value == "failed":
-        return f"<span class=\"bad\">{text}</span>"
+        return f'<span class="bad">{text}</span>'
     return text
 
 
@@ -879,7 +881,7 @@ def _percent(value: Any) -> str:
 def _figure(path: str, caption: str) -> str:
     return (
         "<figure>"
-        f"<img src=\"{html.escape(path, quote=True)}\" alt=\"{html.escape(caption, quote=True)}\">"
+        f'<img src="{html.escape(path, quote=True)}" alt="{html.escape(caption, quote=True)}">'
         f"<figcaption>{html.escape(caption)}</figcaption>"
         "</figure>"
     )

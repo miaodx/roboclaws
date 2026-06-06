@@ -50,8 +50,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=int,
         default=None,
         help=(
-            "Generated mess count override. Defaults to 5 for world-labels entries "
-            "and 10 for camera-raw entries so the RAW_FPV success gate can require "
+            "Generated mess count override. Defaults to 5 for world-oracle-labels entries "
+            "and 10 for camera-raw-fpv entries so the RAW_FPV success gate can require "
             "7 accepted placements."
         ),
     )
@@ -221,7 +221,7 @@ def _entry_profile(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> str:
 def _entry_generated_mess_count(entry: MolmoLiveModelEntry, args: argparse.Namespace) -> int:
     if args.generated_mess_count is not None:
         return int(args.generated_mess_count)
-    if _entry_profile(entry, args) == "camera-raw":
+    if _entry_profile(entry, args) == "camera-raw-fpv":
         return 10
     return 5
 

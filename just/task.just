@@ -1,7 +1,7 @@
 # Human-facing task grammar.
 #
 # Canonical form:
-#   just task::run <task> <driver> [report|profile] [key=value ...]
+#   just task::run <task> <driver> [report|evidence_lane] [key=value ...]
 #
 # Tasks:
 #   ai2thor-nav | territory | coverage | photo-chairs | semantic-map-build |
@@ -14,8 +14,9 @@
 #   visual  - default for non-Molmo tasks, reviewable artifacts for humans
 #   minimal - cheaper semantic evidence for non-Molmo agent iteration
 #
-# Household cleanup input/evidence lanes:
-#   smoke | world-labels | world-labels-sanitized | camera-raw | camera-labels
+# Household cleanup evidence lanes:
+#   smoke | world-oracle-labels | world-public-labels |
+#   camera-grounded-labels camera_labeler=<labeler> | camera-raw-fpv
 
 set working-directory := '..'
 set positional-arguments

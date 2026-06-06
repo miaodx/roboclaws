@@ -32,7 +32,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    sim_costmap_planner` with `route_validation`; treat `ok: false` /
    `blocked_capability` as a real navigation failure and choose another public
    waypoint instead of inventing hidden targets or reading map images directly.
-   In `camera-raw` runs, `observe()` returns raw FPV image evidence instead of
+   In `camera-raw-fpv` runs, `observe()` returns raw FPV image evidence instead of
    structured labels. Inspect the image, select at most one fresh
    high-confidence cleanup object from that source observation, then call
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
@@ -42,7 +42,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    fixture hints. In minimal map mode, normally omit `source_fixture_id` too; do
    not guess it from room context or from empty fixture hints. Do not pre-register raw-FPV candidates with
    `roboclaws__declare_visual_candidates`; that producer-registration path is
-   for `camera-labels`. Prefer the exact visual class when the image makes it
+   for `camera-grounded-labels`. Prefer the exact visual class when the image makes it
    clear (`plate`, `cup`, `potato`, `remotecontrol`, `book`, `pillow`); use
    broad cleanup categories when uncertain (`food`, `dish`, `book`, `linen`,
    `toy`, `electronics`, `pillow`) instead of over-specific guesses that are
@@ -56,7 +56,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `{x,y,width,height}` object. When `navigate_to_visual_candidate` resolves, use
    its returned `candidate_fixture_id` and `recommended_tool` for placement if
    present.
-   Maintain a count of successful grounded cleanup actions. In `camera-raw`
+   Maintain a count of successful grounded cleanup actions. In `camera-raw-fpv`
    acceptance runs, use the target cleanup count from the kickoff prompt or
    public run configuration; do not call `done` before that many grounded visual
    candidates have been successfully cleaned. If grounding stays unresolved and
@@ -71,7 +71,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    If raw-FPV visual grounding is unresolved, continue the waypoint sweep; do
    not call `done` as a system-assessment shortcut while map waypoints remain
    unvisited.
-   In `camera-labels` runs, use
+   In `camera-grounded-labels` runs, use
    `roboclaws__declare_visual_candidates()` to register producer-labelled
    candidates before cleanup selection.
 3. Prefer a local cleanup loop after each useful observation instead of a full
@@ -86,7 +86,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    its `support_estimate.fixture_id`, treat that public candidate as cleanup
    work and use the `candidate_fixture_id` as the target. Do not leave such a
    handle pending just because the current surface looks plausible.
-   In `world-labels-sanitized`, detections intentionally omit
+   In `world-public-labels`, detections intentionally omit
    `candidate_fixture_id`, `cleanup_recommended`, and `recommended_tool`.
    Treat `destination_policy` as public category/fixture-affordance guidance:
    match `destination_policy.preferred_fixture_categories` against

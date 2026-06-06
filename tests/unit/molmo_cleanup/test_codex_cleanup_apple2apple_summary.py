@@ -89,9 +89,10 @@ def test_codex_cleanup_apple2apple_summary_marks_current_state_not_strict(
     assert manifest["comparison"]["axis_checks"]["cleanup_target_signature"]["matches"] is True
     assert manifest["comparison"]["axis_checks"]["head_camera_fpv"]["matches"] is True
     assert manifest["lanes"]["molmospaces-mujoco-codex"]["score"]["restored_text"] == "3/3"
-    assert manifest["lanes"]["isaaclab-rby1m-usd-codex"]["robot_import"][
-        "head_camera_prim_path"
-    ] == "/World/robot_0/head_camera"
+    assert (
+        manifest["lanes"]["isaaclab-rby1m-usd-codex"]["robot_import"]["head_camera_prim_path"]
+        == "/World/robot_0/head_camera"
+    )
     report = (tmp_path / "summary" / "report.html").read_text(encoding="utf-8")
     assert "current_state_not_strict" in report
     assert "robot_0/head_camera" in report
@@ -212,8 +213,12 @@ def _write_run(
                 "object_category": object_category,
                 "restored": completion_status == "success",
                 "actual_location_id": "sink_001" if completion_status == "success" else "held",
-                "actual_receptacle_category": "Sink" if completion_status == "success" else "unknown",
-                "semantic_acceptability": "preferred" if completion_status == "success" else "wrong",
+                "actual_receptacle_category": "Sink"
+                if completion_status == "success"
+                else "unknown",
+                "semantic_acceptability": "preferred"
+                if completion_status == "success"
+                else "wrong",
                 "semantic_reason": "fixture test",
                 "exact_private_match": completion_status == "success",
             }

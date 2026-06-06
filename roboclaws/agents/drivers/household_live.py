@@ -28,4 +28,3 @@ def semantic_map_build_server_argv(python_bin: str) -> list[str]:
         SEMANTIC_MAP_BUILD_SERVER_MODULE,
         SEMANTIC_MAP_BUILD_SERVER_TASK,
     ]
-

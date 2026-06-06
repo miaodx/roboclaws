@@ -310,7 +310,7 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
     demo = _load_demo_module()
     prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
     command = (
-        "just task::run household-cleanup codex world-labels seed=7 "
+        "just task::run household-cleanup codex world-oracle-labels seed=7 "
         "generated_mess_count=5 map_mode=minimal robot_views=on "
         f"runtime_map_prior={prior} "
         f"output_dir={tmp_path}"
@@ -327,7 +327,7 @@ def test_realworld_cleanup_demo_persists_facade_rerun_command(
     report = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert run_result["rerun_command"] == command
     assert command in report
-    assert "household-cleanup direct world-labels" not in report
+    assert "household-cleanup direct world-oracle-labels" not in report
 
 
 def test_realworld_cleanup_demo_can_run_raw_fpv_evidence_mode(tmp_path: Path) -> None:
@@ -375,7 +375,7 @@ def test_realworld_cleanup_demo_can_run_camera_model_policy_mode(tmp_path: Path)
     assert result["camera_model_policy_evidence"]["enabled"] is True
     assert result["camera_model_policy_evidence"]["candidate_count"] >= 1
     assert result["tool_event_counts"]["declare_visual_candidates:request"] >= 1
-    assert "Camera Model Policy" in report
+    assert "Camera Labeler Evidence" in report
     assert "Model-Declared Observations" in report
     assert "Raw FPV Observations" in report
     assert "Semantic Substeps" in report
@@ -397,7 +397,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         include_robot=True,
         record_robot_views=True,
         generated_mess_count=1,
-        cleanup_profile="world-labels",
+        cleanup_profile="world-oracle-labels",
         map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
         require_map_bundle=True,
     )
@@ -516,7 +516,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
         expect_task=None,
         expect_backend="isaaclab_subprocess",
         expect_policy="deterministic_sweep_baseline",
-        expect_profile="world-labels",
+        expect_profile="world-oracle-labels",
         min_generated_mess_count=1,
         require_robot_views=True,
         require_advisory_scoring=True,
@@ -543,7 +543,7 @@ def test_realworld_cleanup_demo_can_run_isaaclab_fake_backend(
             expect_task=None,
             expect_backend="isaaclab_subprocess",
             expect_policy="deterministic_sweep_baseline",
-            expect_profile="world-labels",
+            expect_profile="world-oracle-labels",
             min_generated_mess_count=1,
             require_robot_views=True,
             require_isaac_runtime=True,

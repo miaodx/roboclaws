@@ -195,7 +195,7 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
             "molmo::codex-harness8",
             "dry-run",
             f"output_dir={output_dir}",
-            "row=direct-world-labels-sanitized",
+            "row=direct-world-public-labels",
             "rate_limit_retries=2",
             "rate_limit_retry_sleep_s=0",
         ],
@@ -211,14 +211,14 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
     assert manifest["schema"] == "codex_cleanup_harness8_v1"
     assert len(manifest["rows"]) == 8
     assert {row["row_id"] for row in manifest["rows"]} == {
-        "direct-world-labels",
-        "direct-world-labels-sanitized",
-        "direct-camera-labels-grounding-dino",
-        "direct-camera-raw",
-        "dino-prior-world-labels",
-        "dino-prior-world-labels-sanitized",
-        "dino-prior-camera-labels-grounding-dino",
-        "dino-prior-camera-raw",
+        "direct-world-oracle-labels",
+        "direct-world-public-labels",
+        "direct-camera-grounded-labels-grounding-dino",
+        "direct-camera-raw-fpv",
+        "dino-prior-world-oracle-labels",
+        "dino-prior-world-public-labels",
+        "dino-prior-camera-grounded-labels-grounding-dino",
+        "dino-prior-camera-raw-fpv",
     }
     setup_command = manifest["setup_rows"][0]["command"]
     assert setup_command[:5] == [
@@ -226,9 +226,9 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
         "task::run",
         "semantic-map-build",
         "direct",
-        "camera-labels",
+        "camera-grounded-labels",
     ]
-    assert "visual_grounding=grounding-dino" in setup_command
+    assert "camera_labeler=grounding-dino" in setup_command
 
 
 def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
@@ -236,7 +236,7 @@ def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
         "codex-cleanup-harness8",
         "dry-run",
         "output_dir=/tmp/roboclaws-codex-harness8",
-        "row=direct-world-labels",
+        "row=direct-world-oracle-labels",
     )
 
     assert route == [
@@ -244,7 +244,7 @@ def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
         "harness::codex-cleanup-harness8",
         "dry-run",
         "output_dir=/tmp/roboclaws-codex-harness8",
-        "row=direct-world-labels",
+        "row=direct-world-oracle-labels",
     ]
 
 
@@ -314,7 +314,7 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
 
     assert "molmo-cleanup-codex-perf" in agent_text
     assert re.search(r"^molmo-cleanup-codex-perf \*overrides:", harness_text, re.MULTILINE)
-    assert 'just molmo::cleanup "codex-live" "world-labels"' in harness_text
+    assert 'just molmo::cleanup "codex-live" "world-oracle-labels"' in harness_text
     assert '"skill" "$robot_views"' in harness_text
 
 
@@ -369,7 +369,7 @@ def test_task_module_exposes_only_run_publicly() -> None:
         "control-ui",
         "cleanup-quick-check",
         "cleanup-report",
-        "cleanup-camera-raw",
+        "cleanup-camera-raw-fpv",
         "planner-proof",
         "check",
     )
@@ -389,7 +389,7 @@ def test_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
         "just",
         "molmo::cleanup",
         "codex-live",
-        "world-labels",
+        "world-oracle-labels",
         "7",
         "output/household/household-cleanup/codex-report",
     ]
@@ -409,15 +409,15 @@ def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
 
 
 def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> None:
-    route = trace_task_run("household-cleanup", "direct", "world-labels-sanitized")
+    route = trace_task_run("household-cleanup", "direct", "world-public-labels")
 
     assert route[:6] == [
         "just",
         "molmo::cleanup",
         "direct",
-        "world-labels-sanitized",
+        "world-public-labels",
         "7",
-        "output/household/household-cleanup/direct-world-labels-sanitized",
+        "output/household/household-cleanup/direct-world-public-labels",
     ]
 
 
@@ -430,13 +430,13 @@ def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> Non
         (("household-cleanup", "codex-live"), "unsupported driver 'codex-live'"),
         (("household-cleanup", "claude-live"), "unsupported driver 'claude-live'"),
         (
-            ("household-cleanup", "codex", "world-labels-perf"),
+            ("household-cleanup", "codex", "world-oracle-labels-perf"),
             "unsupported household cleanup lane",
         ),
         (("household-cleanup", "codex", "minimal"), "unsupported household cleanup lane"),
         (("household-cleanup", "codex", "visual"), "unsupported household cleanup lane"),
         (
-            ("household-cleanup", "codex", "camera-raw", "cleanup_routine=mcp"),
+            ("household-cleanup", "codex", "camera-raw-fpv", "cleanup_routine=mcp"),
             "unsupported cleanup_routine",
         ),
     ),
@@ -513,39 +513,43 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     route, plan_trace = trace_task_run_with_plan(
         "household-cleanup",
         "codex",
-        "camera-labels",
+        "camera-grounded-labels",
+        "camera_labeler=grounding-dino",
     )
 
-    assert route[:5] == ["just", "molmo::cleanup", "codex-live", "camera-labels", "7"]
+    assert route[:5] == ["just", "molmo::cleanup", "codex-live", "camera-grounded-labels", "7"]
     assert plan_trace[:2] == ["launch-plan", "task=household-cleanup"]
     assert "driver=codex" in plan_trace
-    assert "mode=camera-labels" in plan_trace
-    assert "profile=camera-labels" in plan_trace
+    assert "mode=camera-grounded-labels" in plan_trace
+    assert "profile=camera-grounded-labels" in plan_trace
     assert "report=" in plan_trace
     assert "backend=molmospaces_subprocess" in plan_trace
     assert "prompt=household_cleanup" in plan_trace
     assert "checker=cleanup_report" in plan_trace
-    assert "target=just agent::run household-cleanup codex camera-labels" in plan_trace
+    assert (
+        "target=just agent::run household-cleanup codex camera-grounded-labels "
+        "camera_labeler=grounding-dino"
+    ) in plan_trace
 
 
 def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
-    plan = resolve_task_launch(("household-cleanup", "codex", "world-labels-sanitized"))
+    plan = resolve_task_launch(("household-cleanup", "codex", "world-public-labels"))
 
-    assert plan.mode == "world-labels-sanitized"
-    assert plan.profile == "world-labels-sanitized"
+    assert plan.mode == "world-public-labels"
+    assert plan.profile == "world-public-labels"
     assert plan.supported_profiles == (
         "smoke",
-        "world-labels",
-        "world-labels-sanitized",
-        "camera-raw",
-        "camera-labels",
+        "world-oracle-labels",
+        "world-public-labels",
+        "camera-raw-fpv",
+        "camera-grounded-labels",
     )
     assert plan.argv == (
         "just",
         "agent::run",
         "household-cleanup",
         "codex",
-        "world-labels-sanitized",
+        "world-public-labels",
     )
 
 
@@ -570,7 +574,7 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
         "just",
         "molmo::cleanup",
         "codex-live",
-        "world-labels",
+        "world-oracle-labels",
         "7",
         "output/custom",
     ]
@@ -580,7 +584,7 @@ def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
     route = trace_task_run(
         "semantic-map-build",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "map_mode=minimal",
         "output_dir=output/custom-map",
     )
@@ -589,7 +593,7 @@ def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
         "just",
         "molmo::cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "7",
         "output/custom-map",
     ]
@@ -611,7 +615,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
     route = trace_task_run(
         "household-cleanup",
         "codex",
-        "world-labels",
+        "world-oracle-labels",
         "map_bundle=molmo-cleanup-default-7",
     )
 
@@ -619,7 +623,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "just",
         "molmo::cleanup",
         "codex-live",
-        "world-labels",
+        "world-oracle-labels",
         "7",
         "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
@@ -634,17 +638,17 @@ def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     route = trace_task_run(
         "household-cleanup",
         "mcp-smoke",
-        "camera-labels",
-        "visual_grounding=fake-http",
+        "camera-grounded-labels",
+        "camera_labeler=fake-http",
     )
 
     assert route[:6] == [
         "just",
         "molmo::cleanup",
         "mcp-smoke",
-        "camera-labels",
+        "camera-grounded-labels",
         "7",
-        "output/household/household-cleanup/mcp-smoke-camera-labels",
+        "output/household/household-cleanup/mcp-smoke-camera-grounded-labels",
     ]
     assert route[13] == "fake-http"
 
@@ -653,7 +657,7 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
     route = trace_task_run(
         "household-cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "backend=isaaclab_subprocess",
         "seed=7",
         "generated_mess_count=1",
@@ -663,7 +667,7 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "just",
         "molmo::cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "7",
         "output/household/household-cleanup/direct-report",
     ]
@@ -684,7 +688,7 @@ def test_molmo_cleanup_route_allows_explicit_legacy_rich_map_mode() -> None:
     route = trace_task_run(
         "household-cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "map_mode=rich",
     )
 
@@ -695,7 +699,8 @@ def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> Non
     route = trace_task_run(
         "semantic-map-build",
         "direct",
-        "camera-labels",
+        "camera-grounded-labels",
+        "camera_labeler=grounding-dino",
         "backend=agibot_gdk",
         "context_json=tests/fixtures/agibot_map_context.completed.json",
         "waypoint_id=wp_sofa_front",
@@ -720,12 +725,12 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
     route = trace_task_run(
         "semantic-map-build",
         "codex",
-        "camera-labels",
+        "camera-grounded-labels",
         "backend=agibot_gdk",
         "context_json=tests/fixtures/agibot_map_context.completed.json",
         "run_dir=output/agibot/map-build-codex/test-run",
         "policy=codex_agibot_semantic_map_build_pilot",
-        "visual_grounding=grounding-dino",
+        "camera_labeler=grounding-dino",
         "visual_grounding_timeout_s=12.5",
     )
 
@@ -741,8 +746,8 @@ def test_semantic_map_build_codex_routes_agibot_backend_to_live_runner() -> None
     assert "--server-arg=--context-json" in route
     assert "--server-arg=tests/fixtures/agibot_map_context.completed.json" in route
     assert "--server-arg=--evidence-lane" in route
-    assert "--server-arg=camera-labels" in route
-    assert "--server-arg=--visual-grounding" in route
+    assert "--server-arg=camera-grounded-labels" in route
+    assert "--server-arg=--camera-labeler" in route
     assert "--server-arg=grounding-dino" in route
     assert "--server-arg=--visual-grounding-timeout-s" in route
     assert "--server-arg=12.5" in route
@@ -758,7 +763,7 @@ def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() ->
     route = trace_task_run(
         "semantic-map-build",
         "codex",
-        "world-labels",
+        "world-oracle-labels",
         "backend=molmospaces_subprocess",
     )
 
@@ -766,7 +771,7 @@ def test_semantic_map_build_codex_routes_molmospaces_backend_to_live_runner() ->
         "just",
         "molmo::cleanup",
         "codex-live",
-        "world-labels",
+        "world-oracle-labels",
         "7",
         "output/household/semantic-map-build/codex-report",
         "帮我建立这个房间的语义地图",
@@ -781,11 +786,11 @@ def test_semantic_map_build_codex_routes_isaac_backend_to_live_runner() -> None:
     route = trace_task_run(
         "semantic-map-build",
         "codex",
-        "world-labels",
+        "world-oracle-labels",
         "backend=isaaclab_subprocess",
     )
 
-    assert route[:4] == ["just", "molmo::cleanup", "codex-live", "world-labels"]
+    assert route[:4] == ["just", "molmo::cleanup", "codex-live", "world-oracle-labels"]
     assert route[15] == "on"
     assert route[17] == "isaaclab_subprocess"
     assert route[-1] == "semantic-map-build"
@@ -795,7 +800,7 @@ def test_household_cleanup_routes_agibot_backend_to_default_cleanup_pilot_cli() 
     route = trace_task_run(
         "household-cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "backend=agibot_gdk",
     )
 
@@ -812,7 +817,7 @@ def test_household_cleanup_routes_agibot_backend_override_to_cleanup_pilot_cli()
     route = trace_task_run(
         "household-cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "backend=agibot_gdk",
         "context_json=tests/fixtures/agibot_map_context.completed.json",
         "agibot_map_artifact_dir=vendors/agibot_sdk/artifacts/maps/robot_map_9",
@@ -839,7 +844,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     route = trace_task_run(
         "household-cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "backend=agibot_molmospaces_sim",
         "context_json=tests/fixtures/agibot_robot_map_9_context.completed.json",
         "agibot_map_artifact_dir=vendors/agibot_sdk/artifacts/maps/robot_map_9",
@@ -863,7 +868,7 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
     assert "--task-name" in route
     assert "household-cleanup" in route
     assert "--profile" in route
-    assert "world-labels" in route
+    assert "world-oracle-labels" in route
     assert "--rehearsal-mode" in route
     assert "cleanup-actions" in route
     assert "--context-json" in route
@@ -880,11 +885,11 @@ def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehard
     route = trace_task_run(
         "semantic-map-build",
         "direct",
-        "camera-labels",
+        "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "run_dir=output/agibot/molmospaces-sim/map-build-test",
         "runtime=molmospaces-subprocess",
-        "visual_grounding=grounding-dino",
+        "camera_labeler=grounding-dino",
         "generated_mess_count=5",
     )
 
@@ -898,8 +903,8 @@ def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehard
     assert "--task-name" in route
     assert "semantic-map-build" in route
     assert "--profile" in route
-    assert "camera-labels" in route
-    assert "--visual-grounding" in route
+    assert "camera-grounded-labels" in route
+    assert "--camera-labeler" in route
     assert "grounding-dino" in route
     assert "--runtime" in route
     assert "molmospaces-subprocess" in route
@@ -911,7 +916,7 @@ def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
     stderr = assert_task_run_fails(
         "household-cleanup",
         "direct",
-        "world-labels",
+        "world-oracle-labels",
         "backend=agibot_molmospaces_sim",
         "seeds=1 2",
     )
@@ -943,8 +948,9 @@ def test_agibot_codex_map_build_route_requires_context_json() -> None:
     stderr = assert_task_run_fails(
         "semantic-map-build",
         "codex",
-        "camera-labels",
+        "camera-grounded-labels",
         "backend=agibot_gdk",
+        "camera_labeler=grounding-dino",
     )
 
     assert "backend=agibot_gdk semantic-map-build Codex requires context_json" in stderr
@@ -952,7 +958,7 @@ def test_agibot_codex_map_build_route_requires_context_json() -> None:
 
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
-    match = re.search(r"camera-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    match = re.search(r"camera-grounded-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
     assert match is not None
     body = match.group("body")
 
@@ -994,7 +1000,7 @@ def test_molmo_cleanup_world_labels_recipe_uses_map_bundle_gate() -> None:
 
 def test_molmo_world_labels_checker_matches_official_acceptance_gate() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
-    match = re.search(r"world-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    match = re.search(r"world-oracle-labels\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
     assert match is not None
     body = match.group("body")
 
@@ -1019,7 +1025,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
     route = trace_task_run(
         "household-cleanup",
         "codex",
-        "world-labels",
+        "world-oracle-labels",
         "robot_views=off",
     )
 
@@ -1027,7 +1033,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
         "just",
         "molmo::cleanup",
         "codex-live",
-        "world-labels",
+        "world-oracle-labels",
         "7",
         "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
@@ -1041,25 +1047,30 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
 
 
 def test_prompt_mapping_molmo_cleanup_camera_profiles() -> None:
-    raw_route = trace_task_run("household-cleanup", "direct", "camera-raw")
-    labels_route = trace_task_run("household-cleanup", "direct", "camera-labels")
+    raw_route = trace_task_run("household-cleanup", "direct", "camera-raw-fpv")
+    labels_route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "camera-grounded-labels",
+        "camera_labeler=sim-projected-labels",
+    )
 
     assert raw_route[:7] == [
         "just",
         "molmo::cleanup",
         "direct",
-        "camera-raw",
+        "camera-raw-fpv",
         "7",
-        "output/household/household-cleanup/direct-camera-raw",
+        "output/household/household-cleanup/direct-camera-raw-fpv",
         "帮我收拾这个房间",
     ]
     assert labels_route[:7] == [
         "just",
         "molmo::cleanup",
         "direct",
-        "camera-labels",
+        "camera-grounded-labels",
         "7",
-        "output/household/household-cleanup/direct-camera-labels",
+        "output/household/household-cleanup/direct-camera-grounded-labels",
         "帮我收拾这个房间",
     ]
     assert raw_route[11] == "skill"
@@ -1093,7 +1104,7 @@ def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
 
 
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
-    prompt = render_kickoff_prompt("camera-raw")
+    prompt = render_kickoff_prompt("camera-raw-fpv")
 
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
@@ -1105,7 +1116,7 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
-    assert "trace-preserving RAW_FPV skill lane" in prompt
+    assert "trace-preserving camera-raw-fpv skill lane" in prompt
     assert "at most one fresh high-confidence cleanup object" in prompt
     assert "skip tiny slivers" in prompt
     assert "already cleaned or already tried from that same source observation" in prompt
@@ -1128,7 +1139,7 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
 
 
 def test_molmo_camera_raw_prompt_scales_to_requested_cleanup_count() -> None:
-    prompt = render_kickoff_prompt("camera-raw", target_cleanup_count=5)
+    prompt = render_kickoff_prompt("camera-raw-fpv", target_cleanup_count=5)
 
     assert "successful cleanup count is still below 5" in prompt
     assert "Clean at least 5 grounded visual candidates" in prompt
@@ -1138,7 +1149,7 @@ def test_molmo_camera_raw_prompt_scales_to_requested_cleanup_count() -> None:
 
 def test_molmo_camera_raw_live_gate_uses_generated_mess_success_threshold() -> None:
     text = MOLMO_JUST.read_text(encoding="utf-8")
-    match = re.search(r"camera-raw\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
+    match = re.search(r"camera-raw-fpv\)\n(?P<body>.*?)\n\s+;;", text, re.DOTALL)
     assert match is not None
     body = match.group("body")
 
@@ -1177,7 +1188,7 @@ def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshol
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
-    prompt = render_kickoff_prompt("world-labels")
+    prompt = render_kickoff_prompt("world-oracle-labels")
 
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
@@ -1196,7 +1207,7 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
 
 
 def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
-    prompt = render_kickoff_prompt("world-labels-sanitized")
+    prompt = render_kickoff_prompt("world-public-labels")
 
     assert "perfect structured detections without cleanup destination oracle fields" in prompt
     assert "do not wait for or rely on cleanup_recommended" in prompt
@@ -1219,7 +1230,10 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
 
 
 def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:
-    prompt = render_semantic_map_build_prompt("camera-labels", "帮我建立这个房间的语义地图")
+    prompt = render_semantic_map_build_prompt(
+        "camera-grounded-labels",
+        "帮我建立这个房间的语义地图",
+    )
 
     assert "This run is semantic-map-build, not household-cleanup" in prompt
     assert "User task: 帮我建立这个房间的语义地图" in prompt

@@ -38,6 +38,7 @@ from roboclaws.household.planner_proof_quality import (
 )
 from roboclaws.household.planner_proof_requests import PLANNER_PROOF_REQUESTS_SCHEMA
 from roboclaws.household.profiles import (
+    CAMERA_GROUNDED_LABELS_LANE,
     WORLD_LABELS_PROFILE,
     cleanup_profile,
     validate_cleanup_profile_metadata,
@@ -93,7 +94,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expect-task-name")
     parser.add_argument("--expect-backend")
     parser.add_argument("--expect-policy")
-    parser.add_argument("--expect-profile")
+    parser.add_argument("--expect-profile", help="Expected cleanup evidence lane or smoke preset.")
     parser.add_argument("--expect-mcp-server")
     parser.add_argument("--expect-seeds")
     parser.add_argument("--min-generated-mess-count", type=int, default=1)
@@ -759,7 +760,7 @@ def _assert_agibot_semantic_map_build_camera_model_policy(
         else:
             assert pipeline.get("status") in {"ok", "failed"}, event
     assert data.get("raw_fpv_observations"), data
-    assert "Camera Model Policy" in report_text, report_text[:500]
+    assert "Camera Labeler Evidence" in report_text, report_text[:500]
     assert "Raw FPV Observations" in report_text, report_text[:500]
     assert pipeline_id in report_text, report_text[:500]
     assert "Bearer " not in json.dumps(data), data
@@ -774,7 +775,8 @@ def _assert_agibot_g2_hardware_semantic_map_build(
     assert data.get("agent_driven") is True, data
     assert data.get("mcp_server") == AGIBOT_SEMANTIC_MAP_BUILD_MCP_SERVER, data
     assert data.get("policy") == AGIBOT_SEMANTIC_MAP_BUILD_POLICY, data
-    assert data.get("evidence_lane") == "camera-labels", data
+    assert data.get("evidence_lane") == CAMERA_GROUNDED_LABELS_LANE, data
+    assert data.get("camera_labeler"), data
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
     runtime_metric_map = data.get("runtime_metric_map") or (data.get("agent_view") or {}).get(
         "runtime_metric_map"
@@ -873,7 +875,8 @@ def _assert_cleanup_profile(
     expected_profile: str,
 ) -> None:
     profile = cleanup_profile(expected_profile)
-    assert data.get("cleanup_profile") == profile.profile, data
+    assert data.get("evidence_lane") == profile.evidence_lane, data
+    assert data.get("cleanup_profile") == profile.evidence_lane, data
     metadata = data.get("cleanup_profile_metadata") or {}
     validate_cleanup_profile_metadata(
         metadata,
@@ -881,7 +884,7 @@ def _assert_cleanup_profile(
         expected_backend=data.get("backend"),
         expected_perception_mode=data.get("perception_mode"),
     )
-    assert profile.profile in report_text, report_text[:500]
+    assert profile.evidence_lane in report_text, report_text[:500]
     assert profile.agent_input in report_text, report_text[:500]
     if profile.profile == WORLD_LABELS_PROFILE:
         assert "image reasoning" not in report_text.lower(), report_text[:500]
@@ -2349,7 +2352,7 @@ def _assert_camera_model_policy(
     assert data.get("raw_fpv_observations"), data
     counts = data.get("tool_event_counts") or {}
     assert int(counts.get("declare_visual_candidates:request") or 0) >= 1, counts
-    assert "Camera Model Policy" in report_text, report_text[:500]
+    assert "Camera Labeler Evidence" in report_text, report_text[:500]
     assert "Raw FPV Observations" in report_text, report_text[:500]
     assert overlay_pipeline_id in report_text, report_text[:500]
     assert "Bearer " not in json.dumps(data), data

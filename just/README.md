@@ -17,7 +17,7 @@ private. They remain runnable for debugging, but they are hidden from
 ## Main Grammar
 
 ```bash
-just task::run <task> <driver> [report|profile] [key=value ...]
+just task::run <task> <driver> [report|evidence_lane] [key=value ...]
 ```
 
 Tasks:
@@ -48,12 +48,25 @@ Reports for non-Molmo tasks:
 
 Household cleanup input/evidence lanes:
 
-- `smoke` is the cheap synthetic contract sanity profile.
-- `world-labels` is the default structured-label lane: the agent receives
-  observed object handles and structured labels; robot-view images are report
-  evidence, not model input.
-- `camera-raw` withholds structured labels and provides raw camera artifacts.
-- `camera-labels` registers structured candidates from camera observations.
+- `smoke` is the cheap synthetic contract sanity preset, not a real evidence
+  lane.
+- `world-oracle-labels` is the default structured-label lane: the agent
+  receives observed object handles and structured labels from privileged world
+  state; robot-view images are report evidence, not model input.
+- `world-public-labels` keeps structured detections while removing
+  destination/tool oracle hints and pre-confirmed navigation authorization.
+- `camera-raw-fpv` withholds structured labels and provides raw camera
+  artifacts for model-declared observations.
+- `camera-grounded-labels` registers structured candidates from camera
+  observations and requires `camera_labeler=<labeler>`.
+
+`evidence_lane` decides what the agent sees. `camera_labeler` only applies to
+`camera-grounded-labels` and decides how camera labels are produced. Use
+`camera_labeler=sim-projected-labels` for the deterministic camera-projected
+control producer, or labelers such as `grounding-dino`, `yoloe`, and
+`omdet-turbo` for deployable camera producers. Public `visual_grounding=...`
+is no longer accepted on task routes; Visual Grounding Service terminology
+remains internal service and benchmark provenance.
 
 These lanes do not choose online/offline map behavior. `map_mode=minimal` is the
 default map projection: it exposes occupancy geometry, generated exploration
@@ -63,16 +76,16 @@ remains available only as an explicit legacy/debug projection with pre-authored
 public fixture semantics.
 
 For timing work that should skip per-tool robot-view capture, keep the normal
-`world-labels` profile and pass an explicit capture option such as
+`world-oracle-labels` lane and pass an explicit capture option such as
 `robot_views=off`.
 
 If the third argument is `key=value`, `task::run` treats the report/profile as
 omitted and keeps the task default (`visual` for non-Molmo tasks,
-`world-labels` for household cleanup).
+`world-oracle-labels` for household cleanup).
 
 ## Live Agent Launch Behavior
 
-`just task::run household-cleanup codex world-labels` launches a detached tmux session.
+`just task::run household-cleanup codex evidence_lane=world-oracle-labels` launches a detached tmux session.
 The session owns the cleanup MCP server, the `codex exec` process, raw Codex
 logs, the MCP trace, and the final checker. The invoking terminal returns after
 printing the tmux session name and artifact directory, so monitor sessions do
@@ -120,7 +133,7 @@ search tool. Hosted CI does not run Codex or Codex provider smoke.
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash
-just task::run household-cleanup claude world-labels
+just task::run household-cleanup claude evidence_lane=world-oracle-labels
 ```
 
 The image is defined by `Dockerfile.coding-agents` and pins
@@ -133,7 +146,7 @@ Codex runs use repo-local `.env` credentials in the pinned container. Host
 `~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-just task::run household-cleanup codex world-labels
+just task::run household-cleanup codex evidence_lane=world-oracle-labels
 ```
 
 Docker-backed coding-agent tasks use an isolated generated workspace owned by
@@ -173,13 +186,13 @@ namespaces such as `mcp__<server>__`.
 ## Examples
 
 ```bash
-just task::run semantic-map-build direct world-labels
+just task::run semantic-map-build direct evidence_lane=world-oracle-labels
 just task::run household-cleanup codex
 just task::run household-cleanup codex smoke
-just task::run household-cleanup direct world-labels runtime_map_prior=output/map/runtime_metric_map.json
-just task::run household-cleanup direct camera-raw
-just task::run household-cleanup direct camera-labels
-just task::run household-cleanup mcp-smoke camera-labels visual_grounding=fake-http
+just task::run household-cleanup direct evidence_lane=world-oracle-labels runtime_map_prior=output/map/runtime_metric_map.json
+just task::run household-cleanup direct evidence_lane=camera-raw-fpv
+just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just task::run household-cleanup mcp-smoke evidence_lane=camera-grounded-labels camera_labeler=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
@@ -298,11 +311,11 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the semantic map build task" | `just task::run semantic-map-build direct world-labels` |
-| "run the semantic map build task with codex" | `just task::run semantic-map-build codex world-labels backend=molmospaces_subprocess` |
-| "run the household cleanup task with codex" | `just task::run household-cleanup codex world-labels` |
+| "run the semantic map build task" | `just task::run semantic-map-build direct evidence_lane=world-oracle-labels` |
+| "run the semantic map build task with codex" | `just task::run semantic-map-build codex evidence_lane=world-oracle-labels backend=molmospaces_subprocess` |
+| "run the household cleanup task with codex" | `just task::run household-cleanup codex evidence_lane=world-oracle-labels` |
 | "run the household cleanup task with codex with smoke profile" | `just task::run household-cleanup codex smoke` |
-| "run the household cleanup camera raw profile" | `just task::run household-cleanup direct camera-raw` |
+| "run the household cleanup camera raw lane" | `just task::run household-cleanup direct evidence_lane=camera-raw-fpv` |
 | "run the ai2thor nav task with openclaw" | `just task::run ai2thor-nav openclaw visual` |
 
 ## Maintainer Dispatch

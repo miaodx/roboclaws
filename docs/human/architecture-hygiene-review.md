@@ -77,9 +77,9 @@ These are not always wrong. They need an explicit reason and a cleanup path.
 
 For household cleanup lanes, keep the distinction sharp:
 
-- `world-labels` may expose public structured labels and public semantic
+- `world-oracle-labels` may expose public structured labels and public semantic
   candidate guidance, but navigation still requires source-FPV confirmation.
-- `world-labels-sanitized` may expose public detections and public destination
+- `world-public-labels` may expose public detections and public destination
   policy, but must not expose private acceptable destinations, oracle cleanup
   decisions, or navigation authorization before source-FPV confirmation.
 - Semantic acceptance and private exact restoration are different evaluation

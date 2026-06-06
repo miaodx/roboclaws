@@ -22,12 +22,18 @@ from roboclaws.household.agibot_contract_rehearsal import (  # noqa: E402
     run_molmospaces_agibot_contract_rehearsal,
     run_molmospaces_agibot_prehardware_rehearsal,
 )
+from roboclaws.household.profiles import camera_labeler_to_visual_grounding_pipeline  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     run_dir = args.run_dir or args.output_dir / _stamp()
     if args.flow == "prehardware":
+        visual_grounding = (
+            camera_labeler_to_visual_grounding_pipeline(args.camera_labeler)
+            if args.camera_labeler
+            else args.visual_grounding
+        )
         result = run_molmospaces_agibot_prehardware_rehearsal(
             run_dir=run_dir,
             task_name=args.task_name,
@@ -43,7 +49,8 @@ def main(argv: list[str] | None = None) -> int:
             record_robot_views=args.record_robot_views,
             context_json=args.context_json,
             agibot_map_artifact_dir=args.agibot_map_artifact_dir,
-            visual_grounding=args.visual_grounding,
+            camera_labeler=args.camera_labeler,
+            visual_grounding=visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,
         )
@@ -121,9 +128,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--profile",
-        choices=("world-labels", "world-labels-sanitized", "camera-raw", "camera-labels"),
-        default="camera-labels",
-        help="Input/evidence lane for --flow prehardware.",
+        choices=(
+            "world-oracle-labels",
+            "world-public-labels",
+            "camera-raw-fpv",
+            "camera-grounded-labels",
+        ),
+        default="camera-grounded-labels",
+        help="Evidence lane for --flow prehardware.",
     )
     parser.add_argument(
         "--task-prompt",
@@ -133,11 +145,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--camera-labeler",
+        help=(
+            "Public camera labeler for camera-grounded-labels. This is translated "
+            "to the internal Visual Grounding Service pipeline id."
+        ),
+    )
+    parser.add_argument(
         "--visual-grounding",
         default="grounding-dino",
         help=(
-            "camera-labels producer pipeline id for --flow prehardware. Use a "
-            "local Visual Grounding Service such as grounding-dino for local proof."
+            "Internal Visual Grounding Service pipeline id for --flow prehardware. "
+            "Prefer --camera-labeler on public routes."
         ),
     )
     parser.add_argument(

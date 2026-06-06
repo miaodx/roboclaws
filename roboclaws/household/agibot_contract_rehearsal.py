@@ -480,6 +480,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     cleanup_object_count: int = 2,
     context_json: Path | None = None,
     agibot_map_artifact_dir: Path | None = None,
+    camera_labeler: str | None = None,
     visual_grounding: str = "grounding-dino",
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
@@ -506,7 +507,10 @@ def run_molmospaces_agibot_prehardware_rehearsal(
     backend = SYNTHETIC_BACKEND if runtime == RUNTIME_FIXTURE else "molmospaces_subprocess"
     if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS and not include_robot:
         include_robot = True
-    if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS and profile in {"camera-raw", "camera-labels"}:
+    if runtime == RUNTIME_MOLMOSPACES_SUBPROCESS and profile in {
+        "camera-raw-fpv",
+        "camera-grounded-labels",
+    }:
         record_robot_views = True if record_robot_views is False else record_robot_views
 
     preflight_dir = run_dir / "preflight"
@@ -526,6 +530,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         profile=profile,
         runtime=runtime,
         visual_grounding=visual_grounding,
+        camera_labeler=camera_labeler,
         agibot_map_reference=agibot_map_reference,
         cleanup_actions_disabled=is_semantic_map_build,
     )
@@ -556,6 +561,7 @@ def run_molmospaces_agibot_prehardware_rehearsal(
         task_prompt=selected_task_prompt,
         runtime=runtime,
         profile=profile,
+        camera_labeler=camera_labeler,
         visual_grounding=visual_grounding,
         agibot_map_reference_path=agibot_map_reference_path,
         cleanup_object_count=cleanup_object_count,
@@ -590,15 +596,17 @@ def _agibot_shaped_metric_map(metric_map: dict[str, Any], *, seed: int) -> dict[
 
 
 def _prehardware_perception_mode(profile: str) -> str:
-    if profile == "camera-raw":
+    if profile == "camera-raw-fpv":
         return RAW_FPV_ONLY_MODE
-    if profile == "camera-labels":
+    if profile == "camera-grounded-labels":
         return CAMERA_MODEL_POLICY_MODE
-    if profile == "world-labels":
+    if profile == "world-oracle-labels":
+        return VISIBLE_OBJECT_DETECTIONS_MODE
+    if profile == "world-public-labels":
         return VISIBLE_OBJECT_DETECTIONS_MODE
     raise ValueError(
         f"unsupported Agibot MolmoSpaces pre-hardware lane {profile!r} "
-        "(expected world-labels|camera-raw|camera-labels)"
+        "(expected world-oracle-labels|world-public-labels|camera-raw-fpv|camera-grounded-labels)"
     )
 
 
@@ -608,6 +616,7 @@ def _prehardware_metadata_overrides(
     profile: str,
     runtime: str,
     visual_grounding: str,
+    camera_labeler: str | None,
     agibot_map_reference: dict[str, Any],
     cleanup_actions_disabled: bool,
 ) -> dict[str, Any]:
@@ -625,7 +634,7 @@ def _prehardware_metadata_overrides(
             "Runs the shared MolmoSpaces cleanup harness as an Agibot-shaped "
             "pre-hardware rehearsal: minimal map first, generated exploration "
             "candidates, online observations, Runtime Metric Map output, and "
-            "RAW_FPV/camera-labels perception evidence. It is simulated and not "
+            "RAW_FPV/camera-grounded-labels perception evidence. It is simulated and not "
             "Agibot GDK hardware proof."
         ),
         "next_confidence_layer": "Real Agibot G2 semantic-map-build hardware run",
@@ -642,7 +651,8 @@ def _prehardware_metadata_overrides(
             "confidence_layer": PRE_HARDWARE_CONFIDENCE_LAYER,
             "runtime": runtime,
             "profile": profile,
-            "perception_lane": profile,
+            "evidence_lane": profile,
+            "camera_labeler": camera_labeler or "",
             "input_lane_note": (
                 "fixture runtime uses synthetic rendering for fast local rehearsal; "
                 "select runtime=molmospaces-subprocess for real MolmoSpaces RAW_FPV/"
@@ -671,7 +681,7 @@ def _prehardware_metadata_overrides(
                 "runtime_metric_map.minimal_map_mode=true",
                 "generated exploration candidates are visited or reported unvisited",
                 "agent view does not contain private truth",
-                "RAW_FPV/camera-labels observations create public runtime evidence",
+                "RAW_FPV/camera-grounded-labels observations create public runtime evidence",
             ],
             "public_contract_note": (
                 "This is the local pre-hardware flow Roboclaws can run before a G2 "
@@ -693,6 +703,7 @@ def _write_prehardware_runtime_export(
     task_prompt: str,
     runtime: str,
     profile: str,
+    camera_labeler: str | None,
     visual_grounding: str,
     agibot_map_reference_path: Path,
     cleanup_object_count: int,
@@ -709,6 +720,8 @@ def _write_prehardware_runtime_export(
         "task_prompt": task_prompt,
         "runtime": runtime,
         "profile": profile,
+        "evidence_lane": profile,
+        "camera_labeler": camera_labeler or "",
         "visual_grounding_pipeline_id": visual_grounding,
         "minimal_map_start": True,
         "online_semantic_map_build": True,

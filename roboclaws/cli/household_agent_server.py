@@ -103,7 +103,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--cleanup-profile",
         choices=cleanup_profile_names(),
-        help="Public Molmo cleanup profile selected by the command facade.",
+        help="Public cleanup evidence lane or smoke preset selected by the command facade.",
     )
     parser.add_argument(
         "--runtime-map-prior",
@@ -185,7 +185,7 @@ def print_setup(
     print(f"Backend       : {backend}")
     print(f"Perception    : {perception_mode}")
     if cleanup_profile:
-        print(f"Profile       : {cleanup_profile}")
+        print(f"Evidence lane : {cleanup_profile}")
     print(f"Visual report : {'enabled' if record_robot_views else 'disabled'}")
     print("\nIn another terminal from this repo, run one of:")
     print(f"  {commands['Codex']}")
@@ -206,7 +206,7 @@ def print_setup(
         print("  Inspect image blocks and call navigate_to_visual_candidate before pick.")
     elif perception_mode == CAMERA_MODEL_POLICY_MODE:
         print("  Observe returns raw FPV evidence first; call declare_visual_candidates.")
-        print("  Candidates come from the configured server-side visual-grounding pipeline.")
+        print("  Candidates come from the configured server-side camera labeler.")
         print("  Clean plausible observed_* camera candidates with the semantic cleanup loop.")
     else:
         print("  Clean plausible observed_* objects with navigate->pick->navigate->open?->place.")

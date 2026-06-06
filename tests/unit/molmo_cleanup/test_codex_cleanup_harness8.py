@@ -21,18 +21,16 @@ def test_build_harness_has_expected_rows(tmp_path: Path) -> None:
     )
 
     assert harness["schema"] == "codex_cleanup_harness8_v1"
-    assert [row["row_id"] for row in harness["setup_rows"]] == [
-        "setup-semantic-map-prior-dino"
-    ]
+    assert [row["row_id"] for row in harness["setup_rows"]] == ["setup-semantic-map-prior-dino"]
     assert [row["row_id"] for row in harness["rows"]] == [
-        "direct-world-labels",
-        "direct-world-labels-sanitized",
-        "direct-camera-labels-grounding-dino",
-        "direct-camera-raw",
-        "dino-prior-world-labels",
-        "dino-prior-world-labels-sanitized",
-        "dino-prior-camera-labels-grounding-dino",
-        "dino-prior-camera-raw",
+        "direct-world-oracle-labels",
+        "direct-world-public-labels",
+        "direct-camera-grounded-labels-grounding-dino",
+        "direct-camera-raw-fpv",
+        "dino-prior-world-oracle-labels",
+        "dino-prior-world-public-labels",
+        "dino-prior-camera-grounded-labels-grounding-dino",
+        "dino-prior-camera-raw-fpv",
     ]
     prior_rows = [row for row in harness["rows"] if row["axes"]["map_mode"] == "dino-prior"]
     assert len(prior_rows) == 4
@@ -51,17 +49,15 @@ def test_prior_camera_rows_get_larger_codex_continuation_budget(tmp_path: Path) 
     )
 
     rows = {row["row_id"]: row for row in harness["rows"]}
-    assert rows["dino-prior-camera-labels-grounding-dino"]["env"] == {
+    assert rows["dino-prior-camera-grounded-labels-grounding-dino"]["env"] == {
         "ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"
     }
-    assert rows["dino-prior-camera-raw"]["env"] == {
-        "ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"
-    }
-    assert rows["direct-camera-labels-grounding-dino"]["env"] == {}
-    assert rows["dino-prior-world-labels"]["env"] == {}
+    assert rows["dino-prior-camera-raw-fpv"]["env"] == {"ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"}
+    assert rows["direct-camera-grounded-labels-grounding-dino"]["env"] == {}
+    assert rows["dino-prior-world-oracle-labels"]["env"] == {}
     assert (
         "ROBOCLAWS_CODEX_MAX_CONTINUATIONS=14"
-        in rows["dino-prior-camera-labels-grounding-dino"]["rerun_command"]
+        in rows["dino-prior-camera-grounded-labels-grounding-dino"]["rerun_command"]
     )
 
 
@@ -80,9 +76,7 @@ def test_replace_runtime_map_prior_updates_prior_rows_only(tmp_path: Path) -> No
 
     direct_rows = [row for row in harness["rows"] if row["axes"]["map_mode"] == "direct"]
     prior_rows = [row for row in harness["rows"] if row["axes"]["map_mode"] == "dino-prior"]
-    assert all(
-        "runtime_map_prior=" not in " ".join(row["command"]) for row in direct_rows
-    )
+    assert all("runtime_map_prior=" not in " ".join(row["command"]) for row in direct_rows)
     assert all(
         "runtime_map_prior=output/prior/runtime_metric_map.json" in row["command"]
         for row in prior_rows
@@ -145,7 +139,7 @@ def test_rate_limit_evidence_detects_provider_429_log(tmp_path: Path) -> None:
 def test_execute_row_with_retries_marks_exhausted_rate_limit(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    row = {"row_id": "dino-prior-world-labels", "run_dir": str(tmp_path)}
+    row = {"row_id": "dino-prior-world-oracle-labels", "run_dir": str(tmp_path)}
 
     def fake_execute_row(row_arg, _args):
         row_arg["run_dir"] = str(tmp_path)
@@ -180,7 +174,7 @@ def test_execute_row_with_retries_marks_exhausted_rate_limit(
 def test_execute_row_applies_row_and_operator_codex_continuation_env(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    run_dir = tmp_path / "dino-prior-camera-labels-grounding-dino" / "0604_1030" / "seed-7"
+    run_dir = tmp_path / "dino-prior-camera-grounded-labels-grounding-dino" / "0604_1030" / "seed-7"
     run_dir.mkdir(parents=True)
     (run_dir / "live_status.json").write_text(
         json.dumps({"phase": "finished", "exit_status": 0}),
@@ -199,10 +193,16 @@ def test_execute_row_applies_row_and_operator_codex_continuation_env(
     monkeypatch.setattr(harness8, "_latest_seed_dir", lambda *_args, **_kwargs: run_dir)
 
     row = {
-        "row_id": "dino-prior-camera-labels-grounding-dino",
+        "row_id": "dino-prior-camera-grounded-labels-grounding-dino",
         "grid_role": "cleanup",
-        "command": ["just", "task::run", "household-cleanup", "codex", "camera-labels"],
-        "output_dir": str(tmp_path / "dino-prior-camera-labels-grounding-dino"),
+        "command": [
+            "just",
+            "task::run",
+            "household-cleanup",
+            "codex",
+            "evidence_lane=camera-grounded-labels",
+        ],
+        "output_dir": str(tmp_path / "dino-prior-camera-grounded-labels-grounding-dino"),
         "env": {"ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"},
     }
     status = harness8._execute_row(
@@ -255,10 +255,10 @@ def test_visual_grounding_connection_error_is_infra_failure(tmp_path: Path) -> N
         map_bundle="bundle",
         map_mode=harness8.PRIOR_MAP_MODE,
         lane={
-            "lane_id": "camera-labels-grounding-dino",
+            "lane_id": "camera-grounded-labels-grounding-dino",
             "label": "Grounding DINO camera labels",
-            "profile": "camera-labels",
-            "visual_grounding": "grounding-dino",
+            "profile": "camera-grounded-labels",
+            "camera_labeler": "grounding-dino",
         },
         runtime_map_prior="output/prior/runtime_metric_map.json",
         visual_grounding_timeout_s="auto",
@@ -270,9 +270,7 @@ def test_visual_grounding_connection_error_is_infra_failure(tmp_path: Path) -> N
     assert "grounding-dino visual grounding infra failure" in row["reason"]
 
 
-def test_prior_setup_rate_limit_blocks_prior_rows(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
+def test_prior_setup_rate_limit_blocks_prior_rows(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     harness = harness8.build_harness(
         output_dir=tmp_path,
         seed=7,
@@ -282,9 +280,7 @@ def test_prior_setup_rate_limit_blocks_prior_rows(
         runtime_map_prior="",
         visual_grounding_timeout_s="auto",
     )
-    selected = [
-        row for row in harness["rows"] if row["row_id"] == "dino-prior-world-labels"
-    ]
+    selected = [row for row in harness["rows"] if row["row_id"] == "dino-prior-world-oracle-labels"]
 
     executed_cleanup_rows: list[str] = []
 
@@ -311,7 +307,7 @@ def test_prior_setup_rate_limit_blocks_prior_rows(
             rate_limit_retries=1,
             rate_limit_retry_sleep_s=0,
             continue_on_error=True,
-            row=["dino-prior-world-labels"],
+            row=["dino-prior-world-oracle-labels"],
             dino_sidecar_lifecycle="off",
         ),
     )
@@ -356,7 +352,7 @@ def test_execute_harness_non_dino_row_does_not_probe_or_start_sidecar(
             runtime_map_prior="",
             seed=7,
             continue_on_error=True,
-            row=["direct-world-labels"],
+            row=["direct-world-oracle-labels"],
             dino_sidecar_lifecycle="auto",
             dino_sidecar_startup_timeout_s=1,
         ),
@@ -364,7 +360,7 @@ def test_execute_harness_non_dino_row_does_not_probe_or_start_sidecar(
 
     assert status == 0
     assert probed is False
-    assert executed == ["direct-world-labels"]
+    assert executed == ["direct-world-oracle-labels"]
     assert harness["dino_sidecar"]["status"] == "not_required"
 
 
@@ -409,7 +405,7 @@ def test_execute_harness_reuses_healthy_external_dino_sidecar(
             runtime_map_prior="",
             seed=7,
             continue_on_error=True,
-            row=["direct-camera-labels-grounding-dino"],
+            row=["direct-camera-grounded-labels-grounding-dino"],
             dino_sidecar_lifecycle="auto",
             dino_sidecar_startup_timeout_s=1,
         ),
@@ -417,7 +413,7 @@ def test_execute_harness_reuses_healthy_external_dino_sidecar(
 
     assert status == 0
     assert starts == []
-    assert executed == ["direct-camera-labels-grounding-dino"]
+    assert executed == ["direct-camera-grounded-labels-grounding-dino"]
     assert harness["dino_sidecar"]["status"] == "reused"
     assert harness["dino_sidecar"]["owner"] == "external"
     assert harness["dino_sidecar"]["started_by_harness"] is False
@@ -491,7 +487,7 @@ def test_execute_harness_starts_and_stops_owned_dino_sidecar(
             runtime_map_prior="",
             seed=7,
             continue_on_error=True,
-            row=["direct-camera-labels-grounding-dino"],
+            row=["direct-camera-grounded-labels-grounding-dino"],
             dino_sidecar_lifecycle="auto",
             dino_sidecar_startup_timeout_s=1,
         ),
@@ -541,7 +537,7 @@ def test_execute_harness_blocks_dino_row_when_port_bound_by_wrong_service(
             runtime_map_prior="",
             seed=7,
             continue_on_error=True,
-            row=["direct-camera-labels-grounding-dino"],
+            row=["direct-camera-grounded-labels-grounding-dino"],
             dino_sidecar_lifecycle="auto",
             dino_sidecar_startup_timeout_s=1,
         ),
@@ -550,7 +546,7 @@ def test_execute_harness_blocks_dino_row_when_port_bound_by_wrong_service(
     row = next(
         row
         for row in harness["rows"]
-        if row["row_id"] == "direct-camera-labels-grounding-dino"
+        if row["row_id"] == "direct-camera-grounded-labels-grounding-dino"
     )
     assert status == 1
     assert executed == []
@@ -573,7 +569,7 @@ def test_prior_rows_require_dino_setup_sidecar_only_without_explicit_prior(
         visual_grounding_timeout_s="auto",
     )
     prior_world_row = next(
-        row for row in harness["rows"] if row["row_id"] == "dino-prior-world-labels"
+        row for row in harness["rows"] if row["row_id"] == "dino-prior-world-oracle-labels"
     )
 
     required_without_prior = harness8._selected_rows_requiring_dino_sidecar(
@@ -589,6 +585,6 @@ def test_prior_rows_require_dino_setup_sidecar_only_without_explicit_prior(
 
     assert [row["row_id"] for row in required_without_prior] == [
         "setup-semantic-map-prior-dino",
-        "dino-prior-world-labels",
+        "dino-prior-world-oracle-labels",
     ]
     assert required_with_prior == []

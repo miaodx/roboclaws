@@ -20,10 +20,10 @@ def test_map_evidence_refresh_report_surfaces_sim_boundary_and_runtime_map(
     run_molmospaces_agibot_prehardware_rehearsal(
         run_dir=run_dir,
         task_name=REHEARSAL_TASK_SEMANTIC_MAP_BUILD,
-        profile="camera-labels",
+        profile="camera-grounded-labels",
         task_prompt=prompt,
         generated_mess_count=5,
-        visual_grounding="sim",
+        camera_labeler="sim",
     )
 
     report_text = (run_dir / "report.html").read_text(encoding="utf-8")

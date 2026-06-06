@@ -26,11 +26,11 @@ class AgentRoute:
 
 
 @dataclass(frozen=True)
-class PerceptionLane:
+class EvidenceLane:
     lane_id: str
     label: str
     profile: str
-    visual_grounding: str
+    camera_labeler: str
     input_mode: str
 
 
@@ -64,19 +64,19 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
     ),
 )
 
-PERCEPTION_LANES: tuple[PerceptionLane, ...] = (
-    PerceptionLane(
-        lane_id="grounding-dino",
+EVIDENCE_LANES: tuple[EvidenceLane, ...] = (
+    EvidenceLane(
+        lane_id="camera-grounded-labels-grounding-dino",
         label="Grounding DINO camera labels",
-        profile="camera-labels",
-        visual_grounding="grounding-dino",
+        profile="camera-grounded-labels",
+        camera_labeler="grounding-dino",
         input_mode="camera_labels",
     ),
-    PerceptionLane(
-        lane_id="raw-fpv",
+    EvidenceLane(
+        lane_id="camera-raw-fpv",
         label="RAW_FPV direct input",
-        profile="camera-raw",
-        visual_grounding="grounding-dino",
+        profile="camera-raw-fpv",
+        camera_labeler="",
         input_mode="raw_fpv_direct",
     ),
 )
@@ -109,7 +109,7 @@ def build_apple2apple_test_grid(
     rows: list[dict[str, Any]] = []
     for map_mode in MAP_MODES:
         for agent_route in AGENT_ROUTES:
-            for lane in PERCEPTION_LANES:
+            for lane in EVIDENCE_LANES:
                 rows.append(
                     _cleanup_grid_row(
                         output_dir=output_dir,
@@ -132,7 +132,7 @@ def build_apple2apple_test_grid(
         "description": (
             "Apple-to-apple MolmoSpaces cleanup grid for online/offline Runtime "
             "Metric Map comparison across Codex API-router and Claude Code "
-            "Kimi/MiMo routes, with Grounding DINO and RAW_FPV perception lanes."
+            "Kimi/MiMo routes, with Grounding DINO and RAW_FPV evidence lanes."
         ),
         "seed": seed,
         "generated_mess_count": generated_mess_count,
@@ -143,7 +143,7 @@ def build_apple2apple_test_grid(
         "axes": {
             "map_modes": list(MAP_MODES),
             "agent_routes": [asdict(item) for item in AGENT_ROUTES],
-            "perception_lanes": [asdict(item) for item in PERCEPTION_LANES],
+            "evidence_lanes": [asdict(item) for item in EVIDENCE_LANES],
         },
         "setup_rows": setup_rows,
         "rows": rows,
@@ -162,9 +162,9 @@ def write_grid_report(grid: dict[str, Any], output_dir: Path) -> Path:
     rows = "\n".join(_render_row(row) for row in grid.get("rows") or [])
     setup_rows = "\n".join(_render_row(row) for row in grid.get("setup_rows") or [])
     if not rows:
-        rows = '<tr><td colspan="9">No cleanup rows were generated.</td></tr>'
+        rows = '<tr><td colspan="10">No cleanup rows were generated.</td></tr>'
     if not setup_rows:
-        setup_rows = '<tr><td colspan="9">No setup rows were generated.</td></tr>'
+        setup_rows = '<tr><td colspan="10">No setup rows were generated.</td></tr>'
     path = output_dir / "apple2apple_test_grid.html"
     path.write_text(
         "\n".join(
@@ -224,7 +224,7 @@ def _semantic_map_prior_row(
         "task::run",
         "semantic-map-build",
         "direct",
-        "world-labels",
+        "evidence_lane=world-oracle-labels",
         f"seed={seed}",
         f"generated_mess_count={generated_mess_count}",
         f"output_dir={row_output_dir}",
@@ -240,7 +240,7 @@ def _semantic_map_prior_row(
         axes={
             "map_mode": "offline-prior-build",
             "agent_route": "direct",
-            "perception_lane": "world-labels",
+            "evidence_lane": "world-oracle-labels",
         },
         env={},
         required_env=(),
@@ -258,7 +258,7 @@ def _cleanup_grid_row(
     map_bundle: str,
     map_mode: str,
     agent_route: AgentRoute,
-    lane: PerceptionLane,
+    lane: EvidenceLane,
     runtime_map_prior: str,
     visual_grounding_timeout_s: str,
 ) -> dict[str, Any]:
@@ -269,14 +269,15 @@ def _cleanup_grid_row(
         "task::run",
         "household-cleanup",
         agent_route.driver,
-        lane.profile,
+        f"evidence_lane={lane.profile}",
         f"seed={seed}",
         f"generated_mess_count={generated_mess_count}",
         f"output_dir={row_output_dir}",
         f"task={task}",
         f"map_bundle={map_bundle}",
-        f"visual_grounding={lane.visual_grounding}",
     ]
+    if lane.camera_labeler:
+        command.append(f"camera_labeler={lane.camera_labeler}")
     if visual_grounding_timeout_s != "auto":
         command.append(f"visual_grounding_timeout_s={visual_grounding_timeout_s}")
     if runtime_map_prior:
@@ -290,7 +291,8 @@ def _cleanup_grid_row(
         axes={
             "map_mode": map_mode,
             "agent_route": agent_route.route_id,
-            "perception_lane": lane.lane_id,
+            "evidence_lane": lane.profile,
+            "camera_labeler": lane.camera_labeler,
             "input_mode": lane.input_mode,
         },
         env=agent_route.env,
@@ -337,7 +339,8 @@ def _row_payload(
 def _thead() -> str:
     return (
         "<thead><tr><th>Row</th><th>Status</th><th>Map</th><th>Agent</th>"
-        "<th>Perception</th><th>Env</th><th>Command</th><th>Report</th><th>Reason</th></tr></thead>"
+        "<th>Evidence Lane</th><th>Camera Labeler</th><th>Env</th><th>Command</th>"
+        "<th>Report</th><th>Reason</th></tr></thead>"
     )
 
 
@@ -361,7 +364,8 @@ def _render_row(row: dict[str, Any]) -> str:
         f"<td><code>{html.escape(str(row.get('status') or 'pending'))}</code></td>"
         f"<td><code>{html.escape(str(axes.get('map_mode') or ''))}</code></td>"
         f"<td><code>{html.escape(str(axes.get('agent_route') or ''))}</code></td>"
-        f"<td><code>{html.escape(str(axes.get('perception_lane') or ''))}</code></td>"
+        f"<td><code>{html.escape(str(axes.get('evidence_lane') or ''))}</code></td>"
+        f"<td><code>{html.escape(str(axes.get('camera_labeler') or 'none'))}</code></td>"
         f"<td>{env}</td>"
         f"<td><code>{html.escape(str(row.get('rerun_command') or ''))}</code></td>"
         f"<td>{report}</td>"

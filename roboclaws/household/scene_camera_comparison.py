@@ -3848,9 +3848,7 @@ def _isaac_lighting_summary(
         active_capture_roles.append("dome_environment")
     if _positive_number(key_intensity):
         active_capture_roles.append("directional_key")
-    has_environment = active_existing_count + added_count > 0 or _positive_number(
-        dome_intensity
-    )
+    has_environment = active_existing_count + added_count > 0 or _positive_number(dome_intensity)
     status = "environment_light_configured" if has_environment else "missing_environment_light"
     summary = (
         f"{diagnostics.get('status') or 'isaac_lighting_profile'}; "
@@ -4741,9 +4739,7 @@ def _primary_mujoco_key_light_direction(render_probe: dict[str, Any]) -> list[fl
 
 def _primary_genesis_key_light_direction(genesis_profile: dict[str, Any]) -> list[float] | None:
     lights = (
-        genesis_profile.get("lights")
-        if isinstance(genesis_profile.get("lights"), list)
-        else []
+        genesis_profile.get("lights") if isinstance(genesis_profile.get("lights"), list) else []
     )
     for light in lights:
         if not isinstance(light, dict):
@@ -5303,9 +5299,7 @@ def _material_response_diagnostics(
             }
         )
     conclusion = _material_response_conclusion(objects)
-    material_like_count = sum(
-        1 for item in objects if "material" in str(item.get("signal") or "")
-    )
+    material_like_count = sum(1 for item in objects if "material" in str(item.get("signal") or ""))
     shared_tone_count = sum(
         1 for item in objects if str(item.get("signal") or "") == "shared_brightness_tone_drift"
     )
@@ -5412,9 +5406,8 @@ def _crop_material_response_metrics(
         metrics = _image_visual_metrics(path)
         lanes[lane_id] = metrics
         delta = _image_pair_visual_delta(baseline_path, path)
-        delta["mean_luminance_delta"] = (
-            float(metrics.get("mean_luminance") or 0.0)
-            - float(lanes[MOLMOSPACES_LANE_ID].get("mean_luminance") or 0.0)
+        delta["mean_luminance_delta"] = float(metrics.get("mean_luminance") or 0.0) - float(
+            lanes[MOLMOSPACES_LANE_ID].get("mean_luminance") or 0.0
         )
         deltas[lane_id] = delta
     return {
@@ -5463,9 +5456,7 @@ def _material_response_conclusion(objects: list[dict[str, Any]]) -> str:
 
 def _material_response_next_action(conclusion: str) -> str:
     if conclusion == "material_issue":
-        return (
-            "Inspect and fix backend material/texture conversion before changing light defaults."
-        )
+        return "Inspect and fix backend material/texture conversion before changing light defaults."
     if conclusion == "light_tone_issue":
         return (
             "Run a controlled backend light/tone sweep with held-out views before changing "
@@ -5507,9 +5498,7 @@ def _material_texture_scale_response(
             scale_delta = _rgb_max_abs_delta(scale, rgba) if scale is not None else None
             fallback_delta = _rgb_max_abs_delta(fallback, rgba) if fallback is not None else None
             squared = [component * component for component in rgba]
-            squared_scale_delta = (
-                _rgb_max_abs_delta(scale, squared) if scale is not None else None
-            )
+            squared_scale_delta = _rgb_max_abs_delta(scale, squared) if scale is not None else None
             squared_fallback_delta = (
                 _rgb_max_abs_delta(fallback, squared) if fallback is not None else None
             )
@@ -5647,9 +5636,7 @@ def _parse_mtl_materials(path: Path) -> dict[str, dict[str, Any]]:
         if stripped.startswith("Kd "):
             materials[current]["diffuse_color"] = _float_list(stripped[3:])
         elif stripped.startswith("map_Kd "):
-            materials[current].setdefault("texture_files", []).append(
-                stripped.split(maxsplit=1)[1]
-            )
+            materials[current].setdefault("texture_files", []).append(stripped.split(maxsplit=1)[1])
     for material in materials.values():
         material["has_diffuse_texture"] = bool(material.get("texture_files"))
     return materials
@@ -5711,8 +5698,7 @@ def _genesis_object_material_contract(
         "search_tokens": category_tokens,
         "material_count": len(matches),
         "materials": sorted(
-            str(item.get("material_name") or item.get("material_path") or "")
-            for item in matches
+            str(item.get("material_name") or item.get("material_path") or "") for item in matches
         ),
         "texture_files": texture_files,
         "has_diffuse_texture_count": sum(1 for item in matches if item.get("has_diffuse_texture")),
@@ -7969,7 +7955,7 @@ def _material_response_diagnostics_section(manifest: dict[str, Any]) -> str:
 <section class="panel">
   <h2>Material Response Diagnostics</h2>
   <p class="note">{html.escape(note)}</p>
-  <p class="note">{html.escape(str(diagnostics.get('interpretation') or ''))}</p>
+  <p class="note">{html.escape(str(diagnostics.get("interpretation") or ""))}</p>
   <div class="table-wrap"><table>
     <thead><tr>{headers}</tr></thead>
     <tbody>{"".join(rows)}</tbody>

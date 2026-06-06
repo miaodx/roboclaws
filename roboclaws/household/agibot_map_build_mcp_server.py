@@ -16,6 +16,14 @@ from roboclaws.household.agibot_sdk_runner import (
     AgibotSDKRunnerAdapter,
 )
 from roboclaws.household.nav2_adapter import BLOCKED_CAPABILITY_PROVENANCE
+from roboclaws.household.profiles import (
+    CAMERA_GROUNDED_LABELS_LANE,
+    CAMERA_RAW_FPV_LANE,
+    camera_labeler_from_visual_grounding_pipeline,
+    camera_labeler_to_visual_grounding_pipeline,
+    cleanup_profile_names,
+    validate_evidence_lane_camera_labeler,
+)
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     RAW_FPV_ONLY_MODE,
@@ -46,9 +54,7 @@ MCP_SERVER_NAME = "agibot_semantic_map_build"
 AGIBOT_SEMANTIC_MAP_BUILD_SCHEMA = "agibot_semantic_map_build_mcp_v1"
 AGIBOT_SEMANTIC_MAP_BUILD_POLICY = "codex_agibot_semantic_map_build_pilot"
 DEFAULT_TASK_PROMPT = "Build a semantic map from Agibot G2 public navigation and camera evidence."
-AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(
-    {"smoke", "world-labels", "world-labels-sanitized", "camera-raw", "camera-labels"}
-)
+AGIBOT_SEMANTIC_MAP_BUILD_LANES = frozenset(cleanup_profile_names())
 AGIBOT_SEMANTIC_MAP_BUILD_TOOLS = (
     "metric_map",
     "fixture_hints",
@@ -76,7 +82,7 @@ def make_agibot_semantic_map_build_mcp(
     runner_python: str | Path | None = None,
     real_movement_enabled: bool = False,
     agibot_map_artifact_dir: Path | None = None,
-    evidence_lane: str = "camera-labels",
+    evidence_lane: str = CAMERA_GROUNDED_LABELS_LANE,
     visual_grounding_pipeline_id: str = "grounding-dino",
     visual_grounding_timeout_s: float | None = None,
     visual_grounding_client: VisualGroundingClient | None = None,
@@ -117,7 +123,7 @@ class AgibotSemanticMapBuildMCPServer:
         runner_python: str | Path | None = None,
         real_movement_enabled: bool = False,
         agibot_map_artifact_dir: Path | None = None,
-        evidence_lane: str = "camera-labels",
+        evidence_lane: str = CAMERA_GROUNDED_LABELS_LANE,
         visual_grounding_pipeline_id: str = "grounding-dino",
         visual_grounding_timeout_s: float | None = None,
         visual_grounding_client: VisualGroundingClient | None = None,
@@ -135,6 +141,9 @@ class AgibotSemanticMapBuildMCPServer:
         self.visual_grounding_pipeline_id = _normalized_visual_grounding_pipeline(
             visual_grounding_pipeline_id,
             evidence_lane=self.evidence_lane,
+        )
+        self.camera_labeler = camera_labeler_from_visual_grounding_pipeline(
+            self.visual_grounding_pipeline_id
         )
         self.visual_grounding_client = (
             visual_grounding_client
@@ -179,6 +188,7 @@ class AgibotSemanticMapBuildMCPServer:
             backend_variant=AGIBOT_GDK_BACKEND_VARIANT,
             real_movement_enabled=self.real_movement_enabled,
             evidence_lane=self.evidence_lane,
+            camera_labeler=self.camera_labeler,
             perception_mode=self.perception_mode,
             visual_grounding_pipeline_id=self.visual_grounding_pipeline_id,
         )
@@ -409,6 +419,7 @@ class AgibotSemanticMapBuildMCPServer:
             "task_prompt": self.task_prompt,
             "seed": self.scenario.seed,
             "evidence_lane": self.evidence_lane,
+            "camera_labeler": self.camera_labeler,
             "perception_mode": self.perception_mode,
             "visual_grounding_pipeline_id": self.visual_grounding_pipeline_id,
             "cleanup_status": readiness["status"],
@@ -829,19 +840,20 @@ def _readiness_from_trace(
 
 
 def _normalized_evidence_lane(value: str) -> str:
-    lane = str(value or "camera-labels").strip() or "camera-labels"
+    lane = str(value or CAMERA_GROUNDED_LABELS_LANE).strip() or CAMERA_GROUNDED_LABELS_LANE
     if lane not in AGIBOT_SEMANTIC_MAP_BUILD_LANES:
         raise ValueError(
             f"unsupported Agibot semantic-map-build evidence lane {lane!r}; "
-            "expected smoke|world-labels|world-labels-sanitized|camera-raw|camera-labels"
+            "expected smoke|world-oracle-labels|world-public-labels|"
+            "camera-grounded-labels|camera-raw-fpv"
         )
     return lane
 
 
 def _perception_mode_for_lane(evidence_lane: str) -> str:
-    if evidence_lane == "camera-raw":
+    if evidence_lane == CAMERA_RAW_FPV_LANE:
         return RAW_FPV_ONLY_MODE
-    if evidence_lane == "camera-labels":
+    if evidence_lane == CAMERA_GROUNDED_LABELS_LANE:
         return CAMERA_MODEL_POLICY_MODE
     return VISIBLE_OBJECT_DETECTIONS_MODE
 
@@ -853,9 +865,14 @@ def _normalized_visual_grounding_pipeline(
 ) -> str:
     selected = str(value or "").strip()
     if selected:
-        return selected
-    if evidence_lane == "camera-labels":
-        return "grounding-dino"
+        labeler = camera_labeler_from_visual_grounding_pipeline(selected)
+    elif evidence_lane == CAMERA_GROUNDED_LABELS_LANE:
+        labeler = "grounding-dino"
+    else:
+        labeler = ""
+    validate_evidence_lane_camera_labeler(evidence_lane=evidence_lane, camera_labeler=labeler)
+    if labeler:
+        return camera_labeler_to_visual_grounding_pipeline(labeler)
     return SIM_VISUAL_GROUNDING_PIPELINE_ID
 
 
@@ -931,6 +948,9 @@ def _camera_model_policy_evidence(
             "schema": "camera_model_policy_v1",
             "enabled": False,
             "visual_grounding_pipeline_id": visual_grounding_pipeline_id,
+            "camera_labeler": camera_labeler_from_visual_grounding_pipeline(
+                visual_grounding_pipeline_id
+            ),
             "event_count": 0,
             "candidate_count": 0,
             "visual_grounding_failure_count": 0,
@@ -959,6 +979,9 @@ def _camera_model_policy_evidence(
         "event_count": event_count,
         "candidate_count": sum(int(event.get("candidate_count") or 0) for event in events),
         "visual_grounding_pipeline_id": visual_grounding_pipeline_id,
+        "camera_labeler": camera_labeler_from_visual_grounding_pipeline(
+            visual_grounding_pipeline_id
+        ),
         "visual_grounding_pipeline_ids": [visual_grounding_pipeline_id],
         "visual_grounding_failure_count": failure_count,
         "model_provenance": EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
@@ -966,7 +989,7 @@ def _camera_model_policy_evidence(
         "duplicate_rate": _duplicate_rate_from_events(events),
         "events": events,
         "policy_note": (
-            "Agibot camera-labels requests external visual grounding over robot-local "
+            "Agibot camera-grounded-labels requests a camera labeler over robot-local "
             "head_color evidence when live camera pixels are available. Dry-run artifacts "
             "record explicit no-live-camera failure instead of fabricating labels."
         ),
@@ -995,7 +1018,7 @@ def _camera_model_policy_event(
                 pipeline_id=visual_grounding_pipeline_id,
                 reason="missing_client",
                 message=(
-                    "Agibot camera-labels hardware validation requires an External "
+                    "Agibot camera-grounded-labels hardware validation requires an External "
                     "Visual Grounding Service client."
                 ),
                 latency_ms=0,

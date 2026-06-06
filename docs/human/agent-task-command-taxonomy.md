@@ -78,14 +78,15 @@ Reports for non-Molmo tasks:
 
 Household cleanup input/evidence lanes:
 
-- `world-labels` by default.
-- `world-labels-sanitized` for structured detections without destination/tool
+- `world-oracle-labels` by default.
+- `world-public-labels` for structured detections without destination/tool
   oracle hints.
-- `robot_views=off` for local timing work that keeps the `world-labels` input
-  contract while disabling per-tool robot-view capture.
+- `robot_views=off` for local timing work that keeps the `world-oracle-labels`
+  input contract while disabling per-tool robot-view capture.
 - `smoke` for cheap synthetic contract iteration.
-- `camera-raw` for raw camera input evidence.
-- `camera-labels` for camera-derived structured candidates.
+- `camera-raw-fpv` for raw camera input evidence.
+- `camera-grounded-labels` for camera-derived structured candidates; requires
+  `camera_labeler=<labeler>`.
 
 These lanes describe the agent input and report/evidence gates. They do not
 select online/offline map behavior; map projection is `map_mode`, and a prior
@@ -146,7 +147,7 @@ Verification run:
 - `just --summary`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run household-cleanup codex`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run household-cleanup codex smoke`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run semantic-map-build direct world-labels`
+- `ROBOCLAWS_JUST_TRACE=1 just task::run semantic-map-build direct evidence_lane=world-oracle-labels`
 - `ROBOCLAWS_JUST_TRACE=1 just task::run ai2thor-nav openclaw`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools`
 - `.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py`

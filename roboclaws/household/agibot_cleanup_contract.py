@@ -205,7 +205,7 @@ class AgibotCleanupMCPContract:
             "declare_visual_candidates",
             "agibot_cleanup_mcp_camera_labels_blocked",
             (
-                "Use semantic-map-build camera-labels for Agibot G2 visual grounding; "
+                "Use semantic-map-build camera-grounded-labels for Agibot G2 visual grounding; "
                 "the shared cleanup MCP path keeps manipulation and cleanup labels blocked."
             ),
             extra={"observation_id": observation_id or ""},
@@ -234,7 +234,13 @@ class AgibotCleanupMCPContract:
     def close_receptacle(self, fixture_id: str) -> dict[str, Any]:
         return self._blocked_manipulation("close_receptacle", fixture_id=fixture_id)
 
-    def done(self, reason: str = "") -> dict[str, Any]:
+    def done(
+        self,
+        reason: str = "",
+        *,
+        semantic_cleanup_evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        del semantic_cleanup_evidence
         self._count("done")
         total_waypoints = len(self.metric_map().get("inspection_waypoints") or [])
         coverage = len(self._observed_waypoint_ids) / total_waypoints if total_waypoints else 1.0

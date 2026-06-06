@@ -172,19 +172,15 @@ def _apply_backend_tone_adjustment(
     if shadow_lift:
         shadow_floor = max(1.0, float(adjustment.get("shadow_floor", 135.0)))
         luminance = (
-            adjusted[..., 0] * 0.2126
-            + adjusted[..., 1] * 0.7152
-            + adjusted[..., 2] * 0.0722
+            adjusted[..., 0] * 0.2126 + adjusted[..., 1] * 0.7152 + adjusted[..., 2] * 0.0722
         )
         shadow_weight = np.clip((shadow_floor - luminance) / shadow_floor, 0.0, 1.0)[..., None]
         adjusted = adjusted + shadow_lift * shadow_weight
     saturation = float(adjustment.get("saturation", 1.0))
     if saturation != 1.0:
-        gray = (
-            adjusted[..., 0] * 0.2126
-            + adjusted[..., 1] * 0.7152
-            + adjusted[..., 2] * 0.0722
-        )[..., None]
+        gray = (adjusted[..., 0] * 0.2126 + adjusted[..., 1] * 0.7152 + adjusted[..., 2] * 0.0722)[
+            ..., None
+        ]
         adjusted = gray + (adjusted - gray) * saturation
     gamma = max(0.1, float(adjustment.get("gamma", 1.0)))
     if gamma != 1.0:

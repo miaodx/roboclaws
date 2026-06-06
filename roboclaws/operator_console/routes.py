@@ -136,7 +136,7 @@ def _cleanup_route(
         label=label,
         task="household-cleanup",
         driver=driver,
-        profile="world-labels",
+        profile="world-oracle-labels",
         backend=backend,
         lock_name=lock_name,
         supports_prompt=True,
@@ -156,7 +156,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         label="MuJoCo Cleanup",
         task="household-cleanup",
         driver="codex",
-        profile="world-labels",
+        profile="world-oracle-labels",
         backend="molmospaces_subprocess",
         lock_name="molmospaces_mujoco",
         supports_prompt=True,
@@ -201,7 +201,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         label="Agibot G2 Map Build",
         task="semantic-map-build",
         driver="codex",
-        profile="camera-labels",
+        profile="camera-grounded-labels",
         backend="agibot_gdk",
         lock_name="agibot_g2",
         supports_prompt=True,
@@ -211,7 +211,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         required_overrides=("context_json",),
         default_overrides=(
             "policy=codex_agibot_semantic_map_build_pilot",
-            "visual_grounding=grounding-dino",
+            "camera_labeler=grounding-dino",
             "visual_grounding_timeout_s=20",
         ),
         gates=(
@@ -231,7 +231,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         label="MuJoCo Map Build",
         task="semantic-map-build",
         driver="codex",
-        profile="world-labels",
+        profile="world-oracle-labels",
         backend="molmospaces_subprocess",
         lock_name="molmospaces_mujoco",
         supports_prompt=True,
@@ -247,7 +247,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         label="Isaac Map Build",
         task="semantic-map-build",
         driver="codex",
-        profile="world-labels",
+        profile="world-oracle-labels",
         backend="isaaclab_subprocess",
         lock_name="isaac_gpu",
         supports_prompt=True,
@@ -268,7 +268,7 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         label="Agibot G2 Cleanup",
         task="household-cleanup",
         driver="codex",
-        profile="camera-labels",
+        profile="camera-grounded-labels",
         backend="agibot_gdk",
         lock_name="agibot_g2",
         supports_prompt=False,
@@ -287,7 +287,7 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         label="Direct / OpenClaw / VLM",
         task="household-cleanup",
         driver="direct",
-        profile="world-labels",
+        profile="world-oracle-labels",
         backend="unsupported",
         lock_name="unsupported",
         supports_prompt=False,
@@ -301,7 +301,7 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         label="Claude Map Build",
         task="semantic-map-build",
         driver="claude",
-        profile="world-labels",
+        profile="world-oracle-labels",
         backend="unsupported",
         lock_name="unsupported",
         supports_prompt=False,
@@ -379,9 +379,9 @@ def _default_field_groups(route: ConsoleRoute) -> tuple[str, ...]:
 def _default_view_modes(route: ConsoleRoute) -> tuple[str, ...]:
     modes = ["overview", "fpv", "map"]
     has_grounding = (
-        route.profile == "camera-labels"
+        route.profile == "camera-grounded-labels"
         or route.backend == "isaaclab_subprocess"
-        or any(item.startswith("visual_grounding=") for item in route.default_overrides)
+        or any(item.startswith("camera_labeler=") for item in route.default_overrides)
     )
     if has_grounding:
         modes.append("grounding")

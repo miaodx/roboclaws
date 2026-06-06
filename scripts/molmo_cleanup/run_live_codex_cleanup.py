@@ -360,10 +360,7 @@ class LiveCodexCleanupRunner:
                     break
                 if (self.run_dir / "run_result.json").is_file():
                     break
-                if (
-                    status == CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS
-                    and turn_index + 1 < max_turns
-                ):
+                if status == CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS and turn_index + 1 < max_turns:
                     print("==> Codex turn went idle before done; starting continuation")
                     recoveries = self.live_timing.setdefault("codex_recoverable_errors", [])
                     if isinstance(recoveries, list):
@@ -457,18 +454,18 @@ class LiveCodexCleanupRunner:
         ]
         if task_name == "household-cleanup" and self.args.profile in {
             "smoke",
-            "world-labels",
-            "camera-labels",
-            "camera-raw",
+            "world-oracle-labels",
+            "camera-grounded-labels",
+            "camera-raw-fpv",
         }:
             checker_args.append("--require-clean-agent-run")
-        if self.args.profile == "world-labels":
+        if self.args.profile == "world-oracle-labels":
             _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
             _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
             if task_name == "household-cleanup":
                 _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
             _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
-        if self.args.profile == "camera-raw":
+        if self.args.profile == "camera-raw-fpv":
             raw_fpv_required_cleanup_count = str(
                 generated_mess_success_threshold(int(self.args.min_generated_mess_count))
             )
@@ -854,9 +851,9 @@ def _codex_continuation_prompt(
     profile: str,
     final_turn: bool = False,
 ) -> str:
-    if profile == "camera-raw":
+    if profile == "camera-raw-fpv":
         perception_instruction = (
-            "For camera-raw observations, inspect the raw FPV image block yourself. "
+            "For camera-raw-fpv observations, inspect the raw FPV image block yourself. "
             "Do not call declare_visual_candidates. "
             + raw_fpv_inline_candidate_instruction()
             + " If navigate_to_visual_candidate returns ok=true, object_id, "
@@ -866,20 +863,23 @@ def _codex_continuation_prompt(
             "Do not re-check fixture_hints, do not infer that minimal-map hidden "
             "fixtures make the target impossible, and do not continue the sweep "
             "until that grounded chain either succeeds or a cleanup tool rejects it. "
+            "Prefer image_region type verbal_region, for example "
+            "image_region={type:verbal_region,value:front of desk}. "
+            "Never send bbox_normalized. "
             "Continue with pick -> navigate_to_receptacle -> open? -> "
             "place/place_inside only after visual grounding resolves."
         )
-    elif profile == "camera-labels":
+    elif profile == "camera-grounded-labels":
         perception_instruction = (
-            "For camera-labels observations, call declare_visual_candidates "
+            "For camera-grounded-labels observations, call declare_visual_candidates "
             "with observation_id only and omit candidates so the configured "
-            "visual-grounding pipeline produces labels. Continue cleaning public "
+            "camera labeler produces labels. Continue cleaning public "
             "camera_model_candidates with navigate_to_object -> pick -> "
             "navigate_to_receptacle -> open? -> place/place_inside."
         )
-    elif profile == "world-labels-sanitized":
+    elif profile == "world-public-labels":
         perception_instruction = (
-            "For world-labels-sanitized observations, visible_object_detections are "
+            "For world-public-labels observations, visible_object_detections are "
             "observation evidence, not a mandatory work queue. Before acting on a "
             "re-observed handle, call metric_map if needed and check "
             "runtime_metric_map.observed_objects plus cleanup_worklist state; skip "
@@ -943,7 +943,7 @@ def _codex_live_prompt(prompt: str) -> str:
 
 def _codex_max_turns(*, profile: str, requested_continuations: int) -> int:
     continuations = max(0, int(requested_continuations))
-    if profile == "world-labels-sanitized":
+    if profile == "world-public-labels":
         # The sanitized minimal-map lane has more public discovery work because
         # destination oracle hints are hidden, so keep enough turns for normal
         # coverage and done-recovery loops without changing cleanup policy.

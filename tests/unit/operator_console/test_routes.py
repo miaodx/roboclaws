@@ -29,28 +29,28 @@ def test_route_registry_exposes_supported_agent_targets() -> None:
         (
             "household-cleanup",
             "codex",
-            "world-labels",
+            "world-oracle-labels",
             "molmospaces_subprocess",
             "molmospaces_mujoco",
         ),
         (
             "household-cleanup",
             "claude",
-            "world-labels",
+            "world-oracle-labels",
             "molmospaces_subprocess",
             "molmospaces_mujoco",
         ),
-        ("household-cleanup", "codex", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
-        ("household-cleanup", "claude", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
-        ("semantic-map-build", "codex", "camera-labels", "agibot_gdk", "agibot_g2"),
+        ("household-cleanup", "codex", "world-oracle-labels", "isaaclab_subprocess", "isaac_gpu"),
+        ("household-cleanup", "claude", "world-oracle-labels", "isaaclab_subprocess", "isaac_gpu"),
+        ("semantic-map-build", "codex", "camera-grounded-labels", "agibot_gdk", "agibot_g2"),
         (
             "semantic-map-build",
             "codex",
-            "world-labels",
+            "world-oracle-labels",
             "molmospaces_subprocess",
             "molmospaces_mujoco",
         ),
-        ("semantic-map-build", "codex", "world-labels", "isaaclab_subprocess", "isaac_gpu"),
+        ("semantic-map-build", "codex", "world-oracle-labels", "isaaclab_subprocess", "isaac_gpu"),
     }
     validate_supported_routes_against_catalog()
 

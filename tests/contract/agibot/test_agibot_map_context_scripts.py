@@ -492,9 +492,7 @@ def test_raw_fpv_checker_records_head_color_status_and_no_motion(
     assert fake_gdk.gdk_release_calls == 1
 
 
-def test_raw_fpv_checker_fails_loudly_on_missing_numpy(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_raw_fpv_checker_fails_loudly_on_missing_numpy(monkeypatch, tmp_path: Path) -> None:
     checker = _load_module(RAW_FPV_CHECK_PATH, "check_raw_fpv_status_mocked_numpy")
     fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory(missing_numpy=True))
 

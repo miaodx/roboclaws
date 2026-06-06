@@ -147,14 +147,14 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     )
     prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
     command = (
-        "just task::run household-cleanup codex world-labels seed=7 "
+        "just task::run household-cleanup codex evidence_lane=world-oracle-labels seed=7 "
         "generated_mess_count=5 map_mode=minimal robot_views=on "
         f"runtime_map_prior={prior} "
         "output_dir=output/household/cleanup/codex-from-semantic-map-with-views"
     )
     monkeypatch.setenv(
         "ROBOCLAWS_REPORT_RERUN_COMMAND",
-        "just task::run household-cleanup direct world-labels seed=7",
+        "just task::run household-cleanup direct evidence_lane=world-oracle-labels seed=7",
     )
     run_result = {
         "cleanup_status": score.status,
@@ -175,7 +175,7 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     html = report_path.read_text(encoding="utf-8")
     assert command in html
     assert run_result["rerun_command"] == command
-    assert "household-cleanup direct world-labels" not in html
+    assert "household-cleanup direct world-oracle-labels" not in html
 
 
 def test_state_snapshot_keeps_bottom_row_objects_visible(tmp_path: Path) -> None:
@@ -1508,7 +1508,7 @@ def test_cleanup_report_renders_camera_model_policy(tmp_path: Path) -> None:
     )
 
     html = report_path.read_text(encoding="utf-8")
-    assert "Camera Model Policy" in html
+    assert "Camera Labeler Evidence" in html
     assert "Model-Declared Observations" in html
     assert "simulated_camera_model" in html
     assert "observed_001" in html
@@ -1673,7 +1673,7 @@ def test_cleanup_report_keeps_visual_core_before_audit_sections(tmp_path: Path) 
         "<h2>Cleanup Primitive Gate</h2>",
         "<h2>Agent View</h2>",
         "<h2>Raw FPV Observations</h2>",
-        "<h2>Camera Model Policy</h2>",
+        "<h2>Camera Labeler Evidence</h2>",
         "<h2>Advisory Review</h2>",
         "<h2>Private Evaluation</h2>",
     ]

@@ -74,9 +74,10 @@ DONE_READINESS_POLICY_RAW_FPV = "raw_fpv_grounded_cleanup_chains"
 DONE_READINESS_POLICY_EXPLICIT = "explicit_grounded_cleanup_chains"
 MODEL_DECLARED_OBSERVATION_SOURCE = "model_declared_observation"
 MAIN_CLEANUP_AGENT_PRODUCER = "main_cleanup_agent"
+TEST_AGENT_PRODUCER = "test_agent"
 SIMULATED_CAMERA_MODEL_PROVENANCE = "simulated_camera_model"
 SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE = "sanitized_visible_object_detections"
-WORLD_LABELS_SANITIZED_PROFILE = "world-labels-sanitized"
+WORLD_LABELS_SANITIZED_PROFILE = "world-public-labels"
 VISUAL_CANDIDATE_ALREADY_HANDLED_REASON = "visual_candidate_already_handled"
 VISUAL_EVIDENCE_REVIEWABLE_STATUS = "reviewable"
 VISUAL_EVIDENCE_NOT_REVIEWABLE_STATUS = "not_reviewable"
@@ -896,9 +897,9 @@ class RealWorldCleanupContract:
                     "empty_raw_fpv_candidate_registration",
                     observation_id=str(raw_observation["observation_id"]),
                     recovery_hint=(
-                        "In camera-raw mode, call navigate_to_visual_candidate with one "
+                        "In camera-raw-fpv mode, call navigate_to_visual_candidate with one "
                         "explicit candidate when acting on public FPV evidence. Empty "
-                        "candidate registration is reserved for camera-labels producers."
+                        "candidate registration is reserved for camera-grounded-labels producers."
                     ),
                 )
             producer_result = self._camera_label_producer_candidates(
@@ -3199,7 +3200,7 @@ class RealWorldCleanupContract:
                         pipeline_id=self.visual_grounding_pipeline_id,
                         reason="missing_client",
                         message=(
-                            "non-sim camera-labels visual grounding requires an "
+                            "non-sim camera-grounded-labels camera labeler requires an "
                             "External Visual Grounding Service client"
                         ),
                         latency_ms=0,
@@ -4447,6 +4448,17 @@ def _visual_grounding_evidence_for_candidate(
         bbox = candidate.get("image_bbox")
     image_dimensions = candidate.get("image_dimensions") or {}
     review = _bbox_reviewability(bbox, image_dimensions=image_dimensions)
+    if (
+        review["reviewability_status"] != VISUAL_EVIDENCE_REVIEWABLE_STATUS
+        and image_region.get("type") == "verbal_region"
+        and str(candidate.get("producer_type") or "") == TEST_AGENT_PRODUCER
+    ):
+        review = {
+            "reviewability_status": VISUAL_EVIDENCE_REVIEWABLE_STATUS,
+            "reviewability_reason": "test_agent_verbal_region",
+            "bbox_coordinate_space": "",
+            "image_bbox": [],
+        }
     pipeline = candidate.get("visual_grounding_pipeline") or {}
     evidence = {
         "schema": VISUAL_GROUNDING_EVIDENCE_SCHEMA,

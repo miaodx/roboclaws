@@ -118,30 +118,36 @@ The clean-slate direction is:
 The public command grammar is intentionally small:
 
 ```bash
-just task::run <task> <driver> [report|profile] [key=value ...]
+just task::run <task> <driver> [report|evidence_lane] [key=value ...]
 ```
 
 Examples:
 
 ```bash
 just task::run ai2thor-nav codex visual
-just task::run semantic-map-build direct world-labels seed=7
-just task::run household-cleanup direct world-labels seed=7
+just task::run semantic-map-build direct evidence_lane=world-oracle-labels seed=7
+just task::run household-cleanup direct evidence_lane=world-oracle-labels seed=7
 just console::run
 ```
 
 For household tasks, the third positional token is a cleanup input/evidence
-lane. `world-labels` means the agent receives structured object handles and
-labels as semantic candidates; those candidates still require an agent-facing
-FPV scan/observe confirmation before navigation. `world-labels-sanitized` keeps
-structured detections while withholding destination/tool oracle hints and uses
-the same FPV confirmation gate. Cleanup lanes do not select online/offline map
-behavior. The default map projection is `map_mode=minimal`, which exposes
-occupancy geometry, generated exploration candidates, and runtime semantic
-anchors instead of authored room or fixture labels. Use `runtime_map_prior=...`
-to consume a raw runtime map or canonical Actionable Semantic Map Snapshot
-prior. `map_mode=rich` remains only as an explicit legacy/debug shortcut for
-tests that need pre-authored public fixture semantics.
+lane, and callers may also pass it explicitly as `evidence_lane=...`.
+`evidence_lane` decides what the agent sees. Supported current lanes are
+`world-oracle-labels`, `world-public-labels`, `camera-grounded-labels`, and
+`camera-raw-fpv`. `camera-grounded-labels` additionally requires
+`camera_labeler=...`, such as `sim-projected-labels` for the deterministic
+camera-projected control producer or `grounding-dino` for the default real
+open-vocabulary bbox proposer. `camera_labeler` is invalid for world-label and
+raw-FPV lanes. The `smoke` token remains a cheap synthetic preset, not an
+evidence lane.
+
+Cleanup lanes do not select online/offline map behavior. The default map
+projection is `map_mode=minimal`, which exposes occupancy geometry, generated
+exploration candidates, and runtime semantic anchors instead of authored room
+or fixture labels. Use `runtime_map_prior=...` to consume a raw runtime map or
+canonical Actionable Semantic Map Snapshot prior. `map_mode=rich` remains only
+as an explicit legacy/debug shortcut for tests that need pre-authored public
+fixture semantics.
 
 The clean-slate household naming is the public surface: `semantic-map-build`
 produces Runtime Metric Map evidence, `actionable_semantic_map_snapshot_v1`

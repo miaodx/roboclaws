@@ -25,7 +25,10 @@ from roboclaws.household.manipulation_provenance import (
 from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
 from roboclaws.household.planner_proof_attachment import attach_planner_proof
 from roboclaws.household.planner_proof_requests import write_planner_proof_requests
-from roboclaws.household.profiles import cleanup_profile_metadata_for_run
+from roboclaws.household.profiles import (
+    camera_labeler_from_visual_grounding_pipeline,
+    cleanup_profile_metadata_for_run,
+)
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
@@ -310,8 +313,8 @@ class RealWorldMolmoCleanupMCPServer:
             augmented["instruction"] = (
                 "Call declare_visual_candidates with observation_id="
                 f"{raw.get('observation_id', '')} before choosing cleanup candidates. "
-                "For camera-labels, pass only observation_id and omit candidates so the "
-                "configured visual-grounding pipeline produces labels. Service URLs, "
+                "For camera-grounded-labels, pass only observation_id and omit "
+                "candidates so the configured camera labeler produces labels. Service URLs, "
                 "credentials, and image paths are server-side details."
             )
         if tool == "observe" and self.perception_mode == RAW_FPV_ONLY_MODE:
@@ -454,6 +457,11 @@ class RealWorldMolmoCleanupMCPServer:
                 "source": self.runtime_map_prior_source,
                 "observed_object_count": len(runtime_prior_rows),
             },
+            "camera_labeler": camera_labeler_from_visual_grounding_pipeline(
+                self.contract.visual_grounding_pipeline_id
+            )
+            if self.perception_mode == CAMERA_MODEL_POLICY_MODE
+            else "",
             "visual_grounding_pipeline_id": self.contract.visual_grounding_pipeline_id,
             "requested_generated_mess_count": requested_count,
             "generated_mess_count": private_evaluation["generated_mess_count"],
@@ -506,8 +514,14 @@ class RealWorldMolmoCleanupMCPServer:
                 backend=_backend_name(self.base_contract.backend, override=self.backend_name),
                 perception_mode=self.perception_mode,
                 record_robot_views=self.record_robot_views,
+                camera_labeler=camera_labeler_from_visual_grounding_pipeline(
+                    self.contract.visual_grounding_pipeline_id
+                )
+                if self.perception_mode == CAMERA_MODEL_POLICY_MODE
+                else None,
             )
-            run_result["cleanup_profile"] = profile_metadata["profile"]
+            run_result["evidence_lane"] = profile_metadata["evidence_lane"]
+            run_result["cleanup_profile"] = profile_metadata["evidence_lane"]
             run_result["cleanup_profile_metadata"] = profile_metadata
         override_hook = getattr(self.contract, "run_result_overrides", None)
         if callable(override_hook):

@@ -108,7 +108,7 @@ def _write_synthetic_run(run_dir: Path) -> None:
     ]
     run_result = {
         "agent_driven": True,
-        "cleanup_profile": "world-labels-sanitized",
+        "evidence_lane": "world-public-labels",
         "cleanup_status": "success",
         "completion_status": "success",
         "seed": 7,

@@ -16,21 +16,21 @@ The grid is one Codex route over four evidence lanes, run both directly and
 with a DINO semantic-map prior:
 
 ```text
-direct-world-labels
-direct-world-labels-sanitized
-direct-camera-labels-grounding-dino
-direct-camera-raw
-dino-prior-world-labels
-dino-prior-world-labels-sanitized
-dino-prior-camera-labels-grounding-dino
-dino-prior-camera-raw
+direct-world-oracle-labels
+direct-world-public-labels
+direct-camera-grounded-labels-grounding-dino
+direct-camera-raw-fpv
+dino-prior-world-oracle-labels
+dino-prior-world-public-labels
+dino-prior-camera-grounded-labels-grounding-dino
+dino-prior-camera-raw-fpv
 ```
 
 The prior rows first build:
 
 ```bash
-just task::run semantic-map-build direct camera-labels \
-  seed=7 generated_mess_count=10 visual_grounding=grounding-dino
+just task::run semantic-map-build direct evidence_lane=camera-grounded-labels \
+  seed=7 generated_mess_count=10 camera_labeler=grounding-dino
 ```
 
 ## Preflight
@@ -54,7 +54,7 @@ Run one row:
 ```bash
 just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/0603_refactor_check \
-  row=direct-world-labels
+  row=direct-world-oracle-labels
 ```
 
 Run a focused subset:
@@ -62,7 +62,7 @@ Run a focused subset:
 ```bash
 just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/0603_refactor_check \
-  row=dino-prior-world-labels,dino-prior-camera-labels-grounding-dino
+  row=dino-prior-world-oracle-labels,dino-prior-camera-grounded-labels-grounding-dino
 ```
 
 Provider `429 Too Many Requests` / rate-limit failures are retried once by

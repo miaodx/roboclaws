@@ -2461,9 +2461,7 @@ def test_scene_camera_comparison_default_lighting_profile_contract() -> None:
     assert rig["fill"]["enabled"] is False
     assert rig["authored_scene_lights_policy"] == "disabled_for_comparison"
     assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(900.0)
-    assert rig["backend_overrides"]["isaac"]["existing_light_intensity_scale"] == pytest.approx(
-        0.0
-    )
+    assert rig["backend_overrides"]["isaac"]["existing_light_intensity_scale"] == pytest.approx(0.0)
     assert roles["key_enabled"] is True
     assert roles["ambient_enabled"] is True
     assert roles["fill_enabled"] is False
@@ -2541,9 +2539,7 @@ def test_scene_camera_key_light_direction_diagnostics_accepts_aligned_vectors() 
             }
         ]
     }
-    isaac_lighting = {
-        "applied_key_light_direction": [-0.577350269, 0.577350269, -0.577350269]
-    }
+    isaac_lighting = {"applied_key_light_direction": [-0.577350269, 0.577350269, -0.577350269]}
 
     diagnostics = _key_light_direction_diagnostics(
         lighting_profile=profile,

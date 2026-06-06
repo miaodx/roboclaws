@@ -220,28 +220,28 @@ def build_harness(
 def _harness_lanes() -> tuple[dict[str, str], ...]:
     return (
         {
-            "lane_id": "world-labels",
-            "label": "World labels",
-            "profile": "world-labels",
-            "visual_grounding": "sim",
+            "lane_id": "world-oracle-labels",
+            "label": "World oracle labels",
+            "profile": "world-oracle-labels",
+            "camera_labeler": "",
         },
         {
-            "lane_id": "world-labels-sanitized",
-            "label": "Sanitized world labels",
-            "profile": "world-labels-sanitized",
-            "visual_grounding": "sim",
+            "lane_id": "world-public-labels",
+            "label": "World public labels",
+            "profile": "world-public-labels",
+            "camera_labeler": "",
         },
         {
-            "lane_id": "camera-labels-grounding-dino",
+            "lane_id": "camera-grounded-labels-grounding-dino",
             "label": "Grounding DINO camera labels",
-            "profile": "camera-labels",
-            "visual_grounding": "grounding-dino",
+            "profile": "camera-grounded-labels",
+            "camera_labeler": "grounding-dino",
         },
         {
-            "lane_id": "camera-raw",
+            "lane_id": "camera-raw-fpv",
             "label": "RAW_FPV",
-            "profile": "camera-raw",
-            "visual_grounding": "grounding-dino",
+            "profile": "camera-raw-fpv",
+            "camera_labeler": "",
         },
     )
 
@@ -261,13 +261,13 @@ def _semantic_map_prior_row(
         "task::run",
         "semantic-map-build",
         "direct",
-        "camera-labels",
+        "camera-grounded-labels",
         f"seed={seed}",
         f"generated_mess_count={generated_mess_count}",
         f"output_dir={row_output_dir}",
         f"task={task}",
         f"map_bundle={map_bundle}",
-        "visual_grounding=grounding-dino",
+        "camera_labeler=grounding-dino",
     ]
     if visual_grounding_timeout_s != "auto":
         command.append(f"visual_grounding_timeout_s={visual_grounding_timeout_s}")
@@ -276,7 +276,7 @@ def _semantic_map_prior_row(
         label="Build DINO semantic-map prior",
         grid_role="setup",
         map_mode="setup",
-        lane_id="camera-labels-grounding-dino",
+        lane_id="camera-grounded-labels-grounding-dino",
         command=command,
         output_dir=row_output_dir,
         requires_runtime_map_prior=False,
@@ -309,8 +309,9 @@ def _cleanup_row(
         f"output_dir={row_output_dir}",
         f"task={task}",
         f"map_bundle={map_bundle}",
-        f"visual_grounding={lane['visual_grounding']}",
     ]
+    if lane.get("camera_labeler"):
+        command.append(f"camera_labeler={lane['camera_labeler']}")
     if visual_grounding_timeout_s != "auto":
         command.append(f"visual_grounding_timeout_s={visual_grounding_timeout_s}")
     if runtime_map_prior:
@@ -348,7 +349,7 @@ def _row_payload(
         "axes": {
             "agent_route": "codex",
             "map_mode": map_mode,
-            "perception_lane": lane_id,
+            "evidence_lane": lane_id,
         },
         "command": [str(item) for item in command],
         "env": {},
@@ -377,8 +378,8 @@ def _row_payload(
 
 def _row_codex_max_continuations(*, map_mode: str, lane_id: str) -> int:
     if map_mode == PRIOR_MAP_MODE and lane_id in {
-        "camera-labels-grounding-dino",
-        "camera-raw",
+        "camera-grounded-labels-grounding-dino",
+        "camera-raw-fpv",
     }:
         return 14
     return 0
@@ -553,8 +554,7 @@ class _DinoSidecarForHarness:
             lock_file.close()
             detail = f": {active}" if active else ""
             self._block(
-                f"another Codex harness owns the Grounding DINO sidecar lock {lock_path}"
-                f"{detail}"
+                f"another Codex harness owns the Grounding DINO sidecar lock {lock_path}{detail}"
             )
             return False
         lock_file.seek(0)
@@ -693,9 +693,7 @@ def _selected_rows_requiring_dino_sidecar(
         prior_already_available
     ):
         rows.extend(
-            row
-            for row in harness.get("setup_rows") or []
-            if _row_command_uses_grounding_dino(row)
+            row for row in harness.get("setup_rows") or [] if _row_command_uses_grounding_dino(row)
         )
         rows.extend(row for row in selected_rows if row.get("requires_runtime_map_prior"))
     rows.extend(row for row in selected_rows if _row_command_uses_grounding_dino(row))
@@ -729,7 +727,7 @@ def _dedupe_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _row_command_uses_grounding_dino(row: dict[str, Any]) -> bool:
     for item in row.get("command") or []:
         text = str(item)
-        if not text.startswith("visual_grounding="):
+        if not text.startswith(("camera_labeler=", "visual_grounding=")):
             continue
         value = text.split("=", maxsplit=1)[1]
         producers = value.replace(",", "+").split("+")
@@ -886,9 +884,7 @@ def _dino_probe_summary(
         }
     pipeline = payload.get("pipeline") if isinstance(payload.get("pipeline"), dict) else {}
     stages = pipeline.get("stages") if isinstance(pipeline.get("stages"), list) else []
-    diagnostics = (
-        payload.get("diagnostics") if isinstance(payload.get("diagnostics"), dict) else {}
-    )
+    diagnostics = payload.get("diagnostics") if isinstance(payload.get("diagnostics"), dict) else {}
     stage_summaries = [
         {
             "stage": stage.get("stage") or "",
@@ -1150,13 +1146,9 @@ def _run_result_metrics(path: Path) -> dict[str, Any]:
         return {}
     score = data.get("score") if isinstance(data.get("score"), dict) else {}
     advisory = (
-        data.get("advisory_evaluation")
-        if isinstance(data.get("advisory_evaluation"), dict)
-        else {}
+        data.get("advisory_evaluation") if isinstance(data.get("advisory_evaluation"), dict) else {}
     )
-    advisory_counts = (
-        advisory.get("counts") if isinstance(advisory.get("counts"), dict) else {}
-    )
+    advisory_counts = advisory.get("counts") if isinstance(advisory.get("counts"), dict) else {}
     runtime = data.get("runtime_timing") if isinstance(data.get("runtime_timing"), dict) else {}
     score_semantic = (
         score.get("semantic_acceptability")
@@ -1164,9 +1156,7 @@ def _run_result_metrics(path: Path) -> dict[str, Any]:
         else {}
     )
     diagnostics = (
-        data.get("agent_diagnostics")
-        if isinstance(data.get("agent_diagnostics"), dict)
-        else {}
+        data.get("agent_diagnostics") if isinstance(data.get("agent_diagnostics"), dict) else {}
     )
     visual_grounding_failures = _visual_grounding_failures(data)
     return {
@@ -1201,9 +1191,7 @@ def _setup_result_metrics(path: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError):
         return {}
     runtime_map = (
-        data.get("runtime_metric_map")
-        if isinstance(data.get("runtime_metric_map"), dict)
-        else {}
+        data.get("runtime_metric_map") if isinstance(data.get("runtime_metric_map"), dict) else {}
     )
     return {
         "sweep_coverage_rate": data.get("sweep_coverage_rate"),
@@ -1603,7 +1591,7 @@ def _render_row(row: dict[str, Any]) -> str:
         f"<td><code>{html.escape(str(row.get('status') or 'pending'))}</code></td>"
         f"<td><code>{html.escape(str(row.get('behavior_status') or ''))}</code></td>"
         f"<td><code>{html.escape(str(axes.get('map_mode') or ''))}</code></td>"
-        f"<td><code>{html.escape(str(axes.get('perception_lane') or ''))}</code></td>"
+        f"<td><code>{html.escape(str(axes.get('evidence_lane') or ''))}</code></td>"
         f"<td>{html.escape(exact)}</td>"
         f"<td>{html.escape(semantic)}</td>"
         f"<td>{html.escape(str(metrics.get('sweep_coverage_rate') or ''))}</td>"

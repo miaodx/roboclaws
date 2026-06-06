@@ -331,7 +331,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     server = make_agibot_semantic_map_build_mcp(
         run_dir=run_dir,
         context_json=context_path,
-        evidence_lane="camera-labels",
+        evidence_lane="camera-grounded-labels",
         visual_grounding_pipeline_id="grounding-dino",
     )
 
@@ -365,7 +365,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     assert run_result["mcp_server"] == MCP_SERVER_NAME
     assert run_result["backend_variant"] == "agibot_gdk"
     assert run_result["cleanup_profile"] == "real_robot_cleanup_v1"
-    assert run_result["evidence_lane"] == "camera-labels"
+    assert run_result["evidence_lane"] == "camera-grounded-labels"
     assert run_result["perception_mode"] == "camera_model_policy"
     assert run_result["visual_grounding_pipeline_id"] == "grounding-dino"
     assert run_result["raw_fpv_observations"][0]["camera"] == "head_color"
@@ -393,7 +393,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     assert "runtime_metric_map.json" in run_result["artifacts"].values()
     assert any(event.get("tool") == "observe" for event in trace_events)
     assert "AgiBot Backend Evidence" in report_text
-    assert "Camera Model Policy" in report_text
+    assert "Camera Labeler Evidence" in report_text
     assert "grounding-dino" in report_text
     assert "Agibot semantic-map-build" in report_text
 
@@ -461,7 +461,7 @@ def test_agibot_semantic_map_build_server_accepts_visual_grounding_timeout(
     server = make_agibot_semantic_map_build_mcp(
         run_dir=tmp_path / "run",
         context_json=COMPLETED_CONTEXT_FIXTURE,
-        evidence_lane="camera-labels",
+        evidence_lane="camera-grounded-labels",
         visual_grounding_pipeline_id="fake-http",
         visual_grounding_timeout_s=9.5,
     )

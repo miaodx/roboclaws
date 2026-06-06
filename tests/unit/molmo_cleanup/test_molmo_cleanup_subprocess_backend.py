@@ -1285,9 +1285,7 @@ def test_canonical_cleanup_robot_view_camera_request_uses_explicit_eye_target() 
     assert rig["fill"]["enabled"] is False
     assert rig["backend_overrides"]["isaac"]["key_intensity"] == pytest.approx(900.0)
     assert rig["ambient"]["isaac_dome_intensity"] == pytest.approx(120.0)
-    assert rig["ambient"]["mujoco_headlight_ambient"] == pytest.approx(
-        [0.35, 0.35, 0.35]
-    )
+    assert rig["ambient"]["mujoco_headlight_ambient"] == pytest.approx([0.35, 0.35, 0.35])
     assert rig["ambient"]["mujoco_headlight_diffuse"] == pytest.approx([0.4, 0.4, 0.4])
     assert rig["ambient"]["genesis_ambient_light"] == pytest.approx([0.37, 0.37, 0.37])
     assert request["color_profile"]["profile_id"] == "display_srgb_soft_highlight_v1"

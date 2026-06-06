@@ -43,9 +43,9 @@ SEMANTIC_MAP_BUILD_RULES = (
     "object. Call metric_map first, then fixture_hints, build an exact waypoint "
     "checklist from metric_map.inspection_waypoints, and sweep every inspection "
     "waypoint with navigate_to_waypoint then observe. Mark a waypoint complete only "
-    "after that waypoint_id has an observe response. For camera-labels, call "
+    "after that waypoint_id has an observe response. For camera-grounded-labels, call "
     "declare_visual_candidates for each raw FPV observation with observation_id only "
-    "and omit candidates so the configured visual-grounding pipeline labels the "
+    "and omit candidates so the configured camera labeler labels the "
     "frame. Use the returned observations and runtime_metric_map public anchors as "
     "map evidence only. Compare the checklist before done, visit any missing "
     "waypoint_id, and call done only after every metric_map.inspection_waypoints "
@@ -83,7 +83,7 @@ CAMERA_LABELS_PROMPT = (
     + COMMON_WAYPOINT_RULES
     + "call declare_visual_candidates for each raw FPV observation before choosing "
     "cleanup candidates with observation_id only and omit candidates so the "
-    "configured visual-grounding pipeline produces labels, and treat returned "
+    "configured camera labeler produces labels, and treat returned "
     "candidates as coming from that pipeline without asking for service URLs, "
     "credentials, image paths, or model hosts. Clean plausible observed_* camera "
     "candidates with navigate->pick->navigate->open?->place/place_inside following "
@@ -100,7 +100,7 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     cleanup_count_text = str(cleanup_count)
     return (
         "Use the bundled molmo-realworld-cleanup skill instructions. This is the "
-        "trace-preserving RAW_FPV skill lane. Use the cleanup MCP tool entries exactly "
+        "trace-preserving camera-raw-fpv skill lane. Use the cleanup MCP tool entries exactly "
         "as exposed by Codex; in text, refer to unprefixed tool names, and if the tool "
         "protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or "
         "roboclaws__. Call metric_map and fixture_hints first, build an exact waypoint "
@@ -137,13 +137,13 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
 
 
 def render_kickoff_prompt(profile: str, *, target_cleanup_count: int = 7) -> str:
-    """Render the live-agent kickoff prompt for a cleanup input lane."""
+    """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
-    if profile == "camera-raw":
+    if profile == "camera-raw-fpv":
         return _camera_raw_prompt(target_cleanup_count=target_cleanup_count)
-    if profile == "camera-labels":
+    if profile == "camera-grounded-labels":
         return CAMERA_LABELS_PROMPT
-    if profile == "world-labels-sanitized":
+    if profile == "world-public-labels":
         return WORLD_LABELS_SANITIZED_PROMPT
     return WORLD_LABELS_PROMPT
 
@@ -152,13 +152,13 @@ def render_semantic_map_build_prompt(profile: str, task: str) -> str:
     """Render the live-agent kickoff prompt for a semantic-map-build lane."""
 
     prompt = COMMON_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
-    if profile == "camera-raw":
+    if profile == "camera-raw-fpv":
         return (
             prompt + " This is the raw-FPV map-build lane: inspect each raw FPV image block "
             "returned by observe, record only public map evidence, and do not declare "
             "cleanup candidates."
         )
-    if profile == "world-labels-sanitized":
+    if profile == "world-public-labels":
         return (
             prompt + " Treat visible_object_detections as structured public detections without "
             "destination oracle fields; use them only as map labels."
@@ -168,7 +168,12 @@ def render_semantic_map_build_prompt(profile: str, task: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Render a household live-agent kickoff prompt.")
-    parser.add_argument("--profile", default="world-labels")
+    parser.add_argument(
+        "--profile",
+        "--evidence-lane",
+        dest="profile",
+        default="world-oracle-labels",
+    )
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default="")
     parser.add_argument("--target-cleanup-count", type=int, default=7)

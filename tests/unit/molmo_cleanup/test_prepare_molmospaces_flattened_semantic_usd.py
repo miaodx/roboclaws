@@ -294,12 +294,8 @@ def test_prepare_flattened_semantic_usd_applies_mujoco_flap_endpoint_pose(
     assert summary["visual_physics_joint_removed_count"] == 2
 
     output_stage = Usd.Stage.Open(str(output_usd))
-    inner = output_stage.GetPrimAtPath(
-        "/val_1/Geometry/box_01/Geometry/Box_10_box_10_flap_inner_1"
-    )
-    outer = output_stage.GetPrimAtPath(
-        "/val_1/Geometry/box_01/Geometry/Box_10_box_10_flap_outer_1"
-    )
+    inner = output_stage.GetPrimAtPath("/val_1/Geometry/box_01/Geometry/Box_10_box_10_flap_inner_1")
+    outer = output_stage.GetPrimAtPath("/val_1/Geometry/box_01/Geometry/Box_10_box_10_flap_outer_1")
     assert _quat_tuple(inner.GetAttribute("xformOp:orient").Get()) == pytest.approx(
         (0.9238795, 0.3826834, 0.0, 0.0),
         abs=1e-5,
