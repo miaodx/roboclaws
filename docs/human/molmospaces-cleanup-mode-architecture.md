@@ -212,6 +212,33 @@ Model-Declared Observations from FPV image evidence. The agent still receives no
 structured labels before declaration, but it may call a narrow declaration or
 inline navigation tool when it is ready to act on a visual candidate.
 
+Current live-agent status, 2026-06-06: treat pure `camera-raw` as a baseline,
+debug, or ablation lane, not the recommended real-robot production path. After
+the strict FPV visual-evidence gate, navigation and pick actions require a
+source-observation-local FPV bbox and `navigation_authorized` candidate state.
+With that gate enforced, the live Codex `camera-raw` run for
+`seed=7 generated_mess_count=5` completed the full 14/14 public waypoint sweep
+and produced two grounded cleanup chains, but it did not reliably find enough
+same-source reviewable candidates to reach the five-object cleanup threshold.
+Focused prompt/skill tuning improved behavior but reached a PARTIAL stop.
+
+The real-robot direction is therefore assisted RAW-FPV / `camera-labels`: a
+robot-deployable visual-grounding producer such as Grounding DINO, YOLO-family
+open-vocabulary detection, SAM-style segmentation, or another perception
+sidecar proposes bbox/mask evidence from the robot camera stream, while the
+LLM/coding agent chooses among candidates, plans recovery, and calls the normal
+navigation/manipulation tools. This is still a camera-evidence path, not a
+simulator-label path, as long as candidate provenance records the source frame,
+image region, confidence, and grounding status.
+
+Older raw-FPV success or near-success rows must not be compared as equivalent
+production evidence unless they pass the current gate. Before the 2026-06-06
+strict gate, some action chains could be authorized by synthetic report-like
+bboxes or by source-fixture, room, or broad-category fallback matching. Those
+paths made reports look cleaner than the actual source-FPV evidence warranted.
+The current stricter result is less flattering, but it is the honest real-robot
+boundary.
+
 The first live-agent gate for this profile should use semantic acceptability
 rather than only exact hidden restoration. Exact private restoration remains
 visible in the report, but preferred/acceptable advisory placements are the
