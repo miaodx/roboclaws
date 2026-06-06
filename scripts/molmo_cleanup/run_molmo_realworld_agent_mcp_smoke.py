@@ -192,6 +192,7 @@ def _drive_public_sweep(
             handle = str(detection["object_id"])
             if handle in handled_handles:
                 continue
+            detection = _confirm_visual_scan_if_needed(server, detection)
             target_fixture = _target_fixture_for_detection(server, detection)
             if target_fixture is None:
                 continue
@@ -225,6 +226,7 @@ def _clean_pending_worklist(server: Any, handled_handles: set[str]) -> None:
         if next_item is None:
             return
         handle = str(next_item.get("object_id") or "")
+        next_item = _confirm_visual_scan_if_needed(server, next_item)
         fixture = _target_fixture_for_detection(server, next_item)
         if fixture is None:
             handled_handles.add(handle)
@@ -253,6 +255,25 @@ def _detections_for_observation(server: Any, observation: dict[str, Any]) -> lis
     observation_id = str(raw.get("observation_id") or "")
     response = server.call_tool("declare_visual_candidates", observation_id=observation_id)
     return list(response.get("camera_model_candidates", []))
+
+
+def _confirm_visual_scan_if_needed(server: Any, detection: dict[str, Any]) -> dict[str, Any]:
+    if str(detection.get("candidate_state") or "") != "visual_scan_required":
+        return detection
+    waypoint_id = str(detection.get("waypoint_id") or detection.get("last_waypoint_id") or "")
+    if waypoint_id:
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
+    server.call_tool("adjust_camera", yaw_delta_deg=15.0, pitch_delta_deg=0.0)
+    observation = server.call_tool("observe")
+    handle = str(detection.get("object_id") or "")
+    return next(
+        (
+            dict(item)
+            for item in observation.get("visible_object_detections", [])
+            if str(item.get("object_id") or "") == handle
+        ),
+        detection,
+    )
 
 
 def _clean_handle(

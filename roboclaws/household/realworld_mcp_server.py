@@ -301,8 +301,9 @@ class RealWorldMolmoCleanupMCPServer:
         if tool == "metric_map":
             augmented["instruction"] = (
                 "inspection_waypoints are static map/fixture coverage candidates, "
-                "not mess hints. Prefer navigate_to_waypoint -> observe -> clean "
-                "visible observed_* candidates before continuing the sweep."
+                "not mess hints. Prefer navigate_to_waypoint -> observe. World-label "
+                "observed_* candidates with candidate_state=visual_scan_required must "
+                "use adjust_camera -> observe before navigate_to_object or pick."
             )
         if tool == "observe" and self.perception_mode == CAMERA_MODEL_POLICY_MODE:
             raw = augmented.get("raw_fpv_observation") or {}
@@ -338,8 +339,9 @@ class RealWorldMolmoCleanupMCPServer:
             augmented = _compact_declare_visual_candidates_response(augmented)
             augmented["instruction"] = (
                 "Use camera_model_candidates with cleanup_recommended=true as the actionable "
-                "worklist. For each candidate, call navigate_to_object, pick, "
-                "navigate_to_receptacle, then the recommended placement tool."
+                "worklist only when candidate_state is navigation_authorized. For each "
+                "authorized candidate, call navigate_to_object, pick, navigate_to_receptacle, "
+                "then the recommended placement tool."
             )
         if tool in {"place", "place_inside", "close_receptacle"} and augmented.get("ok"):
             augmented["instruction"] = (

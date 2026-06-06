@@ -1,6 +1,6 @@
 # MolmoSpaces Visual Grounding Results
 
-Last updated: 2026-05-27
+Last updated: 2026-06-06
 
 This page records the current relative results for MolmoSpaces
 `camera-labels` visual-grounding pipelines. It is the human-facing overview for
@@ -63,11 +63,27 @@ with 6/14 waypoint coverage, and then hit the mify provider/tool namespace
 failure again. Keep the 2026-05-26 raw-FPV success as provider-route reference
 evidence only.
 
+The 2026-06-06 strict-FPV rerun changes the `camera-raw` conclusion. The tool
+route was healthy enough to run the full public waypoint sweep, and focused
+prompt-loop tuning made Codex produce reviewable same-source bbox declarations.
+However, pure `camera-raw` still completed only two grounded cleanup chains for
+`seed=7 generated_mess_count=5`, below the five-object threshold, then entered
+low-yield post-sweep retries. The failure classification is visual
+grounding/image-understanding reliability, not Docker, MCP, placement policy,
+or declaration schema. The run directory is
+`output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7`; it was
+stopped manually after about 26 minutes, so it has trace/live logs but no
+`run_result.json`, `checker.log`, or `report.html`.
+
 Success/latency conclusion: keep `grounding-dino` base-recall as the default
 real `camera-labels` visual-grounding pipeline. For live-agent comparison,
 `world-labels` remains the privileged sim/API control, `camera-labels` + DINO
-base is the current real camera-label pass, and `camera-raw` needs the current
-mify tool-route issue resolved before it can be compared apple-to-apple again.
+base is the current real camera-label pass, and pure `camera-raw` should be
+treated as a baseline/ablation lane rather than the real-robot production path.
+Real-robot cleanup should use assisted RAW-FPV or `camera-labels`: robot-camera
+evidence first, a deployable visual-grounding sidecar to propose bbox/mask
+candidates, and the LLM/coding agent for selection, tool use, recovery, and
+verification.
 
 ## Selection Summary
 

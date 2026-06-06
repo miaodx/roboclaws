@@ -6,6 +6,11 @@ from typing import Any
 
 RAW_FPV_DECLARATION_STRATEGY = "inline_on_navigate"
 RAW_FPV_CATEGORY_HINT = "food, dish, book, linen, toy, electronics, or pillow"
+RAW_FPV_HIGH_CONFIDENCE_TARGETS = (
+    "movable dishware or food on a table/counter",
+    "books, electronics, linen, toys, or pillows visibly out of storage",
+    "objects with most of the item inside the current FPV frame",
+)
 RAW_FPV_ACCEPTED_IMAGE_REGION_FORMS: tuple[dict[str, Any], ...] = (
     {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
     {"type": "point", "value": [390, 230]},
@@ -27,21 +32,31 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
     return (
         f"Raw FPV-only mode uses {RAW_FPV_DECLARATION_STRATEGY}: inspect the FPV "
         f"image block for {subject}, do not batch-register candidates first, "
-        "and call navigate_to_visual_candidate only when acting on a plausible "
-        "cleanup object. Use the exact visual class when the image makes it clear "
-        "(for example plate, cup, potato, remotecontrol, book, or pillow). Use "
-        "broader cleanup categories such as "
+        "and call navigate_to_visual_candidate only when acting on one fresh, "
+        "high-confidence cleanup object from that same source observation. "
+        "Prioritize "
+        + "; ".join(RAW_FPV_HIGH_CONFIDENCE_TARGETS)
+        + ". Avoid permanent fixtures, built-in appliances, wall decor, tiny "
+        "slivers, reflections, and regions already cleaned or already tried from "
+        "the same source observation. Use the exact visual class when the image "
+        "makes it clear (for example plate, cup, potato, remotecontrol, book, or "
+        "pillow). Use broader cleanup categories such as "
         f"{RAW_FPV_CATEGORY_HINT} only when the exact object class is uncertain. "
         "Call navigate_to_visual_candidate with source_observation_id, category, "
         "evidence_note, and image_region before pick. In minimal map mode, omit "
-        "target_fixture_id; do not invent fixture ids from empty fixture_hints. "
+        "target_fixture_id and normally omit source_fixture_id; do not invent "
+        "fixture ids from empty fixture_hints or from guesses about the room. "
         "Use the candidate_fixture_id/recommended_tool returned by "
         "navigate_to_visual_candidate plus runtime_metric_map.public_semantic_anchors. "
         "In explicit rich legacy/debug mode only, target_fixture_id may come from "
         "non-empty fixture_hints. For any candidate you want to navigate to or pick, "
-        "use image_region={type:bbox,value:[x,y,width,height]} from the visible "
-        "agent-facing FPV object. Verbal regions are accepted for clarification but "
-        "are not actionable without a reviewable bbox. Never send bbox_normalized, "
+        "use image_region={type:bbox,value:[x,y,width,height]} from the same visible "
+        "agent-facing FPV object. Verbal regions may clarify a bbox, but they do "
+        "not count as an actionable cleanup chain without a reviewable bbox. If "
+        "navigate_to_visual_candidate returns visual_candidate_not_resolved, do not "
+        "keep retrying the same source_observation_id/category/region; move to a "
+        "new waypoint or adjust_camera once, observe again, and retry only with a "
+        "fresh source_observation_id and tighter bbox. Never send bbox_normalized, "
         "bare x/y/width/height fields, "
         'target_fixture_id="", target_fixture_id="None", or target_fixture_id=null. '
         "After a successful pick/place for an observed handle, do not act on "

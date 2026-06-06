@@ -349,3 +349,64 @@ Expected effect:
 - Lighting remains intentionally unchanged; any remaining residual after a real
   rerun should be reviewed as material/shader/texture filtering before another
   light sweep.
+
+### Fresh A/B Evidence
+
+Prepared a new `val_1` default semantic USD from current code:
+
+`output/isaaclab/flattened-semantic-usd/0605_val1_material_source_preserving_default/summary.json`
+
+The summary reports:
+
+- `status=ready`
+- `rendering_parity_preset=combined-material-light`
+- `material_texture_scale_mode=none`
+- `material_texture_scale_rewrite_count=0`
+- `material_texture_scale_default_candidate=false`
+- `distant_light_rotate_x=25.0`
+- `default_rendering_path_status=default_rendering_path_uses_combined_material_light`
+
+Then reran the full MuJoCo/Isaac/Genesis scene-camera comparison:
+
+`output/molmo/scene-camera-comparison/0605_material_source_preserving_default/0605_1838/report.html`
+
+`material_response_diagnostics` now reports:
+
+- `status=computed`
+- `sample_count=10`
+- `conclusion=mixed`
+- `likely_squared_texture_scale_count=0`
+- BaseballBat Genesis material match is fixed:
+  `matched_by_material_name`, `match_source=visual_audit_material_names`,
+  `materials=["material_LightWoodCounters3"]`.
+- Cloth texture scale is now `source_rgba_texture_scale` instead of the old
+  squared prepared-USD response.
+- Lighting invariants remain unchanged:
+  `missing_environment_light_lanes=[]`,
+  `shadow_parity_probe.status=shadow_capable_profile_accepted`, and
+  `key_light_direction.status=key_light_direction_aligned`.
+
+Compared with the previous `0605_scene_light_report_rerun/0605_1656` report,
+the same 10-object material sample improved in aggregate:
+
+| Lane | Metric | Old | New | Delta |
+| --- | --- | ---: | ---: | ---: |
+| Isaac | mean abs luminance delta | 33.32 | 24.68 | -8.65 |
+| Isaac | mean crop MAD | 47.26 | 42.73 | -4.53 |
+| Genesis | mean abs luminance delta | 31.33 | 20.35 | -10.98 |
+| Genesis | mean crop MAD | 42.70 | 33.38 | -9.32 |
+
+Object-level examples:
+
+- Box improved from Isaac/Genesis MAD `61.10 / 51.60` to `44.94 / 35.27`.
+- BasketBall improved from Isaac/Genesis MAD `53.44 / 50.34` to
+  `38.39 / 32.14`.
+- Pillow improved from Isaac/Genesis MAD `39.44 / 42.15` to `35.97 / 38.45`.
+- Cloth remains a material/local-shadow residual, but the prepared-USD scale
+  path is no longer squared and its MAD improved slightly
+  (`47.38 / 40.92` to `47.23 / 40.47`).
+
+Conclusion: the material default tweak is better than the prior squared-scale
+default on the held-out scene-camera material sample, without changing light,
+tone, exposure, or camera defaults. Remaining residuals should continue through
+material/shader/texture filtering analysis rather than another light sweep.

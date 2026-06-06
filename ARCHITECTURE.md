@@ -132,8 +132,10 @@ just console::run
 
 For household tasks, the third positional token is a cleanup input/evidence
 lane. `world-labels` means the agent receives structured object handles and
-labels; `world-labels-sanitized` keeps structured detections while withholding
-destination/tool oracle hints. Cleanup lanes do not select online/offline map
+labels as semantic candidates; those candidates still require an agent-facing
+FPV scan/observe confirmation before navigation. `world-labels-sanitized` keeps
+structured detections while withholding destination/tool oracle hints and uses
+the same FPV confirmation gate. Cleanup lanes do not select online/offline map
 behavior. The default map projection is `map_mode=minimal`, which exposes
 occupancy geometry, generated exploration candidates, and runtime semantic
 anchors instead of authored room or fixture labels. Use `runtime_map_prior=...`

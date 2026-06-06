@@ -39,6 +39,8 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
   grid for source and cleanup-skill changes.
 - `actionable-semantic-map-conversion`: offline robot semantic-memory conversion
   into `actionable_semantic_map_snapshot_v1` for downstream household tasks.
+- `visual-result-showcase`: post-run renderer for blog/README/demo GIFs,
+  contact sheets, and visual proof artifacts from completed runs.
 
 See `README.md` for the big-picture MCP and skill design principles, and
 `docs/human/mcp-skills-and-semantic-profiles.md` for the detailed profile

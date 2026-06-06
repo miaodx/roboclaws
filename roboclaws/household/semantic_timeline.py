@@ -333,6 +333,11 @@ def visual_candidate_action_evidence(
             "camera_frame": evidence.get("camera_frame"),
             "reviewability_status": evidence.get("reviewability_status"),
             "reviewability_reason": evidence.get("reviewability_reason"),
+            "locality_status": evidence.get("locality_status"),
+            "candidate_state": observation.get("candidate_state")
+            or evidence.get("candidate_state"),
+            "actionability_status": observation.get("actionability_status")
+            or evidence.get("actionability_status"),
             "grounding_status": observation.get("grounding_status")
             or evidence.get("grounding_status"),
             "grounding_confidence": observation.get("grounding_confidence"),
@@ -370,6 +375,10 @@ def object_navigation_action_evidence(
             "camera_frame": evidence.get("camera_frame"),
             "reviewability_status": evidence.get("reviewability_status"),
             "reviewability_reason": evidence.get("reviewability_reason"),
+            "locality_status": evidence.get("locality_status"),
+            "candidate_state": response.get("candidate_state") or evidence.get("candidate_state"),
+            "actionability_status": response.get("actionability_status")
+            or evidence.get("actionability_status"),
             "grounding_status": evidence.get("grounding_status"),
         }
     )
