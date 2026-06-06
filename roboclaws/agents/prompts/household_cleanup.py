@@ -22,8 +22,12 @@ COMMON_WAYPOINT_RULES = (
 )
 
 COMMON_CLEANUP_RULES = (
-    "clean plausible observed objects with navigate->pick->navigate->open?->"
-    "place/place_inside following required_tool if returned, use place_inside for "
+    "clean plausible observed objects only after their candidate_state is "
+    "navigation_authorized; if a world-label object is visual_scan_required, call "
+    "adjust_camera toward it, then observe, then use the refreshed same-handle "
+    "source FPV bbox before navigate_to_object. Clean with "
+    "navigate->pick->navigate->open?->place/place_inside following required_tool "
+    "if returned, use place_inside for "
     "shelf/bookshelf/bookcase/shelving/fridge targets, do not call scene_objects "
     "or read private scoring artifacts, compare the checklist before done, visit "
     "any missing waypoint_id, and call done only after every "

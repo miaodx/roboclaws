@@ -7007,6 +7007,12 @@ def _action_evidence_summary(step: dict[str, Any]) -> str:
         bits.append(_badge("Source FPV bbox", bbox))
     if evidence.get("reviewability_status"):
         bits.append(_badge("BBox review", evidence["reviewability_status"]))
+    if evidence.get("locality_status"):
+        bits.append(_badge("Locality", evidence["locality_status"]))
+    if evidence.get("candidate_state"):
+        bits.append(_badge("Candidate state", evidence["candidate_state"]))
+    if evidence.get("actionability_status"):
+        bits.append(_badge("Authorization", evidence["actionability_status"]))
     if evidence.get("grounding_status"):
         grounding = str(evidence["grounding_status"])
         if evidence.get("grounding_confidence") is not None:

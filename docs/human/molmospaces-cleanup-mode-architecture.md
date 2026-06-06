@@ -89,8 +89,8 @@ Simulator-vs-real provenance belongs in metadata, not in the profile name.
 | Profile | Agent input | Default backend | Default report | What it proves |
 | --- | --- | --- | --- | --- |
 | `smoke` | world labels | synthetic contract | semantic report | Cheap command and contract sanity. |
-| `world-labels` | world labels | MolmoSpaces sim | robot-view report | Oracle structured semantic upper bound with cleanup-ready destination hints. |
-| `world-labels-sanitized` | sanitized world labels | MolmoSpaces sim | robot-view report | Perfect-detector ablation: structured detections without destination/tool oracle hints. |
+| `world-labels` | world labels | MolmoSpaces sim | robot-view report | Oracle structured semantic upper bound; labels are semantic candidates until source-FPV confirmation authorizes navigation. |
+| `world-labels-sanitized` | sanitized world labels | MolmoSpaces sim | robot-view report | Perfect-detector ablation: structured detections without destination/tool oracle hints or pre-confirmed navigation. |
 | `camera-raw` | raw camera artifacts | MolmoSpaces sim | robot-view report | Image-input contract: structured labels are withheld. |
 | `camera-labels` | camera-derived labels | MolmoSpaces sim | robot-view report | Camera-perception-label contract. Today simulated; later real detector/VLM. |
 
@@ -143,8 +143,11 @@ verifier=cleanup_success + robot_view_honesty + real_robot_alignment
 This is the current "MolmoSpaces cleanup with visual result" behavior. The
 agent receives handles such as `observed_001`, object categories, support
 estimates, public candidate fixture hints, cleanup recommendation flags, and
-placement-tool hints. The FPV/chase/map/verification images are report
-artifacts, not model input. Treat this lane as an oracle upper bound for
+placement-tool hints. Initial detections are semantic candidates; before
+`navigate_to_object` or `pick`, the agent must run an FPV scan/observe step that
+binds the same handle to a reviewable source-frame bbox and promotes the
+candidate to navigation-authorized. The FPV/chase/map/verification images are
+report artifacts, not model input. Treat this lane as an oracle upper bound for
 structured semantic cleanup, not the default fairness baseline against camera
 lanes.
 
@@ -168,11 +171,13 @@ detection_exposure_policy=sanitized_visible_object_detections
 ```
 
 The agent receives run-local observed handles such as `observed_001`, object
-categories, image regions, source observation ids, confidence, room/waypoint
-context, producer provenance, and approximate public support evidence. It does
-not receive `candidate_fixture_id`, `cleanup_recommended`, or
-`recommended_tool` in agent-facing detections. Runtime-map observed-object rows
-still report producer type, source observation, image region, grounding status,
+categories, source observation ids, confidence, room/waypoint context, producer
+provenance, and approximate public support evidence. Initial detections are
+semantic candidates with verbal scan guidance, not navigation-authorizing
+synthetic bboxes. It does not receive `candidate_fixture_id`,
+`cleanup_recommended`, or `recommended_tool` in agent-facing detections.
+Runtime-map observed-object rows still report producer type, source observation,
+image region, grounding status,
 and actionability, but destination selection is marked policy-required instead
 of cleanup-ready.
 
@@ -357,8 +362,8 @@ The refactor should make these gaps visible and testable:
 | Test target | Purpose |
 | --- | --- |
 | `profile=smoke` | Cheap contract sanity still works. |
-| `profile=world-labels` | Current structured-label cleanup input lane still produces robot-view artifacts and does not imply image input or map build mode. |
-| `profile=world-labels-sanitized` | Structured detections keep producer/source/region/actionability fields while omitting destination/tool oracle hints. |
+| `profile=world-labels` | Current structured-label cleanup input lane still produces robot-view artifacts, but structured labels are semantic candidates until source-FPV confirmation authorizes navigation. |
+| `profile=world-labels-sanitized` | Structured detections keep producer/source/actionability fields while omitting destination/tool oracle hints and pre-confirmed navigation authorization. |
 | `profile=camera-raw` | Raw camera artifacts are actually used, structured labels are withheld before declaration, and model-declared handles can drive cleanup. |
 | `profile=camera-labels` | Camera-derived label path is separate from world-label path, records producer provenance, and uses the same declaration schema as raw camera cleanup. |
 

@@ -1,6 +1,6 @@
 ---
 refactor_scope: fpv-visual-evidence-gate
-status: REOPEN
+status: PARTIAL
 accepted_severities:
   - P0
   - P1
@@ -12,7 +12,7 @@ last_verified: null
 
 ## Status
 
-REOPEN
+PARTIAL
 
 ## Target
 
@@ -52,37 +52,37 @@ navigation.
 
 ## Accepted Cleanup Checklist
 
-- [ ] Define candidate states explicitly: `semantic_candidate`,
+- [x] Define candidate states explicitly: `semantic_candidate`,
   `visual_scan_required`, `visually_confirmed`, and
   `navigation_authorized`.
-- [ ] Split semantic hints from visual authorization. `world-labels` and
+- [x] Split semantic hints from visual authorization. `world-labels` and
   `world-labels-sanitized` may expose object handles/categories and orientation
   hints, but the initial detections must not carry navigation-authorizing
   synthetic bbox evidence.
-- [ ] Add or expose a pre-navigation visual scan/confirm flow. The robot should
+- [x] Add or expose a pre-navigation visual scan/confirm flow. The robot should
   rotate/orient toward the semantic candidate, run `observe`, and bind the
   handle to a real source FPV bbox before `navigate_to_object` can succeed.
-- [ ] Require `navigate_to_object` / `pick` to accept only
+- [x] Require `navigate_to_object` / `pick` to accept only
   `navigation_authorized` candidates with real source observation provenance.
   Synthetic observation ids such as `visible_detection:*` and generated
   `_image_bbox(handle)` boxes must block with a concrete next tool such as
   `orient_to_candidate`/`adjust_camera` plus `observe`.
-- [ ] Remove action-authorizing resolver fallbacks from
+- [x] Remove action-authorizing resolver fallbacks from
   `navigate_to_visual_candidate`: no source-fixture fallback, no room fallback,
   and no broad category-only match when the exact source observation locality
   does not resolve.
-- [ ] Keep destination inference/advisory helpers separate from source-object
+- [x] Keep destination inference/advisory helpers separate from source-object
   grounding. Destination suggestions may be heuristic, but they must not make a
   source candidate actionable without FPV confirmation.
-- [ ] Preserve Grounding DINO/fake HTTP as bbox-evidence producers using the
+- [x] Preserve Grounding DINO/fake HTTP as bbox-evidence producers using the
   same visual evidence schema; they do not get a separate privileged resolver.
-- [ ] Update reports so each navigation card links the full evidence chain:
+- [x] Update reports so each navigation card links the full evidence chain:
   semantic candidate or raw source, orientation/scan observation, source FPV
   bbox, locality check, candidate state, and navigation authorization.
-- [ ] Replace old fallback-positive tests with block/unresolved tests, and add
+- [x] Replace old fallback-positive tests with block/unresolved tests, and add
   regression coverage for default world-labels, sanitized world-labels,
   RAW-FPV, and camera-labels/Grounding-DINO-shaped candidates.
-- [ ] Keep held-object `done` blockers and existing sanitized/RAW-FPV readiness
+- [x] Keep held-object `done` blockers and existing sanitized/RAW-FPV readiness
   contracts green.
 
 ## Parked Cross-Seam / Future Ideas
@@ -284,3 +284,47 @@ service access is a blocker, not a successful completion condition.
   demos are required evidence, not optional smoke. Added the Grounding DINO
   camera-labels Codex lane and required artifact-backed diagnosis plus fixes
   for any suspicious or failing demo output.
+- 2026-06-06: Implemented the deterministic FPV scan/confirm gate: world-label
+  observations now start as `visual_scan_required` semantic candidates without
+  synthetic bbox authorization, `adjust_camera -> observe` promotes same-source
+  candidates to `navigation_authorized`, RAW-FPV/camera-label resolution no
+  longer falls back through source-fixture/room/category broadening, and reports
+  show locality, candidate state, and authorization. Focused contract, MCP,
+  report, and checker suites pass together:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/reports/test_molmo_cleanup_report.py`;
+  `ruff check ...`;
+  `ruff format --check ...`.
+- 2026-06-06: Required local Codex evidence with `ROBOCLAWS_CODEX_PROVIDER=codex-env`:
+  `world-labels` passed at
+  `output/household/household-cleanup/codex-report/0606_1128/seed-7`
+  (`completion_status=success`, `mess_restoration_rate=0.8`,
+  `sweep_coverage_rate=1.0`, `disturbance_count=0`), with 5/5
+  `navigate_to_object` actions backed by `navigation_authorized`,
+  `reviewable`, `same_waypoint_source_observation` source-FPV bbox evidence.
+  `world-labels-sanitized` passed at
+  `output/household/household-cleanup/codex-world-labels-sanitized/0606_1142/seed-7`
+  (`completion_status=success`, `mess_restoration_rate=0.8`,
+  `sweep_coverage_rate=1.0`, `disturbance_count=0`), with 5/5 navigation
+  actions backed by the same source-FPV authorization chain.
+- 2026-06-06: `camera-labels` with Grounding DINO passed the checker at
+  `output/household/household-cleanup/codex-camera-labels/0606_1227/seed-7`
+  with `completion_status=partial_success`, `mess_restoration_rate=0.2`,
+  `sweep_coverage_rate=1.0`, and `disturbance_count=0`. Grounding DINO produced
+  one navigation-authorized candidate; the single `navigate_to_object` action
+  carried `source_observation_id=raw_fpv_013`,
+  `candidate_state=navigation_authorized`, `reviewability_status=reviewable`,
+  `locality_status=same_waypoint_source_observation`,
+  `producer_id=grounding-dino`, and normalized source-FPV bbox evidence.
+- 2026-06-06: `camera-raw` exposed the remaining live-agent limitation at
+  `output/household/household-cleanup/codex-camera-raw/0606_1156/seed-7`.
+  The run was stopped after 29 minutes with 14/14 waypoints observed, 52 strict
+  `navigate_to_visual_candidate` attempts, 2 grounded cleanup chains, and 5
+  blocked `done` attempts. Successful chains were authorized by
+  source-observation-local FPV evidence; unresolved visible-object guesses
+  stayed `semantic_candidate` with `source_observation_locality_unresolved`
+  instead of resolving through room/source-fixture/category fallback. Diagnosis:
+  stricter RAW-FPV grounding is working, but the current live agent cannot find
+  enough same-source reviewable candidates without a stronger camera-producer or
+  raw-FPV strategy. Proposed follow-up: tune the RAW-FPV live skill/prompt or
+  add a non-privileged visual producer assist, then rerun the same
+  `camera-raw` gate without weakening source-locality authorization.

@@ -1100,6 +1100,59 @@ def _maybe_clean_visible_object(
             {"object_id": handle, "reason": "already_on_inferred_fixture"}
         )
         return view_index
+    if str(detection.get("candidate_state") or "") == "visual_scan_required":
+        source_waypoint_id = str(
+            detection.get("waypoint_id")
+            or detection.get("last_waypoint_id")
+            or (detection.get("support_estimate") or {}).get("waypoint_id")
+            or ""
+        )
+        if source_waypoint_id:
+            _call_tool(
+                trace_events,
+                started_at,
+                "navigate_to_waypoint",
+                {"waypoint_id": source_waypoint_id, "reason": "source_fpv_scan_confirm"},
+                lambda selected=source_waypoint_id: contract.navigate_to_waypoint(selected),
+            )
+        _call_tool(
+            trace_events,
+            started_at,
+            "adjust_camera",
+            {"yaw_delta_deg": 15.0, "pitch_delta_deg": 0.0},
+            lambda: contract.adjust_camera(yaw_delta_deg=15.0, pitch_delta_deg=0.0),
+        )
+        confirmed_observation = _call_tool(
+            trace_events,
+            started_at,
+            "observe",
+            {},
+            contract.observe,
+            postprocess=lambda response: _attach_raw_fpv_robot_view(
+                response=response,
+                contract=contract,
+                base_contract=base_contract,
+                robot_view_steps=robot_view_steps,
+                output_dir=output_dir,
+                view_index_ref=[view_index],
+                record_robot_views=record_robot_views,
+            ),
+        )
+        view_index = _view_index_after_raw_fpv(robot_view_steps, view_index)
+        confirmed = next(
+            (
+                item
+                for item in confirmed_observation.get("visible_object_detections", [])
+                if item.get("object_id") == handle
+            ),
+            None,
+        )
+        if confirmed is None:
+            agent_scratchpad["failed_attempts"].append(
+                {"object_id": handle, "reason": "visual_scan_confirmation_missing"}
+            )
+            return view_index
+        detection = dict(confirmed)
     next_view_index = _clean_visible_object(
         trace_events=trace_events,
         started_at=started_at,
