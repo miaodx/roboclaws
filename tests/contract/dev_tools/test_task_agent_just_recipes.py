@@ -23,6 +23,7 @@ JUST_DIR = REPO_ROOT / "just"
 TASK_JUST = JUST_DIR / "task.just"
 AGENT_JUST = JUST_DIR / "agent.just"
 CODE_JUST = JUST_DIR / "code.just"
+OPENCLAW_JUST = JUST_DIR / "openclaw.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
@@ -565,6 +566,13 @@ def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
         "kimi",
         "output/openclaw/nav",
     ]
+
+
+def test_openclaw_direct_game_recipe_disables_mcp_tools() -> None:
+    text = OPENCLAW_JUST.read_text(encoding="utf-8")
+
+    assert 'if [[ "{{game}}" != "photo" ]]; then' in text
+    assert "bootstrap_cmd+=(ROBOCLAWS_MCP_ENABLED=0)" in text
 
 
 def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
@@ -1281,6 +1289,20 @@ def test_ci_does_not_define_codex_live_proof() -> None:
     assert "report-molmo-official-codex" not in workflow
     assert "codex-provider-smoke" not in workflow
     assert ".tmp/coding-agent-bin/codex" not in workflow
+
+
+def test_ci_direct_openclaw_game_smokes_disable_mcp_tools() -> None:
+    workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+    assert workflow.count('ROBOCLAWS_MCP_ENABLED: "0"') == 3
+    for job_name in (
+        "Bootstrap OpenClaw Gateway (2 named agents)",
+        "Bootstrap OpenClaw Gateway (2 agents — aggressive, defensive)",
+        "Bootstrap OpenClaw Gateway (2 agents — cooperative)",
+    ):
+        job_start = workflow.index(job_name)
+        job_chunk = workflow[job_start : job_start + 500]
+        assert 'ROBOCLAWS_MCP_ENABLED: "0"' in job_chunk
 
 
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:

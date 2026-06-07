@@ -142,6 +142,7 @@ def _run_preseed(tmp_path: Path, env_overrides: dict[str, str]) -> Path:
         "AGENT_IDS_CSV": "agent-0",
         "EXTRA_MODELS_JSON": "[]",
         "AGENT_SOUL_CSV": "",
+        "ROBOCLAWS_MCP_ENABLED": "1",
         "ROBOCLAWS_MCP_URL": "http://host.docker.internal:18788/mcp",
         "ROBOCLAWS_TOOL_PROFILE": "minimal",
         # In production the bash wrapper reads this from
@@ -848,6 +849,30 @@ def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
         assert entry["tools"]["alsoAllow"] == ["bundle-mcp"], (
             f"agent {entry['id']!r} alsoAllow must splice exactly bundle-mcp; "
             f"got {entry['tools']['alsoAllow']!r}"
+        )
+
+
+def test_mcp_can_be_disabled_for_direct_chat_completions_runs(tmp_path: Path) -> None:
+    """Direct OpenClaw game runs use image-to-JSON chat turns, not MCP tools.
+
+    Those runs do not start a host-side Roboclaws MCP server. If the Gateway
+    config still exposes ``bundle-mcp`` there, Kimi can try to call tools
+    against ``host.docker.internal:18788/mcp`` and the turn stalls until the
+    HTTP read timeout. ``ROBOCLAWS_MCP_ENABLED=0`` must therefore remove both
+    the server block and the per-agent bundle-mcp splice.
+    """
+    cfg_path = _run_preseed(
+        tmp_path,
+        {
+            "AGENT_IDS_CSV": "agent-0,agent-1",
+            "ROBOCLAWS_MCP_ENABLED": "0",
+        },
+    )
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    assert "mcp" not in cfg
+    for entry in cfg["agents"]["list"]:
+        assert entry["tools"] == {"profile": "minimal"}, (
+            f"direct chat-completions agents must not expose bundle-mcp; entry={entry!r}"
         )
 
 

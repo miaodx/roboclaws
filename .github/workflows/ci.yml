@@ -242,6 +242,7 @@ jobs:
         env:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
           AGENTS: "2"
+          ROBOCLAWS_MCP_ENABLED: "0"
           HOST_IP: "127.0.0.1"
           PORT: "18789"
         run: |
@@ -343,6 +344,7 @@ jobs:
           KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
           AGENTS: "2"
           AGENT_SOULS: "aggressive,defensive"
+          ROBOCLAWS_MCP_ENABLED: "0"
           HOST_IP: "127.0.0.1"
           PORT: "18789"
         run: |
@@ -437,6 +439,7 @@ jobs:
           AGENTS: "2"
           AGENT_SOULS: "cooperative,cooperative"
           PERSONALITY_PROBE: "0"
+          ROBOCLAWS_MCP_ENABLED: "0"
           HOST_IP: "127.0.0.1"
           PORT: "18789"
         run: |

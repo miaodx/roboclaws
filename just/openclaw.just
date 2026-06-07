@@ -61,6 +61,9 @@ run game="nav" agents="2" steps="10" provider="kimi" output_dir="output/openclaw
     bash scripts/dev/network_status.sh --assert-off-work "OpenClaw Gateway run"
 
     bootstrap_cmd=(env PROVIDER="{{provider}}" AGENTS="{{agents}}")
+    if [[ "{{game}}" != "photo" ]]; then
+      bootstrap_cmd+=(ROBOCLAWS_MCP_ENABLED=0)
+    fi
     if [[ -n "{{agent_souls}}" ]]; then
       bootstrap_cmd+=(AGENT_SOULS="{{agent_souls}}")
     fi

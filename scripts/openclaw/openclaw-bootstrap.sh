@@ -30,6 +30,9 @@
 #   HOST_IP      Bind address on the host            (default: 127.0.0.1)
 #   PORT         Gateway port                        (default: 18789)
 #   SIM_SERVER_URL URL for host-side sim tools       (default: http://host.docker.internal:18788)
+#   ROBOCLAWS_MCP_ENABLED  Seed Roboclaws MCP tools  (default: 1; set 0 for
+#                                                     direct image-to-JSON
+#                                                     chat-completions demos)
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
 #                                                     nvidia | mimo | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
@@ -125,14 +128,29 @@ SIM_SERVER_URL="${SIM_SERVER_URL:-http://host.docker.internal:18788}"
 # /app/dist/local-roots-*.js:getAgentScopedMediaLocalRoots).
 ROBOCLAWS_SNAPSHOTS_DIR="${ROBOCLAWS_SNAPSHOTS_DIR:-}"
 
-# ROBOCLAWS_MCP_URL seeds mcp.servers.roboclaws.url in openclaw.json so the
-# Gateway exposes our MCP tool surface (observe/move/done) to the agent.  Must
-# be set BEFORE first container start — mutating mcp.* on a running Gateway
-# triggers SIGUSR1 → PID-1 exit → container stop (spike F-3).  Default uses
-# host.docker.internal (container→host loopback), same route SIM_SERVER_URL
-# used.  Legacy SIM_SERVER_URL still accepted as a deprecated fallback that
-# appends /mcp and emits a warning; plan 05 removes it entirely when the
-# sim_server.py HTTP path is deleted.
+# ROBOCLAWS_MCP_ENABLED gates whether openclaw.json exposes the Roboclaws MCP
+# server to Gateway agents. Keep the default enabled for chat/autonomous/photo
+# paths that start a host-side MCP server. Direct image-to-JSON game demos set
+# this to 0 because they do not start an MCP server; exposing bundle-mcp there
+# lets a model attempt tool calls against a dead host endpoint and hang the turn.
+ROBOCLAWS_MCP_ENABLED="${ROBOCLAWS_MCP_ENABLED:-1}"
+case "$ROBOCLAWS_MCP_ENABLED" in
+    1|true|TRUE|yes|YES|on|ON) ROBOCLAWS_MCP_ENABLED="1" ;;
+    0|false|FALSE|no|NO|off|OFF) ROBOCLAWS_MCP_ENABLED="0" ;;
+    *)
+        printf '[bootstrap] ERROR: %s\n' "Unsupported ROBOCLAWS_MCP_ENABLED: '$ROBOCLAWS_MCP_ENABLED' (expected 1 or 0)" >&2
+        exit 1
+        ;;
+esac
+
+# ROBOCLAWS_MCP_URL seeds mcp.servers.roboclaws.url in openclaw.json when MCP is
+# enabled, so the Gateway exposes our MCP tool surface (observe/move/done) to
+# the agent. Must be set BEFORE first container start — mutating mcp.* on a
+# running Gateway triggers SIGUSR1 → PID-1 exit → container stop (spike F-3).
+# Default uses host.docker.internal (container→host loopback), same route
+# SIM_SERVER_URL used. Legacy SIM_SERVER_URL still accepted as a deprecated
+# fallback that appends /mcp and emits a warning; plan 05 removes it entirely
+# when the sim_server.py HTTP path is deleted.
 if [[ -n "${ROBOCLAWS_MCP_URL:-}" ]]; then
     :  # explicit override wins
 elif [[ -n "${SIM_SERVER_URL:-}" && "${SIM_SERVER_URL}" != "http://host.docker.internal:18788" ]]; then
@@ -146,9 +164,10 @@ else
 fi
 
 # ROBOCLAWS_TOOL_PROFILE controls which tool allowlist the Gateway applies to
-# every agent.  Default "minimal" keeps the surface to session_status + our
-# MCP tools (spike F-2).  "coding" and "messaging" exist for local probes
-# only; a typo dies 1 rather than silently broadening the attack surface.
+# every agent. Default "minimal" keeps the surface tight; when MCP is enabled
+# the bootstrap also splices in bundle-mcp so Roboclaws tools are reachable.
+# "coding" and "messaging" exist for local probes only; a typo dies 1 rather
+# than silently broadening the attack surface.
 ROBOCLAWS_TOOL_PROFILE="${ROBOCLAWS_TOOL_PROFILE:-minimal}"
 case "$ROBOCLAWS_TOOL_PROFILE" in
     minimal|coding|messaging) ;;
@@ -395,7 +414,10 @@ log "image        : $IMAGE"
 log "container    : $CONTAINER"
 log "volume       : $VOLUME"
 log "bind         : ${HOST_IP}:${PORT}"
-log "mcp url      : $ROBOCLAWS_MCP_URL"
+log "mcp enabled  : $ROBOCLAWS_MCP_ENABLED"
+if [[ "$ROBOCLAWS_MCP_ENABLED" == "1" ]]; then
+    log "mcp url      : $ROBOCLAWS_MCP_URL"
+fi
 log "tool profile : $ROBOCLAWS_TOOL_PROFILE"
 log "agents       : $AGENTS (prefix=$AGENT_PREFIX → ${AGENT_PREFIX}0 .. ${AGENT_PREFIX}$((AGENTS-1)))"
 log "provider     : $PROVIDER"
@@ -538,6 +560,7 @@ agent_soul_csv = os.environ.get("AGENT_SOUL_CSV", "")
 # tool profile BEFORE first container start so the Gateway does not
 # SIGUSR1-restart when mcp.servers changes (spike F-3).
 mcp_url = os.environ["ROBOCLAWS_MCP_URL"]
+mcp_enabled = os.environ.get("ROBOCLAWS_MCP_ENABLED", "1") == "1"
 tool_profile = os.environ["ROBOCLAWS_TOOL_PROFILE"]
 base = "/home/node/.openclaw"
 
@@ -590,7 +613,11 @@ agent_entries = [
         # and every roboclaws__* tool returns "Tool not found".
         # See docs/openclw/openclaw-tool-profiles.md for the full image diff and
         # re-validation steps when bumping the gateway image.
-        "tools": {"profile": tool_profile, "alsoAllow": ["bundle-mcp"]},
+        "tools": (
+            {"profile": tool_profile, "alsoAllow": ["bundle-mcp"]}
+            if mcp_enabled
+            else {"profile": tool_profile}
+        ),
     }
     for aid in agent_ids
 ]
@@ -645,22 +672,23 @@ config = {
 }
 # MCP server block (Phase 2.6, D-04): seeded BEFORE first container start
 # because adding mcp.servers to a running Gateway fires SIGUSR1 → container
-# exit (spike F-3).  The key is `transport` (not `type`); only
+# exit (spike F-3). The key is `transport` (not `type`); only
 # "streamable-http" and "sse" parse — anything else silently fails with
 # [bundle-mcp] SSE error: Non-200 status code (400) and the agent reports
-# it has no such tool (spike F-1).  Source of truth for the loader:
+# it has no such tool (spike F-1). Source of truth for the loader:
 # /app/dist/pi-bundle-mcp-tools-*.js (hash suffix changes per image).
 # Note: per-agent tools.alsoAllow=["bundle-mcp"] above is what actually
 # exposes these servers' tools to the agent — the config block alone is
 # necessary but not sufficient on image 2026.4.25-beta.11+.
-config["mcp"] = {
-    "servers": {
-        "roboclaws": {
-            "transport": "streamable-http",
-            "url": mcp_url,
+if mcp_enabled:
+    config["mcp"] = {
+        "servers": {
+            "roboclaws": {
+                "transport": "streamable-http",
+                "url": mcp_url,
+            }
         }
     }
-}
 # Strict plugin allow-list. Anything not in this list is hard-rejected by
 # the gateway, regardless of enabledByDefault. Source of truth lives in
 # scripts/openclaw/openclaw_plugin_allowlist.py and is forwarded by the host bash
@@ -779,6 +807,7 @@ docker run --rm --user root \
     -e EXTRA_MODELS_JSON="$EXTRA_MODELS_JSON" \
     -e PROVIDER_BASE_URL="$PROVIDER_BASE_URL" \
     -e AGENT_SOUL_CSV="$_soul_csv_for_preseed" \
+    -e ROBOCLAWS_MCP_ENABLED="$ROBOCLAWS_MCP_ENABLED" \
     -e ROBOCLAWS_MCP_URL="$ROBOCLAWS_MCP_URL" \
     -e ROBOCLAWS_TOOL_PROFILE="$ROBOCLAWS_TOOL_PROFILE" \
     -e OPENCLAW_TOKEN="${OPENCLAW_TOKEN:-}" \
@@ -805,6 +834,7 @@ mount_args=(
     --add-host=openrouter.ai:0.0.0.0
     --add-host=raw.githubusercontent.com:0.0.0.0
     -e OPENCLAW_AUTH_MODE=token
+    -e "ROBOCLAWS_MCP_ENABLED=${ROBOCLAWS_MCP_ENABLED}"
     -e "ROBOCLAWS_MCP_URL=${ROBOCLAWS_MCP_URL}"
     # Gateway plugins read the provider key from the env var named by the plugin
     # manifest (providerAuthEnvVars); the value comes from the roboclaws-side

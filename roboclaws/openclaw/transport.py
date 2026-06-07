@@ -345,7 +345,8 @@ class OpenClawBridge:
         state_json_seconds = time.perf_counter() - state_started
         steer = (
             f"You are RoboClaws {agent_name}, step {step_idx}. "
-            f"Follow the ai2thor-navigator skill. "
+            "This is a direct image-to-action turn, not an MCP tool session. "
+            "Do not read skill files or call tools. "
             f"Current state (JSON): {state_json}. "
             "FPV, structured map-v2 overhead, and chase camera attached. "
             'Reply with ONLY JSON: {"reasoning": "...", "action": "..."}.'
