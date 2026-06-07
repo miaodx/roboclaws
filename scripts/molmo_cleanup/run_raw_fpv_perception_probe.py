@@ -161,7 +161,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--raw-run-dir", action="append", type=Path, default=[])
     parser.add_argument("--contrast-run-dir", action="append", type=Path, default=[])
     parser.add_argument("--semantic-map-prior", type=Path, default=DEFAULT_SEMANTIC_MAP_PRIOR)
-    parser.add_argument("--private-labels", type=Path)
+    parser.add_argument("--private-labels", action="append", type=Path, default=[])
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--run-id", default="")
@@ -203,7 +203,7 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         max_candidates=max(1, min(3, int(args.max_candidates))),
     )
     labels = load_probe_labels(
-        args.private_labels,
+        tuple(args.private_labels or ()),
         frames=frames,
         contrast_run_dirs=contrast_run_dirs,
     )
@@ -384,14 +384,22 @@ def build_public_inputs(
 
 
 def load_probe_labels(
-    path: Path | None,
+    paths: Path | tuple[Path, ...] | list[Path] | None,
     *,
     frames: list[ObservationFrame],
     contrast_run_dirs: tuple[Path, ...],
 ) -> list[ProbeLabel]:
     labels: list[ProbeLabel] = []
     frame_ids = {frame.frame_id for frame in frames}
-    if path is not None and path.is_file():
+    if paths is None:
+        label_paths: tuple[Path, ...] = ()
+    elif isinstance(paths, Path):
+        label_paths = (paths,)
+    else:
+        label_paths = tuple(paths)
+    for path in label_paths:
+        if not path.is_file():
+            continue
         payload = _load_json(path)
         for item in payload.get("labels") or []:
             label = _label_from_payload(item, private=True)
@@ -793,7 +801,7 @@ def _collect_frames_from_run_dir(run_dir: Path, *, source_kind: str) -> list[Obs
 
 def _raw_observations_from_json_artifacts(run_dir: Path) -> list[dict[str, Any]]:
     observations = []
-    for name in ("agent_view.json", "run_result.json"):
+    for name in ("raw_fpv_observations.json", "agent_view.json", "run_result.json"):
         path = run_dir / name
         if not path.is_file():
             continue

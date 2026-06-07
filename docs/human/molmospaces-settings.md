@@ -663,6 +663,11 @@ just harness::molmo-planner-proof-bundle-execute-rerun
 - The `camera-raw-fpv` live success gate uses semantic acceptability because a tidy
   camera-derived placement can be correct for review while missing the generated
   exact target fixture.
+- The 2026-06-08 scorer-only raw-FPV probe reached a scoreable 36-frame
+  raw-only set covering all five generated targets, but CodexENV `gpt-5.5`
+  still confirmed at most two unique coarse targets. Keep pure
+  `camera-raw-fpv` as a baseline/ablation lane and prefer
+  `camera-grounded-labels` for live cleanup.
 - `camera_model_policy` remains internal metadata for deterministic simulated
   camera-label producer evidence under the shared Model-Declared Observation
   schema; it is not real VLM pixel inference unless the producer is explicitly a

@@ -78,6 +78,15 @@ or declaration schema. The run directory is
 stopped manually after about 26 minutes, so it has trace/live logs but no
 `run_result.json`, `checker.log`, or `report.html`.
 
+The 2026-06-08 perception-only follow-up made the raw-FPV comparison scoreable
+without changing live actionability. A public sweep corpus plus the saved live
+trace produced a 36-frame raw-only probe set with private scorer labels covering
+all five generated targets and no private-label or executable-handle leakage in
+prompt inputs. CodexENV `gpt-5.5` still stayed below threshold: baseline JSON
+confirmed 1 strict-bbox / 2 coarse unique targets, while skill JSON plus
+semantic-map planning context confirmed 1 strict / 1 coarse unique target. The
+probe route recommendation is `prefer_camera_grounded_labels`.
+
 Success/latency conclusion: keep `grounding-dino` base-recall as the default
 real `camera-grounded-labels` camera-labeler pipeline. For live-agent comparison,
 `world-oracle-labels` remains the privileged sim/API control,
