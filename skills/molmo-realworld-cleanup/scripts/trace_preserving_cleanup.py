@@ -29,6 +29,20 @@ class _McpToolAdapter:
     def navigate_to_object(self, object_id: str) -> dict[str, Any]:
         return self._call_tool("navigate_to_object", object_id=object_id)
 
+    def adjust_camera(
+        self,
+        yaw_delta_deg: float = 0.0,
+        pitch_delta_deg: float = 0.0,
+    ) -> dict[str, Any]:
+        return self._call_tool(
+            "adjust_camera",
+            yaw_delta_deg=yaw_delta_deg,
+            pitch_delta_deg=pitch_delta_deg,
+        )
+
+    def observe(self) -> dict[str, Any]:
+        return self._call_tool("observe")
+
     def pick(self, object_id: str) -> dict[str, Any]:
         return self._call_tool("pick", object_id=object_id)
 

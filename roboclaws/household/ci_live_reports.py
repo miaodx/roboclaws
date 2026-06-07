@@ -40,7 +40,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         profile="world-oracle-labels",
     ),
     MolmoLiveModelEntry(
-        name="kimi-k2.6-camera-raw",
+        name="kimi-k2.6-camera-raw-fpv",
         label="Kimi K2.6 RAW_FPV",
         provider_profile="kimi-anthropic",
         model="kimi-k2.6",
@@ -48,7 +48,7 @@ MODEL_ENTRIES: tuple[MolmoLiveModelEntry, ...] = (
         profile="camera-raw-fpv",
     ),
     MolmoLiveModelEntry(
-        name="mimo-v2.5-camera-raw",
+        name="mimo-v2.5-camera-raw-fpv",
         label="MiMo v2.5 RAW_FPV",
         provider_profile="mimo-anthropic",
         model="mimo-v2.5",

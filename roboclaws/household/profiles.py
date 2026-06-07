@@ -40,7 +40,6 @@ CAMERA_LABELERS: tuple[str, ...] = (
     "fake-http",
     "contract-fake",
     "grounding-dino+mimo-v2.5",
-    "grounding-dino+mimo-v2-omni",
     "yoloe+mimo-v2.5",
     "grounding-dino+qwen3-vl",
     "mimo-v2.5-direct",

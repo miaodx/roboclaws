@@ -11,6 +11,8 @@ from __future__ import annotations
 from roboclaws.ai2thor.tasks import AI2THOR_TASK_SPECS
 from roboclaws.games.tasks import GAME_TASK_SPECS
 from roboclaws.household.profiles import (
+    CAMERA_GROUNDED_LABELS_LANE,
+    SIM_PROJECTED_LABELS_CAMERA_LABELER,
     cleanup_profile_names,
     validate_evidence_lane_camera_labeler,
 )
@@ -134,6 +136,14 @@ def _resolve_evidence_mode(
                 f"expected {'|'.join(cleanup_profile_names())}",
             )
         camera_labeler = _override_value(overrides, "camera_labeler")
+        backend = _override_value(overrides, "backend") or spec.default_backend
+        if (
+            profile == CAMERA_GROUNDED_LABELS_LANE
+            and not camera_labeler
+            and backend == "agibot_molmospaces_sim"
+        ):
+            camera_labeler = SIM_PROJECTED_LABELS_CAMERA_LABELER
+            overrides = (*overrides, f"camera_labeler={camera_labeler}")
         visual_grounding = _override_value(overrides, "visual_grounding")
         if visual_grounding and not camera_labeler:
             raise LaunchError(

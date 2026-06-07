@@ -917,7 +917,6 @@ def _detections_for_policy(
     if perception_mode not in {CAMERA_MODEL_POLICY_MODE, RAW_FPV_ONLY_MODE}:
         return list(observation.get("visible_object_detections", []))
     raw = observation.get("raw_fpv_observation") or {}
-    candidate_inputs = None
     if perception_mode == RAW_FPV_ONLY_MODE:
         waypoint = contract._waypoint_by_id(str(raw.get("waypoint_id") or ""))
         candidate_inputs = (
@@ -928,6 +927,36 @@ def _detections_for_policy(
             if waypoint is not None
             else []
         )
+        detections: list[dict[str, Any]] = []
+        for candidate in candidate_inputs:
+            response = _call_tool(
+                trace_events,
+                started_at,
+                "navigate_to_visual_candidate",
+                {
+                    "source_observation_id": raw.get("observation_id", ""),
+                    "category": candidate.get("category", ""),
+                    "producer_type": MAIN_CLEANUP_AGENT_PRODUCER,
+                    "producer_id": "deterministic_raw_fpv_agent",
+                },
+                lambda item=candidate: contract.navigate_to_visual_candidate(
+                    str(raw.get("observation_id", "")),
+                    category=str(item.get("category") or ""),
+                    evidence_note=str(item.get("evidence_note") or ""),
+                    image_region=item.get("image_region") or {},
+                    source_fixture_id=str(item.get("source_fixture_id") or ""),
+                    confidence=item.get("confidence"),
+                    producer_type=MAIN_CLEANUP_AGENT_PRODUCER,
+                    producer_id="deterministic_raw_fpv_agent",
+                ),
+            )
+            if not response.get("ok"):
+                continue
+            detection = contract.inspect_visible_object(str(response.get("object_id") or ""))
+            if detection.get("ok") and isinstance(detection.get("detection"), dict):
+                detections.append(dict(detection["detection"]))
+        return detections
+    candidate_inputs = None
     producer_type = (
         SIMULATED_CAMERA_MODEL_PROVENANCE
         if perception_mode == CAMERA_MODEL_POLICY_MODE

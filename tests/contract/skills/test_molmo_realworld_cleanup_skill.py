@@ -9,6 +9,10 @@ from roboclaws.household.profiles import WORLD_LABELS_PROFILE
 from roboclaws.household.realworld_contract import RICH_MAP_MODE
 from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.semantic_timeline import (
+    FOCUSED_SEMANTIC_PHASES,
+    successful_semantic_phases,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 ROUTINE_PATH = (
@@ -76,13 +80,26 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
 
     trace_text = (tmp_path / "trace.jsonl").read_text(encoding="utf-8")
     phases = [step["phase"] for step in cleaned["semantic_steps"]]
+    successful_phases = successful_semantic_phases(cleaned["semantic_steps"])
+    successful_cleanup_phases = [
+        phase for phase in successful_phases if phase in FOCUSED_SEMANTIC_PHASES
+    ]
 
     assert cleaned["ok"] is True
     assert cleaned["routine"] == "canonical_cleanup_routine_v1"
     assert cleaned["mcp_composite_used"] is False
     assert cleaned["composite_preserves_semantic_substeps"] is True
-    assert phases[:3] == ["navigate_to_object", "pick", "navigate_to_receptacle"]
+    assert phases[:3] == ["navigate_to_object", "adjust_camera", "observe"]
+    assert successful_cleanup_phases[:3] == [
+        "navigate_to_object",
+        "pick",
+        "navigate_to_receptacle",
+    ]
     assert {"place", "place_inside"}.intersection(phases)
+    assert any(
+        step.get("skill_recovery_for_phase") == "navigate_to_object"
+        for step in cleaned["semantic_steps"]
+    )
     assert '"tool": "clean_observed_object"' not in trace_text
 
 

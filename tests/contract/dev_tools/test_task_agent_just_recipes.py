@@ -912,6 +912,21 @@ def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehard
     assert "--record-robot-views" in route
 
 
+def test_semantic_map_build_agibot_sim_defaults_camera_labeler_for_public_facade() -> None:
+    plan = resolve_task_launch(
+        (
+            "semantic-map-build",
+            "direct",
+            "camera-grounded-labels",
+            "backend=agibot_molmospaces_sim",
+            "runtime=fixture",
+        )
+    )
+
+    assert "camera_labeler=sim-projected-labels" in plan.overrides
+    assert "camera_labeler=sim-projected-labels" in plan.argv
+
+
 def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
     stderr = assert_task_run_fails(
         "household-cleanup",
