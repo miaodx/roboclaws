@@ -9,10 +9,22 @@ from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_raw_fpv_perception_probe.py"
+LABEL_SCRIPT_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "generate_raw_fpv_private_labels.py"
 
 
 def _load_module():
     spec = importlib.util.spec_from_file_location("run_raw_fpv_perception_probe", SCRIPT_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_label_module():
+    spec = importlib.util.spec_from_file_location(
+        "generate_raw_fpv_private_labels", LABEL_SCRIPT_PATH
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -240,6 +252,167 @@ def test_raw_fpv_probe_reports_coarse_locality_route(tmp_path: Path) -> None:
     assert Path(report["artifacts"]["html_report"]).is_file()
 
 
+def test_private_label_generator_reads_only_pre_cleanup_sweep(tmp_path: Path) -> None:
+    labels = _load_label_module()
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "observe",
+                        "response": {
+                            "raw_fpv_observation": _raw_observation(
+                                "raw_fpv_001",
+                                "robot_views/0001_raw_fpv_001.fpv.png",
+                            )
+                        },
+                    }
+                ),
+                json.dumps({"event": "request", "tool": "pick", "request": {}}),
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "observe",
+                        "response": {
+                            "raw_fpv_observation": _raw_observation(
+                                "raw_fpv_002",
+                                "robot_views/0002_raw_fpv_002.fpv.png",
+                            )
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    observations = labels.first_sweep_observations_from_trace(trace_path)
+
+    assert [item["observation_id"] for item in observations] == ["raw_fpv_001"]
+    assert observations[0]["robot_pose"]["x"] == 1.25
+    assert observations[0]["image_artifact"] == "robot_views/0001_raw_fpv_001.fpv.png"
+
+
+def test_private_label_generator_full_trace_keeps_later_observations(tmp_path: Path) -> None:
+    labels = _load_label_module()
+    trace_path = tmp_path / "trace.jsonl"
+    trace_path.write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "observe",
+                        "response": {"raw_fpv_observation": _raw_observation("raw_fpv_001", "")},
+                    }
+                ),
+                json.dumps({"event": "request", "tool": "pick", "request": {}}),
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "observe",
+                        "response": {"raw_fpv_observation": _raw_observation("raw_fpv_002", "")},
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    observations = labels.observations_from_trace(
+        labels._iter_trace_rows(trace_path), replay_mode="full_trace"
+    )
+
+    assert [item["observation_id"] for item in observations] == [
+        "raw_fpv_001",
+        "raw_fpv_002",
+    ]
+
+
+def test_private_label_generator_extracts_private_placement_bindings() -> None:
+    labels = _load_label_module()
+    bindings = labels.placement_bindings_from_trace(
+        [
+            {
+                "event": "response",
+                "tool": "place_inside",
+                "response": {
+                    "ok": True,
+                    "object_id": "observed_007",
+                    "placement_diagnostic": {
+                        "object_id": "book_private_001",
+                        "receptacle_id": "shelf_private_001",
+                        "relation": "inside",
+                    },
+                },
+            }
+        ]
+    )
+
+    assert bindings == {
+        "observed_007": {
+            "private_object_id": "book_private_001",
+            "receptacle_id": "shelf_private_001",
+            "relation": "inside",
+            "place_tool": "place_inside",
+        }
+    }
+
+
+def test_private_label_generator_reconstructs_generated_mess_manifest() -> None:
+    labels = _load_label_module()
+    state = {
+        "seed": 7,
+        "scene_source": "procthor-10k-val",
+        "scene_index": 0,
+        "private_manifest": {
+            "success_threshold": 5,
+            "targets": [
+                {
+                    "object_id": "plate_private_001",
+                    "valid_receptacle_ids": ["sink_private_001"],
+                }
+            ],
+        },
+        "mess_placement_diagnostics": [
+            {
+                "object_id": "plate_private_001",
+                "object_category": "Plate",
+                "receptacle_id": "table_private_001",
+                "relation": "on",
+            }
+        ],
+    }
+
+    manifest = labels.generated_mess_manifest_from_state(state)
+
+    assert manifest["schema"] == "roboclaws_generated_mess_manifest_v1"
+    assert manifest["targets"] == [
+        {
+            "object_id": "plate_private_001",
+            "category": "Plate",
+            "target_receptacle_id": "sink_private_001",
+            "valid_receptacle_ids": ["sink_private_001"],
+            "start_receptacle_id": "table_private_001",
+            "relation": "on",
+            "placement_index": 0,
+        }
+    ]
+
+
+def test_private_label_generator_normalizes_bbox_and_grid_region() -> None:
+    labels = _load_label_module()
+
+    bbox = labels.normalize_box_xywh([270, 180, 539, 359], width=540, height=360)
+
+    assert bbox == [0.5, 0.5, 0.5, 0.5]
+    assert labels.coarse_regions_from_bbox(bbox) == ["lower_right"]
+
+
 def _raw_run_dir(
     base: Path,
     *,
@@ -267,6 +440,26 @@ def _raw_run_dir(
         encoding="utf-8",
     )
     return run_dir
+
+
+def _raw_observation(observation_id: str, image_artifact: str) -> dict[str, object]:
+    return {
+        "observation_id": observation_id,
+        "waypoint_id": "generated_exploration_001",
+        "room_id": "generated_area",
+        "image_artifacts": {"fpv": image_artifact},
+        "robot_view_label": observation_id,
+        "camera_control_contract": {
+            "robot_pose": {
+                "x": 1.25,
+                "y": 2.5,
+                "z": 0.0,
+                "theta": 0.0,
+                "head_yaw": 0.0,
+                "head_pitch": 0.25,
+            }
+        },
+    }
 
 
 def _write_private_labels(

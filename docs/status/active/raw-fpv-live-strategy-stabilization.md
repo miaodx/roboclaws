@@ -339,6 +339,99 @@ the fixed frames, then run the real `codex-env` matrix. If generating labels
 requires MuJoCo segmentation, keep those private labels scorer-only and do not
 copy them into prompt inputs or live agent context.
 
+## 2026-06-07 Private Label Replay Result
+
+State: PARTIAL
+
+Added a scorer-only private-label generator:
+
+- `scripts/molmo_cleanup/generate_raw_fpv_private_labels.py`
+
+The generator replays saved RAW-FPV observations through the MolmoSpaces
+subprocess backend, focuses hidden generated-mess objects with MuJoCo
+segmentation, and writes a `raw_fpv_private_label_manifest_v1` file for the
+existing perception probe. It has two replay modes:
+
+- `pre_cleanup_sweep`: labels only observations before the first cleanup
+  mutation.
+- `full_trace`: also applies scorer-private equivalents of successful
+  pick/place chains before labeling later observations.
+
+Privacy boundary:
+
+- generated labels are scorer-only private artifacts;
+- prompt inputs still contain no private object ids or executable prior handles;
+- the live cleanup contract and actionability rules are unchanged.
+
+Replay runs:
+
+```bash
+python scripts/molmo_cleanup/generate_raw_fpv_private_labels.py \
+  --run-id 0607_1537_first_sweep_private_labels \
+  --keep-replay-artifacts
+```
+
+Result:
+
+- `status=partial`
+- 12 pre-cleanup observations replayed.
+- 2 labels on 1 frame.
+- 2 unique private generated targets labeled.
+
+```bash
+python scripts/molmo_cleanup/generate_raw_fpv_private_labels.py \
+  --run-id 0607_1537_full_trace_private_labels \
+  --keep-replay-artifacts
+```
+
+Result:
+
+- `status=partial`
+- 22 observations replayed.
+- 11 labels on 10 frames.
+- 4 of 5 private generated targets labeled.
+- Missing target: `Irishpotato_98dee472f1cf0a95c9fbc734935c5ea3_1_0_2`.
+
+Offline probe with the full-trace private manifest:
+
+```bash
+python scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  --provider offline \
+  --prompt-variant both \
+  --private-labels \
+    output/molmo/raw-fpv-private-labels/0607_1537_full_trace_private_labels/raw_fpv_private_label_manifest.json \
+  --max-frames-per-source 64 \
+  --run-id 0607_offline_with_full_trace_private_labels_max64
+```
+
+Report:
+
+```bash
+output/molmo/raw-fpv-perception-probe/0607_offline_with_full_trace_private_labels_max64/report.html
+output/molmo/raw-fpv-perception-probe/0607_offline_with_full_trace_private_labels_max64/report.json
+```
+
+Observed result:
+
+- `status=partial`
+- 85 fixed frames ingested.
+- 12 labels total, 11 private replay labels.
+- 74 frames still lack private scorer labels.
+- prompt privacy checks passed:
+  `private_labels_in_prompt_inputs=false` and
+  `agent_facing_input_contains_executable_prior_handles=false`.
+
+Decision:
+
+Do not run the real `codex-env` matrix against this fixed artifact set. The
+manifest path works and preserves the public/private boundary, but the saved
+frames still cannot prove the required `>=5` unique current-frame confirmable
+candidate gate because only 4 of 5 private generated targets are scoreable.
+The next evidence-producing slice must capture or replay a new fixed frame set
+that includes scoreable private RAW-FPV labels for all generated targets, or
+accept that this lane remains below the proof threshold and prefer
+`camera-grounded-labels`.
+
 ## Stop Condition
 
 Stop this slice when `camera-raw-fpv` either passes the accepted success
