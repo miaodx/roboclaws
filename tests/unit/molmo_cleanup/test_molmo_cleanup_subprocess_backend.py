@@ -39,6 +39,7 @@ WORKER_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "molmospaces_subprocess_
 
 
 def _load_worker_module():
+    pytest.importorskip("mujoco")
     spec = importlib.util.spec_from_file_location("molmospaces_subprocess_worker", WORKER_PATH)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)

@@ -176,7 +176,14 @@ def test_isaac_lab_fake_worker_protocol_produces_views_and_semantic_pose(
         assert backend.robot["robot_mounted_head_camera"] is False
     assert backend.robot["head_camera_prim_path"] == "/World/robot_0/head_camera"
     assert backend.robot_import["schema"] == "isaac_rby1m_robot_import_plan_v1"
-    assert backend.robot_import["source_urdf"].endswith("model_holobase_isaac.urdf")
+    if backend.robot_import["source_urdf"]:
+        assert backend.robot_import["source_urdf"].endswith("model_holobase_isaac.urdf")
+    else:
+        assert backend.robot_import["status"] == "missing_urdf"
+        assert (
+            "RBY1M Isaac URDF not found in MolmoSpaces asset cache."
+            in backend.robot_import["blockers"]
+        )
     assert backend.robot_import["head_link_name"] == "link_head_2"
     assert backend.robot_import["head_camera_prim_path"] == "/World/robot_0/head_camera"
     assert backend.robot_import["head_camera_equivalent"] is (
@@ -213,6 +220,11 @@ def test_isaac_lab_worker_detects_imported_rby1m_robot_usd(
         isaac_lab_backend_worker,
         "ISAAC_RBY1M_ROBOT_IMPORT_SUMMARY_PATH",
         summary_path,
+    )
+    monkeypatch.setattr(
+        isaac_lab_backend_worker,
+        "_find_rby1m_isaac_urdf",
+        lambda: tmp_path / "model_holobase_isaac.urdf",
     )
     monkeypatch.setattr(isaac_lab_backend_worker, "_repo_path", lambda path: path)
 

@@ -23,6 +23,11 @@ def _require_agibot_sdk_runner() -> None:
         pytest.skip("Agibot SDK vendor runner is unavailable in this checkout")
 
 
+def _require_raw_fpv_checker() -> None:
+    if not RAW_FPV_CHECK_PATH.is_file():
+        pytest.skip("Agibot raw-FPV checker is unavailable in this checkout")
+
+
 def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> None:
     generator = _load_module(GENERATOR_PATH, "generate_metric_map_from_context")
     context_path = tmp_path / "agibot_map_context.completed.json"
@@ -458,6 +463,7 @@ def test_sdk_runner_camera_observation_fails_loudly_on_missing_numpy(
 def test_raw_fpv_checker_records_head_color_status_and_no_motion(
     monkeypatch, tmp_path: Path
 ) -> None:
+    _require_raw_fpv_checker()
     checker = _load_module(RAW_FPV_CHECK_PATH, "check_raw_fpv_status_mocked_success")
     fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory())
 
@@ -493,6 +499,7 @@ def test_raw_fpv_checker_records_head_color_status_and_no_motion(
 
 
 def test_raw_fpv_checker_fails_loudly_on_missing_numpy(monkeypatch, tmp_path: Path) -> None:
+    _require_raw_fpv_checker()
     checker = _load_module(RAW_FPV_CHECK_PATH, "check_raw_fpv_status_mocked_numpy")
     fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory(missing_numpy=True))
 
