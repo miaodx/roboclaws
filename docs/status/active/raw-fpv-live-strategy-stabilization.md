@@ -6,8 +6,10 @@ State: PARTIAL stop reached
 
 ## Scope
 
-Stabilize the pure `camera-raw` live Codex cleanup lane after the strict FPV
-visual-evidence authorization gate landed.
+Stabilize the `camera-raw-fpv` live Codex cleanup lane after the strict FPV
+visual-evidence authorization gate landed. Semantic-map priors may be tested as
+planning context, but current-frame detector candidates remain out of scope for
+this lane.
 
 This is a strategy and skill-loop follow-up, not a relaxation of the grounding
 contract. `navigate_to_object`, `pick`, and `navigate_to_visual_candidate` must
@@ -60,13 +62,14 @@ fallback matching.
 
 ## Decision Boundary
 
-The next target is pure Codex RAW-FPV. Codex should inspect the raw FPV image
-blocks and drive the trace-preserving loop itself:
+The next target is Codex `camera-raw-fpv`. Codex should inspect the raw FPV
+image blocks and drive the trace-preserving loop itself:
 
 ```text
 observe
   -> choose one visible movable cleanup object
-  -> navigate_to_visual_candidate with source_observation_id, category, and bbox
+  -> navigate_to_visual_candidate with source_observation_id, category, and
+     reviewable image locality
   -> pick
   -> navigate_to_receptacle
   -> open? -> place/place_inside -> close?
@@ -76,21 +79,32 @@ Keep `camera-raw` on `inline_on_navigate` for the next iteration. Do not add
 normal raw-FPV pre-registration unless a later harness result shows that
 prompt/loop tuning alone is insufficient.
 
-If pure RAW-FPV still cannot pass after one focused prompt/skill iteration, the
-next escalation may add a non-privileged visual producer assist, but that must
-be reported as an assisted RAW-FPV lane, not as pure `camera-raw` success.
+Do not create a new public lane for semantic-map hints. `camera-raw-fpv` may use
+Runtime Metric Map / semantic-map priors as planning context for where to look
+and which categories to prioritize, but cleanup eligibility still requires
+current-frame raw-FPV confirmation from the acting model. Current-frame detector
+or hosted visual producer candidates remain `camera-grounded-labels`, not
+`camera-raw-fpv`.
+
+The next escalation is probe-first: measure whether structured raw-FPV JSON
+with reviewable but not detector-grade image locality can produce enough
+current-frame confirmable candidates. Only if that probe passes should the live
+contract accept a relaxed raw-FPV locality form such as a structured coarse
+region.
 
 ## Accepted Success Criteria
 
-For `seed=7 generated_mess_count=5`, pure `camera-raw` is viable when:
+For `seed=7 generated_mess_count=5`, `camera-raw-fpv` is viable when:
 
 - the run reaches full waypoint sweep coverage;
 - Codex completes at least the generated mess success threshold, currently 5
   grounded cleanup chains;
-- successful chains are backed by source-observation-local FPV bbox evidence and
-  `candidate_state=navigation_authorized`;
+- successful chains are backed by source-observation-local raw-FPV evidence,
+  reviewable image locality, and `candidate_state=navigation_authorized`;
 - no structured world labels, private target truth, or visual-grounding service
-  producer candidates leak into the pure RAW-FPV agent input;
+  producer candidates leak into the raw-FPV agent input;
+- semantic-map priors, when provided, are planning context only and do not create
+  executable object handles without current-frame confirmation;
 - `done` is not accepted while public recovery blockers require more grounded
   cleanup work;
 - focused contract/report/checker tests remain green.
@@ -106,22 +120,28 @@ destination agreement.
   synthetic observation fallback authorization.
 - Do not feed `world-labels` or `world-labels-sanitized` structured candidates
   into `camera-raw`.
-- Do not call a detector or hosted visual producer while still claiming pure
-  Codex RAW-FPV success.
+- Do not call a detector or hosted visual producer while still claiming
+  `camera-raw-fpv` success.
+- Do not treat older movable-object semantic-map priors as executable cleanup
+  handles without current-frame raw-FPV confirmation.
+- Do not relax JSON structure for raw-FPV declarations; the open question is
+  locality precision, not whether outputs remain structured.
 - Do not change the public MCP surface into a whole-task cleanup tool.
 
 ## Next Action
 
-Do not continue pure `camera-raw` prompt/loop tuning for this slice. The
+Do not continue broad `camera-raw` prompt/loop tuning for this slice. The
 2026-06-06 live gate reached the PARTIAL stop condition: prompt behavior
-improved, but pure RAW-FPV still completed only two grounded cleanup chains
-before low-yield post-sweep retries.
+improved, but raw-FPV still completed only two grounded cleanup chains before
+low-yield post-sweep retries.
 
-The next justified slice is an explicitly labeled assisted RAW-FPV lane. It
-should preserve source-observation-local FPV evidence, reviewable bboxes, and
-`navigation_authorized` requirements while adding a non-privileged visual
-producer assist or pre-registration path. Do not claim that lane as pure
-`camera-raw` success.
+The next justified slice is a perception-only raw-FPV probe over fixed frames.
+It should compare no-prior and semantic-map-context variants while preserving
+source-observation-local evidence and structured JSON output. Bbox precision is
+diagnostic rather than assumed: the probe should separately report strict bbox
+success and structured coarse-locality success. Do not change live cleanup
+actionability until the probe shows that relaxed locality can meet the cleanup
+threshold.
 
 Reference live artifact:
 
@@ -211,45 +231,63 @@ Classification:
 Decision:
 
 This satisfies the PARTIAL stop condition for the pure prompt/skill slice. The
-next justified slice should be explicitly labeled assisted RAW-FPV, using a
-non-privileged visual producer assist or pre-registration path while preserving
-the same source-FPV locality, bbox reviewability, and
-`navigation_authorized` requirements. Do not report that assisted lane as pure
-`camera-raw` success.
+next justified slice is a perception-only raw-FPV probe that keeps structured
+JSON output and current-frame source locality, allows semantic-map priors only
+as planning context, and measures whether coarse but reviewable image locality
+can meet the cleanup threshold before live actionability changes.
 
 ## Stop Condition
 
-Stop this slice when pure `camera-raw` either passes the accepted success
-criteria above, or produces artifact-backed evidence that prompt/loop tuning is
-insufficient and the next justified slice is an explicitly labeled assisted
-RAW-FPV lane.
+Stop this slice when `camera-raw-fpv` either passes the accepted success
+criteria above, or produces artifact-backed evidence that raw-FPV model
+perception remains below threshold even with structured JSON, semantic-map
+context, and relaxed coarse-locality probe scoring.
 
 ## Preflight Contract
 
 Preflight status: DRAFT
 
 Task source: `docs/status/active/raw-fpv-live-strategy-stabilization.md` plus
-the 2026-06-06 discussion.
+the 2026-06-06 and 2026-06-07 discussion.
 
 Canonical source: `docs/status/active/raw-fpv-live-strategy-stabilization.md`.
 
 Route: durable `$intuitive-flow`.
 
-Goal: Stabilize the pure Codex `camera-raw` live cleanup lane by tuning only
-the RAW-FPV skill/prompt loop, while preserving strict source-FPV
-authorization.
+Goal: Build a perception-only `camera-raw-fpv` probe that measures whether
+structured JSON output with strict bbox and relaxed coarse-locality scoring can
+produce enough current-frame confirmable cleanup candidates before changing live
+cleanup actionability.
 
 ### Execution Scope
 
-- Tune `camera-raw` live-agent instructions in
-  `skills/molmo-realworld-cleanup/SKILL.md`,
-  `roboclaws/household/raw_fpv_guidance.py`, and/or
-  `roboclaws/agents/prompts/household_cleanup.py`.
-- Keep `inline_on_navigate` as the normal pure RAW-FPV strategy.
-- Make Codex more reliably execute
-  `observe -> visible movable object -> bbox -> navigate_to_visual_candidate -> pick/place`.
-- Update focused tests for prompt/skill contract if text behavior changes.
-- Run one pure `camera-raw` Codex live gate after deterministic tests pass.
+- Add a probe script under `scripts/molmo_cleanup/` that reads fixed raw-FPV
+  observation frames and public context from existing run artifacts.
+- Include both failed raw-FPV frames and successful or partial-success contrast
+  frames so scorer behavior is calibrated.
+- Ask the model for JSON only: each observation may yield at most 1-3 cleanup
+  candidates with `source_observation_id`, `category`, `evidence_note`,
+  confidence, and either strict bbox locality or structured coarse locality.
+- Represent coarse locality as structured fields, not free text: a fixed screen
+  grid region such as `upper_left`, `upper_center`, `upper_right`,
+  `middle_left`, `center`, `middle_right`, `lower_left`, `lower_center`, or
+  `lower_right`, plus an optional surface hint such as `floor`, `table`,
+  `shelf`, `counter`, `bed`, `sofa`, or `unknown`.
+- Compare a minimal first matrix: `CodexENV gpt-5.5` with baseline JSON prompt
+  vs skill JSON plus semantic-map context.
+- Provide semantic-map context only as compressed planning context:
+  waypoint/area, likely categories, historical observation direction, and
+  `needs_confirm`; do not expose executable observed-object handles.
+- Score strict-bbox success separately from coarse-locality success against an
+  offline private-label scorer that is never included in the model prompt.
+- Score coarse locality by region/object overlap plus independent category
+  matching; do not require a precise center-point hit for coarse locality.
+- Simulate live cleanup constraints in the primary metric: at most one acted
+  candidate per observation, duplicate/already-handled candidates do not count
+  toward threshold, and 1-3 candidate lists are used only for recall diagnostics
+  beyond the live-like top candidate.
+- Report failure classes at least as `schema_failure`,
+  `locality_too_coarse_or_invalid`, and `semantic_mismatch/unresolved`.
 
 ### Execution Non-Goals
 
@@ -257,8 +295,10 @@ authorization.
 - No room/source-fixture/category/synthetic bbox fallback restoration.
 - No world-label or camera-label leakage into pure `camera-raw`.
 - No detector/VLM producer assist in this slice.
-- No new MCP tool or whole-task cleanup tool.
-- No broad report redesign.
+- No live cleanup actionability change until the probe shows relaxed locality can
+  meet the cleanup threshold.
+- No new public lane, MCP tool, or whole-task cleanup tool.
+- No broad report redesign beyond the probe output.
 
 ### Context Package
 
@@ -276,7 +316,10 @@ Must read:
 Useful evidence:
 
 - `output/household/household-cleanup/codex-camera-raw/0606_1156/seed-7`
+- `output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7`
 - `output/household/household-cleanup/codex-camera-labels/0606_1227/seed-7`
+- `output/molmo/codex-harness8/0607_1005-codexenv-detached`
+- `output/molmo/codex-harness8/0607_0943-codexenv-cleanwt/_semantic-map-prior-dino/0607_0943/seed-7/runtime_metric_map.json`
 
 Do not read unless needed:
 
@@ -289,23 +332,33 @@ Do not read unless needed:
 SUCCESS only if:
 
 - Focused deterministic tests pass.
-- Pure `camera-raw` live Codex run reaches full sweep coverage.
-- It completes at least 5 grounded cleanup chains for
-  `seed=7 generated_mess_count=5`.
-- Successful chains have source-observation-local FPV bbox evidence and
-  `candidate_state=navigation_authorized`.
-- Checker passes the RAW-FPV gates with no structured-label leakage.
+- The probe ingests fixed raw-FPV frames and writes a reproducible report under
+  `output/molmo/raw-fpv-perception-probe/`.
+- The report separates strict-bbox and coarse-locality scoring.
+- The report includes `unique_confirmable_count`, `duplicate_count`, and a
+  live-like top-candidate score that prevents repeated sightings of the same
+  object from satisfying the threshold.
+- The report shows whether the first CodexENV matrix reaches the cleanup
+  threshold: `>=5` unique current-frame confirmable candidates for
+  `generated_mess_count=5`, or `>=7` for `generated_mess_count=10`.
+- The report emits one route recommendation:
+  `keep_raw_fpv_baseline_only`, `try_live_coarse_locality_contract`, or
+  `prefer_camera_grounded_labels`.
+- Private labels are used only by the offline scorer and are not present in
+  prompts or agent-facing input dumps.
+- Semantic-map context appears only as compressed planning context and does not
+  expose executable prior handles.
 
 PARTIAL if:
 
-- Deterministic prompt/contract behavior improves, but live `camera-raw` still
-  fails with artifact-backed classification showing prompt/loop tuning is
-  insufficient.
+- The probe infrastructure runs and reports schema/locality/semantic failure
+  classes, but real-provider execution is skipped or inconclusive.
 
 BLOCKED_NEEDS_DECISION if:
 
-- Passing pure RAW-FPV appears to require detector/VLM producer assist,
-  pre-registration, public MCP contract changes, or fallback broadening.
+- Probe evidence shows live cleanup would require accepting coarse locality,
+  adding a detector/VLM producer assist, pre-registration, public MCP contract
+  changes, or fallback broadening.
 - Required local Codex/Docker/simulator/provider route is unavailable.
 
 Must not regress:
@@ -327,16 +380,16 @@ Must not regress:
 ```
 
 ```bash
-ruff check roboclaws/agents/prompts/household_cleanup.py roboclaws/household/raw_fpv_guidance.py
-ruff format --check roboclaws/agents/prompts/household_cleanup.py roboclaws/household/raw_fpv_guidance.py
+ruff check scripts/molmo_cleanup roboclaws/agents/prompts/household_cleanup.py roboclaws/household/raw_fpv_guidance.py
+ruff format --check scripts/molmo_cleanup roboclaws/agents/prompts/household_cleanup.py roboclaws/household/raw_fpv_guidance.py
 git diff --check
 ```
 
-Live gate:
+Optional model probe after deterministic verification:
 
 ```bash
 ROBOCLAWS_CODEX_PROVIDER=codex-env \
-just task::run household-cleanup codex camera-raw seed=7 generated_mess_count=5
+python scripts/molmo_cleanup/run_raw_fpv_perception_probe.py --provider codex-env --model gpt-5.5
 ```
 
 ### Execution Surface

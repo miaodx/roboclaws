@@ -123,6 +123,14 @@ A movable object observation loaded from an earlier runtime-map snapshot into a
 later run. It is planning evidence and should be confirmed before action.
 _Avoid_: static fixture, current-run confirmed handle, private generated mess
 
+**RAW-FPV Semantic Context**:
+Public Runtime Metric Map or semantic-map prior context supplied to a
+`camera-raw-fpv` cleanup run to guide search priorities, likely categories, or
+where to observe next. It does not create executable observed-object handles;
+cleanup eligibility still requires current-frame raw-FPV confirmation from the
+acting model.
+_Avoid_: assisted lane, current-frame detector candidates, prior-as-action
+
 **Map Update Candidate**:
 A public-evidence-backed proposed update to static map semantics, usually for a
 large fixture or semi-static object. It may be useful in the current Runtime
@@ -161,6 +169,13 @@ _Avoid_: skill scratchpad authority, private target-count leak, new cleanup task
 A public observed handle created from camera evidence by the main agent or a
 camera inference producer.
 _Avoid_: simulator oracle, private target, ungrounded local note
+
+**Reviewable Image Locality**:
+Structured image-local evidence attached to a current observation, such as a
+bbox, point, or normalized coarse region, that lets reviewers and contracts bind
+a model-declared cleanup candidate to the raw FPV frame. JSON structure remains
+required; detector-grade bbox precision is not assumed for raw-FPV model output.
+_Avoid_: freeform prose only, stale prior location, private target match
 
 **External Visual Grounding Service**:
 A replaceable service boundary for camera-derived candidates. It may use a fake
