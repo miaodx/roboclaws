@@ -10,6 +10,7 @@ from PIL import Image
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_raw_fpv_perception_probe.py"
 LABEL_SCRIPT_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "generate_raw_fpv_private_labels.py"
+SWEEP_SCRIPT_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "generate_raw_fpv_sweep_corpus.py"
 
 
 def _load_module():
@@ -24,6 +25,17 @@ def _load_module():
 def _load_label_module():
     spec = importlib.util.spec_from_file_location(
         "generate_raw_fpv_private_labels", LABEL_SCRIPT_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_sweep_module():
+    spec = importlib.util.spec_from_file_location(
+        "generate_raw_fpv_sweep_corpus", SWEEP_SCRIPT_PATH
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -252,6 +264,38 @@ def test_raw_fpv_probe_reports_coarse_locality_route(tmp_path: Path) -> None:
     assert Path(report["artifacts"]["html_report"]).is_file()
 
 
+def test_raw_fpv_probe_merges_multiple_private_label_manifests(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path, observation_ids=("raw_fpv_001", "raw_fpv_002"))
+    frame_prefix = "household-cleanup-codex-camera-raw-0606_1537-seed-7"
+    first = _write_private_labels(
+        tmp_path / "private_labels_a.json",
+        frame_id=f"{frame_prefix}/raw_fpv_001",
+        object_id="private_plate_001",
+        category="plate",
+        bbox=[0.1, 0.2, 0.2, 0.2],
+    )
+    second = _write_private_labels(
+        tmp_path / "private_labels_b.json",
+        frame_id=f"{frame_prefix}/raw_fpv_002",
+        object_id="private_book_001",
+        category="book",
+        bbox=[0.5, 0.5, 0.2, 0.2],
+    )
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=4,
+    )
+
+    labels = probe.load_probe_labels((first, second), frames=frames, contrast_run_dirs=())
+
+    assert sorted(label.object_id for label in labels) == [
+        "private_book_001",
+        "private_plate_001",
+    ]
+
+
 def test_private_label_generator_reads_only_pre_cleanup_sweep(tmp_path: Path) -> None:
     labels = _load_label_module()
     trace_path = tmp_path / "trace.jsonl"
@@ -411,6 +455,116 @@ def test_private_label_generator_normalizes_bbox_and_grid_region() -> None:
 
     assert bbox == [0.5, 0.5, 0.5, 0.5]
     assert labels.coarse_regions_from_bbox(bbox) == ["lower_right"]
+
+
+def test_raw_fpv_probe_reads_public_sweep_observation_manifest(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = tmp_path / "raw-fpv-sweep"
+    robot_views = run_dir / "robot_views"
+    robot_views.mkdir(parents=True)
+    Image.new("RGB", (120, 90), color=(80, 20, 20)).save(robot_views / "0001_raw_fpv_001.fpv.png")
+    (run_dir / "raw_fpv_observations.json").write_text(
+        json.dumps(
+            {
+                "schema": "raw_fpv_public_sweep_observations_v1",
+                "raw_fpv_observations": [
+                    {
+                        "observation_id": "raw_fpv_001",
+                        "waypoint_id": "generated_exploration_001",
+                        "room_id": "generated_area",
+                        "image_artifacts": {"fpv": "robot_views/0001_raw_fpv_001.fpv.png"},
+                        "public_contract_note": "no private scoring truth",
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=4,
+    )
+
+    assert len(frames) == 1
+    assert frames[0].frame_id.endswith("raw-fpv-sweep/raw_fpv_001")
+    assert frames[0].source_kind == "raw_failure"
+
+
+def test_raw_fpv_sweep_corpus_public_observation_excludes_private_target_ids() -> None:
+    sweep = _load_sweep_module()
+    observation = sweep._public_observation(
+        observation_id="raw_fpv_001",
+        waypoint={"waypoint_id": "generated_exploration_001", "room_id": "generated_area"},
+        yaw=-45.0,
+        pitch=0.0,
+        view={"camera_control_contract": {"robot_pose": {"x": 1.0}}},
+        image_artifact="robot_views/0001_raw_fpv_001.fpv.png",
+    )
+
+    text = json.dumps(observation, sort_keys=True)
+
+    assert observation["structured_detections_available"] is False
+    assert observation["image_artifacts"]["fpv"] == "robot_views/0001_raw_fpv_001.fpv.png"
+    assert "private_plate_001" not in text
+    assert "observed_" not in text
+    assert "anchor_fixture_" not in text
+
+
+def test_raw_fpv_sweep_corpus_labels_from_private_focus_only() -> None:
+    sweep = _load_sweep_module()
+
+    class Backend:
+        def write_robot_views_with_resolution(self, *args: object, **kwargs: object) -> dict:
+            assert kwargs["focus_object_id"] == "private_plate_001"
+            return {
+                "focus": {
+                    "object_category": "Plate",
+                    "object_location_relation": "on",
+                    "receptacle_category": "table",
+                    "fpv_visibility": {
+                        "boxes": [
+                            {
+                                "source": "segmentation",
+                                "pixels": 100,
+                                "bbox": [12, 18, 35, 44],
+                            }
+                        ]
+                    },
+                }
+            }
+
+    labels = sweep._labels_from_view_focuses(
+        backend=Backend(),
+        frame_id="sweep/raw_fpv_001",
+        observation_id="raw_fpv_001",
+        targets=[{"object_id": "private_plate_001", "category": "Plate"}],
+        output_dir=Path("unused"),
+        label_prefix="0001_raw_fpv_001",
+        min_object_pixels=12,
+        width=120,
+        height=90,
+        yaw=0.0,
+        pitch=0.0,
+    )
+
+    assert labels == [
+        {
+            "frame_id": "sweep/raw_fpv_001",
+            "source_observation_id": "raw_fpv_001",
+            "object_id": "private_plate_001",
+            "category": "Plate",
+            "bbox": [0.1, 0.2, 0.2, 0.3],
+            "coarse_regions": ["middle_left"],
+            "surface_hint": "table",
+            "label_source": "private_molmospaces_public_sweep_fpv_segmentation",
+            "private": True,
+            "pixel_bbox": [12, 18, 35, 44],
+            "object_pixels": 100,
+        }
+    ]
 
 
 def _raw_run_dir(

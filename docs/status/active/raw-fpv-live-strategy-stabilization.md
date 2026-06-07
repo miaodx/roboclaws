@@ -2,7 +2,7 @@
 
 Owner/session: Codex active thread
 Started: 2026-06-06 Asia/Shanghai
-State: PARTIAL stop reached
+State: STOP reached; prefer `camera-grounded-labels`
 
 ## Scope
 
@@ -431,6 +431,138 @@ The next evidence-producing slice must capture or replay a new fixed frame set
 that includes scoreable private RAW-FPV labels for all generated targets, or
 accept that this lane remains below the proof threshold and prefer
 `camera-grounded-labels`.
+
+## 2026-06-08 Public Sweep And CodexENV Probe Result
+
+State: STOP reached
+
+Added a fixed public RAW-FPV sweep corpus generator:
+
+- `scripts/molmo_cleanup/generate_raw_fpv_sweep_corpus.py`
+
+The generator navigates only public generated exploration candidates and
+captures robot-mounted FPV frames at fixed camera offsets. It writes public
+`raw_fpv_observations.json` for model input and a separate scorer-only
+`raw_fpv_private_label_manifest.json` from private MuJoCo segmentation. It does
+not use target-directed `navigate_to_object` captures for public prompt inputs.
+
+Probe updates:
+
+- `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py` now ingests
+  `raw_fpv_observations.json` run directories.
+- The probe accepts multiple `--private-labels` manifests so scorer labels from
+  a public sweep and an existing saved trace can be merged without leaking
+  private truth into prompts.
+
+Public sweep evidence:
+
+```bash
+python scripts/molmo_cleanup/generate_raw_fpv_sweep_corpus.py \
+  --run-id 0608_public_sweep_default_offsets \
+  --min-object-pixels 12
+```
+
+Report:
+
+```bash
+output/molmo/raw-fpv-sweep-corpus/0608_public_sweep_default_offsets/report.json
+```
+
+Observed result:
+
+- `status=partial`
+- 84 public sweep frames.
+- 17 private scorer labels.
+- 4 of 5 generated private targets scoreable from the public sweep alone.
+- Missing target from sweep alone: `book_c62db15891607d44173a3d995755f638_1_0_8`.
+- Privacy checks passed:
+  `private_labels_in_prompt_inputs=false` and
+  `agent_facing_input_contains_executable_prior_handles=false`.
+
+Combined raw-only scorer gate:
+
+```bash
+python scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  --provider offline \
+  --prompt-variant both \
+  --raw-run-dir output/molmo/raw-fpv-sweep-corpus/0608_public_sweep_default_offsets \
+  --raw-run-dir output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7 \
+  --contrast-run-dir /tmp/roboclaws-no-contrast \
+  --private-labels output/molmo/raw-fpv-sweep-corpus/0608_public_sweep_default_offsets/raw_fpv_private_label_manifest.json \
+  --private-labels output/molmo/raw-fpv-private-labels/0607_1537_full_trace_private_labels/raw_fpv_private_label_manifest.json \
+  --max-frames-per-source 18 \
+  --run-id 0608_offline_public_sweep_plus_saved_trace_private_labels_raw_only_max18
+```
+
+Report:
+
+```bash
+output/molmo/raw-fpv-perception-probe/0608_offline_public_sweep_plus_saved_trace_private_labels_raw_only_max18/report.json
+```
+
+Observed result:
+
+- 36 raw-only frames.
+- 12 private scorer labels.
+- All 5 generated targets scoreable: Book, Potato, Pillow, Plate, and
+  RemoteControl.
+- Privacy checks passed:
+  `private_labels_in_prompt_inputs=false` and
+  `agent_facing_input_contains_executable_prior_handles=false`.
+
+Real provider probe:
+
+```bash
+ROBOCLAWS_CODEX_PROVIDER=codex-env \
+python scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  --provider codex-env \
+  --model gpt-5.5 \
+  --prompt-variant both \
+  --raw-run-dir output/molmo/raw-fpv-sweep-corpus/0608_public_sweep_default_offsets \
+  --raw-run-dir output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7 \
+  --contrast-run-dir /tmp/roboclaws-no-contrast \
+  --private-labels output/molmo/raw-fpv-sweep-corpus/0608_public_sweep_default_offsets/raw_fpv_private_label_manifest.json \
+  --private-labels output/molmo/raw-fpv-private-labels/0607_1537_full_trace_private_labels/raw_fpv_private_label_manifest.json \
+  --max-frames-per-source 18 \
+  --run-id 0608_codexenv_public_sweep_plus_saved_trace_raw_only_max18 \
+  --timeout-s 120
+```
+
+Report:
+
+```bash
+output/molmo/raw-fpv-perception-probe/0608_codexenv_public_sweep_plus_saved_trace_raw_only_max18/report.html
+output/molmo/raw-fpv-perception-probe/0608_codexenv_public_sweep_plus_saved_trace_raw_only_max18/report.json
+```
+
+Observed result:
+
+- `status=success`
+- 36 raw-only frames.
+- 12 private scorer labels covering all 5 generated targets.
+- Privacy checks passed:
+  `private_labels_in_prompt_inputs=false` and
+  `agent_facing_input_contains_executable_prior_handles=false`.
+- `baseline_json`: 78 candidates, 0 schema failures, 1 strict-bbox unique
+  confirmable target, 2 coarse unique confirmable targets, 3 duplicates.
+- `skill_json_semantic_map`: 74 candidates, 0 schema failures, 1 strict-bbox
+  unique confirmable target, 1 coarse unique confirmable target, 2 duplicates.
+- `skill_json_semantic_map` had one provider timeout on
+  `raw_fpv_004`; the rest of the variant completed and remained below
+  threshold.
+- Live-like threshold was not met for either variant:
+  `threshold=5`, `strict_bbox_threshold_met=false`,
+  `coarse_threshold_met=false`.
+- Route recommendation: `prefer_camera_grounded_labels`.
+
+Decision:
+
+This reaches the stop condition with artifact-backed evidence that pure
+`camera-raw-fpv` model perception remains below threshold even after structured
+JSON, semantic-map planning context, relaxed coarse-locality scoring, and a
+fixed scoreable raw-FPV frame set. Do not weaken source-FPV actionability and
+do not add detector/camera-label producer candidates to `camera-raw-fpv`.
+Prefer `camera-grounded-labels` for the current live cleanup path.
 
 ## Stop Condition
 
