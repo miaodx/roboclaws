@@ -171,6 +171,12 @@ def test_bridge_step_posts_to_chat_completions():
     # one text block + fpv, map_v2, chase image_url blocks
     kinds = [b["type"] for b in content]
     assert kinds == ["text", "image_url", "image_url", "image_url"]
+    steer = content[0]["text"]
+    assert "direct image-to-action turn" in steer
+    assert "not an MCP tool session" in steer
+    assert "Do not read skill files or call tools" in steer
+    assert "Follow the ai2thor-navigator skill" not in steer
+    assert "roboclaws__" not in steer
     # image_urls are inline data URLs (no filesystem path leakage)
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert content[2]["image_url"]["url"].startswith("data:image/jpeg;base64,")
