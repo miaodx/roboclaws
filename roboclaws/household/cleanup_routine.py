@@ -13,6 +13,8 @@ from roboclaws.household.semantic_timeline import (
     PLACE_PHASE,
 )
 
+ADJUST_CAMERA_TOOL = "adjust_camera"
+OBSERVE_TOOL = "observe"
 ROUTINE_SCHEMA = "cleanup_routine_result_v1"
 ROUTINE_NAME = "canonical_cleanup_routine_v1"
 
@@ -357,6 +359,18 @@ def _recover_once(
     target_request_key: str,
 ) -> dict[str, Any] | None:
     required_tool = str(failed_response.get("required_tool") or "")
+    if failed_response.get("error_reason") == "visual_evidence_not_reviewable":
+        return _recover_visual_evidence_once(
+            contract=contract,
+            call_tool=call_tool,
+            record_tool_view=record_tool_view,
+            failed_phase=failed_phase,
+            failed_request=failed_request,
+            failed_fn=failed_fn,
+            object_id=object_id,
+            steps=steps,
+        )
+
     if failed_response.get("error_reason") != "semantic_order":
         return None
     if required_tool not in PUBLIC_ATOMIC_TOOLS or required_tool == failed_phase:
@@ -385,6 +399,77 @@ def _recover_once(
     steps.append(recovery_step)
     if not recovery_step.get("ok"):
         return recovery_step
+
+    retry_response = _invoke(
+        contract=contract,
+        call_tool=call_tool,
+        record_tool_view=record_tool_view,
+        tool=failed_phase,
+        request=failed_request,
+        fn=failed_fn,
+    )
+    retry_step = dict(retry_response)
+    retry_step.setdefault("tool", failed_phase)
+    retry_step["phase"] = failed_phase
+    retry_step.setdefault("object_id", object_id)
+    retry_step["routine_recovery_retry"] = True
+    retry_step["skill_recovery_retry"] = True
+    steps.append(retry_step)
+    return retry_step
+
+
+def _recover_visual_evidence_once(
+    *,
+    contract: Any,
+    call_tool: ToolCall | None,
+    record_tool_view: ToolViewRecorder | None,
+    failed_phase: str,
+    failed_request: dict[str, Any],
+    failed_fn: Callable[[], dict[str, Any]],
+    object_id: str,
+    steps: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    adjust = getattr(contract, ADJUST_CAMERA_TOOL, None)
+    observe = getattr(contract, OBSERVE_TOOL, None)
+    if not callable(adjust) or not callable(observe):
+        return None
+
+    adjust_request = {"yaw_delta_deg": 15.0, "pitch_delta_deg": 0.0}
+    adjust_response = _invoke(
+        contract=contract,
+        call_tool=call_tool,
+        record_tool_view=record_tool_view,
+        tool=ADJUST_CAMERA_TOOL,
+        request=adjust_request,
+        fn=lambda: adjust(**adjust_request),
+    )
+    adjust_step = dict(adjust_response)
+    adjust_step.setdefault("tool", ADJUST_CAMERA_TOOL)
+    adjust_step["phase"] = ADJUST_CAMERA_TOOL
+    adjust_step.setdefault("object_id", object_id)
+    adjust_step["routine_recovery_for_phase"] = failed_phase
+    adjust_step["skill_recovery_for_phase"] = failed_phase
+    steps.append(adjust_step)
+    if not adjust_step.get("ok"):
+        return adjust_step
+
+    observe_response = _invoke(
+        contract=contract,
+        call_tool=call_tool,
+        record_tool_view=record_tool_view,
+        tool=OBSERVE_TOOL,
+        request={},
+        fn=observe,
+    )
+    observe_step = dict(observe_response)
+    observe_step.setdefault("tool", OBSERVE_TOOL)
+    observe_step["phase"] = OBSERVE_TOOL
+    observe_step.setdefault("object_id", object_id)
+    observe_step["routine_recovery_for_phase"] = failed_phase
+    observe_step["skill_recovery_for_phase"] = failed_phase
+    steps.append(observe_step)
+    if not observe_step.get("ok"):
+        return observe_step
 
     retry_response = _invoke(
         contract=contract,

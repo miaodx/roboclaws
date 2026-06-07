@@ -23,7 +23,7 @@
 # - just molmo::review-report
 # - just molmo::mcp-smoke-report
 # - just molmo::openclaw-smoke-report
-# - just molmo::camera-raw-report
+# - just molmo::camera-raw-fpv-report
 # - just molmo::codex-report
 # - just molmo::claude-report
 # - just molmo::openclaw-report
@@ -117,7 +117,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         sim-projected-labels)
           visual_grounding="sim"
           ;;
-        grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake|grounding-dino+mimo-v2.5|grounding-dino+mimo-v2-omni|yoloe+mimo-v2.5|grounding-dino+qwen3-vl|mimo-v2.5-direct|qwen3-vl-direct)
+        grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake|grounding-dino+mimo-v2.5|yoloe+mimo-v2.5|grounding-dino+qwen3-vl|mimo-v2.5-direct|qwen3-vl-direct)
           visual_grounding="$camera_labeler"
           ;;
         *)
@@ -268,7 +268,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
         ;;
       *)
-        echo "error: unsupported cleanup evidence_lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
+        echo "error: unsupported cleanup lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
         exit 1
         ;;
     esac
@@ -859,7 +859,7 @@ openclaw-smoke-report seed="7" output_dir="output/molmo/openclaw-smoke-report" t
     just molmo::cleanup "openclaw-smoke" "world-oracle-labels" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Raw camera-input evidence report. This proves camera artifact plumbing, not cleanup success.
-camera-raw-report seed="7" output_dir="output/molmo/camera-raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
+camera-raw-fpv-report seed="7" output_dir="output/molmo/camera-raw-fpv-report" task="帮我收拾这个房间" generated_mess_count="10":
     just molmo::cleanup "direct" "camera-raw-fpv" "{{seed}}" "{{output_dir}}" "{{task}}" "{{generated_mess_count}}"
 
 # Live Codex CLI report. Starts the cleanup MCP server and launches Codex.
