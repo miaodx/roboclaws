@@ -135,13 +135,25 @@ Do not continue broad `camera-raw` prompt/loop tuning for this slice. The
 improved, but raw-FPV still completed only two grounded cleanup chains before
 low-yield post-sweep retries.
 
-The next justified slice is a perception-only raw-FPV probe over fixed frames.
-It should compare no-prior and semantic-map-context variants while preserving
-source-observation-local evidence and structured JSON output. Bbox precision is
-diagnostic rather than assumed: the probe should separately report strict bbox
-success and structured coarse-locality success. Do not change live cleanup
-actionability until the probe shows that relaxed locality can meet the cleanup
-threshold.
+The perception-only raw-FPV probe infrastructure now exists at
+`scripts/molmo_cleanup/run_raw_fpv_perception_probe.py`. The next justified
+slice is to supply or generate a scoreable private RAW-FPV label manifest for
+the fixed saved frames, then run the first real-provider matrix:
+
+```bash
+ROBOCLAWS_CODEX_PROVIDER=codex-env \
+python scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  --provider codex-env \
+  --model gpt-5.5 \
+  --private-labels <raw-fpv-private-label-manifest.json>
+```
+
+The probe already compares baseline JSON and skill JSON plus semantic-map
+planning context, but the 2026-06-07 offline artifact pass found only one
+derivable contrast label in existing saved artifacts. Do not burn paid provider
+calls against that sparse scorer because it cannot prove the cleanup threshold.
+Do not change live cleanup actionability until the probe shows that relaxed
+locality can meet the threshold with scoreable current-frame labels.
 
 Reference live artifact:
 
@@ -235,6 +247,97 @@ next justified slice is a perception-only raw-FPV probe that keeps structured
 JSON output and current-frame source locality, allows semantic-map priors only
 as planning context, and measures whether coarse but reviewable image locality
 can meet the cleanup threshold before live actionability changes.
+
+## 2026-06-07 Perception Probe Infrastructure Result
+
+State: PARTIAL
+
+Added a perception-only RAW-FPV probe:
+
+- `scripts/molmo_cleanup/run_raw_fpv_perception_probe.py`
+- `tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py`
+
+The probe:
+
+- ingests fixed RAW-FPV frames from saved cleanup artifacts;
+- emits separate public prompt inputs and private/offline scorer output;
+- supports baseline JSON and skill JSON plus compressed semantic-map context;
+- scores strict bbox and structured coarse locality separately;
+- reports live-like top-candidate unique counts, duplicate counts, schema
+  failures, locality failures, semantic mismatches, and missing-label coverage;
+- keeps semantic-map priors as non-executable planning context only;
+- supports optional `codex-env` Responses calls, but defaults to offline scoring
+  from a predictions file or provider output.
+
+Deterministic verification passed:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py
+```
+
+```bash
+ruff check \
+  scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/raw_fpv_guidance.py \
+  tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py
+ruff format --check \
+  scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/raw_fpv_guidance.py \
+  tests/unit/molmo_cleanup/test_raw_fpv_perception_probe.py
+git diff --check
+```
+
+Offline artifact pass:
+
+```bash
+python scripts/molmo_cleanup/run_raw_fpv_perception_probe.py \
+  --provider offline \
+  --prompt-variant both \
+  --run-id 0607_offline_artifact_probe
+```
+
+Report:
+
+```bash
+output/molmo/raw-fpv-perception-probe/0607_offline_artifact_probe/report.html
+output/molmo/raw-fpv-perception-probe/0607_offline_artifact_probe/report.json
+```
+
+Observed result:
+
+- `status=partial`
+- 51 fixed frames ingested from saved RAW-FPV and contrast artifacts.
+- 1 derivable contrast label found; 50 frames remain without scoreable private
+  labels.
+- prompt input privacy checks passed:
+  `private_labels_in_prompt_inputs=false` and
+  `agent_facing_input_contains_executable_prior_handles=false`.
+- Provider credentials were present locally, but real `codex-env` calls were
+  intentionally skipped because the sparse saved-artifact labels cannot prove
+  threshold success or failure.
+
+Classification:
+
+- Probe infrastructure is implemented and reproducible.
+- The current blocker is not provider route availability; it is lack of a
+  scoreable private RAW-FPV label manifest for the fixed frames.
+- Existing artifacts preserve the source-frame contract, but do not by
+  themselves provide enough per-frame private pixel/locality truth to evaluate
+  `>=5` unique current-frame confirmable candidates.
+
+Next decision:
+
+Generate or supply a private RAW-FPV bbox/coarse-locality label manifest for
+the fixed frames, then run the real `codex-env` matrix. If generating labels
+requires MuJoCo segmentation, keep those private labels scorer-only and do not
+copy them into prompt inputs or live agent context.
 
 ## Stop Condition
 
