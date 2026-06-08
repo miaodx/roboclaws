@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -24,9 +25,12 @@ from roboclaws.household.realworld_contract import (  # noqa: E402
 )
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend  # noqa: E402
 from scripts.molmo_cleanup.generate_raw_fpv_private_labels import (  # noqa: E402
+    LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE,
+    LABEL_SCOPE_GENERATED_TARGETS,
     MANIFEST_SCHEMA,
     coarse_regions_from_bbox,
     generated_mess_manifest_from_state,
+    label_object_ids_for_scope,
     normalize_box_xywh,
     surface_hint_from_focus,
 )
@@ -77,6 +81,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-object-pixels", type=int, default=12)
     parser.add_argument("--render-width", type=int, default=540)
     parser.add_argument("--render-height", type=int, default=360)
+    parser.add_argument(
+        "--label-scope",
+        choices=(LABEL_SCOPE_GENERATED_TARGETS, LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE),
+        default=LABEL_SCOPE_GENERATED_TARGETS,
+        help=(
+            "generated-targets preserves hidden-target recovery truth. "
+            "cleanup-visible-movable labels all cleanup-family movable objects for "
+            "visible_movable_label_quality."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -173,6 +187,7 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
                     height=max(1, int(args.render_height)),
                     yaw=float(yaw),
                     pitch=float(pitch),
+                    label_scope=str(args.label_scope),
                 )
                 labels.extend(frame_labels)
                 frames.append(
@@ -198,6 +213,7 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
             "label_source": "private_molmospaces_public_sweep_fpv_segmentation",
             "source_run_dir": str(source_run_dir),
             "scorer_only": True,
+            "label_scope": str(args.label_scope),
             "private_truth_included_in_prompt_inputs": False,
             "public_frame_policy": (
                 "generated_exploration_waypoints_plus_camera_offsets_no_target_handles"
@@ -234,7 +250,12 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
     unique_labeled = sorted({str(item.get("object_id") or "") for item in labels})
     target_ids = {str(item.get("object_id") or "") for item in generated_manifest["targets"]}
     missing_targets = sorted(target_ids.difference(unique_labeled))
-    status = "success" if not missing_targets and labels else "partial"
+    status = (
+        "success"
+        if labels
+        and (str(args.label_scope) == LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE or not missing_targets)
+        else "partial"
+    )
     report = {
         "schema": REPORT_SCHEMA,
         "status": status,
@@ -251,6 +272,7 @@ def generate_sweep_corpus(args: argparse.Namespace) -> dict[str, Any]:
         "selected_object_count": len(target_ids),
         "missing_private_targets": missing_targets,
         "min_object_pixels": max(1, int(args.min_object_pixels)),
+        "label_scope": str(args.label_scope),
         "camera_yaw_offsets_deg": list(yaw_offsets),
         "camera_pitch_offsets_deg": list(pitch_offsets),
         "privacy": {
@@ -284,10 +306,24 @@ def _labels_from_view_focuses(
     height: int,
     yaw: float,
     pitch: float,
+    label_scope: str = LABEL_SCOPE_GENERATED_TARGETS,
 ) -> list[dict[str, Any]]:
+    if label_scope == LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE:
+        return _labels_from_single_segmentation(
+            backend=backend,
+            frame_id=frame_id,
+            observation_id=observation_id,
+            min_object_pixels=min_object_pixels,
+            width=width,
+            height=height,
+            yaw=yaw,
+            pitch=pitch,
+            label_scope=label_scope,
+        )
     labels = []
-    for target in targets:
-        object_id = str(target.get("object_id") or "")
+    state = backend._read_state()  # noqa: SLF001 - scorer-only corpus generator.
+    target_by_id = {str(target.get("object_id") or ""): target for target in targets}
+    for object_id in label_object_ids_for_scope(state, label_scope=label_scope):
         if not object_id:
             continue
         result = backend.write_robot_views_with_resolution(
@@ -311,12 +347,85 @@ def _labels_from_view_focuses(
                 "frame_id": frame_id,
                 "source_observation_id": observation_id,
                 "object_id": object_id,
-                "category": str(focus.get("object_category") or target.get("category") or ""),
+                "category": str(
+                    focus.get("object_category")
+                    or (target_by_id.get(object_id) or {}).get("category")
+                    or ((state.get("objects") or {}).get(object_id) or {}).get("category")
+                    or ""
+                ),
                 "bbox": bbox,
                 "coarse_regions": coarse_regions_from_bbox(bbox),
                 "surface_hint": surface_hint_from_focus(focus),
                 "label_source": "private_molmospaces_public_sweep_fpv_segmentation",
                 "private": True,
+                "hidden_target": label_scope == LABEL_SCOPE_GENERATED_TARGETS,
+                "pixel_bbox": list(box["bbox"]),
+                "object_pixels": pixels,
+            }
+        )
+    return labels
+
+
+def _labels_from_single_segmentation(
+    *,
+    backend: MolmoSpacesSubprocessBackend,
+    frame_id: str,
+    observation_id: str,
+    min_object_pixels: int,
+    width: int,
+    height: int,
+    yaw: float,
+    pitch: float,
+    label_scope: str,
+) -> list[dict[str, Any]]:
+    os.environ.setdefault("MUJOCO_GL", "egl")
+    from scripts.molmo_cleanup import molmospaces_subprocess_worker as worker
+
+    state = backend._read_state()  # noqa: SLF001 - scorer-only corpus generator.
+    model, data = worker._load_model_data_for_state(state)  # noqa: SLF001
+    worker._apply_qpos(data, state["qpos"])  # noqa: SLF001
+    worker._apply_robot_view_camera_offset(  # noqa: SLF001
+        model,
+        data,
+        yaw_offset_deg=float(yaw),
+        pitch_offset_deg=float(pitch),
+    )
+    worker.mujoco.mj_forward(model, data)
+    segmentation = worker._render_segmentation(  # noqa: SLF001
+        model,
+        data,
+        "robot_0/head_camera",
+        width=width,
+        height=height,
+    )
+    labels = []
+    objects = state.get("objects") if isinstance(state.get("objects"), dict) else {}
+    for object_id in label_object_ids_for_scope(state, label_scope=label_scope):
+        obj = objects.get(object_id) if isinstance(objects.get(object_id), dict) else {}
+        body_name = str(obj.get("body_name") or object_id)
+        box = worker._segmentation_box(  # noqa: SLF001
+            model,
+            segmentation,
+            body_name,
+            label=str(obj.get("category") or object_id),
+            color=[239, 68, 68],
+        )
+        pixels = int((box or {}).get("pixels") or 0)
+        if box is None or pixels < min_object_pixels:
+            continue
+        bbox = normalize_box_xywh(box["bbox"], width=width, height=height)
+        labels.append(
+            {
+                "frame_id": frame_id,
+                "source_observation_id": observation_id,
+                "object_id": object_id,
+                "category": str(obj.get("category") or ""),
+                "bbox": bbox,
+                "coarse_regions": coarse_regions_from_bbox(bbox),
+                "surface_hint": "unknown",
+                "label_source": "private_molmospaces_public_sweep_fpv_segmentation",
+                "private": True,
+                "hidden_target": False,
                 "pixel_bbox": list(box["bbox"]),
                 "object_pixels": pixels,
             }

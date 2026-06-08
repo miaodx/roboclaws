@@ -37,6 +37,8 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
   world, manipulation, and episode capabilities.
 - `codex-cleanup-harness8`: repeatable eight-case Codex cleanup regression
   grid for source and cleanup-skill changes.
+- `raw-fpv-visual-labeler`: perception-only RAW-FPV frame-group labeling
+  contract for visible cleanup-relevant movable objects.
 - `actionable-semantic-map-conversion`: offline robot semantic-memory conversion
   into `actionable_semantic_map_snapshot_v1` for downstream household tasks.
 - `visual-result-showcase`: post-run renderer for blog/README/demo GIFs,

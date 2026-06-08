@@ -13,7 +13,8 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,7 @@ PUBLIC_INPUT_SCHEMA = "raw_fpv_perception_probe_public_input_v1"
 PRIVATE_LABEL_SCHEMA = "raw_fpv_private_label_manifest_v1"
 PREDICTION_SCHEMA = "raw_fpv_probe_predictions_v1"
 RESPONSE_SCHEMA = "raw_fpv_probe_response_v1"
+VISUAL_LABELER_RESPONSE_SCHEMA = "raw_fpv_visual_labeler_response_v1"
 
 DEFAULT_RAW_RUN_DIRS = (
     Path("output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7"),
@@ -72,6 +74,31 @@ SURFACE_HINTS = (
     "sofa",
     "unknown",
 )
+MOVABLE_CATEGORY_FAMILIES = (
+    "food",
+    "dish",
+    "book",
+    "linen",
+    "toy",
+    "electronics",
+)
+FIXTURE_OR_SURFACE_CATEGORIES = {
+    "appliance",
+    "bed",
+    "bookshelf",
+    "cabinet",
+    "counter",
+    "desk",
+    "fixture",
+    "floor",
+    "fridge",
+    "refrigerator",
+    "shelf",
+    "sink",
+    "sofa",
+    "surface",
+    "table",
+}
 FAILURE_CLASSES = (
     "schema_failure",
     "locality_too_coarse_or_invalid",
@@ -114,11 +141,13 @@ class ProbeLabel:
     source_observation_id: str
     object_id: str
     category: str
+    category_family: str
     bbox: tuple[float, float, float, float] | None
     coarse_regions: tuple[str, ...]
     surface_hint: str
     label_source: str
     private: bool
+    hidden_target: bool
 
     def score_payload(self) -> dict[str, Any]:
         return {
@@ -126,11 +155,13 @@ class ProbeLabel:
             "source_observation_id": self.source_observation_id,
             "object_id": self.object_id,
             "category": self.category,
+            "category_family": self.category_family,
             "bbox": list(self.bbox) if self.bbox is not None else None,
             "coarse_regions": list(self.coarse_regions),
             "surface_hint": self.surface_hint,
             "label_source": self.label_source,
             "private": self.private,
+            "hidden_target": self.hidden_target,
         }
 
 
@@ -162,6 +193,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--contrast-run-dir", action="append", type=Path, default=[])
     parser.add_argument("--semantic-map-prior", type=Path, default=DEFAULT_SEMANTIC_MAP_PRIOR)
     parser.add_argument("--private-labels", action="append", type=Path, default=[])
+    parser.add_argument(
+        "--all-visible-labels",
+        action="append",
+        type=Path,
+        default=[],
+        help=(
+            "Scorer-only all-visible cleanup-relevant movable-object labels. These labels "
+            "are private/offline truth and are never included in prompt inputs."
+        ),
+    )
     parser.add_argument("--predictions", type=Path)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_ROOT)
     parser.add_argument("--run-id", default="")
@@ -174,7 +215,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--model", default=DEFAULT_MODEL)
     parser.add_argument(
         "--prompt-variant",
-        choices=("both", "baseline_json", "skill_json_semantic_map"),
+        choices=(
+            "all",
+            "both",
+            "baseline_json",
+            "skill_json_semantic_map",
+            "raw_fpv_visual_labeler",
+        ),
         default="both",
     )
     parser.add_argument("--max-frames-per-source", type=int, default=18)
@@ -206,6 +253,18 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         tuple(args.private_labels or ()),
         frames=frames,
         contrast_run_dirs=contrast_run_dirs,
+        default_hidden_target=True,
+    )
+    labels = _dedupe_labels(
+        [
+            *labels,
+            *load_probe_labels(
+                tuple(args.all_visible_labels or ()),
+                frames=frames,
+                contrast_run_dirs=(),
+                default_hidden_target=False,
+            ),
+        ]
     )
     predictions = load_predictions(args.predictions)
 
@@ -256,6 +315,11 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
                 "schema": "raw_fpv_perception_probe_private_score_v1",
                 "label_count": len(labels),
                 "private_label_count": sum(1 for item in labels if item.private),
+                "hidden_target_label_count": sum(1 for item in labels if item.hidden_target),
+                "all_visible_movable_label_count": sum(
+                    1 for item in labels if not item.hidden_target
+                ),
+                "truth_scope": _truth_scope_summary(labels),
                 "labels": [item.score_payload() for item in labels],
                 "matrix": matrix,
             },
@@ -281,7 +345,10 @@ def run_probe(args: argparse.Namespace) -> dict[str, Any]:
         "frame_count": len(frames),
         "label_count": len(labels),
         "private_label_count": sum(1 for item in labels if item.private),
+        "hidden_target_label_count": sum(1 for item in labels if item.hidden_target),
+        "all_visible_movable_label_count": sum(1 for item in labels if not item.hidden_target),
         "missing_label_frame_count": _missing_label_frame_count(frames, labels),
+        "truth_scope": _truth_scope_summary(labels),
         "semantic_map_context": {
             "provided": bool(semantic_map_prior),
             "source": str(args.semantic_map_prior) if semantic_map_prior else "",
@@ -334,6 +401,7 @@ def build_public_inputs(
     semantic_map_prior: dict[str, Any],
     max_candidates: int,
 ) -> dict[str, Any]:
+    frame_groups = build_frame_groups(frames)
     return {
         "schema": PUBLIC_INPUT_SCHEMA,
         "prompt_contract": {
@@ -355,6 +423,37 @@ def build_public_inputs(
                 "This probe does not authorize cleanup actions. Current-frame RAW-FPV "
                 "confirmation would still be required by live cleanup tools."
             ),
+        },
+        "visual_labeler_contract": {
+            "skill_id": "raw-fpv-visual-labeler",
+            "response_schema": VISUAL_LABELER_RESPONSE_SCHEMA,
+            "perception_only": True,
+            "group_size_range": [3, 6],
+            "required_label_fields": [
+                "evidence_frame_id",
+                "category",
+                "category_family",
+                "coarse_region",
+                "confidence",
+                "is_cleanup_relevant",
+            ],
+            "optional_label_fields": [
+                "bbox",
+                "surface_hint",
+                "reason_not_actionable",
+            ],
+            "category_families": list(MOVABLE_CATEGORY_FAMILIES),
+            "fixture_surface_policy": (
+                "Fixtures and surfaces may be emitted only as surface_hint or as "
+                "non-cleanup-relevant labels; they are not object hits."
+            ),
+            "privacy_exclusions": [
+                "private labels",
+                "generated hidden target ids",
+                "acceptable destination truth",
+                "executable observed-object handles",
+                "detector or camera-label producer candidates",
+            ],
         },
         "variants": {
             "baseline_json": {
@@ -379,8 +478,113 @@ def build_public_inputs(
                     for frame in frames
                 ],
             },
+            "raw_fpv_visual_labeler": {
+                "description": (
+                    "Dedicated clean-context visual labeler over neighboring RAW-FPV frame "
+                    "groups. Labels are perception evidence only and are not executable "
+                    "cleanup handles."
+                ),
+                "frame_groups": [
+                    {
+                        "group_id": group["group_id"],
+                        "grouping_basis": group["grouping_basis"],
+                        "frames": [
+                            _prompt_payload_for_frame(frame, semantic_context={})
+                            for frame in group["frames"]
+                        ],
+                        "public_context": group["public_context"],
+                    }
+                    for group in frame_groups
+                ],
+            },
         },
     }
+
+
+def build_frame_groups(
+    frames: list[ObservationFrame],
+    *,
+    min_group_size: int = 3,
+    max_group_size: int = 6,
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[ObservationFrame]] = {}
+    for frame in frames:
+        grouped.setdefault((frame.source_run_id, frame.waypoint_id or "unknown"), []).append(frame)
+
+    groups: list[dict[str, Any]] = []
+    short_groups: dict[str, list[ObservationFrame]] = {}
+    fallback_index = 0
+    for (source_run_id, waypoint_id), items in sorted(grouped.items()):
+        ordered = sorted(items, key=lambda item: item.source_observation_id)
+        if len(ordered) < min_group_size:
+            short_groups.setdefault(source_run_id, []).extend(ordered)
+            continue
+        for chunk in _frame_group_chunks(
+            ordered,
+            min_group_size=min_group_size,
+            max_group_size=max_group_size,
+        ):
+            fallback_index += 1
+            groups.append(
+                _frame_group_payload(
+                    f"group_{fallback_index:03d}",
+                    chunk,
+                    grouping_basis="source_waypoint_neighborhood",
+                    waypoint_id=waypoint_id,
+                    source_run_id=source_run_id,
+                )
+            )
+    for source_run_id, items in sorted(short_groups.items()):
+        ordered = sorted(items, key=lambda item: item.source_observation_id)
+        for chunk in _frame_group_chunks(
+            ordered,
+            min_group_size=min_group_size,
+            max_group_size=max_group_size,
+        ):
+            fallback_index += 1
+            groups.append(
+                _frame_group_payload(
+                    f"group_{fallback_index:03d}",
+                    chunk,
+                    grouping_basis="source_observation_neighborhood",
+                    waypoint_id=chunk[0].waypoint_id or "unknown",
+                    source_run_id=source_run_id,
+                )
+            )
+    if not groups and frames:
+        groups.append(
+            _frame_group_payload(
+                "group_001",
+                frames[:max_group_size],
+                grouping_basis="fallback_sequence",
+                waypoint_id=frames[0].waypoint_id or "unknown",
+                source_run_id=frames[0].source_run_id,
+            )
+        )
+    return groups
+
+
+def _frame_group_chunks(
+    frames: list[ObservationFrame],
+    *,
+    min_group_size: int,
+    max_group_size: int,
+) -> list[list[ObservationFrame]]:
+    if len(frames) <= max_group_size:
+        return [frames]
+    group_count = (len(frames) + max_group_size - 1) // max_group_size
+    while group_count > 1 and len(frames) // group_count < min_group_size:
+        group_count -= 1
+
+    chunks = []
+    start = 0
+    for index in range(group_count):
+        remaining_groups = group_count - index
+        remaining_items = len(frames) - start
+        size = (remaining_items + remaining_groups - 1) // remaining_groups
+        chunks.append(frames[start : start + size])
+        start += size
+    return chunks
 
 
 def load_probe_labels(
@@ -388,9 +592,11 @@ def load_probe_labels(
     *,
     frames: list[ObservationFrame],
     contrast_run_dirs: tuple[Path, ...],
+    default_hidden_target: bool,
 ) -> list[ProbeLabel]:
     labels: list[ProbeLabel] = []
     frame_ids = {frame.frame_id for frame in frames}
+    alias_by_key = _frame_aliases(frames)
     if paths is None:
         label_paths: tuple[Path, ...] = ()
     elif isinstance(paths, Path):
@@ -402,9 +608,19 @@ def load_probe_labels(
             continue
         payload = _load_json(path)
         for item in payload.get("labels") or []:
-            label = _label_from_payload(item, private=True)
+            label = _label_from_payload(
+                item,
+                private=True,
+                default_hidden_target=default_hidden_target,
+            )
             if label.frame_id in frame_ids:
                 labels.append(label)
+                continue
+            alias = alias_by_key.get(
+                (_frame_source_family(label.frame_id), label.source_observation_id)
+            )
+            if alias:
+                labels.append(replace(label, frame_id=alias))
     labels.extend(
         _derive_resolved_contrast_labels(
             contrast_run_dirs=contrast_run_dirs,
@@ -414,6 +630,32 @@ def load_probe_labels(
     unique: dict[tuple[str, str], ProbeLabel] = {}
     for label in labels:
         unique.setdefault((label.frame_id, label.object_id), label)
+    return list(unique.values())
+
+
+def _frame_aliases(frames: list[ObservationFrame]) -> dict[tuple[str, str], str]:
+    candidates: dict[tuple[str, str], list[str]] = {}
+    for frame in frames:
+        candidates.setdefault(
+            (_frame_source_family(frame.frame_id), frame.source_observation_id),
+            [],
+        ).append(frame.frame_id)
+    return {key: values[0] for key, values in candidates.items() if len(values) == 1}
+
+
+def _frame_source_family(frame_id: str) -> str:
+    prefix = str(frame_id or "").split("/", 1)[0]
+    if prefix.startswith("molmo-raw-fpv-sweep-corpus-"):
+        return "molmo-raw-fpv-sweep-corpus"
+    if prefix.startswith("household-cleanup-codex-camera-raw-"):
+        return "household-cleanup-codex-camera-raw"
+    return prefix
+
+
+def _dedupe_labels(labels: list[ProbeLabel]) -> list[ProbeLabel]:
+    unique: dict[tuple[str, str, bool], ProbeLabel] = {}
+    for label in labels:
+        unique.setdefault((label.frame_id, label.object_id, label.hidden_target), label)
     return list(unique.values())
 
 
@@ -453,27 +695,47 @@ def score_variant(
     for label in labels:
         labels_by_frame.setdefault(label.frame_id, []).append(label)
 
+    response_schema = (
+        VISUAL_LABELER_RESPONSE_SCHEMA
+        if variant_id == "raw_fpv_visual_labeler"
+        else RESPONSE_SCHEMA
+    )
+
     evaluated_frames = []
     strict_unique: set[str] = set()
     coarse_unique: set[str] = set()
     diagnostic_unique: set[str] = set()
+    visible_truth_objects = {label.object_id for label in labels if not label.hidden_target}
+    visible_matched_objects: set[str] = set()
+    visible_predicted_object_hits = 0
+    visible_duplicate_count = 0
+    category_tier_counts = {tier: 0 for tier in ("exact", "semantic", "coarse_family", "mismatch")}
+    coarse_locality_match_count = 0
+    surface_hint_only_count = 0
     duplicate_count = 0
     schema_failure_count = 0
     failure_counts = {key: 0 for key in FAILURE_CLASSES}
     candidate_count = 0
 
     for frame in frames:
-        response = predictions.get(frame.frame_id) or {"schema": RESPONSE_SCHEMA, "candidates": []}
-        normalized = normalize_response(response, frame=frame)
+        response = predictions.get(frame.frame_id) or {
+            "schema": response_schema,
+            "candidates": [],
+            "labels": [],
+        }
+        normalized = normalize_response(response, frame=frame, variant_id=variant_id)
         schema_errors = normalized["schema_errors"]
         if schema_errors:
             schema_failure_count += len(schema_errors)
             failure_counts["schema_failure"] += len(schema_errors)
         frame_labels = labels_by_frame.get(frame.frame_id, [])
+        hidden_frame_labels = [label for label in frame_labels if label.hidden_target]
+        visible_frame_labels = [label for label in frame_labels if not label.hidden_target]
         frame_scores = []
+        surface_hint_only_count += int(normalized.get("surface_hint_only_count") or 0)
         for index, candidate in enumerate(normalized["candidates"]):
             candidate_count += 1
-            score = score_candidate(candidate, frame_labels)
+            score = score_candidate(candidate, hidden_frame_labels)
             score["rank"] = index + 1
             frame_scores.append(score)
             matched_id = str(score.get("matched_object_id") or "")
@@ -495,7 +757,22 @@ def score_variant(
                 reason = str(score.get("failure_class") or "")
                 if reason in failure_counts:
                     failure_counts[reason] += 1
-        if not frame_labels:
+            visible_score = score_candidate(
+                candidate,
+                visible_frame_labels,
+            )
+            visible_matched_id = str(visible_score.get("matched_object_id") or "")
+            if visible_score["coarse_confirmable"] and visible_matched_id:
+                visible_predicted_object_hits += 1
+                if visible_matched_id in visible_matched_objects:
+                    visible_duplicate_count += 1
+                visible_matched_objects.add(visible_matched_id)
+            tier = str(visible_score.get("category_match_tier") or "mismatch")
+            if tier in category_tier_counts:
+                category_tier_counts[tier] += 1
+            if visible_score.get("coarse_region_match"):
+                coarse_locality_match_count += 1
+        if not hidden_frame_labels:
             failure_counts["missing_private_label"] += 1
         evaluated_frames.append(
             {
@@ -504,14 +781,17 @@ def score_variant(
                 "candidate_count": len(normalized["candidates"]),
                 "schema_errors": schema_errors,
                 "label_count": len(frame_labels),
+                "hidden_target_label_count": len(hidden_frame_labels),
+                "visible_movable_label_count": len(visible_frame_labels),
                 "scores": frame_scores,
             }
         )
 
     strict_count = len(strict_unique)
     coarse_count = len(coarse_unique)
-    return {
+    hidden_target_recovery = {
         "variant_id": variant_id,
+        "truth_object_count": len({label.object_id for label in labels if label.hidden_target}),
         "candidate_count": candidate_count,
         "schema_failure_count": schema_failure_count,
         "failure_class_counts": failure_counts,
@@ -527,30 +807,89 @@ def score_variant(
             "strict_bbox_threshold_met": strict_count >= threshold,
             "coarse_threshold_met": coarse_count >= threshold,
         },
+    }
+    visible_quality_status = "scoreable" if visible_truth_objects else "truth_sparse"
+    visible_movable_label_quality = {
+        "status": visible_quality_status,
+        "truth_object_count": len(visible_truth_objects),
+        "truth_label_count": sum(1 for label in labels if not label.hidden_target),
+        "predicted_object_hit_count": visible_predicted_object_hits,
+        "predicted_object_label_count": candidate_count,
+        "unique_matched_object_count": len(visible_matched_objects),
+        "recall": _ratio(len(visible_matched_objects), len(visible_truth_objects)),
+        "precision": _ratio(visible_predicted_object_hits, candidate_count),
+        "category_match_tiers": category_tier_counts,
+        "coarse_locality_match_count": coarse_locality_match_count,
+        "duplicate_rate": _ratio(visible_duplicate_count, visible_predicted_object_hits),
+        "schema_failure_rate": _ratio(schema_failure_count, max(1, candidate_count)),
+        "surface_hint_only_count": surface_hint_only_count,
+        "fixtures_surfaces_scored_as_hints_only": True,
+    }
+    return {
+        "variant_id": variant_id,
+        **hidden_target_recovery,
+        "visible_movable_label_quality": visible_movable_label_quality,
+        "hidden_target_recovery": hidden_target_recovery,
         "evaluated_frames": evaluated_frames,
     }
 
 
-def normalize_response(response: dict[str, Any], *, frame: ObservationFrame) -> dict[str, Any]:
+def normalize_response(
+    response: dict[str, Any],
+    *,
+    frame: ObservationFrame,
+    variant_id: str = "baseline_json",
+) -> dict[str, Any]:
     errors = []
-    if response.get("schema") not in {RESPONSE_SCHEMA, "", None}:
+    expected_schema = (
+        VISUAL_LABELER_RESPONSE_SCHEMA
+        if variant_id == "raw_fpv_visual_labeler"
+        else RESPONSE_SCHEMA
+    )
+    accepted_schemas = {expected_schema, "", None}
+    if variant_id != "raw_fpv_visual_labeler":
+        accepted_schemas.add(RESPONSE_SCHEMA)
+    if response.get("schema") not in accepted_schemas:
         errors.append(f"schema mismatch: {response.get('schema')}")
-    raw_candidates = response.get("candidates")
+    raw_candidates = (
+        response.get("labels")
+        if variant_id == "raw_fpv_visual_labeler" and response.get("labels") is not None
+        else response.get("candidates")
+    )
     if raw_candidates is None:
         raw_candidates = []
     if not isinstance(raw_candidates, list):
-        errors.append("candidates must be a list")
+        errors.append(
+            "labels must be a list"
+            if variant_id == "raw_fpv_visual_labeler"
+            else "candidates must be a list"
+        )
         raw_candidates = []
     candidates = []
-    for item in raw_candidates[:3]:
+    surface_hint_only_count = 0
+    for item in raw_candidates[: 12 if variant_id == "raw_fpv_visual_labeler" else 3]:
         if not isinstance(item, dict):
-            errors.append("candidate must be an object")
+            errors.append(
+                "label must be an object"
+                if variant_id == "raw_fpv_visual_labeler"
+                else "candidate must be an object"
+            )
             continue
-        candidate, item_errors = _normalize_candidate(item, frame=frame)
+        if variant_id == "raw_fpv_visual_labeler":
+            candidate, item_errors = _normalize_visual_label(item, frame=frame)
+        else:
+            candidate, item_errors = _normalize_candidate(item, frame=frame)
         errors.extend(item_errors)
         if candidate:
-            candidates.append(candidate)
-    return {"schema_errors": errors, "candidates": candidates}
+            if candidate.get("surface_hint_only"):
+                surface_hint_only_count += 1
+            else:
+                candidates.append(candidate)
+    return {
+        "schema_errors": errors,
+        "candidates": candidates,
+        "surface_hint_only_count": surface_hint_only_count,
+    }
 
 
 def score_candidate(candidate: dict[str, Any], labels: list[ProbeLabel]) -> dict[str, Any]:
@@ -561,12 +900,19 @@ def score_candidate(candidate: dict[str, Any], labels: list[ProbeLabel]) -> dict
             "matched_object_id": "",
             "failure_class": "missing_private_label",
             "category_match": False,
+            "category_match_tier": "mismatch",
             "bbox_iou": 0.0,
             "coarse_region_match": False,
         }
     best: dict[str, Any] | None = None
     for label in labels:
-        category_match = category_matches(candidate.get("category", ""), label.category)
+        tier = category_match_tier(
+            candidate.get("category", ""),
+            label.category,
+            candidate_family=str(candidate.get("category_family") or ""),
+            label_family=label.category_family,
+        )
+        category_match = tier != "mismatch"
         bbox_iou = _bbox_iou(candidate.get("bbox"), label.bbox)
         candidate_regions = set(candidate.get("coarse_regions") or [])
         label_regions = set(label.coarse_regions or ())
@@ -582,9 +928,11 @@ def score_candidate(candidate: dict[str, Any], labels: list[ProbeLabel]) -> dict
                 label.object_id if strict_confirmable or coarse_confirmable else ""
             ),
             "category_match": category_match,
+            "category_match_tier": tier,
             "bbox_iou": round(bbox_iou, 6),
             "coarse_region_match": coarse_region_match,
             "label_category": label.category,
+            "label_category_family": label.category_family,
             "label_coarse_regions": list(label.coarse_regions),
         }
         if best is None or score_value > float(best["_score_value"]):
@@ -605,6 +953,13 @@ def score_candidate(candidate: dict[str, Any], labels: list[ProbeLabel]) -> dict
 
 
 def route_recommendation(matrix: list[dict[str, Any]]) -> str:
+    if any(
+        str(item.get("variant_id") or "") == "raw_fpv_visual_labeler"
+        and ((item.get("metrics") or {}).get("visible_movable_label_quality") or {}).get("status")
+        == "truth_sparse"
+        for item in matrix
+    ):
+        return "needs_all_visible_movable_truth"
     strict_met = any(
         ((item.get("metrics") or {}).get("live_like_top_candidate") or {}).get(
             "strict_bbox_threshold_met"
@@ -626,6 +981,31 @@ def route_recommendation(matrix: list[dict[str, Any]]) -> str:
     return "keep_raw_fpv_baseline_only"
 
 
+def _frame_group_payload(
+    group_id: str,
+    frames: list[ObservationFrame],
+    *,
+    grouping_basis: str,
+    waypoint_id: str,
+    source_run_id: str,
+) -> dict[str, Any]:
+    return {
+        "group_id": group_id,
+        "grouping_basis": grouping_basis,
+        "source_run_id": source_run_id,
+        "waypoint_id": waypoint_id,
+        "frames": frames,
+        "public_context": {
+            "source_run_id": source_run_id,
+            "waypoint_id": waypoint_id,
+            "room_id": next((frame.room_id for frame in frames if frame.room_id), ""),
+            "frame_count": len(frames),
+            "perception_only": True,
+            "non_executable_planning_context_only": True,
+        },
+    }
+
+
 def execute_provider_variant(
     *,
     variant_id: str,
@@ -638,31 +1018,38 @@ def execute_provider_variant(
     output_dir.mkdir(parents=True, exist_ok=True)
     errors = []
     predictions = {}
-    frames = (((public_inputs.get("variants") or {}).get(variant_id) or {}).get("frames")) or []
+    variant_payload = (public_inputs.get("variants") or {}).get(variant_id) or {}
+    requests = _provider_requests_for_variant(variant_id, variant_payload)
     api_config = _provider_config(provider)
     if api_config.get("error"):
         return "provider_config_error", [api_config["error"]], predictions
-    for frame in frames:
-        frame_id = str(frame.get("frame_id") or "")
-        image_path = Path(str(frame.get("image_path") or ""))
+    for request in requests:
+        request_id = str(request.get("request_id") or "")
+        image_paths = [Path(str(path)) for path in request.get("image_paths") or []]
         started = time.monotonic()
         try:
-            prompt = render_prompt(frame, variant_id=variant_id)
+            prompt = render_prompt(request["payload"], variant_id=variant_id)
             response_payload = _call_responses_api(
                 base_url=str(api_config["base_url"]),
                 api_key=str(api_config["api_key"]),
                 model=model,
                 prompt=prompt,
-                image_path=image_path,
+                image_paths=image_paths,
                 timeout_s=timeout_s,
             )
             output_text = _responses_output_text(response_payload)
             parsed = _json_object_from_text(output_text)
             elapsed_ms = round((time.monotonic() - started) * 1000)
-            predictions[frame_id] = parsed
+            predictions.update(
+                _provider_predictions_from_response(
+                    variant_id=variant_id,
+                    request=request,
+                    response=parsed,
+                )
+            )
             _write_provider_artifacts(
                 output_dir,
-                frame_id=frame_id,
+                frame_id=request_id,
                 prompt=prompt,
                 response_payload=response_payload,
                 output_text=output_text,
@@ -671,13 +1058,13 @@ def execute_provider_variant(
         except Exception as exc:  # noqa: BLE001 - provider probes should report and continue
             elapsed_ms = round((time.monotonic() - started) * 1000)
             error = {
-                "frame_id": frame_id,
+                "request_id": request_id,
                 "type": type(exc).__name__,
                 "message": str(exc),
                 "elapsed_ms": elapsed_ms,
             }
             errors.append(error)
-            (output_dir / f"{_safe_filename(frame_id)}.error.json").write_text(
+            (output_dir / f"{_safe_filename(request_id)}.error.json").write_text(
                 json.dumps(error, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
@@ -688,7 +1075,70 @@ def execute_provider_variant(
     return "provider_ok", [], predictions
 
 
+def _provider_requests_for_variant(
+    variant_id: str,
+    variant_payload: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if variant_id == "raw_fpv_visual_labeler":
+        requests = []
+        for group in variant_payload.get("frame_groups") or []:
+            frames = [frame for frame in group.get("frames") or [] if isinstance(frame, dict)]
+            requests.append(
+                {
+                    "request_id": str(group.get("group_id") or f"group_{len(requests) + 1:03d}"),
+                    "payload": group,
+                    "frame_ids": [str(frame.get("frame_id") or "") for frame in frames],
+                    "image_paths": [str(frame.get("image_path") or "") for frame in frames],
+                }
+            )
+        return requests
+
+    requests = []
+    for frame in variant_payload.get("frames") or []:
+        if not isinstance(frame, dict):
+            continue
+        frame_id = str(frame.get("frame_id") or "")
+        requests.append(
+            {
+                "request_id": frame_id,
+                "payload": frame,
+                "frame_ids": [frame_id],
+                "image_paths": [str(frame.get("image_path") or "")],
+            }
+        )
+    return requests
+
+
+def _provider_predictions_from_response(
+    *,
+    variant_id: str,
+    request: dict[str, Any],
+    response: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    if variant_id != "raw_fpv_visual_labeler":
+        frame_ids = [frame_id for frame_id in request.get("frame_ids") or [] if frame_id]
+        return {frame_ids[0]: response} if frame_ids else {}
+
+    frame_ids = {str(frame_id) for frame_id in request.get("frame_ids") or [] if frame_id}
+    labels_by_frame: dict[str, list[dict[str, Any]]] = {frame_id: [] for frame_id in frame_ids}
+    for item in response.get("labels") or []:
+        if not isinstance(item, dict):
+            continue
+        evidence_frame_id = str(item.get("evidence_frame_id") or item.get("frame_id") or "")
+        if not evidence_frame_id and len(frame_ids) == 1:
+            evidence_frame_id = next(iter(frame_ids))
+        if evidence_frame_id in labels_by_frame:
+            labels_by_frame[evidence_frame_id].append(item)
+    schema = response.get("schema") or VISUAL_LABELER_RESPONSE_SCHEMA
+    return {
+        frame_id: {"schema": schema, "labels": labels}
+        for frame_id, labels in labels_by_frame.items()
+    }
+
+
 def render_prompt(frame_payload: dict[str, Any], *, variant_id: str) -> str:
+    if variant_id == "raw_fpv_visual_labeler":
+        return _render_visual_labeler_prompt(frame_payload)
     contract = (
         "Return only strict JSON with schema raw_fpv_probe_response_v1. "
         "Return at most three candidates. Each candidate must include "
@@ -723,11 +1173,51 @@ def render_prompt(frame_payload: dict[str, Any], *, variant_id: str) -> str:
     )
 
 
+def _render_visual_labeler_prompt(group_payload: dict[str, Any]) -> str:
+    frames = [
+        {
+            "frame_id": frame.get("frame_id"),
+            "source_observation_id": frame.get("source_observation_id"),
+            "waypoint_id": frame.get("waypoint_id"),
+            "room_id": frame.get("room_id"),
+            "image_sha256": frame.get("image_sha256"),
+        }
+        for frame in group_payload.get("frames") or []
+        if isinstance(frame, dict)
+    ]
+    return (
+        "Use the raw-fpv-visual-labeler skill. Return only strict JSON with schema "
+        "raw_fpv_visual_labeler_response_v1. The attached images are the listed frames "
+        "in order. Label visible cleanup-relevant movable objects only; fixtures and "
+        "surfaces may appear only as surface_hint or is_cleanup_relevant=false. "
+        "Do not include private labels, hidden target ids, acceptable destinations, "
+        "observed-object handles, detector candidates, camera-label producer candidates, "
+        "or cleanup commands. Required fields per label: evidence_frame_id, category, "
+        "category_family, coarse_region, confidence, is_cleanup_relevant. Optional fields: "
+        "bbox, surface_hint, reason_not_actionable. Allowed category_family values: "
+        + ", ".join(MOVABLE_CATEGORY_FAMILIES)
+        + ". Allowed coarse_region values: "
+        + ", ".join(SCREEN_GRID_REGIONS)
+        + ". Allowed surface_hint values: "
+        + ", ".join(SURFACE_HINTS)
+        + ".\nGroup public context: "
+        + json.dumps(group_payload.get("public_context") or {}, sort_keys=True)
+        + "\nFrames: "
+        + json.dumps(frames, sort_keys=True)
+        + '\nOutput shape: {"schema":"raw_fpv_visual_labeler_response_v1","labels":['
+        '{"evidence_frame_id":"run/raw_fpv_001","category":"mug","category_family":"dish",'
+        '"coarse_region":"middle_right","confidence":0.82,"is_cleanup_relevant":true,'
+        '"bbox":[0.62,0.5,0.12,0.15],"surface_hint":"table",'
+        '"reason_not_actionable":""}]}'
+    )
+
+
 def render_html_report(report: dict[str, Any]) -> str:
     rows = []
     for item in report.get("matrix") or []:
         metrics = item.get("metrics") or {}
         live_like = metrics.get("live_like_top_candidate") or {}
+        visible = metrics.get("visible_movable_label_quality") or {}
         rows.append(
             "<tr>"
             f"<td>{html.escape(str(item.get('variant_id') or ''))}</td>"
@@ -735,6 +1225,9 @@ def render_html_report(report: dict[str, Any]) -> str:
             f"<td>{metrics.get('candidate_count', 0)}</td>"
             f"<td>{metrics.get('strict_bbox_unique_confirmable_count', 0)}</td>"
             f"<td>{metrics.get('coarse_unique_confirmable_count', 0)}</td>"
+            f"<td>{html.escape(str(visible.get('status') or ''))}</td>"
+            f"<td>{visible.get('unique_matched_object_count', 0)}</td>"
+            f"<td>{visible.get('precision', 0.0)}</td>"
             f"<td>{metrics.get('duplicate_count', 0)}</td>"
             f"<td>{html.escape(str(live_like.get('coarse_threshold_met', False)))}</td>"
             "</tr>"
@@ -753,9 +1246,14 @@ def render_html_report(report: dict[str, Any]) -> str:
         f"<p>Frames: {report.get('frame_count', 0)}; labels: {report.get('label_count', 0)}; "
         f"private labels: {report.get('private_label_count', 0)}; "
         f"missing label frames: {report.get('missing_label_frame_count', 0)}</p>"
+        "<h2>Split Metrics</h2>"
         "<table><thead><tr><th>Variant</th><th>Execution</th><th>Candidates</th>"
-        "<th>Strict unique</th><th>Coarse unique</th><th>Duplicates</th>"
+        "<th>Hidden strict unique</th><th>Hidden coarse unique</th>"
+        "<th>Visible truth</th><th>Visible unique</th><th>Visible precision</th><th>Duplicates</th>"
         "<th>Coarse threshold met</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        "<h2>Truth Scope</h2><pre>"
+        + html.escape(json.dumps(report.get("truth_scope") or {}, indent=2, sort_keys=True))
+        + "</pre>"
         "<h2>Privacy</h2><pre>"
         + html.escape(json.dumps(report.get("privacy") or {}, indent=2, sort_keys=True))
         + "</pre></body></html>"
@@ -891,17 +1389,24 @@ def _derive_resolved_contrast_labels(
                         source_observation_id=observation_id,
                         object_id=str(item.get("object_id") or ""),
                         category=str(item.get("category") or "object"),
+                        category_family=_category_family(str(item.get("category") or "object")),
                         bbox=bbox,
                         coarse_regions=tuple(_coarse_regions_from_bbox(bbox)),
                         surface_hint="unknown",
                         label_source="resolved_camera_label_contrast",
                         private=False,
+                        hidden_target=False,
                     )
                 )
     return labels
 
 
-def _label_from_payload(item: dict[str, Any], *, private: bool) -> ProbeLabel:
+def _label_from_payload(
+    item: dict[str, Any],
+    *,
+    private: bool,
+    default_hidden_target: bool,
+) -> ProbeLabel:
     bbox = _bbox_tuple(item.get("bbox") or item.get("image_bbox"))
     coarse_regions = tuple(
         region
@@ -916,11 +1421,15 @@ def _label_from_payload(item: dict[str, Any], *, private: bool) -> ProbeLabel:
         source_observation_id=str(item.get("source_observation_id") or ""),
         object_id=str(item.get("object_id") or ""),
         category=str(item.get("category") or "object"),
+        category_family=_category_family(
+            str(item.get("category_family") or item.get("family") or item.get("category") or "")
+        ),
         bbox=bbox,
         coarse_regions=coarse_regions,
         surface_hint=surface_hint,
         label_source=str(item.get("label_source") or "private_manifest"),
         private=private,
+        hidden_target=bool(item.get("hidden_target", default_hidden_target)),
     )
 
 
@@ -1005,32 +1514,147 @@ def _normalize_candidate(
     candidate = {
         "source_observation_id": observation_id or frame.source_observation_id,
         "category": category,
+        "category_family": _category_family(category),
         "evidence_note": evidence_note,
         "confidence": confidence,
         "bbox": bbox,
         "coarse_regions": sorted(set(coarse_regions)),
         "surface_hint": surface_hint,
+        "surface_hint_only": False,
     }
     if not bbox and not coarse_regions:
         errors.append("locality must include bbox or coarse_region")
     return candidate, errors
 
 
+def _normalize_visual_label(
+    item: dict[str, Any],
+    *,
+    frame: ObservationFrame,
+) -> tuple[dict[str, Any], list[str]]:
+    errors = []
+    evidence_frame_id = str(item.get("evidence_frame_id") or item.get("frame_id") or "")
+    if evidence_frame_id and evidence_frame_id != frame.frame_id:
+        errors.append("evidence_frame_id does not match frame")
+    category = str(item.get("category") or "").strip().lower()
+    if not category:
+        errors.append("category is required")
+    category_family = _category_family(str(item.get("category_family") or category))
+    if (
+        category_family not in MOVABLE_CATEGORY_FAMILIES
+        and category not in FIXTURE_OR_SURFACE_CATEGORIES
+    ):
+        errors.append("category_family is not a supported cleanup family")
+    coarse = item.get("coarse_region") or item.get("screen_grid_region")
+    locality = item.get("locality") if isinstance(item.get("locality"), dict) else {}
+    if not coarse:
+        coarse = locality.get("coarse_region") or locality.get("screen_grid_region")
+    coarse_regions = []
+    if str(coarse or "") in SCREEN_GRID_REGIONS:
+        coarse_regions.append(str(coarse))
+    else:
+        errors.append("coarse_region is required")
+    bbox = _bbox_tuple(item.get("bbox") or locality.get("bbox"))
+    coarse_regions.extend(region for region in _coarse_regions_from_bbox(bbox) if region)
+    surface_hint = str(item.get("surface_hint") or locality.get("surface_hint") or "unknown")
+    if surface_hint not in SURFACE_HINTS:
+        surface_hint = "unknown"
+    try:
+        confidence = float(item.get("confidence", 0.0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+        errors.append("confidence must be numeric")
+    cleanup_relevant = item.get("is_cleanup_relevant")
+    if not isinstance(cleanup_relevant, bool):
+        errors.append("is_cleanup_relevant must be boolean")
+        cleanup_relevant = False
+    surface_hint_only = (
+        not cleanup_relevant
+        or _category_norm(category)
+        in {_category_norm(value) for value in FIXTURE_OR_SURFACE_CATEGORIES}
+        or category_family not in MOVABLE_CATEGORY_FAMILIES
+    )
+    candidate = {
+        "source_observation_id": frame.source_observation_id,
+        "evidence_frame_id": evidence_frame_id or frame.frame_id,
+        "category": category,
+        "category_family": category_family,
+        "evidence_note": str(item.get("reason_not_actionable") or item.get("evidence_note") or ""),
+        "confidence": confidence,
+        "bbox": bbox,
+        "coarse_regions": sorted(set(coarse_regions)),
+        "surface_hint": surface_hint,
+        "is_cleanup_relevant": bool(cleanup_relevant),
+        "reason_not_actionable": str(item.get("reason_not_actionable") or ""),
+        "surface_hint_only": surface_hint_only,
+    }
+    return candidate, errors
+
+
 def category_matches(candidate: str, label: str) -> bool:
+    return category_match_tier(candidate, label) != "mismatch"
+
+
+def category_match_tier(
+    candidate: str,
+    label: str,
+    *,
+    candidate_family: str = "",
+    label_family: str = "",
+) -> str:
     candidate_norm = _category_norm(candidate)
     label_norm = _category_norm(label)
     if candidate_norm == label_norm:
-        return True
-    families = {
-        "dish": {"dish", "plate", "bowl", "cup", "mug"},
-        "food": {"food", "potato", "apple", "fruit", "vegetable"},
-        "electronics": {"electronics", "remote", "remotecontrol", "phone", "laptop"},
-        "linen": {"linen", "pillow", "towel", "blanket", "cloth"},
-        "toy": {"toy"},
-        "book": {"book"},
-        "pillow": {"pillow"},
+        return "exact"
+    if _semantic_category_alias(candidate_norm) == _semantic_category_alias(label_norm):
+        return "semantic"
+    candidate_family_norm = _category_family(candidate_family or candidate)
+    label_family_norm = _category_family(label_family or label)
+    if candidate_family_norm and candidate_family_norm == label_family_norm:
+        return "coarse_family"
+    return "mismatch"
+
+
+def _category_family(value: str) -> str:
+    norm = _category_norm(value)
+    families = _category_families()
+    for family, members in families.items():
+        if norm in members:
+            return family
+    return norm if norm in MOVABLE_CATEGORY_FAMILIES else ""
+
+
+def _semantic_category_alias(value: str) -> str:
+    aliases = {
+        "irishpotato": "potato",
+        "remotecontrol": "remote",
+        "tvremote": "remote",
+        "mug": "cup",
+        "teacup": "cup",
+        "dishware": "dish",
+        "cloth": "linen",
+        "blanket": "linen",
+        "cushion": "pillow",
     }
-    return any(candidate_norm in members and label_norm in members for members in families.values())
+    return aliases.get(value, value)
+
+
+def _category_families() -> dict[str, set[str]]:
+    return {
+        "dish": {"dish", "dishware", "plate", "bowl", "cup", "mug", "teacup"},
+        "food": {"food", "potato", "irishpotato", "apple", "fruit", "vegetable", "bread"},
+        "electronics": {
+            "electronics",
+            "remote",
+            "remotecontrol",
+            "tvremote",
+            "phone",
+            "laptop",
+        },
+        "linen": {"linen", "pillow", "cushion", "towel", "blanket", "cloth"},
+        "toy": {"toy", "ball"},
+        "book": {"book", "notebook"},
+    }
 
 
 def _category_norm(value: str) -> str:
@@ -1093,21 +1717,23 @@ def _call_responses_api(
     api_key: str,
     model: str,
     prompt: str,
-    image_path: Path,
     timeout_s: float,
+    image_path: Path | None = None,
+    image_paths: Iterable[Path] | None = None,
 ) -> dict[str, Any]:
-    image_bytes = image_path.read_bytes()
-    mime_type = "image/png" if image_path.suffix.lower() == ".png" else "image/jpeg"
-    image_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+    paths = list(image_paths or ([] if image_path is None else [image_path]))
+    content = [{"type": "input_text", "text": prompt}]
+    for path in paths:
+        image_bytes = path.read_bytes()
+        mime_type = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+        image_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
+        content.append({"type": "input_image", "image_url": image_url})
     payload = {
         "model": model,
         "input": [
             {
                 "role": "user",
-                "content": [
-                    {"type": "input_text", "text": prompt},
-                    {"type": "input_image", "image_url": image_url},
-                ],
+                "content": content,
             }
         ],
     }
@@ -1198,6 +1824,8 @@ def _json_object_from_text(text: str) -> dict[str, Any]:
 
 
 def _selected_variants(value: str) -> tuple[str, ...]:
+    if value == "all":
+        return ("baseline_json", "skill_json_semantic_map", "raw_fpv_visual_labeler")
     if value == "both":
         return ("baseline_json", "skill_json_semantic_map")
     return (value,)
@@ -1213,6 +1841,8 @@ def _probe_status(
         return "partial"
     if any(str(item.get("execution_status") or "") == "provider_config_error" for item in matrix):
         return "blocked_needs_decision"
+    if not any(not label.hidden_target for label in labels):
+        return "partial"
     if provider == "offline" and not any(
         (item.get("metrics") or {}).get("candidate_count") for item in matrix
     ):
@@ -1233,6 +1863,31 @@ def _contains_private_label_leak(public_inputs: dict[str, Any], labels: list[Pro
 def _contains_executable_prior_handle(public_inputs: dict[str, Any]) -> bool:
     text = json.dumps(public_inputs, sort_keys=True)
     return bool(re.search(r"\b(observed_\d+|anchor_fixture_\d+)\b", text))
+
+
+def _truth_scope_summary(labels: list[ProbeLabel]) -> dict[str, Any]:
+    hidden_objects = {label.object_id for label in labels if label.hidden_target}
+    visible_objects = {label.object_id for label in labels if not label.hidden_target}
+    if visible_objects:
+        scope = "all_visible_movable_or_mixed"
+    elif hidden_objects:
+        scope = "hidden_targets_only"
+    else:
+        scope = "missing"
+    return {
+        "scope": scope,
+        "hidden_target_object_count": len(hidden_objects),
+        "all_visible_movable_object_count": len(visible_objects),
+        "visible_movable_quality_claim": "scoreable" if visible_objects else "truth_sparse",
+        "hidden_target_recovery_scoreable": bool(hidden_objects),
+        "scorer_only": True,
+    }
+
+
+def _ratio(numerator: int | float, denominator: int | float) -> float:
+    if float(denominator or 0.0) <= 0.0:
+        return 0.0
+    return round(float(numerator) / float(denominator), 6)
 
 
 def _console_summary(report: dict[str, Any]) -> dict[str, Any]:

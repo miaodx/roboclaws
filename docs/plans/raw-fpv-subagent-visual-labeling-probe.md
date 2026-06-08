@@ -1,10 +1,32 @@
 # RAW-FPV Subagent Visual Labeling Probe
 
-**Status:** Draft preflight
+**Status:** Reviewed preflight, implementation in progress
 **Created:** 2026-06-08
 **Source:** RAW-FPV live strategy discussion plus `intuitive-planning-loop`
 review of the existing dedicated-labeler plan.
 **Canonical source:** this file
+
+## Inline Flow Review
+
+External `gstack-autoplan` was not installed in the current checkout, so
+`intuitive-flow` used the active `/goal` approval as the execution signal and
+performed an inline plan-review reconciliation before implementation.
+
+Accepted review decisions:
+
+- Keep the first slice perception-only and offline.
+- Treat first-slice truth scope as cleanup-relevant movable objects only.
+- Keep fixtures and surfaces as `surface_hint` evidence only, not object hits.
+- Accept PARTIAL when the existing 0608 corpus has hidden-target truth but lacks
+  scorer-only all-visible movable-object truth.
+- Do not change `camera-raw-fpv` live actionability, public lane semantics, MCP
+  tools, or camera-label producer boundaries.
+
+Parked from this slice:
+
+- Generate a richer all-visible movable-object scorer manifest for the 0608
+  frame set or a new fixed corpus before making any quality claim about the
+  clean-context labeler.
 
 ## Problem
 

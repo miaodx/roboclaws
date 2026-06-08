@@ -665,9 +665,11 @@ just harness::molmo-planner-proof-bundle-execute-rerun
   exact target fixture.
 - The 2026-06-08 scorer-only raw-FPV probe reached a scoreable 36-frame
   raw-only set covering all five generated targets, but CodexENV `gpt-5.5`
-  still confirmed at most two unique coarse targets. Keep pure
+  still confirmed at most two unique coarse hidden targets. Keep pure
   `camera-raw-fpv` as a baseline/ablation lane and prefer
-  `camera-grounded-labels` for live cleanup.
+  `camera-grounded-labels` for the current live cleanup path. That conclusion is
+  scoped to hidden-target recovery and live actionability; a clean-context
+  RAW-FPV visual labeler is tracked separately as perception-only evidence.
 - `camera_model_policy` remains internal metadata for deterministic simulated
   camera-label producer evidence under the shared Model-Declared Observation
   schema; it is not real VLM pixel inference unless the producer is explicitly a
