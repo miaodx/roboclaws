@@ -65,13 +65,13 @@ just agent::harness codex-cleanup-harness8 execute \
   row=dino-prior-world-oracle-labels,dino-prior-camera-grounded-labels-grounding-dino
 ```
 
-Provider `429 Too Many Requests` / rate-limit failures are retried once by
-default. During a noisy provider window, use:
+Explicit retryable provider-transient failures from the live runner are retried
+once by default. During a noisy provider window, use:
 
 ```bash
 just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/0603_refactor_check \
-  rate_limit_retries=2 rate_limit_retry_sleep_s=90
+  provider_retry_attempts=2 provider_retry_sleep_s=90
 ```
 
 Run the full grid:
@@ -101,7 +101,7 @@ summary. Review behavior metrics separately from strict checker exit status:
 - disturbance count
 - unrecovered semantic-order errors
 - wall time and tool-call count
-- retry count / rate-limit evidence
+- retry count / provider-transient evidence
 - per-row `report.html`
 
 For source and skill changes, a practical pass means no obvious regression in
@@ -111,6 +111,9 @@ useful evidence; inspect the checker reason before treating it as cleanup
 behavior regression.
 
 A row with `behavior_status=infra_failure` is not cleanup behavior evidence.
-`rate_limited` means Codex provider exhaustion; `infra_failed` means an external
+`provider_transient_failed` means the live runner reported
+`reason=provider_transient_failure` with a `provider_reason` such as
+`rate_limit`, `upstream_unavailable`, or `upstream_timeout`, and the harness
+exhausted the configured retry budget. `infra_failed` means an external
 dependency such as the Grounding DINO sidecar failed or timed out. Rerun it
 before comparing direct vs DINO-prior behavior.
