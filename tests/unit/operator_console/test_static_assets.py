@@ -21,6 +21,9 @@ def test_static_app_has_route_specific_field_groups() -> None:
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
 
     assert 'id="isaac-fields"' in html
+    assert 'id="codex-fields"' in html
+    assert 'id="codex-provider-input"' in html
+    assert 'id="codex-model-input"' in html
     assert 'id="agibot-fields"' in html
     assert 'id="agibot-gate-fields"' in html
     assert 'id="real-movement-gate"' in html
@@ -28,9 +31,20 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "field_groups" in app
     assert "real_movement_enabled" in app
     assert "Movement" in app
+    assert "Provider" in app
+    assert "env_overrides" in app
+    assert "ROBOCLAWS_CODEX_PROVIDER" in app
+    assert "selectedCodexProvider" in app
     assert "NEEDS PREFLIGHT" in app
     assert "NEEDS OPERATOR GATES" in app
     assert "PORT IN USE" in app
+    assert "ATTACH" in app
+    assert "Attach Existing Run" in app
+    assert "attachExistingRun" in app
+    assert "attachable_run" in app
+    assert "renderStartAction" in app
+    assert "Run Attached" in app
+    assert "Watching run" in app
     assert "/api/readiness" in app
     assert "refreshSelectedRouteReadiness" in app
 
@@ -65,6 +79,41 @@ def test_static_app_announces_run_state_via_live_region() -> None:
     assert 'id="event-log"' in html
     assert 'role="status"' in html
     assert 'aria-live="polite"' in html
+
+
+def test_static_app_has_resizable_run_evidence_panel() -> None:
+    html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="state-rail-resizer"' in html
+    assert 'id="evidence-strip-resizer"' in html
+    assert 'role="separator"' in html
+    assert 'class="splitter state-rail-splitter"' in html
+    assert 'class="splitter event-strip-splitter"' in html
+    assert 'title="Drag to resize raw evidence log panel"\n          hidden' in html
+    assert 'href="/styles.css?v=' in html
+    assert 'src="/app.js?v=' in html
+    assert 'aria-label="Resize run evidence panel"' in html
+    assert 'aria-label="Resize raw evidence log panel"' in html
+    assert "STATE_RAIL_WIDTH_KEY" in app
+    assert "EVIDENCE_STRIP_HEIGHT_KEY" in app
+    assert "startStateRailResize" in app
+    assert "startEvidenceStripResize" in app
+    assert "setPointerCapture" in app
+    assert "ArrowLeft" in app
+    assert "ArrowUp" in app
+    assert "els.evidenceStripResizer.hidden = !hidden" in app
+    assert "raw-evidence-open" in app
+    assert "--state-rail-width" in css
+    assert "--evidence-strip-height" in css
+    assert ".state-rail-splitter" in css
+    assert ".event-strip-splitter" in css
+    assert "cursor: col-resize" in css
+    assert "cursor: row-resize" in css
+    assert ".raw-evidence" in css
+    assert "overflow: auto" in css
+    assert "white-space: pre" in css
 
 
 def test_static_app_routes_destructive_actions_through_styled_dialog() -> None:

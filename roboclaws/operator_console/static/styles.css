@@ -8,6 +8,10 @@
   --warning: #935600;
   --danger: #b42318;
   --success: #287d3c;
+  --state-rail-width: 300px;
+  --state-rail-min-width: 260px;
+  --event-strip-height: 112px;
+  --evidence-strip-height: 280px;
   color-scheme: light;
 }
 
@@ -26,6 +30,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -51,6 +56,7 @@ button:disabled {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -98,14 +104,22 @@ button:not(:disabled):hover {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 240px 300px minmax(520px, 1fr) 300px;
-  grid-template-rows: 56px minmax(0, 1fr) 112px;
+  grid-template-columns:
+    240px
+    300px
+    minmax(420px, 1fr)
+    minmax(var(--state-rail-min-width), var(--state-rail-width));
+  grid-template-rows: 56px minmax(0, 1fr) var(--event-strip-height);
   grid-template-areas:
     "top top top top"
     "routes setup workspace state"
     "events events events events";
   height: 100vh;
   overflow: hidden;
+}
+
+.app-shell.raw-evidence-open {
+  --event-strip-height: var(--evidence-strip-height);
 }
 
 .top-run-bar {
@@ -174,6 +188,8 @@ button:not(:disabled):hover {
 .state-rail {
   border-right: 0;
   border-left: 1px solid var(--border);
+  position: relative;
+  min-width: var(--state-rail-min-width);
 }
 
 .route-rail {
@@ -188,6 +204,47 @@ button:not(:disabled):hover {
   grid-area: state;
 }
 
+.splitter {
+  border: 0;
+  background: transparent;
+}
+
+.state-rail-splitter {
+  position: absolute;
+  top: 0;
+  left: -8px;
+  z-index: 2;
+  width: 16px;
+  height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.state-rail-splitter::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 7px;
+  width: 2px;
+  background: var(--border);
+}
+
+.state-rail-splitter:hover::before,
+.state-rail-splitter:focus-visible::before,
+body.resizing-state-rail .state-rail-splitter::before {
+  background: var(--accent);
+}
+
+body.resizing-state-rail {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body.resizing-state-rail * {
+  cursor: col-resize !important;
+}
+
 .workspace {
   grid-area: workspace;
   overflow: hidden;
@@ -196,11 +253,56 @@ button:not(:disabled):hover {
 
 .event-strip {
   grid-area: events;
-  min-height: 112px;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+  min-height: var(--event-strip-height);
   padding: 16px;
   border-top: 1px solid var(--border);
   background: var(--panel);
-  overflow: auto;
+  overflow: hidden;
+}
+
+.event-strip-splitter {
+  position: absolute;
+  display: none;
+  top: -8px;
+  left: 0;
+  z-index: 2;
+  width: 100%;
+  height: 16px;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.event-strip-splitter::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--border);
+}
+
+.event-strip-splitter:hover::before,
+.event-strip-splitter:focus-visible::before,
+body.resizing-evidence-strip .event-strip-splitter::before {
+  background: var(--accent);
+}
+
+.app-shell.raw-evidence-open .event-strip-splitter {
+  display: block;
+}
+
+body.resizing-evidence-strip {
+  cursor: row-resize;
+  user-select: none;
+}
+
+body.resizing-evidence-strip * {
+  cursor: row-resize !important;
 }
 
 .rail-section,
@@ -226,6 +328,7 @@ label {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid var(--border);
@@ -555,6 +658,23 @@ pre,
   text-decoration: none;
 }
 
+.raw-evidence {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+
 dialog {
   width: min(640px, calc(100vw - 32px));
   border: 1px solid var(--border);
@@ -610,6 +730,22 @@ dialog pre {
   .state-rail,
   .workspace {
     overflow: visible;
+  }
+
+  .state-rail {
+    min-width: 0;
+  }
+
+  .state-rail-splitter {
+    display: none;
+  }
+
+  .event-strip {
+    overflow: auto;
+  }
+
+  .event-strip-splitter {
+    display: none;
   }
 
   .view-grid {

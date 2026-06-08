@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Shared helpers for Codex / Claude Code demo launchers.
 #
-# Normal users configure only provider keys in the repo-local .env. The
-# ROBOCLAWS_* provider/model variables handled in this file are maintainer-only
-# escape hatches for tests, CI, and one-off debugging.
+# Normal Codex runs use CODEX_BASE_URL / CODEX_API_KEY from the repo-local .env.
+# The ROBOCLAWS_* provider/model variables handled in this file are explicit
+# overrides for tests, CI, UI-selected routes, and one-off debugging.
 
 roboclaws_load_dotenv() {
   local env_file="${1:-.env}"
@@ -27,13 +27,7 @@ roboclaws_code_agent_provider() {
   if [[ -z "$provider" ]]; then
     case "$primary_var" in
       ROBOCLAWS_CODEX_PROVIDER)
-        if [[ -n "${XM_LLM_API_KEY:-}" ]]; then
-          provider="mify"
-        elif [[ -n "${CODEX_BASE_URL:-}" || -n "${CODEX_API_KEY:-}" ]]; then
-          provider="codex-env"
-        else
-          provider="system"
-        fi
+        provider="codex-env"
         ;;
       ROBOCLAWS_CLAUDE_PROVIDER)
         if [[ -n "${MIMO_TP_KEY:-}" ]]; then
@@ -256,7 +250,7 @@ roboclaws_codex_provider_args() {
     codex-env|mify)
       ;;
     system)
-      echo "error: Codex repo workflows require XM_LLM_API_KEY for the mify profile, or CODEX_BASE_URL and CODEX_API_KEY for the codex-env profile; add them to the repo-local .env or export them for this shell" >&2
+      echo "error: Codex repo workflows default to codex-env and require CODEX_BASE_URL and CODEX_API_KEY; set ROBOCLAWS_CODEX_PROVIDER=mify explicitly to use XM_LLM_API_KEY" >&2
       return 2
       ;;
     *)
@@ -379,7 +373,7 @@ roboclaws_assert_codex_network_allowed() {
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
   case "$provider" in
-    system|codex-env|mify)
+    codex-env|mify)
       ;;
     *)
       echo "error: unsupported Codex provider '${provider}'; expected mify or codex-env" >&2
@@ -396,11 +390,6 @@ roboclaws_assert_codex_network_allowed() {
 
   case "$rc" in
     0)
-      if [[ "$provider" == "system" ]]; then
-        echo "error: work network detected; ${label} is blocked while using system Codex provider." >&2
-        echo "       Configure XM_LLM_API_KEY for mify, or CODEX_BASE_URL and CODEX_API_KEY for codex-env, in the repo-local .env; or switch off the work network." >&2
-        return 1
-      fi
       echo "==> network guard ok: work network with repo-local Codex provider (${provider})" >&2
       ;;
     1)

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Agent Operator Console</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=codex-env-default-20260608" />
   </head>
   <body>
     <div class="app-shell">
@@ -57,6 +57,22 @@
             Context JSON
             <input id="context-json-input" name="context_json" placeholder="Agibot context path" />
           </label>
+          </div>
+          <div id="codex-fields" class="route-fields" hidden>
+          <label>
+            Codex provider
+            <select id="codex-provider-input" name="codex_provider">
+              <option value="codex-env" selected>codex-env</option>
+              <option value="mify">mify</option>
+            </select>
+          </label>
+          <label>
+            Codex model override
+            <input id="codex-model-input" name="codex_model" placeholder="Provider default" />
+          </label>
+          <div class="prompt-copy" id="codex-provider-help">
+            codex-env uses CODEX_BASE_URL and CODEX_API_KEY. mify requires XM_LLM_API_KEY.
+          </div>
           </div>
           <div id="isaac-fields" class="route-fields" hidden>
           <label>
@@ -137,6 +153,15 @@
       </main>
 
       <aside class="state-rail">
+        <div
+          id="state-rail-resizer"
+          class="splitter state-rail-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize run evidence panel"
+          tabindex="0"
+          title="Drag to resize run evidence panel"
+        ></div>
         <section>
           <h2>Run State</h2>
           <dl id="run-state">
@@ -160,12 +185,22 @@
         <section>
           <h2>Raw Logs</h2>
           <button id="toggle-raw-button" class="secondary">Show Raw Evidence</button>
-          <pre id="raw-evidence" class="raw-evidence" hidden></pre>
         </section>
       </aside>
 
       <footer class="event-strip">
+        <div
+          id="evidence-strip-resizer"
+          class="splitter event-strip-splitter"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize raw evidence log panel"
+          tabindex="0"
+          title="Drag to resize raw evidence log panel"
+          hidden
+        ></div>
         <div id="event-log" role="status" aria-live="polite">Choose an agent route on the left. The console will show required gates before launch.</div>
+        <pre id="raw-evidence" class="raw-evidence" tabindex="0" hidden></pre>
       </footer>
     </div>
 
@@ -180,6 +215,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js"></script>
+    <script src="/app.js?v=codex-env-default-20260608"></script>
   </body>
 </html>

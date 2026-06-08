@@ -15,9 +15,20 @@ from roboclaws.launch.catalog import resolve_task_launch
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleRoute, accepted_isaac_preflight, get_route
+from roboclaws.operator_console.state import resolve_display_run_dir
 
 DEFAULT_MCP_HOST = "127.0.0.1"
 DEFAULT_MCP_PORT = 18788
+CODEX_PROVIDER_DEFAULT = "codex-env"
+CODEX_PROVIDER_DEFAULT_MODELS = {
+    "codex-env": "gpt-5.5",
+    "mify": "xiaomi/mimo-v2.5",
+}
+CODEX_PROVIDER_REQUIRED_ENV = {
+    "codex-env": ("CODEX_BASE_URL", "CODEX_API_KEY"),
+    "mify": ("XM_LLM_API_KEY",),
+}
+ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CODEX_MODEL"}
 
 
 class ConsoleLaunchError(ValueError):
@@ -29,6 +40,7 @@ class LaunchRequest:
     route_id: str
     prompt: str = ""
     overrides: dict[str, str] | None = None
+    env_overrides: dict[str, str] | None = None
     gates: dict[str, bool] | None = None
 
 
@@ -63,16 +75,9 @@ def provider_key_present(route: ConsoleRoute, env: dict[str, str] | None = None)
                 "MIMO_TP_KEY",
             )
         )
-    return any(
-        env_map.get(key)
-        for key in (
-            "XM_LLM_API_KEY",
-            "CODEX_API_KEY",
-            "KIMI_API_KEY",
-            "MIMO_TP_KEY",
-            "OPENAI_API_KEY",
-        )
-    )
+    if route.driver == "codex":
+        return _codex_provider_status(env_map)["ok"]
+    return False
 
 
 def build_launch_argv(
@@ -132,6 +137,8 @@ def start_console_run(
     route = get_route(request.route_id)
     gate_payload = request.gates or {}
     overrides = request.overrides or {}
+    env_overrides = request.env_overrides or {}
+    run_env = _apply_env_overrides(route, run_env, env_overrides)
     readiness = route_readiness(root, route, overrides=overrides, gates=gate_payload, env=run_env)
     if not readiness["can_start"]:
         raise ConsoleLaunchError(str(readiness["blocker"]))
@@ -176,6 +183,7 @@ def start_console_run(
         "backend_lock": route.lock_name,
         "lock": lock_state.to_payload(),
         "argv": argv,
+        "env_overrides": _public_env_overrides(env_overrides),
         "run_dir": str(run_dir),
     }
     (run_dir / "operator_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -187,6 +195,7 @@ def route_readiness(
     route: ConsoleRoute,
     *,
     overrides: dict[str, str] | None = None,
+    env_overrides: dict[str, str] | None = None,
     gates: dict[str, bool] | None = None,
     env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
@@ -200,14 +209,22 @@ def route_readiness(
             "gates": [],
         }
 
-    env_map = load_repo_dotenv(root, env)
+    env_map = _apply_env_overrides(route, load_repo_dotenv(root, env), env_overrides or {})
     override_map = overrides or {}
     gate_map = gates or {}
     gate_rows: list[dict[str, Any]] = []
     blocker = ""
     lock_state = ResourceLock(root, route.lock_name).read()
-    if lock_state.held and not lock_state.stale:
-        blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
+    attachable_run = _attachable_run_payload(root, lock_state)
+    lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
+    if lock_active:
+        if attachable_run:
+            blocker = (
+                f"Backend lock is held by run {attachable_run['run_id']}. "
+                "Attach to the existing run or wait for it to finish."
+            )
+        else:
+            blocker = "Backend lock is held by another run. Open that run or wait for it to finish."
         blocker_kind = "locked"
     else:
         blocker_kind = ""
@@ -217,10 +234,11 @@ def route_readiness(
         evidence = ""
         kind = "ready"
         if gate.kind == "provider_key":
-            ok = provider_key_present(route, env_map)
+            provider_status = _provider_status(route, env_map)
+            ok = provider_status["ok"]
             if not ok:
                 label = route.driver_label or route.driver
-                message = f"No {label} provider route found in repo .env."
+                message = str(provider_status["message"] or f"No {label} provider route found.")
                 kind = "needs_provider"
         elif gate.kind == "isaac_preflight":
             accepted = accepted_isaac_preflight(root)
@@ -272,6 +290,8 @@ def route_readiness(
         "blocker": blocker,
         "blocker_kind": blocker_kind,
         "lock": lock_state.to_payload(),
+        "attachable_run": attachable_run,
+        "provider": _provider_status(route, env_map),
         "gates": gate_rows,
     }
 
@@ -282,17 +302,14 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     if not state_path.exists():
         raise ConsoleLaunchError(f"unknown run id: {run_id}")
     state = json.loads(state_path.read_text(encoding="utf-8"))
+    display_run_dir = resolve_display_run_dir(run_dir)
+    _stop_live_child_run(display_run_dir)
     pid = state.get("pid")
-    if isinstance(pid, int) and pid > 0:
-        try:
-            os.killpg(pid, 15)
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            os.kill(pid, 15)
+    _terminate_process_group(pid if isinstance(pid, int) else None)
     state["phase"] = "human_takeover_stop" if emergency else "stopped_by_operator"
     state["terminal_reason"] = state["phase"]
     state["stopped_at_epoch"] = time.time()
+    state["display_run_dir"] = str(display_run_dir)
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
     route_payload = state.get("route") or {}
     lock_name = str(route_payload.get("lock_name") or state.get("backend_lock") or "")
@@ -331,6 +348,228 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
     for key in route.required_overrides:
         if key not in allowed:
             raise ConsoleLaunchError(f"route registry uses unsupported parameter: {key}")
+
+
+def _validate_env_overrides(route: ConsoleRoute, env_overrides: dict[str, str]) -> None:
+    if env_overrides and route.driver != "codex":
+        raise ConsoleLaunchError("provider overrides are only supported for Codex routes")
+    for key, value in env_overrides.items():
+        if key not in ALLOWED_ENV_OVERRIDES:
+            raise ConsoleLaunchError(f"unsupported provider override: {key}")
+        if "\x00" in value or "\n" in value or "\r" in value:
+            raise ConsoleLaunchError(f"invalid control character in provider override: {key}")
+        if key == "ROBOCLAWS_CODEX_PROVIDER" and value not in CODEX_PROVIDER_DEFAULT_MODELS:
+            raise ConsoleLaunchError(
+                f"unsupported Codex provider override: {value}; expected codex-env or mify"
+            )
+
+
+def _apply_env_overrides(
+    route: ConsoleRoute,
+    env_map: dict[str, str],
+    env_overrides: dict[str, str],
+) -> dict[str, str]:
+    clean = {str(key): str(value) for key, value in env_overrides.items() if str(value) != ""}
+    _validate_env_overrides(route, clean)
+    if not clean:
+        return env_map
+    merged = dict(env_map)
+    merged.update(clean)
+    return merged
+
+
+def _public_env_overrides(env_overrides: dict[str, str]) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in env_overrides.items()
+        if key in ALLOWED_ENV_OVERRIDES and str(value) != ""
+    }
+
+
+def _provider_status(route: ConsoleRoute, env_map: dict[str, str]) -> dict[str, Any]:
+    if route.driver == "codex":
+        return _codex_provider_status(env_map)
+    return {
+        "driver": route.driver,
+        "provider": "",
+        "model": "",
+        "required_env": [],
+        "missing_env": [],
+        "ok": provider_key_present(route, env_map),
+        "message": "",
+    }
+
+
+def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
+    provider = (
+        env_map.get("ROBOCLAWS_CODEX_PROVIDER")
+        or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
+        or CODEX_PROVIDER_DEFAULT
+    )
+    model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
+    if provider not in CODEX_PROVIDER_DEFAULT_MODELS:
+        return {
+            "driver": "codex",
+            "provider": provider,
+            "model": model or "",
+            "required_env": [],
+            "missing_env": [],
+            "ok": False,
+            "message": f"Unsupported Codex provider {provider!r}; choose codex-env or mify.",
+        }
+    model = model or CODEX_PROVIDER_DEFAULT_MODELS[provider]
+    required_env = list(CODEX_PROVIDER_REQUIRED_ENV[provider])
+    missing_env = [key for key in required_env if not env_map.get(key)]
+    if missing_env:
+        if provider == "codex-env":
+            message = (
+                "Codex provider codex-env requires CODEX_BASE_URL and CODEX_API_KEY "
+                "in repo .env. Choose mify explicitly only when using XM_LLM_API_KEY."
+            )
+        else:
+            message = "Codex provider mify requires XM_LLM_API_KEY in repo .env."
+    else:
+        message = ""
+    return {
+        "driver": "codex",
+        "provider": provider,
+        "model": model,
+        "required_env": required_env,
+        "missing_env": missing_env,
+        "ok": not missing_env,
+        "message": message,
+    }
+
+
+def _attachable_run_payload(root: Path, lock_state: Any) -> dict[str, Any] | None:
+    if not lock_state.held or not lock_state.owner_run_id:
+        return None
+    run_dir = console_output_root(root) / "runs" / lock_state.owner_run_id
+    state_path = run_dir / "operator_state.json"
+    if not state_path.exists():
+        return None
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    route_payload = state.get("route") if isinstance(state.get("route"), dict) else {}
+    display_run_dir = resolve_display_run_dir(run_dir)
+    live_status = _read_json(display_run_dir / "live_status.json")
+    active_pid = _live_run_pid(display_run_dir) or lock_state.pid
+    if lock_state.stale and not _display_run_attachable(display_run_dir, live_status, active_pid):
+        return None
+    return {
+        "run_id": str(state.get("run_id") or lock_state.owner_run_id),
+        "route_id": str(route_payload.get("id") or ""),
+        "route_label": str(route_payload.get("label") or "Agent run"),
+        "phase": str(live_status.get("phase") or state.get("phase") or "running"),
+        "run_dir": str(state.get("run_dir") or run_dir),
+        "display_run_dir": str(display_run_dir),
+        "backend_lock": str(state.get("backend_lock") or lock_state.name),
+        "pid": active_pid,
+        "started_at": str(state.get("started_at") or ""),
+    }
+
+
+def _display_run_attachable(
+    display_run_dir: Path,
+    live_status: dict[str, Any],
+    active_pid: int | None,
+) -> bool:
+    phase = str(live_status.get("phase") or "").lower()
+    if phase in {"finished", "failed"} and "exit_status" in live_status:
+        return False
+    if phase:
+        return True
+    if active_pid and _pid_exists(active_pid):
+        return True
+    if _tmux_session_active(display_run_dir):
+        return True
+    return False
+
+
+def _live_run_pid(display_run_dir: Path) -> int | None:
+    server_pid_path = display_run_dir / "server.pid"
+    if not server_pid_path.is_file():
+        return None
+    try:
+        pid = int(server_pid_path.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
+def _stop_live_child_run(display_run_dir: Path) -> None:
+    _kill_tmux_session(display_run_dir)
+    _terminate_process_group(_live_run_pid(display_run_dir))
+
+
+def _terminate_process_group(pid: int | None) -> None:
+    if not pid or pid <= 0:
+        return
+    try:
+        os.killpg(pid, 15)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        os.kill(pid, 15)
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _pid_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _tmux_session_active(display_run_dir: Path) -> bool:
+    session_path = display_run_dir / "tmux_session.txt"
+    if not session_path.is_file():
+        return False
+    try:
+        session_name = session_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    if not session_name:
+        return False
+    result = subprocess.run(
+        ["tmux", "has-session", "-t", session_name],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def _kill_tmux_session(display_run_dir: Path) -> None:
+    session_path = display_run_dir / "tmux_session.txt"
+    if not session_path.is_file():
+        return
+    try:
+        session_name = session_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return
+    if not session_name:
+        return
+    subprocess.run(
+        ["tmux", "kill-session", "-t", session_name],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def _override_key(value: str) -> str:
