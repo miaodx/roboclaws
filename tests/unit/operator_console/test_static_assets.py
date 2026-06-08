@@ -54,6 +54,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Watching run" in app
     assert "/api/readiness" in app
     assert "refreshSelectedRouteReadiness" in app
+    assert "checker_status.message" in app
 
 
 def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
@@ -75,7 +76,7 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'resource_kind !== "physical_robot"' in app
     assert 'panels.add("blank-chase")' in app
     assert "No chase frame yet" in app
-    assert "overview-chase-20260608" in html
+    assert "decision-proof-20260608" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
     assert '"chase map"' in css
