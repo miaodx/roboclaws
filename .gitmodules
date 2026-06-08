@@ -1,6 +1,7 @@
 [submodule "vendors/agibot_sdk"]
 	path = vendors/agibot_sdk
 	url = git@git.n.xiaomi.com:ipg/infra/agibot_sdk.git
+	branch = main
 [submodule "vendors/molmospaces"]
 	path = vendors/molmospaces
 	url = https://github.com/allenai/molmospaces.git
