@@ -2,11 +2,18 @@
 
 ## Status
 
-PLANNED
+DONE
+
+Implemented on 2026-06-08. Focused verification passed:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console
+.venv/bin/ruff check roboclaws/operator_console tests/unit/operator_console
+```
 
 ## Intuitive Preflight Result
 
-Preflight status: DRAFT
+Preflight status: IMPLEMENTED
 
 Task source: this plan path.
 
