@@ -517,15 +517,10 @@ pre,
 }
 
 .mode-overview {
-  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas:
     "fpv map"
-    "grounding map";
-}
-
-.mode-overview.no-grounding {
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-areas: "fpv map";
+    "chase map";
 }
 
 .mode-overview [data-panel="map"] {
@@ -536,8 +531,15 @@ pre,
   grid-area: fpv;
 }
 
-.mode-overview [data-panel="grounding"] {
-  grid-area: grounding;
+.mode-overview [data-panel="chase"],
+.mode-overview [data-panel="blank-chase"] {
+  grid-area: chase;
+}
+
+.blank-panel {
+  border-color: transparent;
+  background: transparent;
+  pointer-events: none;
 }
 
 .mode-fpv,
@@ -831,13 +833,11 @@ dialog pre {
   .mode-overview {
     grid-template-areas:
       "fpv"
-      "grounding"
+      "chase"
       "map";
   }
 
-  .mode-overview.no-grounding {
-    grid-template-areas:
-      "fpv"
-      "map";
+  .blank-panel {
+    min-height: 220px;
   }
 }

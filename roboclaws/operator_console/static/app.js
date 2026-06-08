@@ -803,7 +803,10 @@ function renderArtifacts(items) {
 
 function renderViews(assets, route = state.selectedRoute) {
   setImageSlot("fpv", assets.fpv, "No frame yet. Waiting for the first observation artifact.");
-  setImageSlot("chase", assets.chase, "Chase view unavailable for this backend.");
+  const chaseEmptyText = routeHasOverviewChase(route)
+    ? "No chase frame yet. Waiting for the first observation artifact."
+    : "Chase view unavailable for this backend.";
+  setImageSlot("chase", assets.chase, chaseEmptyText);
   setImageSlot("map", assets.map, "Map artifact has not been written yet.");
   setImageSlot("grounding", assets.grounding, "No grounding result yet.");
   ensureActiveViewAvailable(route);
@@ -882,9 +885,11 @@ function renderViewModes(route = state.selectedRoute) {
     return;
   }
   const modes = routeViewModes(route);
-  const hasGrounding = modes.has("grounding");
+  const hasOverviewChase = routeHasOverviewChase(route, modes);
   const activeView = state.activeView || "overview";
-  visualGrid.className = `view-grid mode-${activeView}${hasGrounding ? "" : " no-grounding"}`;
+  visualGrid.className = `view-grid mode-${activeView}${
+    hasOverviewChase ? " has-overview-chase" : " no-overview-chase"
+  }`;
 
   document.querySelectorAll(".view-mode").forEach((button) => {
     const enabled = modes.has(button.dataset.view);
@@ -892,7 +897,7 @@ function renderViewModes(route = state.selectedRoute) {
     button.classList.toggle("active", enabled && button.dataset.view === activeView);
   });
 
-  const visiblePanels = visiblePanelsForView(activeView, modes);
+  const visiblePanels = visiblePanelsForView(activeView, modes, route);
   document.querySelectorAll("[data-panel]").forEach((panel) => {
     panel.hidden = !visiblePanels.has(panel.dataset.panel);
   });
@@ -910,6 +915,10 @@ function ensureActiveViewAvailable(route = state.selectedRoute) {
 
 function routeViewModes(route) {
   return new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
+}
+
+function routeHasOverviewChase(route, modes = routeViewModes(route)) {
+  return Boolean(route && route.resource_kind !== "physical_robot" && modes.has("chase"));
 }
 
 function isAgibotRoute(route) {
@@ -932,11 +941,13 @@ function selectedClaudeProviderLabel() {
   return option ? option.textContent : selectedClaudeProvider();
 }
 
-function visiblePanelsForView(view, modes) {
+function visiblePanelsForView(view, modes, route = state.selectedRoute) {
   if (view === "overview") {
     const panels = new Set(["fpv", "map"]);
-    if (modes.has("grounding")) {
-      panels.add("grounding");
+    if (routeHasOverviewChase(route, modes)) {
+      panels.add("chase");
+    } else {
+      panels.add("blank-chase");
     }
     return panels;
   }
