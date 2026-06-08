@@ -43,19 +43,6 @@ HARNESS_SCHEMA = "codex_cleanup_harness8_v1"
 ROW_SCHEMA = "codex_cleanup_harness8_row_v1"
 DIRECT_MAP_MODE = "direct"
 PRIOR_MAP_MODE = "dino-prior"
-RATE_LIMIT_LOG_NAMES = (
-    "driver.log",
-    "codex.stderr.log",
-    "codex-last-message.md",
-)
-RATE_LIMIT_PATTERNS = (
-    "429 too many requests",
-    "too many requests",
-    "provider_rate_limit",
-    "rate limit",
-    "ratelimit",
-    "exceeded retry limit",
-)
 VISUAL_GROUNDING_INFRA_FAILURE_REASONS = {
     "connection_error",
     "timeout",
@@ -99,24 +86,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--live-wait-timeout-s", type=float, default=7200.0)
     parser.add_argument("--live-wait-poll-s", type=float, default=10.0)
     parser.add_argument(
-        "--rate-limit-retries",
+        "--provider-retry-attempts",
         type=int,
         default=1,
         help=(
-            "Additional whole-row retries for provider 429/rate-limit failures. "
-            "Ordinary cleanup failures are not retried."
+            "Additional whole-row retries for explicit retryable provider-transient "
+            "failures. Ordinary cleanup and launcher failures are not retried."
         ),
     )
-    parser.add_argument("--rate-limit-retry-sleep-s", type=float, default=60.0)
     parser.add_argument(
-        "--codex-max-continuations",
-        type=int,
-        default=0,
-        help=(
-            "Override ROBOCLAWS_CODEX_MAX_CONTINUATIONS for cleanup rows. "
-            "When unset, prior camera rows receive a larger budget because they "
-            "must both consume prior-map state and sweep/ground RAW_FPV evidence."
-        ),
+        "--provider-retry-sleep-s",
+        type=float,
+        default=60.0,
     )
     parser.add_argument(
         "--dino-sidecar-lifecycle",
@@ -366,23 +347,8 @@ def _row_payload(
         "run_result_path": "",
         "metrics": {},
     }
-    continuation_budget = _row_codex_max_continuations(
-        map_mode=map_mode,
-        lane_id=lane_id,
-    )
-    if continuation_budget:
-        row["env"]["ROBOCLAWS_CODEX_MAX_CONTINUATIONS"] = str(continuation_budget)
     row["rerun_command"] = row_rerun_command(row)
     return row
-
-
-def _row_codex_max_continuations(*, map_mode: str, lane_id: str) -> int:
-    if map_mode == PRIOR_MAP_MODE and lane_id in {
-        "camera-grounded-labels-grounding-dino",
-        "camera-raw-fpv",
-    }:
-        return 14
-    return 0
 
 
 def _execute_harness(harness: dict[str, Any], args: argparse.Namespace) -> int:
@@ -434,10 +400,12 @@ def _execute_prior_build(harness: dict[str, Any], args: argparse.Namespace) -> s
     status = _execute_row_with_retries(row, args)
     prior = _latest_runtime_map(Path(row["output_dir"]), seed=args.seed)
     if prior is None:
-        if str(row.get("status") or "") == "rate_limited":
-            harness["setup_status"] = "rate_limited"
+        if str(row.get("status") or "") == "provider_transient_failed":
+            harness["setup_status"] = "provider_transient_failed"
             harness["behavior_status"] = "infra_failure"
-            harness["reason"] = row.get("reason") or "semantic-map prior build was rate limited"
+            harness["reason"] = (
+                row.get("reason") or "semantic-map prior build hit a provider transient failure"
+            )
             return ""
         if status != 0:
             raise RuntimeError("semantic-map prior build failed")
@@ -973,45 +941,49 @@ def _elapsed_ms(started: float) -> int:
 
 def _execute_row_with_retries(row: dict[str, Any], args: argparse.Namespace) -> int:
     attempts: list[dict[str, Any]] = []
-    max_attempts = max(int(args.rate_limit_retries), 0) + 1
+    max_attempts = max(int(args.provider_retry_attempts), 0) + 1
     status = 1
-    final_rate_limit: dict[str, Any] | None = None
+    final_provider_transient: dict[str, Any] | None = None
     for attempt_index in range(max_attempts):
         if attempt_index:
-            sleep_s = max(float(args.rate_limit_retry_sleep_s), 0.0)
+            sleep_s = max(float(args.provider_retry_sleep_s), 0.0)
             if sleep_s:
                 time.sleep(sleep_s)
         status = _execute_row(row, args)
-        rate_limit = _rate_limit_evidence(row)
-        final_rate_limit = rate_limit
+        provider_transient = _provider_transient_evidence(row)
+        final_provider_transient = provider_transient
         attempts.append(
             {
                 "attempt": attempt_index + 1,
                 "exit_status": status,
                 "run_dir": row.get("run_dir") or "",
-                "rate_limited": bool(rate_limit),
-                "rate_limit_evidence": rate_limit,
+                "provider_transient": bool(provider_transient),
+                "provider_transient_evidence": provider_transient,
                 "finished_at": _utc_timestamp(),
             }
         )
-        if status == 0 or not rate_limit or attempt_index == max_attempts - 1:
+        if status == 0 or not provider_transient or attempt_index == max_attempts - 1:
             break
         print(
-            f"provider rate limit detected for {row.get('row_id')}; "
+            f"provider transient failure detected for {row.get('row_id')}; "
             f"retrying attempt {attempt_index + 2}/{max_attempts}"
         )
 
     row["attempts"] = attempts
     row["retry_count"] = max(len(attempts) - 1, 0)
-    row["rate_limit_retry_count"] = sum(1 for attempt in attempts if attempt["rate_limited"])
+    row["provider_retry_count"] = sum(1 for attempt in attempts if attempt["provider_transient"])
     if status == 0 and len(attempts) > 1:
-        row["infra_note"] = "succeeded after provider rate-limit retry"
-    elif status != 0 and final_rate_limit:
-        row["status"] = "rate_limited"
+        row["infra_note"] = "succeeded after provider-transient retry"
+    elif status != 0 and final_provider_transient:
+        row["status"] = "provider_transient_failed"
         row["behavior_status"] = "infra_failure"
-        row["reason"] = (
-            f"provider rate limited after {len(attempts)} attempt(s); "
-            f"{final_rate_limit.get('snippet') or final_rate_limit.get('source') or 'see logs'}"
+        provider_reason = str(final_provider_transient.get("provider_reason") or "")
+        if provider_reason:
+            row["provider_reason"] = provider_reason
+        row["retryable"] = bool(final_provider_transient.get("retryable"))
+        row["resume_available"] = bool(final_provider_transient.get("resume_available"))
+        row["reason"] = f"provider transient failure after {len(attempts)} attempt(s)" + (
+            f": {provider_reason}" if provider_reason else ""
         )
     return status
 
@@ -1022,9 +994,6 @@ def _execute_row(row: dict[str, Any], args: argparse.Namespace) -> int:
     env = os.environ.copy()
     row_env = row.get("env") if isinstance(row.get("env"), dict) else {}
     env.update({str(key): str(value) for key, value in row_env.items()})
-    requested_continuations = int(getattr(args, "codex_max_continuations", 0) or 0)
-    if requested_continuations > 0 and str(row.get("grid_role") or "") == "cleanup":
-        env["ROBOCLAWS_CODEX_MAX_CONTINUATIONS"] = str(requested_continuations)
     status = subprocess.run(command, env=env, check=False).returncode
     run_dir = _latest_seed_dir(Path(row["output_dir"]), seed=args.seed)
     if run_dir is not None:
@@ -1377,40 +1346,18 @@ def _is_setup_row(row: dict[str, Any]) -> bool:
     return str(row.get("grid_role") or "") == "setup"
 
 
-def _rate_limit_evidence(row: dict[str, Any]) -> dict[str, Any] | None:
+def _provider_transient_evidence(row: dict[str, Any]) -> dict[str, Any] | None:
     live_status = row.get("live_status") if isinstance(row.get("live_status"), dict) else {}
-    for key in ("reason", "error", "message", "phase"):
-        evidence = _rate_limit_match(str(live_status.get(key) or ""), source=f"live_status.{key}")
-        if evidence:
-            return evidence
-
-    run_dir_value = row.get("run_dir")
-    if not run_dir_value:
+    if live_status.get("reason") != "provider_transient_failure":
         return None
-    run_dir = Path(str(run_dir_value))
-    paths = [run_dir / name for name in RATE_LIMIT_LOG_NAMES]
-    paths.extend(sorted(run_dir.glob("codex-continuation-*.stderr.log")))
-    paths.extend(sorted(run_dir.glob("codex-events*.jsonl")))
-    for path in paths:
-        if not path.is_file():
-            continue
-        evidence = _rate_limit_match(_tail_text(path), source=str(path.name))
-        if evidence:
-            return evidence
-    return None
-
-
-def _rate_limit_match(text: str, *, source: str) -> dict[str, Any] | None:
-    lowered = text.lower()
-    for pattern in RATE_LIMIT_PATTERNS:
-        index = lowered.find(pattern)
-        if index < 0:
-            continue
-        start = max(index - 90, 0)
-        end = min(index + len(pattern) + 140, len(text))
-        snippet = " ".join(text[start:end].split())
-        return {"source": source, "pattern": pattern, "snippet": snippet}
-    return None
+    if live_status.get("retryable") is not True:
+        return None
+    return {
+        "source": "live_status.json",
+        "provider_reason": str(live_status.get("provider_reason") or ""),
+        "retryable": True,
+        "resume_available": bool(live_status.get("resume_available")),
+    }
 
 
 def _tail_text(path: Path, *, max_bytes: int = 256_000) -> str:

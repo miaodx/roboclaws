@@ -96,14 +96,14 @@ just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/$(date +%m%d_%H%M)
 ```
 
-Provider `429 Too Many Requests` / rate-limit failures are treated as
-infrastructure failures and are retried once by default. For a noisier provider
-window, raise the retry budget without changing cleanup behavior:
+Explicit retryable provider-transient failures from the live runner are treated
+as infrastructure failures and retried once by default. For a noisier provider
+window, raise the provider retry budget without changing cleanup behavior:
 
 ```bash
 just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/0603_refactor_check \
-  rate_limit_retries=2 rate_limit_retry_sleep_s=90
+  provider_retry_attempts=2 provider_retry_sleep_s=90
 ```
 
 Execute one row:
@@ -150,7 +150,7 @@ The minimum review fields are:
 - disturbance count
 - unrecovered semantic-order error count
 - wall time and tool-call count
-- retry count / rate-limit evidence
+- retry count / provider-transient evidence
 - report link
 
 For source and skill changes, compare against the most recent accepted harness
@@ -161,14 +161,17 @@ run. Treat these as regression triggers:
 - semantic accepted count dropping by more than one object in a structured lane;
 - `world-public-labels` falling back to repeated `done`/held loops;
 - DINO rows failing due to service, timeout, or declaration contract errors;
-- large wall-time increases not explained by provider rate limits or sidecar
+- large wall-time increases not explained by provider transient failures or sidecar
   latency.
 
 Rows with `behavior_status=infra_failure` did not produce clean behavioral
-evidence. `status=rate_limited` means the Codex provider exhausted the configured
-retry budget. `status=infra_failed` means an external dependency such as the
-Grounding DINO sidecar failed or timed out. Rerun those rows after the provider
-or sidecar is healthy before drawing cleanup-regression conclusions.
+evidence. `status=provider_transient_failed` means the live runner reported
+`reason=provider_transient_failure` with a `provider_reason` such as
+`rate_limit`, `upstream_unavailable`, or `upstream_timeout`, and the harness
+exhausted the configured retry budget. `status=infra_failed` means an external
+dependency such as the Grounding DINO sidecar failed or timed out. Rerun those
+rows after the provider or sidecar is healthy before drawing cleanup-regression
+conclusions.
 
 Exact/private restore is useful evidence, but it is not the primary objective
 for sanitized public-policy cleanup. Use semantic accepted, sweep coverage, and
