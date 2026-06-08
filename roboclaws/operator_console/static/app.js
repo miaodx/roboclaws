@@ -73,6 +73,10 @@ const els = {
   confirmTitle: document.getElementById("confirm-title"),
   confirmAction: document.getElementById("confirm-action"),
   confirmBody: document.getElementById("confirm-body"),
+  imageDialog: document.getElementById("image-dialog"),
+  imageDialogTitle: document.getElementById("image-dialog-title"),
+  imageDialogPath: document.getElementById("image-dialog-path"),
+  imageDialogImg: document.getElementById("image-dialog-img"),
 };
 
 async function boot() {
@@ -736,6 +740,9 @@ async function pollState() {
   }
   state.activeState = payload;
   renderRunState(payload);
+  if (!els.rawEvidence.hidden) {
+    refreshRawEvidence();
+  }
 }
 
 function renderRunState(payload) {
@@ -812,7 +819,50 @@ function setImageSlot(name, asset, emptyText) {
     slot.textContent = emptyText;
     return;
   }
-  slot.innerHTML = `<img alt="${name} artifact" src="${asset.href || artifactHref(asset.path)}" />`;
+  const src = asset.href || artifactHref(asset.path);
+  const label = imageLabel(name);
+  slot.innerHTML = `
+    <button
+      type="button"
+      class="image-preview-button"
+      data-image-src="${escapeHtml(src)}"
+      data-image-title="${escapeHtml(label)}"
+      data-image-path="${escapeHtml(asset.path || "")}"
+      aria-label="Open ${escapeHtml(label)} image preview"
+      title="Open image preview"
+    >
+      <img alt="${escapeHtml(label)} artifact" src="${escapeHtml(src)}" />
+    </button>
+  `;
+  const button = slot.querySelector(".image-preview-button");
+  button.addEventListener("click", () => {
+    openImageDialog({
+      src,
+      title: label,
+      path: asset.path || "",
+    });
+  });
+}
+
+function imageLabel(name) {
+  const labels = {
+    fpv: "FPV",
+    map: "Map",
+    grounding: "Grounding",
+    chase: "Chase",
+  };
+  return labels[name] || name;
+}
+
+function openImageDialog({ src, title, path }) {
+  if (!src) {
+    return;
+  }
+  els.imageDialogTitle.textContent = title;
+  els.imageDialogPath.textContent = path;
+  els.imageDialogImg.src = src;
+  els.imageDialogImg.alt = `${title} artifact`;
+  els.imageDialog.showModal();
 }
 
 function renderEvents(payload) {
@@ -922,13 +972,25 @@ async function toggleRawEvidence() {
   els.appShell.classList.toggle("raw-evidence-open", hidden);
   els.toggleRawButton.textContent = hidden ? "Hide Raw Evidence" : "Show Raw Evidence";
   if (hidden) {
-    const driver = ((state.activeState && state.activeState.artifact_paths) || []).find(
-      (item) => item.label === "Driver Log"
-    );
-    const text = driver
-      ? await fetch(`/api/raw/${encodeURI(driver.path)}`).then((response) => response.text())
-      : "";
-    els.rawEvidence.textContent = text || "No raw driver log yet.";
+    refreshRawEvidence({ forceStickToBottom: true });
+  }
+}
+
+async function refreshRawEvidence(options = {}) {
+  const forceStickToBottom = options.forceStickToBottom === true;
+  const driver = ((state.activeState && state.activeState.artifact_paths) || []).find(
+    (item) => item.label === "Driver Log"
+  );
+  const shouldStickToBottom =
+    forceStickToBottom ||
+    els.rawEvidence.scrollTop + els.rawEvidence.clientHeight >=
+      els.rawEvidence.scrollHeight - 24;
+  const text = driver
+    ? await fetch(`/api/raw/${encodeURI(driver.path)}`).then((response) => response.text())
+    : "";
+  els.rawEvidence.textContent = text || "No raw driver log yet.";
+  if (shouldStickToBottom) {
+    els.rawEvidence.scrollTop = els.rawEvidence.scrollHeight;
   }
 }
 
