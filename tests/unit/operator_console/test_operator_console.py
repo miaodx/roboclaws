@@ -126,17 +126,24 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         build_launch_argv(route, root=tmp_path, run_id="run-3", overrides={"shell": "true"})
 
 
-def test_console_readiness_enforces_locks_and_preflights(tmp_path: Path) -> None:
+def test_console_readiness_keeps_isaac_preflight_advisory_but_locks_blocking(
+    tmp_path: Path,
+) -> None:
     route = get_route("codex-isaac-cleanup")
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
-    assert readiness["can_start"] is False
-    assert "Isaac preflight has not passed" in readiness["blocker"]
+    assert readiness["can_start"] is True
+    isaac_gate = next(gate for gate in readiness["gates"] if gate["id"] == "isaac_preflight")
+    assert isaac_gate["severity"] == "advisory"
+    assert isaac_gate["blocks_start"] is False
 
     accepted = tmp_path / "output" / "isaaclab" / "runtime-preflight-accepted.json"
     accepted.parent.mkdir(parents=True)
     accepted.write_text("{}", encoding="utf-8")
     readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is True
+    isaac_gate = next(gate for gate in readiness["gates"] if gate["id"] == "isaac_preflight")
+    assert isaac_gate["status"] == "ready"
+    assert isaac_gate["evidence"] == str(accepted)
 
     lock = ResourceLock(tmp_path, route.lock_name)
     lock.acquire(run_id="active", pid=os.getpid())
