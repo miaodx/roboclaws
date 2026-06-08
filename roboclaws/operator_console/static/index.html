@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Agent Operator Console</title>
-    <link rel="stylesheet" href="/styles.css?v=codex-env-default-20260608" />
+    <link rel="stylesheet" href="/styles.css?v=agent-provider-select-20260608" />
   </head>
   <body>
     <div class="app-shell">
@@ -66,12 +66,21 @@
               <option value="mify">mify</option>
             </select>
           </label>
-          <label>
-            Codex model override
-            <input id="codex-model-input" name="codex_model" placeholder="Provider default" />
-          </label>
           <div class="prompt-copy" id="codex-provider-help">
             codex-env uses CODEX_BASE_URL and CODEX_API_KEY. mify requires XM_LLM_API_KEY.
+          </div>
+          </div>
+          <div id="claude-fields" class="route-fields" hidden>
+          <label>
+            Claude provider
+            <select id="claude-provider-input" name="claude_provider">
+              <option value="kimi-anthropic">Kimi</option>
+              <option value="mimo-anthropic" selected>MiMo token plan</option>
+              <option value="mify-anthropic">MiMo mify</option>
+            </select>
+          </label>
+          <div class="prompt-copy" id="claude-provider-help">
+            Kimi uses KIMI_API_KEY. MiMo token plan uses MIMO_TP_KEY. MiMo mify uses XM_LLM_API_KEY.
           </div>
           </div>
           <div id="isaac-fields" class="route-fields" hidden>
@@ -215,6 +224,6 @@
       </form>
     </dialog>
 
-    <script src="/app.js?v=codex-env-default-20260608"></script>
+    <script src="/app.js?v=agent-provider-select-20260608"></script>
   </body>
 </html>

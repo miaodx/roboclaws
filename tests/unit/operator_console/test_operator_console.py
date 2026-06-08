@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import subprocess
 import threading
 import urllib.request
@@ -34,6 +35,12 @@ CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
+
+
+def _free_port() -> str:
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        return str(listener.getsockname()[1])
 
 
 def _just_bin() -> str:
@@ -121,19 +128,19 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
 
 def test_console_readiness_enforces_locks_and_preflights(tmp_path: Path) -> None:
     route = get_route("codex-isaac-cleanup")
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is False
     assert "Isaac preflight has not passed" in readiness["blocker"]
 
     accepted = tmp_path / "output" / "isaaclab" / "runtime-preflight-accepted.json"
     accepted.parent.mkdir(parents=True)
     accepted.write_text("{}", encoding="utf-8")
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is True
 
     lock = ResourceLock(tmp_path, route.lock_name)
     lock.acquire(run_id="active", pid=os.getpid())
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is False
     assert "Backend lock is held" in readiness["blocker"]
 

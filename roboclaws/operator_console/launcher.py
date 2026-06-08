@@ -28,7 +28,18 @@ CODEX_PROVIDER_REQUIRED_ENV = {
     "codex-env": ("CODEX_BASE_URL", "CODEX_API_KEY"),
     "mify": ("XM_LLM_API_KEY",),
 }
-ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CODEX_MODEL"}
+CLAUDE_PROVIDER_DEFAULT = "mimo-anthropic"
+CLAUDE_PROVIDER_DEFAULT_MODELS = {
+    "kimi-anthropic": "kimi-k2.6",
+    "mimo-anthropic": "mimo-v2.5",
+    "mify-anthropic": "xiaomi/mimo-v2.5",
+}
+CLAUDE_PROVIDER_REQUIRED_ENV = {
+    "kimi-anthropic": ("KIMI_API_KEY",),
+    "mimo-anthropic": ("MIMO_TP_KEY",),
+    "mify-anthropic": ("XM_LLM_API_KEY",),
+}
+ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CLAUDE_PROVIDER"}
 
 
 class ConsoleLaunchError(ValueError):
@@ -66,15 +77,7 @@ def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str,
 def provider_key_present(route: ConsoleRoute, env: dict[str, str] | None = None) -> bool:
     env_map = os.environ if env is None else env
     if route.driver == "claude":
-        return any(
-            env_map.get(key)
-            for key in (
-                "ANTHROPIC_API_KEY",
-                "XM_LLM_API_KEY",
-                "KIMI_API_KEY",
-                "MIMO_TP_KEY",
-            )
-        )
+        return _claude_provider_status(env_map)["ok"]
     if route.driver == "codex":
         return _codex_provider_status(env_map)["ok"]
     return False
@@ -351,16 +354,25 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
 
 
 def _validate_env_overrides(route: ConsoleRoute, env_overrides: dict[str, str]) -> None:
-    if env_overrides and route.driver != "codex":
-        raise ConsoleLaunchError("provider overrides are only supported for Codex routes")
+    if env_overrides and route.driver not in {"codex", "claude"}:
+        raise ConsoleLaunchError("provider overrides are only supported for coding-agent routes")
     for key, value in env_overrides.items():
         if key not in ALLOWED_ENV_OVERRIDES:
             raise ConsoleLaunchError(f"unsupported provider override: {key}")
         if "\x00" in value or "\n" in value or "\r" in value:
             raise ConsoleLaunchError(f"invalid control character in provider override: {key}")
+        if key == "ROBOCLAWS_CODEX_PROVIDER" and route.driver != "codex":
+            raise ConsoleLaunchError("Codex provider override is only supported for Codex routes")
+        if key == "ROBOCLAWS_CLAUDE_PROVIDER" and route.driver != "claude":
+            raise ConsoleLaunchError("Claude provider override is only supported for Claude routes")
         if key == "ROBOCLAWS_CODEX_PROVIDER" and value not in CODEX_PROVIDER_DEFAULT_MODELS:
             raise ConsoleLaunchError(
                 f"unsupported Codex provider override: {value}; expected codex-env or mify"
+            )
+        if key == "ROBOCLAWS_CLAUDE_PROVIDER" and value not in CLAUDE_PROVIDER_DEFAULT_MODELS:
+            raise ConsoleLaunchError(
+                "unsupported Claude provider override: "
+                f"{value}; expected kimi-anthropic, mimo-anthropic, or mify-anthropic"
             )
 
 
@@ -389,6 +401,8 @@ def _public_env_overrides(env_overrides: dict[str, str]) -> dict[str, str]:
 def _provider_status(route: ConsoleRoute, env_map: dict[str, str]) -> dict[str, Any]:
     if route.driver == "codex":
         return _codex_provider_status(env_map)
+    if route.driver == "claude":
+        return _claude_provider_status(env_map)
     return {
         "driver": route.driver,
         "provider": "",
@@ -397,6 +411,45 @@ def _provider_status(route: ConsoleRoute, env_map: dict[str, str]) -> dict[str, 
         "missing_env": [],
         "ok": provider_key_present(route, env_map),
         "message": "",
+    }
+
+
+def _claude_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
+    provider = (
+        env_map.get("ROBOCLAWS_CLAUDE_PROVIDER")
+        or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
+        or CLAUDE_PROVIDER_DEFAULT
+    )
+    model = env_map.get("ROBOCLAWS_CLAUDE_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
+    if provider not in CLAUDE_PROVIDER_DEFAULT_MODELS:
+        return {
+            "driver": "claude",
+            "provider": provider,
+            "model": model or "",
+            "required_env": [],
+            "missing_env": [],
+            "ok": False,
+            "message": (
+                f"Unsupported Claude provider {provider!r}; choose Kimi, MiMo token plan, "
+                "or MiMo mify."
+            ),
+        }
+    model = model or CLAUDE_PROVIDER_DEFAULT_MODELS[provider]
+    required_env = list(CLAUDE_PROVIDER_REQUIRED_ENV[provider])
+    missing_env = [key for key in required_env if not env_map.get(key)]
+    if missing_env:
+        required = " and ".join(required_env)
+        message = f"Claude provider {provider} requires {required} in repo .env."
+    else:
+        message = ""
+    return {
+        "driver": "claude",
+        "provider": provider,
+        "model": model,
+        "required_env": required_env,
+        "missing_env": missing_env,
+        "ok": not missing_env,
+        "message": message,
     }
 
 

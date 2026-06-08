@@ -23,7 +23,12 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert 'id="isaac-fields"' in html
     assert 'id="codex-fields"' in html
     assert 'id="codex-provider-input"' in html
-    assert 'id="codex-model-input"' in html
+    assert 'id="codex-model-input"' not in html
+    assert 'id="claude-fields"' in html
+    assert 'id="claude-provider-input"' in html
+    assert 'value="kimi-anthropic"' in html
+    assert 'value="mimo-anthropic"' in html
+    assert 'value="mify-anthropic"' in html
     assert 'id="agibot-fields"' in html
     assert 'id="agibot-gate-fields"' in html
     assert 'id="real-movement-gate"' in html
@@ -34,7 +39,9 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Provider" in app
     assert "env_overrides" in app
     assert "ROBOCLAWS_CODEX_PROVIDER" in app
+    assert "ROBOCLAWS_CLAUDE_PROVIDER" in app
     assert "selectedCodexProvider" in app
+    assert "selectedClaudeProvider" in app
     assert "NEEDS PREFLIGHT" in app
     assert "NEEDS OPERATOR GATES" in app
     assert "PORT IN USE" in app
