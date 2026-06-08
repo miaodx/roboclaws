@@ -59,7 +59,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 }
                 env_overrides = {
                     "ROBOCLAWS_CODEX_PROVIDER": str(query.get("codex_provider", [""])[0]),
-                    "ROBOCLAWS_CODEX_MODEL": str(query.get("codex_model", [""])[0]),
+                    "ROBOCLAWS_CLAUDE_PROVIDER": str(query.get("claude_provider", [""])[0]),
                 }
                 env_overrides = {key: value for key, value in env_overrides.items() if value}
                 return self._json(

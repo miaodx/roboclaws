@@ -24,15 +24,26 @@ CODEX_ENV = {
 }
 
 
+def _free_port() -> str:
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        return str(listener.getsockname()[1])
+
+
 def test_launcher_readiness_validates_isaac_and_agibot_gates(tmp_path: Path) -> None:
-    isaac = route_readiness(tmp_path, get_route("codex-isaac-cleanup"), env=CODEX_ENV)
+    isaac = route_readiness(
+        tmp_path,
+        get_route("codex-isaac-cleanup"),
+        overrides={"port": _free_port()},
+        env=CODEX_ENV,
+    )
     assert not isaac["can_start"]
     assert "Isaac preflight" in isaac["blocker"]
 
     agibot = route_readiness(
         tmp_path,
         get_route("codex-agibot-g2-map-build"),
-        overrides={"context_json": str(tmp_path / "context.json")},
+        overrides={"context_json": str(tmp_path / "context.json"), "port": _free_port()},
         gates={"localization_ready": True, "run_enabled": False, "estop_ready": True},
         env=CODEX_ENV,
     )
@@ -95,18 +106,16 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
                 route_id=route.id,
                 env_overrides={
                     "ROBOCLAWS_CODEX_PROVIDER": "mify",
-                    "ROBOCLAWS_CODEX_MODEL": "xiaomi/mimo-v2.5",
                 },
+                overrides={"port": _free_port()},
             ),
             env={"XM_LLM_API_KEY": "key"},
         )
 
     assert seen_lock_owner == state["run_id"]
     assert seen_env["ROBOCLAWS_CODEX_PROVIDER"] == "mify"
-    assert seen_env["ROBOCLAWS_CODEX_MODEL"] == "xiaomi/mimo-v2.5"
     assert state["env_overrides"] == {
         "ROBOCLAWS_CODEX_PROVIDER": "mify",
-        "ROBOCLAWS_CODEX_MODEL": "xiaomi/mimo-v2.5",
     }
     lock = ResourceLock(tmp_path, route.lock_name).read()
     assert lock.pid == 12345
@@ -252,7 +261,11 @@ def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
 def test_provider_gate_requires_agent_key_route(tmp_path: Path, monkeypatch) -> None:
     for key in ("XM_LLM_API_KEY", "CODEX_API_KEY", "KIMI_API_KEY", "MIMO_TP_KEY", "OPENAI_API_KEY"):
         monkeypatch.delenv(key, raising=False)
-    readiness = route_readiness(tmp_path, get_route("codex-mujoco-cleanup"))
+    readiness = route_readiness(
+        tmp_path,
+        get_route("codex-mujoco-cleanup"),
+        overrides={"port": _free_port()},
+    )
     assert not readiness["can_start"]
     assert "CODEX_BASE_URL" in readiness["blocker"]
     assert "CODEX_API_KEY" in readiness["blocker"]
@@ -267,7 +280,11 @@ def test_provider_gate_auto_loads_codex_env_from_repo_dotenv(tmp_path: Path, mon
         encoding="utf-8",
     )
 
-    readiness = route_readiness(tmp_path, get_route("codex-mujoco-cleanup"))
+    readiness = route_readiness(
+        tmp_path,
+        get_route("codex-mujoco-cleanup"),
+        overrides={"port": _free_port()},
+    )
 
     assert readiness["can_start"] is True
     assert load_repo_dotenv(tmp_path, {})["CODEX_API_KEY"] == "from-dotenv"
@@ -279,11 +296,41 @@ def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path)
         tmp_path,
         get_route("codex-mujoco-cleanup"),
         env={"XM_LLM_API_KEY": "key"},
+        overrides={"port": _free_port()},
         env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "mify"},
     )
 
     assert readiness["can_start"] is True
     assert readiness["provider"]["provider"] == "mify"
+
+
+def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
+    route = get_route("claude-mujoco-cleanup")
+
+    missing_default = route_readiness(tmp_path, route, env={})
+    assert missing_default["can_start"] is False
+    assert missing_default["provider"]["provider"] == "mimo-anthropic"
+    assert "MIMO_TP_KEY" in missing_default["blocker"]
+
+    kimi = route_readiness(
+        tmp_path,
+        route,
+        env={"KIMI_API_KEY": "key"},
+        overrides={"port": _free_port()},
+        env_overrides={"ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic"},
+    )
+    assert kimi["can_start"] is True
+    assert kimi["provider"]["provider"] == "kimi-anthropic"
+
+    mify = route_readiness(
+        tmp_path,
+        route,
+        env={"XM_LLM_API_KEY": "key"},
+        overrides={"port": _free_port()},
+        env_overrides={"ROBOCLAWS_CLAUDE_PROVIDER": "mify-anthropic"},
+    )
+    assert mify["can_start"] is True
+    assert mify["provider"]["provider"] == "mify-anthropic"
 
 
 def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
@@ -298,6 +345,18 @@ def test_provider_gate_rejects_invalid_env_override(tmp_path: Path) -> None:
             assert "unsupported Codex provider override" in str(exc)
         else:  # pragma: no cover - assertion style keeps dependency surface small.
             raise AssertionError("expected invalid provider override to fail")
+
+    with patch.dict(os.environ, {}, clear=True):
+        try:
+            route_readiness(
+                tmp_path,
+                get_route("claude-mujoco-cleanup"),
+                env_overrides={"ROBOCLAWS_CLAUDE_PROVIDER": "system"},
+            )
+        except ValueError as exc:
+            assert "unsupported Claude provider override" in str(exc)
+        else:  # pragma: no cover - assertion style keeps dependency surface small.
+            raise AssertionError("expected invalid Claude provider override to fail")
 
 
 def test_mcp_port_gate_rejects_port_that_is_already_accepting_connections(

@@ -33,11 +33,12 @@ const els = {
   selectedRouteSummary: document.getElementById("selected-route-summary"),
   commonFields: document.getElementById("common-fields"),
   codexFields: document.getElementById("codex-fields"),
+  claudeFields: document.getElementById("claude-fields"),
   isaacFields: document.getElementById("isaac-fields"),
   agibotFields: document.getElementById("agibot-fields"),
   agibotGateFields: document.getElementById("agibot-gate-fields"),
   codexProviderInput: document.getElementById("codex-provider-input"),
-  codexModelInput: document.getElementById("codex-model-input"),
+  claudeProviderInput: document.getElementById("claude-provider-input"),
   contextInput: document.getElementById("context-json-input"),
   isaacSceneInput: document.getElementById("isaac-scene-input"),
   isaacPreflightGate: document.getElementById("isaac-preflight-gate"),
@@ -92,7 +93,7 @@ function bindEvents() {
   [
     els.contextInput,
     els.codexProviderInput,
-    els.codexModelInput,
+    els.claudeProviderInput,
     els.portInput,
     els.isaacPreflightGate,
     els.localizationGate,
@@ -471,6 +472,7 @@ function renderRouteFields(route) {
 
   els.commonFields.hidden = !route.enabled || !fieldGroups.has("common");
   els.codexFields.hidden = !route.enabled || route.driver !== "codex";
+  els.claudeFields.hidden = !route.enabled || route.driver !== "claude";
   els.isaacFields.hidden = !fieldGroups.has("isaac");
   els.agibotFields.hidden = !fieldGroups.has("agibot");
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
@@ -588,9 +590,9 @@ async function refreshSelectedRouteReadiness() {
   }
   if (route.driver === "codex") {
     params.set("codex_provider", selectedCodexProvider());
-    if (els.codexModelInput.value.trim()) {
-      params.set("codex_model", els.codexModelInput.value.trim());
-    }
+  }
+  if (route.driver === "claude") {
+    params.set("claude_provider", selectedClaudeProvider());
   }
   const readiness = await fetchJson(`/api/readiness?${params.toString()}`);
   if (readiness.error) {
@@ -607,9 +609,10 @@ function confirmLaunch() {
   const promptSource = els.taskPrompt.value.trim() ? "custom" : "default";
   const providerRows =
     route.driver === "codex"
-      ? `<dt>Provider</dt><dd>${escapeHtml(selectedCodexProvider())}</dd>
-      <dt>Model</dt><dd>${escapeHtml(els.codexModelInput.value.trim() || "provider default")}</dd>`
-      : "";
+      ? `<dt>Provider</dt><dd>${escapeHtml(selectedCodexProvider())}</dd>`
+      : route.driver === "claude"
+        ? `<dt>Provider</dt><dd>${escapeHtml(selectedClaudeProviderLabel())}</dd>`
+        : "";
   const movementRows = isAgibotRoute(route)
     ? `<dt>Movement</dt><dd>${escapeHtml(
         els.realMovementGate.checked ? "enabled" : "dry-run"
@@ -691,9 +694,10 @@ async function launchRun() {
     body.env_overrides = {
       ROBOCLAWS_CODEX_PROVIDER: selectedCodexProvider(),
     };
-    if (els.codexModelInput.value.trim()) {
-      body.env_overrides.ROBOCLAWS_CODEX_MODEL = els.codexModelInput.value.trim();
-    }
+  } else if (state.selectedRoute.driver === "claude") {
+    body.env_overrides = {
+      ROBOCLAWS_CLAUDE_PROVIDER: selectedClaudeProvider(),
+    };
   }
 
   const result = await fetchJson("/api/runs", {
@@ -865,6 +869,17 @@ function isAgibotRoute(route) {
 
 function selectedCodexProvider() {
   return els.codexProviderInput.value || "codex-env";
+}
+
+function selectedClaudeProvider() {
+  return els.claudeProviderInput.value || "mimo-anthropic";
+}
+
+function selectedClaudeProviderLabel() {
+  const option = Array.from(els.claudeProviderInput.options).find(
+    (item) => item.value === selectedClaudeProvider()
+  );
+  return option ? option.textContent : selectedClaudeProvider();
 }
 
 function visiblePanelsForView(view, modes) {
