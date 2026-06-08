@@ -111,6 +111,9 @@ def test_static_app_has_resizable_run_evidence_panel() -> None:
     assert "ArrowLeft" in app
     assert "ArrowUp" in app
     assert "els.evidenceStripResizer.hidden = !hidden" in app
+    assert "refreshRawEvidence()" in app
+    assert "forceStickToBottom: true" in app
+    assert "shouldStickToBottom" in app
     assert "raw-evidence-open" in app
     assert "--state-rail-width" in css
     assert "--evidence-strip-height" in css
@@ -137,3 +140,20 @@ def test_static_app_routes_destructive_actions_through_styled_dialog() -> None:
     # Run title reaches the 28px display role only once a run is active.
     assert ".top-run-bar.run-active #run-title" in css
     assert "font-variant-numeric: tabular-nums" in css
+
+
+def test_static_app_opens_images_in_large_dialog() -> None:
+    html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="image-dialog"' in html
+    assert 'id="image-dialog-img"' in html
+    assert "image-preview-button" in app
+    assert "openImageDialog" in app
+    assert "showModal()" in app
+    assert "data-image-src" in app
+    assert ".image-dialog" in css
+    assert ".image-dialog-frame img" in css
+    assert "max-height: calc(100vh - 168px)" in css
+    assert "transform: scale(1.02)" in css

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 import socket
 import subprocess
 import time
@@ -306,10 +307,12 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
         raise ConsoleLaunchError(f"unknown run id: {run_id}")
     state = json.loads(state_path.read_text(encoding="utf-8"))
     display_run_dir = resolve_display_run_dir(run_dir)
+    terminal_phase = "human_takeover_stop" if emergency else "stopped_by_operator"
     _stop_live_child_run(display_run_dir)
+    _mark_live_child_stopped(display_run_dir, terminal_phase)
     pid = state.get("pid")
     _terminate_process_group(pid if isinstance(pid, int) else None)
-    state["phase"] = "human_takeover_stop" if emergency else "stopped_by_operator"
+    state["phase"] = terminal_phase
     state["terminal_reason"] = state["phase"]
     state["stopped_at_epoch"] = time.time()
     state["display_run_dir"] = str(display_run_dir)
@@ -530,7 +533,9 @@ def _display_run_attachable(
     active_pid: int | None,
 ) -> bool:
     phase = str(live_status.get("phase") or "").lower()
-    if phase in {"finished", "failed"} and "exit_status" in live_status:
+    if phase in {"finished", "failed", "stopped_by_operator", "human_takeover_stop"} and (
+        "exit_status" in live_status
+    ):
         return False
     if phase:
         return True
@@ -553,19 +558,192 @@ def _live_run_pid(display_run_dir: Path) -> int | None:
 
 
 def _stop_live_child_run(display_run_dir: Path) -> None:
+    live_pid = _live_run_pid(display_run_dir)
+    stop_pids = _live_run_stop_pids(live_pid)
+    _stop_docker_containers_for_run(display_run_dir)
     _kill_tmux_session(display_run_dir)
-    _terminate_process_group(_live_run_pid(display_run_dir))
+    for pid in stop_pids:
+        _terminate_process_group(pid)
+
+
+def _mark_live_child_stopped(display_run_dir: Path, phase: str) -> None:
+    display_run_dir.mkdir(parents=True, exist_ok=True)
+    status_path = display_run_dir / "live_status.json"
+    payload = _read_json(status_path)
+    payload.update(
+        {
+            "phase": phase,
+            "terminal_reason": phase,
+            "finished_at_epoch": time.time(),
+            "exit_status": 130,
+        }
+    )
+    status_path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _live_run_stop_pids(live_pid: int | None) -> list[int]:
+    if not live_pid or live_pid <= 0:
+        return []
+    pids = [live_pid]
+    parent_pid = _process_parent_pid(live_pid)
+    if parent_pid and _safe_process_pid(parent_pid):
+        pids.append(parent_pid)
+        pids.extend(_descendant_pids(parent_pid))
+    else:
+        pids.extend(_descendant_pids(live_pid))
+    return _dedupe_pids(pids)
 
 
 def _terminate_process_group(pid: int | None) -> None:
     if not pid or pid <= 0:
         return
+    _signal_process_group_or_pid(pid, signal.SIGTERM)
+    deadline = time.monotonic() + 1.0
+    while _pid_exists(pid) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if _pid_exists(pid):
+        _signal_process_group_or_pid(pid, signal.SIGKILL)
+
+
+def _signal_process_group_or_pid(pid: int, sig: signal.Signals) -> None:
     try:
-        os.killpg(pid, 15)
+        pgid = os.getpgid(pid)
     except ProcessLookupError:
+        pgid = pid
+    except (PermissionError, OSError):
+        pgid = None
+    if pgid and pgid > 0:
+        try:
+            os.killpg(pgid, int(sig))
+            return
+        except ProcessLookupError:
+            pass
+        except (PermissionError, OSError):
+            pass
+    try:
+        os.kill(pid, int(sig))
+    except (ProcessLookupError, PermissionError, OSError):
         pass
-    except PermissionError:
-        os.kill(pid, 15)
+
+
+def _process_parent_pid(pid: int) -> int | None:
+    try:
+        raw = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    return _parse_proc_stat_parent_pid(raw)
+
+
+def _descendant_pids(root_pid: int) -> list[int]:
+    children_by_parent: dict[int, list[int]] = {}
+    try:
+        stat_paths = list(Path("/proc").glob("[0-9]*/stat"))
+    except OSError:
+        return []
+    for stat_path in stat_paths:
+        try:
+            pid = int(stat_path.parent.name)
+            parent_pid = _parse_proc_stat_parent_pid(stat_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if parent_pid is None:
+            continue
+        children_by_parent.setdefault(parent_pid, []).append(pid)
+    descendants: list[int] = []
+    queue = list(children_by_parent.get(root_pid, []))
+    while queue:
+        pid = queue.pop(0)
+        if not _safe_process_pid(pid):
+            continue
+        descendants.append(pid)
+        queue.extend(children_by_parent.get(pid, []))
+    return descendants
+
+
+def _parse_proc_stat_parent_pid(raw: str) -> int | None:
+    try:
+        suffix = raw.rsplit(") ", 1)[1]
+        fields = suffix.split()
+        return int(fields[1])
+    except (IndexError, ValueError):
+        return None
+
+
+def _safe_process_pid(pid: int) -> bool:
+    return pid > 1 and pid not in {os.getpid(), os.getppid()}
+
+
+def _dedupe_pids(pids: list[int]) -> list[int]:
+    seen: set[int] = set()
+    output: list[int] = []
+    for pid in pids:
+        if pid in seen or not _safe_process_pid(pid):
+            continue
+        seen.add(pid)
+        output.append(pid)
+    return output
+
+
+def _stop_docker_containers_for_run(display_run_dir: Path) -> None:
+    workspace = (display_run_dir / "agent-docker-workspace").resolve()
+    if not workspace.exists():
+        return
+    for container_id in _docker_container_ids_with_mount(workspace):
+        subprocess.run(
+            ["docker", "stop", "--time", "5", container_id],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def _docker_container_ids_with_mount(source: Path) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["docker", "ps", "-q"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except (FileNotFoundError, OSError):
+        return []
+    if result.returncode != 0:
+        return []
+    container_ids: list[str] = []
+    for container_id in result.stdout.split():
+        try:
+            inspect = subprocess.run(
+                ["docker", "inspect", "--format", "{{json .Mounts}}", container_id],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+        except (FileNotFoundError, OSError):
+            continue
+        if inspect.returncode != 0:
+            continue
+        try:
+            mounts = json.loads(inspect.stdout)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(mounts, list):
+            continue
+        for mount in mounts:
+            if not isinstance(mount, dict):
+                continue
+            mount_source = mount.get("Source")
+            if not mount_source:
+                continue
+            try:
+                candidate = Path(str(mount_source)).resolve()
+            except OSError:
+                continue
+            if candidate == source:
+                container_ids.append(container_id)
+                break
+    return container_ids
 
 
 def _read_json(path: Path) -> dict[str, Any]:

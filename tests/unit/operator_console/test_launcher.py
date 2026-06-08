@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from roboclaws.operator_console.launcher import (
     LaunchRequest,
+    _terminate_process_group,
     build_launch_argv,
     load_repo_dotenv,
     route_readiness,
@@ -205,8 +206,8 @@ def test_readiness_keeps_stale_wrapper_lock_attachable_when_child_live_run_is_ac
 def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
     route = get_route("codex-mujoco-cleanup")
     run_id = "wrapper-run"
-    wrapper_pid = 111
-    server_pid = 222
+    wrapper_pid = 123450
+    server_pid = 123451
     run_dir = console_output_root(tmp_path) / "runs" / run_id
     attempt_dir = run_dir / "0608_1807" / "seed-7"
     attempt_dir.mkdir(parents=True)
@@ -244,9 +245,14 @@ def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
         return Result()
 
     with (
+        patch("roboclaws.operator_console.launcher._process_parent_pid") as parent_pid,
+        patch("roboclaws.operator_console.launcher._descendant_pids") as descendant_pids,
+        patch("roboclaws.operator_console.launcher.os.getpgid", side_effect=lambda pid: pid),
         patch("roboclaws.operator_console.launcher.os.killpg") as killpg,
         patch("roboclaws.operator_console.launcher.subprocess.run", side_effect=fake_run),
     ):
+        parent_pid.return_value = wrapper_pid
+        descendant_pids.return_value = [server_pid]
         killpg.side_effect = lambda pid, signal: killed_pids.append(pid)
         state = stop_console_run(tmp_path, run_id)
 
@@ -255,7 +261,97 @@ def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
     assert server_pid in killed_pids
     assert wrapper_pid in killed_pids
     assert ["tmux", "kill-session", "-t", "roboclaws-test"] in tmux_commands
+    live_status = json.loads((attempt_dir / "live_status.json").read_text(encoding="utf-8"))
+    assert live_status["phase"] == "stopped_by_operator"
+    assert live_status["exit_status"] == 130
     assert ResourceLock(tmp_path, route.lock_name).read().held is False
+
+
+def test_stop_console_run_stops_docker_container_bound_to_attempt_workspace(
+    tmp_path: Path,
+) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "wrapper-run"
+    wrapper_pid = 123450
+    server_pid = 123451
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0608_1807" / "seed-7"
+    workspace = attempt_dir / "agent-docker-workspace"
+    workspace.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": wrapper_pid,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "server.pid").write_text(f"{server_pid}\n", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=wrapper_pid)
+
+    docker_stops: list[list[str]] = []
+
+    def fake_run(command, **kwargs):  # noqa: ANN001, ANN003, ANN202
+        del kwargs
+
+        class Result:
+            returncode = 0
+            stdout = ""
+
+        result = Result()
+        if command == ["docker", "ps", "-q"]:
+            result.stdout = "container-a\ncontainer-b\n"
+        elif command[:4] == ["docker", "inspect", "--format", "{{json .Mounts}}"]:
+            container_id = command[4]
+            source = workspace if container_id == "container-b" else tmp_path / "other"
+            result.stdout = json.dumps([{"Source": str(source.resolve())}])
+        elif command[:2] == ["docker", "stop"]:
+            docker_stops.append(list(command))
+        return result
+
+    with (
+        patch("roboclaws.operator_console.launcher._process_parent_pid", return_value=wrapper_pid),
+        patch("roboclaws.operator_console.launcher._descendant_pids", return_value=[server_pid]),
+        patch("roboclaws.operator_console.launcher.os.getpgid", side_effect=lambda pid: pid),
+        patch("roboclaws.operator_console.launcher.os.killpg"),
+        patch("roboclaws.operator_console.launcher.subprocess.run", side_effect=fake_run),
+    ):
+        stop_console_run(tmp_path, run_id)
+
+    assert docker_stops == [["docker", "stop", "--time", "5", "container-b"]]
+
+
+def test_terminate_process_group_falls_back_to_single_pid_when_group_lookup_fails() -> None:
+    signals: list[tuple[int, int]] = []
+
+    def fake_kill(pid: int, sig: int) -> None:
+        if sig == 0:
+            raise ProcessLookupError
+        signals.append((pid, sig))
+
+    with (
+        patch(
+            "roboclaws.operator_console.launcher.os.getpgid",
+            side_effect=ProcessLookupError,
+        ),
+        patch(
+            "roboclaws.operator_console.launcher.os.killpg",
+            side_effect=ProcessLookupError,
+        ),
+        patch("roboclaws.operator_console.launcher.os.kill", side_effect=fake_kill),
+    ):
+        _terminate_process_group(12345)
+
+    assert signals == [(12345, 15)]
 
 
 def test_provider_gate_requires_agent_key_route(tmp_path: Path, monkeypatch) -> None:

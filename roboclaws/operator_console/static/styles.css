@@ -600,6 +600,32 @@ pre,
   object-fit: contain;
 }
 
+.image-preview-button {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.image-preview-button:not(:disabled):hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+.image-preview-button img {
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.image-preview-button:hover img,
+.image-preview-button:focus-visible img {
+  filter: contrast(1.05);
+  transform: scale(1.02);
+}
+
 .ratio-4-3 {
   aspect-ratio: 4 / 3;
 }
@@ -691,6 +717,53 @@ dialog pre {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.image-dialog {
+  width: min(1280px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  padding: 0;
+}
+
+.image-dialog::backdrop {
+  background: rgb(20 24 22 / 0.72);
+}
+
+.image-dialog form {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0;
+  min-height: min(760px, calc(100vh - 48px));
+  margin: 0;
+}
+
+.image-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.image-dialog-header h2 {
+  margin-bottom: 4px;
+}
+
+.image-dialog-frame {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 16px;
+  background: #111614;
+}
+
+.image-dialog-frame img {
+  width: 100%;
+  height: 100%;
+  max-height: calc(100vh - 168px);
+  object-fit: contain;
 }
 
 @media (max-width: 1360px) {
