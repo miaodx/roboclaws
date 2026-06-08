@@ -101,6 +101,110 @@ retryable infrastructure failures, and any retry/resume is a bounded harness
 behavior driven only by that status. Existing artifact/status consumers still
 have stable files to inspect.
 
+## Preflight Contract
+
+Preflight status: DRAFT
+
+Task source: this plan plus the 2026-06-08 discussion.
+
+Canonical source: `docs/plans/refactor-live-agent-runner-boundary.md`.
+
+Route: `$intuitive-refactor`.
+
+Goal: refactor live Codex and Claude household cleanup runners so they act as
+launcher/artifact wrappers, while provider-transient failures get a narrow
+bounded harness retry path instead of cleanup continuation.
+
+Scope:
+
+- Remove live-runner continuation policy from Codex and Claude cleanup routes.
+- Remove lane-specific `world-public-labels` continuation budget.
+- Remove continuation-oriented knobs such as `--codex-max-continuations` and
+  `ROBOCLAWS_CODEX_MAX_CONTINUATIONS` where they affect live runner behavior.
+- Add stable status classification for provider-transient failures:
+  `reason=provider_transient_failure`,
+  `provider_reason=rate_limit|upstream_unavailable|upstream_timeout`,
+  `retryable=true`, and `resume_available=<bool>`.
+- Keep provider-transient retry narrow: 429/rate limit, 502/503/504 upstream
+  unavailable, provider/proxy timeout, connection reset, or clearly
+  provider/proxy-attributed upstream unavailable.
+- Keep bounded provider retry/resume in the batch harness only, driven by
+  explicit retryable status.
+- Update tests and docs for Codex and Claude runner boundary plus harness retry
+  semantics.
+
+Non-goals:
+
+- No agent-owned checkpoint/handoff MCP tool in this slice.
+- No cleanup strategy changes inside the skill.
+- No new `done` readiness tool; `done` remains the authoritative completion
+  gate.
+- No backward compatibility for removed continuation knobs.
+- No live provider validation required.
+
+Context package:
+
+- Must read:
+  - `docs/plans/refactor-live-agent-runner-boundary.md`
+  - `scripts/molmo_cleanup/run_live_codex_cleanup.py`
+  - `scripts/molmo_cleanup/run_live_claude_cleanup.py`
+  - `scripts/molmo_cleanup/run_codex_cleanup_harness8.py`
+  - `just/molmo.just`
+  - `tests/unit/molmo_cleanup/test_ci_live_reports.py`
+  - `tests/unit/molmo_cleanup/test_codex_cleanup_harness8.py`
+- Useful evidence:
+  - `just/README.md`
+  - `skills/molmo-realworld-cleanup/SKILL.md`
+  - `docs/human/mcp-skills-and-semantic-profiles.md`
+- Do not read unless needed:
+  - historical retrospectives, large generated reports, live run outputs.
+
+Definition of done / acceptance criteria:
+
+- SUCCESS only if Codex and Claude live runners do not automatically start
+  another agent turn for unfinished cleanup, idle timeout, tool-binding/MCP
+  namespace errors, or lane-specific budgets.
+- SUCCESS only if provider-transient failures are explicitly classified and
+  retryable without being treated as cleanup progress control.
+- SUCCESS only if harness retry is bounded and activates only from explicit
+  provider-transient status.
+- SUCCESS only if existing artifact/status consumers remain readable.
+- SUCCESS only if focused tests pass.
+- PARTIAL if Codex boundary is fixed but Claude remains old behavior, or
+  provider status exists but harness retry is not updated.
+- BLOCKED_NEEDS_DECISION if implementation cannot reliably distinguish
+  provider-transient from auth/config/context/tool failures without adding
+  broad log guessing.
+- Must not regress public `just task::run household-cleanup codex|claude ...`
+  route shape except removed continuation knobs.
+- Must not regress operator console artifact/status visibility.
+- Must not regress `done` as the cleanup completion gate.
+
+Verification:
+
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_codex_cleanup_harness8.py`
+- `ruff check` on touched Python files if implementation edits Python.
+- No live Codex/Claude provider run required.
+
+Execution surface:
+
+- Main session: root supervisor, keeps plan/contract aligned.
+- Worker: none by default.
+- Worker-local goal: none.
+
+Main-session `/goal` prompt:
+
+```text
+/goal execute docs/plans/refactor-live-agent-runner-boundary.md with intuitive-flow
+```
+
+To execute:
+
+```text
+/goal execute docs/plans/refactor-live-agent-runner-boundary.md with intuitive-flow
+```
+
 ## Execution Log
 
 - 2026-06-08: Scope accepted in discussion. User explicitly requested no
