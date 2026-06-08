@@ -772,7 +772,9 @@ function renderRunState(payload) {
   `;
   els.toolPanel.textContent = JSON.stringify(payload.latest_tool_call || {}, null, 2);
   els.proofPanel.textContent = `${payload.checker_status.status || "pending"}: ${
-    payload.checker_status.checker_log || "Checker has not run yet."
+    payload.checker_status.message ||
+    payload.checker_status.checker_log ||
+    "Checker has not run yet."
   }`;
   renderArtifacts(payload.artifact_paths || []);
   renderViews(payload.latest_view_assets || {}, route);
