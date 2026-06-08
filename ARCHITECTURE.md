@@ -59,6 +59,10 @@ Key pieces:
   surface.
 - `roboclaws/cli/agent_server.py` starts coding-agent MCP servers for
   `ai2thor-nav`, `household-cleanup`, and `semantic-map-build`.
+- `roboclaws/agents/live_runtime.py` defines the provider-neutral runtime
+  contract for one live coding-agent invocation. Current Codex and Claude Code
+  CLI routes remain the product baselines; experimental SDK runtimes live under
+  `roboclaws/agents/drivers/` without changing public task strategy.
 - `examples/games/` contains runnable game examples.
 
 The canonical navigation tools are `observe`, `observe_archived`, `move`, and
@@ -176,7 +180,9 @@ Going forward:
 - Add a new backend as a reusable adapter under the owning domain package, then
   expose it through task metadata or launch validation.
 - Add a new coding-agent driver under `roboclaws/agents/drivers/` and keep
-  task-specific kickoff text in `roboclaws/agents/prompts/`.
+  task-specific kickoff text in `roboclaws/agents/prompts/`. Shared launcher
+  and status semantics should flow through `roboclaws/agents/live_runtime.py`
+  when the driver is a live coding-agent runtime.
 - Add or revise MCP tools in the domain-local MCP module when the capability
   surface is stable enough to reuse across skills.
 - Profiles describe reusable capability environments, not whole tasks.
