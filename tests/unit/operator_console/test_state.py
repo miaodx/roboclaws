@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from roboclaws.operator_console.routes import get_route
@@ -243,6 +244,37 @@ def test_state_ignores_runtime_capture_when_selecting_latest_robot_tool(
     )
     assert state["latest_tool_call"]["name"] == "observe"
     assert state["latest_tool_call"]["ok"] is True
+
+
+def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
+    robot_views = run_dir / "robot_views"
+    map_bundle = run_dir / "map_bundle"
+    robot_views.mkdir(parents=True)
+    map_bundle.mkdir()
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "running",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    robot_map = robot_views / "0042_observe.map.png"
+    report_map = map_bundle / "report_static_navigation_map.png"
+    robot_map.write_bytes(b"robot map")
+    report_map.write_bytes(b"report map")
+    os.utime(robot_map, (1, 1))
+    os.utime(report_map, (2, 2))
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["latest_view_assets"]["map"]["path"] == str(robot_map.resolve())
 
 
 def test_state_surfaces_provider_rate_limit_reason(tmp_path: Path) -> None:
