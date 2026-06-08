@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit hook: ruff (lint + format) + fast unit tests.
+# Pre-commit hook: ruff (lint + format) + scoped tests.
 #
 # Install once per clone:
 #
@@ -12,11 +12,10 @@
 #
 # Auto-skip:
 #
-#     Tests are auto-skipped when no .py / .toml / .lock files are
-#     staged (doc-only commits don't pay the ~30-60s test cost).
-#     Override the auto-skip with FORCE_TESTS=1 if your change
-#     affects test results in a non-obvious way (e.g., editing a JSON
-#     fixture or a justfile recipe that tests depend on).
+#     Tests are auto-skipped when no .py / .toml / .lock files are staged
+#     (doc-only commits don't pay the test cost). Python commits run scoped
+#     tests when the hook can infer a relevant target. Set FORCE_TESTS=1
+#     to run the full non-integration suite.
 #
 # Design notes:
 #   - Tests marked `@pytest.mark.integration` (Docker-dependent OR real
@@ -84,5 +83,98 @@ if [[ ! -x scripts/dev/run_pytest_standalone.sh ]]; then
     exit 1
 fi
 
-echo "pre-commit: pytest -m 'not integration' (fast subset)"
-./scripts/dev/run_pytest_standalone.sh -m "not integration" -q --durations=5
+run_full_fast_tests() {
+    echo "pre-commit: pytest -m 'not integration' (full fast subset)"
+    ./scripts/dev/run_pytest_standalone.sh -m "not integration" -q --durations=5
+}
+
+add_test_target() {
+    local target="$1"
+    [[ -e "$target" ]] || return 0
+    local existing
+    for existing in "${TEST_TARGETS[@]}"; do
+        [[ "$existing" == "$target" ]] && return 0
+    done
+    TEST_TARGETS+=("$target")
+}
+
+infer_tests_for_path() {
+    local path="$1"
+    case "$path" in
+        tests/*.py|tests/*/*.py|tests/*/*/*.py)
+            add_test_target "$path"
+            ;;
+        roboclaws/operator_console/*)
+            add_test_target "tests/unit/operator_console"
+            ;;
+        roboclaws/core/providers/*)
+            add_test_target "tests/unit/providers"
+            ;;
+        roboclaws/core/*|roboclaws/ai2thor/*)
+            add_test_target "tests/unit/core"
+            ;;
+        roboclaws/games/*)
+            add_test_target "tests/unit/games"
+            ;;
+        roboclaws/openclaw/*)
+            add_test_target "tests/unit/openclaw"
+            add_test_target "tests/contract/openclaw"
+            ;;
+        roboclaws/maps/*)
+            add_test_target "tests/contract/maps"
+            ;;
+        roboclaws/mcp/*)
+            add_test_target "tests/contract/mcp"
+            ;;
+        roboclaws/household/*|roboclaws/molmo_cleanup/*)
+            add_test_target "tests/unit/molmo_cleanup"
+            add_test_target "tests/contract/molmo_cleanup"
+            ;;
+        roboclaws/agents/*)
+            add_test_target "tests/contract/skills"
+            add_test_target "tests/contract/dev_tools"
+            ;;
+        roboclaws/launch/*|roboclaws/devtools/*)
+            add_test_target "tests/contract/dev_tools"
+            ;;
+        roboclaws/cli/*)
+            add_test_target "tests/contract/mcp"
+            add_test_target "tests/contract/molmo_cleanup"
+            ;;
+        examples/*)
+            add_test_target "tests/unit/examples"
+            ;;
+        scripts/*.py|scripts/*/*.py)
+            add_test_target "tests/unit/scripts"
+            add_test_target "tests/contract/dev_tools"
+            ;;
+    esac
+}
+
+if [[ "${FORCE_TESTS:-0}" == "1" ]]; then
+    echo "pre-commit: FORCE_TESTS=1 set — running full fast pytest"
+    run_full_fast_tests
+    exit 0
+fi
+
+STAGED_CONFIG="$(git diff --cached --name-only --diff-filter=ACMR -- '*.toml' '*.lock' || true)"
+if [[ -n "$STAGED_CONFIG" ]]; then
+    echo "pre-commit: staged dependency/config file — running full fast pytest"
+    run_full_fast_tests
+    exit 0
+fi
+
+declare -a TEST_TARGETS=()
+while IFS= read -r path; do
+    [[ -n "$path" ]] || continue
+    infer_tests_for_path "$path"
+done <<< "$STAGED_PY"
+
+if [[ "${#TEST_TARGETS[@]}" -eq 0 ]]; then
+    echo "pre-commit: no scoped pytest target inferred — running full fast pytest"
+    run_full_fast_tests
+    exit 0
+fi
+
+echo "pre-commit: pytest scoped targets: ${TEST_TARGETS[*]}"
+./scripts/dev/run_pytest_standalone.sh -m "not integration" -q --durations=5 "${TEST_TARGETS[@]}"

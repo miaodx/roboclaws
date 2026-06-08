@@ -9,6 +9,7 @@ JUST_DIR = REPO_ROOT / "just"
 VERIFY_JUST = JUST_DIR / "verify.just"
 HARNESS_JUST = JUST_DIR / "harness.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
+PRE_COMMIT_HOOK = REPO_ROOT / ".githooks" / "pre-commit"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
@@ -72,6 +73,19 @@ def test_fast_dev_tests_clear_provider_env_for_deterministic_mock_gate() -> None
     assert 'KIMI_API_KEY=""' in script_text
     assert 'MIMO_TP_KEY=""' in script_text
     assert "ROBOCLAWS_PYTEST_CLEAR_PROVIDER_ENV=1" in dev_text
+
+
+def test_pre_commit_runs_scoped_tests_by_default_with_full_fast_opt_in() -> None:
+    hook_text = PRE_COMMIT_HOOK.read_text(encoding="utf-8")
+    dev_text = (JUST_DIR / "dev.just").read_text(encoding="utf-8")
+
+    assert "infer_tests_for_path" in hook_text
+    assert "roboclaws/operator_console/*)" in hook_text
+    assert 'add_test_target "tests/unit/operator_console"' in hook_text
+    assert "FORCE_TESTS=1 set" in hook_text
+    assert "run_full_fast_tests" in hook_text
+    assert "pytest scoped targets: ${TEST_TARGETS[*]}" in hook_text
+    assert "FORCE_TESTS=1 for full fast pytest" in dev_text
 
 
 def test_molmo_apple2apple_grid_recipe_resolves_ci_python() -> None:

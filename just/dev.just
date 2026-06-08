@@ -1,7 +1,8 @@
 # Dev workflow — git hooks, pytest split, repo-wide self-check.
 #
 # Test split invariant:
-#   - test-fast        : what the pre-commit hook runs (no Docker, no real provider).
+#   - test-fast        : full non-integration confidence gate; opt into it from
+#                        pre-commit with FORCE_TESTS=1.
 #   - test-unit        : fast isolated public-API behavior tests.
 #   - test-contract    : public schema/tool/report/recipe compatibility tests.
 #   - test-regression  : known-bug and artifact-regression coverage.
@@ -27,7 +28,7 @@ network-status:
 install-hooks:
     @git config core.hooksPath .githooks
     @echo "==> git hooks installed (core.hooksPath = .githooks)"
-    @echo "    pre-commit : ruff + fast pytest"
+    @echo "    pre-commit : ruff + scoped pytest (FORCE_TESTS=1 for full fast pytest)"
     @echo "    post-merge : integration tests, backgrounded, log in .git/integration-last.log"
     @echo "    bypass     : git commit --no-verify   or   SKIP_TESTS=1 git commit"
 
