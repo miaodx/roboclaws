@@ -24,6 +24,8 @@ MANIFEST_SCHEMA = "raw_fpv_private_label_manifest_v1"
 REPORT_SCHEMA = "raw_fpv_private_label_generation_report_v1"
 DEFAULT_RUN_DIR = Path("output/household/household-cleanup/codex-camera-raw/0606_1537/seed-7")
 DEFAULT_OUTPUT_ROOT = Path("output/molmo/raw-fpv-private-labels")
+LABEL_SCOPE_GENERATED_TARGETS = "generated-targets"
+LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE = "cleanup-visible-movable"
 
 SCREEN_GRID_REGIONS = (
     "upper_left",
@@ -61,6 +63,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--min-object-pixels", type=int, default=12)
     parser.add_argument("--render-width", type=int, default=540)
     parser.add_argument("--render-height", type=int, default=360)
+    parser.add_argument(
+        "--label-scope",
+        choices=(LABEL_SCOPE_GENERATED_TARGETS, LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE),
+        default=LABEL_SCOPE_GENERATED_TARGETS,
+        help=(
+            "generated-targets preserves the live hidden-target recovery scorer. "
+            "cleanup-visible-movable labels all cleanup-family movable objects for "
+            "visible_movable_label_quality."
+        ),
+    )
     parser.add_argument(
         "--replay-mode",
         choices=("full_trace", "pre_cleanup_sweep"),
@@ -139,6 +151,7 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
                 min_object_pixels=max(1, int(args.min_object_pixels)),
                 render_width=max(1, int(args.render_width)),
                 render_height=max(1, int(args.render_height)),
+                label_scope=str(args.label_scope),
             )
         else:
             for observation in observations:
@@ -151,6 +164,7 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
                     min_object_pixels=max(1, int(args.min_object_pixels)),
                     render_width=max(1, int(args.render_width)),
                     render_height=max(1, int(args.render_height)),
+                    label_scope=str(args.label_scope),
                 )
                 labels.extend(frame_labels)
                 frame_summaries.append(frame_summary)
@@ -169,6 +183,7 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
             "source_trace": str(trace_path),
             "source_backend_state": str(source_state_path),
             "replay_mode": args.replay_mode,
+            "label_scope": args.label_scope,
             "first_sweep_only": args.replay_mode == "pre_cleanup_sweep",
             "scorer_only": True,
             "private_truth_included_in_prompt_inputs": False,
@@ -191,7 +206,15 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
 
     labeled_frame_count = len({str(item.get("frame_id") or "") for item in labels})
     unique_object_count = len({str(item.get("object_id") or "") for item in labels})
-    status = "success" if unique_object_count >= len(generated_manifest["targets"]) else "partial"
+    status = (
+        "success"
+        if labels
+        and (
+            str(args.label_scope) == LABEL_SCOPE_CLEANUP_VISIBLE_MOVABLE
+            or unique_object_count >= len(generated_manifest["targets"])
+        )
+        else "partial"
+    )
     report = {
         "schema": REPORT_SCHEMA,
         "status": status,
@@ -199,6 +222,7 @@ def generate_private_labels(args: argparse.Namespace) -> dict[str, Any]:
         "output_dir": str(output_run_dir),
         "source_run_dir": str(source_run_dir),
         "replay_mode": args.replay_mode,
+        "label_scope": args.label_scope,
         "observation_count": len(observations),
         "first_sweep_observation_count": len(
             observations_from_trace(trace_rows, replay_mode="pre_cleanup_sweep")
@@ -346,6 +370,7 @@ def _label_observation(
     min_object_pixels: int,
     render_width: int,
     render_height: int,
+    label_scope: str = LABEL_SCOPE_GENERATED_TARGETS,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     state = backend._read_state()  # noqa: SLF001 - private scorer replay utility.
     state["robot_pose"] = dict(observation.get("robot_pose") or {})
@@ -361,7 +386,7 @@ def _label_observation(
         "image_artifact": observation.get("image_artifact") or "",
         "labels": [],
     }
-    for object_id in source_state.get("selected_object_ids") or []:
+    for object_id in label_object_ids_for_scope(source_state, label_scope=label_scope):
         result = backend.write_robot_views_with_resolution(
             output_dir,
             label=f"{observation['observation_id']}_{_safe_filename(str(object_id))}",
@@ -386,6 +411,7 @@ def _label_observation(
             "surface_hint": surface_hint_from_focus(focus),
             "label_source": "private_molmospaces_replay_fpv_segmentation",
             "private": True,
+            "hidden_target": label_scope == LABEL_SCOPE_GENERATED_TARGETS,
             "pixel_bbox": list(box["bbox"]),
             "object_pixels": pixels,
         }
@@ -413,6 +439,7 @@ def _label_full_trace(
     min_object_pixels: int,
     render_width: int,
     render_height: int,
+    label_scope: str = LABEL_SCOPE_GENERATED_TARGETS,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     labels: list[dict[str, Any]] = []
     frame_summaries: list[dict[str, Any]] = []
@@ -439,6 +466,7 @@ def _label_full_trace(
                 min_object_pixels=min_object_pixels,
                 render_width=render_width,
                 render_height=render_height,
+                label_scope=label_scope,
             )
             labels.extend(frame_labels)
             frame_summaries.append(frame_summary)
@@ -530,6 +558,62 @@ def surface_hint_from_focus(focus: dict[str, Any]) -> str:
     if "sofa" in text:
         return "sofa"
     return "unknown"
+
+
+def label_object_ids_for_scope(state: dict[str, Any], *, label_scope: str) -> list[str]:
+    if label_scope == LABEL_SCOPE_GENERATED_TARGETS:
+        return [str(object_id) for object_id in state.get("selected_object_ids") or []]
+    objects = state.get("objects") if isinstance(state.get("objects"), dict) else {}
+    return [
+        str(object_id)
+        for object_id, item in sorted(objects.items())
+        if isinstance(item, dict) and _category_family(item.get("category"))
+    ]
+
+
+def _category_family(value: Any) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+    if not normalized:
+        return ""
+    fixture_terms = {
+        "armchair",
+        "bed",
+        "bookcase",
+        "bookshelf",
+        "cabinet",
+        "counter",
+        "desk",
+        "dresser",
+        "floor",
+        "fridge",
+        "refrigerator",
+        "shelf",
+        "sink",
+        "sofa",
+        "table",
+    }
+    if any(term in normalized for term in fixture_terms):
+        return ""
+    families = {
+        "dish": {"dish", "dishware", "dishsponge", "plate", "bowl", "cup", "mug", "teacup"},
+        "food": {"food", "potato", "irishpotato", "apple", "fruit", "vegetable", "bread"},
+        "electronics": {
+            "electronics",
+            "remote",
+            "remotecontrol",
+            "tvremote",
+            "cellphone",
+            "phone",
+            "laptop",
+        },
+        "linen": {"linen", "pillow", "cushion", "towel", "blanket", "cloth"},
+        "toy": {"toy", "ball", "basketball", "baseballbat"},
+        "book": {"book", "notebook", "newspaper"},
+    }
+    for family, members in families.items():
+        if normalized in members or any(normalized.startswith(member) for member in members):
+            return family
+    return ""
 
 
 def _object_box_from_visibility(visibility: dict[str, Any]) -> dict[str, Any] | None:

@@ -87,7 +87,7 @@ def test_raw_fpv_probe_keeps_private_labels_out_of_prompt_inputs(tmp_path: Path)
     prompt_text = json.dumps(prompt_inputs, sort_keys=True)
     score = json.loads(Path(report["artifacts"]["private_score"]).read_text())
 
-    assert report["status"] == "success"
+    assert report["status"] == "partial"
     assert report["privacy"]["private_labels_in_prompt_inputs"] is False
     assert report["privacy"]["agent_facing_input_contains_executable_prior_handles"] is False
     assert "private_plate_001" not in prompt_text
@@ -288,12 +288,349 @@ def test_raw_fpv_probe_merges_multiple_private_label_manifests(tmp_path: Path) -
         max_frames_per_source=4,
     )
 
-    labels = probe.load_probe_labels((first, second), frames=frames, contrast_run_dirs=())
+    labels = probe.load_probe_labels(
+        (first, second),
+        frames=frames,
+        contrast_run_dirs=(),
+        default_hidden_target=True,
+    )
 
     assert sorted(label.object_id for label in labels) == [
         "private_book_001",
         "private_plate_001",
     ]
+
+
+def test_raw_fpv_probe_aliases_unique_sweep_frame_labels_by_observation_id(
+    tmp_path: Path,
+) -> None:
+    probe = _load_module()
+    run_dir = tmp_path / "output" / "molmo" / "raw-fpv-sweep-corpus" / "current-run"
+    robot_views = run_dir / "robot_views"
+    robot_views.mkdir(parents=True)
+    Image.new("RGB", (120, 90), color=(80, 20, 20)).save(robot_views / "0001_raw_fpv_001.fpv.png")
+    (run_dir / "raw_fpv_observations.json").write_text(
+        json.dumps(
+            {
+                "schema": "raw_fpv_public_sweep_observations_v1",
+                "raw_fpv_observations": [
+                    {
+                        "observation_id": "raw_fpv_001",
+                        "waypoint_id": "generated_exploration_001",
+                        "room_id": "generated_area",
+                        "image_artifacts": {"fpv": "robot_views/0001_raw_fpv_001.fpv.png"},
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    label_path = _write_visible_labels(
+        tmp_path / "all_visible_labels.json",
+        frame_id="molmo-raw-fpv-sweep-corpus-other-run/raw_fpv_001",
+        object_id="visible_mug_001",
+        category="mug",
+        category_family="dish",
+        bbox=[0.1, 0.2, 0.2, 0.2],
+    )
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=4,
+    )
+
+    labels = probe.load_probe_labels(
+        (label_path,),
+        frames=frames,
+        contrast_run_dirs=(),
+        default_hidden_target=False,
+    )
+
+    assert len(labels) == 1
+    assert labels[0].frame_id == frames[0].frame_id
+
+
+def test_raw_fpv_probe_builds_visual_labeler_frame_groups(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(
+        tmp_path,
+        observation_ids=(
+            "raw_fpv_001",
+            "raw_fpv_002",
+            "raw_fpv_003",
+            "raw_fpv_004",
+        ),
+    )
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=8,
+    )
+
+    public_inputs = probe.build_public_inputs(frames, semantic_map_prior={}, max_candidates=3)
+    groups = public_inputs["variants"]["raw_fpv_visual_labeler"]["frame_groups"]
+
+    assert public_inputs["visual_labeler_contract"]["skill_id"] == "raw-fpv-visual-labeler"
+    assert groups
+    assert groups[0]["grouping_basis"] in {
+        "source_waypoint_neighborhood",
+        "short_source_waypoint_neighborhood",
+        "source_observation_neighborhood",
+    }
+    assert 3 <= len(groups[0]["frames"]) <= 6
+    group_text = json.dumps(groups, sort_keys=True)
+    assert "private_plate_001" not in group_text
+    assert "observed_" not in group_text
+    assert "anchor_fixture_" not in group_text
+
+
+def test_raw_fpv_visual_labeler_provider_groups_images_and_fans_out_predictions(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(
+        tmp_path,
+        observation_ids=(
+            "raw_fpv_001",
+            "raw_fpv_002",
+            "raw_fpv_003",
+        ),
+    )
+    frames = probe.collect_observation_frames(
+        raw_run_dirs=(run_dir,),
+        contrast_run_dirs=(),
+        max_frames_per_source=8,
+    )
+    public_inputs = probe.build_public_inputs(frames, semantic_map_prior={}, max_candidates=3)
+    calls: list[dict[str, object]] = []
+
+    monkeypatch.setenv("CODEX_API_KEY", "test-key")
+
+    def fake_call_responses_api(**kwargs):
+        calls.append(kwargs)
+        assert len(kwargs["image_paths"]) == 3
+        return {
+            "output_text": json.dumps(
+                {
+                    "schema": "raw_fpv_visual_labeler_response_v1",
+                    "labels": [
+                        {
+                            "evidence_frame_id": frames[0].frame_id,
+                            "category": "mug",
+                            "category_family": "dish",
+                            "coarse_region": "center",
+                            "confidence": 0.8,
+                            "is_cleanup_relevant": True,
+                        },
+                        {
+                            "evidence_frame_id": frames[1].frame_id,
+                            "category": "table",
+                            "category_family": "fixture",
+                            "coarse_region": "center",
+                            "confidence": 0.8,
+                            "is_cleanup_relevant": False,
+                        },
+                    ],
+                }
+            )
+        }
+
+    monkeypatch.setattr(probe, "_call_responses_api", fake_call_responses_api)
+
+    status, errors, predictions = probe.execute_provider_variant(
+        variant_id="raw_fpv_visual_labeler",
+        public_inputs=public_inputs,
+        output_dir=tmp_path / "responses",
+        provider="codex-env",
+        model="test-model",
+        timeout_s=1.0,
+    )
+
+    assert status == "provider_ok"
+    assert errors == []
+    assert len(calls) == 1
+    assert set(predictions) == {frame.frame_id for frame in frames}
+    assert len(predictions[frames[0].frame_id]["labels"]) == 1
+    assert len(predictions[frames[1].frame_id]["labels"]) == 1
+    assert predictions[frames[2].frame_id]["labels"] == []
+
+
+def test_raw_fpv_visual_labeler_scores_split_visible_quality(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    frame_id = "household-cleanup-codex-camera-raw-0606_1537-seed-7/raw_fpv_001"
+    hidden_labels = _write_private_labels(
+        tmp_path / "hidden_labels.json",
+        frame_id=frame_id,
+        object_id="private_plate_001",
+        category="plate",
+        bbox=[0.1, 0.2, 0.2, 0.2],
+    )
+    visible_labels = _write_visible_labels(
+        tmp_path / "visible_labels.json",
+        frame_id=frame_id,
+        object_id="visible_mug_001",
+        category="mug",
+        category_family="dish",
+        bbox=[0.62, 0.5, 0.12, 0.15],
+    )
+    predictions = tmp_path / "predictions.json"
+    predictions.write_text(
+        json.dumps(
+            {
+                "schema": "raw_fpv_probe_predictions_v1",
+                "predictions": [
+                    {
+                        "variant_id": "raw_fpv_visual_labeler",
+                        "frame_id": frame_id,
+                        "response": {
+                            "schema": "raw_fpv_visual_labeler_response_v1",
+                            "labels": [
+                                {
+                                    "evidence_frame_id": frame_id,
+                                    "category": "cup",
+                                    "category_family": "dish",
+                                    "coarse_region": "middle_right",
+                                    "confidence": 0.82,
+                                    "is_cleanup_relevant": True,
+                                    "bbox": [0.62, 0.5, 0.12, 0.15],
+                                    "surface_hint": "table",
+                                },
+                                {
+                                    "evidence_frame_id": frame_id,
+                                    "category": "table",
+                                    "category_family": "fixture",
+                                    "coarse_region": "center",
+                                    "confidence": 0.9,
+                                    "is_cleanup_relevant": False,
+                                    "surface_hint": "table",
+                                    "reason_not_actionable": "fixture surface only",
+                                },
+                            ],
+                        },
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = probe.run_probe(
+        probe.parse_args(
+            [
+                "--raw-run-dir",
+                str(run_dir),
+                "--contrast-run-dir",
+                str(tmp_path / "missing-contrast"),
+                "--private-labels",
+                str(hidden_labels),
+                "--all-visible-labels",
+                str(visible_labels),
+                "--predictions",
+                str(predictions),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--run-id",
+                "visual-labeler",
+                "--prompt-variant",
+                "raw_fpv_visual_labeler",
+            ]
+        )
+    )
+
+    metrics = report["matrix"][0]["metrics"]
+    visible = metrics["visible_movable_label_quality"]
+
+    assert report["status"] == "success"
+    assert report["truth_scope"]["visible_movable_quality_claim"] == "scoreable"
+    assert "visible_movable_label_quality" in metrics
+    assert "hidden_target_recovery" in metrics
+    assert visible["unique_matched_object_count"] == 1
+    assert visible["surface_hint_only_count"] == 1
+    assert visible["fixtures_surfaces_scored_as_hints_only"] is True
+    assert visible["category_match_tiers"]["semantic"] == 1
+
+
+def test_raw_fpv_probe_reports_truth_sparse_when_only_hidden_targets(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    labels = _write_private_labels(
+        tmp_path / "private_labels.json",
+        frame_id="household-cleanup-codex-camera-raw-0606_1537-seed-7/raw_fpv_001",
+        object_id="private_plate_001",
+        category="plate",
+        bbox=[0.1, 0.2, 0.2, 0.2],
+    )
+
+    report = probe.run_probe(
+        probe.parse_args(
+            [
+                "--raw-run-dir",
+                str(run_dir),
+                "--contrast-run-dir",
+                str(tmp_path / "missing-contrast"),
+                "--private-labels",
+                str(labels),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--run-id",
+                "truth-sparse",
+                "--prompt-variant",
+                "baseline_json",
+            ]
+        )
+    )
+
+    metrics = report["matrix"][0]["metrics"]
+
+    assert report["status"] == "partial"
+    assert report["truth_scope"]["scope"] == "hidden_targets_only"
+    assert metrics["visible_movable_label_quality"]["status"] == "truth_sparse"
+
+
+def test_raw_fpv_visual_labeler_recommends_visible_truth_when_sparse(tmp_path: Path) -> None:
+    probe = _load_module()
+    run_dir = _raw_run_dir(tmp_path)
+    labels = _write_private_labels(
+        tmp_path / "private_labels.json",
+        frame_id="household-cleanup-codex-camera-raw-0606_1537-seed-7/raw_fpv_001",
+        object_id="private_plate_001",
+        category="plate",
+        bbox=[0.1, 0.2, 0.2, 0.2],
+    )
+
+    report = probe.run_probe(
+        probe.parse_args(
+            [
+                "--raw-run-dir",
+                str(run_dir),
+                "--contrast-run-dir",
+                str(tmp_path / "missing-contrast"),
+                "--private-labels",
+                str(labels),
+                "--output-dir",
+                str(tmp_path / "out"),
+                "--run-id",
+                "visual-truth-sparse",
+                "--prompt-variant",
+                "raw_fpv_visual_labeler",
+            ]
+        )
+    )
+
+    assert report["route_recommendation"] == "needs_all_visible_movable_truth"
+
+
+def test_raw_fpv_probe_category_match_tiers() -> None:
+    probe = _load_module()
+
+    assert probe.category_match_tier("plate", "plate") == "exact"
+    assert probe.category_match_tier("cup", "mug") == "semantic"
+    assert probe.category_match_tier("dish", "plate") == "coarse_family"
+    assert probe.category_match_tier("book", "remote control") == "mismatch"
 
 
 def test_private_label_generator_reads_only_pre_cleanup_sweep(tmp_path: Path) -> None:
@@ -457,6 +794,27 @@ def test_private_label_generator_normalizes_bbox_and_grid_region() -> None:
     assert labels.coarse_regions_from_bbox(bbox) == ["lower_right"]
 
 
+def test_private_label_generator_cleanup_visible_scope_selects_cleanup_family_objects() -> None:
+    labels = _load_label_module()
+    state = {
+        "selected_object_ids": ["private_plate_001"],
+        "objects": {
+            "private_plate_001": {"category": "Plate"},
+            "visible_book_001": {"category": "Book"},
+            "fixture_bookcase_001": {"category": "Bookcase"},
+            "fixture_table_001": {"category": "DiningTable"},
+        },
+    }
+
+    assert labels.label_object_ids_for_scope(state, label_scope="generated-targets") == [
+        "private_plate_001"
+    ]
+    assert labels.label_object_ids_for_scope(state, label_scope="cleanup-visible-movable") == [
+        "private_plate_001",
+        "visible_book_001",
+    ]
+
+
 def test_raw_fpv_probe_reads_public_sweep_observation_manifest(tmp_path: Path) -> None:
     probe = _load_module()
     run_dir = tmp_path / "raw-fpv-sweep"
@@ -517,6 +875,15 @@ def test_raw_fpv_sweep_corpus_labels_from_private_focus_only() -> None:
     sweep = _load_sweep_module()
 
     class Backend:
+        def _read_state(self) -> dict:
+            return {
+                "selected_object_ids": ["private_plate_001"],
+                "objects": {
+                    "private_plate_001": {"category": "Plate"},
+                    "private_table_001": {"category": "DiningTable"},
+                },
+            }
+
         def write_robot_views_with_resolution(self, *args: object, **kwargs: object) -> dict:
             assert kwargs["focus_object_id"] == "private_plate_001"
             return {
@@ -561,9 +928,27 @@ def test_raw_fpv_sweep_corpus_labels_from_private_focus_only() -> None:
             "surface_hint": "table",
             "label_source": "private_molmospaces_public_sweep_fpv_segmentation",
             "private": True,
+            "hidden_target": True,
             "pixel_bbox": [12, 18, 35, 44],
             "object_pixels": 100,
         }
+    ]
+
+
+def test_raw_fpv_sweep_corpus_all_visible_scope_labels_cleanup_family_objects() -> None:
+    sweep = _load_sweep_module()
+    state = {
+        "selected_object_ids": ["private_plate_001"],
+        "objects": {
+            "private_plate_001": {"category": "Plate"},
+            "visible_mug_001": {"category": "Mug"},
+            "fixture_table_001": {"category": "DiningTable"},
+        },
+    }
+
+    assert sweep.label_object_ids_for_scope(state, label_scope="cleanup-visible-movable") == [
+        "private_plate_001",
+        "visible_mug_001",
     ]
 
 
@@ -635,6 +1020,39 @@ def _write_private_labels(
                         "object_id": object_id,
                         "category": category,
                         "bbox": bbox,
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def _write_visible_labels(
+    path: Path,
+    *,
+    frame_id: str,
+    object_id: str,
+    category: str,
+    category_family: str,
+    bbox: list[float],
+) -> Path:
+    path.write_text(
+        json.dumps(
+            {
+                "schema": "raw_fpv_private_label_manifest_v1",
+                "provenance": {"scorer_only": True, "truth_scope": "all_visible_movable"},
+                "labels": [
+                    {
+                        "frame_id": frame_id,
+                        "source_observation_id": frame_id.rsplit("/", 1)[-1],
+                        "object_id": object_id,
+                        "category": category,
+                        "category_family": category_family,
+                        "bbox": bbox,
+                        "hidden_target": False,
                     }
                 ],
             }

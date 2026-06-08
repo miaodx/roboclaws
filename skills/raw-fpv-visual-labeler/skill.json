@@ -1,0 +1,37 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "raw-fpv-visual-labeler",
+  "summary": "Perception-only clean-context labeling of visible cleanup-relevant movable objects from grouped RAW-FPV frames.",
+  "abstraction_level": "agent_skill",
+  "role": "perception_probe",
+  "status": "experimental",
+  "mcp": {
+    "profiles": ["household_world_v1"],
+    "required_tools": [],
+    "optional_tools": [],
+    "privileged_tools": [],
+    "boundary_notes": "This skill consumes public RAW-FPV artifacts only. It must not receive private labels, hidden target ids, acceptable destination truth, executable observed-object handles, detector candidates, or camera-label producer candidates."
+  },
+  "capability_requirements": {
+    "profiles": ["household_world_v1"],
+    "backend_variants": ["artifact_only"],
+    "notes": "Offline perception probe only; output labels are not live cleanup handles and do not change camera-raw-fpv actionability."
+  },
+  "scripts": [],
+  "evidence_outputs": [
+    "prompt_inputs.json",
+    "private_score.json",
+    "report.json",
+    "report.html"
+  ],
+  "lifecycle": {
+    "refactor_signals": [
+      "the labeler becomes useful across multiple perception corpora",
+      "all-visible movable truth generation becomes a reusable benchmark workflow",
+      "labels are proposed as live cleanup inputs"
+    ],
+    "promote_to_mcp_when": [
+      "only after a separate public contract decision defines an assisted camera evidence lane with stable provenance, privacy, and actionability rules"
+    ]
+  }
+}
