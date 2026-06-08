@@ -466,10 +466,11 @@ MIMO_TP_KEY=...
 KIMI_API_KEY=...
 ```
 
-Codex repo workflows default to the internal multi-model aggregator when
-`XM_LLM_API_KEY` is present (`mify`, `xiaomi/mimo-v2.5`, Responses API, web
-search disabled). `CODEX_BASE_URL` and `CODEX_API_KEY` remain available only
-for explicit non-mify Codex debugging. Claude Code prefers MiMo when
+Codex repo workflows default to `codex-env` and require `CODEX_BASE_URL` plus
+`CODEX_API_KEY` (`gpt-5.5`, Responses API). They do not fall back to mify when
+`XM_LLM_API_KEY` is present. To use mify, set `ROBOCLAWS_CODEX_PROVIDER=mify`
+explicitly; that profile uses `XM_LLM_API_KEY`, `xiaomi/mimo-v2.5`, Responses
+API, and web search disabled. Claude Code prefers MiMo when
 `MIMO_TP_KEY` is present, then Kimi when `KIMI_API_KEY` is present, then mify
 Anthropic when `XM_LLM_API_KEY` is present. Bare system CLIs are outside the
 supported path unless a human explicitly asks for a debugging run. Before a
@@ -638,7 +639,8 @@ just molmo::openclaw-report
 `openclaw-report` keeps the repo work-network guard. `claude-report` is blocked
 on the work network unless the repo-local `.env` contains a supported MiMo,
 Kimi, or mify Anthropic key route. `codex-report` may run on the work network
-with the repo-local mify or codex-env route configured in `.env`. Run
+with the repo-local `codex-env` route configured in `.env`, or with explicit
+`ROBOCLAWS_CODEX_PROVIDER=mify` plus `XM_LLM_API_KEY`. Run
 `just dev::network-status` first if you are unsure which network you are on.
 
 Planner proof-bundle dry run:

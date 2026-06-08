@@ -89,9 +89,10 @@ If that command reports `network: work`, do not run `just openclaw::*`,
 `just chat::run`, `just appliance::run`, or OpenClaw integration/local
 verification gates. Do not run system-provider Claude Code workflows on the
 work network. Claude Code recipes may run there only when the repo-local `.env`
-contains a supported MiMo, Kimi, or mify Anthropic key route. Codex recipes may
-run there when `XM_LLM_API_KEY` configures the default repo-local mify route, or
-when `CODEX_BASE_URL` and `CODEX_API_KEY` configure an explicit non-mify Codex route.
+contains a supported MiMo, Kimi, or mify Anthropic key route. Codex recipes
+default to `codex-env` and may run there when `CODEX_BASE_URL` and
+`CODEX_API_KEY` are configured; mify is available only as an explicit
+`ROBOCLAWS_CODEX_PROVIDER=mify` override with `XM_LLM_API_KEY`.
 Model-only overrides do not bypass the guard. Guarded coding-agent recipes
 should fail before launching when the work-network probe is reachable and no
 allowed repo-local key route is available.
@@ -128,12 +129,13 @@ set -a && source .env && set +a
 #   KIMI_API_KEY         — Kimi (Moonshot) coding-tier key, used by OpenClaw demos
 #   NV_API_KEY           — Nvidia inference endpoints (optional)
 #   MIMO_TP_KEY          — MiMo, default for the interactive chat path
-#   XM_LLM_API_KEY       — internal multi-model aggregator, default Codex route
-#                           and optional Claude mify route
+#   XM_LLM_API_KEY       — internal multi-model aggregator; used by Codex only
+#                           with ROBOCLAWS_CODEX_PROVIDER=mify, and by optional
+#                           Claude mify route
 #   XM_LLM_BASE_URL      — optional override; defaults to https://api.llm.mioffice.cn/v1
 #   XM_LLM_ANTHROPIC_BASE_URL — optional Claude mify override; defaults to
 #                               https://api.llm.mioffice.cn/anthropic
-#   CODEX_BASE_URL / CODEX_API_KEY — optional non-mify Codex endpoint for live agents
+#   CODEX_BASE_URL / CODEX_API_KEY — default codex-env endpoint for live agents
 ```
 
 Sanity check:

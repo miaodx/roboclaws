@@ -11,6 +11,16 @@ from typing import Any
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import ConsoleRoute
 
+LIVE_RUN_MARKERS = (
+    "live_status.json",
+    "run_result.json",
+    "trace.jsonl",
+    "report.html",
+    "runtime_metric_map.json",
+    "tmux_session.txt",
+    "driver.log",
+)
+
 
 @dataclass(frozen=True)
 class ArtifactLink:
@@ -35,30 +45,36 @@ def derive_operator_state(
     """Read a run directory and return the console's normalized live state."""
 
     run_dir = run_dir.resolve()
+    display_run_dir = resolve_display_run_dir(run_dir)
     status = _read_json(run_dir / "operator_state.json")
-    live_status = _read_json(run_dir / "live_status.json")
-    run_result = _read_json(_latest_existing(run_dir, ("run_result.json",)))
-    trace_path = _latest_existing(run_dir, ("trace.jsonl",))
+    live_status = _read_json(_latest_existing(display_run_dir, ("live_status.json",)))
+    run_result = _read_json(_latest_existing(display_run_dir, ("run_result.json",)))
+    trace_path = _latest_existing(display_run_dir, ("trace.jsonl",))
     latest_trace = _last_jsonl(trace_path)
-    checker = _checker_status(run_dir, run_result)
+    checker = _checker_status(display_run_dir, run_result)
     terminal_reason = _terminal_reason(status, live_status, run_result)
     phase = str(
-        status.get("phase")
-        or live_status.get("phase")
+        live_status.get("phase")
+        or status.get("phase")
         or live_status.get("status")
         or run_result.get("status")
         or "idle"
     )
-    artifacts = [link.to_payload(root) for link in _artifact_links(run_dir)]
-    latest_view_assets = _latest_view_assets(root, run_dir)
+    artifacts = [link.to_payload(root) for link in _artifact_links(display_run_dir)]
+    if display_run_dir != run_dir:
+        artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
+    latest_view_assets = _latest_view_assets(root, display_run_dir)
     public_result = _public_run_result_summary(run_result)
 
     return {
         "run_id": str(status.get("run_id") or run_dir.name),
+        "display_run_id": _display_run_id(run_dir, display_run_dir),
         "route": status.get("route") or (route.to_payload() if route else None),
         "run_dir": str(run_dir),
+        "display_run_dir": str(display_run_dir),
         "phase": phase,
         "status": _status_from_phase(phase, checker, terminal_reason),
+        "status_label": _status_label(phase, terminal_reason),
         "backend_lock": status.get("backend_lock") or (route.lock_name if route else ""),
         "pid": status.get("pid"),
         "started_at": status.get("started_at"),
@@ -79,10 +95,42 @@ def derive_operator_state(
     }
 
 
+def resolve_display_run_dir(run_dir: Path) -> Path:
+    """Return the nested live-attempt directory that currently owns evidence."""
+
+    run_dir = run_dir.resolve()
+    candidates = (
+        [run_dir] if any((run_dir / marker).exists() for marker in LIVE_RUN_MARKERS) else []
+    )
+    for marker in LIVE_RUN_MARKERS:
+        try:
+            matches = run_dir.rglob(marker)
+        except OSError:
+            continue
+        for path in matches:
+            if not path.is_file():
+                continue
+            parent = path.parent.resolve()
+            if parent not in candidates:
+                candidates.append(parent)
+    if not candidates:
+        return run_dir
+    return max(candidates, key=_run_dir_activity_mtime)
+
+
 def redacted_artifact_text(path: Path, *, max_bytes: int = 200_000) -> str:
     """Read a raw text artifact and redact secrets before serving it."""
 
-    data = path.read_bytes()[:max_bytes]
+    data = path.read_bytes()
+    if max_bytes > 0 and len(data) > max_bytes:
+        head_bytes = max_bytes // 2
+        tail_bytes = max_bytes - head_bytes
+        omitted = len(data) - max_bytes
+        marker = (
+            f"\n\n[operator console truncated {omitted} raw bytes; "
+            "showing beginning and end of artifact]\n\n"
+        ).encode()
+        data = data[:head_bytes] + marker + data[-tail_bytes:]
     text = data.decode("utf-8", errors="replace")
     return redact_text(text)
 
@@ -144,6 +192,19 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
     return links
 
 
+def _wrapper_artifact_links(run_dir: Path) -> list[ArtifactLink]:
+    specs = (
+        ("Console Launch Log", "console-launch.log", "log"),
+        ("Operator State", "operator_state.json", "json"),
+    )
+    links: list[ArtifactLink] = []
+    for label, name, kind in specs:
+        path = run_dir / name
+        if path.exists():
+            links.append(ArtifactLink(label=label, path=path.resolve(), kind=kind))
+    return links
+
+
 def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
     patterns = {
         "fpv": ("*.fpv*.png", "*.fpv*.jpg", "*fpv*.png", "*fpv*.jpg"),
@@ -186,8 +247,8 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any]) -> dict[str, Any]
 def _terminal_reason(
     status: dict[str, Any], live_status: dict[str, Any], run_result: dict[str, Any]
 ) -> str:
-    for payload in (status, live_status, run_result):
-        for key in ("terminal_reason", "terminate_reason", "error_reason", "status"):
+    for payload in (live_status, status, run_result):
+        for key in ("terminal_reason", "terminate_reason", "error_reason", "reason", "status"):
             value = payload.get(key)
             if value:
                 return str(value)
@@ -196,6 +257,8 @@ def _terminal_reason(
 
 def _status_from_phase(phase: str, checker: dict[str, Any], terminal_reason: str) -> str:
     lower = phase.lower()
+    if _is_rate_limit_reason(terminal_reason):
+        return "rate_limited"
     if lower in {"stopped_by_operator", "human_takeover_stop", "failed", "passed"}:
         return lower
     if checker.get("status") == "passed":
@@ -205,6 +268,17 @@ def _status_from_phase(phase: str, checker: dict[str, Any], terminal_reason: str
     if lower in {"running", "starting", "queued", "paused", "stopping"}:
         return lower
     return "idle"
+
+
+def _status_label(phase: str, terminal_reason: str) -> str:
+    if _is_rate_limit_reason(terminal_reason):
+        return "Provider rate limited"
+    return phase
+
+
+def _is_rate_limit_reason(reason: str) -> bool:
+    normalized = reason.lower()
+    return "rate limit" in normalized or "rate_limited" in normalized or "429" in normalized
 
 
 def _elapsed_seconds(status: dict[str, Any]) -> float | None:
@@ -260,6 +334,32 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "primitive_provenance",
     )
     return {key: run_result[key] for key in allowed if key in run_result}
+
+
+def _display_run_id(wrapper_run_dir: Path, display_run_dir: Path) -> str:
+    if wrapper_run_dir == display_run_dir:
+        return wrapper_run_dir.name
+    try:
+        return str(display_run_dir.relative_to(wrapper_run_dir))
+    except ValueError:
+        return display_run_dir.name
+
+
+def _run_dir_activity_mtime(path: Path) -> float:
+    mtimes: list[float] = []
+    for marker in LIVE_RUN_MARKERS:
+        marker_path = path / marker
+        if marker_path.exists():
+            try:
+                mtimes.append(marker_path.stat().st_mtime)
+            except OSError:
+                pass
+    if mtimes:
+        return max(mtimes)
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:

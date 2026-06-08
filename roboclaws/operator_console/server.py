@@ -36,6 +36,8 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+            return self._static_file(parsed.path)
         if parsed.path == "/api/routes":
             return self._json(
                 {
@@ -55,7 +57,19 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     for key in ("host", "port", "context_json")
                     if query.get(key, [""])[0]
                 }
-                return self._json(route_readiness(self.repo_root, route, overrides=overrides))
+                env_overrides = {
+                    "ROBOCLAWS_CODEX_PROVIDER": str(query.get("codex_provider", [""])[0]),
+                    "ROBOCLAWS_CODEX_MODEL": str(query.get("codex_model", [""])[0]),
+                }
+                env_overrides = {key: value for key, value in env_overrides.items() if value}
+                return self._json(
+                    route_readiness(
+                        self.repo_root,
+                        route,
+                        overrides=overrides,
+                        env_overrides=env_overrides,
+                    )
+                )
             except (ConsoleLaunchError, KeyError, ValueError) as exc:
                 return self._json({"error": str(exc)}, status=400)
         if parsed.path.startswith("/api/runs/"):
@@ -87,6 +101,12 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             return self._file(path)
         return super().do_GET()
 
+    def do_HEAD(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        if parsed.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+            return self._static_file(parsed.path, body=False)
+        return super().do_HEAD()
+
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         try:
@@ -96,6 +116,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     route_id=str(payload.get("route_id") or ""),
                     prompt=str(payload.get("prompt") or ""),
                     overrides=dict(payload.get("overrides") or {}),
+                    env_overrides=dict(payload.get("env_overrides") or {}),
                     gates=dict(payload.get("gates") or {}),
                 )
                 return self._json(start_console_run(self.repo_root, request), status=201)
@@ -153,6 +174,27 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
+
+    def _static_file(self, request_path: str, *, body: bool = True) -> None:
+        name = "index.html" if request_path in {"/", "/index.html"} else request_path.lstrip("/")
+        path = Path(self.directory) / name
+        if not path.exists():
+            return self.send_error(HTTPStatus.NOT_FOUND)
+        data = path.read_bytes()
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        if path.suffix in {".html", ".css", ".js"}:
+            content_type = {
+                ".html": "text/html; charset=utf-8",
+                ".css": "text/css; charset=utf-8",
+                ".js": "application/javascript; charset=utf-8",
+            }[path.suffix]
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Cache-Control", "no-store, max-age=0")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        if body:
+            self.wfile.write(data)
 
 
 def run_server(root: Path, host: str, port: int) -> None:
