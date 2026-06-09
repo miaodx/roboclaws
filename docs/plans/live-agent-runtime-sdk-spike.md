@@ -656,7 +656,10 @@ Approval gate:
 - Anthropic Claude Agent SDK spike for replacing `claude -p` with structured
   SDK calls.
 - Pi SDK RPC prototype with a minimal Roboclaws MCP adapter.
-- Agent-owned checkpoint/handoff MCP tool for explicit continuation.
+- Agent-owned checkpoint/handoff MCP tool for explicit cross-session
+  continuation. The private OpenAI Agents SDK route now has bounded same-run
+  continuation for incomplete SDK turns, but no durable checkpoint/handoff MCP
+  protocol.
 - Operator-console retry UX for provider-transient failures.
 - Public/default route promotion for `openai-agents-live` after maintainer
   review.
@@ -692,6 +695,15 @@ Approval gate:
    keep `openai-agents-live` private/non-default as an experimental supplement
    while retaining Docker-backed Codex and Claude Code CLI routes as product
    baselines.
+7. **Bounded incomplete-turn continuation slice**: completed after the
+   `codex-mify`/`xiaomi/mimo-v2.5` compatibility run ended cleanly from the SDK
+   but stopped before MCP `done`. The private OpenAI Agents SDK runner now has a
+   small extension point for incomplete-turn recovery: when an SDK invocation
+   exits successfully with `agent-turn-complete` and no `run_result.json`, the
+   runner may issue a bounded continuation prompt and invoke the SDK again
+   against the same MCP server state. `done`/`run_result.json` remains the only
+   cleanup success signal; the runner still fails after the configured attempt
+   cap instead of inferring task completion.
 
 ## Execution Log
 

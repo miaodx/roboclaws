@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
@@ -24,6 +25,20 @@ from roboclaws.household.report import runtime_timing_from_trace
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
+DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS = 2
+
+
+DEFAULT_INCOMPLETE_TURN_CONTINUATION_PROMPT = """
+Continuation recovery for the same live household cleanup run:
+
+The previous OpenAI Agents SDK invocation ended without calling `done`, so no
+`run_result.json` was produced. Continue from the current cleanup MCP server
+state. Do not summarize progress as a final answer. First inspect the current
+runtime state through cleanup tools, then continue only missing waypoint,
+visual-grounding, pick/place, or completion steps. Call `done` only after the
+MCP-visible task state satisfies the cleanup instructions. The runner will count
+success only when MCP `done` produces `run_result.json`.
+""".strip()
 
 
 class LiveAgentRunFailure(RuntimeError):
@@ -58,6 +73,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help=(
             "Maximum OpenAI Agents SDK agent turns inside one runner invocation. "
             "This is not runner-side continuation."
+        ),
+    )
+    parser.add_argument(
+        "--incomplete-turn-continuation-attempts",
+        type=int,
+        default=int(
+            os.environ.get(
+                "ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS",
+                str(DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS),
+            )
+        ),
+        help=(
+            "Bounded continuation attempts after a successful SDK turn ends without "
+            "MCP done/run_result.json. The runner still never infers cleanup success."
         ),
     )
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
@@ -202,23 +231,46 @@ class LiveOpenAIAgentsCleanupRunner:
     def _run_sdk_agent(self) -> None:
         self._write_status("running-openai-agents")
         self._mark_timing("openai_agents_start")
-        request = LiveAgentRequest(
-            task_name=self.args.task_name,
-            skill_name="molmo-realworld-cleanup",
-            kickoff_prompt=self.args.kickoff_prompt,
-            mcp_server=LiveAgentMCPServer(name="cleanup", url=self.args.client_url),
-            run_dir=self.run_dir,
-            model=self.args.model,
-            provider_profile=self.args.provider_profile,
-            max_turns=self.args.max_turns,
-            one_turn=True,
-            metadata={
-                "provider_profile": self.args.provider_profile,
-                "max_turns": self.args.max_turns,
-            },
-            artifact_paths={"live_status": self.status_path},
+        recovery_policy = IncompleteTurnRecoveryPolicy(
+            max_attempts=int(
+                getattr(
+                    self.args,
+                    "incomplete_turn_continuation_attempts",
+                    DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
+                )
+            )
         )
-        result = OpenAIAgentsLiveRuntime().run(request)
+        runtime = OpenAIAgentsLiveRuntime()
+        prompt = self.args.kickoff_prompt
+        attempt_index = 0
+        result = None
+        attempts: list[dict[str, Any]] = []
+        while True:
+            if attempt_index:
+                self._write_status("running-openai-agents-continuation")
+            request = self._sdk_request(prompt=prompt, attempt_index=attempt_index)
+            result = runtime.run(request)
+            attempt_summary = _sdk_attempt_summary(result, attempt_index=attempt_index)
+            attempts.append(attempt_summary)
+            self.live_timing["openai_agents_attempts"] = attempts
+            if result.exit_status not in {0, None}:
+                break
+            if (self.run_dir / "run_result.json").is_file():
+                break
+            continuation_prompt = recovery_policy.continuation_prompt(
+                original_prompt=self.args.kickoff_prompt,
+                result=result,
+                run_dir=self.run_dir,
+                attempt_index=attempt_index,
+            )
+            if continuation_prompt is None:
+                break
+            attempt_summary["recovery_action"] = "continue"
+            attempt_summary["recovery_reason"] = recovery_policy.reason
+            attempt_index += 1
+            prompt = continuation_prompt
+
+        assert result is not None
         self._mark_timing("openai_agents_end")
         self.live_timing["openai_agents"] = {
             "phase": result.phase,
@@ -245,8 +297,43 @@ class LiveOpenAIAgentsCleanupRunner:
             )
         if not (self.run_dir / "run_result.json").is_file():
             raise RuntimeError(
-                "OpenAI Agents SDK turn ended without done after one live-agent turn"
+                "OpenAI Agents SDK turn ended without done after "
+                f"{len(attempts)} OpenAI Agents SDK invocation(s)"
             )
+
+    def _sdk_request(self, *, prompt: str, attempt_index: int) -> LiveAgentRequest:
+        artifact_paths = {
+            "live_status": self.status_path,
+            "openai_agents_events": self.run_dir / "openai-agents-events.jsonl",
+            "openai_agents_trace": self.run_dir / "openai-agents-trace.json",
+        }
+        if attempt_index:
+            artifact_paths.update(
+                {
+                    "openai_agents_events": self.run_dir
+                    / f"openai-agents-events.continuation-{attempt_index}.jsonl",
+                    "openai_agents_trace": self.run_dir
+                    / f"openai-agents-trace.continuation-{attempt_index}.json",
+                }
+            )
+        return LiveAgentRequest(
+            task_name=self.args.task_name,
+            skill_name="molmo-realworld-cleanup",
+            kickoff_prompt=prompt,
+            mcp_server=LiveAgentMCPServer(name="cleanup", url=self.args.client_url),
+            run_dir=self.run_dir,
+            model=self.args.model,
+            provider_profile=self.args.provider_profile,
+            max_turns=self.args.max_turns,
+            one_turn=True,
+            metadata={
+                "provider_profile": self.args.provider_profile,
+                "max_turns": self.args.max_turns,
+                "attempt_index": attempt_index,
+                "attempt_role": "continuation" if attempt_index else "initial",
+            },
+            artifact_paths=artifact_paths,
+        )
 
     def _wait_for_server_finish(self) -> None:
         assert self.server_proc is not None
@@ -416,6 +503,58 @@ class LiveOpenAIAgentsCleanupRunner:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
         self.status_path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
+
+
+@dataclass(frozen=True)
+class IncompleteTurnRecoveryPolicy:
+    """Bounded recovery for SDK turns that end cleanly before MCP completion."""
+
+    max_attempts: int
+    reason: str = "incomplete_agent_turn"
+    continuation_suffix: str = DEFAULT_INCOMPLETE_TURN_CONTINUATION_PROMPT
+
+    def continuation_prompt(
+        self,
+        *,
+        original_prompt: str,
+        result: Any,
+        run_dir: Path,
+        attempt_index: int,
+    ) -> str | None:
+        if self.max_attempts <= 0:
+            return None
+        if attempt_index >= self.max_attempts:
+            return None
+        if (run_dir / "run_result.json").is_file():
+            return None
+        if getattr(result, "exit_status", None) not in {0, None}:
+            return None
+        if getattr(result, "phase", "") != "agent-turn-complete":
+            return None
+        return f"{original_prompt.rstrip()}\n\n{self.continuation_suffix}\n"
+
+
+def _sdk_attempt_summary(result: Any, *, attempt_index: int) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "attempt_index": attempt_index,
+        "attempt_role": "continuation" if attempt_index else "initial",
+        "phase": getattr(result, "phase", ""),
+        "exit_status": getattr(result, "exit_status", None),
+        "reason": getattr(result, "reason", ""),
+        "provider_reason": getattr(result, "provider_reason", ""),
+        "run_result_present": bool(getattr(result, "run_result_present", False)),
+        "trace_id": getattr(result, "trace_id", ""),
+        "provider_session_id": getattr(result, "provider_session_id", ""),
+    }
+    started = _float_or_none(getattr(result, "started_at_epoch", None))
+    finished = _float_or_none(getattr(result, "finished_at_epoch", None))
+    if started is not None:
+        payload["started_at_epoch"] = started
+    if finished is not None:
+        payload["finished_at_epoch"] = finished
+    if started is not None and finished is not None:
+        payload["elapsed_s"] = _round_duration(finished - started)
+    return payload
 
 
 def _run_and_tee(
