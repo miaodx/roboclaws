@@ -2690,6 +2690,8 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
             assert trace.get("first_cleanup_before_full_survey") is False, trace
             assert trace.get("loop_style") == "scan_only", trace
             assert trace.get("cleanup_action_count") == 0, trace
+        elif _is_open_ended_intent(data) and int(trace.get("cleanup_action_count") or 0) == 0:
+            assert trace.get("loop_style") == "scan_only", trace
         else:
             assert trace.get("loop_style") in {
                 "survey_first_cleanup_loop",
@@ -2730,6 +2732,12 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     assert "Waypoint Honesty & Cleanup Loop" in report_text, report_text[:500]
     assert "static_map_fixture_coverage" in report_text, report_text[:500]
     assert "post_place_observe" in report_text, report_text[:500]
+
+
+def _is_open_ended_intent(data: dict[str, Any]) -> bool:
+    goal_contract = data.get("goal_contract") if isinstance(data.get("goal_contract"), dict) else {}
+    intent = str(data.get("task_intent") or goal_contract.get("intent") or "").strip()
+    return intent == "open-ended"
 
 
 def _trace_started_cleanup_after_first_actionable_observation(trace: dict[str, Any]) -> bool:
