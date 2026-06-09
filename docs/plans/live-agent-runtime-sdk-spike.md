@@ -717,6 +717,165 @@ Approval gate:
    that setting in timing; `ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST=false` can
    disable it for A/B runs.
 
+### Observability Contract V1
+
+The formal live-agent timing contract should be intent-neutral. Even though the
+first implementation lives in the OpenAI Agents SDK cleanup runner, the stable
+schema name should be `live_agent_timeline_v1`, not a cleanup-specific name such
+as `openai_agents_cleanup_timeline_v1`. The payload should identify the run
+semantics explicitly with fields such as `surface`, `intent`, `task_name`,
+`task_intent_mode`, `runtime`, `provider_profile`, `model`, and
+`evidence_lane`.
+
+The first attribution model has four layers:
+
+- runner wall-clock segments: setup, live-agent runtime, post-agent server wait,
+  checker, and final overhead;
+- runtime/model attribution: provider or SDK time that is not explained by the
+  MCP trace;
+- MCP/backend attribution: trace timing, robot-view capture, tool handler time,
+  between-tool gaps, control-plane counts, and tool-error classifications;
+- task quality: `run_result.json`, checker outcome, restored/failed objects,
+  and intent-specific gate failures.
+
+Single-run artifacts remain authoritative for one execution. Multi-run
+comparison should be produced by a separate summarizer that reads
+`live_timing.json` and related artifacts across run directories instead of
+writing aggregate benchmark state back into a run.
+
+For the next observability slice, add OpenAI Agents SDK span-level evidence
+through SDK hooks or a trace processor and write it to a dedicated artifact such
+as `openai-agents-spans.jsonl`. That follow-up should expose model call timing,
+tool call timing, retries, and SDK orchestration gaps without changing
+`done`/`run_result.json` as the only cleanup success signal. Raw prompts,
+credentials, and private evaluator truth must not be written to these
+observability artifacts; error samples may be retained only when they are useful
+for failure classification and do not contain secrets.
+
+### Execution Preflight: Observability V1
+
+Preflight status: DRAFT
+
+Task source: this plan plus the 2026-06-09 observability grill.
+
+Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`.
+
+Route: durable `intuitive-flow`.
+
+Goal: implement the formal live-agent observability V1 for the OpenAI Agents
+SDK route while keeping the timing schema intent-neutral and extensible beyond
+cleanup.
+
+Scope:
+
+- Rename the emitted timeline schema from `openai_agents_cleanup_timeline_v1`
+  to `live_agent_timeline_v1`.
+- Add run semantic identifiers to timing/timeline artifacts where available:
+  `surface`, `intent`, `task_name`, `task_intent_mode`, `runtime`,
+  `provider_profile`, `model`, and `evidence_lane`.
+- Preserve current OpenAI Agents SDK-specific metrics without making those
+  SDK-specific names the top-level cross-runtime contract.
+- Add OpenAI Agents SDK span-level evidence, likely
+  `openai-agents-spans.jsonl`, through SDK hooks or a trace processor if the
+  SDK APIs expose that data without unsafe logging.
+- Keep MCP/backend attribution, tool-error classification, timeout config,
+  cached-tool-list config, and continuation attempts visible in
+  `live_timing.json`.
+- Update focused tests and any report/summarizer consumers that assert the old
+  cleanup-specific schema name.
+
+Non-goals:
+
+- Do not promote `openai-agents-live` to the public/default route.
+- Do not change MCP cleanup success semantics: `done`/`run_result.json` remains
+  authoritative.
+- Do not add private evaluator truth, credentials, or full sensitive prompts to
+  observability artifacts.
+- Do not require Codex CLI or Claude CLI to emit the full same schema in this
+  slice unless the existing code path makes that low-risk and local.
+- Do not treat repeated `list_tools` as a proven bottleneck without measured
+  evidence; keep it as a measured optimization signal.
+
+Definition of Done / acceptance criteria:
+
+SUCCESS only if:
+
+- `live_timing.json` contains `timeline.schema == "live_agent_timeline_v1"`.
+- The timeline identifies the run semantics rather than encoding cleanup in the
+  schema name.
+- Existing latency attribution remains present and covered by tests.
+- SDK span-level evidence is emitted, or the implementation records a concrete
+  SDK API limitation and still preserves the V1 timeline contract.
+- The required local/live acceptance gate below runs the OpenAI Agents SDK
+  cleanup route on multiple evidence lanes and records the observability
+  artifacts for each run.
+
+PARTIAL if:
+
+- Deterministic tests pass and schema/semantic fields are implemented, but one
+  required live lane is blocked by provider credentials, local visual backend
+  availability, or SDK span API limits; the missing gate and consequence must
+  be recorded.
+
+BLOCKED_NEEDS_DECISION if:
+
+- Adding span hooks requires storing sensitive raw prompts, credentials, or
+  private evaluator truth by default.
+- The SDK tracing API cannot be used without changing provider credentials,
+  external trace export behavior, or the MCP capability contract.
+
+Must not regress:
+
+- bounded incomplete-turn continuation;
+- MCP client-session timeout override;
+- `cache_tools_list` configurability and metrics;
+- private/non-default route boundary;
+- checker/report artifact generation;
+- `done` as the only cleanup success signal.
+
+Verification:
+
+- Required deterministic gate:
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py -q`
+- Required deterministic gate:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`
+- Required deterministic gate:
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py -q`
+- Required lint gate:
+  `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/household/report.py tests/unit/agents/test_live_runtime.py`
+- Required local/live acceptance gate: run `openai-agents-live` cleanup
+  sequentially on different evidence lanes, not as an optional exploratory
+  follow-up. Minimum lanes:
+  - `world-public-labels`:
+    `just molmo::cleanup openai-agents-live world-public-labels 7 output/household/household-cleanup/openai-agents-observability-v1-world-public "帮我收拾这个房间" 5 127.0.0.1 18788`
+  - `camera-grounded-labels` with deterministic projected labels:
+    `just molmo::cleanup openai-agents-live camera-grounded-labels 7 output/household/household-cleanup/openai-agents-observability-v1-camera-grounded "帮我收拾这个房间" 5 127.0.0.1 18788 auto auto auto sim-projected-labels`
+  - `camera-raw-fpv`:
+    `just molmo::cleanup openai-agents-live camera-raw-fpv 7 output/household/household-cleanup/openai-agents-observability-v1-raw-fpv "帮我收拾这个房间" 5 127.0.0.1 18788`
+- For each required live run, inspect `live_timing.json` and confirm the
+  timeline schema, semantic identifiers, lane name, attribution buckets,
+  tool-error metrics, and span artifact availability or recorded limitation.
+  At least one required lane must pass the checker; any lane that fails due to
+  model strategy or local backend behavior must still produce classified
+  observability artifacts instead of failing silently.
+
+Execution surface:
+
+- Main session: root supervisor, owns scope, test/live-run gating, and final
+  complete/partial/blocked judgment.
+- Worker: none required initially.
+- Worker-local goal: none.
+
+Main-session `/goal` prompt:
+
+```text
+/goal execute docs/plans/live-agent-runtime-sdk-spike.md with intuitive-flow
+```
+
+Approval gate: reply `LGTM`, `approve`, or `go ahead` to approve this
+preflight. To start durable execution from the main session, use the exact
+`/goal` prompt above.
+
 ## Execution Log
 
 - 2026-06-09: Implemented the first scaffold slice. Added
