@@ -704,6 +704,18 @@ Approval gate:
    against the same MCP server state. `done`/`run_result.json` remains the only
    cleanup success signal; the runner still fails after the configured attempt
    cap instead of inferring task completion.
+8. **SDK performance observability slice**: completed after the mify comparison
+   showed SDK success but long MCP between-tool gaps, while direct mify Codex
+   failed early. The private OpenAI Agents SDK runner now captures its cleanup
+   MCP server stdout/stderr to `openai-agents-server.log` and summarizes
+   control-plane request counts in `live_timing.json`, including
+   `ListToolsRequest`, `CallToolRequest`, streamable HTTP session count, trace
+   export skips, HTTP statuses, and `list_tools_per_call_tool`. This makes the
+   repeated-list-tools observation measurable before optimizing it. Because the
+   cleanup MCP tool catalog is static within one run, the SDK route now also
+   enables the Agents SDK MCP `cache_tools_list` option by default and records
+   that setting in timing; `ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST=false` can
+   disable it for A/B runs.
 
 ## Execution Log
 

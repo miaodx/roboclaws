@@ -41,7 +41,7 @@ default:
 # Explicit cleanup evidence-lane runner. The recipe parameter remains named
 # `profile` for positional Just compatibility; public callers should pass the
 # new evidence lane names.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -69,6 +69,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     min_generated_mess_count_override="{{min_generated_mess_count_override}}"
     generated_mess_object_ids="{{generated_mess_object_ids}}"
     task_name="{{task_name}}"
+    operator_messages_path="{{operator_messages_path}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -103,6 +104,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_object_ids="${generated_mess_object_ids#generated_mess_object_ids=}"
     task_name="${task_name#task_name=}"
     task_name="${task_name#task-name=}"
+    operator_messages_path="${operator_messages_path#operator_messages_path=}"
+    operator_messages_path="${operator_messages_path#operator-messages-path=}"
     generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))
 
     if [[ "$camera_labeler" == visual_grounding=* ]]; then
@@ -514,6 +517,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         if [[ -n "$isaac_scene_usd_path" ]]; then
           server_args+=(--isaac-scene-usd-path "$isaac_scene_usd_path")
         fi
+        if [[ -n "$operator_messages_path" ]]; then
+          server_args+=(--operator-messages-path "$operator_messages_path")
+        fi
 
         if [[ "$driver" == "codex-live" ]]; then
           if ! command -v tmux >/dev/null 2>&1; then
@@ -736,6 +742,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
           )
+          if [[ "${ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST:-true}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
+            runner_args+=(--no-cache-tools-list)
+          else
+            runner_args+=(--cache-tools-list)
+          fi
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
           done
