@@ -659,6 +659,41 @@ pre,
   overflow-wrap: anywhere;
 }
 
+.camera-angle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.camera-angle-label {
+  color: var(--muted);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.camera-angle-badge {
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.camera-angle-badge.camera-active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tool-json {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
 #run-state {
   display: grid;
   grid-template-columns: max-content 1fr;

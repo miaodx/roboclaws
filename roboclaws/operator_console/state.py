@@ -62,6 +62,7 @@ def derive_operator_state(
     run_result = _read_json(_latest_existing(display_run_dir, ("run_result.json",)))
     trace_path = _latest_existing(display_run_dir, ("trace.jsonl",))
     latest_trace = _last_robot_tool_jsonl(trace_path) or _last_jsonl(trace_path)
+    camera_state = _camera_angle_summary(trace_path)
     phase = str(
         live_status.get("phase")
         or status.get("phase")
@@ -104,6 +105,7 @@ def derive_operator_state(
             latest_trace, run_result, latest_agent_message
         ),
         "latest_tool_call": _tool_call_summary(latest_trace),
+        "camera_state": camera_state,
         "artifact_paths": artifacts,
         "latest_view_assets": latest_view_assets,
         "checker_status": checker,
@@ -210,6 +212,100 @@ def _last_robot_tool_jsonl(path: Path) -> dict[str, Any]:
     return {}
 
 
+def _camera_angle_summary(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return {}
+
+    offset: dict[str, float] = {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}
+    latest_adjust: dict[str, Any] = {}
+    latest_event: str = ""
+    current_waypoint_id = ""
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        tool = str(payload.get("tool") or payload.get("tool_name") or "")
+        event = str(payload.get("event") or "")
+        response = payload.get("response") if isinstance(payload.get("response"), dict) else {}
+        request = payload.get("request") if isinstance(payload.get("request"), dict) else {}
+
+        if event == "response" and tool in {
+            "navigate_to_waypoint",
+            "navigate_to_object",
+            "navigate_to_receptacle",
+        }:
+            if response.get("ok") is True:
+                offset = {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}
+                latest_event = f"{tool}_reset"
+                waypoint_id = response.get("waypoint_id")
+                if waypoint_id:
+                    current_waypoint_id = str(waypoint_id)
+            continue
+
+        if tool != "adjust_camera":
+            continue
+        if event == "request":
+            latest_adjust = {
+                "requested_yaw_delta_deg": _float_or_zero(request.get("yaw_delta_deg")),
+                "requested_pitch_delta_deg": _float_or_zero(request.get("pitch_delta_deg")),
+            }
+            latest_event = "adjust_camera_request"
+            continue
+        if event == "response":
+            camera_offset = response.get("camera_offset")
+            if isinstance(camera_offset, dict):
+                offset = {
+                    "yaw_delta_deg": _float_or_zero(camera_offset.get("yaw_delta_deg")),
+                    "pitch_delta_deg": _float_or_zero(camera_offset.get("pitch_delta_deg")),
+                }
+            else:
+                offset = {
+                    "yaw_delta_deg": _float_or_zero(response.get("yaw_delta_deg")),
+                    "pitch_delta_deg": _float_or_zero(response.get("pitch_delta_deg")),
+                }
+            previous = response.get("previous_camera_offset")
+            latest_adjust.update(
+                {
+                    "ok": response.get("ok"),
+                    "status": response.get("status"),
+                    "previous_camera_offset": previous if isinstance(previous, dict) else {},
+                    "camera_offset": dict(offset),
+                    "waypoint_id": str(response.get("waypoint_id") or current_waypoint_id),
+                }
+            )
+            latest_event = "adjust_camera_response"
+            if latest_adjust["waypoint_id"]:
+                current_waypoint_id = latest_adjust["waypoint_id"]
+
+    if not latest_adjust and offset == {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}:
+        return {}
+    active = bool(offset.get("yaw_delta_deg") or offset.get("pitch_delta_deg"))
+    return {
+        "camera_offset": offset,
+        "active": active,
+        "latest_adjust": latest_adjust,
+        "latest_event": latest_event,
+        "reset_on_navigation": True,
+        "summary": _camera_angle_label(offset, active=active),
+    }
+
+
+def _camera_angle_label(offset: dict[str, float], *, active: bool) -> str:
+    yaw = _float_or_zero(offset.get("yaw_delta_deg"))
+    pitch = _float_or_zero(offset.get("pitch_delta_deg"))
+    status = "active" if active else "neutral"
+    return f"yaw {yaw:g} deg, pitch {pitch:g} deg ({status})"
+
+
 def _is_robot_tool_trace(payload: dict[str, Any]) -> bool:
     tool = str(payload.get("tool") or payload.get("tool_name") or "")
     if not tool or tool == "<runtime>":
@@ -261,6 +357,16 @@ def _numeric_trace_time(trace: dict[str, Any] | None) -> float | None:
         except (TypeError, ValueError):
             continue
     return None
+
+
+def _float_or_zero(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if number == 0:
+        return 0.0
+    return round(number, 3)
 
 
 def _latest_agent_message(run_dir: Path) -> str:
