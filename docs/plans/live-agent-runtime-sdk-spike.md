@@ -1,6 +1,6 @@
 ---
 plan_scope: live-agent-runtime-sdk-spike
-status: DONE
+status: CONTINUE
 source:
   - 2026-06-08 SDK deep research discussion
   - intuitive-reduce-entropy
@@ -13,7 +13,7 @@ last_reviewed: 2026-06-08
 
 ## Status
 
-DONE
+CONTINUE
 
 ## Decision Summary
 
@@ -26,7 +26,9 @@ The recommended direction is:
 1. Keep the current Docker-backed `codex-live` and `claude-live` CLI routes as
    product/coding-agent baselines.
 2. Define a Roboclaws-owned `LiveAgentRuntime` contract at the driver layer.
-3. Add one experimental SDK runtime first: `openai-agents-live`.
+3. Add one experimental SDK runtime first: `openai-agents-live`, and stop only
+   when it can actually run a household cleanup job end-to-end through the
+   existing MCP server/checker/report boundary.
 4. Keep Anthropic Claude Agent SDK as a conditional second spike only if the
    Claude route needs SDK-level session/control improvements.
 5. Park Pi SDK until the goal explicitly becomes an open provider-agnostic
@@ -272,6 +274,47 @@ Stop gates:
 - Stop if provider/session state cannot be represented in normalized
   `LiveAgentResult` and `live_status.json`.
 
+### Model And Interface Target
+
+The first OpenAI Agents SDK cleanup route should use the SDK's Responses model
+path, not Chat Completions, because the current repo's Codex-compatible
+profiles already classify `codex-env` and `mify` as `wire_api=responses`.
+
+Development default and target order:
+
+1. Default development and first live cleanup proof target: `codex-env` with
+   `CODEX_BASE_URL` + `CODEX_API_KEY`, model `gpt-5.5`, via
+   `OpenAIResponsesModel`.
+2. Secondary compatibility target after the default route works:
+   `codex-mify` with `XM_LLM_BASE_URL` + `XM_LLM_API_KEY`, model
+   `xiaomi/mimo-v2.5`, via `OpenAIResponsesModel`.
+
+All OpenAI SDK cleanup runner development, route wiring, artifact parity work,
+and first credentialed proof commands should default to `codex-env` unless the
+user explicitly requests a `codex-mify` compatibility pass or `codex-env`
+credentials are unavailable.
+
+Current probe evidence from 2026-06-09:
+
+- `codex-env` direct Responses API probe succeeded with model `gpt-5.5`.
+- `codex-mify` direct Responses API probe succeeded with model
+  `xiaomi/mimo-v2.5`; the response included both `reasoning` and `message`
+  output items, so artifact parsing must not rely only on a single flat text
+  field.
+- `codex-env` OpenAI Agents SDK `OpenAIResponsesModel` probe succeeded and
+  returned `roboclaws-ok`.
+- `codex-mify` OpenAI Agents SDK `OpenAIResponsesModel` probe succeeded and
+  returned `roboclaws-ok`.
+
+Out of scope for the first OpenAI SDK cleanup proof:
+
+- Claude Anthropic routes (`kimi-anthropic`, `mimo-anthropic`,
+  `mify-anthropic`) are not first-slice OpenAI SDK targets even though those
+  models may expose Chat Completions-compatible endpoints elsewhere. Using them
+  through OpenAI Agents SDK would require an explicit non-Responses model
+  adapter decision, such as Chat Completions or LiteLLM/Any-LLM provider
+  wiring.
+
 ### Skeptic Result
 
 Risks:
@@ -335,11 +378,20 @@ Add an experimental `openai-agents-live` runtime behind the new contract.
 
 Required behavior:
 
-- Connect to the existing Roboclaws MCP server when possible.
+- Add the OpenAI Agents SDK dependency as a committed optional extra, tentatively
+  named `openai-agents`, so the experimental SDK path is reproducible through
+  `uv sync --extra dev --extra openai-agents` instead of relying on one-off
+  `uv pip install`.
+- Start and connect to the existing Roboclaws cleanup MCP server without
+  changing MCP tool semantics.
 - Run the same household cleanup skill prompt through the SDK runtime.
 - Emit SDK event/tracing/session artifacts into the run directory.
 - Write the same normalized `live_status.json` and compatible timing/result
   artifacts expected by operator-console and checker paths.
+- Provide a runnable repo script and, if useful for traceability, a hidden or
+  private `just` route that invokes the SDK runner for `household-cleanup` with
+  normal run-dir/status artifacts.
+- Run the existing cleanup checker after `done` writes `run_result.json`.
 - Preserve one-turn/no-runner-continuation behavior unless a later explicit
   handoff protocol is accepted.
 
@@ -348,10 +400,34 @@ Non-requirements:
 - It does not need to outperform Codex CLI in the first spike.
 - It does not need to support Claude or Pi.
 - It does not need to be exposed as the default public driver.
+- It does not need to be promoted to a public `just task::run` driver until a
+  maintainer accepts the experimental route.
 
-### Phase 3: Compare And Decide
+### Phase 3: Runnable Cleanup Proof
 
-After mock/contract tests pass, optionally run one local provider proof.
+After mock/contract tests pass, run one local OpenAI SDK cleanup proof unless
+the only remaining blocker is missing credentials or another explicit
+external-input gate.
+
+Minimum runnable proof:
+
+- Command syncs the committed optional OpenAI Agents SDK dependency path.
+- Command starts the existing household cleanup MCP server.
+- OpenAI SDK runtime connects over MCP and can call cleanup tools.
+- A cleanup run reaches `done`, producing `run_result.json`.
+- Existing checker runs against that result.
+- The run directory contains `live_status.json`, SDK event/trace artifacts,
+  checker output, and `report.html`.
+
+If live provider credentials are unavailable, stop with
+`BLOCKED_NEEDS_DECISION` only after the dependency, runner, route, artifact, and
+mock/contract test slices are complete and the next missing evidence is the
+credentialed provider run.
+
+### Phase 4: Compare And Decide
+
+After a runnable SDK cleanup proof exists, compare it with the Codex CLI
+baseline.
 
 Decision criteria:
 
@@ -395,7 +471,7 @@ Why not first:
 
 ## Preflight Contract
 
-Preflight status: IMPLEMENTED
+Preflight status: CONTINUE
 
 Task source:
 
@@ -413,8 +489,9 @@ Route:
 Goal:
 
 - Add a Roboclaws-owned live-agent runtime contract and a first experimental
-  OpenAI Agents SDK driver spike without changing existing Codex/Claude live
-  route behavior.
+  OpenAI Agents SDK cleanup runner that can actually use the OpenAI SDK path to
+  run the household cleanup job through the existing MCP/checker/report
+  boundary, without changing existing Codex/Claude live route behavior.
 
 Scope:
 
@@ -424,6 +501,10 @@ Scope:
   representable by the contract.
 - Add the experimental OpenAI Agents SDK driver only after the contract is
   testable.
+- Add dependency handling for OpenAI Agents SDK.
+- Add a runnable OpenAI SDK cleanup runner/route that starts the existing MCP
+  server, invokes the SDK runtime, waits for `done`, runs the checker, and
+  writes normal live artifacts.
 - Keep the experimental driver private or clearly non-default unless the user
   approves a public route.
 - Document any SDK dependency/extra decision in this plan before changing
@@ -436,7 +517,8 @@ Non-goals:
 - No Pi SDK implementation or MCP adapter in the first slice.
 - No changes to MCP tool semantics or cleanup skill strategy.
 - No runner-side cleanup continuation or task-completion inference.
-- No paid/live-provider validation unless separately approved.
+- No public/default route promotion unless separately approved.
+- No Codex/Claude baseline replacement.
 
 Context package:
 
@@ -476,23 +558,31 @@ SUCCESS only if:
   unchanged unless explicitly approved.
 - Normalized status fields remain compatible with existing `live_status.json`
   consumers.
-- The OpenAI experimental driver is either implemented behind a non-default
-  private/experimental route or explicitly left as the next gated slice with a
-  concrete reason.
-- Tests cover the contract and the preserved failure/status semantics.
+- The OpenAI Agents SDK dependency path is available through committed metadata
+  or a documented local experimental install command.
+- The OpenAI experimental driver is implemented behind a non-default
+  private/experimental route or command.
+- The OpenAI SDK route can run the household cleanup job through the existing
+  MCP server and produces normal live artifacts.
+- `done` remains the only cleanup completion signal, and the existing checker
+  runs on the resulting `run_result.json`.
+- Tests cover the contract, the preserved failure/status semantics, the route
+  wiring, and the SDK runner's artifact/checker behavior.
 - Dependency and route exposure decisions are recorded.
+- One local credentialed OpenAI SDK cleanup proof has passed, or every
+  agent-owned prerequisite for that proof is complete and the plan is explicitly
+  blocked on missing provider credentials.
 
 PARTIAL if:
 
-- The runtime contract lands and tests pass, but the OpenAI SDK driver remains
-  blocked by dependency, MCP transport, or provider validation decisions.
+- The runtime contract lands and tests pass, but the OpenAI SDK path cannot yet
+  run a cleanup job through MCP/checker/report.
 
 BLOCKED_NEEDS_DECISION if:
 
-- Adding the OpenAI Agents SDK dependency requires choosing between a normal
-  dependency and optional extra.
 - Exposing `openai-agents-live` publicly is required for verification.
-- Live provider validation is required to prove the claim.
+- Default `codex-env` credentials are unavailable after dependency, runner,
+  route, artifact, and mock/contract slices are complete.
 - The SDK cannot connect to the existing MCP server without changing the MCP
   capability contract.
 
@@ -508,14 +598,16 @@ Must not regress:
 
 Verification:
 
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_state.py`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`
 - `ruff check` on touched Python files.
-- `ROBOCLAWS_JUST_TRACE=1 just task::run household-cleanup codex smoke`
-  if routing metadata changes.
-- No live OpenAI/Codex/Claude provider run is required unless separately
-  approved.
+- Route trace/dry-run command for the private OpenAI SDK cleanup route.
+- Mocked runner test proving the OpenAI SDK route writes normalized status,
+  waits for `run_result.json`, and invokes the checker.
+- Local credentialed OpenAI SDK cleanup smoke command, unless blocked only by
+  missing provider credentials after all agent-owned prerequisites are done.
 
 Execution surface:
 
@@ -549,8 +641,33 @@ Approval gate:
 - Pi SDK RPC prototype with a minimal Roboclaws MCP adapter.
 - Agent-owned checkpoint/handoff MCP tool for explicit continuation.
 - Operator-console retry UX for provider-transient failures.
-- Live provider proof comparing Codex CLI baseline against OpenAI Agents SDK
-  artifact and failure surfaces.
+- Public/default route promotion for `openai-agents-live` after maintainer
+  review.
+
+## Remaining Required Slices
+
+These are required before this plan can return to `DONE`:
+
+1. **Dependency slice**: add or document the OpenAI Agents SDK dependency path
+   for this repo as a committed optional extra, tentatively named
+   `openai-agents`. Use `OpenAIResponsesModel` first. Default development to
+   `codex-env`/`gpt-5.5`; keep
+   `codex-mify`/`xiaomi/mimo-v2.5` as a secondary compatibility proof target,
+   not as a blocker for the first cleanup proof unless `codex-env` credentials
+   are unavailable.
+2. **Runner slice**: add a real OpenAI SDK cleanup runner that starts the
+   existing cleanup MCP server, invokes `OpenAIAgentsLiveRuntime`, waits for
+   `done`/`run_result.json`, runs the checker, and writes normal live artifacts.
+3. **Route slice**: wire a private/hidden repo command or `just` route to the
+   runner without changing existing `codex` or `claude` public routes.
+4. **Artifact parity slice**: ensure SDK events/traces/status/timing/checker
+   output are visible to existing operator-console and diagnostic consumers.
+5. **Live proof slice**: run one local credentialed OpenAI SDK cleanup smoke
+   through the default `codex-env` target, or stop as
+   `BLOCKED_NEEDS_DECISION` only if missing provider credentials are the sole
+   remaining blocker after slices 1-4 are complete.
+6. **Comparison slice**: compare SDK artifacts/failure behavior against the
+   Codex CLI baseline and record the decision here.
 
 ## Execution Log
 
@@ -579,3 +696,28 @@ Approval gate:
   contract; README/public command docs remain unchanged because no public route
   changed. No live OpenAI/Codex/Claude provider run was performed, per
   preflight.
+- 2026-06-09: Reopened/refactored this plan from scaffold completion to
+  operational completion. The stop condition is now: Roboclaws can actually use
+  the OpenAI Agents SDK path to run a household cleanup job through the existing
+  MCP/checker/report boundary, or the only remaining blocker is explicitly
+  external provider credentials after dependency, runner, route, artifact, and
+  mock/contract slices are complete.
+- 2026-06-09: Ran one-off local SDK model probes after installing
+  `openai-agents==0.17.4` into this checkout's `.venv` with `uv pip install`
+  (no committed dependency metadata change). Direct Responses API probes passed
+  for `codex-env` model `gpt-5.5` and `codex-mify` model `xiaomi/mimo-v2.5`.
+  OpenAI Agents SDK `OpenAIResponsesModel` probes also passed for both targets.
+  This establishes Responses as the first cleanup-runner interface target; Chat
+  Completions remains a fallback/expansion path for non-Responses providers.
+- 2026-06-09: Set `codex-env`/`gpt-5.5` as the default development and first
+  live cleanup proof target for this plan. `codex-mify`/`xiaomi/mimo-v2.5`
+  remains a secondary Responses compatibility target after the default route
+  works, not a blocker for the first cleanup proof unless `codex-env`
+  credentials are unavailable.
+- 2026-06-09: Ran a grill-with-docs-batch saturation check. No additional
+  user-facing decision questions are needed before implementation: the plan
+  already protects the public route boundary, MCP contract, private-data
+  boundary, cleanup `done` gate, and credential blocker semantics. Remaining
+  choices are implementation defaults recorded here: use a committed optional
+  `openai-agents` extra, keep the first SDK runner private/non-default, and use
+  `codex-env` for default development and first live proof.
