@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+
+from roboclaws.operator_console.history import latest_run_payload
+from roboclaws.operator_console.paths import console_output_root
+from roboclaws.operator_console.routes import get_route
+
+
+def test_latest_run_payload_uses_history_index_and_nested_attempt_artifacts(
+    tmp_path: Path,
+) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "20260609-102534-codex-mujoco-cleanup"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0609_1025" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "failed", "exit_status": 1}),
+        encoding="utf-8",
+    )
+    report = attempt_dir / "report.html"
+    report.write_text("<html>report</html>", encoding="utf-8")
+    os.utime(report, (20, 20))
+    history = console_output_root(tmp_path) / "runs.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    history.write_text(
+        json.dumps(
+            {
+                "schema": "operator_console_run_history_v1",
+                "run_id": run_id,
+                "route_id": route.id,
+                "route_label": route.label,
+                "run_dir": str(run_dir),
+                "started_at_epoch": 10,
+                "started_at": "2026-06-09T02:25:34Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    payload = latest_run_payload(tmp_path)
+
+    assert payload["run_id"] == run_id
+    assert payload["route_id"] == route.id
+    assert payload["route_label"] == route.label
+    assert payload["display_run_id"] == "0609_1025/seed-7"
+    assert payload["display_run_dir"] == str(attempt_dir.resolve())
+    assert payload["phase"] == "failed"
+
+
+def test_latest_run_payload_falls_back_to_scanning_runs_directory(tmp_path: Path) -> None:
+    run_dir = console_output_root(tmp_path) / "runs" / "manual-run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "trace.jsonl").write_text("{}\n", encoding="utf-8")
+
+    payload = latest_run_payload(tmp_path)
+
+    assert payload["run_id"] == "manual-run"
+    assert payload["run_dir"] == str(run_dir.resolve())

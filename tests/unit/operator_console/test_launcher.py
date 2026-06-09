@@ -150,6 +150,17 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert state["env_overrides"] == {
         "ROBOCLAWS_CODEX_PROVIDER": "mify",
     }
+    history_path = console_output_root(tmp_path) / "runs.jsonl"
+    history_rows = [
+        json.loads(line)
+        for line in history_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert history_rows[-1]["run_id"] == state["run_id"]
+    assert history_rows[-1]["route_id"] == route.id
+    assert history_rows[-1]["run_dir"] == str(
+        console_output_root(tmp_path) / "runs" / state["run_id"]
+    )
     lock = ResourceLock(tmp_path, route.lock_name).read()
     assert lock.pid == 12345
     state_path = console_output_root(tmp_path) / "runs" / state["run_id"] / "operator_state.json"
@@ -178,7 +189,7 @@ def test_readiness_exposes_attachable_run_for_held_backend_lock(tmp_path: Path) 
     )
     ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=pid)
 
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
 
     assert readiness["can_start"] is False
     assert readiness["blocker_kind"] == "locked"
@@ -225,7 +236,7 @@ def test_readiness_keeps_stale_wrapper_lock_attachable_when_child_live_run_is_ac
     lock = ResourceLock(tmp_path, route.lock_name)
     lock.acquire(run_id=run_id, pid=99999999)
 
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
 
     assert readiness["can_start"] is False
     assert readiness["blocker_kind"] == "locked"
@@ -268,7 +279,7 @@ def test_readiness_releases_terminal_failed_lock_instead_of_attaching_dead_run(
     )
     ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=123450)
 
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
 
     assert readiness["can_start"] is True
     assert readiness["blocker_kind"] == ""

@@ -53,6 +53,7 @@ const els = {
   routeStatus: document.getElementById("route-status"),
   lockStatus: document.getElementById("lock-status"),
   elapsedStatus: document.getElementById("elapsed-status"),
+  latestResultButton: document.getElementById("latest-result-button"),
   pauseButton: document.getElementById("pause-button"),
   stopButton: document.getElementById("stop-button"),
   emergencyButton: document.getElementById("emergency-button"),
@@ -111,6 +112,7 @@ function bindEvents() {
     input.addEventListener("change", refreshSelectedRouteReadiness);
   });
   els.startButton.addEventListener("click", handleStartAction);
+  els.latestResultButton.addEventListener("click", attachLatestResult);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
     confirmAction({
@@ -605,6 +607,27 @@ function handleStartAction() {
 function attachExistingRun(run) {
   state.activeRunId = run.run_id;
   state.activeRouteId = run.route_id || state.selectedRoute.id;
+  renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
+  startPolling();
+}
+
+async function attachLatestResult() {
+  const result = await fetchJson("/api/runs/latest");
+  if (result.error) {
+    els.eventList.textContent = result.error;
+    return;
+  }
+  const route = state.routes.find((item) => item.id === result.route_id);
+  if (route) {
+    state.selectedRoute = route;
+    renderRoutes();
+    renderSelection();
+  }
+  state.activeRunId = result.run_id;
+  state.activeRouteId = result.route_id || (route ? route.id : state.selectedRoute.id);
+  els.eventList.textContent = `Attached latest result ${result.run_id}${
+    result.display_run_id ? ` / ${result.display_run_id}` : ""
+  }.`;
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   startPolling();
 }

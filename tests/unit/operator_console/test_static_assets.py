@@ -54,6 +54,10 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "PORT IN USE" in app
     assert "ATTACH" in app
     assert "Attach Existing Run" in app
+    assert "Latest Result" in html
+    assert "latest-result-button" in app
+    assert "attachLatestResult" in app
+    assert "/api/runs/latest" in app
     assert "attachExistingRun" in app
     assert "attachable_run" in app
     assert "renderStartAction" in app
