@@ -103,6 +103,7 @@ def _run_openai_agents(request: LiveAgentRequest, *, events_path: Path) -> Any:
     server = MCPServerStreamableHttp(
         name=request.mcp_server.name,
         params={"url": request.mcp_server.url},
+        cache_tools_list=_cache_tools_list(request),
     )
     agent_kwargs: dict[str, Any] = {
         "name": f"roboclaws-{request.task_name}",
@@ -151,6 +152,19 @@ def _max_turns(request: LiveAgentRequest) -> int:
     except (TypeError, ValueError):
         return DEFAULT_OPENAI_AGENTS_MAX_TURNS
     return max(1, value)
+
+
+def _cache_tools_list(request: LiveAgentRequest) -> bool:
+    configured = None
+    if isinstance(request.metadata, dict):
+        configured = request.metadata.get("cache_tools_list")
+    if configured is None:
+        configured = os.environ.get("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST")
+    if configured is None:
+        return True
+    if isinstance(configured, bool):
+        return configured
+    return str(configured).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:

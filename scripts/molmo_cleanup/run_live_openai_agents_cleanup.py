@@ -7,6 +7,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -89,6 +90,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "MCP done/run_result.json. The runner still never infers cleanup success."
         ),
     )
+    parser.add_argument(
+        "--cache-tools-list",
+        action=argparse.BooleanOptionalAction,
+        default=_env_bool("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", default=True),
+        help=(
+            "Ask the OpenAI Agents SDK MCP client to cache the cleanup tool list. "
+            "The cleanup MCP tool catalog is static within one live run."
+        ),
+    )
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
@@ -100,6 +110,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--server-arg", action="append", default=[])
     parser.add_argument("--checker-visual-arg", action="append", default=[])
     return parser.parse_args(argv)
+
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -114,6 +131,9 @@ class LiveOpenAIAgentsCleanupRunner:
         self.timing_path = self.run_dir / "live_timing.json"
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
+        self.server_log_path = self.run_dir / "openai-agents-server.log"
+        self.server_log_file: BinaryIO | None = None
+        self.server_log_thread: threading.Thread | None = None
         self.lock_file = None
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
@@ -124,6 +144,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "runtime": "openai-agents-live",
             "provider_profile": getattr(args, "provider_profile", ""),
             "model": getattr(args, "model", ""),
+            "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
         }
 
     def run(self) -> int:
@@ -209,7 +230,14 @@ class LiveOpenAIAgentsCleanupRunner:
         env = os.environ.copy()
         if env.get(REPORT_RERUN_COMMAND_ENV):
             command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
-        self.server_proc = subprocess.Popen(command, cwd=self.args.repo_root, env=env)
+        self.server_proc = subprocess.Popen(
+            command,
+            cwd=self.args.repo_root,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        self._start_server_log_tee()
         (self.run_dir / "server.pid").write_text(f"{self.server_proc.pid}\n", encoding="utf-8")
 
     def _wait_for_mcp_ready(self) -> None:
@@ -331,6 +359,7 @@ class LiveOpenAIAgentsCleanupRunner:
                 "max_turns": self.args.max_turns,
                 "attempt_index": attempt_index,
                 "attempt_role": "continuation" if attempt_index else "initial",
+                "cache_tools_list": bool(getattr(self.args, "cache_tools_list", True)),
             },
             artifact_paths=artifact_paths,
         )
@@ -342,6 +371,7 @@ class LiveOpenAIAgentsCleanupRunner:
         self._mark_timing("server_wait_start")
         status = self.server_proc.wait()
         self._mark_timing("server_finished")
+        self._finish_server_log_tee()
         self.server_proc = None
         if status != 0:
             raise RuntimeError(f"cleanup MCP server exited with status {status}")
@@ -461,11 +491,15 @@ class LiveOpenAIAgentsCleanupRunner:
             payload["detail"] = detail
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
         payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+        payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc
-        if proc is None or proc.poll() is not None:
+        if proc is None:
+            return
+        if proc.poll() is not None:
+            self._finish_server_log_tee()
             return
         proc.terminate()
         try:
@@ -473,6 +507,33 @@ class LiveOpenAIAgentsCleanupRunner:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
+        self._finish_server_log_tee()
+
+    def _start_server_log_tee(self) -> None:
+        proc = self.server_proc
+        if proc is None:
+            return
+        stream = getattr(proc, "stdout", None)
+        if stream is None:
+            return
+        self.server_log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.server_log_file = self.server_log_path.open("ab")
+        self.server_log_thread = threading.Thread(
+            target=_tee_stream,
+            args=(stream, [self.server_log_file, sys.stdout.buffer]),
+            daemon=True,
+        )
+        self.server_log_thread.start()
+
+    def _finish_server_log_tee(self) -> None:
+        thread = self.server_log_thread
+        if thread is not None:
+            thread.join(timeout=5)
+            self.server_log_thread = None
+        log_file = self.server_log_file
+        if log_file is not None:
+            log_file.close()
+            self.server_log_file = None
 
     def _write_status(
         self,
@@ -664,6 +725,64 @@ def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
         if isinstance(timing, dict):
             return timing
     return runtime_timing_from_trace(_read_jsonl_path(run_dir / "trace.jsonl"))
+
+
+def _mcp_control_plane_metrics(run_dir: Path) -> dict[str, Any]:
+    log_path = run_dir / "openai-agents-server.log"
+    if not log_path.is_file():
+        return {
+            "available": False,
+            "reason": "openai-agents-server.log not present",
+        }
+
+    request_counts: dict[str, int] = {}
+    http_status_counts: dict[str, int] = {}
+    session_create_count = 0
+    session_termination_count = 0
+    trace_export_skip_count = 0
+    line_count = 0
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line_count += 1
+        request_match = re.search(r"Processing request of type ([A-Za-z0-9_]+)", line)
+        if request_match:
+            request_type = request_match.group(1)
+            request_counts[request_type] = request_counts.get(request_type, 0) + 1
+        status_match = re.search(r'HTTP/[^"]+"\s+([0-9]{3})\s+([A-Za-z][A-Za-z ]*)$', line)
+        if status_match:
+            status_key = f"{status_match.group(1)} {status_match.group(2).strip()}"
+            http_status_counts[status_key] = http_status_counts.get(status_key, 0) + 1
+        if "Created new transport with session ID:" in line:
+            session_create_count += 1
+        if "Terminating session:" in line:
+            session_termination_count += 1
+        if "OPENAI_API_KEY is not set, skipping trace export" in line:
+            trace_export_skip_count += 1
+
+    call_tool_count = request_counts.get("CallToolRequest", 0)
+    list_tools_count = request_counts.get("ListToolsRequest", 0)
+    total_requests = sum(request_counts.values())
+    control_request_count = total_requests - call_tool_count
+    return {
+        "available": True,
+        "log": log_path.name,
+        "line_count": line_count,
+        "request_type_counts": dict(sorted(request_counts.items())),
+        "total_mcp_request_count": total_requests,
+        "call_tool_request_count": call_tool_count,
+        "list_tools_request_count": list_tools_count,
+        "control_request_count": control_request_count,
+        "list_tools_per_call_tool": (
+            _round_duration(list_tools_count / call_tool_count) if call_tool_count else None
+        ),
+        "streamable_http_session_count": session_create_count,
+        "session_termination_count": session_termination_count,
+        "trace_export_skip_count": trace_export_skip_count,
+        "http_status_counts": dict(sorted(http_status_counts.items())),
+        "optimization_note": (
+            "Control-plane counts are parsed from the MCP server log. Per-request "
+            "control-plane latency is not exposed by the server log yet."
+        ),
+    }
 
 
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
