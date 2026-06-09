@@ -1,0 +1,125 @@
+from __future__ import annotations
+
+import os
+
+import pytest
+
+from roboclaws.household.visual_backend_slots import (
+    VisualBackendSlotError,
+    acquire_visual_backend_slot,
+    list_visual_backend_slots,
+)
+
+
+def test_default_visual_backend_slot_limit_is_one(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS", raising=False)
+
+    first = acquire_visual_backend_slot(
+        repo_root=tmp_path,
+        run_id="run-a",
+        pid=os.getpid(),
+        backend="molmospaces_subprocess",
+        port=18788,
+        output_dir=tmp_path / "run-a",
+        status_path=tmp_path / "run-a" / "live_status.json",
+        owner="test",
+    )
+    with pytest.raises(VisualBackendSlotError) as exc_info:
+        acquire_visual_backend_slot(
+            repo_root=tmp_path,
+            run_id="run-b",
+            pid=os.getpid(),
+            backend="molmospaces_subprocess",
+            port=18790,
+            output_dir=tmp_path / "run-b",
+            status_path=tmp_path / "run-b" / "live_status.json",
+            owner="test",
+        )
+
+    assert "all 1 MolmoSpaces visual backend slot(s) are held" in str(exc_info.value)
+    assert exc_info.value.active_slots[0]["run_id"] == "run-a"
+    first.release()
+
+
+def test_explicit_two_slot_limit_allows_two_and_blocks_third(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS", "2")
+
+    first = acquire_visual_backend_slot(
+        repo_root=tmp_path,
+        run_id="run-a",
+        pid=os.getpid(),
+        backend="molmospaces_subprocess",
+        port=18788,
+        output_dir=tmp_path / "run-a",
+        status_path=tmp_path / "run-a" / "live_status.json",
+        owner="test",
+    )
+    second = acquire_visual_backend_slot(
+        repo_root=tmp_path,
+        run_id="run-b",
+        pid=os.getpid(),
+        backend="molmospaces_subprocess",
+        port=18790,
+        output_dir=tmp_path / "run-b",
+        status_path=tmp_path / "run-b" / "live_status.json",
+        owner="test",
+    )
+
+    with pytest.raises(VisualBackendSlotError) as exc_info:
+        acquire_visual_backend_slot(
+            repo_root=tmp_path,
+            run_id="run-c",
+            pid=os.getpid(),
+            backend="molmospaces_subprocess",
+            port=18792,
+            output_dir=tmp_path / "run-c",
+            status_path=tmp_path / "run-c" / "live_status.json",
+            owner="test",
+        )
+
+    assert {slot["run_id"] for slot in exc_info.value.active_slots} == {"run-a", "run-b"}
+    assert first.state.slot_id == 1
+    assert second.state.slot_id == 2
+    first.release()
+    second.release()
+
+
+def test_stale_visual_backend_slot_is_released_only_when_pid_is_gone(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS", "1")
+    stale_pid = 999_999_999
+    stale = acquire_visual_backend_slot(
+        repo_root=tmp_path,
+        run_id="stale-run",
+        pid=stale_pid,
+        backend="molmospaces_subprocess",
+        port=18788,
+        output_dir=tmp_path / "stale-run",
+        status_path=tmp_path / "stale-run" / "live_status.json",
+        owner="test",
+    )
+    assert stale.state.path.exists()
+
+    replacement = acquire_visual_backend_slot(
+        repo_root=tmp_path,
+        run_id="fresh-run",
+        pid=os.getpid(),
+        backend="molmospaces_subprocess",
+        port=18790,
+        output_dir=tmp_path / "fresh-run",
+        status_path=tmp_path / "fresh-run" / "live_status.json",
+        owner="test",
+    )
+
+    states = list_visual_backend_slots(repo_root=tmp_path)
+    assert states[0].run_id == "fresh-run"
+    assert replacement.state.slot_id == stale.state.slot_id
+    replacement.release()

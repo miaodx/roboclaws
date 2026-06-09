@@ -11,6 +11,7 @@ import socket
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
@@ -51,6 +52,7 @@ VISUAL_GROUNDING_INFRA_FAILURE_REASONS = {
 DINO_VISUAL_GROUNDING_PIPELINE_ID = "grounding-dino"
 DINO_SIDECAR_LOCK_PATH = Path("output/molmo/.visual-grounding-dino.lock")
 DINO_SIDECAR_LOG_NAME = "visual-grounding-dino-sidecar.log"
+DEFAULT_CLEANUP_MCP_PORT = 18788
 DINO_SIDECAR_PROBE_IMAGE_BASE64 = (
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mP8z8AARQAFAAH/"
     "e+m+7wAAAABJRU5ErkJggg=="
@@ -79,6 +81,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--map-bundle", default=DEFAULT_MAP_BUNDLE)
     parser.add_argument("--runtime-map-prior", default="")
     parser.add_argument("--visual-grounding-timeout-s", default="auto")
+    parser.add_argument("--parallelism", type=int, default=1)
+    parser.add_argument("--base-port", type=int, default=DEFAULT_CLEANUP_MCP_PORT)
     parser.add_argument("--just-bin", default="just")
     parser.add_argument("--execute", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
@@ -124,6 +128,11 @@ def main(argv: list[str] | None = None) -> int:
         map_bundle=args.map_bundle,
         runtime_map_prior=args.runtime_map_prior,
         visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+    )
+    _configure_harness_parallelism(
+        harness,
+        parallelism=args.parallelism,
+        base_port=args.base_port,
     )
     if args.execute:
         if args.row:
@@ -193,9 +202,74 @@ def build_harness(
         "map_bundle": map_bundle,
         "runtime_map_prior": runtime_map_prior,
         "runtime_map_prior_placeholder": RUNTIME_MAP_PRIOR_PLACEHOLDER,
+        "parallelism": 1,
+        "base_port": DEFAULT_CLEANUP_MCP_PORT,
         "setup_rows": setup_rows,
         "rows": rows,
     }
+
+
+def _configure_harness_parallelism(
+    harness: dict[str, Any],
+    *,
+    parallelism: int,
+    base_port: int,
+) -> None:
+    parallelism = max(int(parallelism), 1)
+    base_port = int(base_port)
+    harness["parallelism"] = parallelism
+    harness["base_port"] = base_port
+    for row in [*(harness.get("setup_rows") or []), *(harness.get("rows") or [])]:
+        if _is_setup_row(row):
+            row["harness_parallelism"] = 1
+            row["parallel_group"] = "setup"
+            _set_row_port(row, base_port)
+            row["rerun_command"] = row_rerun_command(row)
+            continue
+        row["harness_parallelism"] = parallelism
+        row["parallel_group"] = "cleanup"
+        if parallelism > 1:
+            row_env = row.get("env") if isinstance(row.get("env"), dict) else {}
+            row["env"] = {
+                **row_env,
+                "ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS": "1",
+                "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS": str(parallelism),
+            }
+        _set_row_port(row, _planned_row_port(row, base_port=base_port, parallelism=parallelism))
+        row["rerun_command"] = row_rerun_command(row)
+
+
+def _planned_row_port(row: dict[str, Any], *, base_port: int, parallelism: int) -> int:
+    if parallelism <= 1:
+        return base_port
+    index = _cleanup_row_index(row)
+    return base_port + index * 2
+
+
+def _cleanup_row_index(row: dict[str, Any]) -> int:
+    row_id = str(row.get("row_id") or "")
+    all_ids = [
+        f"{DIRECT_MAP_MODE}-world-oracle-labels",
+        f"{DIRECT_MAP_MODE}-world-public-labels",
+        f"{DIRECT_MAP_MODE}-camera-grounded-labels-grounding-dino",
+        f"{DIRECT_MAP_MODE}-camera-raw-fpv",
+        f"{PRIOR_MAP_MODE}-world-oracle-labels",
+        f"{PRIOR_MAP_MODE}-world-public-labels",
+        f"{PRIOR_MAP_MODE}-camera-grounded-labels-grounding-dino",
+        f"{PRIOR_MAP_MODE}-camera-raw-fpv",
+    ]
+    try:
+        return all_ids.index(row_id)
+    except ValueError:
+        return 0
+
+
+def _set_row_port(row: dict[str, Any], port: int) -> None:
+    command = [str(item) for item in row.get("command") or []]
+    command = [item for item in command if not item.startswith("port=")]
+    command.append(f"port={int(port)}")
+    row["command"] = command
+    row["assigned_port"] = int(port)
 
 
 def _harness_lanes() -> tuple[dict[str, str], ...]:
@@ -382,14 +456,54 @@ def _execute_harness(harness: dict[str, Any], args: argparse.Namespace) -> int:
                 return 1
             _replace_runtime_map_prior(harness, prior_path)
 
+        failure_count = _execute_cleanup_rows(selected_rows, args)
+        return 1 if failure_count else 0
+
+
+def _execute_cleanup_rows(rows: list[dict[str, Any]], args: argparse.Namespace) -> int:
+    parallelism = max(int(getattr(args, "parallelism", 1) or 1), 1)
+    if parallelism == 1:
         failure_count = 0
-        for row in selected_rows:
+        for row in rows:
             status = _execute_row_with_retries(row, args)
             if status != 0:
                 failure_count += 1
                 if not args.continue_on_error:
                     break
-        return 1 if failure_count else 0
+        return failure_count
+
+    failure_count = 0
+    pending = list(rows)
+    with ThreadPoolExecutor(max_workers=parallelism) as executor:
+        futures = {}
+        while pending and (args.continue_on_error or failure_count == 0):
+            while pending and len(futures) < parallelism:
+                row = pending.pop(0)
+                futures[executor.submit(_execute_row_with_retries, row, args)] = row
+            if not futures:
+                break
+            done_future = next(as_completed(futures))
+            row = futures.pop(done_future)
+            status = done_future.result()
+            if status != 0:
+                failure_count += 1
+                if not args.continue_on_error:
+                    for future in as_completed(futures):
+                        if future.result() != 0:
+                            failure_count += 1
+                    futures.clear()
+                    for remaining in pending:
+                        remaining["status"] = "not_started"
+                        remaining["reason"] = (
+                            f"not started because {row.get('row_id')} failed and "
+                            "continue_on_error is false"
+                        )
+                        remaining["updated_at"] = _utc_timestamp()
+                    break
+        for future in as_completed(futures):
+            if future.result() != 0:
+                failure_count += 1
+    return failure_count
 
 
 def _execute_prior_build(harness: dict[str, Any], args: argparse.Namespace) -> str:
@@ -944,6 +1058,10 @@ def _execute_row_with_retries(row: dict[str, Any], args: argparse.Namespace) -> 
     max_attempts = max(int(args.provider_retry_attempts), 0) + 1
     status = 1
     final_provider_transient: dict[str, Any] | None = None
+    started_at_epoch = time.time()
+    row["started_at"] = _utc_timestamp()
+    row["started_at_epoch"] = started_at_epoch
+    row["harness_parallelism"] = max(int(getattr(args, "parallelism", 1) or 1), 1)
     for attempt_index in range(max_attempts):
         if attempt_index:
             sleep_s = max(float(args.provider_retry_sleep_s), 0.0)
@@ -972,6 +1090,10 @@ def _execute_row_with_retries(row: dict[str, Any], args: argparse.Namespace) -> 
     row["attempts"] = attempts
     row["retry_count"] = max(len(attempts) - 1, 0)
     row["provider_retry_count"] = sum(1 for attempt in attempts if attempt["provider_transient"])
+    finished_at_epoch = time.time()
+    row["finished_at"] = _utc_timestamp()
+    row["finished_at_epoch"] = finished_at_epoch
+    row["wallclock_s"] = round(max(0.0, finished_at_epoch - started_at_epoch), 3)
     if status == 0 and len(attempts) > 1:
         row["infra_note"] = "succeeded after provider-transient retry"
     elif status != 0 and final_provider_transient:
@@ -1496,7 +1618,8 @@ def _thead() -> str:
     return (
         "<thead><tr><th>Row</th><th>Status</th><th>Behavior</th><th>Map</th><th>Lane</th>"
         "<th>Exact</th><th>Semantic</th><th>Sweep</th><th>Disturb</th>"
-        "<th>Order</th><th>Elapsed</th><th>Report</th><th>Command / reason</th></tr></thead>"
+        "<th>Order</th><th>Port</th><th>Parallelism</th><th>Elapsed</th>"
+        "<th>Report</th><th>Command / reason</th></tr></thead>"
     )
 
 
@@ -1544,6 +1667,8 @@ def _render_row(row: dict[str, Any]) -> str:
         f"<td>{html.escape(str(metrics.get('sweep_coverage_rate') or ''))}</td>"
         f"<td>{html.escape(str(metrics.get('disturbance_count') or ''))}</td>"
         f"<td>{html.escape(order_text)}</td>"
+        f"<td><code>{html.escape(str(row.get('assigned_port') or ''))}</code></td>"
+        f"<td><code>{html.escape(str(row.get('harness_parallelism') or ''))}</code></td>"
         f"<td>{html.escape(elapsed_text)}</td>"
         f"<td>{report}</td>"
         f"<td><code>{html.escape(command)}</code><br>{html.escape(reason)}{retry_text}</td>"

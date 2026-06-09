@@ -27,6 +27,12 @@ from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
     normalize_task_intent_mode,
 )
+from roboclaws.household.visual_backend_slots import (
+    MOLMOSPACES_SUBPROCESS_BACKEND,
+    VisualBackendSlotError,
+    VisualBackendSlotLease,
+    acquire_visual_backend_slot,
+)
 
 try:
     sys.stdout.reconfigure(line_buffering=True)
@@ -134,6 +140,7 @@ class LiveCodexCleanupRunner:
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
         self.lock_file = None
+        self.visual_slot: VisualBackendSlotLease | None = None
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
@@ -156,25 +163,51 @@ class LiveCodexCleanupRunner:
             self._write_status("failed", 130)
             self._write_live_timing("failed", 130, reason="keyboard_interrupt")
             self._cleanup_server()
+            self._release_visual_slot()
             return 130
         except LiveAgentRunFailure as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, **exc.failure.status_fields())
             self._write_live_timing("failed", 1, **exc.failure.status_fields())
             self._cleanup_server()
+            self._release_visual_slot()
             return 1
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
             self._write_live_timing("failed", 1, reason=str(exc))
             self._cleanup_server()
+            self._release_visual_slot()
             return 1
 
         self._write_live_timing("finished", 0)
         self._write_status("finished", 0)
+        self._release_visual_slot()
         return 0
 
     def _acquire_lock(self) -> None:
+        if self.args.backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+            try:
+                self.visual_slot = acquire_visual_backend_slot(
+                    repo_root=self.args.repo_root,
+                    run_id=_run_id_from_run_dir(self.run_dir),
+                    pid=os.getpid(),
+                    backend=self.args.backend,
+                    port=self.args.port,
+                    output_dir=self.run_dir,
+                    status_path=self.status_path,
+                    owner="codex-live",
+                )
+            except VisualBackendSlotError as exc:
+                detail = (
+                    f": {json.dumps(exc.active_slots, sort_keys=True)}" if exc.active_slots else ""
+                )
+                raise RuntimeError(
+                    "no MolmoSpaces visual backend slot is available"
+                    f" under {self.args.repo_root / 'output/molmo/visual-backend-slots'}{detail}"
+                ) from exc
+            return
+
         self.args.lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_file = self.args.lock_path.open("a+", encoding="utf-8")
         try:
@@ -204,6 +237,16 @@ class LiveCodexCleanupRunner:
         )
         lock_file.flush()
         self.lock_file = lock_file
+
+    def _release_visual_slot(self) -> None:
+        if self.visual_slot is None:
+            return
+        try:
+            self.visual_slot.release()
+        except VisualBackendSlotError as exc:
+            print(f"warning: could not release visual backend slot: {exc}", file=sys.stderr)
+        finally:
+            self.visual_slot = None
 
     def _start_server(self) -> None:
         print("==> detached Codex Molmo cleanup runner")
@@ -545,6 +588,8 @@ class LiveCodexCleanupRunner:
             payload["resume_available"] = resume_available
         if detail:
             payload["detail"] = detail
+        if self.visual_slot is not None:
+            payload["visual_backend_slot"] = self.visual_slot.to_payload()
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -1036,6 +1081,14 @@ def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
             continue
         filtered.append(arg)
     return filtered
+
+
+def _run_id_from_run_dir(run_dir: Path) -> str:
+    name = run_dir.name
+    parent = run_dir.parent.name
+    if parent:
+        return f"{parent}/{name}"
+    return name
 
 
 if __name__ == "__main__":
