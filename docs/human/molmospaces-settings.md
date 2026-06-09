@@ -505,10 +505,27 @@ just molmo::status output/molmo/codex-report/<stamp>/seed-7
 
 The status probe reports tmux liveness, elapsed time, MCP tool progress,
 `run_result.json` / `report.html` readiness, and the latest Codex message if
-the CLI has written one. Only one detached Molmo/Codex cleanup run is allowed at
-a time because each visual run owns a MuJoCo-backed MolmoSpaces backend. If a
-run is active or the requested MCP port is busy, the launcher fails instead of
-starting another simulator on a different port.
+the CLI has written one. Interactive/operator MolmoSpaces visual cleanup remains
+single-instance by default because each visual run owns a MuJoCo-backed
+MolmoSpaces backend. If an interactive Codex tmux session is active or the
+requested MCP port is busy, the launcher fails instead of silently starting
+another simulator on a different port.
+
+Batch harness routes may opt into bounded visual backend concurrency. The
+measured local development setting is:
+
+```bash
+ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS=2 \
+  just agent::harness codex-cleanup-harness8 execute parallelism=2
+```
+
+The harness keeps semantic-map-prior setup serialized, then runs cleanup rows
+with distinct MCP ports, output directories, live status files, backend state,
+persistent workers, and coding-agent workspaces. A third visual row is not
+launched while two slot leases are active. Local measurement on the current
+RBY1M/EGL path showed about 2 GiB PSS per warm visual worker, so lower the slot
+limit when Isaac Lab, visual-grounding sidecars, browser consoles, or other
+memory-heavy tools are running.
 
 For quick axis overrides, use positional values or `driver=` / `profile=`
 prefixes:
