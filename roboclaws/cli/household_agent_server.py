@@ -137,6 +137,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--rerun-command",
         help="Exact public command that launched this run, shown in report.html.",
     )
+    parser.add_argument(
+        "--operator-messages-path",
+        type=Path,
+        help="Operator-console JSONL inbox for active-run steering messages.",
+    )
     return parser.parse_args(argv)
 
 
@@ -255,6 +260,7 @@ def run_molmo_realworld_cleanup_agent_server(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    operator_messages_path: str | Path | None = None,
     context_json: str | Path | None = None,
     runner_python: str | Path | None = None,
     runner_script: str | Path | None = None,
@@ -361,6 +367,7 @@ def run_molmo_realworld_cleanup_agent_server(
             visual_grounding=visual_grounding,
             visual_grounding_base_url=visual_grounding_base_url,
             visual_grounding_timeout_s=visual_grounding_timeout_s,
+            operator_messages_path=operator_messages_path,
             rerun_command=rerun_command,
         )
         server.run_in_thread()
@@ -436,6 +443,7 @@ def main(argv: list[str] | None = None) -> int:
             visual_grounding=args.visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+            operator_messages_path=args.operator_messages_path,
             context_json=args.context_json,
             runner_python=args.runner_python,
             runner_script=args.runner_script,

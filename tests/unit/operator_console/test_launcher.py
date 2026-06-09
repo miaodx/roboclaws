@@ -116,6 +116,20 @@ def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
     assert "generated_mess_count=2" in argv
 
 
+def test_launcher_passes_operator_message_path_for_steer_routes(tmp_path: Path) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    path = tmp_path / "operator_messages.jsonl"
+
+    argv = build_launch_argv(
+        route,
+        root=tmp_path,
+        run_id="run-1",
+        overrides={"operator_messages_path": str(path)},
+    )
+
+    assert f"operator_messages_path={path}" in argv
+
+
 def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     route = get_route("codex-mujoco-cleanup")
     seen_lock_owner = ""
@@ -150,6 +164,8 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert state["env_overrides"] == {
         "ROBOCLAWS_CODEX_PROVIDER": "mify",
     }
+    assert state["operator_session_id"].startswith("session-")
+    assert any(item.startswith("operator_messages_path=") for item in state["argv"])
     history_path = console_output_root(tmp_path) / "runs.jsonl"
     history_rows = [
         json.loads(line)

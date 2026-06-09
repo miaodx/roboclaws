@@ -27,6 +27,11 @@ def register_realworld_mcp_tools(server: Any) -> None:
 
 def register_lifecycle_tools(server: Any) -> None:
     @server._mcp.tool()
+    def check_operator_messages(max_messages: int = 10) -> dict:
+        """Read queued public operator steering messages at a safe checkpoint."""
+        return server.call_tool("check_operator_messages", max_messages=max_messages)
+
+    @server._mcp.tool()
     def done(reason: str) -> dict:
         """Finish the run and write trace, run_result, and report."""
         return server.call_tool("done", reason=reason)
@@ -58,6 +63,7 @@ def public_tool_names_for_profile(
     return (
         *SEMANTIC_CLEANUP_TOOL_NAMES,
         *ATOMIC_CLEANUP_TOOL_NAMES,
+        "check_operator_messages",
         "done",
     )
 
@@ -74,9 +80,13 @@ def tool_handlers_for_call(
             semantic_cleanup_evidence=evidence,
         )
 
+    def check_operator_messages() -> dict[str, Any]:
+        return server.check_operator_messages(int(kwargs.get("max_messages") or 10))
+
     return {
         **semantic_cleanup_handlers(server, kwargs),
         **atomic_cleanup_handlers(server, kwargs),
+        "check_operator_messages": check_operator_messages,
         "done": done,
     }
 

@@ -1,6 +1,6 @@
 ---
 plan_scope: operator-console-agent-interaction
-status: DRAFT
+status: IMPLEMENTED_V1
 source:
   - 2026-06-09 operator-console steering discussion
   - intuitive-reduce-entropy
@@ -9,6 +9,56 @@ last_reviewed: 2026-06-09
 ---
 
 # Operator Console Agent Interaction
+
+## Implementation Result
+
+Implemented on 2026-06-09.
+
+Shipped v1 includes:
+
+- Operator Session artifacts and session APIs.
+- deterministic Ask Why over public run artifacts.
+- explicit Steer Current Run and Continue After Run APIs/UI modes.
+- linked follow-up run metadata with `operator_session_id`, `parent_run_id`,
+  and public continuation packets.
+- route-gated active-run steering through `operator_messages.jsonl` and the
+  household MCP `check_operator_messages` tool.
+- ordinary MCP pending-message hints without exposing full message text.
+- simulator queued Continue auto-start only after terminal parent evidence;
+  physical, real-movement, and emergency-stop routes require confirmation.
+- focused deterministic tests and one local live Codex console proof.
+
+Verification evidence:
+
+```bash
+.venv/bin/ruff check roboclaws/operator_console roboclaws/household roboclaws/cli/household_agent_server.py roboclaws/mcp/profiles.py tests/unit/operator_console tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_household_cleanup_route_passes_operator_messages_path_override tests/contract/dev_tools/test_task_agent_just_recipes.py::test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checker
+```
+
+Live acceptance evidence:
+
+- Console route: `just console::run 127.0.0.1 8876`
+- Run id: `20260609-134702-codex-mujoco-cleanup`
+- Report:
+  `output/operator-console/runs/20260609-134702-codex-mujoco-cleanup/0609_1347/seed-7/report.html`
+- Result:
+  `output/operator-console/runs/20260609-134702-codex-mujoco-cleanup/0609_1347/seed-7/run_result.json`
+- Checker: passed with exit status 0.
+- Operator message:
+  `steer-6e4bfca03853` moved from `queued` to `seen` at
+  `2026-06-09T05:47:36Z` after Codex read it through
+  `check_operator_messages`.
+
+Parked follow-ups:
+
+- Add richer steer lifecycle states such as `applied`, `rejected`, and
+  `expired`; parked because v1 acceptance only needs durable queueing,
+  pending hints, and MCP `seen` acknowledgement. Unpark when the task skill
+  defines how agents should explicitly apply or reject operator instructions.
+- Replace deterministic Ask Why with an optional live analyzer route; parked
+  because v1 intentionally avoids provider calls and robot MCP mutation for
+  read-only explanations. Unpark when product wants natural-language analysis
+  beyond public artifact summarization.
 
 ## Goal
 

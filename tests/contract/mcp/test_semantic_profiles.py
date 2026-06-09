@@ -105,7 +105,15 @@ def test_household_world_profile_is_task_neutral_and_world_only() -> None:
         "navigate_to_waypoint",
     }
     assert public_names.isdisjoint(
-        {"pick", "place", "place_inside", "open_receptacle", "close_receptacle", "done"}
+        {
+            "pick",
+            "place",
+            "place_inside",
+            "open_receptacle",
+            "close_receptacle",
+            "check_operator_messages",
+            "done",
+        }
     )
 
 
@@ -117,7 +125,7 @@ def test_household_cleanup_skill_capabilities_are_composed_not_copied() -> None:
     assert "metric_map" in world.public_tool_names()
     assert "pick" not in world.public_tool_names()
     assert {"pick", "place", "navigate_to_receptacle"} <= set(manipulation.public_tool_names())
-    assert lifecycle.public_tool_names() == ("done",)
+    assert lifecycle.public_tool_names() == ("check_operator_messages", "done")
 
 
 def test_legacy_molmo_profile_public_metadata_omits_private_evaluator_terms() -> None:
