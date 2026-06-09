@@ -12,6 +12,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.launcher import (
     ConsoleLaunchError,
     LaunchRequest,
@@ -78,6 +79,11 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 )
             except (ConsoleLaunchError, KeyError, ValueError) as exc:
                 return self._json({"error": str(exc)}, status=400)
+        if parsed.path == "/api/runs/latest":
+            latest = latest_run_payload(self.repo_root)
+            if not latest:
+                return self._json({"error": "No operator-console run artifacts found."}, status=404)
+            return self._json(latest)
         if parsed.path.startswith("/api/runs/"):
             run_id = unquote(parsed.path.removeprefix("/api/runs/"))
             if run_id.endswith("/pause"):

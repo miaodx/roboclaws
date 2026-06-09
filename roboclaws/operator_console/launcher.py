@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.launch.catalog import resolve_task_launch
+from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleRoute, accepted_isaac_preflight, get_route
@@ -177,13 +178,15 @@ def start_console_run(
             process.terminate()
         lock.release(run_id=run_id, force=True)
         raise
+    started_at_epoch = time.time()
+    started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     state = {
         "run_id": run_id,
         "route": route.to_payload(),
         "phase": "starting",
         "pid": process.pid,
-        "started_at_epoch": time.time(),
-        "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "started_at_epoch": started_at_epoch,
+        "started_at": started_at,
         "backend_lock": route.lock_name,
         "lock": lock_state.to_payload(),
         "argv": argv,
@@ -191,6 +194,14 @@ def start_console_run(
         "run_dir": str(run_dir),
     }
     (run_dir / "operator_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    append_run_history(
+        root,
+        run_id=run_id,
+        route=route,
+        run_dir=run_dir,
+        started_at_epoch=started_at_epoch,
+        started_at=started_at,
+    )
     return state
 
 
