@@ -59,6 +59,7 @@ const els = {
   emergencyButton: document.getElementById("emergency-button"),
   phaseValue: document.getElementById("phase-value"),
   backendLockValue: document.getElementById("backend-lock-value"),
+  cameraAngleValue: document.getElementById("camera-angle-value"),
   terminalValue: document.getElementById("terminal-value"),
   decisionPanel: document.getElementById("decision-state"),
   toolPanel: document.getElementById("tool-state"),
@@ -824,6 +825,7 @@ function renderRunState(payload) {
     payload.elapsed_seconds == null ? "00:00" : formatElapsed(payload.elapsed_seconds);
   els.phaseValue.textContent = payload.phase || "idle";
   els.backendLockValue.textContent = payload.backend_lock || "none";
+  els.cameraAngleValue.textContent = cameraStateLabel(payload.camera_state || {});
   els.terminalValue.textContent = payload.terminal_reason || "none";
 
   const decision = payload.latest_public_decision_evidence || {};
@@ -835,7 +837,7 @@ function renderRunState(payload) {
     <p>${escapeHtml(decision.reasoning || decision.decision || "")}</p>
     ${decision.blocked_reason ? `<p class="field-help">${escapeHtml(decision.blocked_reason)}</p>` : ""}
   `;
-  els.toolPanel.textContent = JSON.stringify(payload.latest_tool_call || {}, null, 2);
+  renderToolPanel(payload);
   els.proofPanel.textContent = `${payload.checker_status.status || "pending"}: ${
     payload.checker_status.message ||
     payload.checker_status.checker_log ||
@@ -845,6 +847,23 @@ function renderRunState(payload) {
   renderViews(payload.latest_view_assets || {}, route);
   renderEvents(payload);
   renderControls(payload);
+}
+
+function renderToolPanel(payload) {
+  const cameraState = payload.camera_state || {};
+  const cameraSummary = cameraState.summary || "yaw 0 deg, pitch 0 deg (neutral)";
+  const activeClass = cameraState.active ? "camera-active" : "camera-neutral";
+  els.toolPanel.innerHTML = `
+    <div class="camera-angle-row">
+      <span class="camera-angle-label">Camera</span>
+      <span class="camera-angle-badge ${activeClass}">${escapeHtml(cameraSummary)}</span>
+    </div>
+    <pre class="tool-json">${escapeHtml(JSON.stringify(payload.latest_tool_call || {}, null, 2))}</pre>
+  `;
+}
+
+function cameraStateLabel(cameraState) {
+  return cameraState.summary || "yaw 0 deg, pitch 0 deg (neutral)";
 }
 
 function renderControls(payload) {
