@@ -726,6 +726,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --provider-profile "$openai_agents_profile"
             --model "$openai_agents_model"
             --max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-128}"
+            --incomplete-turn-continuation-attempts "${ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS:-2}"
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
