@@ -1104,7 +1104,7 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
     )
     if [[ ! -x "$standard_python" ]]; then
       echo "error: missing standard MolmoSpaces runtime: ${standard_python}" >&2
-      echo "       run: uv sync --extra dev --extra molmospaces" >&2
+      echo "       run: uv sync --extra dev" >&2
       exit 1
     fi
     if [[ ! -x "$filament_python" ]]; then
@@ -1214,7 +1214,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     genesis_python="${ROBOCLAWS_GENESIS_PYTHON:-.venv-genesis/bin/python}"
     if [[ ! -x "$molmospaces_python" ]]; then
       echo "error: missing MolmoSpaces runtime: ${molmospaces_python}" >&2
-      echo "       run: uv sync --extra dev --extra molmospaces" >&2
+      echo "       run: uv sync --extra dev" >&2
       exit 1
     fi
     if [[ ! -x "$isaac_python" ]]; then

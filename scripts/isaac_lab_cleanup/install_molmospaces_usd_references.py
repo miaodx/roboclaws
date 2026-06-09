@@ -151,9 +151,7 @@ def _build_resource_manager(
         from molmospaces_resources import HFRemoteStorage, R2RemoteStorage, ResourceManager
         from molmospaces_resources.manager import InstallMode
     except ModuleNotFoundError as exc:
-        raise SystemExit(
-            "molmospaces_resources is required; run `uv sync --extra dev --extra molmospaces`."
-        ) from exc
+        raise SystemExit("molmospaces_resources is required; run `uv sync --extra dev`.") from exc
 
     remote_storage = (
         R2RemoteStorage(f"{DEFAULT_BUCKET_PREFIX}-thor-resources")
