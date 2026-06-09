@@ -1011,10 +1011,32 @@ async function postRunAction(action) {
   const result = await fetchJson(`/api/runs/${encodeURIComponent(state.activeRunId)}/${action}`, {
     method: "POST",
   });
+  if (result.error) {
+    els.eventList.textContent = result.error;
+    return;
+  }
   if (result.reason) {
     els.eventList.textContent = result.reason;
   }
+  if (["stop", "emergency-stop"].includes(action)) {
+    detachRunAfterStop(result);
+    await refreshSelectedRouteReadiness();
+    return;
+  }
   pollState();
+}
+
+function detachRunAfterStop(result) {
+  if (state.pollTimer) {
+    clearInterval(state.pollTimer);
+    state.pollTimer = null;
+  }
+  state.activeRunId = null;
+  state.activeRouteId = "";
+  state.activeState = null;
+  els.eventList.textContent =
+    result.terminal_reason || result.phase || "Run stopped; backend lock released.";
+  renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
 }
 
 async function toggleRawEvidence() {

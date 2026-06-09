@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import ConsoleRoute
 
@@ -76,9 +77,17 @@ def derive_operator_state(
     latest_view_assets = _latest_view_assets(root, display_run_dir)
     public_result = _public_run_result_summary(run_result)
     latest_agent_message = _latest_agent_message(display_run_dir)
+    run_id = str(status.get("run_id") or run_dir.name)
+    stop_available = _stop_available(
+        root=root,
+        run_id=run_id,
+        route=route,
+        status=status,
+        phase=phase,
+    )
 
     return {
-        "run_id": str(status.get("run_id") or run_dir.name),
+        "run_id": run_id,
         "display_run_id": _display_run_id(run_dir, display_run_dir),
         "route": status.get("route") or (route.to_payload() if route else None),
         "run_dir": str(run_dir),
@@ -102,7 +111,7 @@ def derive_operator_state(
         "public_run_result": public_result,
         "controls": {
             "pause_available": bool(route.pause_supported) if route else False,
-            "stop_available": phase not in {"passed", "failed", "stopped_by_operator"},
+            "stop_available": stop_available,
             "emergency_stop_required": bool(route.emergency_stop_required) if route else False,
         },
     }
@@ -426,12 +435,14 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
     checker_log = _latest_existing(run_dir, ("checker.log",))
     report = _latest_existing(run_dir, ("report.html",))
     normalized_phase = phase.lower()
+    failure_reason = _checker_failure_reason(run_result, checker_log)
     if normalized_phase in {"failed", "error", "terminated"}:
         return {
             "status": "failed",
             "report_exists": report.exists(),
             "checker_log": str(checker_log) if checker_log.exists() else "",
-            "message": "Checker failed." if checker_log.exists() else "Run failed.",
+            "reason": failure_reason,
+            "message": _checker_failure_message(checker_log, failure_reason, "Run failed."),
         }
     ok = _run_result_success(run_result)
     if ok and report.exists():
@@ -439,6 +450,7 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
             "status": "passed",
             "report_exists": True,
             "checker_log": str(checker_log) if checker_log.exists() else "",
+            "reason": "",
             "message": "Checker passed.",
         }
     if run_result:
@@ -446,13 +458,17 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
             "status": "failed",
             "report_exists": report.exists(),
             "checker_log": str(checker_log) if checker_log.exists() else "",
-            "message": "Checker failed." if checker_log.exists() else "Run result is present.",
+            "reason": failure_reason,
+            "message": _checker_failure_message(
+                checker_log, failure_reason, "Run result is present."
+            ),
         }
     if normalized_phase == "checking-result":
         return {
             "status": "running",
             "report_exists": report.exists(),
             "checker_log": str(checker_log) if checker_log.exists() else "",
+            "reason": "",
             "message": "Checker is running.",
         }
     if _phase_is_active(normalized_phase):
@@ -460,14 +476,93 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
             "status": "waiting",
             "report_exists": False,
             "checker_log": "",
+            "reason": "",
             "message": "Checker will run when the live agent hands off to result checking.",
         }
     return {
         "status": "pending",
         "report_exists": False,
         "checker_log": str(checker_log) if checker_log.exists() else "",
+        "reason": "",
         "message": "Checker has not run yet.",
     }
+
+
+def _checker_failure_message(checker_log: Path, reason: str, fallback: str) -> str:
+    if reason:
+        return f"Checker failed: {reason}"
+    if checker_log.exists():
+        return "Checker failed. Open Checker Output for details."
+    return fallback
+
+
+def _checker_failure_reason(run_result: dict[str, Any], checker_log: Path) -> str:
+    reason = _structured_checker_failure_reason(run_result)
+    if reason:
+        return reason
+    return _checker_log_failure_reason(checker_log)
+
+
+def _structured_checker_failure_reason(run_result: dict[str, Any]) -> str:
+    diagnostics = run_result.get("agent_diagnostics") or {}
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+    if diagnostics.get("fridge_inside_sequence_ok") is False:
+        return (
+            "fridge cleanup sequence incomplete; call close_receptacle with the same "
+            "fridge fixture_id after place_inside before moving on or done."
+        )
+    stale_reference_errors = int(diagnostics.get("stale_reference_errors") or 0)
+    if stale_reference_errors > 0:
+        return (
+            f"{stale_reference_errors} stale reference error(s); use object and fixture ids "
+            "from the latest observe response."
+        )
+    semantic_order_errors = int(
+        diagnostics.get("semantic_order_unrecovered_errors")
+        or diagnostics.get("semantic_order_errors")
+        or 0
+    )
+    if semantic_order_errors > 0:
+        return (
+            f"{semantic_order_errors} semantic order error(s); call the required_tool from "
+            "the failed MCP response before trying another cleanup tool."
+        )
+    duplicate_navigation_count = int(diagnostics.get("duplicate_post_place_navigation_count") or 0)
+    if duplicate_navigation_count > 0:
+        return (
+            f"{duplicate_navigation_count} duplicate post-place navigation event(s); after "
+            "placing an object, observe before choosing the next object or waypoint."
+        )
+    if diagnostics.get("premature_done") is True:
+        source = diagnostics.get("premature_done_source")
+        suffix = f" ({source})" if source else ""
+        return f"done was called before cleanup was complete{suffix}."
+    return ""
+
+
+def _checker_log_failure_reason(checker_log: Path) -> str:
+    if not checker_log.exists():
+        return ""
+    try:
+        text = checker_log.read_text(encoding="utf-8", errors="replace")[:80_000]
+    except OSError:
+        return ""
+    if "fridge_inside_sequence_ok" in text:
+        return (
+            "fridge cleanup sequence incomplete; call close_receptacle with the same "
+            "fridge fixture_id after place_inside before moving on or done."
+        )
+    if "stale_reference_errors" in text:
+        return (
+            "stale reference errors; use object and fixture ids from the latest observe response."
+        )
+    if "semantic_order" in text:
+        return (
+            "semantic cleanup order failed; call the required_tool from the failed MCP "
+            "response before trying another cleanup tool."
+        )
+    return ""
 
 
 def _run_result_success(run_result: dict[str, Any]) -> bool:
@@ -576,6 +671,32 @@ def _phase_is_active(phase: str) -> bool:
         "paused",
         "stopping",
     }
+
+
+def _stop_available(
+    *,
+    root: Path,
+    run_id: str,
+    route: ConsoleRoute | None,
+    status: dict[str, Any],
+    phase: str,
+) -> bool:
+    normalized = phase.lower()
+    if _phase_is_active(normalized):
+        return True
+    if normalized not in {
+        "failed",
+        "finished",
+        "passed",
+        "stopped_by_operator",
+        "human_takeover_stop",
+    }:
+        return False
+    lock_name = str(status.get("backend_lock") or (route.lock_name if route else ""))
+    if not lock_name:
+        return False
+    lock_state = ResourceLock(root, lock_name).read()
+    return lock_state.held and lock_state.owner_run_id == run_id
 
 
 def _decision_evidence(
