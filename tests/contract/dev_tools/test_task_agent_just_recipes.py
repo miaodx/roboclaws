@@ -27,6 +27,9 @@ MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
+LIVE_OPENAI_AGENTS_RUNNER = (
+    REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_openai_agents_cleanup.py"
+)
 AGIBOT_MAP_BUILD_CODEX_RUNNER = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_agibot_map_build.py"
 )
@@ -406,6 +409,29 @@ def test_prompt_mapping_household_cleanup_codex_smoke_override() -> None:
         "7",
         "output/household/household-cleanup/codex-smoke",
     ]
+
+
+def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert "openai-agents-live" in molmo_text
+    assert "run_live_openai_agents_cleanup.py" in molmo_text
+    assert 'policy="openai_agents_agent"' in molmo_text
+    assert "openai-agents-live" not in trace_task_run("household-cleanup", "codex")
+
+    with pytest.raises(CommandError, match="unsupported driver 'openai-agents-live'"):
+        resolve_task_run(("household-cleanup", "openai-agents-live", "smoke"))
+
+
+def test_openai_agents_runner_script_uses_runtime_contract_and_checker() -> None:
+    runner_text = LIVE_OPENAI_AGENTS_RUNNER.read_text(encoding="utf-8")
+
+    assert "OpenAIAgentsLiveRuntime" in runner_text
+    assert "LiveAgentRequest" in runner_text
+    assert "household_cleanup_server_argv" in runner_text
+    assert "CHECKER_SCRIPT" in runner_text
+    assert "--require-clean-agent-run" in runner_text
+    assert "run_result.json" in runner_text
 
 
 def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> None:
