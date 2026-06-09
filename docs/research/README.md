@@ -12,6 +12,7 @@ This directory contains technical research documents that inform Roboclaws proje
 | 04 | [openclaw-robotics-ecosystem](04-openclaw-robotics-ecosystem.md) | OpenClaw robotics ecosystem mapping | 6 active repos; multi-agent sim control is an open gap |
 | 05 | [real-model-smoke-validation](05-real-model-smoke-validation.md) | Issue #50 local-dev validation | Territory terminates early, coverage fails, follow-up tracked in #52 |
 | 06 | [visual-grounding-perception-producer](06-visual-grounding-perception-producer.md) | Edge visual-grounding perception producer | Separate producer service; fast proposer first, optional verifier only when measured quality requires it |
+| 07 | [agent-sdk-vs-frameworks-for-coding-loop](07-agent-sdk-vs-frameworks-for-coding-loop.md) | OpenAI Agents SDK vs. Claude Agent SDK vs. other frameworks, for the code-holds-the-loop MCP robot agent | Decisive axis is loop ownership, not provider compat; thin DIY loop on the MCP Python SDK (or PydanticAI) beats both vendor SDKs for this use case; OpenAI Agents SDK preferred of the two; resilience must be engineered regardless |
 
 ## See Also
 
@@ -23,3 +24,4 @@ This directory contains technical research documents that inform Roboclaws proje
 - **2026-04-14**: Added report 05 documenting the issue #50 real-model smoke validation outcome
 - **2026-04-28**: Added cross-link to new monthly checkpoint series at `docs/research-checkpoints/`
 - **2026-05-25**: Added report 06 on the visual-grounding perception producer reference design
+- **2026-06-09**: Added report 07 comparing the OpenAI Agents SDK, Claude Agent SDK, and other frameworks for the code-holds-the-loop MCP robot agent (decision context for replacing the Codex-CLI subprocess driver)
