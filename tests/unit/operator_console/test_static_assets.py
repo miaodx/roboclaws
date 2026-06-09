@@ -161,6 +161,16 @@ def test_static_app_routes_destructive_actions_through_styled_dialog() -> None:
     assert "font-variant-numeric: tabular-nums" in css
 
 
+def test_static_app_hides_pause_until_a_route_supports_it() -> None:
+    html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="pause-button" class="secondary" disabled hidden' in html
+    assert "const pauseAvailable = Boolean(controls.pause_available)" in app
+    assert "els.pauseButton.hidden = !pauseAvailable" in app
+    assert "els.pauseButton.disabled = !pauseAvailable" in app
+
+
 def test_static_app_opens_images_in_large_dialog() -> None:
     html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
