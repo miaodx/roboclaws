@@ -726,6 +726,32 @@ def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chai
     assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] == 0
 
 
+def test_realworld_mcp_custom_task_mode_is_recorded_in_run_result(
+    tmp_path: Path,
+) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        policy="codex_agent",
+        agent_driven=True,
+        task_prompt="我渴了，帮我找些解渴的东西",
+        task_intent_mode="custom",
+    )
+    try:
+        server.call_tool("metric_map")
+        server.call_tool("fixture_hints")
+        server.call_tool("observe")
+        done = server.call_tool("done", reason="custom task complete")
+        run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
+    finally:
+        server.close()
+
+    assert done["ok"] is True
+    assert run_result["task_prompt"] == "我渴了，帮我找些解渴的东西"
+    assert run_result["task_intent_mode"] == "custom"
+
+
 def test_realworld_mcp_raw_fpv_camera_raw_done_allows_complete_live_chains(
     tmp_path: Path,
 ) -> None:

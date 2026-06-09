@@ -41,7 +41,7 @@ default:
 # Explicit cleanup evidence-lane runner. The recipe parameter remains named
 # `profile` for positional Just compatibility; public callers should pass the
 # new evidence lane names.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -70,6 +70,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_object_ids="{{generated_mess_object_ids}}"
     task_name="{{task_name}}"
     operator_messages_path="{{operator_messages_path}}"
+    task_intent_mode="{{task_intent_mode}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -106,6 +107,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_name="${task_name#task-name=}"
     operator_messages_path="${operator_messages_path#operator_messages_path=}"
     operator_messages_path="${operator_messages_path#operator-messages-path=}"
+    task_intent_mode="${task_intent_mode#task_intent_mode=}"
+    task_intent_mode="${task_intent_mode#task-intent-mode=}"
+    task_intent_mode="${task_intent_mode:-default_cleanup}"
     generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))
 
     if [[ "$camera_labeler" == visual_grounding=* ]]; then
@@ -352,6 +356,28 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       done
       checker_visual_args=("${filtered_checker_visual_args[@]}")
     fi
+    if [[ "$task_intent_mode" == "custom" ]]; then
+      profile_requires_clean_success="false"
+      filtered_checker_visual_args=()
+      skip_checker_arg_value="false"
+      for checker_arg in "${checker_visual_args[@]}"; do
+        if [[ "$skip_checker_arg_value" == "true" ]]; then
+          skip_checker_arg_value="false"
+          continue
+        fi
+        case "$checker_arg" in
+          --min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions|--min-sweep-coverage)
+            skip_checker_arg_value="true"
+            ;;
+          --require-clean-agent-run|--require-model-declared-observations)
+            ;;
+          *)
+            filtered_checker_visual_args+=("$checker_arg")
+            ;;
+        esac
+      done
+      checker_visual_args=("${filtered_checker_visual_args[@]}")
+    fi
     semantic_sweep_args+=(--map-mode "$map_mode")
     if [[ "$map_mode" == "minimal" ]]; then
       checker_semantic_args+=(--require-minimal-map)
@@ -491,7 +517,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         if [[ "$profile" == "camera-raw-fpv" ]]; then
           prompt_cleanup_count="$generated_mess_success_threshold"
         fi
-        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count")"
+        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count" --task-intent-mode "$task_intent_mode")"
 
         server_args=(
           --host "$server_host"
@@ -502,6 +528,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --task-name "$task_name"
           --backend "$backend"
           --task "$task"
+          --task-intent-mode "$task_intent_mode"
           --generated-mess-count "$generated_mess_count"
           "${generated_mess_object_args[@]}"
           --perception-mode "$perception_mode"
@@ -580,6 +607,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -675,6 +703,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
+            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -737,6 +766,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -813,8 +843,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ "$driver" == "openclaw-live" ]]; then
             checker_args+=(--require-openclaw-minimum)
           fi
-          if [[ "$profile_requires_clean_success" == "true" && "$driver" != "openclaw-live" ]]; then
+          if [[ "$profile_requires_clean_success" == "true" && "$driver" != "openclaw-live" && "$task_intent_mode" != "custom" ]]; then
             checker_args+=(--require-clean-agent-run)
+          fi
+          if [[ "$task_intent_mode" == "custom" ]]; then
+            checker_args+=(--allow-partial-cleanup)
           fi
           .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
             "${checker_args[@]}" \
@@ -861,6 +894,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --seed "$seed" \
             --backend "$backend" \
             --task "$task" \
+            --task-intent-mode "$task_intent_mode" \
             --policy "$policy" \
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \
@@ -893,8 +927,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --expect-mcp-server molmo_cleanup_realworld
           --require-agent-driven
         )
-        if [[ "$profile_requires_clean_success" == "true" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" && "$task_intent_mode" != "custom" ]]; then
           checker_args+=(--require-clean-agent-run)
+        fi
+        if [[ "$task_intent_mode" == "custom" ]]; then
+          checker_args+=(--allow-partial-cleanup)
         fi
         ;;
       openclaw-smoke)
@@ -904,8 +941,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --require-agent-driven
           --require-openclaw-minimum
         )
-        if [[ "$profile_requires_clean_success" == "true" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" && "$task_intent_mode" != "custom" ]]; then
           checker_args+=(--require-clean-agent-run)
+        fi
+        if [[ "$task_intent_mode" == "custom" ]]; then
+          checker_args+=(--allow-partial-cleanup)
         fi
         ;;
     esac
