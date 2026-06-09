@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
+from roboclaws.household.visual_scan_guidance import visual_scan_prompt_rule
 
 COMMON_PREFIX = (
     "Use the bundled molmo-realworld-cleanup skill instructions. "
@@ -23,9 +24,7 @@ COMMON_WAYPOINT_RULES = (
 
 COMMON_CLEANUP_RULES = (
     "clean plausible observed objects only after their candidate_state is "
-    "navigation_authorized; if a world-label object is visual_scan_required, call "
-    "adjust_camera toward it, then observe, then use the refreshed same-handle "
-    "source FPV bbox before navigate_to_object. Clean with "
+    f"navigation_authorized; {visual_scan_prompt_rule()} Clean with "
     "navigate->pick->navigate->open?->place/place_inside following required_tool "
     "if returned, use place_inside for "
     "shelf/bookshelf/bookcase/shelving/fridge targets, do not call scene_objects "
@@ -35,7 +34,19 @@ COMMON_CLEANUP_RULES = (
     "is generated."
 )
 
-WORLD_LABELS_PROMPT = COMMON_PREFIX + COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES
+HOUSEHOLD_CLEANUP_TASK_PREFIX = "This run is household-cleanup. User task: {task}. "
+
+DEFAULT_HOUSEHOLD_CLEANUP_TASK = "clean up this room"
+
+
+def _task_prefix(task: str) -> str:
+    normalized = " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
+    return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
+
+
+def _with_task(prompt: str, task: str) -> str:
+    return COMMON_PREFIX + _task_prefix(task) + prompt
+
 
 SEMANTIC_MAP_BUILD_RULES = (
     "This run is semantic-map-build, not household-cleanup. User task: {task}. "
@@ -54,8 +65,7 @@ SEMANTIC_MAP_BUILD_RULES = (
 )
 
 WORLD_LABELS_SANITIZED_PROMPT = (
-    COMMON_PREFIX
-    + COMMON_WAYPOINT_RULES
+    COMMON_WAYPOINT_RULES
     + "treat visible_object_detections as perfect structured detections without "
     "cleanup destination oracle fields; do not wait for or rely on "
     "cleanup_recommended, and treat every observed detection as a cleanup "
@@ -76,7 +86,7 @@ WORLD_LABELS_SANITIZED_PROMPT = (
 )
 
 CAMERA_LABELS_PROMPT = (
-    COMMON_PREFIX + "When the next action is an MCP tool call, make that tool call before "
+    "When the next action is an MCP tool call, make that tool call before "
     "writing progress text and never end a turn by saying you will call a tool "
     "later. After every successful place/place_inside, immediately call observe "
     "before ending the turn or choosing another object. "
@@ -99,11 +109,8 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     cleanup_count = max(1, int(target_cleanup_count))
     cleanup_count_text = str(cleanup_count)
     return (
-        "Use the bundled molmo-realworld-cleanup skill instructions. This is the "
-        "trace-preserving camera-raw-fpv skill lane. Use the cleanup MCP tool entries exactly "
-        "as exposed by Codex; in text, refer to unprefixed tool names, and if the tool "
-        "protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or "
-        "roboclaws__. Call metric_map and fixture_hints first, build an exact waypoint "
+        "This is the trace-preserving camera-raw-fpv skill lane. Call metric_map and "
+        "fixture_hints first, build an exact waypoint "
         "checklist from metric_map.inspection_waypoints, sweep every inspection "
         "waypoint with navigate_to_waypoint then observe, and mark a waypoint complete "
         "only after that waypoint_id has an observe response. Inspect each raw FPV "
@@ -136,16 +143,24 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     )
 
 
-def render_kickoff_prompt(profile: str, *, target_cleanup_count: int = 7) -> str:
+def render_kickoff_prompt(
+    profile: str,
+    *,
+    task: str = "",
+    target_cleanup_count: int = 7,
+) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
     if profile == "camera-raw-fpv":
-        return _camera_raw_prompt(target_cleanup_count=target_cleanup_count)
+        return _with_task(
+            _camera_raw_prompt(target_cleanup_count=target_cleanup_count),
+            task,
+        )
     if profile == "camera-grounded-labels":
-        return CAMERA_LABELS_PROMPT
+        return _with_task(CAMERA_LABELS_PROMPT, task)
     if profile == "world-public-labels":
-        return WORLD_LABELS_SANITIZED_PROMPT
-    return WORLD_LABELS_PROMPT
+        return _with_task(WORLD_LABELS_SANITIZED_PROMPT, task)
+    return _with_task(COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES, task)
 
 
 def render_semantic_map_build_prompt(profile: str, task: str) -> str:
@@ -182,7 +197,13 @@ def main(argv: list[str] | None = None) -> int:
         task = args.task or "build a semantic map of this room"
         print(render_semantic_map_build_prompt(args.profile, task))
     else:
-        print(render_kickoff_prompt(args.profile, target_cleanup_count=args.target_cleanup_count))
+        print(
+            render_kickoff_prompt(
+                args.profile,
+                task=args.task,
+                target_cleanup_count=args.target_cleanup_count,
+            )
+        )
     return 0
 
 

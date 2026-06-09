@@ -40,6 +40,13 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_failure_response,
     visual_grounding_request,
 )
+from roboclaws.household.visual_scan_guidance import (
+    VISUAL_SCAN_NOOP_ERROR_REASON,
+    noop_camera_adjustment_hint,
+    visual_evidence_recovery_hint,
+    visual_scan_done_recovery_hint,
+    visual_scan_payload,
+)
 from roboclaws.maps.bundle import metric_map_bundle_metadata, validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
 from roboclaws.maps.route import SIM_COSTMAP_PLANNER, validate_metric_map_route
@@ -836,13 +843,30 @@ class RealWorldCleanupContract:
         pitch_delta_deg: float = 0.0,
     ) -> dict[str, Any]:
         previous = self._camera_offset()
+        yaw_delta = _float_or_zero(yaw_delta_deg)
+        pitch_delta = _float_or_zero(pitch_delta_deg)
+        if not yaw_delta and not pitch_delta:
+            return self._error(
+                "adjust_camera",
+                VISUAL_SCAN_NOOP_ERROR_REASON,
+                camera_offset=previous,
+                previous_camera_offset=previous,
+                required_next_tool="adjust_camera",
+                followup_tool="observe",
+                yaw_bounds_deg=[-45, 45],
+                pitch_bounds_deg=[-20, 20],
+                waypoint_id=self._current_waypoint_id,
+                recovery_hint=noop_camera_adjustment_hint(),
+                no_camera_motion=True,
+                fresh_fpv_observation_required=True,
+            )
         self._camera_yaw_offset_deg = _clamp(
-            self._camera_yaw_offset_deg + _float_or_zero(yaw_delta_deg),
+            self._camera_yaw_offset_deg + yaw_delta,
             -45.0,
             45.0,
         )
         self._camera_pitch_offset_deg = _clamp(
-            self._camera_pitch_offset_deg + _float_or_zero(pitch_delta_deg),
+            self._camera_pitch_offset_deg + pitch_delta,
             -20.0,
             20.0,
         )
@@ -1483,12 +1507,7 @@ class RealWorldCleanupContract:
             if any(str(item.get("state") or "") == "held" for item in pending):
                 required_tool = "navigate_to_receptacle"
             if required_tool == "adjust_camera":
-                recovery_hint = (
-                    "Pending observed handles are semantic candidates that still need "
-                    "agent-facing FPV confirmation. Call adjust_camera toward a candidate, "
-                    "then observe, then navigate_to_object only after candidate_state is "
-                    "navigation_authorized."
-                )
+                recovery_hint = visual_scan_done_recovery_hint()
             else:
                 recovery_hint = (
                     "Clean pending observed handles before done. For held objects, select a "
@@ -2983,7 +3002,7 @@ class RealWorldCleanupContract:
                 "waypoint_id": str(public_waypoint.get("waypoint_id") or ""),
                 "candidate_state": candidate_state,
                 "candidate_state_history": _candidate_state_history(candidate_state),
-                "visual_scan": _visual_scan_guidance(visual_confirmation),
+                "visual_scan": visual_scan_payload(visual_confirmation),
                 "locality_status": "same_waypoint_source_observation"
                 if visual_confirmation
                 else "semantic_hint_requires_source_fpv_scan",
@@ -3705,7 +3724,7 @@ class RealWorldCleanupContract:
                 }
             )
             if actionability_status != "actionable":
-                recovery_hint = _visual_evidence_recovery_hint()
+                recovery_hint = visual_evidence_recovery_hint()
         target_plausibility = self._target_plausibility(
             category=str(candidate.get("category") or ""),
             target_fixture_id=target_fixture_id,
@@ -3977,7 +3996,7 @@ class RealWorldCleanupContract:
             or declaration.get("grounding_confidence")
             or 0.0,
             source_observation_id=evidence.get("source_observation_id", ""),
-            recovery_hint=_visual_evidence_recovery_hint(),
+            recovery_hint=visual_evidence_recovery_hint(),
         )
 
     def _next_visible_observation_id(self) -> str:
@@ -4638,24 +4657,6 @@ def _candidate_state_history(candidate_state: str) -> list[str]:
     return [CANDIDATE_STATE_SEMANTIC]
 
 
-def _visual_scan_guidance(visual_confirmation: bool) -> dict[str, Any]:
-    if visual_confirmation:
-        return {
-            "status": "confirmed_from_source_fpv_observation",
-            "required_next_tool": "navigate_to_object",
-        }
-    return {
-        "status": "required_before_navigation",
-        "required_next_tool": "adjust_camera",
-        "followup_tool": "observe",
-        "public_contract_note": (
-            "Structured world labels are semantic hints only. Adjust the camera toward "
-            "the candidate and observe again so the source FPV observation carries a "
-            "reviewable bbox before navigate_to_object or pick."
-        ),
-    }
-
-
 def _required_tool_for_candidate_state(candidate_state: str) -> str:
     if candidate_state == CANDIDATE_STATE_NAVIGATION_AUTHORIZED:
         return "navigate_to_object"
@@ -4664,14 +4665,6 @@ def _required_tool_for_candidate_state(candidate_state: str) -> str:
     if candidate_state == CANDIDATE_STATE_VISUAL_SCAN_REQUIRED:
         return "adjust_camera"
     return "observe"
-
-
-def _visual_evidence_recovery_hint() -> str:
-    return (
-        "Do not navigate or pick this candidate until the agent-facing FPV evidence "
-        "has a reviewable bbox. Observe or adjust_camera, then retry with "
-        "image_region={type:bbox,value:[x,y,width,height]} from the visible object."
-    )
 
 
 def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:

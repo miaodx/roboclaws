@@ -202,6 +202,34 @@ def test_world_label_candidate_requires_scan_then_observe_before_navigation() ->
     _assert_no_forbidden_keys(navigation)
 
 
+def test_zero_camera_adjustment_does_not_confirm_world_label_candidate() -> None:
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    first_observation = _first_non_empty_observation(contract)
+    handle = first_observation["visible_object_detections"][0]["object_id"]
+
+    adjusted = contract.adjust_camera(yaw_delta_deg=0, pitch_delta_deg=0)
+    second_observation = contract.observe()
+    still_pending = next(
+        item
+        for item in second_observation["visible_object_detections"]
+        if item["object_id"] == handle
+    )
+    navigation = contract.navigate_to_object(handle)
+
+    assert adjusted["ok"] is False
+    assert adjusted["error_reason"] == "noop_camera_adjustment"
+    assert adjusted["required_next_tool"] == "adjust_camera"
+    assert adjusted["followup_tool"] == "observe"
+    assert adjusted["camera_offset"] == {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}
+    assert adjusted["no_camera_motion"] is True
+    assert adjusted["fresh_fpv_observation_required"] is True
+    assert "does not create a fresh source FPV view" in adjusted["recovery_hint"]
+    assert still_pending["candidate_state"] == "visual_scan_required"
+    assert still_pending["visual_scan"]["fresh_fpv_observation_required"] is True
+    assert navigation["ok"] is False
+    assert navigation["required_next_tool"] == "adjust_camera"
+
+
 def test_world_labels_sanitized_observations_omit_destination_oracle_fields() -> None:
     rich_contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     rich_observation = _first_non_empty_observation(rich_contract)
