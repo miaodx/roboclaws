@@ -326,6 +326,7 @@ def test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance(
         server.close()
 
     assert skipped["ok"] is False
+    assert "fresh source FPV evidence with a reviewable bbox" in metric_map["instruction"]
     assert skipped["error_reason"] == "visual_evidence_not_reviewable"
     assert skipped["required_next_tool"] == "adjust_camera"
     assert skipped["candidate_state"] == "visual_scan_required"

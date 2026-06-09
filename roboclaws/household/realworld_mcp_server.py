@@ -73,6 +73,7 @@ from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_client_from_env,
 )
+from roboclaws.household.visual_scan_guidance import visual_scan_metric_map_instruction
 
 __all__ = ["MCP_SERVER_NAME", "RealWorldMolmoCleanupMCPServer", "make_molmo_realworld_cleanup_mcp"]
 
@@ -304,9 +305,8 @@ class RealWorldMolmoCleanupMCPServer:
         if tool == "metric_map":
             augmented["instruction"] = (
                 "inspection_waypoints are static map/fixture coverage candidates, "
-                "not mess hints. Prefer navigate_to_waypoint -> observe. World-label "
-                "observed_* candidates with candidate_state=visual_scan_required must "
-                "use adjust_camera -> observe before navigate_to_object or pick."
+                f"not mess hints. Prefer navigate_to_waypoint -> observe. "
+                f"{visual_scan_metric_map_instruction()}"
             )
         if tool == "observe" and self.perception_mode == CAMERA_MODEL_POLICY_MODE:
             raw = augmented.get("raw_fpv_observation") or {}

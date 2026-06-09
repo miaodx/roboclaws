@@ -1231,6 +1231,8 @@ def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshol
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     prompt = render_kickoff_prompt("world-oracle-labels")
 
+    assert "This run is household-cleanup" in prompt
+    assert "User task: clean up this room" in prompt
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
     assert "selected Nav2 map bundle" in prompt
@@ -1245,6 +1247,19 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
+    assert "fresh same-handle source FPV observation with a reviewable bbox" in prompt
+    assert "adjust_camera(0, 0) is only a no-op camera command" in prompt
+
+
+def test_molmo_cleanup_live_prompt_includes_custom_user_task() -> None:
+    prompt = render_kickoff_prompt(
+        "world-oracle-labels",
+        task="我渴了，帮我找些解渴的东西",
+    )
+
+    assert "This run is household-cleanup" in prompt
+    assert "User task: 我渴了，帮我找些解渴的东西" in prompt
+    assert "metric_map.inspection_waypoints" in prompt
 
 
 def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
