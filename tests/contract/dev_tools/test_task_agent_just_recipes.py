@@ -1144,6 +1144,17 @@ def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
     assert route[16] == "output/prior/runtime_metric_map.json"
 
 
+def test_household_cleanup_route_passes_operator_messages_path_override() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "codex",
+        "world-oracle-labels",
+        "operator_messages_path=output/operator-console/runs/run-a/operator_messages.jsonl",
+    )
+
+    assert route[-1] == "output/operator-console/runs/run-a/operator_messages.jsonl"
+
+
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     prompt = render_kickoff_prompt("camera-raw-fpv")
 

@@ -79,6 +79,11 @@ def derive_operator_state(
     public_result = _public_run_result_summary(run_result)
     latest_agent_message = _latest_agent_message(display_run_dir)
     run_id = str(status.get("run_id") or run_dir.name)
+    from roboclaws.operator_console.interactions import operator_message_state
+
+    interaction_state = operator_message_state(root, run_dir)
+    normalized_status = _status_from_phase(phase, checker, terminal_reason)
+    controls_terminal = _control_terminal_state(phase, normalized_status, terminal_reason)
     stop_available = _stop_available(
         root=root,
         run_id=run_id,
@@ -94,7 +99,7 @@ def derive_operator_state(
         "run_dir": str(run_dir),
         "display_run_dir": str(display_run_dir),
         "phase": phase,
-        "status": _status_from_phase(phase, checker, terminal_reason),
+        "status": normalized_status,
         "status_label": _status_label(phase, terminal_reason),
         "backend_lock": status.get("backend_lock") or (route.lock_name if route else ""),
         "pid": status.get("pid"),
@@ -111,7 +116,15 @@ def derive_operator_state(
         "checker_status": checker,
         "terminal_reason": terminal_reason,
         "public_run_result": public_result,
+        "operator_session_id": status.get("operator_session_id") or "",
+        "operator_messages": interaction_state,
         "controls": {
+            "ask_why_available": True,
+            "continue_available": True,
+            "steer_available": bool(route.supports_operator_steer)
+            if route and not controls_terminal
+            else False,
+            "supports_operator_steer": bool(route.supports_operator_steer) if route else False,
             "pause_available": bool(route.pause_supported) if route else False,
             "stop_available": stop_available,
             "emergency_stop_required": bool(route.emergency_stop_required) if route else False,
@@ -493,6 +506,7 @@ def _wrapper_artifact_links(run_dir: Path) -> list[ArtifactLink]:
     specs = (
         ("Console Launch Log", "console-launch.log", "log"),
         ("Operator State", "operator_state.json", "json"),
+        ("Operator Messages", "operator_messages.jsonl", "jsonl"),
     )
     links: list[ArtifactLink] = []
     for label, name, kind in specs:
@@ -738,6 +752,23 @@ def _status_label(phase: str, terminal_reason: str) -> str:
     if _is_provider_transient_reason(terminal_reason):
         return "Provider transient failure"
     return phase
+
+
+def _control_terminal_state(phase: str, status: str, terminal_reason: str) -> bool:
+    terminal_values = {
+        "done",
+        "finished",
+        "passed",
+        "failed",
+        "stopped_by_operator",
+        "human_takeover_stop",
+        "emergency_stopped",
+    }
+    return (
+        phase.lower() in terminal_values
+        or status.lower() in terminal_values
+        or terminal_reason.lower() in terminal_values
+    )
 
 
 def _is_provider_transient_reason(reason: str) -> bool:

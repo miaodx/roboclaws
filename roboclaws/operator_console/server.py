@@ -13,6 +13,15 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from roboclaws.operator_console.history import latest_run_payload
+from roboclaws.operator_console.interactions import (
+    InteractionError,
+    append_ask_why,
+    append_continue_request,
+    append_steer_message,
+    create_operator_session,
+    get_operator_session,
+    list_operator_messages,
+)
 from roboclaws.operator_console.launcher import (
     ConsoleLaunchError,
     LaunchRequest,
@@ -84,6 +93,12 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             if not latest:
                 return self._json({"error": "No operator-console run artifacts found."}, status=404)
             return self._json(latest)
+        if parsed.path.startswith("/api/sessions/"):
+            session_id = unquote(parsed.path.removeprefix("/api/sessions/"))
+            try:
+                return self._json(get_operator_session(self.repo_root, session_id))
+            except InteractionError as exc:
+                return self._json({"error": str(exc)}, status=404)
         if parsed.path.startswith("/api/runs/"):
             run_id = unquote(parsed.path.removeprefix("/api/runs/"))
             if run_id.endswith("/pause"):
@@ -95,6 +110,12 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                         "reason": PAUSE_UNAVAILABLE_REASON,
                     }
                 )
+            if run_id.endswith("/messages"):
+                run_id = run_id.removesuffix("/messages")
+                try:
+                    return self._json(list_operator_messages(self.repo_root, run_id))
+                except InteractionError as exc:
+                    return self._json({"error": str(exc)}, status=404)
             route_id = parse_qs(parsed.query).get("route", [""])[0]
             route = get_route(route_id) if route_id else None
             run_dir = console_output_root(self.repo_root) / "runs" / run_id
@@ -123,6 +144,8 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         try:
             payload = self._read_payload()
+            if parsed.path == "/api/sessions":
+                return self._json(create_operator_session(self.repo_root), status=201)
             if parsed.path == "/api/runs":
                 request = LaunchRequest(
                     route_id=str(payload.get("route_id") or ""),
@@ -130,8 +153,46 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     overrides=dict(payload.get("overrides") or {}),
                     env_overrides=dict(payload.get("env_overrides") or {}),
                     gates=dict(payload.get("gates") or {}),
+                    operator_session_id=str(payload.get("operator_session_id") or ""),
+                    parent_run_id=str(payload.get("parent_run_id") or ""),
+                    continuation_packet=dict(payload.get("continuation_packet") or {}),
                 )
                 return self._json(start_console_run(self.repo_root, request), status=201)
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/ask-why"):
+                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/ask-why")
+                return self._json(
+                    append_ask_why(self.repo_root, run_id, str(payload.get("question") or "")),
+                    status=201,
+                )
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/messages"):
+                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/messages")
+                return self._json(
+                    append_steer_message(self.repo_root, run_id, str(payload.get("body") or "")),
+                    status=201,
+                )
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/continue"):
+                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/continue")
+                follow_up = append_continue_request(
+                    self.repo_root,
+                    run_id,
+                    str(payload.get("prompt") or payload.get("body") or ""),
+                )
+                if follow_up.get("status") == "ready_to_start" and follow_up.get(
+                    "auto_start_allowed"
+                ):
+                    launch = LaunchRequest(
+                        route_id=str(follow_up.get("route_id") or ""),
+                        prompt=str(follow_up.get("body") or ""),
+                        operator_session_id=str(follow_up.get("operator_session_id") or ""),
+                        parent_run_id=run_id,
+                        continuation_packet=dict(follow_up.get("continuation_packet") or {}),
+                    )
+                    try:
+                        follow_up["started_run"] = start_console_run(self.repo_root, launch)
+                        follow_up["status"] = "started"
+                    except ConsoleLaunchError as exc:
+                        follow_up["start_error"] = str(exc)
+                return self._json(follow_up, status=201)
             if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/pause"):
                 run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/pause")
                 return self._json(
@@ -147,7 +208,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/emergency-stop"):
                 run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/emergency-stop")
                 return self._json(stop_console_run(self.repo_root, run_id, emergency=True))
-        except (ConsoleLaunchError, KeyError, ValueError) as exc:
+        except (ConsoleLaunchError, InteractionError, KeyError, ValueError) as exc:
             return self._json({"error": str(exc)}, status=400)
         return self.send_error(HTTPStatus.NOT_FOUND)
 

@@ -689,6 +689,34 @@ pre,
   color: var(--accent);
 }
 
+.operator-message-panel textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+}
+
+.operator-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.operator-mode {
+  min-width: 0;
+  padding: 6px;
+}
+
+.operator-mode.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#operator-message-button {
+  width: 100%;
+  margin-top: 8px;
+}
+
 .tool-json {
   margin: 0;
   white-space: pre-wrap;

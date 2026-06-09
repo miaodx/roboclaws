@@ -80,9 +80,49 @@ def test_realworld_mcp_tool_files_are_layered_by_capability(tmp_path: Path) -> N
         cleanup_profile=WORLD_LABELS_PROFILE,
     )
     try:
-        assert _fastmcp_tool_names(server) == semantic | atomic | {"done"}
+        assert _fastmcp_tool_names(server) == semantic | atomic | {
+            "check_operator_messages",
+            "done",
+        }
     finally:
         server.close()
+
+
+def test_realworld_mcp_operator_messages_pending_hint_and_seen(tmp_path: Path) -> None:
+    operator_messages = tmp_path / "operator_messages.jsonl"
+    operator_messages.write_text(
+        json.dumps(
+            {
+                "schema": "operator_console_message_v1",
+                "message_id": "msg-1",
+                "command_type": "steer",
+                "run_id": "run-a",
+                "body": "Observe the desk again",
+                "status": "queued",
+                "created_at": "2026-06-09T00:00:00Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "attempt",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        operator_messages_path=operator_messages,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        seen = server.call_tool("check_operator_messages")
+        empty = server.call_tool("metric_map")
+    finally:
+        server.close()
+
+    assert metric_map["operator_message_pending"] is True
+    assert metric_map["pending_operator_message_count"] == 1
+    assert seen["messages"][0]["body"] == "Observe the desk again"
+    assert seen["messages"][0]["status"] == "seen"
+    assert "operator_message_pending" not in empty
 
 
 def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Path) -> None:

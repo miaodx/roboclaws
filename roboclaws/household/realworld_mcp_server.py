@@ -74,6 +74,10 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_client_from_env,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_metric_map_instruction
+from roboclaws.operator_console.interactions import (
+    check_operator_messages_for_mcp,
+    pending_operator_message_hint,
+)
 
 __all__ = ["MCP_SERVER_NAME", "RealWorldMolmoCleanupMCPServer", "make_molmo_realworld_cleanup_mcp"]
 
@@ -114,6 +118,7 @@ def make_molmo_realworld_cleanup_mcp(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    operator_messages_path: str | Path | None = None,
     rerun_command: str | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
@@ -139,6 +144,7 @@ def make_molmo_realworld_cleanup_mcp(
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
+        operator_messages_path=operator_messages_path,
         rerun_command=rerun_command,
     )
 
@@ -171,6 +177,7 @@ class RealWorldMolmoCleanupMCPServer:
         visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
         visual_grounding_base_url: str | None = None,
         visual_grounding_timeout_s: float | None = None,
+        operator_messages_path: str | Path | None = None,
         rerun_command: str | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
@@ -216,6 +223,9 @@ class RealWorldMolmoCleanupMCPServer:
         self.record_robot_views = bool(record_robot_views)
         self.cleanup_profile = cleanup_profile
         self.planner_proof_run_result = planner_proof_run_result
+        self.operator_messages_path = (
+            Path(operator_messages_path) if operator_messages_path is not None else None
+        )
         self.rerun_command = (
             str(rerun_command or "").strip() or os.environ.get(REPORT_RERUN_COMMAND_ENV, "").strip()
         )
@@ -268,12 +278,19 @@ class RealWorldMolmoCleanupMCPServer:
                 "error": str(exc),
             }
         response = self._augment_response(name, request, response)
+        if name != "check_operator_messages":
+            response = self._attach_operator_message_hint(response)
         response = self._attach_raw_fpv_artifact_if_needed(name, response)
         self._write_tool_response(name, response)
         if name == "done" and response.get("ok"):
             return self._finalize_done(str(kwargs.get("reason", "")), response)
         self._record_tool_robot_view(name, request, response)
         return response
+
+    def check_operator_messages(self, max_messages: int = 10) -> dict[str, Any]:
+        path = self.operator_messages_path
+        run_dir = path.parent if path is not None else self.run_dir
+        return check_operator_messages_for_mcp(run_dir, max_messages=max(1, max_messages))
 
     def done_readiness_evidence(self) -> dict[str, Any]:
         trace_events = self._read_trace_events()
@@ -351,6 +368,16 @@ class RealWorldMolmoCleanupMCPServer:
                 "After placing and closing if needed, call observe once in the current "
                 "room/fixture area before choosing the next object or waypoint."
             )
+        return augmented
+
+    def _attach_operator_message_hint(self, response: dict[str, Any]) -> dict[str, Any]:
+        path = self.operator_messages_path
+        run_dir = path.parent if path is not None else self.run_dir
+        hint = pending_operator_message_hint(run_dir)
+        if not hint:
+            return response
+        augmented = dict(response)
+        augmented.update(hint)
         return augmented
 
     def _finalize_done(self, reason: str, done_response: dict[str, Any]) -> dict[str, Any]:

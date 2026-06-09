@@ -84,6 +84,7 @@ run task driver mode="" *overrides:
         photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
+        operator_messages_path|\
         scene|scene_index|scene_source|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
         isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
@@ -360,6 +361,7 @@ run task driver mode="" *overrides:
         fi
         map_mode="$(get map_mode minimal)"
         runtime_map_prior="$(get runtime_map_prior "")"
+        operator_messages_path="$(get operator_messages_path "")"
         backend="$(get backend auto)"
         min_generated_mess_count="$(get min_generated_mess_count auto)"
         generated_mess_object_ids="$(get generated_mess_object_ids "")"
@@ -706,7 +708,8 @@ run task driver mode="" *overrides:
           "$map_bundle" "$cleanup_routine" "$robot_views" "$camera_labeler" \
           "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend" \
           "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path" \
-          "$min_generated_mess_count" "$generated_mess_object_ids" "$task"
+          "$min_generated_mess_count" "$generated_mess_object_ids" "$task" \
+          "$operator_messages_path"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

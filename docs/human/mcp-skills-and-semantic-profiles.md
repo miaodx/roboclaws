@@ -230,7 +230,8 @@ capabilities when they need to move objects:
 
 - `household_manipulation_v1` owns object/receptacle navigation plus
   `pick`, `place`, `place_inside`, `open_receptacle`, and `close_receptacle`.
-- `household_episode_v1` owns explicit task completion through `done`.
+- `household_episode_v1` owns explicit task completion through `done` and
+  active-run operator steering through `check_operator_messages`.
 
 `done` is also the authoritative completion-readiness checkpoint. When public
 run state shows that closeout is premature, the server returns a structured
@@ -241,6 +242,13 @@ semantic substeps, and public run acceptance configuration; they must not use
 hidden mess membership, acceptable destination sets, private manifests, or
 scorer truth. Do not add a separate default MCP tool just to ask whether `done`
 is ready.
+
+`check_operator_messages` is a public steering checkpoint for supported
+operator-console routes. Ordinary MCP responses may expose only a pending hint
+when unread operator steering exists; the message text is retrieved through
+`check_operator_messages`, which marks queued messages as seen. It is not a
+post-`done` mutation path: terminal runs keep their report and checker evidence
+fixed, and follow-up work starts as a linked run from the operator console.
 
 Physical backends may expose these tools as structured `blocked_capability`
 responses until manipulation is proven.
