@@ -213,6 +213,7 @@ def live_agent_artifacts(
         "claude_events": run_dir / "claude-events.jsonl",
         "openai_agents_events": run_dir / "openai-agents-events.jsonl",
         "openai_agents_trace": run_dir / "openai-agents-trace.json",
+        "openai_agents_spans": run_dir / "openai-agents-spans.jsonl",
     }
     return {name: path for name, path in candidates.items() if path.exists()}
 

@@ -1756,6 +1756,8 @@ def test_molmo_cleanup_recipe_passes_goal_contract_to_all_household_runners() ->
     assert 'goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"' in (
         molmo_text
     )
+    assert 'if [[ -z "$goal_contract_json" && -z "$goal_contract_path" ]]; then' in molmo_text
+    assert "normalize_goal_contract" in molmo_text
     assert 'goal_contract_args+=(--goal-contract-json "$goal_contract_json")' in molmo_text
     assert '"${goal_contract_args[@]}" \\' in molmo_text
     assert 'prompt_args+=("${goal_contract_args[@]}")' in molmo_text

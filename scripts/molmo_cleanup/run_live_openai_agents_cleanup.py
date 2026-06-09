@@ -173,6 +173,11 @@ class LiveOpenAIAgentsCleanupRunner:
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
+            "surface": "household-world",
+            "intent": _intent_for_task_name(getattr(args, "task_name", "")),
+            "task_name": getattr(args, "task_name", ""),
+            "task_intent_mode": _task_intent_mode_for_timing(args),
+            "evidence_lane": getattr(args, "profile", ""),
             "profile": getattr(args, "profile", ""),
             "backend": getattr(args, "backend", ""),
             "policy": getattr(args, "policy", ""),
@@ -408,6 +413,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "live_status": self.status_path,
             "openai_agents_events": self.run_dir / "openai-agents-events.jsonl",
             "openai_agents_trace": self.run_dir / "openai-agents-trace.json",
+            "openai_agents_spans": self.run_dir / "openai-agents-spans.jsonl",
         }
         if attempt_index:
             artifact_paths.update(
@@ -416,6 +422,8 @@ class LiveOpenAIAgentsCleanupRunner:
                     / f"openai-agents-events.continuation-{attempt_index}.jsonl",
                     "openai_agents_trace": self.run_dir
                     / f"openai-agents-trace.continuation-{attempt_index}.json",
+                    "openai_agents_spans": self.run_dir
+                    / f"openai-agents-spans.continuation-{attempt_index}.jsonl",
                 }
             )
         return LiveAgentRequest(
@@ -437,6 +445,11 @@ class LiveOpenAIAgentsCleanupRunner:
                 "mcp_client_session_timeout_s": float(
                     getattr(self.args, "mcp_client_session_timeout_s", 0.0) or 0.0
                 ),
+                "surface": "household-world",
+                "intent": _intent_for_task_name(getattr(self.args, "task_name", "")),
+                "task_name": getattr(self.args, "task_name", ""),
+                "task_intent_mode": _task_intent_mode_for_timing(self.args),
+                "evidence_lane": getattr(self.args, "profile", ""),
             },
             artifact_paths=artifact_paths,
         )
@@ -551,6 +564,7 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
         payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
         payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
+        payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
         payload["timeline"] = _live_timing_timeline(payload)
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
@@ -781,6 +795,18 @@ def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict
     return breakdown
 
 
+def _intent_for_task_name(task_name: str) -> str:
+    if task_name == "semantic-map-build":
+        return "map-build"
+    return "cleanup"
+
+
+def _task_intent_mode_for_timing(args: Any) -> str:
+    return normalize_task_intent_mode(
+        getattr(args, "task_intent_mode", "") or TASK_INTENT_MODE_DEFAULT
+    )
+
+
 def _live_timing_timeline(timing: dict[str, Any]) -> dict[str, Any]:
     """Build a normalized timeline for cross-run latency comparisons."""
 
@@ -790,7 +816,15 @@ def _live_timing_timeline(timing: dict[str, Any]) -> dict[str, Any]:
     attempt_segments = _attempt_timeline_segments(timing)
     attribution = _latency_attribution(timing)
     return {
-        "schema": "openai_agents_cleanup_timeline_v1",
+        "schema": "live_agent_timeline_v1",
+        "surface": timing.get("surface", ""),
+        "intent": timing.get("intent", ""),
+        "task_name": timing.get("task_name", ""),
+        "task_intent_mode": timing.get("task_intent_mode", ""),
+        "runtime": timing.get("runtime", ""),
+        "provider_profile": timing.get("provider_profile", ""),
+        "model": timing.get("model", ""),
+        "evidence_lane": timing.get("evidence_lane") or timing.get("profile", ""),
         "started_at_epoch": started_at,
         "finished_at_epoch": finished_at,
         "total_elapsed_s": (timing.get("runner_timing") or {}).get("total_elapsed_s"),
@@ -905,6 +939,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         if isinstance(timing.get("openai_agents_event_metrics"), dict)
         else {}
     )
+    span_metrics = (
+        timing.get("openai_agents_span_metrics")
+        if isinstance(timing.get("openai_agents_span_metrics"), dict)
+        else {}
+    )
     sdk_elapsed = _float_or_none(runner_timing.get("openai_agents_elapsed_s"))
     mcp_elapsed = _float_or_none(mcp_timing.get("total_elapsed_s"))
     model_or_sdk_unattributed_s = None
@@ -930,6 +969,10 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         ),
         "openai_agents_tool_error_count": event_metrics.get("tool_error_count"),
         "openai_agents_tool_error_classifications": event_metrics.get("tool_error_classifications"),
+        "openai_agents_span_artifact_available": span_metrics.get("available"),
+        "openai_agents_span_count": span_metrics.get("span_end_count"),
+        "openai_agents_span_type_counts": span_metrics.get("span_type_counts"),
+        "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
         "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
     }
 
@@ -1067,6 +1110,52 @@ def _openai_agents_event_metrics(run_dir: Path) -> dict[str, Any]:
         "tool_error_count": sum(tool_error_classifications.values()),
         "tool_error_classifications": dict(sorted(tool_error_classifications.items())),
         "tool_error_messages_sample": tool_error_messages,
+    }
+
+
+def _openai_agents_span_metrics(run_dir: Path) -> dict[str, Any]:
+    span_paths = sorted(run_dir.glob("openai-agents-spans*.jsonl"))
+    if not span_paths:
+        return {
+            "available": False,
+            "reason": "openai-agents span files not present",
+        }
+
+    event_counts: dict[str, int] = {}
+    span_type_counts: dict[str, int] = {}
+    limitations: list[dict[str, Any]] = []
+    span_end_count = 0
+    for path in span_paths:
+        for event in _read_jsonl_path(path):
+            event_type = str(event.get("event") or "")
+            if event_type:
+                event_counts[event_type] = event_counts.get(event_type, 0) + 1
+            if event_type == "span_capture_unavailable":
+                limitations.append(
+                    {
+                        "reason": event.get("reason", ""),
+                        "error_type": event.get("error_type", ""),
+                        "message": event.get("message", ""),
+                    }
+                )
+            if event_type != "span_end":
+                continue
+            span_end_count += 1
+            span_type = str(event.get("span_type") or "unknown")
+            span_type_counts[span_type] = span_type_counts.get(span_type, 0) + 1
+
+    return {
+        "available": True,
+        "span_files": [path.name for path in span_paths],
+        "event_counts": dict(sorted(event_counts.items())),
+        "span_end_count": span_end_count,
+        "span_type_counts": dict(sorted(span_type_counts.items())),
+        "limitations": limitations,
+        "sanitization_note": (
+            "Span artifacts retain IDs, timing, span types, model/usage, MCP tool metadata, "
+            "and errors. Raw prompts, model text, function inputs, and function outputs are "
+            "not persisted."
+        ),
     }
 
 

@@ -716,6 +716,17 @@ Approval gate:
    enables the Agents SDK MCP `cache_tools_list` option by default and records
    that setting in timing; `ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST=false` can
    disable it for A/B runs.
+9. **Observability V1 slice**: completed. `live_timing.json` now includes an
+   intent-neutral `timeline.schema == "live_agent_timeline_v1"` plus semantic
+   identifiers for `surface`, `intent`, `task_name`, `task_intent_mode`,
+   `runtime`, `provider_profile`, `model`, and `evidence_lane`. The private
+   OpenAI Agents SDK route writes sanitized SDK span artifacts to
+   `openai-agents-spans.jsonl`, discovers those artifacts through
+   `LiveAgentResult`, and summarizes span counts/types in `live_timing.json`.
+   The lower private `just molmo::cleanup` route also synthesizes the default
+   goal contract for direct `openai-agents-live` runs when no goal contract path
+   is supplied. `openai-agents-live` remains private/non-default, and
+   `done`/`run_result.json` remains the only cleanup success signal.
 
 ### Observability Contract V1
 
@@ -743,18 +754,18 @@ comparison should be produced by a separate summarizer that reads
 `live_timing.json` and related artifacts across run directories instead of
 writing aggregate benchmark state back into a run.
 
-For the next observability slice, add OpenAI Agents SDK span-level evidence
-through SDK hooks or a trace processor and write it to a dedicated artifact such
-as `openai-agents-spans.jsonl`. That follow-up should expose model call timing,
-tool call timing, retries, and SDK orchestration gaps without changing
-`done`/`run_result.json` as the only cleanup success signal. Raw prompts,
-credentials, and private evaluator truth must not be written to these
-observability artifacts; error samples may be retained only when they are useful
-for failure classification and do not contain secrets.
+The Observability V1 slice adds OpenAI Agents SDK span-level evidence through a
+trace processor and writes it to `openai-agents-spans.jsonl`. The span artifact
+exposes trace/span identifiers, timing, span types, model/usage, MCP tool names,
+and error metadata without changing `done`/`run_result.json` as the only cleanup
+success signal. Raw prompts, model text, function inputs/outputs, credentials,
+and private evaluator truth are not written to the span artifacts; error samples
+may be retained only when they are useful for failure classification and do not
+contain secrets.
 
 ### Execution Preflight: Observability V1
 
-Preflight status: DRAFT
+Preflight status: DONE
 
 Task source: this plan plus the 2026-06-09 observability grill.
 
@@ -943,3 +954,34 @@ preflight. To start durable execution from the main session, use the exact
   `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py tests/unit/operator_console/test_state.py tests/unit/operator_console/test_launcher.py tests/unit/molmo_cleanup/test_ci_live_reports.py`,
   `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`,
   and `.venv/bin/ruff check roboclaws/agents/live_runtime.py roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/summarize_live_run.py roboclaws/operator_console/state.py roboclaws/operator_console/launcher.py tests/unit/agents/test_live_runtime.py tests/unit/operator_console/test_state.py tests/unit/operator_console/test_launcher.py tests/contract/dev_tools/test_task_agent_just_recipes.py`.
+- 2026-06-09: Completed Observability V1 implementation. The private
+  `openai-agents-live` route now writes sanitized
+  `openai-agents-spans.jsonl`, includes `live_agent_timeline_v1` in
+  `live_timing.json`, and records semantic run identifiers for
+  `surface=household-world`, `intent=cleanup`, `task_name=household-cleanup`,
+  `task_intent_mode=default_cleanup`, `runtime=openai-agents-live`,
+  `provider_profile=codex-env`, model `gpt-5.5`, and the active
+  `evidence_lane`.
+- 2026-06-09: Observability V1 live acceptance passed on
+  `world-public-labels` at
+  `output/household/household-cleanup/openai-agents-observability-v1-world-public/0609_2119/seed-7/`
+  and `camera-grounded-labels` at
+  `output/household/household-cleanup/openai-agents-observability-v1-camera-grounded/0609_2140/seed-7/`.
+  Both runs finished with exit status 0, produced `run_result.json`,
+  `report.html`, `live_timing.json`, `live_agent_timeline_v1`, and sanitized
+  span metrics. Span end counts were 298 and 318 respectively.
+- 2026-06-09: The `camera-raw-fpv` live acceptance run at
+  `output/household/household-cleanup/openai-agents-observability-v1-raw-fpv/0609_2202/seed-7/`
+  did not reach cleanup `done`/checker success. It produced
+  `live_timing.json`, `live_agent_timeline_v1`, two sanitized span files, and
+  764 span-end records across the initial SDK invocation plus one continuation.
+  The run stopped with a provider-wrapped context-window failure after two
+  grounded cleanup chains and repeated unresolved visual candidates. The SDK
+  exception classifier now has a regression test so this wording is classified
+  as `provider_context_failure` before the misleading HTTP 502 wrapper is
+  treated as a transient upstream outage.
+- 2026-06-09: Observability V1 focused verification passed:
+  `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`,
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
+  and `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py`.

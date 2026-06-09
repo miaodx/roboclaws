@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import json
 from argparse import Namespace
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from roboclaws.agents.drivers.openai_agents_live import OpenAIAgentsLiveRuntime
+from roboclaws.agents.drivers.openai_agents_live import (
+    OpenAIAgentsLiveRuntime,
+    _failure_from_exception,
+    _RoboclawsSpanRecorder,
+)
 from roboclaws.agents.live_runtime import (
     LiveAgentMCPServer,
     LiveAgentRequest,
@@ -20,6 +25,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _live_timing_timeline,
     _mcp_control_plane_metrics,
     _openai_agents_event_metrics,
+    _openai_agents_span_metrics,
 )
 
 
@@ -105,6 +111,7 @@ def test_live_agent_result_reads_existing_cli_artifacts(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     (run_dir / "codex-events.jsonl").write_text('{"type":"error"}\n', encoding="utf-8")
+    (run_dir / "openai-agents-spans.jsonl").write_text('{"event":"span_end"}\n', encoding="utf-8")
 
     result = live_agent_result_from_artifacts(run_dir)
 
@@ -118,6 +125,7 @@ def test_live_agent_result_reads_existing_cli_artifacts(tmp_path: Path) -> None:
         "cleanup_success": False,
     }
     assert result.artifact_paths["codex_events"] == run_dir / "codex-events.jsonl"
+    assert result.artifact_paths["openai_agents_spans"] == run_dir / "openai-agents-spans.jsonl"
 
 
 def test_openai_agents_runtime_missing_sdk_writes_normalized_failure(
@@ -147,6 +155,19 @@ def test_openai_agents_runtime_missing_sdk_writes_normalized_failure(
     payload = json.loads((tmp_path / "run" / "live_status.json").read_text(encoding="utf-8"))
     assert payload["reason"] == "provider_config_failure"
     assert "not installed" in payload["detail"]
+
+
+def test_openai_agents_runtime_classifies_context_window_before_502() -> None:
+    failure = _failure_from_exception(
+        RuntimeError(
+            "Error code: 502 - {'error': {'message': 'Your input exceeds the context "
+            "window of this model. Please adjust your input and try again.'}}"
+        )
+    )
+
+    assert failure.reason == "provider_context_failure"
+    assert failure.retryable is False
+    assert failure.resume_available is False
 
 
 def test_openai_agents_runtime_turn_completion_does_not_infer_cleanup_success(
@@ -480,11 +501,21 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert status_payload["exit_status"] == 0
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
     assert timing["runtime"] == "openai-agents-live"
+    assert timing["surface"] == "household-world"
+    assert timing["intent"] == "cleanup"
+    assert timing["task_name"] == "household-cleanup"
+    assert timing["task_intent_mode"] == "default_cleanup"
+    assert timing["evidence_lane"] == "smoke"
     assert timing["mcp_client_session_timeout_s"] == 30.0
     assert timing["openai_agents"]["trace_id"] == "trace_1"
     assert timing["mcp_control_plane_metrics"]["available"] is False
     assert timing["openai_agents_event_metrics"]["available"] is True
-    assert timing["timeline"]["schema"] == "openai_agents_cleanup_timeline_v1"
+    assert timing["openai_agents_span_metrics"]["available"] is False
+    assert timing["timeline"]["schema"] == "live_agent_timeline_v1"
+    assert timing["timeline"]["surface"] == "household-world"
+    assert timing["timeline"]["intent"] == "cleanup"
+    assert timing["timeline"]["runtime"] == "openai-agents-live"
+    assert timing["timeline"]["evidence_lane"] == "smoke"
     assert [item["name"] for item in timing["timeline"]["runner_segments"]] == [
         "pre_agent_setup",
         "openai_agents_runtime",
@@ -508,6 +539,7 @@ def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
     checker_commands: list[list[str]] = []
     prompts: list[str] = []
     event_paths: list[Path] = []
+    span_paths: list[Path] = []
 
     class FakeProcess:
         pid = 4242
@@ -532,6 +564,7 @@ def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
         def run(self, request: LiveAgentRequest) -> LiveAgentResult:
             prompts.append(request.kickoff_prompt)
             event_paths.append(request.artifact_path("openai_agents_events", "missing.jsonl"))
+            span_paths.append(request.artifact_path("openai_agents_spans", "missing.jsonl"))
             if len(prompts) == 1:
                 return LiveAgentResult(
                     phase="agent-turn-complete",
@@ -615,6 +648,10 @@ def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
     assert event_paths == [
         run_dir / "openai-agents-events.jsonl",
         run_dir / "openai-agents-events.continuation-1.jsonl",
+    ]
+    assert span_paths == [
+        run_dir / "openai-agents-spans.jsonl",
+        run_dir / "openai-agents-spans.continuation-1.jsonl",
     ]
     assert checker_commands
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
@@ -801,8 +838,108 @@ def test_openai_agents_event_metrics_parse_tool_errors(tmp_path: Path) -> None:
     assert "Waited 5.0 seconds" in metrics["tool_error_messages_sample"][0]
 
 
+def test_openai_agents_span_recorder_writes_sanitized_span_events(tmp_path: Path) -> None:
+    spans_path = tmp_path / "openai-agents-spans.jsonl"
+    recorder = _RoboclawsSpanRecorder(
+        spans_path,
+        runtime_config={
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-env",
+            "model": "gpt-5.5",
+        },
+    )
+
+    class FakeSpanData:
+        type = "function"
+
+        def export(self) -> dict[str, object]:
+            return {
+                "type": "function",
+                "name": "pickup_object",
+                "input": '{"secret":"prompt text"}',
+                "output": '{"private_target_truth": true}',
+                "mcp_data": {"server": "cleanup", "tool_name": "pickup_object"},
+            }
+
+    class FakeSpan:
+        trace_id = "trace_1"
+        span_id = "span_1"
+        parent_id = "span_parent"
+        started_at = datetime.fromtimestamp(100, UTC).isoformat()
+        ended_at = datetime.fromtimestamp(102.5, UTC).isoformat()
+        span_data = FakeSpanData()
+        error = {"message": "tool failed", "data": {"raw": "not persisted"}}
+
+    recorder.on_span_end(FakeSpan())
+    recorder.shutdown()
+    recorder.on_span_end(FakeSpan())
+
+    events = [json.loads(line) for line in spans_path.read_text(encoding="utf-8").splitlines()]
+
+    assert len(events) == 1
+    event = events[0]
+    assert event["schema"] == "openai_agents_sanitized_span_v1"
+    assert event["event"] == "span_end"
+    assert event["runtime"] == "openai-agents-live"
+    assert event["span_type"] == "function"
+    assert event["span_name"] == "pickup_object"
+    assert event["duration_s"] == 2.5
+    assert event["mcp"] == {"server": "cleanup", "tool_name": "pickup_object"}
+    assert event["error"] == {"message": "tool failed", "data_keys": ["raw"]}
+    assert "input" not in event
+    assert "output" not in event
+
+
+def test_openai_agents_span_metrics_parse_span_artifacts(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-spans.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"event": "trace_start", "trace_id": "trace_1"}),
+                json.dumps({"event": "span_end", "span_type": "response"}),
+                json.dumps({"event": "span_end", "span_type": "function"}),
+                json.dumps(
+                    {
+                        "event": "span_capture_unavailable",
+                        "reason": "sdk_trace_processor_registration_failed",
+                        "error_type": "RuntimeError",
+                        "message": "cannot register",
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = _openai_agents_span_metrics(run_dir)
+
+    assert metrics["available"] is True
+    assert metrics["span_files"] == ["openai-agents-spans.jsonl"]
+    assert metrics["event_counts"]["span_end"] == 2
+    assert metrics["span_end_count"] == 2
+    assert metrics["span_type_counts"] == {"function": 1, "response": 1}
+    assert metrics["limitations"] == [
+        {
+            "reason": "sdk_trace_processor_registration_failed",
+            "error_type": "RuntimeError",
+            "message": "cannot register",
+        }
+    ]
+    assert "Raw prompts" in metrics["sanitization_note"]
+
+
 def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() -> None:
     timing = {
+        "surface": "household-world",
+        "intent": "cleanup",
+        "task_name": "household-cleanup",
+        "task_intent_mode": "custom",
+        "runtime": "openai-agents-live",
+        "provider_profile": "codex-env",
+        "model": "gpt-5.5",
+        "evidence_lane": "world-public-labels",
         "started_at_epoch": 100.0,
         "openai_agents_start_epoch": 105.0,
         "openai_agents_end_epoch": 145.0,
@@ -828,6 +965,12 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "tool_error_count": 1,
             "tool_error_classifications": {"mcp_client_request_timeout": 1},
         },
+        "openai_agents_span_metrics": {
+            "available": True,
+            "span_end_count": 3,
+            "span_type_counts": {"function": 2, "response": 1},
+            "limitations": [],
+        },
         "openai_agents_attempts": [
             {
                 "attempt_index": 0,
@@ -852,6 +995,15 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
 
     timeline = _live_timing_timeline(timing)
 
+    assert timeline["schema"] == "live_agent_timeline_v1"
+    assert timeline["surface"] == "household-world"
+    assert timeline["intent"] == "cleanup"
+    assert timeline["task_name"] == "household-cleanup"
+    assert timeline["task_intent_mode"] == "custom"
+    assert timeline["runtime"] == "openai-agents-live"
+    assert timeline["provider_profile"] == "codex-env"
+    assert timeline["model"] == "gpt-5.5"
+    assert timeline["evidence_lane"] == "world-public-labels"
     assert [segment["duration_s"] for segment in timeline["runner_segments"]] == [
         5.0,
         40.0,
@@ -866,4 +1018,10 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
     assert timeline["latency_attribution"]["model_or_sdk_unattributed_s"] == 7.0
     assert timeline["latency_attribution"]["openai_agents_tool_error_classifications"] == {
         "mcp_client_request_timeout": 1
+    }
+    assert timeline["latency_attribution"]["openai_agents_span_artifact_available"] is True
+    assert timeline["latency_attribution"]["openai_agents_span_count"] == 3
+    assert timeline["latency_attribution"]["openai_agents_span_type_counts"] == {
+        "function": 2,
+        "response": 1,
     }

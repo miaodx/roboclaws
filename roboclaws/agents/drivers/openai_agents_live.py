@@ -30,10 +30,11 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
         request.run_dir.mkdir(parents=True, exist_ok=True)
         events_path = request.artifact_path("openai_agents_events", "openai-agents-events.jsonl")
         trace_path = request.artifact_path("openai_agents_trace", "openai-agents-trace.json")
+        spans_path = request.artifact_path("openai_agents_spans", "openai-agents-spans.jsonl")
         status_path = request.artifact_path("live_status", "live_status.json")
 
         try:
-            result = _run_openai_agents(request, events_path=events_path)
+            result = _run_openai_agents(request, events_path=events_path, spans_path=spans_path)
         except ImportError:
             failure = LiveAgentFailure(
                 "provider_config_failure",
@@ -49,7 +50,11 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
                 failure=failure,
                 started_at_epoch=started_at,
                 finished_at_epoch=time.time(),
-                artifact_paths={"openai_agents_events": events_path, "live_status": status_path},
+                artifact_paths={
+                    "openai_agents_events": events_path,
+                    "openai_agents_spans": spans_path,
+                    "live_status": status_path,
+                },
             )
             _write_json(status_path, normalized.to_live_status_payload())
             return normalized
@@ -61,7 +66,11 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
                 failure=failure,
                 started_at_epoch=started_at,
                 finished_at_epoch=time.time(),
-                artifact_paths={"openai_agents_events": events_path, "live_status": status_path},
+                artifact_paths={
+                    "openai_agents_events": events_path,
+                    "openai_agents_spans": spans_path,
+                    "live_status": status_path,
+                },
             )
             _write_json(status_path, normalized.to_live_status_payload())
             return normalized
@@ -71,6 +80,7 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
         artifact_paths = {
             "openai_agents_events": events_path,
             "openai_agents_trace": trace_path,
+            "openai_agents_spans": spans_path,
             "live_status": status_path,
         }
         if run_result_path.exists():
@@ -93,12 +103,22 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
         return normalized
 
 
-def _run_openai_agents(request: LiveAgentRequest, *, events_path: Path) -> Any:
+def _run_openai_agents(
+    request: LiveAgentRequest,
+    *,
+    events_path: Path,
+    spans_path: Path,
+) -> Any:
     try:
         from agents import Agent, Runner  # type: ignore[import-not-found]
         from agents.mcp import MCPServerStreamableHttp  # type: ignore[import-not-found]
     except ImportError:
         raise
+    try:
+        from agents import add_trace_processor, flush_traces  # type: ignore[import-not-found]
+    except ImportError:
+        add_trace_processor = None
+        flush_traces = None
 
     model = _responses_model(request)
     timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
@@ -132,17 +152,56 @@ def _run_openai_agents(request: LiveAgentRequest, *, events_path: Path) -> Any:
     agent = Agent(**agent_kwargs)
     events_path.parent.mkdir(parents=True, exist_ok=True)
     events_path.write_text("", encoding="utf-8")
+    spans_path.parent.mkdir(parents=True, exist_ok=True)
+    spans_path.write_text("", encoding="utf-8")
     _append_event(events_path, {"event": "start", "ts_epoch": time.time(), **runtime_config})
+    span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=runtime_config)
+    if add_trace_processor is None:
+        _append_span_limitation(
+            spans_path,
+            runtime_config=runtime_config,
+            reason="sdk_trace_processor_api_unavailable",
+        )
+        span_processor = None
+    else:
+        try:
+            add_trace_processor(span_processor)
+        except Exception as exc:
+            _append_span_limitation(
+                spans_path,
+                runtime_config=runtime_config,
+                reason="sdk_trace_processor_registration_failed",
+                exc=exc,
+            )
+            span_processor = None
 
-    if hasattr(server, "__aenter__"):
-        return _run_with_async_mcp_server(server, agent, request, events_path)
-    runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
-    result = Runner.run_sync(agent, request.kickoff_prompt, **runner_kwargs)
-    _append_event(
-        events_path,
-        {"event": "result", "ts_epoch": time.time(), "summary": _summarize_sdk_result(result)},
-    )
-    return result
+    try:
+        if hasattr(server, "__aenter__"):
+            return _run_with_async_mcp_server(server, agent, request, events_path)
+        runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
+        result = Runner.run_sync(agent, request.kickoff_prompt, **runner_kwargs)
+        _append_event(
+            events_path,
+            {"event": "result", "ts_epoch": time.time(), "summary": _summarize_sdk_result(result)},
+        )
+        return result
+    finally:
+        if flush_traces is not None:
+            try:
+                flush_traces()
+            except Exception as exc:
+                _append_event(
+                    events_path,
+                    {
+                        "event": "trace_flush_error",
+                        "ts_epoch": time.time(),
+                        "error_type": exc.__class__.__name__,
+                        "message": str(exc),
+                    },
+                )
+        if span_processor is not None:
+            span_processor.force_flush()
+            span_processor.shutdown()
 
 
 def _run_with_async_mcp_server(
@@ -281,6 +340,219 @@ def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     return payload
 
 
+class _RoboclawsSpanRecorder:
+    """Tracing processor that writes sanitized SDK span metadata.
+
+    The OpenAI Agents SDK span export can include raw model input/output and
+    function input/output. Roboclaws keeps only identifiers, timing, span type,
+    model/usage, MCP tool names, and error metadata so live artifacts stay useful
+    without persisting prompts, credentials, or private evaluator truth.
+    """
+
+    def __init__(self, path: Path, *, runtime_config: dict[str, Any]) -> None:
+        self.path = path
+        self.runtime_config = runtime_config
+        self.active = True
+
+    def on_trace_start(self, trace: Any) -> None:
+        self._append(
+            {
+                "event": "trace_start",
+                "ts_epoch": time.time(),
+                "trace_id": str(getattr(trace, "trace_id", "") or ""),
+                "workflow_name": str(getattr(trace, "name", "") or ""),
+            }
+        )
+
+    def on_trace_end(self, trace: Any) -> None:
+        self._append(
+            {
+                "event": "trace_end",
+                "ts_epoch": time.time(),
+                "trace_id": str(getattr(trace, "trace_id", "") or ""),
+                "workflow_name": str(getattr(trace, "name", "") or ""),
+            }
+        )
+
+    def on_span_start(self, span: Any) -> None:
+        self._append(_sanitized_span_event(span, event="span_start", runtime_config=None))
+
+    def on_span_end(self, span: Any) -> None:
+        self._append(_sanitized_span_event(span, event="span_end", runtime_config=None))
+
+    def shutdown(self) -> None:
+        self.active = False
+
+    def force_flush(self) -> None:
+        return None
+
+    def _append(self, payload: dict[str, Any]) -> None:
+        if not self.active:
+            return
+        payload.setdefault("schema", "openai_agents_sanitized_span_v1")
+        payload.setdefault("runtime", self.runtime_config.get("runtime"))
+        payload.setdefault("provider_profile", self.runtime_config.get("provider_profile"))
+        payload.setdefault("model", self.runtime_config.get("model"))
+        _append_event(self.path, _drop_empty(payload))
+
+
+def _append_span_limitation(
+    path: Path,
+    *,
+    runtime_config: dict[str, Any],
+    reason: str,
+    exc: Exception | None = None,
+) -> None:
+    payload = {
+        "schema": "openai_agents_sanitized_span_v1",
+        "event": "span_capture_unavailable",
+        "ts_epoch": time.time(),
+        "runtime": runtime_config.get("runtime"),
+        "provider_profile": runtime_config.get("provider_profile"),
+        "model": runtime_config.get("model"),
+        "reason": reason,
+    }
+    if exc is not None:
+        payload["error_type"] = exc.__class__.__name__
+        payload["message"] = str(exc)
+    _append_event(path, _drop_empty(payload))
+
+
+def _sanitized_span_event(
+    span: Any,
+    *,
+    event: str,
+    runtime_config: dict[str, Any] | None,
+) -> dict[str, Any]:
+    span_data = getattr(span, "span_data", None)
+    exported = _span_data_export(span_data)
+    payload: dict[str, Any] = {
+        "schema": "openai_agents_sanitized_span_v1",
+        "event": event,
+        "ts_epoch": time.time(),
+        "trace_id": str(getattr(span, "trace_id", "") or ""),
+        "span_id": str(getattr(span, "span_id", "") or ""),
+        "parent_id": str(getattr(span, "parent_id", "") or ""),
+        "started_at": getattr(span, "started_at", None),
+        "ended_at": getattr(span, "ended_at", None),
+        "duration_s": _iso_duration_seconds(
+            getattr(span, "started_at", None),
+            getattr(span, "ended_at", None),
+        ),
+        "span_type": str(_span_export_value(exported, "type") or getattr(span_data, "type", "")),
+        "span_name": _safe_span_name(exported, span_data),
+        "error": _sanitized_span_error(getattr(span, "error", None)),
+        "usage": _span_usage(exported),
+        "mcp": _span_mcp(exported),
+        "model": _span_model(exported),
+    }
+    if runtime_config:
+        payload.update(
+            {
+                "runtime": runtime_config.get("runtime"),
+                "provider_profile": runtime_config.get("provider_profile"),
+                "model": runtime_config.get("model"),
+            }
+        )
+    return _drop_empty(payload)
+
+
+def _span_data_export(span_data: Any) -> dict[str, Any]:
+    if span_data is None or not hasattr(span_data, "export"):
+        return {}
+    try:
+        exported = span_data.export()
+    except Exception:
+        return {}
+    return exported if isinstance(exported, dict) else {}
+
+
+def _span_export_value(exported: dict[str, Any], key: str) -> Any:
+    if key in exported:
+        return exported[key]
+    data = exported.get("data")
+    if isinstance(data, dict):
+        return data.get(key) or data.get(f"sdk_span_{key}")
+    return None
+
+
+def _safe_span_name(exported: dict[str, Any], span_data: Any) -> str:
+    span_type = str(_span_export_value(exported, "type") or getattr(span_data, "type", "") or "")
+    name = _span_export_value(exported, "name")
+    if span_type == "function":
+        return str(name or "")
+    if span_type in {"agent", "task", "turn", "custom", "mcp_list_tools"}:
+        return str(name or "")
+    return ""
+
+
+def _span_usage(exported: dict[str, Any]) -> dict[str, Any]:
+    usage = _span_export_value(exported, "usage")
+    return _to_jsonable(usage) if isinstance(usage, dict) else {}
+
+
+def _span_mcp(exported: dict[str, Any]) -> dict[str, Any]:
+    mcp: dict[str, Any] = {}
+    mcp_data = exported.get("mcp_data")
+    if isinstance(mcp_data, dict):
+        for key in ("server", "tool_name", "name"):
+            if key in mcp_data:
+                mcp[key] = mcp_data[key]
+    server = exported.get("server")
+    if server:
+        mcp["server"] = server
+    result = exported.get("result")
+    if isinstance(result, list):
+        mcp["tool_names"] = [str(item) for item in result]
+        mcp["tool_count"] = len(result)
+    return _to_jsonable(mcp) if mcp else {}
+
+
+def _span_model(exported: dict[str, Any]) -> str:
+    model = _span_export_value(exported, "model")
+    return str(model or "")
+
+
+def _sanitized_span_error(error: Any) -> dict[str, Any]:
+    if not isinstance(error, dict):
+        return {}
+    payload: dict[str, Any] = {}
+    message = str(error.get("message") or "")
+    if message:
+        payload["message"] = message
+    data = error.get("data")
+    if isinstance(data, dict):
+        payload["data_keys"] = sorted(str(key) for key in data.keys())
+    return payload
+
+
+def _iso_duration_seconds(started_at: Any, ended_at: Any) -> float | None:
+    if not started_at or not ended_at:
+        return None
+    from datetime import datetime
+
+    try:
+        start = datetime.fromisoformat(str(started_at).replace("Z", "+00:00"))
+        end = datetime.fromisoformat(str(ended_at).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return round(max(0.0, (end - start).total_seconds()), 3)
+
+
+def _drop_empty(payload: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in payload.items() if not _is_empty_json_value(value)}
+
+
+def _is_empty_json_value(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and value == "":
+        return True
+    if isinstance(value, (list, tuple, dict)) and not value:
+        return True
+    return False
+
+
 def _responses_model(request: LiveAgentRequest) -> Any:
     from agents import OpenAIResponsesModel  # type: ignore[import-not-found]
     from openai import AsyncOpenAI  # type: ignore[import-not-found]
@@ -364,6 +636,18 @@ def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
         item in lowered for item in ("authentication", "unauthorized", "invalid api key", "401")
     ):
         return LiveAgentFailure("provider_auth_failure", retryable=False, detail=detail)
+    if any(
+        item in lowered
+        for item in (
+            "context length",
+            "context_length",
+            "context window",
+            "maximum context",
+            "input exceeds the context",
+            "too large",
+        )
+    ):
+        return LiveAgentFailure("provider_context_failure", retryable=False, detail=detail)
     if any(
         item in lowered for item in ("429", "rate limit", "too many requests", "502", "503", "504")
     ):

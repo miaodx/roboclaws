@@ -118,6 +118,18 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     goal_contract_path="${goal_contract_path#goal-contract-path=}"
     goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"
     goal_contract_path="${goal_contract_path:-${ROBOCLAWS_GOAL_CONTRACT_PATH:-}}"
+    task_intent="${ROBOCLAWS_TASK_INTENT:-}"
+    if [[ -z "$task_intent" ]]; then
+      case "$task_name" in
+        semantic-map-build) task_intent="map-build" ;;
+        *) task_intent="cleanup" ;;
+      esac
+    fi
+    if [[ -z "$goal_contract_json" && -z "$goal_contract_path" ]]; then
+      goal_contract_json="$(
+        ROBOCLAWS_TASK_INTENT="$task_intent" ROBOCLAWS_TASK_PROMPT="$task" .venv/bin/python -c 'import os; from roboclaws.launch.catalog import SURFACE_SPECS; from roboclaws.launch.goals import normalize_goal_contract; from roboclaws.launch.intents import TASK_INTENT_SPECS; print(normalize_goal_contract(surface=SURFACE_SPECS["household-world"], intent=TASK_INTENT_SPECS[os.environ["ROBOCLAWS_TASK_INTENT"]], raw_prompt=os.environ.get("ROBOCLAWS_TASK_PROMPT", "")).to_json())'
+      )"
+    fi
     goal_contract_args=()
     if [[ -n "$goal_contract_json" ]]; then
       goal_contract_args+=(--goal-contract-json "$goal_contract_json")
@@ -568,8 +580,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --target-cleanup-count "$prompt_cleanup_count"
           --task-intent-mode "$task_intent_mode"
         )
-        if [[ -n "${ROBOCLAWS_TASK_INTENT:-}" ]]; then
-          prompt_args+=(--intent "$ROBOCLAWS_TASK_INTENT")
+        if [[ -n "$task_intent" ]]; then
+          prompt_args+=(--intent "$task_intent")
         fi
         prompt_args+=("${goal_contract_args[@]}")
         kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup "${prompt_args[@]}")"
