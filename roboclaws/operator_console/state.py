@@ -15,10 +15,20 @@ LIVE_RUN_MARKERS = (
     "live_status.json",
     "run_result.json",
     "trace.jsonl",
+    "codex-events.jsonl",
+    "claude-events.jsonl",
     "report.html",
     "runtime_metric_map.json",
     "tmux_session.txt",
     "driver.log",
+    "openai-agents-events.jsonl",
+    "openai-agents-trace.json",
+)
+
+AGENT_EVENT_GLOBS = (
+    "codex-events*.jsonl",
+    "claude-events*.jsonl",
+    "openai-agents-events*.jsonl",
 )
 
 
@@ -65,7 +75,7 @@ def derive_operator_state(
         artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
     latest_view_assets = _latest_view_assets(root, display_run_dir)
     public_result = _public_run_result_summary(run_result)
-    latest_agent_message = _latest_codex_agent_message(display_run_dir)
+    latest_agent_message = _latest_agent_message(display_run_dir)
 
     return {
         "run_id": str(status.get("run_id") or run_dir.name),
@@ -174,15 +184,20 @@ def _last_robot_tool_jsonl(path: Path) -> dict[str, Any]:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return {}
-    for line in reversed(lines):
+    payloads: list[dict[str, Any]] = []
+    for line in lines:
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    for index in range(len(payloads) - 1, -1, -1):
+        payload = payloads[index]
         if isinstance(payload, dict) and _is_robot_tool_trace(payload):
-            return payload
+            return _paired_tool_trace(payload, payloads[:index])
     return {}
 
 
@@ -193,16 +208,65 @@ def _is_robot_tool_trace(payload: dict[str, Any]) -> bool:
     return True
 
 
-def _latest_codex_agent_message(run_dir: Path) -> str:
-    event_paths = sorted(run_dir.glob("codex-events*.jsonl"), key=lambda path: path.stat().st_mtime)
+def _paired_tool_trace(trace: dict[str, Any], previous: list[dict[str, Any]]) -> dict[str, Any]:
+    if trace.get("event") != "response":
+        return trace
+    request = trace.get("request") if isinstance(trace.get("request"), dict) else None
+    if request:
+        return _with_latency_from_request(trace, None)
+    tool = str(trace.get("tool") or trace.get("tool_name") or "")
+    for candidate in reversed(previous):
+        if candidate.get("event") != "request":
+            continue
+        candidate_tool = str(candidate.get("tool") or candidate.get("tool_name") or "")
+        if candidate_tool != tool:
+            continue
+        merged = dict(trace)
+        candidate_request = candidate.get("request")
+        if isinstance(candidate_request, dict):
+            merged["request"] = candidate_request
+        return _with_latency_from_request(merged, candidate)
+    return trace
+
+
+def _with_latency_from_request(
+    trace: dict[str, Any], request_trace: dict[str, Any] | None
+) -> dict[str, Any]:
+    if trace.get("latency_ms") is not None or trace.get("duration_ms") is not None:
+        return trace
+    start = _numeric_trace_time(request_trace) if request_trace is not None else None
+    end = _numeric_trace_time(trace)
+    if start is None or end is None or end < start:
+        return trace
+    merged = dict(trace)
+    merged["latency_ms"] = round((end - start) * 1000, 3)
+    return merged
+
+
+def _numeric_trace_time(trace: dict[str, Any] | None) -> float | None:
+    if not trace:
+        return None
+    for key in ("ts", "timestamp", "wallclock_elapsed"):
+        try:
+            return float(trace.get(key))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _latest_agent_message(run_dir: Path) -> str:
+    event_paths: list[Path] = []
+    for pattern in AGENT_EVENT_GLOBS:
+        event_paths.extend(path for path in run_dir.glob(pattern) if path.is_file())
+    event_paths = sorted(set(event_paths), key=_safe_mtime)
     for path in reversed(event_paths):
-        message = _last_codex_agent_message(path)
+        message = _last_agent_message(path)
         if message:
             return message
     return ""
 
 
-def _last_codex_agent_message(path: Path) -> str:
+def _last_agent_message(path: Path) -> str:
     if not path.exists():
         return ""
     try:
@@ -216,13 +280,67 @@ def _last_codex_agent_message(path: Path) -> str:
             payload = json.loads(line)
         except json.JSONDecodeError:
             continue
-        item = payload.get("item") if isinstance(payload, dict) else None
-        if not isinstance(item, dict) or item.get("type") != "agent_message":
+        if not isinstance(payload, dict):
             continue
+        text = _agent_message_text(payload)
+        if text:
+            return text
+    return ""
+
+
+def _agent_message_text(payload: dict[str, Any]) -> str:
+    item = payload.get("item")
+    if isinstance(item, dict) and item.get("type") == "agent_message":
         text = item.get("text")
         if text:
             return str(text)
+
+    message = payload.get("message")
+    if isinstance(message, dict) and _is_assistant_message_payload(payload, message):
+        text = _message_content_text(message.get("content"))
+        if text:
+            return text
+
+    if _is_assistant_payload(payload):
+        text = _message_content_text(payload.get("content"))
+        if text:
+            return text
+
+    summary = payload.get("summary")
+    if isinstance(summary, dict):
+        for key in ("final_output", "output_text", "message"):
+            value = summary.get(key)
+            if value:
+                return str(value)
     return ""
+
+
+def _is_assistant_message_payload(payload: dict[str, Any], message: dict[str, Any]) -> bool:
+    return (
+        str(payload.get("type") or "").lower() == "assistant"
+        or str(message.get("role") or "").lower() == "assistant"
+    )
+
+
+def _is_assistant_payload(payload: dict[str, Any]) -> bool:
+    return str(payload.get("role") or "").lower() == "assistant"
+
+
+def _message_content_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    texts: list[str] = []
+    for item in content:
+        if isinstance(item, str):
+            texts.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") in {None, "text", "output_text"} and item.get("text"):
+            texts.append(str(item["text"]))
+    return "\n".join(text.strip() for text in texts if text and text.strip())
 
 
 def _latest_existing(run_dir: Path, names: tuple[str, ...]) -> Path:
@@ -240,6 +358,9 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Run Result", "run_result.json", "json"),
         ("Trace", "trace.jsonl", "jsonl"),
         ("Agent Events", "codex-events.jsonl", "jsonl"),
+        ("Claude Events", "claude-events.jsonl", "jsonl"),
+        ("OpenAI Agents Events", "openai-agents-events.jsonl", "jsonl"),
+        ("OpenAI Agents Trace", "openai-agents-trace.json", "json"),
         ("Driver Log", "driver.log", "log"),
         ("Checker Output", "checker.log", "log"),
         ("Runtime Map", "runtime_metric_map.json", "json"),
@@ -304,12 +425,15 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
 def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> dict[str, Any]:
     checker_log = _latest_existing(run_dir, ("checker.log",))
     report = _latest_existing(run_dir, ("report.html",))
-    ok = bool(
-        run_result.get("ok")
-        or run_result.get("success")
-        or run_result.get("cleanup_success")
-        or run_result.get("semantic_map_success")
-    )
+    normalized_phase = phase.lower()
+    if normalized_phase in {"failed", "error", "terminated"}:
+        return {
+            "status": "failed",
+            "report_exists": report.exists(),
+            "checker_log": str(checker_log) if checker_log.exists() else "",
+            "message": "Checker failed." if checker_log.exists() else "Run failed.",
+        }
+    ok = _run_result_success(run_result)
     if ok and report.exists():
         return {
             "status": "passed",
@@ -324,7 +448,6 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
             "checker_log": str(checker_log) if checker_log.exists() else "",
             "message": "Checker failed." if checker_log.exists() else "Run result is present.",
         }
-    normalized_phase = phase.lower()
     if normalized_phase == "checking-result":
         return {
             "status": "running",
@@ -345,6 +468,43 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
         "checker_log": str(checker_log) if checker_log.exists() else "",
         "message": "Checker has not run yet.",
     }
+
+
+def _run_result_success(run_result: dict[str, Any]) -> bool:
+    if not run_result:
+        return False
+    if _run_result_has_failure(run_result):
+        return False
+    for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
+        if run_result.get(key) is True:
+            return True
+    for key in ("cleanup_status", "completion_status", "final_status", "status"):
+        if _is_success_string(run_result.get(key)):
+            return True
+    score = run_result.get("score")
+    if isinstance(score, dict):
+        for key in ("completion_status", "status"):
+            if _is_success_string(score.get(key)):
+                return True
+    return False
+
+
+def _run_result_has_failure(run_result: dict[str, Any]) -> bool:
+    for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
+        if run_result.get(key) is False:
+            return True
+    for key in ("cleanup_status", "completion_status", "final_status", "status"):
+        if _is_failure_string(run_result.get(key)):
+            return True
+    return False
+
+
+def _is_success_string(value: Any) -> bool:
+    return str(value).strip().lower() in {"success", "ok", "passed"}
+
+
+def _is_failure_string(value: Any) -> bool:
+    return str(value).strip().lower() in {"failed", "failure", "error"}
 
 
 def _terminal_reason(
@@ -409,6 +569,8 @@ def _phase_is_active(phase: str) -> bool:
         "starting-server",
         "running",
         "running-codex",
+        "running-claude",
+        "running-openai-agents",
         "waiting-for-server-finish",
         "checking-result",
         "paused",
@@ -503,6 +665,9 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "success",
         "cleanup_success",
         "semantic_map_success",
+        "cleanup_status",
+        "completion_status",
+        "final_status",
         "terminate_reason",
         "primitive_provenance",
     )
@@ -529,6 +694,13 @@ def _run_dir_activity_mtime(path: Path) -> float:
                 pass
     if mtimes:
         return max(mtimes)
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _safe_mtime(path: Path) -> float:
     try:
         return path.stat().st_mtime
     except OSError:
