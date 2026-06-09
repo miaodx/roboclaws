@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.routes import get_route
 from roboclaws.operator_console.state import (
     derive_operator_state,
@@ -510,7 +511,13 @@ def test_state_keeps_failed_phase_when_result_contains_success(tmp_path: Path) -
         encoding="utf-8",
     )
     (attempt_dir / "run_result.json").write_text(
-        json.dumps({"cleanup_status": "success", "score": {"status": "success"}}),
+        json.dumps(
+            {
+                "cleanup_status": "success",
+                "score": {"status": "success"},
+                "agent_diagnostics": {"fridge_inside_sequence_ok": False},
+            }
+        ),
         encoding="utf-8",
     )
     (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
@@ -520,7 +527,100 @@ def test_state_keeps_failed_phase_when_result_contains_success(tmp_path: Path) -
 
     assert state["status"] == "failed"
     assert state["checker_status"]["status"] == "failed"
+    assert state["checker_status"]["reason"] == (
+        "fridge cleanup sequence incomplete; call close_receptacle with the same "
+        "fridge fixture_id after place_inside before moving on or done."
+    )
+    assert state["checker_status"]["message"].startswith(
+        "Checker failed: fridge cleanup sequence incomplete"
+    )
     assert state["terminal_reason"] == "cleanup checker exited with status 1"
+    assert state["controls"]["stop_available"] is False
+
+
+def test_state_allows_stop_to_release_lock_for_failed_terminal_run(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0609_1025" / "seed-7"
+    route = get_route("codex-mujoco-cleanup")
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": route.to_payload(),
+                "phase": "starting",
+                "backend_lock": route.lock_name,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "failed",
+                "exit_status": 1,
+                "reason": "cleanup checker exited with status 1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "cleanup_status": "success",
+                "agent_diagnostics": {"fridge_inside_sequence_ok": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "checker.log").write_text("checker failed\n", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id="wrapper-run", pid=12345)
+
+    state = derive_operator_state(tmp_path, run_dir, route)
+
+    assert state["status"] == "failed"
+    assert state["checker_status"]["status"] == "failed"
+    assert state["controls"]["stop_available"] is True
+
+
+def test_state_summarizes_checker_log_failure_when_structured_diagnostic_missing(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0609_1030" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "failed", "exit_status": 1}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps({"cleanup_status": "success"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
+    (attempt_dir / "checker.log").write_text(
+        "AssertionError: {'agent_diagnostics': {'fridge_inside_sequence_ok': False}}\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["checker_status"]["status"] == "failed"
+    assert state["checker_status"]["message"] == (
+        "Checker failed: fridge cleanup sequence incomplete; call close_receptacle with "
+        "the same fridge fixture_id after place_inside before moving on or done."
+    )
 
 
 def test_state_surfaces_openai_agents_artifacts(tmp_path: Path) -> None:
