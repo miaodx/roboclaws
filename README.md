@@ -62,14 +62,12 @@ reference is
 Install the project once:
 
 ```bash
-uv sync --extra dev --extra openclaw
+uv sync --extra dev
 ```
 
-For MolmoSpaces/MuJoCo cleanup demos, include the heavier extra:
-
-```bash
-uv sync --extra dev --extra molmospaces
-```
+The `dev` extra includes the standard MolmoSpaces/MuJoCo CPU runtime used by
+local cleanup demos. Isaac Lab remains intentionally isolated in
+`.venv-isaaclab/`; use the Isaac preflight harness when testing that backend.
 
 The public command grammar is:
 

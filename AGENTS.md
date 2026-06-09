@@ -56,10 +56,11 @@ self-contained.
 uv sync --extra dev
 ```
 
-If a new optional-extras group is needed (e.g. `[openclaw]` for the MCP server),
-install it with `uv sync --extra dev --extra openclaw`.
-For real MolmoSpaces/MuJoCo demos, use
-`uv sync --extra dev --extra molmospaces`.
+The `dev` extra includes the standard MolmoSpaces/MuJoCo CPU runtime used by
+local cleanup demos. Keep Isaac Lab out of this environment; it belongs in the
+isolated `.venv-isaaclab/` runtime created by the Isaac preflight harness.
+Install additional optional-extras groups only when a workflow explicitly needs
+one.
 
 Mainland China network note: if PyPI downloads are slow or flaky, keep mirror
 selection machine-local via uv flags or environment variables, not committed
@@ -67,7 +68,7 @@ project metadata. Example:
 
 ```bash
 UV_DEFAULT_INDEX=https://pypi.tuna.tsinghua.edu.cn/simple \
-  uv sync --extra dev --extra molmospaces
+  uv sync --extra dev
 ```
 
 Use `uv sync` / `uv pip install` with mirrors as needed; do not switch to plain
