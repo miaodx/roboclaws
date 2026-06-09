@@ -1,19 +1,36 @@
 ---
 plan_scope: live-agent-runtime-sdk-spike
-status: CONTINUE
+status: DONE
 source:
   - 2026-06-08 SDK deep research discussion
   - intuitive-reduce-entropy
   - inline intuitive-planning-loop
   - intuitive-preflight
-last_reviewed: 2026-06-08
+last_reviewed: 2026-06-09
 ---
 
 # Live Agent Runtime SDK Spike
 
 ## Status
 
-CONTINUE
+DONE
+
+Completed on 2026-06-09. Roboclaws now has a provider-neutral
+`LiveAgentRuntime` contract and a private/non-default `openai-agents-live`
+household cleanup route that runs through the existing MCP server, `done`
+handoff, checker, and report boundary. Existing public `codex` and `claude`
+household cleanup routes remain unchanged.
+
+Live proof:
+
+- Command:
+  `just molmo::cleanup openai-agents-live smoke 7 output/household/household-cleanup/openai-agents-smoke-128 '帮我收拾这个房间' 5 127.0.0.1 18788`
+- Artifact:
+  `output/household/household-cleanup/openai-agents-smoke-128/0609_1052/seed-7/`
+- Result: `live_status.json` finished with exit status 0; checker passed;
+  `report.html` was generated; `run_result.json` restored 5/5 targets with
+  sweep coverage `1.0`; `openai-agents-events.jsonl` and
+  `openai-agents-trace.json` were written.
 
 ## Decision Summary
 
@@ -471,7 +488,7 @@ Why not first:
 
 ## Preflight Contract
 
-Preflight status: CONTINUE
+Preflight status: DONE
 
 Task source:
 
@@ -644,34 +661,41 @@ Approval gate:
 - Public/default route promotion for `openai-agents-live` after maintainer
   review.
 
-## Remaining Required Slices
+## Completed Slices
 
-These are required before this plan can return to `DONE`:
-
-1. **Dependency slice**: add or document the OpenAI Agents SDK dependency path
-   for this repo as a committed optional extra, tentatively named
-   `openai-agents`. Use `OpenAIResponsesModel` first. Default development to
-   `codex-env`/`gpt-5.5`; keep
-   `codex-mify`/`xiaomi/mimo-v2.5` as a secondary compatibility proof target,
-   not as a blocker for the first cleanup proof unless `codex-env` credentials
-   are unavailable.
-2. **Runner slice**: add a real OpenAI SDK cleanup runner that starts the
-   existing cleanup MCP server, invokes `OpenAIAgentsLiveRuntime`, waits for
-   `done`/`run_result.json`, runs the checker, and writes normal live artifacts.
-3. **Route slice**: wire a private/hidden repo command or `just` route to the
-   runner without changing existing `codex` or `claude` public routes.
-4. **Artifact parity slice**: ensure SDK events/traces/status/timing/checker
-   output are visible to existing operator-console and diagnostic consumers.
-5. **Live proof slice**: run one local credentialed OpenAI SDK cleanup smoke
-   through the default `codex-env` target, or stop as
-   `BLOCKED_NEEDS_DECISION` only if missing provider credentials are the sole
-   remaining blocker after slices 1-4 are complete.
-6. **Comparison slice**: compare SDK artifacts/failure behavior against the
-   Codex CLI baseline and record the decision here.
+1. **Dependency slice**: completed. `openai-agents==0.17.4` is committed as the
+   optional `openai-agents` extra in `pyproject.toml` / `uv.lock`. The runtime
+   uses `OpenAIResponsesModel` first. Default development and proof target is
+   `codex-env` with `CODEX_BASE_URL`, `CODEX_API_KEY`, and model `gpt-5.5`;
+   `codex-mify` remains a secondary compatibility target.
+2. **Runner slice**: completed. Added
+   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, which owns the
+   cleanup MCP server process, invokes `OpenAIAgentsLiveRuntime`, requires
+   `done`/`run_result.json`, runs the existing checker, and writes normal live
+   status/timing/checker/report artifacts.
+3. **Route slice**: completed. Wired `openai-agents-live` through the private
+   `just molmo::cleanup` maintainer surface only. Public
+   `just task::run household-cleanup codex|claude ...` behavior remains
+   unchanged, and `openai-agents-live` is rejected by public task-driver
+   resolution.
+4. **Artifact parity slice**: completed. SDK event and trace files
+   (`openai-agents-events.jsonl`, `openai-agents-trace.json`) are discovered by
+   live artifact helpers, operator-console state, and live-run summary output.
+   Operator-console checker status also now surfaces structured cleanup failure
+   reasons when available.
+5. **Live proof slice**: completed. The local credentialed `codex-env` proof at
+   `output/household/household-cleanup/openai-agents-smoke-128/0609_1052/seed-7/`
+   passed through MCP, `done`, checker, and `report.html`.
+6. **Comparison slice**: completed for the first spike decision. The SDK path
+   gives Python-native MCP wiring plus event/trace artifacts, but it is not
+   Codex CLI and is not promoted to a public/default route. The decision is to
+   keep `openai-agents-live` private/non-default as an experimental supplement
+   while retaining Docker-backed Codex and Claude Code CLI routes as product
+   baselines.
 
 ## Execution Log
 
-- 2026-06-09: Implemented the first spike slice. Added
+- 2026-06-09: Implemented the first scaffold slice. Added
   `roboclaws.agents.live_runtime` with `LiveAgentRequest`,
   `LiveAgentResult`, `LiveAgentRuntime`, artifact discovery, and
   `live_status.json` normalization helpers. Added private experimental
@@ -680,12 +704,10 @@ These are required before this plan can return to `DONE`:
   artifacts, and normalized failure/status output. Existing `codex` and
   `claude` live routes and public `just task::run` driver names were not
   changed.
-- 2026-06-09: Dependency decision recorded: do not add `openai-agents` to
-  `pyproject.toml` in this slice. The experimental runtime reports
-  `reason=provider_config_failure`, `retryable=false` when the SDK is missing.
-  Route exposure decision recorded: keep `openai-agents-live` private and
-  non-default until a separately approved local provider proof compares it
-  against the Codex CLI baseline.
+- 2026-06-09: Superseded the scaffold-only dependency decision after the plan
+  reopened for an operational cleanup proof. Final dependency decision: commit
+  `openai-agents==0.17.4` as an optional `openai-agents` extra, and keep
+  `openai-agents-live` private/non-default until maintainer review promotes it.
 - 2026-06-09: Verification passed:
   `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`,
   `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py`,
@@ -721,3 +743,20 @@ These are required before this plan can return to `DONE`:
   choices are implementation defaults recorded here: use a committed optional
   `openai-agents` extra, keep the first SDK runner private/non-default, and use
   `codex-env` for default development and first live proof.
+- 2026-06-09: Completed the operational dependency, runner, route, artifact,
+  and proof slices. Added the committed optional dependency, implemented
+  explicit `OpenAIResponsesModel` setup for `codex-env`/`codex-mify`, raised
+  the SDK internal turn cap to the repo default `128`, added the private
+  `openai-agents-live` runner/route, surfaced SDK artifacts in summaries and
+  the operator console, and kept public `codex`/`claude` routes unchanged.
+- 2026-06-09: Live proof passed with
+  `just molmo::cleanup openai-agents-live smoke 7 output/household/household-cleanup/openai-agents-smoke-128 '帮我收拾这个房间' 5 127.0.0.1 18788`.
+  Artifact:
+  `output/household/household-cleanup/openai-agents-smoke-128/0609_1052/seed-7/`.
+  The run finished with exit status 0, checker passed, `report.html` was
+  generated, 5/5 targets were restored, sweep coverage was `1.0`, and
+  `openai-agents-events.jsonl` / `openai-agents-trace.json` were present.
+- 2026-06-09: Final focused verification passed:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py tests/unit/operator_console/test_state.py tests/unit/operator_console/test_launcher.py tests/unit/molmo_cleanup/test_ci_live_reports.py`,
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  and `.venv/bin/ruff check roboclaws/agents/live_runtime.py roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py scripts/molmo_cleanup/summarize_live_run.py roboclaws/operator_console/state.py roboclaws/operator_console/launcher.py tests/unit/agents/test_live_runtime.py tests/unit/operator_console/test_state.py tests/unit/operator_console/test_launcher.py tests/contract/dev_tools/test_task_agent_just_recipes.py`.
