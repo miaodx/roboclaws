@@ -11,6 +11,7 @@ from roboclaws.household.task_intent import (
     normalize_task_intent_mode,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_prompt_rule
+from roboclaws.launch.goals import GoalContract, goal_contract_from_json
 
 TOOL_PROTOCOL_PREFIX = (
     "Use the cleanup MCP tool entries exactly as exposed by Codex; in text, "
@@ -75,8 +76,20 @@ def _normalize_task(task: str) -> str:
     return " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
 
 
-def _task_prefix(task: str, *, task_intent_mode: str = TASK_INTENT_MODE_DEFAULT) -> str:
+def _task_prefix(
+    task: str,
+    *,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    goal_contract: GoalContract | None = None,
+) -> str:
     normalized = _normalize_task(task)
+    if goal_contract is not None:
+        return (
+            f"This run is surface={goal_contract.surface} intent={goal_contract.intent}. "
+            f"Normalized goal: {goal_contract.normalized_goal}. "
+            f"Goal scope: {goal_contract.goal_scope}. Raw user goal: "
+            f"{goal_contract.raw_prompt or normalized}. "
+        )
     if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
         return CUSTOM_HOUSEHOLD_TASK_PREFIX.format(task=normalized)
     return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
@@ -91,9 +104,18 @@ def _with_task(
     task: str,
     *,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    goal_contract: GoalContract | None = None,
 ) -> str:
     prefix = CUSTOM_PREFIX if task_intent_mode == TASK_INTENT_MODE_CUSTOM else COMMON_PREFIX
-    return prefix + _task_prefix(task, task_intent_mode=task_intent_mode) + prompt
+    return (
+        prefix
+        + _task_prefix(
+            task,
+            task_intent_mode=task_intent_mode,
+            goal_contract=goal_contract,
+        )
+        + prompt
+    )
 
 
 def _custom_scope_suffix() -> str:
@@ -220,9 +242,13 @@ def render_kickoff_prompt(
     task: str = "",
     target_cleanup_count: int = 7,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    intent: str = "",
+    goal_contract: GoalContract | None = None,
 ) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
+    if intent == "open-ended":
+        task_intent_mode = TASK_INTENT_MODE_CUSTOM
     intent_mode = _normalize_task_intent_mode(task_intent_mode)
     if profile == "camera-raw-fpv":
         return _with_task(
@@ -234,6 +260,7 @@ def render_kickoff_prompt(
             ),
             task,
             task_intent_mode=intent_mode,
+            goal_contract=goal_contract,
         )
     if profile == "camera-grounded-labels":
         return _with_task(
@@ -245,6 +272,7 @@ def render_kickoff_prompt(
             ),
             task,
             task_intent_mode=intent_mode,
+            goal_contract=goal_contract,
         )
     if profile == "world-public-labels":
         return _with_task(
@@ -256,6 +284,7 @@ def render_kickoff_prompt(
             ),
             task,
             task_intent_mode=intent_mode,
+            goal_contract=goal_contract,
         )
     return _with_task(
         _task_aware_prompt(
@@ -266,6 +295,7 @@ def render_kickoff_prompt(
         ),
         task,
         task_intent_mode=intent_mode,
+        goal_contract=goal_contract,
     )
 
 
@@ -298,8 +328,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default="")
     parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
+    parser.add_argument("--intent", default="")
+    parser.add_argument("--goal-contract-json", default="")
     parser.add_argument("--target-cleanup-count", type=int, default=7)
     args = parser.parse_args(argv)
+    goal_contract = goal_contract_from_json(args.goal_contract_json)
     if args.task_name == "semantic-map-build":
         task = args.task or "build a semantic map of this room"
         print(render_semantic_map_build_prompt(args.profile, task))
@@ -310,6 +343,8 @@ def main(argv: list[str] | None = None) -> int:
                 task=args.task,
                 target_cleanup_count=args.target_cleanup_count,
                 task_intent_mode=args.task_intent_mode,
+                intent=args.intent,
+                goal_contract=goal_contract,
             )
         )
     return 0

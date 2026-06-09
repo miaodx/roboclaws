@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="980" viewBox="0 0 1280 980" role="img" aria-labelledby="title desc">
-  <title id="title">Roboclaws composable task, skill, and MCP capability profile ladder</title>
-  <desc id="desc">Detailed architecture diagram showing runnable tasks selecting skills, skills composing MCP tools through reusable capability profile requirements, backend variants including real robots, privileged boundaries, and report feedback.</desc>
+  <title id="title">Roboclaws composable surface, intent, skill, and MCP capability profile ladder</title>
+  <desc id="desc">Detailed architecture diagram showing runnable surfaces and intents selecting skills, skills composing MCP tools through reusable capability profile requirements, backend variants including real robots, privileged boundaries, and report feedback.</desc>
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#f8fbff"/>
@@ -46,16 +46,16 @@
 
   <rect width="1280" height="980" fill="url(#background)"/>
 
-  <text x="58" y="58" class="title">Composable Task / Skill / Capability Profile Ladder</text>
-  <text x="58" y="86" class="subtitle">Tasks own public runs. Skills compose behavior. Profiles define reusable capability environments. MCP tools stay stable.</text>
+  <text x="58" y="58" class="title">Composable Surface / Intent / Skill / Capability Profile Ladder</text>
+  <text x="58" y="86" class="subtitle">Surfaces and intents own public runs. Skills compose behavior. Profiles define reusable capability environments. MCP tools stay stable.</text>
 
   <rect x="46" y="116" width="1188" height="116" class="public-band"/>
   <text x="70" y="146" class="section">PUBLIC RUN SURFACE</text>
   <rect x="92" y="168" width="210" height="42" class="chip"/>
   <text x="114" y="195" class="chip-text">Open-ended goal</text>
   <rect x="366" y="154" width="240" height="70" class="focus-card"/>
-  <text x="390" y="181" class="focus-title">Runnable Task</text>
-  <text x="390" y="203" class="focus-text">semantic-map-build, household-cleanup</text>
+  <text x="390" y="181" class="focus-title">Surface + Intent</text>
+  <text x="390" y="203" class="focus-text">household-world: map-build, cleanup</text>
   <rect x="676" y="168" width="220" height="42" class="ok-chip"/>
   <text x="698" y="195" class="chip-text">Parameters + reports</text>
   <rect x="960" y="168" width="200" height="42" class="ok-chip"/>

@@ -63,8 +63,9 @@ room", remains a Task Prompt that the agent plans over those capabilities.
 The profile is public-agent metadata only. It must not expose generated mess
 sets, acceptable destinations, private manifests, hidden target lists,
 `is_misplaced`, private scoring truth, or the AI2-THOR `scene_objects` oracle.
-Demo recipes such as `just task::run household-cleanup ...` choose a run shape; they
-are not whole-task MCP tools.
+Demo recipes such as
+`just run::surface surface=household-world intent=cleanup ...` choose a run
+shape; they are not whole-task MCP tools.
 
 ## Model-Declared Camera Bridge
 
@@ -115,13 +116,13 @@ as report provenance.
 Recommended command shape for the future pipeline comparison:
 
 ```bash
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
-just task::run household-cleanup mcp-smoke evidence_lane=camera-grounded-labels camera_labeler=fake-http
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=yoloe
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=omdet-turbo
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=grounding-dino+mimo-v2.5
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=yoloe+mimo-v2.5
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world driver=mcp-smoke intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=fake-http
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=yoloe
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=omdet-turbo
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=grounding-dino+mimo-v2.5
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=yoloe+mimo-v2.5
 ```
 
 `yolo-custom` is not an active pipeline. Without a planned cleanup-ontology
@@ -486,7 +487,7 @@ support Codex, but may run supported Claude Code and OpenClaw routes. Use the
 same key set when comparing Kimi/MiMo results across machines:
 
 ```bash
-just task::run household-cleanup claude evidence_lane=world-oracle-labels seed=7 generated_mess_count=5
+just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels seed=7 generated_mess_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.

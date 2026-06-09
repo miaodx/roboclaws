@@ -18,10 +18,12 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
-from roboclaws.agents.drivers.openai_agents_live import OpenAIAgentsLiveRuntime
+from roboclaws.agents.drivers.openai_agents_live import (
+    MCP_CLIENT_SESSION_TIMEOUT_ENV,
+    OpenAIAgentsLiveRuntime,
+)
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
-from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.report import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_CUSTOM,
@@ -34,10 +36,16 @@ from roboclaws.household.visual_backend_slots import (
     VisualBackendSlotLease,
     acquire_visual_backend_slot,
 )
+from roboclaws.launch.evaluation import (
+    checker_flags_for_household_intent,
+    household_intent_id_for_checker,
+    merge_checker_flags,
+)
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS = 2
+DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
 
 
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_PROMPT = """
@@ -110,6 +118,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "The cleanup MCP tool catalog is static within one live run."
         ),
     )
+    parser.add_argument(
+        "--mcp-client-session-timeout-s",
+        type=float,
+        default=float(
+            os.environ.get(
+                MCP_CLIENT_SESSION_TIMEOUT_ENV,
+                str(DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S),
+            )
+        ),
+        help=(
+            "OpenAI Agents SDK MCP ClientSession read timeout. Visual cleanup lanes can "
+            "exceed the SDK's short default while robot-view artifacts are captured."
+        ),
+    )
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
@@ -158,6 +180,9 @@ class LiveOpenAIAgentsCleanupRunner:
             "provider_profile": getattr(args, "provider_profile", ""),
             "model": getattr(args, "model", ""),
             "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
+            "mcp_client_session_timeout_s": _round_duration(
+                max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
+            ),
         }
 
     def run(self) -> int:
@@ -409,6 +434,9 @@ class LiveOpenAIAgentsCleanupRunner:
                 "attempt_index": attempt_index,
                 "attempt_role": "continuation" if attempt_index else "initial",
                 "cache_tools_list": bool(getattr(self.args, "cache_tools_list", True)),
+                "mcp_client_session_timeout_s": float(
+                    getattr(self.args, "mcp_client_session_timeout_s", 0.0) or 0.0
+                ),
             },
             artifact_paths=artifact_paths,
         )
@@ -429,6 +457,7 @@ class LiveOpenAIAgentsCleanupRunner:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
+        task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
         custom_task = (
             normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
             == TASK_INTENT_MODE_CUSTOM
@@ -436,6 +465,16 @@ class LiveOpenAIAgentsCleanupRunner:
         checker_visual_args = list(self.args.checker_visual_arg)
         if custom_task:
             checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
+        intent_id = household_intent_id_for_checker(
+            task_name=task_name,
+            task_intent=task_intent,
+            custom_task=custom_task,
+        )
+        checker_policy_args = checker_flags_for_household_intent(
+            intent_id=intent_id,
+            profile=self.args.profile,
+            min_generated_mess_count=self.args.min_generated_mess_count,
+        )
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -457,52 +496,8 @@ class LiveOpenAIAgentsCleanupRunner:
             "molmo_cleanup_realworld",
             "--min-generated-mess-count",
             self.args.min_generated_mess_count,
-            "--require-agent-driven",
-            "--require-advisory-scoring",
-            *checker_visual_args,
+            *merge_checker_flags(checker_policy_args, checker_visual_args),
         ]
-        if task_name == "household-cleanup" and self.args.profile in {
-            "smoke",
-            "world-oracle-labels",
-            "camera-grounded-labels",
-            "camera-raw-fpv",
-        }:
-            if custom_task:
-                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
-            else:
-                checker_args.append("--require-clean-agent-run")
-        if self.args.profile == "world-oracle-labels":
-            _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
-            _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
-            if task_name == "household-cleanup" and not custom_task:
-                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
-            if not custom_task:
-                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
-        if self.args.profile == "camera-raw-fpv":
-            raw_fpv_required_cleanup_count = str(
-                generated_mess_success_threshold(int(self.args.min_generated_mess_count))
-            )
-            if not custom_task:
-                _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
-                _append_missing_checker_value(
-                    checker_args,
-                    "--min-model-declared-observations",
-                    raw_fpv_required_cleanup_count,
-                )
-                _append_missing_checker_value(
-                    checker_args,
-                    "--min-model-declared-actions",
-                    raw_fpv_required_cleanup_count,
-                )
-                if task_name == "household-cleanup":
-                    _append_missing_checker_value(
-                        checker_args,
-                        "--min-semantic-accepted-count",
-                        raw_fpv_required_cleanup_count,
-                    )
-                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
-            elif task_name == "household-cleanup":
-                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
         checker_args.append(str(run_result))
 
         try:
@@ -555,6 +550,8 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
         payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
         payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
+        payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
+        payload["timeline"] = _live_timing_timeline(payload)
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
     def _cleanup_server(self) -> None:
@@ -776,7 +773,190 @@ def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict
     if total is not None:
         breakdown["accounted_elapsed_s"] = _round_duration(accounted)
         breakdown["unaccounted_elapsed_s"] = _round_duration(max(0.0, total - accounted))
+        breakdown["accounting_note"] = (
+            "The partitioned runner buckets sum to total wall time. MCP trace timing "
+            "runs inside openai_agents_elapsed_s and is reported separately to avoid "
+            "double counting concurrent server work."
+        )
     return breakdown
+
+
+def _live_timing_timeline(timing: dict[str, Any]) -> dict[str, Any]:
+    """Build a normalized timeline for cross-run latency comparisons."""
+
+    finished_at = _float_or_none(timing.get("finished_at_epoch"))
+    started_at = _float_or_none(timing.get("started_at_epoch"))
+    runner_segments = _runner_timeline_segments(timing, finished_at)
+    attempt_segments = _attempt_timeline_segments(timing)
+    attribution = _latency_attribution(timing)
+    return {
+        "schema": "openai_agents_cleanup_timeline_v1",
+        "started_at_epoch": started_at,
+        "finished_at_epoch": finished_at,
+        "total_elapsed_s": (timing.get("runner_timing") or {}).get("total_elapsed_s"),
+        "runner_segments": runner_segments,
+        "openai_agents_attempt_segments": attempt_segments,
+        "latency_attribution": attribution,
+        "notes": [
+            "runner_segments partition end-to-end wall clock.",
+            (
+                "latency_attribution nests MCP trace attribution inside the SDK agent window; "
+                "do not add it to runner_segments as extra wall time."
+            ),
+            (
+                "between_tool_gap_s is the response-to-next-request window and includes model "
+                "reasoning, SDK orchestration, transport, and other agent-side delay."
+            ),
+        ],
+    }
+
+
+def _runner_timeline_segments(
+    timing: dict[str, Any],
+    finished_at: float | None,
+) -> list[dict[str, Any]]:
+    started_at = _float_or_none(timing.get("started_at_epoch"))
+    sdk_start = _float_or_none(timing.get("openai_agents_start_epoch"))
+    sdk_end = _float_or_none(timing.get("openai_agents_end_epoch"))
+    server_finished = _float_or_none(timing.get("server_finished_epoch"))
+    checker_start = _float_or_none(timing.get("checker_start_epoch"))
+    checker_end = _float_or_none(timing.get("checker_end_epoch"))
+    segments = [
+        _timeline_segment(
+            "pre_agent_setup",
+            "runner",
+            started_at,
+            sdk_start,
+            "Launcher setup, lock acquisition, MCP server startup, and readiness wait.",
+        ),
+        _timeline_segment(
+            "openai_agents_runtime",
+            "sdk_agent",
+            sdk_start,
+            sdk_end,
+            "OpenAI Agents SDK execution window including model calls and MCP tool use.",
+        ),
+        _timeline_segment(
+            "post_agent_server_wait",
+            "runner",
+            sdk_end,
+            server_finished,
+            "Wait for the cleanup MCP server to flush artifacts and exit after done.",
+        ),
+        _timeline_segment(
+            "checker",
+            "verification",
+            checker_start,
+            checker_end,
+            "Cleanup artifact checker.",
+        ),
+        _timeline_segment(
+            "final_overhead",
+            "runner",
+            checker_end,
+            finished_at,
+            "Final timing/status write.",
+        ),
+    ]
+    return [segment for segment in segments if segment is not None]
+
+
+def _attempt_timeline_segments(timing: dict[str, Any]) -> list[dict[str, Any]]:
+    segments: list[dict[str, Any]] = []
+    attempts = timing.get("openai_agents_attempts")
+    if not isinstance(attempts, list):
+        return segments
+    for attempt in attempts:
+        if not isinstance(attempt, dict):
+            continue
+        attempt_index = _int_or_none(attempt.get("attempt_index"))
+        label = "sdk_attempt"
+        if attempt_index is not None:
+            label = f"sdk_attempt_{attempt_index}"
+        segment = _timeline_segment(
+            label,
+            "sdk_agent_attempt",
+            _float_or_none(attempt.get("started_at_epoch")),
+            _float_or_none(attempt.get("finished_at_epoch")),
+            str(attempt.get("attempt_role") or ""),
+            extra={
+                "attempt_index": attempt_index,
+                "attempt_role": attempt.get("attempt_role"),
+                "phase": attempt.get("phase"),
+                "run_result_present": bool(attempt.get("run_result_present")),
+                "recovery_action": attempt.get("recovery_action", ""),
+                "recovery_reason": attempt.get("recovery_reason", ""),
+            },
+        )
+        if segment is not None:
+            segments.append(segment)
+    return segments
+
+
+def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
+    mcp_timing = (
+        timing.get("mcp_trace_timing") if isinstance(timing.get("mcp_trace_timing"), dict) else {}
+    )
+    runner_timing = (
+        timing.get("runner_timing") if isinstance(timing.get("runner_timing"), dict) else {}
+    )
+    event_metrics = (
+        timing.get("openai_agents_event_metrics")
+        if isinstance(timing.get("openai_agents_event_metrics"), dict)
+        else {}
+    )
+    sdk_elapsed = _float_or_none(runner_timing.get("openai_agents_elapsed_s"))
+    mcp_elapsed = _float_or_none(mcp_timing.get("total_elapsed_s"))
+    model_or_sdk_unattributed_s = None
+    if sdk_elapsed is not None:
+        model_or_sdk_unattributed_s = sdk_elapsed
+        if mcp_elapsed is not None:
+            model_or_sdk_unattributed_s = max(0.0, sdk_elapsed - mcp_elapsed)
+    return {
+        "openai_agents_elapsed_s": sdk_elapsed,
+        "mcp_trace_elapsed_s": mcp_elapsed,
+        "model_or_sdk_unattributed_s": (
+            _round_duration(model_or_sdk_unattributed_s)
+            if model_or_sdk_unattributed_s is not None
+            else None
+        ),
+        "mcp_between_tool_gap_s": mcp_timing.get("between_tool_gap_s"),
+        "mcp_robot_view_capture_s": mcp_timing.get("robot_view_capture_s"),
+        "mcp_tool_handler_s": mcp_timing.get("tool_handler_s"),
+        "mcp_other_overhead_s": mcp_timing.get("other_mcp_overhead_s"),
+        "mcp_tool_call_count": mcp_timing.get("tool_call_count"),
+        "mcp_list_tools_request_count": (timing.get("mcp_control_plane_metrics") or {}).get(
+            "list_tools_request_count"
+        ),
+        "openai_agents_tool_error_count": event_metrics.get("tool_error_count"),
+        "openai_agents_tool_error_classifications": event_metrics.get("tool_error_classifications"),
+        "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
+    }
+
+
+def _timeline_segment(
+    name: str,
+    category: str,
+    started_at: float | None,
+    finished_at: float | None,
+    detail: str,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if started_at is None or finished_at is None:
+        return None
+    duration = _round_duration(finished_at - started_at)
+    payload: dict[str, Any] = {
+        "name": name,
+        "category": category,
+        "started_at_epoch": started_at,
+        "finished_at_epoch": finished_at,
+        "duration_s": duration,
+        "detail": detail,
+    }
+    if extra:
+        payload.update({key: value for key, value in extra.items() if value not in {None, ""}})
+    return payload
 
 
 def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
@@ -850,6 +1030,46 @@ def _mcp_control_plane_metrics(run_dir: Path) -> dict[str, Any]:
     }
 
 
+def _openai_agents_event_metrics(run_dir: Path) -> dict[str, Any]:
+    event_paths = sorted(run_dir.glob("openai-agents-events*.jsonl"))
+    if not event_paths:
+        return {
+            "available": False,
+            "reason": "openai-agents event files not present",
+        }
+
+    event_counts: dict[str, int] = {}
+    tool_error_classifications: dict[str, int] = {}
+    tool_error_messages: list[str] = []
+    result_count = 0
+    for path in event_paths:
+        for event in _read_jsonl_path(path):
+            event_type = str(event.get("event") or "")
+            if event_type:
+                event_counts[event_type] = event_counts.get(event_type, 0) + 1
+            if event_type == "result":
+                result_count += 1
+            if event_type != "tool_error":
+                continue
+            classification = str(event.get("classification") or "tool_error")
+            tool_error_classifications[classification] = (
+                tool_error_classifications.get(classification, 0) + 1
+            )
+            message = str(event.get("message") or "")
+            if message and len(tool_error_messages) < 8:
+                tool_error_messages.append(message)
+
+    return {
+        "available": True,
+        "event_files": [path.name for path in event_paths],
+        "event_counts": dict(sorted(event_counts.items())),
+        "result_count": result_count,
+        "tool_error_count": sum(tool_error_classifications.values()),
+        "tool_error_classifications": dict(sorted(tool_error_classifications.items())),
+        "tool_error_messages_sample": tool_error_messages,
+    }
+
+
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
@@ -869,6 +1089,13 @@ def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
 def _float_or_none(value: Any) -> float | None:
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
 

@@ -34,10 +34,15 @@ from roboclaws.household.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
-from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT  # noqa: E402
+from roboclaws.household.task_intent import (  # noqa: E402
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
 from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
+from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json  # noqa: E402
 from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact  # noqa: E402
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
@@ -51,6 +56,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
     parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
+    parser.add_argument("--goal-contract", type=Path)
+    parser.add_argument("--goal-contract-json")
     parser.add_argument("--policy", default="realworld_contract_smoke_agent")
     parser.add_argument(
         "--backend",
@@ -114,6 +121,8 @@ def run_smoke(
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    goal_contract_json: str | None = None,
+    goal_contract_path: str | Path | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if generated_mess_count < 1:
@@ -164,10 +173,16 @@ def run_smoke(
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
         task_intent_mode=task_intent_mode,
+        goal_contract=goal_contract_from_json(goal_contract_json)
+        or goal_contract_from_file(goal_contract_path),
     )
     try:
-        _drive_public_sweep(server)
-        done = server.call_tool("done", reason=f"{policy} cleanup complete")
+        if normalize_task_intent_mode(task_intent_mode) == TASK_INTENT_MODE_CUSTOM:
+            _drive_open_ended_probe(server)
+            done = server.call_tool("done", reason=f"{policy} open-ended smoke task complete")
+        else:
+            _drive_public_sweep(server)
+            done = server.call_tool("done", reason=f"{policy} cleanup complete")
     finally:
         server.close()
 
@@ -213,6 +228,22 @@ def _drive_public_sweep(
             handled_handles.add(handle)
         _clean_pending_worklist(server, handled_handles)
     _clean_pending_worklist(server, handled_handles)
+
+
+def _drive_open_ended_probe(server: Any) -> None:
+    metric_map = server.call_tool("metric_map")
+    server.call_tool("fixture_hints")
+    waypoints = metric_map.get("inspection_waypoints") or []
+    if not waypoints:
+        server.call_tool("observe")
+        return
+    for waypoint in waypoints:
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if waypoint_id:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint_id)
+        observation = server.call_tool("observe")
+        if _detections_for_observation(server, observation):
+            return
 
 
 def _clean_pending_worklist(server: Any, handled_handles: set[str]) -> None:
@@ -359,6 +390,8 @@ def main(argv: list[str] | None = None) -> int:
         visual_grounding_base_url=args.visual_grounding_base_url,
         visual_grounding_timeout_s=args.visual_grounding_timeout_s,
         task_intent_mode=args.task_intent_mode,
+        goal_contract_json=args.goal_contract_json,
+        goal_contract_path=args.goal_contract,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

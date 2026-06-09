@@ -27,7 +27,7 @@ The eight cleanup rows are:
 The setup row builds the prior once with:
 
 ```bash
-just task::run semantic-map-build direct evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world driver=direct intent=map-build evidence_lane=camera-grounded-labels \
   seed=7 generated_mess_count=10 camera_labeler=grounding-dino
 ```
 

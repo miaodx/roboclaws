@@ -166,10 +166,24 @@ def _result_summary(run_result: dict[str, Any], run_dir: Path) -> dict[str, Any]
     if not run_result:
         return {"state": "pending"}
     score = run_result.get("score") if isinstance(run_result.get("score"), dict) else {}
+    goal_contract = (
+        run_result.get("goal_contract") if isinstance(run_result.get("goal_contract"), dict) else {}
+    )
+    completion_claim = (
+        run_result.get("agent_completion_claim")
+        if isinstance(run_result.get("agent_completion_claim"), dict)
+        else {}
+    )
     artifacts = run_result.get("artifacts") if isinstance(run_result.get("artifacts"), dict) else {}
     report = artifacts.get("report") or run_dir / "report.html"
+    intent = str(run_result.get("task_intent") or goal_contract.get("intent") or "").strip()
+    surface = str(run_result.get("task_surface") or goal_contract.get("surface") or "").strip()
     return {
         "state": "present",
+        "surface": surface or "unknown",
+        "intent": intent or "unknown",
+        "headline": _result_headline(intent=intent, completion_claim=completion_claim),
+        "claim_summary": str(completion_claim.get("completion_summary") or "").strip(),
         "cleanup_status": run_result.get("cleanup_status"),
         "completion_status": run_result.get("completion_status"),
         "restored": _score_fraction(score, "restored_count", "total_targets"),
@@ -218,12 +232,23 @@ def _print_summary(summary: dict[str, Any]) -> None:
 
     result = summary["result"]
     if result["state"] == "present":
-        print(
-            "result: "
-            f"{result['cleanup_status']} completion={result['completion_status']} "
-            f"restored={result['restored']} sweep={result['sweep']} "
-            f"policy={result['policy']}"
-        )
+        if result["intent"] == "cleanup":
+            print(
+                "result: "
+                f"{result['cleanup_status']} completion={result['completion_status']} "
+                f"restored={result['restored']} sweep={result['sweep']} "
+                f"policy={result['policy']}"
+            )
+        else:
+            print(
+                "result: "
+                f"{result['intent']} {result['headline']} "
+                f"cleanup_score={result['cleanup_status']} "
+                f"completion={result['completion_status']} sweep={result['sweep']} "
+                f"policy={result['policy']}"
+            )
+            if result["claim_summary"]:
+                print(f"claim: {result['claim_summary']}")
         print(f"report: {result['report']}")
     else:
         print("result: pending")
@@ -441,6 +466,17 @@ def _tool_event_label(event: dict[str, Any]) -> str:
     if isinstance(elapsed, int | float):
         suffix = f" at +{_format_duration(float(elapsed))}"
     return f"{tool}:{kind}{suffix}"
+
+
+def _result_headline(*, intent: str, completion_claim: dict[str, Any]) -> str:
+    if intent == "cleanup" or not intent:
+        return "cleanup-score"
+    if (
+        completion_claim.get("schema") == "roboclaws_agent_completion_claim_v1"
+        and str(completion_claim.get("completion_summary") or "").strip()
+    ):
+        return "claim=present"
+    return "claim=missing"
 
 
 def _score_fraction(score: dict[str, Any], numerator: str, denominator: str) -> str:

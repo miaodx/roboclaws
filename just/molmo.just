@@ -41,7 +41,7 @@ default:
 # Explicit cleanup evidence-lane runner. The recipe parameter remains named
 # `profile` for positional Just compatibility; public callers should pass the
 # new evidence lane names.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" goal_contract_json="" goal_contract_path="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -71,6 +71,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_name="{{task_name}}"
     operator_messages_path="{{operator_messages_path}}"
     task_intent_mode="{{task_intent_mode}}"
+    goal_contract_json="{{goal_contract_json}}"
+    goal_contract_path="{{goal_contract_path}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -110,6 +112,19 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_intent_mode="${task_intent_mode#task_intent_mode=}"
     task_intent_mode="${task_intent_mode#task-intent-mode=}"
     task_intent_mode="${task_intent_mode:-default_cleanup}"
+    goal_contract_json="${goal_contract_json#goal_contract_json=}"
+    goal_contract_json="${goal_contract_json#goal-contract-json=}"
+    goal_contract_path="${goal_contract_path#goal_contract_path=}"
+    goal_contract_path="${goal_contract_path#goal-contract-path=}"
+    goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"
+    goal_contract_path="${goal_contract_path:-${ROBOCLAWS_GOAL_CONTRACT_PATH:-}}"
+    goal_contract_args=()
+    if [[ -n "$goal_contract_json" ]]; then
+      goal_contract_args+=(--goal-contract-json "$goal_contract_json")
+    fi
+    if [[ -n "$goal_contract_path" ]]; then
+      goal_contract_args+=(--goal-contract "$goal_contract_path")
+    fi
     generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))
 
     if [[ "$camera_labeler" == visual_grounding=* ]]; then
@@ -546,7 +561,18 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         if [[ "$profile" == "camera-raw-fpv" ]]; then
           prompt_cleanup_count="$generated_mess_success_threshold"
         fi
-        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count" --task-intent-mode "$task_intent_mode")"
+        prompt_args=(
+          --profile "$profile"
+          --task-name "$task_name"
+          --task "$task"
+          --target-cleanup-count "$prompt_cleanup_count"
+          --task-intent-mode "$task_intent_mode"
+        )
+        if [[ -n "${ROBOCLAWS_TASK_INTENT:-}" ]]; then
+          prompt_args+=(--intent "$ROBOCLAWS_TASK_INTENT")
+        fi
+        prompt_args+=("${goal_contract_args[@]}")
+        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup "${prompt_args[@]}")"
 
         server_args=(
           --host "$server_host"
@@ -570,6 +596,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           "${runtime_map_prior_args[@]}"
           --map-mode "$map_mode"
         )
+        server_args+=("${goal_contract_args[@]}")
         if [[ -n "$isaac_scene_usd_path" ]]; then
           server_args+=(--isaac-scene-usd-path "$isaac_scene_usd_path")
         fi
@@ -770,6 +797,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --model "$openai_agents_model"
             --max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-128}"
             --incomplete-turn-continuation-attempts "${ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS:-2}"
+            --mcp-client-session-timeout-s "${ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S:-30}"
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
@@ -912,6 +940,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             "${runtime_map_prior_args[@]}" \
             "${semantic_sweep_args[@]}" \
             "${isaac_scene_args[@]}" \
+            "${goal_contract_args[@]}" \
             --output-dir "$run_dir"
           ;;
         mcp-smoke|openclaw-smoke)
@@ -924,6 +953,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --backend "$backend" \
             --task "$task" \
             --task-intent-mode "$task_intent_mode" \
+            "${goal_contract_args[@]}" \
             --policy "$policy" \
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \

@@ -111,6 +111,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--require-raw-fpv-observations", action="store_true")
     parser.add_argument("--require-camera-model-policy", action="store_true")
     parser.add_argument("--require-runtime-metric-map", action="store_true")
+    parser.add_argument("--require-goal-contract", action="store_true")
+    parser.add_argument("--require-completion-claim", action="store_true")
     parser.add_argument("--require-semantic-sweep", action="store_true")
     parser.add_argument("--require-agibot-g2-hardware", action="store_true")
     parser.add_argument("--require-minimal-map", action="store_true")
@@ -230,6 +232,8 @@ def main() -> None:
             require_raw_fpv_observations=args.require_raw_fpv_observations,
             require_camera_model_policy=args.require_camera_model_policy,
             require_runtime_metric_map=args.require_runtime_metric_map,
+            require_goal_contract=args.require_goal_contract,
+            require_completion_claim=args.require_completion_claim,
             require_semantic_sweep=args.require_semantic_sweep,
             require_agibot_g2_hardware=args.require_agibot_g2_hardware,
             require_minimal_map=args.require_minimal_map,
@@ -308,6 +312,8 @@ def _assert_result(
     require_raw_fpv_observations: bool = False,
     require_camera_model_policy: bool = False,
     require_runtime_metric_map: bool = False,
+    require_goal_contract: bool = False,
+    require_completion_claim: bool = False,
     require_semantic_sweep: bool = False,
     require_agibot_g2_hardware: bool = False,
     require_minimal_map: bool = False,
@@ -417,6 +423,10 @@ def _assert_result(
             data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {},
             agent_view=agent_view,
         )
+    if require_goal_contract:
+        _assert_goal_contract(data, base)
+    if require_completion_claim:
+        _assert_completion_claim(data)
     runtime_metric_map = (
         data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
     )
@@ -1113,6 +1123,7 @@ def _assert_runtime_metric_map(
             "promotion_status",
         ):
             assert key in anchor, anchor
+
         assert isinstance(anchor.get("affordances") or [], list), anchor
         assert anchor.get("promotion_status") != "promoted", anchor
         assert not str(anchor.get("anchor_id") or "").startswith("observed_"), anchor
@@ -1151,6 +1162,31 @@ def _assert_runtime_metric_map(
         assert "is_misplaced" not in candidate, candidate
         assert candidate.get("promotion_status") != "promoted", candidate
     _assert_no_forbidden_keys(runtime_metric_map)
+
+
+def _assert_goal_contract(data: dict[str, Any], base: Path) -> None:
+    contract = data.get("goal_contract") or {}
+    assert contract.get("schema") == "roboclaws_goal_contract_v1", data
+    assert contract.get("surface"), contract
+    assert contract.get("intent"), contract
+    assert contract.get("normalized_goal"), contract
+    assert contract.get("goal_scope") in {"whole-room", "prompt-scoped", "agent-declared"}, contract
+    artifacts = data.get("artifacts") or {}
+    path = _resolve_path(base, artifacts.get("goal_contract", ""))
+    assert path.is_file(), path
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload == contract, (payload, contract)
+
+
+def _assert_completion_claim(data: dict[str, Any]) -> None:
+    claim = data.get("agent_completion_claim") or {}
+    assert claim.get("schema") == "roboclaws_agent_completion_claim_v1", data
+    for key in ("completion_summary", "why_done", "evidence_used", "remaining_risks"):
+        assert key in claim, claim
+    assert str(claim["completion_summary"]).strip(), claim
+    assert str(claim["why_done"]).strip(), claim
+    assert isinstance(claim["evidence_used"], list), claim
+    assert isinstance(claim["remaining_risks"], list), claim
 
 
 def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> None:

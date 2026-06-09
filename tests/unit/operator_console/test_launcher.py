@@ -634,5 +634,7 @@ def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
     route = get_route("claude-mujoco-cleanup")
     argv = build_launch_argv(route, root=tmp_path, run_id="run-1")
 
-    assert argv[:4] == ["just", "task::run", "household-cleanup", "claude"]
+    assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=claude"]
+    assert "intent=cleanup" in argv
+    assert "evidence_lane=world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv

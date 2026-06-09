@@ -48,7 +48,7 @@ CI. Removing them saves little and makes `main` depend on local discipline.
 
 Use the existing command surfaces directly when they fit:
 
-- `just task::run ...` for user-facing task execution.
+- `just run::surface ...` for user-facing surface/intent execution.
 - `just agent::verify ...` for confidence gates.
 - `just dev::test ...` for pytest marker slices.
 - `just harness::*` or lower private modules only for maintainer debugging and
@@ -58,15 +58,17 @@ A dedicated `ci::*` namespace is optional. Add one only when the command is
 truly job-shaped rather than task-shaped, such as local Pages assembly from
 downloaded artifacts or a full "reproduce this exact GitHub job" wrapper.
 
-Do not add a `ci::*` wrapper merely to rename an existing `task::run` or
+Do not add a `ci::*` wrapper merely to rename an existing `run::surface` or
 `agent::verify` command.
 
-## Required Coverage For New Tasks
+## Required Coverage For New Surfaces And Intents
 
-When adding a public task such as `semantic-map-build` or `household-cleanup`,
-required CI should prove the task's public contract with deterministic inputs:
+When adding a public surface or intent such as
+`surface=household-world intent=map-build` or
+`surface=household-world intent=cleanup`, required CI should prove its public
+contract with deterministic inputs:
 
-- command routing accepts the documented `just task::run` shape
+- command routing accepts the documented `just run::surface` shape
 - required profiles, drivers, and overrides are validated
 - public artifacts are written with the expected names and schemas
 - private evaluation data is not leaked into public agent inputs
@@ -107,11 +109,11 @@ gate when it requires any of the following:
 | CI Job | Current Level | Local Equivalent |
 | --- | --- | --- |
 | `lint-and-mock` | required PR gate | `just agent::verify ci-required` |
-| `real-model-smoke` | required main gate today; review if provider flakiness grows | `just task::run territory vlm visual ...` and `just task::run coverage vlm visual ...` |
-| `openclaw-smoke` | advisory smoke | `just task::run ai2thor-nav openclaw visual ...` |
-| `territory-openclaw-smoke` | advisory smoke | `just task::run territory openclaw visual ...` |
-| `coverage-openclaw-smoke` | advisory smoke | `just task::run coverage openclaw visual ...` |
-| `photo-task-smoke` | opt-in expensive gate | `just task::run photo-chairs openclaw visual ...` |
+| `real-model-smoke` | required main gate today; review if provider flakiness grows | `just run::surface surface=ai2thor-games driver=vlm intent=territory report=visual ...` and `just run::surface surface=ai2thor-games driver=vlm intent=coverage report=visual ...` |
+| `openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual ...` |
+| `territory-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games driver=openclaw intent=territory report=visual ...` |
+| `coverage-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games driver=openclaw intent=coverage report=visual ...` |
+| `photo-task-smoke` | opt-in expensive gate | `just run::surface surface=ai2thor-world driver=openclaw intent=photo-capture report=visual ...` |
 | `molmo-live-cleanup` | opt-in expensive gate | `just molmo::ci-rehearsal ...` or the live matrix script |
 | `publish-pages` | required main gate | no single facade today; keep focused tests for Pages assembly constraints |
 
@@ -120,9 +122,9 @@ gate when it requires any of the following:
 - Pages assembly is job-shaped and does not yet have a single local facade.
   Focused tests should model its important constraints, such as running helper
   scripts without project site-packages.
-- `semantic-map-build` is a public task. It should have deterministic required
-  contract coverage for command routing and `runtime_metric_map.json` shape,
-  independent of real Agibot, Isaac, or live-agent proof.
+- `surface=household-world intent=map-build` should have deterministic
+  required contract coverage for command routing and `runtime_metric_map.json`
+  shape, independent of real Agibot, Isaac, or live-agent proof.
 - New backends should not automatically expand required CI. Add a cheap adapter
   contract first, then decide whether real backend proof is advisory or local.
 

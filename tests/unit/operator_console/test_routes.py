@@ -23,34 +23,65 @@ def test_route_registry_exposes_supported_agent_targets() -> None:
     }
     assert {route.driver for route in enabled} == {"codex", "claude"}
     assert {
-        (route.task, route.driver, route.profile, route.backend, route.lock_name)
+        (route.surface, route.intent, route.driver, route.profile, route.backend, route.lock_name)
         for route in enabled
     } == {
         (
-            "household-cleanup",
+            "household-world",
+            "cleanup",
             "codex",
             "world-oracle-labels",
             "molmospaces_subprocess",
             "molmospaces_mujoco",
         ),
         (
-            "household-cleanup",
+            "household-world",
+            "cleanup",
             "claude",
             "world-oracle-labels",
             "molmospaces_subprocess",
             "molmospaces_mujoco",
         ),
-        ("household-cleanup", "codex", "world-oracle-labels", "isaaclab_subprocess", "isaac_gpu"),
-        ("household-cleanup", "claude", "world-oracle-labels", "isaaclab_subprocess", "isaac_gpu"),
-        ("semantic-map-build", "codex", "camera-grounded-labels", "agibot_gdk", "agibot_g2"),
         (
-            "semantic-map-build",
+            "household-world",
+            "cleanup",
+            "codex",
+            "world-oracle-labels",
+            "isaaclab_subprocess",
+            "isaac_gpu",
+        ),
+        (
+            "household-world",
+            "cleanup",
+            "claude",
+            "world-oracle-labels",
+            "isaaclab_subprocess",
+            "isaac_gpu",
+        ),
+        (
+            "household-world",
+            "map-build",
+            "codex",
+            "camera-grounded-labels",
+            "agibot_gdk",
+            "agibot_g2",
+        ),
+        (
+            "household-world",
+            "map-build",
             "codex",
             "world-oracle-labels",
             "molmospaces_subprocess",
             "molmospaces_mujoco",
         ),
-        ("semantic-map-build", "codex", "world-oracle-labels", "isaaclab_subprocess", "isaac_gpu"),
+        (
+            "household-world",
+            "map-build",
+            "codex",
+            "world-oracle-labels",
+            "isaaclab_subprocess",
+            "isaac_gpu",
+        ),
     }
     validate_supported_routes_against_catalog()
 
@@ -98,9 +129,10 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         run_id="run-1",
         prompt="collect mugs; rm -rf / should stay text",
     )
-    assert argv[:4] == ["just", "task::run", "household-cleanup", "codex"]
+    assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=codex"]
+    assert "intent=cleanup" not in argv
+    assert "evidence_lane=world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv
-    assert "task_intent_mode=custom" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
 
 

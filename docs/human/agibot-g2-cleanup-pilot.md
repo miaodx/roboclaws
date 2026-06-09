@@ -6,7 +6,7 @@
 
 当前硬件验收只接受这个组合：
 
-- public task: `semantic-map-build`
+- public surface/intent: `surface=household-world intent=map-build`
 - driver: `codex`
 - evidence lane: `camera-grounded-labels`
 - backend: `agibot_gdk`
@@ -31,7 +31,7 @@
   -> hardware checker
 ```
 
-`household-cleanup` 不作为当前 Agibot 真机主验收任务。它会因为 manipulation
+`intent=cleanup` 不作为当前 Agibot 真机主验收任务。它会因为 manipulation
 正确 blocked 而看起来像“cleanup 没完成”，这不是今天要证明的事。
 
 ## 自动预检
@@ -86,7 +86,7 @@ PNC、真实相机或 DINO。
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just task::run semantic-map-build direct evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world driver=direct intent=map-build evidence_lane=camera-grounded-labels \
   backend=agibot_molmospaces_sim \
   runtime=fixture \
   rehearsal_mode=contract \
@@ -120,7 +120,7 @@ gate 和 launcher 仍然可用：
 Codex 或机器人：
 
 ```bash
-ROBOCLAWS_JUST_TRACE=1 just task::run semantic-map-build codex evidence_lane=camera-grounded-labels \
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/example/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
@@ -297,7 +297,7 @@ VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just task::run semantic-map-build codex evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-codex-dry-run \
@@ -321,7 +321,7 @@ dry run 不能称为 hardware evidence。
 只有 operator 确认 run-level gate 后，才启用 movement：
 
 ```bash
-just task::run semantic-map-build codex evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels \
   backend=agibot_gdk \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
@@ -341,7 +341,7 @@ output/agibot/semantic-map-build-hardware/<stamp>/seed-7/
 ## HTML control console
 
 可以和 HTML control console 结合。console 仍然走同一个 public route：
-`semantic-map-build codex evidence_lane=camera-grounded-labels backend=agibot_gdk`。
+`surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels backend=agibot_gdk`。
 
 启动 console：
 
@@ -443,7 +443,7 @@ arbitrary coordinate navigation 或额外 local nudge。
 
 ## 不作为当前步骤
 
-- `household-cleanup` 真机验收：manipulation 未证明，当前不跑。
+- `intent=cleanup` 真机验收：manipulation 未证明，当前不跑。
 - `camera-raw-fpv` / RAW_FPV-only cleanup lane：当前 Agibot 硬件验收使用
   `camera-grounded-labels`。但 `head_color` RAW_FPV preflight 是现场前置检查，用来证明
   policy camera 本身可读。

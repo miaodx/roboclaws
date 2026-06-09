@@ -51,18 +51,18 @@ Do not expose `agent_input`, `report`, `world_backend`, `perception_provenance`,
 or `verifier` as first-class public knobs by default. Those remain profile
 metadata and report metadata.
 
-Current command shape:
+Current canonical command shape:
 
 ```bash
-just task::run household-cleanup <driver> evidence_lane=<lane> [camera_labeler=<labeler>]
+just run::surface surface=household-world driver=<driver> intent=cleanup evidence_lane=<lane> [camera_labeler=<labeler>]
 ```
 
 Examples:
 
 ```bash
-just task::run household-cleanup claude evidence_lane=world-oracle-labels
-just task::run household-cleanup claude evidence_lane=camera-raw-fpv
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=camera-raw-fpv
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
 ```
 
 No backward compatibility is required for this refactor. The new names can

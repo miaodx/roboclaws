@@ -12,6 +12,7 @@ from roboclaws.agents.live_runtime import LiveAgentRequest, LiveAgentResult, Liv
 from roboclaws.agents.live_status import LiveAgentFailure
 
 DEFAULT_OPENAI_AGENTS_MAX_TURNS = 128
+MCP_CLIENT_SESSION_TIMEOUT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S"
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -100,26 +101,47 @@ def _run_openai_agents(request: LiveAgentRequest, *, events_path: Path) -> Any:
         raise
 
     model = _responses_model(request)
+    timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
+    runtime_config = _runtime_config(
+        request,
+        mcp_client_session_timeout_configured=timeout_configured,
+        mcp_client_session_timeout_s=timeout_s,
+    )
+    server_kwargs: dict[str, Any] = {
+        "name": request.mcp_server.name,
+        "params": {"url": request.mcp_server.url},
+        "cache_tools_list": _cache_tools_list(request),
+    }
+    if timeout_configured:
+        server_kwargs["client_session_timeout_seconds"] = timeout_s
     server = MCPServerStreamableHttp(
-        name=request.mcp_server.name,
-        params={"url": request.mcp_server.url},
-        cache_tools_list=_cache_tools_list(request),
+        **server_kwargs,
     )
     agent_kwargs: dict[str, Any] = {
         "name": f"roboclaws-{request.task_name}",
         "instructions": request.kickoff_prompt,
         "mcp_servers": [server],
+        "mcp_config": {
+            "failure_error_function": _recording_tool_error_function(
+                events_path,
+                runtime_config=runtime_config,
+            )
+        },
         "model": model,
     }
     agent = Agent(**agent_kwargs)
     events_path.parent.mkdir(parents=True, exist_ok=True)
     events_path.write_text("", encoding="utf-8")
+    _append_event(events_path, {"event": "start", "ts_epoch": time.time(), **runtime_config})
 
     if hasattr(server, "__aenter__"):
         return _run_with_async_mcp_server(server, agent, request, events_path)
     runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
     result = Runner.run_sync(agent, request.kickoff_prompt, **runner_kwargs)
-    _append_event(events_path, {"event": "result", "summary": _summarize_sdk_result(result)})
+    _append_event(
+        events_path,
+        {"event": "result", "ts_epoch": time.time(), "summary": _summarize_sdk_result(result)},
+    )
     return result
 
 
@@ -137,7 +159,10 @@ def _run_with_async_mcp_server(
         async with server:
             runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
             result = await Runner.run(agent, request.kickoff_prompt, **runner_kwargs)
-        _append_event(events_path, {"event": "result", "summary": _summarize_sdk_result(result)})
+        _append_event(
+            events_path,
+            {"event": "result", "ts_epoch": time.time(), "summary": _summarize_sdk_result(result)},
+        )
         return result
 
     return asyncio.run(_run())
@@ -165,6 +190,79 @@ def _cache_tools_list(request: LiveAgentRequest) -> bool:
     if isinstance(configured, bool):
         return configured
     return str(configured).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _mcp_client_session_timeout_seconds(request: LiveAgentRequest) -> tuple[bool, float | None]:
+    configured = None
+    if isinstance(request.metadata, dict):
+        configured = request.metadata.get("mcp_client_session_timeout_s")
+    if configured is None:
+        configured = os.environ.get(MCP_CLIENT_SESSION_TIMEOUT_ENV)
+    if configured is None or str(configured).strip() == "":
+        return False, None
+    try:
+        value = float(configured)
+    except (TypeError, ValueError):
+        return False, None
+    if value <= 0:
+        return True, None
+    return True, round(value, 3)
+
+
+def _runtime_config(
+    request: LiveAgentRequest,
+    *,
+    mcp_client_session_timeout_configured: bool,
+    mcp_client_session_timeout_s: float | None,
+) -> dict[str, Any]:
+    return {
+        "runtime": "openai-agents-live",
+        "provider_profile": request.provider_profile,
+        "model": request.model,
+        "max_turns": _max_turns(request),
+        "cache_tools_list": _cache_tools_list(request),
+        "mcp_server": {
+            "name": request.mcp_server.name,
+            "transport": request.mcp_server.transport,
+            "url": request.mcp_server.url,
+        },
+        "mcp_client_session_timeout_configured": mcp_client_session_timeout_configured,
+        "mcp_client_session_timeout_s": mcp_client_session_timeout_s,
+    }
+
+
+def _recording_tool_error_function(
+    events_path: Path,
+    *,
+    runtime_config: dict[str, Any],
+) -> Any:
+    def _format_tool_error(_context: Any, error: Exception) -> str:
+        message = str(error)
+        _append_event(
+            events_path,
+            {
+                "event": "tool_error",
+                "ts_epoch": time.time(),
+                "error_type": error.__class__.__name__,
+                "classification": _classify_tool_error(message),
+                "message": message,
+                "mcp_client_session_timeout_s": runtime_config.get("mcp_client_session_timeout_s"),
+            },
+        )
+        return f"An error occurred while running the tool. Please try again. Error: {message}"
+
+    return _format_tool_error
+
+
+def _classify_tool_error(message: str) -> str:
+    lowered = message.lower()
+    if "timed out while waiting for response to clientrequest" in lowered:
+        return "mcp_client_request_timeout"
+    if "connection timeout" in lowered or "timed out" in lowered or "timeout" in lowered:
+        return "timeout"
+    if "connection lost" in lowered or "connection reset" in lowered:
+        return "connection_lost"
+    return "tool_error"
 
 
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:

@@ -17,7 +17,9 @@ from roboclaws.agents.live_runtime import (
 from roboclaws.agents.live_status import LiveAgentFailure
 from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     LiveOpenAIAgentsCleanupRunner,
+    _live_timing_timeline,
     _mcp_control_plane_metrics,
+    _openai_agents_event_metrics,
 )
 
 
@@ -244,6 +246,8 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert captured["api_key"] == "fake-codex-key"
     assert captured["agent_kwargs"]["model"] is captured["responses_model"]
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is True
+    assert "client_session_timeout_seconds" not in captured["mcp_server_kwargs"]
+    assert captured["agent_kwargs"]["mcp_config"]["failure_error_function"]
     assert captured["runner_kwargs"]["max_turns"] == 128
 
 
@@ -301,6 +305,68 @@ def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
     OpenAIAgentsLiveRuntime().run(request)
 
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is False
+
+
+def test_openai_agents_runtime_configures_mcp_client_session_timeout(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            pass
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setenv("ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S", "30")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    assert captured["mcp_server_kwargs"]["client_session_timeout_seconds"] == 30.0
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["event"] == "start"
+    assert events[0]["mcp_client_session_timeout_s"] == 30.0
 
 
 def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, monkeypatch) -> None:
@@ -393,6 +459,7 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
         provider_profile="codex-env",
         model="gpt-5.5",
         max_turns=128,
+        mcp_client_session_timeout_s=30.0,
         server_startup_timeout_s=1.0,
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
@@ -413,8 +480,19 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert status_payload["exit_status"] == 0
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
     assert timing["runtime"] == "openai-agents-live"
+    assert timing["mcp_client_session_timeout_s"] == 30.0
     assert timing["openai_agents"]["trace_id"] == "trace_1"
     assert timing["mcp_control_plane_metrics"]["available"] is False
+    assert timing["openai_agents_event_metrics"]["available"] is True
+    assert timing["timeline"]["schema"] == "openai_agents_cleanup_timeline_v1"
+    assert [item["name"] for item in timing["timeline"]["runner_segments"]] == [
+        "pre_agent_setup",
+        "openai_agents_runtime",
+        "post_agent_server_wait",
+        "checker",
+        "final_overhead",
+    ]
+    assert timing["timeline"]["latency_attribution"]["mcp_client_session_timeout_s"] == 30.0
     assert checker_commands
     checker_command = checker_commands[0]
     assert "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py" in checker_command
@@ -517,6 +595,7 @@ def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
         model="gpt-5.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=2,
+        mcp_client_session_timeout_s=30.0,
         server_startup_timeout_s=1.0,
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
@@ -618,6 +697,7 @@ def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
         model="gpt-5.5",
         max_turns=128,
         incomplete_turn_continuation_attempts=1,
+        mcp_client_session_timeout_s=30.0,
         server_startup_timeout_s=1.0,
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
@@ -685,4 +765,105 @@ def test_openai_agents_control_plane_metrics_parse_server_log(tmp_path: Path) ->
     assert metrics["http_status_counts"] == {
         "200 OK": 1,
         "202 Accepted": 1,
+    }
+
+
+def test_openai_agents_event_metrics_parse_tool_errors(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-events.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"event": "start", "mcp_client_session_timeout_s": 5}),
+                json.dumps(
+                    {
+                        "event": "tool_error",
+                        "classification": "mcp_client_request_timeout",
+                        "message": (
+                            "Timed out while waiting for response to ClientRequest. "
+                            "Waited 5.0 seconds."
+                        ),
+                    }
+                ),
+                json.dumps({"event": "result"}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = _openai_agents_event_metrics(run_dir)
+
+    assert metrics["available"] is True
+    assert metrics["event_counts"]["tool_error"] == 1
+    assert metrics["tool_error_count"] == 1
+    assert metrics["tool_error_classifications"] == {"mcp_client_request_timeout": 1}
+    assert "Waited 5.0 seconds" in metrics["tool_error_messages_sample"][0]
+
+
+def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() -> None:
+    timing = {
+        "started_at_epoch": 100.0,
+        "openai_agents_start_epoch": 105.0,
+        "openai_agents_end_epoch": 145.0,
+        "server_finished_epoch": 146.0,
+        "checker_start_epoch": 146.5,
+        "checker_end_epoch": 148.0,
+        "finished_at_epoch": 149.0,
+        "mcp_client_session_timeout_s": 30.0,
+        "runner_timing": {
+            "total_elapsed_s": 49.0,
+            "openai_agents_elapsed_s": 40.0,
+        },
+        "mcp_trace_timing": {
+            "total_elapsed_s": 33.0,
+            "between_tool_gap_s": 20.0,
+            "robot_view_capture_s": 6.0,
+            "tool_handler_s": 5.0,
+            "other_mcp_overhead_s": 2.0,
+            "tool_call_count": 10,
+        },
+        "mcp_control_plane_metrics": {"list_tools_request_count": 2},
+        "openai_agents_event_metrics": {
+            "tool_error_count": 1,
+            "tool_error_classifications": {"mcp_client_request_timeout": 1},
+        },
+        "openai_agents_attempts": [
+            {
+                "attempt_index": 0,
+                "attempt_role": "initial",
+                "phase": "agent-turn-complete",
+                "started_at_epoch": 105.0,
+                "finished_at_epoch": 115.0,
+                "run_result_present": False,
+                "recovery_action": "continue",
+                "recovery_reason": "incomplete_agent_turn",
+            },
+            {
+                "attempt_index": 1,
+                "attempt_role": "continuation",
+                "phase": "finished",
+                "started_at_epoch": 115.0,
+                "finished_at_epoch": 145.0,
+                "run_result_present": True,
+            },
+        ],
+    }
+
+    timeline = _live_timing_timeline(timing)
+
+    assert [segment["duration_s"] for segment in timeline["runner_segments"]] == [
+        5.0,
+        40.0,
+        1.0,
+        1.5,
+        1.0,
+    ]
+    assert [segment["name"] for segment in timeline["openai_agents_attempt_segments"]] == [
+        "sdk_attempt_0",
+        "sdk_attempt_1",
+    ]
+    assert timeline["latency_attribution"]["model_or_sdk_unattributed_s"] == 7.0
+    assert timeline["latency_attribution"]["openai_agents_tool_error_classifications"] == {
+        "mcp_client_request_timeout": 1
     }

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from roboclaws.launch.catalog import resolve_task_launch
+from roboclaws.launch.catalog import resolve_surface_launch
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.locks import ResourceLock
@@ -107,9 +107,10 @@ def build_launch_argv(
         item for item in route.default_overrides if _override_key(item) not in overridden_keys
     ]
     args = [
-        route.task,
-        route.driver,
-        route.profile,
+        f"surface={route.surface}",
+        f"driver={route.driver}",
+        f"intent={route.intent}",
+        f"evidence_lane={route.profile}",
         f"backend={route.backend}",
         *default_overrides,
     ]
@@ -128,12 +129,12 @@ def build_launch_argv(
             raise ConsoleLaunchError(
                 "This route cannot accept a custom prompt safely. Use the default task prompt."
             )
-        if route.task == "household-cleanup" and "task_intent_mode" not in request_overrides:
-            args.append("task_intent_mode=custom")
+        if route.surface == "household-world" and route.intent == "cleanup":
+            args = [arg for arg in args if arg != "intent=cleanup"]
         args.append(f"prompt={prompt}")
 
-    resolve_task_launch(args)
-    return ["just", "task::run", *args]
+    resolve_surface_launch(args)
+    return ["just", "run::surface", *args]
 
 
 def start_console_run(

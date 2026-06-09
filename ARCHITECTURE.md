@@ -2,11 +2,11 @@
 
 Roboclaws is a thin robotics demo repo. Its architecture goal is not to hide
 robot work behind one opaque tool; it is to make every run reviewable through
-public task inputs, MCP tool traces, maps, reports, and private-evaluation
-boundaries.
+public surface/intent inputs, MCP tool traces, maps, reports, and
+private-evaluation boundaries.
 
-For commands, start with [`README.md`](README.md). For the task/skill/profile
-model, read
+For commands, start with [`README.md`](README.md). For the
+surface/intent/skill/profile model, read
 [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md).
 
 ![Architecture diagram](docs/architecture.svg)
@@ -17,7 +17,7 @@ The current human-facing layers are:
 
 ```text
 Open-ended goal
-  -> Runnable Task
+  -> Runnable Surface and Intent
   -> Agent Skill
   -> Capability Profile requirements
   -> MCP Capability Tools
@@ -25,8 +25,10 @@ Open-ended goal
   -> Artifacts and reports
 ```
 
-- **Runnable Tasks** are public run surfaces such as `ai2thor-nav`,
-  `semantic-map-build`, and `household-cleanup`. They own command names,
+- **Runnable Surfaces And Intents** are public run contracts such as
+  `surface=ai2thor-world intent=navigate`,
+  `surface=household-world intent=map-build`, and
+  `surface=household-world intent=cleanup`. They own command names,
   parameters, report shape, and acceptance gates.
 - **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
   and trace-preserving routines such as `navigate -> pick -> place`.
@@ -37,9 +39,9 @@ Open-ended goal
 - **Backend Variants** implement the same public shape in mock, simulator, API,
   or physical-robot environments.
 
-The real-robot rule is: physical runs should reuse the same task, skill,
-profile, and MCP tool layers. They differ by backend variant, provenance, safety
-gates, operator map context, and blocked-capability status.
+The real-robot rule is: physical runs should reuse the same surface, intent,
+skill, profile, and MCP tool layers. They differ by backend variant,
+provenance, safety gates, operator map context, and blocked-capability status.
 
 ## Major Stacks
 
@@ -102,12 +104,12 @@ Key pieces:
 
 The clean-slate direction is:
 
-- `semantic-map-build` is a Runnable Task for producing Runtime Metric Map
+- `surface=household-world intent=map-build` produces Runtime Metric Map
   snapshots, which can be wrapped as an Actionable Semantic Map Snapshot for
   downstream task consumption.
-- `household-cleanup` is a Runnable Task for cleanup runs.
+- `surface=household-world intent=cleanup` runs cleanup.
 - The canonical map flow is minimal-first: start from occupancy/free-space
-  navigation context, run `semantic-map-build`, then feed the resulting
+  navigation context, run `intent=map-build`, then feed the resulting
   `runtime_metric_map.json` or `actionable_semantic_map_snapshot.json` to
   cleanup with `runtime_map_prior=...` when a prior sweep is useful.
 - Offline Agibot `navigation_memory.json` conversion happens at the map-artifact
@@ -122,20 +124,20 @@ The clean-slate direction is:
 The public command grammar is intentionally small:
 
 ```bash
-just task::run <task> <driver> [report|evidence_lane] [key=value ...]
+just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
 ```
 
 Examples:
 
 ```bash
-just task::run ai2thor-nav codex visual
-just task::run semantic-map-build direct evidence_lane=world-oracle-labels seed=7
-just task::run household-cleanup direct evidence_lane=world-oracle-labels seed=7
+just run::surface surface=ai2thor-world driver=codex intent=navigate report=visual
+just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels seed=7
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=world-oracle-labels seed=7
 just console::run
 ```
 
-For household tasks, the third positional token is a cleanup input/evidence
-lane, and callers may also pass it explicitly as `evidence_lane=...`.
+For household runs, callers pass the cleanup input/evidence lane explicitly as
+`evidence_lane=...`.
 `evidence_lane` decides what the agent sees. Supported current lanes are
 `world-oracle-labels`, `world-public-labels`, `camera-grounded-labels`, and
 `camera-raw-fpv`. `camera-grounded-labels` additionally requires
@@ -153,17 +155,18 @@ canonical Actionable Semantic Map Snapshot prior. `map_mode=rich` remains only
 as an explicit legacy/debug shortcut for tests that need pre-authored public
 fixture semantics.
 
-The clean-slate household naming is the public surface: `semantic-map-build`
-produces Runtime Metric Map evidence, `actionable_semantic_map_snapshot_v1`
-is the canonical downstream artifact contract, and `household-cleanup`
-consumes household-world evidence for cleanup. Older Molmo-specific
-task/profile names are legacy compatibility details, not the canonical task
-layer.
+The clean-slate household public shape is `surface=household-world` plus
+explicit intents. `intent=map-build` produces Runtime Metric Map evidence,
+`actionable_semantic_map_snapshot_v1` is the canonical downstream artifact
+contract, and `intent=cleanup` consumes household-world evidence for cleanup.
+Older task/profile names such as `semantic-map-build`, `household-cleanup`,
+and Molmo-specific profile names are legacy compatibility details, not the
+canonical task layer.
 
 `just console::run` starts a standalone local operator console for supported
 coding-agent household routes. The console does not expose arbitrary shell
 commands: route selection comes from explicit console metadata and still
-resolves through the public task/catalog constraints.
+resolves through the public surface/intent catalog constraints.
 
 ## Capability Profiles
 
@@ -175,8 +178,9 @@ Older backend/domain ids such as `molmospaces_cleanup_v1` and
 
 Going forward:
 
-- Add a new runnable task by adding a domain `tasks.py` spec and registering it
-  in `roboclaws/launch/catalog.py`; keep behavior in the domain package.
+- Add a new runnable surface or intent by adding a domain `tasks.py` spec and
+  registering it in `roboclaws/launch/catalog.py`; keep behavior in the domain
+  package.
 - Add a new backend as a reusable adapter under the owning domain package, then
   expose it through task metadata or launch validation.
 - Add a new coding-agent driver under `roboclaws/agents/drivers/` and keep
@@ -230,7 +234,7 @@ task/profile shape, not separate robot-only task taxonomies.
 | Need | Start here |
 | --- | --- |
 | What to run | [`README.md`](README.md), [`just/README.md`](just/README.md) |
-| Task/skill/profile design | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
+| Surface/intent/skill/profile design | [`docs/human/mcp-skills-and-semantic-profiles.md`](docs/human/mcp-skills-and-semantic-profiles.md) |
 | MolmoSpaces settings | [`docs/human/molmospaces-settings.md`](docs/human/molmospaces-settings.md) |
 | Local runtime and keys | [`docs/human/local-runtime.md`](docs/human/local-runtime.md) |
 | Current project focus | [`STATUS.md`](STATUS.md) |

@@ -24,7 +24,7 @@ binaries with no system-package dependencies — install once, forget.
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
 | [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock`, including the standard MolmoSpaces/MuJoCo CPU runtime |
-| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing runs use `just task::run <task> <driver> [report]` with lower-level modules hidden from completion but still available for debugging |
+| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing runs use `just run::surface surface=<surface> driver=<driver> [intent=<intent>]` with lower-level modules hidden from completion but still available for debugging |
 
 ### Install
 
@@ -50,16 +50,16 @@ If either binary isn't found after install, add `~/.local/bin` to your `$PATH`
 ```bash
 just                       # default: prints the small public facade
 just --list                # same
-just --list task           # human-facing task grammar
+just --list run            # human-facing surface grammar
 just --list agent          # maintainer dispatchers
-just --summary             # task::run plus compact agent::* dispatchers
+just --summary             # run::surface plus compact agent::* dispatchers
 ```
 
 Invoke recipes with the `module::recipe` form:
 
 ```bash
-just task::run ai2thor-nav openclaw
-just task::run household-cleanup codex smoke
+just run::surface surface=ai2thor-world driver=openclaw intent=navigate
+just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke
 just agent::verify mock
 just agent::verify ci-required
 ```
@@ -70,7 +70,7 @@ keeps the namespace visible at a glance.
 ### Tab completion (one-time per machine)
 
 `just`'s install script does **not** wire up shell completions. Run this
-once to make `just <TAB>`, `just task::<TAB>`, `just agent::<TAB>`, etc.
+once to make `just <TAB>`, `just run::<TAB>`, `just agent::<TAB>`, etc.
 work in any directory that has a `justfile`:
 
 ```bash

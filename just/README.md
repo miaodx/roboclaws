@@ -5,30 +5,38 @@ task/driver/report combination as a separate recipe.
 
 ## Public Namespaces
 
-- `task::*` is for humans and natural-language delegation.
+- `run::*` is for humans and natural-language delegation.
 - `agent::*` is for maintainer-level dispatch into private implementation
   modules.
 
-Lower modules such as `openclaw::*`, `vlm::*`, `molmo::*`, `harness::*`,
-`verify::*`, `mcp::*`, `code::*`, `chat::*`, `appliance::*`, and `dev::*` are
-private. They remain runnable for debugging, but they are hidden from
-`just --summary` and shell completion.
+Lower modules such as `task::*`, `openclaw::*`, `vlm::*`, `molmo::*`,
+`harness::*`, `verify::*`, `mcp::*`, `code::*`, `chat::*`, `appliance::*`,
+and `dev::*` are private. They remain runnable for debugging, but they are
+hidden from `just --summary` and shell completion.
 
 ## Main Grammar
 
 ```bash
-just task::run <task> <driver> [report|evidence_lane] [key=value ...]
+just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
 ```
 
-Tasks:
+Surfaces:
 
-- `ai2thor-nav`
+- `ai2thor-world`
+- `ai2thor-games`
+- `household-world`
+- `planner-proof`
+
+Intents:
+
+- `navigate`
+- `photo-capture`
 - `territory`
 - `coverage`
-- `photo-chairs`
-- `semantic-map-build`
-- `household-cleanup`
-- `molmo-planner-proof`
+- `map-build`
+- `cleanup`
+- `open-ended`
+- `planner-proof`
 
 Drivers:
 
@@ -79,13 +87,14 @@ For timing work that should skip per-tool robot-view capture, keep the normal
 `world-oracle-labels` lane and pass an explicit capture option such as
 `robot_views=off`.
 
-If the third argument is `key=value`, `task::run` treats the report/profile as
-omitted and keeps the task default (`visual` for non-Molmo tasks,
-`world-oracle-labels` for household cleanup).
+If `intent=` is omitted, the surface default is used. For
+`surface=household-world`, a supplied `prompt=` without `intent=` infers
+`intent=open-ended`; an explicit `intent=cleanup prompt=...` narrows cleanup
+scope while keeping cleanup evaluation.
 
 ## Live Agent Launch Behavior
 
-`just task::run household-cleanup codex evidence_lane=world-oracle-labels` launches a detached tmux session.
+`just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels` launches a detached tmux session.
 The session owns the cleanup MCP server, the `codex exec` process, raw Codex
 logs, the MCP trace, and the final checker. The invoking terminal returns after
 printing the tmux session name and artifact directory, so monitor sessions do
@@ -135,7 +144,7 @@ does not run Codex or Codex provider smoke.
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash
-just task::run household-cleanup claude evidence_lane=world-oracle-labels
+just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels
 ```
 
 The image is defined by `Dockerfile.coding-agents` and pins
@@ -148,7 +157,7 @@ Codex runs use repo-local `.env` credentials in the pinned container. Host
 `~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-just task::run household-cleanup codex evidence_lane=world-oracle-labels
+just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels
 ```
 
 Docker-backed coding-agent tasks use an isolated generated workspace owned by
@@ -188,24 +197,25 @@ namespaces such as `mcp__<server>__`.
 ## Examples
 
 ```bash
-just task::run semantic-map-build direct evidence_lane=world-oracle-labels
-just task::run household-cleanup codex
-just task::run household-cleanup codex smoke
-just task::run household-cleanup direct evidence_lane=world-oracle-labels runtime_map_prior=output/map/runtime_metric_map.json
-just task::run household-cleanup direct evidence_lane=camera-raw-fpv
-just task::run household-cleanup direct evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
-just task::run household-cleanup mcp-smoke evidence_lane=camera-grounded-labels camera_labeler=fake-http
+just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels
+just run::surface surface=household-world driver=codex intent=cleanup
+just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke
+just run::surface surface=household-world driver=codex prompt="我渴了，帮我找些解渴的东西"
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=world-oracle-labels runtime_map_prior=output/map/runtime_metric_map.json
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-raw-fpv
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world driver=mcp-smoke intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
 .venv/bin/python scripts/visual_grounding/build_representative_visual_grounding_corpus.py output --output output/visual-grounding-corpora/representative-raw-fpv/representative_raw_fpv_corpus.json
 .venv/bin/python scripts/visual_grounding/build_molmospaces_visual_grounding_bbox_corpus.py --output output/visual-grounding-corpora/molmospaces-bbox-10x10/corpus.json --scene-indices 0-9 --targets-per-scene 10
 VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline real-router --adapter-mode real
-just task::run ai2thor-nav openclaw
-just task::run photo-chairs codex
-just task::run territory vlm steps=20 agents=2
-just task::run coverage script output_dir=output/script/coverage-smoke
-just task::run molmo-planner-proof direct mode=dry-run
+just run::surface surface=ai2thor-world driver=openclaw intent=navigate
+just run::surface surface=ai2thor-world driver=codex intent=photo-capture
+just run::surface surface=ai2thor-games driver=vlm intent=territory steps=20 agents=2
+just run::surface surface=ai2thor-games driver=script intent=coverage output_dir=output/script/coverage-smoke
+just run::surface surface=planner-proof driver=direct intent=planner-proof mode=dry-run
 ```
 
 For `pipeline=fake-http` visual-grounding runs, start the configurable service
@@ -313,12 +323,13 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the semantic map build task" | `just task::run semantic-map-build direct evidence_lane=world-oracle-labels` |
-| "run the semantic map build task with codex" | `just task::run semantic-map-build codex evidence_lane=world-oracle-labels backend=molmospaces_subprocess` |
-| "run the household cleanup task with codex" | `just task::run household-cleanup codex evidence_lane=world-oracle-labels` |
-| "run the household cleanup task with codex with smoke profile" | `just task::run household-cleanup codex smoke` |
-| "run the household cleanup camera raw lane" | `just task::run household-cleanup direct evidence_lane=camera-raw-fpv` |
-| "run the ai2thor nav task with openclaw" | `just task::run ai2thor-nav openclaw visual` |
+| "run the semantic map build task" | `just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels` |
+| "run the semantic map build task with codex" | `just run::surface surface=household-world driver=codex intent=map-build evidence_lane=world-oracle-labels backend=molmospaces_subprocess` |
+| "run the household cleanup task with codex" | `just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels` |
+| "run the household cleanup task with codex with smoke profile" | `just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke` |
+| "run an open-ended household goal with codex" | `just run::surface surface=household-world driver=codex prompt="我渴了，帮我找些解渴的东西"` |
+| "run the household cleanup camera raw lane" | `just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-raw-fpv` |
+| "run the ai2thor nav task with openclaw" | `just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual` |
 
 ## Maintainer Dispatch
 

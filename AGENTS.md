@@ -197,8 +197,8 @@ python examples/games/territory_game.py --agents 2 --steps 50 --scene FloorPlan2
 Or use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
-just task::run ai2thor-nav openclaw              # normal OpenClaw navigation
-just task::run household-cleanup codex smoke      # cheap synthetic cleanup iteration
+just run::surface surface=ai2thor-world driver=openclaw intent=navigate
+just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke
 just agent::verify mock                          # maintainer confidence gate
 ```
 
@@ -345,25 +345,29 @@ routine progress.
 ## 9) Just command routing
 
 When a user asks in natural language to run a demo, cleanup task, proof task, or
-verification gate, translate it to the composable public surface instead of
-searching for a bespoke recipe name.
+verification gate, translate it to the composable public surface/intent command
+instead of searching for a bespoke recipe name.
 
 Primary grammar:
 
 ```bash
-just task::run <task> <driver> [report] [key=value ...]
+just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
 ```
 
-Use `visual` by default for non-Molmo tasks. For Molmo cleanup, use
-`world-oracle-labels` by default and `smoke` when the prompt asks for cheap,
-semantic, or fast AI-agent iteration evidence.
+Use `report=visual` by default for non-Molmo surfaces. For household cleanup,
+use `evidence_lane=world-oracle-labels` by default and `evidence_lane=smoke`
+when the prompt asks for cheap, semantic, or fast AI-agent iteration evidence.
+If a household prompt is supplied and no `intent=` is named, let the canonical
+surface infer `intent=open-ended`; use `intent=cleanup prompt=...` only when the
+prompt explicitly narrows cleanup scope.
 
 Examples:
 
-- "run the semantic map build task" -> `just task::run semantic-map-build direct evidence_lane=world-oracle-labels`
-- "run the household cleanup task with codex" -> `just task::run household-cleanup codex evidence_lane=world-oracle-labels`
-- "run the household cleanup task with codex with smoke profile" -> `just task::run household-cleanup codex smoke`
-- "run the ai2thor nav task with openclaw" -> `just task::run ai2thor-nav openclaw visual`
+- "run the semantic map build task" -> `just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels`
+- "run the household cleanup task with codex" -> `just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels`
+- "run the household cleanup task with codex with smoke profile" -> `just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke`
+- "run an open-ended household goal with codex" -> `just run::surface surface=household-world driver=codex prompt="我渴了，帮我找些解渴的东西"`
+- "run the ai2thor nav task with openclaw" -> `just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual`
 
 Use `agent::*` for deeper maintainer control:
 

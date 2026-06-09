@@ -30,6 +30,11 @@ from roboclaws.household.visual_backend_slots import (
     VisualBackendSlotLease,
     acquire_visual_backend_slot,
 )
+from roboclaws.launch.evaluation import (
+    checker_flags_for_household_intent,
+    household_intent_id_for_checker,
+    merge_checker_flags,
+)
 
 FULL_PERMISSION_ARGS = ("--dangerously-skip-permissions", "--permission-mode", "bypassPermissions")
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
@@ -351,6 +356,8 @@ class LiveClaudeCleanupRunner:
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
+        task_name = getattr(self.args, "task_name", "household-cleanup")
+        task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
         custom_task = (
             normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
             == TASK_INTENT_MODE_CUSTOM
@@ -358,6 +365,16 @@ class LiveClaudeCleanupRunner:
         checker_visual_args = list(self.args.checker_visual_arg)
         if custom_task:
             checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
+        intent_id = household_intent_id_for_checker(
+            task_name=task_name,
+            task_intent=task_intent,
+            custom_task=custom_task,
+        )
+        checker_policy_args = checker_flags_for_household_intent(
+            intent_id=intent_id,
+            profile=self.args.profile,
+            min_generated_mess_count=self.args.min_generated_mess_count,
+        )
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -377,20 +394,8 @@ class LiveClaudeCleanupRunner:
             "molmo_cleanup_realworld",
             "--min-generated-mess-count",
             self.args.min_generated_mess_count,
-            "--require-agent-driven",
-            "--require-advisory-scoring",
-            *checker_visual_args,
+            *merge_checker_flags(checker_policy_args, checker_visual_args),
         ]
-        if self.args.profile in {
-            "smoke",
-            "world-oracle-labels",
-            "camera-grounded-labels",
-            "camera-raw-fpv",
-        }:
-            if custom_task:
-                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
-            else:
-                checker_args.append("--require-clean-agent-run")
         checker_args.append(str(run_result))
 
         status = _run_and_tee(

@@ -78,6 +78,13 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_client_from_env,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_metric_map_instruction
+from roboclaws.launch.goals import (
+    GoalContract,
+    completion_claim_from_done_reason,
+    goal_contract_from_file,
+    goal_contract_from_json,
+    write_goal_contract,
+)
 from roboclaws.operator_console.interactions import (
     check_operator_messages_for_mcp,
     pending_operator_message_hint,
@@ -123,6 +130,7 @@ def make_molmo_realworld_cleanup_mcp(
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    goal_contract: GoalContract | None = None,
     operator_messages_path: str | Path | None = None,
     rerun_command: str | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
@@ -150,6 +158,7 @@ def make_molmo_realworld_cleanup_mcp(
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
         task_intent_mode=task_intent_mode,
+        goal_contract=goal_contract,
         operator_messages_path=operator_messages_path,
         rerun_command=rerun_command,
     )
@@ -184,6 +193,7 @@ class RealWorldMolmoCleanupMCPServer:
         visual_grounding_base_url: str | None = None,
         visual_grounding_timeout_s: float | None = None,
         task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+        goal_contract: GoalContract | None = None,
         operator_messages_path: str | Path | None = None,
         rerun_command: str | None = None,
     ) -> None:
@@ -229,6 +239,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.backend_name = str(backend_name()) if callable(backend_name) else ""
         self.scenario = contract.scenario
         self.task_prompt = task_prompt
+        self.goal_contract = goal_contract or _goal_contract_from_env()
         self.task_intent_mode = normalize_task_intent_mode(
             getattr(contract, "task_intent_mode", self.task_intent_mode)
         )
@@ -273,6 +284,7 @@ class RealWorldMolmoCleanupMCPServer:
             policy=policy,
             agent_driven=self.agent_driven,
             task_intent_mode=self.task_intent_mode,
+            goal_contract=self.goal_contract.to_payload() if self.goal_contract is not None else {},
             perception_mode=self.perception_mode,
             cleanup_profile=self.cleanup_profile,
             visual_grounding_pipeline_id=contract.visual_grounding_pipeline_id,
@@ -443,6 +455,16 @@ class RealWorldMolmoCleanupMCPServer:
         runtime_metric_map_path = self.run_dir / "runtime_metric_map.json"
         private_evaluation_path = self.run_dir / "private_evaluation.json"
         advisory_evaluation_path = self.run_dir / "advisory_evaluation.json"
+        goal_contract_path = self.run_dir / "goal_contract.json"
+        goal_contract_payload: dict[str, Any] = {}
+        completion_claim: dict[str, Any] = {}
+        if self.goal_contract is not None:
+            write_goal_contract(goal_contract_path, self.goal_contract)
+            goal_contract_payload = self.goal_contract.to_payload()
+            completion_claim = completion_claim_from_done_reason(
+                reason,
+                goal_contract=self.goal_contract,
+            )
         runtime_metric_map = agent_view.get("runtime_metric_map", {})
         runtime_prior_rows = [
             item
@@ -474,6 +496,11 @@ class RealWorldMolmoCleanupMCPServer:
             "seed": self.scenario.seed,
             "task_prompt": self.task_prompt,
             "task_intent_mode": self.task_intent_mode,
+            "task_surface": goal_contract_payload.get("surface", "household-world"),
+            "task_intent": goal_contract_payload.get("intent")
+            or ("open-ended" if self.task_intent_mode == "custom" else self.task_name),
+            "goal_contract": goal_contract_payload,
+            "agent_completion_claim": completion_claim,
             "contract": REALWORLD_CONTRACT,
             "adr_0003_satisfied": True,
             "final_status": done_response["cleanup_status"],
@@ -551,6 +578,8 @@ class RealWorldMolmoCleanupMCPServer:
                 "after_snapshot": str(after_snapshot),
             },
         }
+        if self.goal_contract is not None:
+            run_result["artifacts"]["goal_contract"] = str(goal_contract_path)
         if self.cleanup_profile is not None:
             profile_metadata = cleanup_profile_metadata_for_run(
                 profile_name=self.cleanup_profile,
@@ -1229,6 +1258,16 @@ def _public_acceptance_config_from_backend(
 def _resolve_artifact_path(run_dir: Path, value: str) -> Path:
     path = Path(value)
     return path if path.is_absolute() else run_dir / path
+
+
+def _goal_contract_from_env() -> GoalContract | None:
+    path = os.environ.get("ROBOCLAWS_GOAL_CONTRACT_PATH", "")
+    if path:
+        return goal_contract_from_file(path)
+    payload = os.environ.get("ROBOCLAWS_GOAL_CONTRACT_JSON", "")
+    if payload:
+        return goal_contract_from_json(payload)
+    return None
 
 
 def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> None:

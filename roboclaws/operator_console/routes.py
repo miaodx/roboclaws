@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from roboclaws.launch.catalog import resolve_task_launch
+from roboclaws.launch.catalog import resolve_surface_launch
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,8 @@ class ConsoleRoute:
     id: str
     label: str
     task: str
+    surface: str
+    intent: str
     driver: str
     profile: str
     backend: str
@@ -54,16 +56,17 @@ class ConsoleRoute:
 
     def base_args(self) -> list[str]:
         return [
-            self.task,
-            self.driver,
-            self.profile,
+            f"surface={self.surface}",
+            f"driver={self.driver}",
+            f"intent={self.intent}",
+            f"evidence_lane={self.profile}",
             f"backend={self.backend}",
             *self.default_overrides,
         ]
 
     def to_payload(self) -> dict[str, Any]:
         payload = asdict(self)
-        payload["argv_preview"] = ["just", "task::run", *self.base_args()]
+        payload["argv_preview"] = ["just", "run::surface", *self.base_args()]
         payload["command_preview"] = payload["argv_preview"]
         payload["gates"] = [gate.to_payload() for gate in self.gates]
         payload["required_gates"] = [gate for gate in payload["gates"] if gate["required"]]
@@ -152,6 +155,8 @@ def _cleanup_route(
         id=route_id,
         label=label,
         task="household-cleanup",
+        surface="household-world",
+        intent="cleanup",
         driver=driver,
         profile="world-oracle-labels",
         backend=backend,
@@ -173,6 +178,8 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="codex-mujoco-cleanup",
         label="MuJoCo Cleanup",
         task="household-cleanup",
+        surface="household-world",
+        intent="cleanup",
         driver="codex",
         profile="world-oracle-labels",
         backend="molmospaces_subprocess",
@@ -222,6 +229,8 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="codex-agibot-g2-map-build",
         label="Agibot G2 Map Build",
         task="semantic-map-build",
+        surface="household-world",
+        intent="map-build",
         driver="codex",
         profile="camera-grounded-labels",
         backend="agibot_gdk",
@@ -252,6 +261,8 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="codex-mujoco-map-build",
         label="MuJoCo Map Build",
         task="semantic-map-build",
+        surface="household-world",
+        intent="map-build",
         driver="codex",
         profile="world-oracle-labels",
         backend="molmospaces_subprocess",
@@ -268,6 +279,8 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="codex-isaac-map-build",
         label="Isaac Map Build",
         task="semantic-map-build",
+        surface="household-world",
+        intent="map-build",
         driver="codex",
         profile="world-oracle-labels",
         backend="isaaclab_subprocess",
@@ -289,6 +302,8 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="agibot-g2-cleanup",
         label="Agibot G2 Cleanup",
         task="household-cleanup",
+        surface="household-world",
+        intent="cleanup",
         driver="codex",
         profile="camera-grounded-labels",
         backend="agibot_gdk",
@@ -308,6 +323,8 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="unsupported-drivers",
         label="Direct / OpenClaw / VLM",
         task="household-cleanup",
+        surface="household-world",
+        intent="cleanup",
         driver="direct",
         profile="world-oracle-labels",
         backend="unsupported",
@@ -322,6 +339,8 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="claude-map-build",
         label="Claude Map Build",
         task="semantic-map-build",
+        surface="household-world",
+        intent="map-build",
         driver="claude",
         profile="world-oracle-labels",
         backend="unsupported",
@@ -337,6 +356,8 @@ DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
         id="ai2thor-games",
         label="AI2-THOR games",
         task="coverage",
+        surface="ai2thor-games",
+        intent="coverage",
         driver="codex",
         profile="visual",
         backend="unsupported",
@@ -370,7 +391,7 @@ def validate_supported_routes_against_catalog() -> None:
     """Fail if supported console routes drift away from the public catalog."""
 
     for route in SUPPORTED_ROUTES:
-        resolve_task_launch(route.base_args())
+        resolve_surface_launch(route.base_args())
 
 
 def accepted_isaac_preflight(root: Path) -> Path | None:
