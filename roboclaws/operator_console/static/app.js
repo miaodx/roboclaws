@@ -849,7 +849,9 @@ function renderRunState(payload) {
 
 function renderControls(payload) {
   const controls = payload.controls || {};
-  els.pauseButton.disabled = !controls.pause_available;
+  const pauseAvailable = Boolean(controls.pause_available);
+  els.pauseButton.hidden = !pauseAvailable;
+  els.pauseButton.disabled = !pauseAvailable;
   els.stopButton.disabled = !controls.stop_available;
   els.emergencyButton.disabled = !controls.emergency_stop_required;
 }
