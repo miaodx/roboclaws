@@ -96,6 +96,7 @@ def derive_operator_state(
         "run_id": run_id,
         "display_run_id": _display_run_id(run_dir, display_run_dir),
         "route": status.get("route") or (route.to_payload() if route else None),
+        "selected_intent": status.get("selected_intent") or (route.intent if route else ""),
         "run_dir": str(run_dir),
         "display_run_dir": str(display_run_dir),
         "phase": phase,

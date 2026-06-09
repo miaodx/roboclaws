@@ -112,6 +112,11 @@ def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:
     assert "map" in mujoco["view_modes"]
     assert "grounding" not in mujoco["view_modes"]
     assert "outputs" in mujoco["view_modes"]
+    assert mujoco["default_intent"] == "cleanup"
+    assert mujoco["supported_intents"] == ["cleanup", "open-ended"]
+    assert [option["id"] for option in mujoco["intent_options"]] == ["cleanup", "open-ended"]
+    assert mujoco["intent_options"][0]["checker_id"] == "cleanup_report"
+    assert mujoco["intent_options"][1]["checker_id"] == "open_ended_report"
 
     assert isaac["field_groups"] == ["common", "isaac"]
     assert "grounding" in isaac["view_modes"]
@@ -130,10 +135,31 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
         prompt="collect mugs; rm -rf / should stay text",
     )
     assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=codex"]
-    assert "intent=cleanup" not in argv
+    assert "intent=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
+
+
+def test_open_ended_launch_requires_explicit_operator_intent(tmp_path) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    argv = build_launch_argv(
+        route,
+        root=tmp_path,
+        run_id="run-1",
+        intent="open-ended",
+        prompt="collect mugs; rm -rf / should stay text",
+    )
+
+    assert "intent=open-ended" in argv
+    assert "intent=cleanup" not in argv
+    assert "prompt=collect mugs; rm -rf / should stay text" in argv
+
+
+def test_launch_rejects_route_unsupported_intent(tmp_path) -> None:
+    route = get_route("codex-mujoco-map-build")
+    with pytest.raises(ConsoleLaunchError, match="unsupported intent 'open-ended'"):
+        build_launch_argv(route, root=tmp_path, run_id="run-1", intent="open-ended")
 
 
 def test_prompt_rejected_for_unsupported_route(tmp_path) -> None:

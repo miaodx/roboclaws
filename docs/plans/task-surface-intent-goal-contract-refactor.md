@@ -403,8 +403,8 @@ Required local/live gates for a full product claim:
 - One local mock/smoke household run for `intent=cleanup`.
 - One local mock/smoke household run for `intent=open-ended`.
 - One local map-build run for `intent=map-build`.
-- Operator-console launch preview for a custom prompt showing the normalized
-  goal contract.
+- Operator-console launch preview for a custom prompt showing the selected
+  intent, goal scope, checker, and evaluation policy.
 
 ## Implementation Evidence
 
@@ -418,6 +418,9 @@ Implemented:
   `surface=household-world` with explicit intents.
 - Migrated AI2-THOR navigation/photo and games routes onto surface/intent
   launch resolution.
+- Added the operator-console explicit task-intent selector so the same prompt
+  can launch as `intent=cleanup` or `intent=open-ended` for A/B comparison,
+  with previewed goal scope, checker, and evaluation policy before launch.
 - Wrote `goal_contract.json` for resolved runs and propagated the goal contract
   through lower household recipes and live-agent runners.
 - Split common household MCP/tool guidance from cleanup-specific prompt
@@ -607,4 +610,6 @@ proof.
 - Advisory evaluator promotion to hard gate for selected open-ended intents.
 - Richer scope vocabulary beyond `whole-room`, `prompt-scoped`, and
   `agent-declared`.
-- Public UI redesign for normalized-goal review and approval.
+- Full LLM-powered normalized-goal review/approval UI. Keep parked unless
+  operators need clarification beyond the explicit intent selector and launch
+  interpretation preview.

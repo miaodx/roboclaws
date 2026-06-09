@@ -149,6 +149,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/runs":
                 request = LaunchRequest(
                     route_id=str(payload.get("route_id") or ""),
+                    intent=str(payload.get("intent") or ""),
                     prompt=str(payload.get("prompt") or ""),
                     overrides=dict(payload.get("overrides") or {}),
                     env_overrides=dict(payload.get("env_overrides") or {}),
@@ -182,6 +183,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 ):
                     launch = LaunchRequest(
                         route_id=str(follow_up.get("route_id") or ""),
+                        intent=str(follow_up.get("intent") or ""),
                         prompt=str(follow_up.get("body") or ""),
                         operator_session_id=str(follow_up.get("operator_session_id") or ""),
                         parent_run_id=run_id,

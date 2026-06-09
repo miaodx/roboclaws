@@ -9,6 +9,7 @@ const state = {
   pollTimer: null,
   readinessTimer: null,
   activeView: "overview",
+  selectedIntent: "",
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -28,6 +29,9 @@ const els = {
   taskPrompt: document.getElementById("prompt-input"),
   promptHelp: document.getElementById("prompt-copy"),
   promptCount: document.getElementById("char-count"),
+  intentFields: document.getElementById("intent-fields"),
+  intentInput: document.getElementById("intent-input"),
+  intentPreview: document.getElementById("intent-preview"),
   seedInput: document.getElementById("seed-input"),
   messInput: document.getElementById("mess-count-input"),
   portInput: document.getElementById("port-input"),
@@ -98,6 +102,11 @@ async function boot() {
 function bindEvents() {
   els.taskPrompt.addEventListener("input", () => {
     els.promptCount.textContent = `${els.taskPrompt.value.length} / 2000`;
+    renderSelection();
+  });
+  els.intentInput.addEventListener("change", () => {
+    state.selectedIntent = selectedIntent();
+    renderSelection();
   });
   [
     els.contextInput,
@@ -401,6 +410,7 @@ function renderRoutes() {
     `;
     button.addEventListener("click", () => {
       state.selectedRoute = route;
+      state.selectedIntent = route.default_intent || route.intent || "";
       renderRoutes();
       renderSelection();
       refreshSelectedRouteReadiness();
@@ -419,6 +429,7 @@ function renderSelection() {
   renderSelectedRouteSummary(route, readiness);
   ensureActiveViewAvailable(route);
   renderViewModes(route);
+  renderIntentSelector(route);
   els.taskPrompt.disabled = !route.supports_prompt;
   els.taskPrompt.placeholder = route.task_prompt_default || route.default_prompt || "";
   els.promptHelp.textContent = route.supports_prompt
@@ -494,6 +505,7 @@ function gateBadgeDisplay(gate) {
 
 function renderSelectedRouteSummary(route, readiness) {
   const status = routeStatusDisplay(route, readiness);
+  const interpretation = launchInterpretation(route);
   els.selectedRouteSummary.innerHTML = `
     <div class="route-card-title">
       <span>${escapeHtml(route.label)}</span>
@@ -501,6 +513,9 @@ function renderSelectedRouteSummary(route, readiness) {
     </div>
     <div class="meta-label">${escapeHtml(route.driver_label)} / ${escapeHtml(route.profile)}</div>
     <div class="field-help">${escapeHtml(route.backend)}</div>
+    <div class="field-help">${escapeHtml(interpretation.intentLabel)} / ${escapeHtml(
+      interpretation.goalScope
+    )}</div>
   `;
 }
 
@@ -515,12 +530,107 @@ function renderRouteFields(route) {
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
 }
 
+function renderIntentSelector(route) {
+  const options = intentOptions(route);
+  state.selectedIntent = selectedIntentForRoute(route);
+  els.intentInput.innerHTML = "";
+  for (const option of options) {
+    const node = document.createElement("option");
+    node.value = option.id;
+    node.textContent = option.label;
+    node.selected = option.id === state.selectedIntent;
+    els.intentInput.appendChild(node);
+  }
+  els.intentFields.hidden = !route.enabled || options.length === 0;
+  els.intentInput.disabled = options.length <= 1;
+  const interpretation = launchInterpretation(route);
+  els.intentPreview.innerHTML = `
+    <dl class="state-list compact">
+      <dt>Goal scope</dt><dd>${escapeHtml(interpretation.goalScope)}</dd>
+      <dt>Checker</dt><dd>${escapeHtml(interpretation.checker)}</dd>
+      <dt>Evaluation</dt><dd>${escapeHtml(interpretation.evaluation)}</dd>
+    </dl>
+  `;
+}
+
 function commandPreview(route) {
-  const parts = route.argv_preview || route.command_preview || [];
+  const selected = selectedIntentForRoute(route);
+  const parts = [...(route.argv_preview || route.command_preview || [])];
   if (!parts.length) {
     return "Route unavailable.";
   }
+  const intentIndex = parts.findIndex((part) => String(part).startsWith("intent="));
+  if (intentIndex >= 0) {
+    parts[intentIndex] = `intent=${selected}`;
+  } else {
+    const driverIndex = parts.findIndex((part) => String(part).startsWith("driver="));
+    parts.splice(driverIndex >= 0 ? driverIndex + 1 : 2, 0, `intent=${selected}`);
+  }
+  if (route.supports_prompt && els.taskPrompt.value.trim()) {
+    parts.push(`prompt=${els.taskPrompt.value}`);
+  }
   return parts.join(" ");
+}
+
+function selectedIntent() {
+  const route = state.selectedRoute;
+  if (!route) {
+    return "";
+  }
+  const value = els.intentInput.value || state.selectedIntent || route.default_intent || route.intent;
+  return selectedIntentForRoute(route, value);
+}
+
+function selectedIntentForRoute(route, requestedIntent = "") {
+  const options = intentOptions(route);
+  const fallback = route.default_intent || route.intent || (options[0] && options[0].id) || "";
+  const candidate = requestedIntent || state.selectedIntent || fallback;
+  return options.some((option) => option.id === candidate) ? candidate : fallback;
+}
+
+function intentOptions(route) {
+  const options = route.intent_options || [];
+  if (options.length) {
+    return options;
+  }
+  return (route.supported_intents || [route.intent]).map((intent) => ({
+    id: intent,
+    label: intentLabel(intent),
+    checker_id: route.checker_id || "",
+    goal_scope: intent === "map-build" ? "whole-room" : "agent-declared",
+    evaluation_policy: intent.replace("-", "_"),
+  }));
+}
+
+function launchInterpretation(route) {
+  const intent = selectedIntentForRoute(route);
+  const option = intentOptions(route).find((item) => item.id === intent) || {};
+  return {
+    intent,
+    intentLabel: option.label || intentLabel(intent),
+    goalScope: goalScopeForIntent(intent, option.goal_scope || ""),
+    checker: option.checker_id || route.checker_id || "",
+    evaluation: option.evaluation_policy || intent.replace("-", "_"),
+  };
+}
+
+function goalScopeForIntent(intent, defaultScope) {
+  if (intent === "cleanup") {
+    return els.taskPrompt.value.trim() ? "prompt-scoped" : "whole-room";
+  }
+  if (intent === "map-build") {
+    return "whole-room";
+  }
+  return defaultScope || "agent-declared";
+}
+
+function intentLabel(intent) {
+  const labels = {
+    cleanup: "Cleanup",
+    "open-ended": "Open-ended",
+    "map-build": "Map build",
+  };
+  return labels[intent] || intent;
 }
 
 function effectiveReadiness(route) {
@@ -689,6 +799,7 @@ async function refreshSelectedRouteReadiness() {
 function confirmLaunch() {
   const route = state.selectedRoute;
   const promptSource = els.taskPrompt.value.trim() ? "custom" : "default";
+  const interpretation = launchInterpretation(route);
   const providerRows =
     route.driver === "codex"
       ? `<dt>Provider</dt><dd>${escapeHtml(selectedCodexProvider())}</dd>`
@@ -706,6 +817,10 @@ function confirmLaunch() {
       <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver)}</dd>
       <dt>Backend</dt><dd>${escapeHtml(route.backend)}</dd>
       <dt>Profile</dt><dd>${escapeHtml(route.profile)}</dd>
+      <dt>Intent</dt><dd>${escapeHtml(interpretation.intentLabel)}</dd>
+      <dt>Goal scope</dt><dd>${escapeHtml(interpretation.goalScope)}</dd>
+      <dt>Checker</dt><dd>${escapeHtml(interpretation.checker)}</dd>
+      <dt>Evaluation</dt><dd>${escapeHtml(interpretation.evaluation)}</dd>
       ${providerRows}
       <dt>Lock</dt><dd>${escapeHtml(route.lock_name)}</dd>
       ${movementRows}
@@ -747,6 +862,7 @@ function confirmAction({ title, cta, body, bodyHtml, onConfirm }) {
 async function launchRun() {
   const body = {
     route_id: state.selectedRoute.id,
+    intent: selectedIntent(),
     prompt: els.taskPrompt.value,
     overrides: {
       seed: els.seedInput.value || "7",

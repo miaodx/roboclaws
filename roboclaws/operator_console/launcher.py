@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from roboclaws.launch.catalog import resolve_surface_launch
+from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.locks import ResourceLock
@@ -52,6 +52,7 @@ class ConsoleLaunchError(ValueError):
 @dataclass(frozen=True)
 class LaunchRequest:
     route_id: str
+    intent: str = ""
     prompt: str = ""
     overrides: dict[str, str] | None = None
     env_overrides: dict[str, str] | None = None
@@ -94,6 +95,7 @@ def build_launch_argv(
     *,
     root: Path,
     run_id: str,
+    intent: str = "",
     prompt: str = "",
     overrides: dict[str, str] | None = None,
 ) -> list[str]:
@@ -101,6 +103,7 @@ def build_launch_argv(
 
     request_overrides = overrides or {}
     _validate_override_keys(route, request_overrides)
+    selected_intent = _selected_intent(route, intent)
     output_dir = console_output_root(root) / "runs" / run_id
     overridden_keys = set(request_overrides)
     default_overrides = [
@@ -109,7 +112,7 @@ def build_launch_argv(
     args = [
         f"surface={route.surface}",
         f"driver={route.driver}",
-        f"intent={route.intent}",
+        f"intent={selected_intent}",
         f"evidence_lane={route.profile}",
         f"backend={route.backend}",
         *default_overrides,
@@ -129,11 +132,12 @@ def build_launch_argv(
             raise ConsoleLaunchError(
                 "This route cannot accept a custom prompt safely. Use the default task prompt."
             )
-        if route.surface == "household-world" and route.intent == "cleanup":
-            args = [arg for arg in args if arg != "intent=cleanup"]
         args.append(f"prompt={prompt}")
 
-    resolve_surface_launch(args)
+    try:
+        resolve_surface_launch(args)
+    except LaunchError as exc:
+        raise ConsoleLaunchError(str(exc)) from exc
     return ["just", "run::surface", *args]
 
 
@@ -163,6 +167,7 @@ def start_console_run(
         route,
         root=root,
         run_id=run_id,
+        intent=request.intent,
         prompt=request.prompt,
         overrides=overrides,
     )
@@ -196,6 +201,7 @@ def start_console_run(
         "parent_run_id": request.parent_run_id,
         "continuation_packet": request.continuation_packet or {},
         "route": route.to_payload(),
+        "selected_intent": _selected_intent(route, request.intent),
         "phase": "starting",
         "pid": process.pid,
         "started_at_epoch": started_at_epoch,
@@ -216,6 +222,13 @@ def start_console_run(
         started_at=started_at,
     )
     return state
+
+
+def _selected_intent(route: ConsoleRoute, intent: str = "") -> str:
+    try:
+        return route.selected_intent(intent)
+    except ValueError as exc:
+        raise ConsoleLaunchError(str(exc)) from exc
 
 
 def route_readiness(

@@ -151,6 +151,8 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
             tmp_path,
             LaunchRequest(
                 route_id=route.id,
+                intent="open-ended",
+                prompt="收拾桌面上的杯子",
                 env_overrides={
                     "ROBOCLAWS_CODEX_PROVIDER": "mify",
                 },
@@ -164,6 +166,9 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert state["env_overrides"] == {
         "ROBOCLAWS_CODEX_PROVIDER": "mify",
     }
+    assert state["selected_intent"] == "open-ended"
+    assert "intent=open-ended" in state["argv"]
+    assert "prompt=收拾桌面上的杯子" in state["argv"]
     assert state["operator_session_id"].startswith("session-")
     assert any(item.startswith("operator_messages_path=") for item in state["argv"])
     history_path = console_output_root(tmp_path) / "runs.jsonl"

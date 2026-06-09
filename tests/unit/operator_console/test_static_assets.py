@@ -76,6 +76,28 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "checker_status.message" in app
 
 
+def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> None:
+    html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    css = (STATIC_ROOT / "styles.css").read_text(encoding="utf-8")
+
+    assert 'id="intent-input"' in html
+    assert 'id="intent-preview"' in html
+    assert "selectedIntent" in app
+    assert "selectedIntentForRoute" in app
+    assert "launchInterpretation" in app
+    assert "route.intent_options" in app
+    assert "intent: selectedIntent()" in app
+    assert "intent=${selected}" in app
+    assert '"open-ended": "Open-ended"' in app
+    assert "Goal scope" in app
+    assert "Checker" in app
+    assert "Evaluation" in app
+    assert "prompt-scoped" in app
+    assert "checker_id" in app
+    assert ".intent-preview" in css
+
+
 def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     html = (STATIC_ROOT / "index.html").read_text(encoding="utf-8")
     app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")

@@ -182,6 +182,7 @@ def append_continue_request(root: Path, run_id: str, prompt: str) -> dict[str, A
             "operator_session_id": session["operator_session_id"],
             "parent_run_id": run_id,
             "route_id": route.id if route else "",
+            "intent": str(state.get("selected_intent") or ""),
             "queue_reason": reason,
             "auto_start_allowed": status == "ready_to_start",
             "continuation_packet": _continuation_packet(state, session, run_id, prompt),

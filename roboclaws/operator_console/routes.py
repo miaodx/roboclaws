@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.launch.catalog import resolve_surface_launch
+from roboclaws.launch.intents import TASK_INTENT_SPECS
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,7 @@ class ConsoleRoute:
     enabled: bool
     checker_id: str
     task_prompt_default: str
+    supported_intents: tuple[str, ...] = ()
     required_overrides: tuple[str, ...] = ()
     default_overrides: tuple[str, ...] = ()
     gates: tuple[RouteGate, ...] = ()
@@ -54,11 +56,26 @@ class ConsoleRoute:
     field_groups: tuple[str, ...] = ()
     view_modes: tuple[str, ...] = ()
 
-    def base_args(self) -> list[str]:
+    def supported_intent_ids(self) -> tuple[str, ...]:
+        return self.supported_intents or (self.intent,)
+
+    def selected_intent(self, intent: str = "") -> str:
+        selected = str(intent or self.intent).strip()
+        if selected.startswith("intent="):
+            selected = selected.removeprefix("intent=")
+        if selected not in self.supported_intent_ids():
+            supported = "|".join(self.supported_intent_ids())
+            raise ValueError(
+                f"unsupported intent '{selected}' for route '{self.id}'; expected {supported}"
+            )
+        return selected
+
+    def base_args(self, *, intent: str = "") -> list[str]:
+        selected_intent = self.selected_intent(intent)
         return [
             f"surface={self.surface}",
             f"driver={self.driver}",
-            f"intent={self.intent}",
+            f"intent={selected_intent}",
             f"evidence_lane={self.profile}",
             f"backend={self.backend}",
             *self.default_overrides,
@@ -68,6 +85,11 @@ class ConsoleRoute:
         payload = asdict(self)
         payload["argv_preview"] = ["just", "run::surface", *self.base_args()]
         payload["command_preview"] = payload["argv_preview"]
+        payload["default_intent"] = self.intent
+        payload["supported_intents"] = list(self.supported_intent_ids())
+        payload["intent_options"] = [
+            _intent_option(intent_id) for intent_id in self.supported_intent_ids()
+        ]
         payload["gates"] = [gate.to_payload() for gate in self.gates]
         payload["required_gates"] = [gate for gate in payload["gates"] if gate["required"]]
         payload["state"] = "enabled" if self.enabled else "disabled"
@@ -165,6 +187,7 @@ def _cleanup_route(
         enabled=True,
         checker_id="cleanup_report",
         task_prompt_default="帮我收拾这个房间",
+        supported_intents=("cleanup", "open-ended"),
         default_overrides=("seed=7", f"generated_mess_count={default_mess_count}"),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, *gates),
         resource_kind=resource_kind,
@@ -188,6 +211,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         enabled=True,
         checker_id="cleanup_report",
         task_prompt_default="帮我收拾这个房间",
+        supported_intents=("cleanup", "open-ended"),
         default_overrides=("seed=7", "generated_mess_count=5"),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
         driver_label="Codex",
@@ -391,7 +415,8 @@ def validate_supported_routes_against_catalog() -> None:
     """Fail if supported console routes drift away from the public catalog."""
 
     for route in SUPPORTED_ROUTES:
-        resolve_surface_launch(route.base_args())
+        for intent in route.supported_intent_ids():
+            resolve_surface_launch(route.base_args(intent=intent))
 
 
 def accepted_isaac_preflight(root: Path) -> Path | None:
@@ -432,3 +457,37 @@ def _default_view_modes(route: ConsoleRoute) -> tuple[str, ...]:
         modes.append("chase")
     modes.append("outputs")
     return tuple(modes)
+
+
+def _intent_option(intent_id: str) -> dict[str, str]:
+    spec = TASK_INTENT_SPECS.get(intent_id)
+    if spec is None:
+        return {
+            "id": intent_id,
+            "label": _intent_label(intent_id),
+            "prompt_id": "",
+            "checker_id": "",
+            "goal_scope": "",
+            "evaluation_policy": "",
+            "done_readiness_policy": "",
+            "checker_policy": "",
+        }
+    return {
+        "id": intent_id,
+        "label": _intent_label(intent_id),
+        "prompt_id": spec.prompt_id,
+        "checker_id": spec.checker_id,
+        "goal_scope": spec.default_goal_scope,
+        "evaluation_policy": spec.evaluation_policy,
+        "done_readiness_policy": spec.done_readiness_policy,
+        "checker_policy": spec.checker_policy,
+    }
+
+
+def _intent_label(intent_id: str) -> str:
+    return {
+        "cleanup": "Cleanup",
+        "open-ended": "Open-ended",
+        "map-build": "Map build",
+        "coverage": "Coverage",
+    }.get(intent_id, intent_id.replace("-", " ").title())
