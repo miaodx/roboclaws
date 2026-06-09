@@ -6,6 +6,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import urllib.error
 import urllib.request
 from functools import partial
 from http.server import ThreadingHTTPServer
@@ -350,7 +351,7 @@ def test_operator_console_run_endpoint_passes_explicit_intent(tmp_path: Path) ->
     assert launch_request.prompt == "收拾桌面上的杯子"
 
 
-def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> None:
+def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) -> None:
     route = get_route("codex-mujoco-cleanup")
     run_id = "parent-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
@@ -404,7 +405,7 @@ def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> 
     try:
         host, port = server.server_address
         request = urllib.request.Request(
-            f"http://{host}:{port}/api/runs/{run_id}/continue",
+            f"http://{host}:{port}/api/runs/{run_id}/next-goal",
             method="POST",
             data=json.dumps({"prompt": "Run the next sweep"}).encode("utf-8"),
             headers={"Content-Type": "application/json"},
@@ -424,3 +425,26 @@ def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> 
     assert launch_request.intent == "open-ended"
     assert launch_request.operator_session_id == "session-test"
     assert launch_request.parent_run_id == run_id
+
+
+def test_operator_console_continue_endpoint_is_not_public(tmp_path: Path) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/parent-run/continue",
+            method="POST",
+            data=json.dumps({"prompt": "Run the next sweep"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 404

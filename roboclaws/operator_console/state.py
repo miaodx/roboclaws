@@ -121,7 +121,7 @@ def derive_operator_state(
         "operator_messages": interaction_state,
         "controls": {
             "ask_why_available": True,
-            "continue_available": True,
+            "next_goal_available": controls_terminal,
             "steer_available": bool(route.supports_operator_steer)
             if route and not controls_terminal
             else False,

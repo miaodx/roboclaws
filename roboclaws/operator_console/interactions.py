@@ -21,7 +21,7 @@ MESSAGE_LOG = "operator_messages.jsonl"
 SESSION_LOG = "sessions.jsonl"
 SESSION_DIR = "sessions"
 ASK_WHY_DIR = "ask_why"
-CONTINUE_QUEUE = "continue_queue.jsonl"
+NEXT_GOAL_QUEUE = "next_goal_queue.jsonl"
 
 TERMINAL_STATUSES = {
     "done",
@@ -130,7 +130,7 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
     run_dir, route = _run_context(root, run_id)
     state = derive_operator_state(root, run_dir, route)
     if _is_terminal_state(state):
-        raise InteractionError("Robot Run is terminal; use Continue After Run instead.")
+        raise InteractionError("Robot Run is terminal; use Next Goal instead.")
     if route is None or not route.supports_operator_steer:
         raise InteractionError("Steer Current Run is unavailable for this route.")
     message = _base_message(command_type="steer", run_id=run_id, body=body, status="queued")
@@ -143,36 +143,44 @@ def append_steer_message(root: Path, run_id: str, body: str) -> dict[str, Any]:
     return message
 
 
-def append_continue_request(root: Path, run_id: str, prompt: str) -> dict[str, Any]:
-    """Create or queue a linked follow-up run request."""
+def append_next_goal_request(
+    root: Path,
+    run_id: str,
+    prompt: str,
+    *,
+    confirmed: bool = False,
+) -> dict[str, Any]:
+    """Create a linked next-goal run request after a terminal parent."""
 
     prompt = _clean_text(prompt)
     if not prompt:
-        raise InteractionError("Continue After Run requires a follow-up prompt.")
+        raise InteractionError("Next Goal requires a goal prompt.")
     run_dir, route = _run_context(root, run_id)
     state = derive_operator_state(root, run_dir, route)
     session = _session_for_run(root, run_dir, run_id)
     terminal = _is_terminal_state(state)
-    requires_confirmation = _requires_continue_confirmation(route)
+    if not terminal:
+        raise InteractionError(
+            "Next Goal is available after this Robot Run is terminal. "
+            "Use Steer or Ask Why while the run is active."
+        )
+    requires_confirmation = _requires_next_goal_confirmation(route)
     result_available = _parent_result_available(run_dir, state)
     terminal_success = _terminal_success(state)
-    status = (
-        "ready_to_start"
-        if terminal and result_available and terminal_success and not requires_confirmation
-        else "queued"
-    )
-    if not terminal:
-        reason = "waiting_for_parent_terminal_state"
-    elif not result_available:
+    status = "ready_to_start"
+    if not result_available:
         reason = "waiting_for_parent_result_artifacts"
+        status = "blocked"
     elif not terminal_success:
         reason = "operator_confirmation_required_after_parent_terminal_status"
+        status = "ready_to_start" if confirmed else "confirmation_required"
     elif requires_confirmation:
         reason = "operator_confirmation_required"
+        status = "ready_to_start" if confirmed else "confirmation_required"
     else:
         reason = "parent_terminal_and_result_available"
     message = _base_message(
-        command_type="continue",
+        command_type="next_goal",
         run_id=run_id,
         body=prompt,
         status=status,
@@ -185,10 +193,12 @@ def append_continue_request(root: Path, run_id: str, prompt: str) -> dict[str, A
             "intent": str(state.get("selected_intent") or ""),
             "queue_reason": reason,
             "auto_start_allowed": status == "ready_to_start",
-            "continuation_packet": _continuation_packet(state, session, run_id, prompt),
+            "confirmation_required": status == "confirmation_required",
+            "confirmed": bool(confirmed),
+            "next_goal_packet": _next_goal_packet(state, session, run_id, prompt),
         }
     )
-    _append_jsonl(run_dir / CONTINUE_QUEUE, message)
+    _append_jsonl(run_dir / NEXT_GOAL_QUEUE, message)
     _append_message(run_dir, message)
     _record_session_message(root, run_dir, message)
     return message
@@ -342,7 +352,7 @@ def _ask_why_answer(root: Path, state: dict[str, Any], question: str) -> dict[st
     }
 
 
-def _continuation_packet(
+def _next_goal_packet(
     state: dict[str, Any],
     session: dict[str, Any],
     parent_run_id: str,
@@ -350,7 +360,7 @@ def _continuation_packet(
 ) -> dict[str, Any]:
     artifacts = state.get("artifact_paths") if isinstance(state.get("artifact_paths"), list) else []
     packet = {
-        "schema": "operator_console_continuation_packet_v1",
+        "schema": "operator_console_next_goal_packet_v1",
         "operator_session_id": session["operator_session_id"],
         "parent_run_id": parent_run_id,
         "operator_prompt": prompt,
@@ -448,7 +458,7 @@ def _terminal_success(state: dict[str, Any]) -> bool:
     return True
 
 
-def _requires_continue_confirmation(route: ConsoleRoute | None) -> bool:
+def _requires_next_goal_confirmation(route: ConsoleRoute | None) -> bool:
     if route is None:
         return True
     return route.emergency_stop_required or route.resource_kind in {"physical_robot", "real_robot"}

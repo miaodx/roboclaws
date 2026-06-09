@@ -59,9 +59,24 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert 'id="camera-angle-value"' in html
     assert "cameraStateLabel" in app
     assert "renderToolPanel" in app
+    assert 'class="setup-panel"' in html
+    assert 'class="state-rail"' in html
+    setup_html = html.split('<aside class="setup-panel">', 1)[1].split("</aside>", 1)[0]
+    state_rail_html = html.split('<aside class="state-rail">', 1)[1].split("</aside>", 1)[0]
+    assert "Operator Input" in setup_html
+    assert "Operator Input" not in state_rail_html
+    assert 'id="prompt-label"' in html
     assert 'data-operator-mode="ask_why"' in html
     assert 'data-operator-mode="steer"' in html
-    assert 'data-operator-mode="continue"' in html
+    assert 'data-operator-mode="goal"' in html
+    assert 'data-operator-mode="continue"' not in html
+    assert 'id="operator-message-input"' not in html
+    assert 'id="operator-message-button"' not in html
+    assert "Continue" not in html
+    assert "/continue" not in app
+    assert "/next-goal" in app
+    assert "Start Next Goal" in app
+    assert "Confirm Next Goal" in app
     assert "/ask-why" in app
     assert "check_operator_messages" in app
     assert "attachLatestResult" in app
@@ -70,7 +85,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "attachable_run" in app
     assert "renderStartAction" in app
     assert "Run Attached" in app
-    assert "Watching run" in app
+    assert "Use Steer or Ask Why" in app
     assert "/api/readiness" in app
     assert "refreshSelectedRouteReadiness" in app
     assert "checker_status.message" in app

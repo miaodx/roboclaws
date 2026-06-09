@@ -59,7 +59,7 @@ class LaunchRequest:
     gates: dict[str, bool] | None = None
     operator_session_id: str = ""
     parent_run_id: str = ""
-    continuation_packet: dict[str, Any] | None = None
+    next_goal_packet: dict[str, Any] | None = None
 
 
 def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str, str]:
@@ -199,7 +199,7 @@ def start_console_run(
         "run_id": run_id,
         "operator_session_id": session["operator_session_id"],
         "parent_run_id": request.parent_run_id,
-        "continuation_packet": request.continuation_packet or {},
+        "next_goal_packet": request.next_goal_packet or {},
         "route": route.to_payload(),
         "selected_intent": _selected_intent(route, request.intent),
         "phase": "starting",

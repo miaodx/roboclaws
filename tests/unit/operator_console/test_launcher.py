@@ -153,6 +153,7 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
                 route_id=route.id,
                 intent="open-ended",
                 prompt="收拾桌面上的杯子",
+                next_goal_packet={"schema": "operator_console_next_goal_packet_v1"},
                 env_overrides={
                     "ROBOCLAWS_CODEX_PROVIDER": "mify",
                 },
@@ -167,6 +168,8 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
         "ROBOCLAWS_CODEX_PROVIDER": "mify",
     }
     assert state["selected_intent"] == "open-ended"
+    assert state["next_goal_packet"] == {"schema": "operator_console_next_goal_packet_v1"}
+    assert "continuation_packet" not in state
     assert "intent=open-ended" in state["argv"]
     assert "prompt=收拾桌面上的杯子" in state["argv"]
     assert state["operator_session_id"].startswith("session-")
