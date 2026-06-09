@@ -28,6 +28,11 @@ from roboclaws.household.semantic_timeline import (
     PLACE_PHASE,
     SEMANTIC_LOOP_VARIANT,
 )
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+    task_intent_is_custom,
+)
 from roboclaws.household.types import CleanupScenario
 from roboclaws.household.visual_grounding import (
     EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
@@ -242,6 +247,9 @@ class RealWorldCleanupContract:
             str(cleanup_profile or "").strip().lower().replace("_", "-") if cleanup_profile else ""
         )
         self.public_acceptance_config = _public_acceptance_config(public_acceptance_config)
+        self.task_intent_mode = normalize_task_intent_mode(
+            self.public_acceptance_config.get("task_intent_mode")
+        )
         self.sanitize_world_labels = self.cleanup_profile == WORLD_LABELS_SANITIZED_PROFILE
         self.visible_detection_exposure_policy = (
             SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
@@ -1501,7 +1509,10 @@ class RealWorldCleanupContract:
         semantic_cleanup_evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         blockers: list[dict[str, Any]] = []
-        pending = self._pending_cleanup_candidates()
+        custom_task = self._custom_task_intent()
+        pending = (
+            self._held_cleanup_candidates() if custom_task else self._pending_cleanup_candidates()
+        )
         if pending:
             required_tool = str(pending[0].get("required_tool") or "navigate_to_object")
             if any(str(item.get("state") or "") == "held" for item in pending):
@@ -1527,7 +1538,7 @@ class RealWorldCleanupContract:
             )
 
         coverage = self._sweep_coverage()
-        if coverage["unvisited_waypoint_ids"]:
+        if not custom_task and coverage["unvisited_waypoint_ids"]:
             next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
             blockers.append(
                 {
@@ -1576,6 +1587,7 @@ class RealWorldCleanupContract:
             "status": "blocked" if blockers else "ready",
             "blockers": blockers,
             "policy_uses_private_truth": False,
+            "task_intent_mode": self.task_intent_mode,
             "public_contract_note": (
                 "Done readiness is evaluated from public Agent View state, public tool "
                 "trace evidence, and public run acceptance configuration. It does not "
@@ -1603,6 +1615,8 @@ class RealWorldCleanupContract:
         return self._error("done", error_reason, status="blocked", **payload)
 
     def _required_model_declared_observations(self) -> int:
+        if self._custom_task_intent():
+            return 0
         configured = _positive_int(
             self.public_acceptance_config.get("required_model_declared_observations")
         )
@@ -1648,6 +1662,8 @@ class RealWorldCleanupContract:
         return blocker
 
     def _grounded_cleanup_chain_requirement(self) -> tuple[int, str]:
+        if self._custom_task_intent():
+            return 0, ""
         explicit_count = _positive_int(
             self.public_acceptance_config.get("required_grounded_cleanup_chains")
         )
@@ -1700,6 +1716,9 @@ class RealWorldCleanupContract:
             "total_waypoints": total_waypoints,
             "unvisited_waypoint_ids": unvisited,
         }
+
+    def _custom_task_intent(self) -> bool:
+        return task_intent_is_custom(self.task_intent_mode)
 
     def agent_view_payload(self) -> dict[str, Any]:
         observed_objects = [
@@ -2713,6 +2732,13 @@ class RealWorldCleanupContract:
                 }
             )
         return pending
+
+    def _held_cleanup_candidates(self) -> list[dict[str, Any]]:
+        return [
+            item
+            for item in self._pending_cleanup_candidates()
+            if str(item.get("state") or "") == "held"
+        ]
 
     def _destination_options_for_policy(self, policy: dict[str, Any]) -> list[dict[str, Any]]:
         preferred = [
@@ -6074,6 +6100,9 @@ def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
     policy = str(source.get("done_readiness_policy") or "").strip()
     if policy:
         accepted["done_readiness_policy"] = policy
+    task_intent_mode = normalize_task_intent_mode(source.get("task_intent_mode"))
+    if task_intent_mode != TASK_INTENT_MODE_DEFAULT:
+        accepted["task_intent_mode"] = task_intent_mode
     _assert_no_forbidden_agent_view_keys(accepted)
     return accepted
 

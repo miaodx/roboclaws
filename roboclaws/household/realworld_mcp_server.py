@@ -68,6 +68,10 @@ from roboclaws.household.semantic_timeline import (
     successful_semantic_phases,
 )
 from roboclaws.household.skill_scratchpad import read_or_create_skill_scratchpad
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
 from roboclaws.household.types import CleanupScenario
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
@@ -118,6 +122,7 @@ def make_molmo_realworld_cleanup_mcp(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     operator_messages_path: str | Path | None = None,
     rerun_command: str | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
@@ -144,6 +149,7 @@ def make_molmo_realworld_cleanup_mcp(
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
+        task_intent_mode=task_intent_mode,
         operator_messages_path=operator_messages_path,
         rerun_command=rerun_command,
     )
@@ -177,6 +183,7 @@ class RealWorldMolmoCleanupMCPServer:
         visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
         visual_grounding_base_url: str | None = None,
         visual_grounding_timeout_s: float | None = None,
+        task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
         operator_messages_path: str | Path | None = None,
         rerun_command: str | None = None,
     ) -> None:
@@ -188,11 +195,15 @@ class RealWorldMolmoCleanupMCPServer:
         self.task_name = task_name
         self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
         self.policy_uses_private_truth = False
+        self.task_intent_mode = normalize_task_intent_mode(task_intent_mode)
         self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
         self.runtime_map_prior_source = runtime_map_prior_source
         if contract is None:
             scenario = scenario or build_cleanup_scenario()
             base_contract = base_contract or CleanupBackendSession(scenario)
+            acceptance_config = _public_acceptance_config_from_backend(base_contract)
+            if self.task_intent_mode != TASK_INTENT_MODE_DEFAULT:
+                acceptance_config["task_intent_mode"] = self.task_intent_mode
             contract = RealWorldCleanupContract(
                 base_contract,
                 task_prompt=task_prompt,
@@ -202,7 +213,7 @@ class RealWorldMolmoCleanupMCPServer:
                 runtime_map_prior=runtime_map_prior,
                 map_mode=map_mode,
                 cleanup_profile=cleanup_profile,
-                public_acceptance_config=_public_acceptance_config_from_backend(base_contract),
+                public_acceptance_config=acceptance_config,
                 visual_grounding_client=visual_grounding_client_from_env(
                     visual_grounding,
                     base_url=visual_grounding_base_url,
@@ -218,6 +229,9 @@ class RealWorldMolmoCleanupMCPServer:
         self.backend_name = str(backend_name()) if callable(backend_name) else ""
         self.scenario = contract.scenario
         self.task_prompt = task_prompt
+        self.task_intent_mode = normalize_task_intent_mode(
+            getattr(contract, "task_intent_mode", self.task_intent_mode)
+        )
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = contract.perception_mode
         self.record_robot_views = bool(record_robot_views)
@@ -258,6 +272,7 @@ class RealWorldMolmoCleanupMCPServer:
             contract=REALWORLD_CONTRACT,
             policy=policy,
             agent_driven=self.agent_driven,
+            task_intent_mode=self.task_intent_mode,
             perception_mode=self.perception_mode,
             cleanup_profile=self.cleanup_profile,
             visual_grounding_pipeline_id=contract.visual_grounding_pipeline_id,
@@ -458,6 +473,7 @@ class RealWorldMolmoCleanupMCPServer:
             "scenario_id": self.scenario.scenario_id,
             "seed": self.scenario.seed,
             "task_prompt": self.task_prompt,
+            "task_intent_mode": self.task_intent_mode,
             "contract": REALWORLD_CONTRACT,
             "adr_0003_satisfied": True,
             "final_status": done_response["cleanup_status"],

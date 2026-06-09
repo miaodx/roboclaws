@@ -22,6 +22,11 @@ from roboclaws.agents.drivers.household_live import household_cleanup_server_arg
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
 from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
 
 try:
     sys.stdout.reconfigure(line_buffering=True)
@@ -103,6 +108,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
     parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--policy", required=True)
     parser.add_argument("--task", required=True)
     parser.add_argument("--min-generated-mess-count", required=True)
@@ -361,6 +367,13 @@ class LiveCodexCleanupRunner:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
+        custom_task = (
+            normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
+            == TASK_INTENT_MODE_CUSTOM
+        )
+        checker_visual_args = list(self.args.checker_visual_arg)
+        if custom_task:
+            checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -384,7 +397,7 @@ class LiveCodexCleanupRunner:
             self.args.min_generated_mess_count,
             "--require-agent-driven",
             "--require-advisory-scoring",
-            *self.args.checker_visual_arg,
+            *checker_visual_args,
         ]
         if task_name == "household-cleanup" and self.args.profile in {
             "smoke",
@@ -392,35 +405,42 @@ class LiveCodexCleanupRunner:
             "camera-grounded-labels",
             "camera-raw-fpv",
         }:
-            checker_args.append("--require-clean-agent-run")
+            if custom_task:
+                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
+            else:
+                checker_args.append("--require-clean-agent-run")
         if self.args.profile == "world-oracle-labels":
             _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
             _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
-            if task_name == "household-cleanup":
+            if task_name == "household-cleanup" and not custom_task:
                 _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
-            _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
+            if not custom_task:
+                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw-fpv":
             raw_fpv_required_cleanup_count = str(
                 generated_mess_success_threshold(int(self.args.min_generated_mess_count))
             )
-            _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
-            _append_missing_checker_value(
-                checker_args,
-                "--min-model-declared-observations",
-                raw_fpv_required_cleanup_count,
-            )
-            _append_missing_checker_value(
-                checker_args,
-                "--min-model-declared-actions",
-                raw_fpv_required_cleanup_count,
-            )
-            if task_name == "household-cleanup":
+            if not custom_task:
+                _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
                 _append_missing_checker_value(
                     checker_args,
-                    "--min-semantic-accepted-count",
+                    "--min-model-declared-observations",
                     raw_fpv_required_cleanup_count,
                 )
-            _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
+                _append_missing_checker_value(
+                    checker_args,
+                    "--min-model-declared-actions",
+                    raw_fpv_required_cleanup_count,
+                )
+                if task_name == "household-cleanup":
+                    _append_missing_checker_value(
+                        checker_args,
+                        "--min-semantic-accepted-count",
+                        raw_fpv_required_cleanup_count,
+                    )
+                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
+            elif task_name == "household-cleanup":
+                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
         checker_args.append(str(run_result))
 
         try:
@@ -992,6 +1012,30 @@ def _append_missing_checker_flag(args: list[str], flag: str) -> None:
 def _append_missing_checker_value(args: list[str], flag: str, value: str) -> None:
     if flag not in args:
         args.extend([flag, value])
+
+
+def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
+    filtered: list[str] = []
+    skip_value = False
+    for arg in args:
+        if skip_value:
+            skip_value = False
+            continue
+        if arg in {
+            "--min-semantic-accepted-count",
+            "--min-model-declared-observations",
+            "--min-model-declared-actions",
+            "--min-sweep-coverage",
+        }:
+            skip_value = True
+            continue
+        if arg in {
+            "--require-clean-agent-run",
+            "--require-model-declared-observations",
+        }:
+            continue
+        filtered.append(arg)
+    return filtered
 
 
 if __name__ == "__main__":

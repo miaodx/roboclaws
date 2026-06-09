@@ -19,6 +19,11 @@ from typing import BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
 
 FULL_PERMISSION_ARGS = ("--dangerously-skip-permissions", "--permission-mode", "bypassPermissions")
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
@@ -50,6 +55,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--policy", required=True)
     parser.add_argument("--task", required=True)
     parser.add_argument("--min-generated-mess-count", required=True)
@@ -302,6 +308,13 @@ class LiveClaudeCleanupRunner:
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
+        custom_task = (
+            normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
+            == TASK_INTENT_MODE_CUSTOM
+        )
+        checker_visual_args = list(self.args.checker_visual_arg)
+        if custom_task:
+            checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -323,7 +336,7 @@ class LiveClaudeCleanupRunner:
             self.args.min_generated_mess_count,
             "--require-agent-driven",
             "--require-advisory-scoring",
-            *self.args.checker_visual_arg,
+            *checker_visual_args,
         ]
         if self.args.profile in {
             "smoke",
@@ -331,7 +344,10 @@ class LiveClaudeCleanupRunner:
             "camera-grounded-labels",
             "camera-raw-fpv",
         }:
-            checker_args.append("--require-clean-agent-run")
+            if custom_task:
+                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
+            else:
+                checker_args.append("--require-clean-agent-run")
         checker_args.append(str(run_result))
 
         status = _run_and_tee(
@@ -530,6 +546,35 @@ def _shell_quote(value: str) -> str:
     if all(char in safe for char in value):
         return value
     return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def _append_missing_checker_flag(args: list[str], flag: str) -> None:
+    if flag not in args:
+        args.append(flag)
+
+
+def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
+    filtered: list[str] = []
+    skip_value = False
+    for arg in args:
+        if skip_value:
+            skip_value = False
+            continue
+        if arg in {
+            "--min-semantic-accepted-count",
+            "--min-model-declared-observations",
+            "--min-model-declared-actions",
+            "--min-sweep-coverage",
+        }:
+            skip_value = True
+            continue
+        if arg in {
+            "--require-clean-agent-run",
+            "--require-model-declared-observations",
+        }:
+            continue
+        filtered.append(arg)
+    return filtered
 
 
 if __name__ == "__main__":

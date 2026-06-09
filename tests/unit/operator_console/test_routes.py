@@ -100,6 +100,7 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
     )
     assert argv[:4] == ["just", "task::run", "household-cleanup", "codex"]
     assert "backend=molmospaces_subprocess" in argv
+    assert "task_intent_mode=custom" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
 
 

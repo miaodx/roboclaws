@@ -5,13 +5,25 @@ from __future__ import annotations
 import argparse
 
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
 from roboclaws.household.visual_scan_guidance import visual_scan_prompt_rule
 
-COMMON_PREFIX = (
-    "Use the bundled molmo-realworld-cleanup skill instructions. "
+TOOL_PROTOCOL_PREFIX = (
     "Use the cleanup MCP tool entries exactly as exposed by Codex; in text, "
     "refer to unprefixed tool names, and if the tool protocol requires a namespace "
     "use namespace cleanup, never mcp__cleanup__ or roboclaws__. "
+)
+
+COMMON_PREFIX = (
+    "Use the bundled molmo-realworld-cleanup skill instructions. " + TOOL_PROTOCOL_PREFIX
+)
+
+CUSTOM_PREFIX = (
+    "Use the MCP tools as a bounded household robot capability surface. " + TOOL_PROTOCOL_PREFIX
 )
 
 COMMON_WAYPOINT_RULES = (
@@ -34,18 +46,77 @@ COMMON_CLEANUP_RULES = (
     "is generated."
 )
 
+CUSTOM_TASK_RULES = (
+    "The operator task is the only goal. Do not start a room-cleanup routine, full "
+    "waypoint sweep, visual-scan prerequisite, or pick/place chain unless the operator "
+    "task itself requires it. Use metric_map, fixture_hints, navigate_to_waypoint, "
+    "observe, and adjust_camera only as needed to gather enough public evidence for "
+    "the operator task. If the task asks for information, report the answer and call "
+    "done once satisfied. If the task requires manipulating an object, act only on "
+    "task-relevant observed objects, use the public navigation/manipulation tools, "
+    "and follow required_tool or public error responses. Do not call scene_objects or "
+    "read private scoring artifacts. Do not treat unrelated pending cleanup candidates "
+    "as part of the operator task. When the operator task is satisfied and you are not "
+    "holding an object, call done so the report is generated."
+)
+
 HOUSEHOLD_CLEANUP_TASK_PREFIX = "This run is household-cleanup. User task: {task}. "
+CUSTOM_HOUSEHOLD_TASK_PREFIX = (
+    "This run is household-cleanup with a custom operator task. "
+    "The following operator task is authoritative and overrides the default cleanup "
+    "task: {task}. When this wrapper and the operator task conflict, follow the "
+    "operator task subject to public tool safety and error responses. "
+)
 
 DEFAULT_HOUSEHOLD_CLEANUP_TASK = "clean up this room"
 
 
-def _task_prefix(task: str) -> str:
+def _normalize_task(task: str) -> str:
+    return " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
+
+
+def _task_prefix(task: str, *, task_intent_mode: str = TASK_INTENT_MODE_DEFAULT) -> str:
+    normalized = _normalize_task(task)
+    if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
+        return CUSTOM_HOUSEHOLD_TASK_PREFIX.format(task=normalized)
+    return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
+
+
+def _normalize_task_intent_mode(task_intent_mode: str) -> str:
+    return normalize_task_intent_mode(task_intent_mode)
+
+
+def _with_task(
+    prompt: str,
+    task: str,
+    *,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+) -> str:
+    prefix = CUSTOM_PREFIX if task_intent_mode == TASK_INTENT_MODE_CUSTOM else COMMON_PREFIX
+    return prefix + _task_prefix(task, task_intent_mode=task_intent_mode) + prompt
+
+
+def _custom_scope_suffix() -> str:
+    return (
+        " In custom operator task mode, do not infer additional cleanup goals from "
+        "the household-cleanup route name."
+    )
+
+
+def _task_aware_prompt(prompt: str, *, task_intent_mode: str) -> str:
+    if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
+        return prompt + _custom_scope_suffix()
+    return prompt
+
+
+def _legacy_task_prefix(task: str) -> str:
+    """Compatibility shim for callers/tests that imported the old helper."""
+
     normalized = " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
     return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
 
 
-def _with_task(prompt: str, task: str) -> str:
-    return COMMON_PREFIX + _task_prefix(task) + prompt
+_task_prefix_legacy = _legacy_task_prefix
 
 
 SEMANTIC_MAP_BUILD_RULES = (
@@ -148,19 +219,54 @@ def render_kickoff_prompt(
     *,
     task: str = "",
     target_cleanup_count: int = 7,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
 ) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
+    intent_mode = _normalize_task_intent_mode(task_intent_mode)
     if profile == "camera-raw-fpv":
         return _with_task(
-            _camera_raw_prompt(target_cleanup_count=target_cleanup_count),
+            _task_aware_prompt(
+                CUSTOM_TASK_RULES
+                if intent_mode == TASK_INTENT_MODE_CUSTOM
+                else _camera_raw_prompt(target_cleanup_count=target_cleanup_count),
+                task_intent_mode=intent_mode,
+            ),
             task,
+            task_intent_mode=intent_mode,
         )
     if profile == "camera-grounded-labels":
-        return _with_task(CAMERA_LABELS_PROMPT, task)
+        return _with_task(
+            _task_aware_prompt(
+                CUSTOM_TASK_RULES
+                if intent_mode == TASK_INTENT_MODE_CUSTOM
+                else CAMERA_LABELS_PROMPT,
+                task_intent_mode=intent_mode,
+            ),
+            task,
+            task_intent_mode=intent_mode,
+        )
     if profile == "world-public-labels":
-        return _with_task(WORLD_LABELS_SANITIZED_PROMPT, task)
-    return _with_task(COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES, task)
+        return _with_task(
+            _task_aware_prompt(
+                CUSTOM_TASK_RULES
+                if intent_mode == TASK_INTENT_MODE_CUSTOM
+                else WORLD_LABELS_SANITIZED_PROMPT,
+                task_intent_mode=intent_mode,
+            ),
+            task,
+            task_intent_mode=intent_mode,
+        )
+    return _with_task(
+        _task_aware_prompt(
+            CUSTOM_TASK_RULES
+            if intent_mode == TASK_INTENT_MODE_CUSTOM
+            else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
+            task_intent_mode=intent_mode,
+        ),
+        task,
+        task_intent_mode=intent_mode,
+    )
 
 
 def render_semantic_map_build_prompt(profile: str, task: str) -> str:
@@ -191,6 +297,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default="")
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--target-cleanup-count", type=int, default=7)
     args = parser.parse_args(argv)
     if args.task_name == "semantic-map-build":
@@ -202,6 +309,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.profile,
                 task=args.task,
                 target_cleanup_count=args.target_cleanup_count,
+                task_intent_mode=args.task_intent_mode,
             )
         )
     return 0

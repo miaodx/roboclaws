@@ -116,6 +116,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     assert argv[:4] == ["just", "task::run", "household-cleanup", "codex"]
     assert "world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv
+    assert "task_intent_mode=custom" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
 

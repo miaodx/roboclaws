@@ -128,6 +128,8 @@ def build_launch_argv(
             raise ConsoleLaunchError(
                 "This route cannot accept a custom prompt safely. Use the default task prompt."
             )
+        if route.task == "household-cleanup" and "task_intent_mode" not in request_overrides:
+            args.append("task_intent_mode=custom")
         args.append(f"prompt={prompt}")
 
     resolve_task_launch(args)
@@ -393,6 +395,7 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
         "host",
         "port",
         "operator_messages_path",
+        "task_intent_mode",
     }
     for key, value in overrides.items():
         if key not in allowed:
