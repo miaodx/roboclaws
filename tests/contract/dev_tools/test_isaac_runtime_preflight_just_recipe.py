@@ -221,3 +221,37 @@ def test_agent_harness_allows_isaac_prepared_cleanup_smoke_target() -> None:
         "stamp=val2",
         "accept_nvidia_eula=false",
     ]
+
+
+def test_agent_harness_allows_b1_map12_navigation_smoke_target() -> None:
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    harness_text = HARNESS_JUST.read_text(encoding="utf-8")
+
+    assert "b1-map12-navigation-smoke" in agent_text
+    assert re.search(r"^b1-map12-navigation-smoke \*overrides:", harness_text, re.MULTILINE)
+    assert "check_b1_map12_readiness.py" in harness_text
+    assert "run_b1_map12_navigation_smoke.py" in harness_text
+    assert "import_rby1m_robot_usd.py --static-only" in harness_text
+    assert 'require_navigation_success="true"' in harness_text
+    assert "--require-navigation-success" in harness_text
+    assert 'OMNI_KIT_ACCEPT_EULA="YES"' in harness_text
+
+    route = trace_agent_harness(
+        "b1-map12-navigation-smoke",
+        "output_dir=/tmp/roboclaws-b1-map12-navigation",
+        "runtime_python=/tmp/isaac-python",
+        "stamp=contract",
+        "prepare_robot_usd=false",
+        "require_navigation_success=false",
+        "accept_nvidia_eula=false",
+    )
+    assert route == [
+        "just",
+        "harness::b1-map12-navigation-smoke",
+        "output_dir=/tmp/roboclaws-b1-map12-navigation",
+        "runtime_python=/tmp/isaac-python",
+        "stamp=contract",
+        "prepare_robot_usd=false",
+        "require_navigation_success=false",
+        "accept_nvidia_eula=false",
+    ]
