@@ -970,7 +970,7 @@ Known profile ids:
 | `baseline` | inferred from provider/model | `full` | `repeat_full_prompt` | 128 | 2 | true | 30s | unset / unset | unset |
 | `gpt_compact_v1` | GPT/codex-env | `compact` | `state_summary_only` | 128 | 1 | true | 30s | 96k / 128k | done retry 2, max observe per waypoint 1 |
 | `mimo_compact_v1` | MiMo/mify | `compact` | `state_summary_only` | 128 | 1 | true | 30s | 64k / 96k | done retry 2, max observe per waypoint 1 |
-| `raw_fpv_budgeted_v1` | GPT/codex-env or MiMo/mify | `raw_fpv_compact` | `state_summary_only` | 128 | 1 | true | 30s | 64k / 96k | raw-FPV candidates 24, max observe per waypoint 1, done retry 1 |
+| `raw_fpv_budgeted_v1` | GPT/codex-env or MiMo/mify | `raw_fpv_compact` | `state_summary_only` | 40 | 1 | true | 30s | 64k / 96k | raw-FPV candidates 24, max observe per waypoint 1, done retry 1 |
 | `custom` | explicit | explicit | explicit | explicit | explicit | explicit | explicit | explicit | explicit |
 
 Budget notes:
@@ -982,6 +982,9 @@ Budget notes:
   raw-FPV context risk.
 - Hard-limit checks fail before starting another continuation or broad raw-FPV
   observation loop.
+- Raw-FPV uses a lower SDK per-attempt turn cap so the runner regains control
+  and can classify budget exhaustion before a single attempt grows into a
+  provider context-window failure.
 - If a provider exposes a smaller effective context window than the configured
   profile, the run records `provider_context_budget_exceeded` and the profile
   limitation instead of retrying with an implicit larger budget.
@@ -1944,3 +1947,32 @@ preflight. To start durable execution from the main session, use the exact
   `./scripts/dev/run_pytest_standalone.sh tests/contract/reports/test_molmo_cleanup_report.py -q`,
   `./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py -q`,
   and `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py`.
+- 2026-06-10: Completed the Agent SDK performance optimization pass for the
+  private `openai-agents-live` route. The runner now persists telemetry V2
+  context/cache/context-growth metrics, private Agent SDK performance profiles,
+  compact continuation state, compact label-lane prompts, raw-FPV budget
+  classification, and manifest-driven comparison output. Public
+  `run::surface` routing and the `done`/`run_result.json` cleanup success gate
+  remain unchanged.
+- 2026-06-10: Label-lane live validation passed for GPT/codex-env and MiMo/mify
+  on seed 7, generated mess count 5. The comparison manifest at
+  `docs/status/active/agent-sdk-perf-opt-0610-comparison-manifest.json`
+  reports GPT `world-public-labels` improved from 20m26s to 8m30s and GPT
+  `camera-grounded-labels` from 20m43s to 9m04s, both with checker-visible
+  `run_result.json`. MiMo `world-public-labels` produced a new passing
+  baseline-quality candidate at 6m45s against a failed-checker diagnostic
+  baseline, so it is not a clean speedup claim. MiMo `camera-grounded-labels`
+  passed but improved only from 9m29s to 9m08s, recorded as a provider/model
+  profile limitation rather than a success against the 40% target.
+- 2026-06-10: Raw-FPV safety validation first exposed a real implementation gap:
+  `output/household/household-cleanup/agent-sdk-perf-opt-0610/gpt-raw-fpv-budgeted/0610_0927/seed-7/`
+  crossed the raw profile's 96k response-context hard limit inside one
+  128-turn SDK attempt before the runner could classify it, and was interrupted
+  deliberately. The raw-FPV profile now uses a lower per-attempt SDK turn cap
+  so the runner regains control before provider context failure.
+- 2026-06-10: Raw-FPV retry passed the Phase 5 safety gate at
+  `output/household/household-cleanup/agent-sdk-perf-opt-0610/gpt-raw-fpv-budgeted-turncap/0610_0949/seed-7/`.
+  It terminated with classified reason `raw_fpv_sdk_turn_budget_exhausted`,
+  `max_input_tokens=67040` under the 96k hard limit,
+  `context_window_failure_detected=false`, 40 response spans, and no
+  `run_result.json` as expected for this safety-only phase.

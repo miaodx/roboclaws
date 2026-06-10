@@ -29,11 +29,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="",
         help="run directory, run root, or run_result.json. Defaults to latest Codex report run.",
     )
+    parser.add_argument(
+        "--comparison-manifest",
+        type=Path,
+        help=(
+            "JSON manifest of explicit Agent SDK baseline/candidate run pairs. "
+            "Smoke references cannot satisfy full-lane baseline requirements."
+        ),
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.comparison_manifest:
+        return _print_comparison_manifest(args.comparison_manifest)
     run_dir = _resolve_run_dir(Path(args.path) if args.path else None)
     if run_dir is None:
         print(f"error: no run found under {DEFAULT_SEARCH_ROOT}", file=sys.stderr)
@@ -314,6 +324,176 @@ def _baseline_comparison(
         "speedup": round(baseline_s / candidate, 2) if candidate > 0 else None,
         "candidate_run_dir": str(run_dir),
     }
+
+
+def _print_comparison_manifest(path: Path) -> int:
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"error: could not read comparison manifest {path}: {exc}", file=sys.stderr)
+        return 1
+    entries = manifest.get("comparisons") if isinstance(manifest, dict) else None
+    if not isinstance(entries, list) or not entries:
+        print(
+            "error: comparison manifest must contain a non-empty comparisons list",
+            file=sys.stderr,
+        )
+        return 1
+
+    rows: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            print("error: comparison manifest entries must be objects", file=sys.stderr)
+            return 1
+        baseline_role = str(entry.get("baseline_role") or "")
+        lane = str(entry.get("lane") or "")
+        if baseline_role == "smoke_reference" and lane not in {"smoke", "diagnostic"}:
+            print(
+                "error: smoke reference cannot satisfy full-lane baseline "
+                f"for comparison {entry.get('key') or '<unknown>'}",
+                file=sys.stderr,
+            )
+            return 1
+        baseline_dir = Path(str(entry.get("baseline_run_dir") or ""))
+        candidate_dir = Path(str(entry.get("candidate_run_dir") or ""))
+        if not baseline_dir or not candidate_dir:
+            print(
+                f"error: comparison {entry.get('key') or '<unknown>'} needs explicit run dirs",
+                file=sys.stderr,
+            )
+            return 1
+        if not baseline_dir.exists() or not candidate_dir.exists():
+            print(
+                f"error: comparison {entry.get('key') or '<unknown>'} references missing run dir",
+                file=sys.stderr,
+            )
+            return 1
+        rows.append(_comparison_row(entry, baseline_dir=baseline_dir, candidate_dir=candidate_dir))
+
+    print("Agent SDK comparison manifest")
+    header = (
+        "key | provider | lane | baseline | candidate | elapsed_delta_s | "
+        "gap_delta_s | uncached_delta | cache_ratio | context | terminal | checker"
+    )
+    print(header)
+    print("-" * len(header))
+    for row in rows:
+        print(
+            f"{row['key']} | {row['provider_profile']} | {row['lane']} | "
+            f"{_format_duration(row['baseline_elapsed_s'])} | "
+            f"{_format_duration(row['candidate_elapsed_s'])} | "
+            f"{_signed_duration(row['elapsed_delta_s'])} | "
+            f"{_signed_duration(row['between_tool_gap_delta_s'])} | "
+            f"{row['uncached_delta']} | {row['candidate_cache_hit_ratio']} | "
+            f"{row['candidate_context_state']} | {row['candidate_terminal']} | "
+            f"{row['candidate_checker']}"
+        )
+    return 0
+
+
+def _comparison_row(
+    entry: dict[str, Any],
+    *,
+    baseline_dir: Path,
+    candidate_dir: Path,
+) -> dict[str, Any]:
+    baseline = _comparison_run_summary(baseline_dir)
+    candidate = _comparison_run_summary(candidate_dir)
+    return {
+        "key": str(entry.get("key") or ""),
+        "provider_profile": str(entry.get("provider_profile") or candidate["provider_profile"]),
+        "lane": str(entry.get("lane") or candidate["lane"]),
+        "baseline_elapsed_s": baseline["elapsed_s"],
+        "candidate_elapsed_s": candidate["elapsed_s"],
+        "elapsed_delta_s": _delta(candidate["elapsed_s"], baseline["elapsed_s"]),
+        "between_tool_gap_delta_s": _delta(
+            candidate["between_tool_gap_s"],
+            baseline["between_tool_gap_s"],
+        ),
+        "uncached_delta": _token_delta(
+            candidate["total_uncached_input_tokens"],
+            baseline["total_uncached_input_tokens"],
+        ),
+        "candidate_cache_hit_ratio": candidate["cache_hit_ratio"],
+        "candidate_context_state": candidate["context_state"],
+        "candidate_terminal": candidate["terminal"],
+        "candidate_checker": candidate["checker"],
+    }
+
+
+def _comparison_run_summary(run_dir: Path) -> dict[str, Any]:
+    live_timing = _read_json(run_dir / "live_timing.json")
+    run_result = _read_json(run_dir / "run_result.json")
+    runner = live_timing.get("runner_timing") if isinstance(live_timing, dict) else {}
+    mcp = live_timing.get("mcp_trace_timing") if isinstance(live_timing, dict) else {}
+    raw_context = live_timing.get("context_metrics") if isinstance(live_timing, dict) else {}
+    context = raw_context if isinstance(raw_context, dict) else {}
+    raw_cache = live_timing.get("cache_metrics") if isinstance(live_timing, dict) else {}
+    cache = raw_cache if isinstance(raw_cache, dict) else {}
+    status = _read_json(run_dir / "live_status.json")
+    terminal = _terminal_state(live_timing, status)
+    return {
+        "elapsed_s": _float_or_none((runner or {}).get("total_elapsed_s")),
+        "between_tool_gap_s": _float_or_none((mcp or {}).get("between_tool_gap_s")),
+        "total_uncached_input_tokens": (
+            (context or {}).get("total_uncached_input_tokens")
+            if (context or {}).get("available")
+            else None
+        ),
+        "cache_hit_ratio": (
+            (context or {}).get("cache_hit_ratio")
+            if (context or {}).get("available")
+            else (cache or {}).get("cached_input_token_ratio")
+        ),
+        "provider_profile": live_timing.get("provider_profile") or "unknown",
+        "lane": live_timing.get("evidence_lane") or live_timing.get("profile") or "unknown",
+        "context_state": _context_state(context),
+        "terminal": terminal,
+        "checker": _checker_state(status, run_result),
+    }
+
+
+def _context_state(context: dict[str, Any]) -> str:
+    if context.get("available"):
+        max_input = context.get("max_input_tokens")
+        return f"available(max={max_input})" if max_input is not None else "available"
+    limitations = context.get("limitations")
+    if isinstance(limitations, list) and limitations:
+        return "unavailable:" + ",".join(str(item) for item in limitations[:3])
+    return "unavailable"
+
+
+def _terminal_state(live_timing: dict[str, Any], status: dict[str, Any]) -> str:
+    terminal = live_timing.get("agent_sdk_budget_terminal")
+    if isinstance(terminal, dict) and terminal.get("reason"):
+        return str(terminal["reason"])
+    reason = status.get("reason")
+    if reason:
+        return str(reason)
+    phase = status.get("phase")
+    return str(phase or "unknown")
+
+
+def _checker_state(status: dict[str, Any], run_result: dict[str, Any]) -> str:
+    if run_result:
+        return "result-present"
+    reason = status.get("reason") or status.get("phase") or "missing"
+    return str(reason)
+
+
+def _delta(candidate: float | None, baseline: float | None) -> float | None:
+    if candidate is None or baseline is None:
+        return None
+    return round(candidate - baseline, 3)
+
+
+def _token_delta(candidate: Any, baseline: Any) -> str:
+    candidate_int = int(candidate) if isinstance(candidate, int) else None
+    baseline_int = int(baseline) if isinstance(baseline, int) else None
+    if candidate_int is None or baseline_int is None:
+        return "unavailable"
+    delta = candidate_int - baseline_int
+    return f"{delta:+d}"
 
 
 def _print_timing(timing: dict[str, Any]) -> None:

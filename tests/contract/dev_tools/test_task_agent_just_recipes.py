@@ -666,6 +666,9 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
     assert "openai-agents-live" in molmo_text
     assert "run_live_openai_agents_cleanup.py" in molmo_text
     assert 'policy="openai_agents_agent"' in molmo_text
+    assert "--agent-sdk-perf-profile" in molmo_text
+    assert "ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE" in molmo_text
+    assert "--context-soft-limit-tokens" in molmo_text
     assert "openai-agents-live" not in trace_task_run("household-cleanup", "codex")
 
     with pytest.raises(CommandError, match="unsupported driver 'openai-agents-live'"):
@@ -1715,6 +1718,55 @@ def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance()
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
     assert "first complete an anchor discovery sweep" not in prompt
+
+
+def test_molmo_compact_label_prompts_keep_public_done_boundary() -> None:
+    world_prompt = render_kickoff_prompt("world-public-labels", prompt_mode="compact")
+    camera_prompt = render_kickoff_prompt("camera-grounded-labels", prompt_mode="compact")
+
+    assert "Compact action cadence for world-public-labels" in world_prompt
+    assert "observe -> candidate decision" in world_prompt
+    assert "pending_cleanup_candidates" in world_prompt
+    assert "only MCP done producing run_result.json counts" in world_prompt
+    assert "private scoring artifacts" in world_prompt
+    assert "Compact action cadence for camera-grounded-labels" in camera_prompt
+    assert "declare_visual_candidates with observation_id only" in camera_prompt
+    assert "service URLs" in camera_prompt
+    assert "only MCP done producing run_result.json counts" in camera_prompt
+
+
+def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
+    prompt = render_kickoff_prompt(
+        "camera-raw-fpv",
+        target_cleanup_count=5,
+        prompt_mode="raw_fpv_compact",
+        raw_fpv_candidate_budget=3,
+        max_observe_per_waypoint=2,
+        done_retry_budget=1,
+    )
+
+    assert "Compact action cadence for camera-raw-fpv" in prompt
+    assert "run budget of 3 raw-FPV candidate attempts" in prompt
+    assert "use at most 2 observe response(s)" in prompt
+    assert "retry done at most 1 time(s)" in prompt
+    assert "Never retry the same source_observation_id/category/region" in prompt
+    assert "only MCP done producing run_result.json counts" in prompt
+
+
+def test_molmo_live_openai_agents_profile_controls_prompt_mode() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert 'prompt_mode="${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-full}"' in text
+    assert "gpt_compact_v1|mimo_compact_v1)" in text
+    assert 'prompt_mode="compact"' in text
+    assert "raw_fpv_budgeted_v1)" in text
+    assert 'prompt_mode="raw_fpv_compact"' in text
+    assert '--prompt-mode "$prompt_mode"' in text
+    assert '--raw-fpv-candidate-budget "$prompt_raw_fpv_candidate_budget"' in text
+    assert '--max-observe-per-waypoint "$prompt_max_observe_per_waypoint"' in text
+    assert '--done-retry-budget "$prompt_done_retry_budget"' in text
+    assert 'runner_args+=(--max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS}")' in text
+    assert '--max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-128}"' not in text
 
 
 def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:

@@ -627,6 +627,13 @@ def _require_setting(provider: str, name: str, value: str) -> None:
 
 def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
     detail = str(exc)
+    if exc.__class__.__name__ == "MaxTurnsExceeded":
+        return LiveAgentFailure(
+            "agent_sdk_turn_budget_exceeded",
+            retryable=False,
+            resume_available=False,
+            detail=detail,
+        )
     lowered = detail.lower()
     if any(item in lowered for item in ("requires codex_base_url", "requires codex_api_key")):
         return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)

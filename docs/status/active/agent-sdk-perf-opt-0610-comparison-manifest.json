@@ -1,0 +1,37 @@
+{
+  "schema": "agent_sdk_comparison_manifest_v1",
+  "comparisons": [
+    {
+      "key": "gpt_world_public_compact",
+      "lane": "world-public-labels",
+      "provider_profile": "codex-env",
+      "baseline_role": "full_lane_baseline",
+      "baseline_run_dir": "output/household/household-cleanup/openai-agents-observability-v1-world-public/0609_2119/seed-7",
+      "candidate_run_dir": "output/household/household-cleanup/agent-sdk-perf-opt-0610/gpt-world-public/0610_0847/seed-7"
+    },
+    {
+      "key": "gpt_camera_grounded_compact",
+      "lane": "camera-grounded-labels",
+      "provider_profile": "codex-env",
+      "baseline_role": "full_lane_baseline",
+      "baseline_run_dir": "output/household/household-cleanup/openai-agents-observability-v1-camera-grounded/0609_2140/seed-7",
+      "candidate_run_dir": "output/household/household-cleanup/agent-sdk-perf-opt-0610/gpt-camera-grounded/0610_0856/seed-7"
+    },
+    {
+      "key": "mimo_world_public_compact",
+      "lane": "world-public-labels",
+      "provider_profile": "mify",
+      "baseline_role": "diagnostic_failed_checker_baseline",
+      "baseline_run_dir": "output/household/household-cleanup/agent-sdk-extra-lanes-0609c/world-public-labels/0609_1733/seed-7",
+      "candidate_run_dir": "output/household/household-cleanup/agent-sdk-perf-opt-0610/mimo-world-public-rerun/0610_0910/seed-7"
+    },
+    {
+      "key": "mimo_camera_grounded_compact",
+      "lane": "camera-grounded-labels",
+      "provider_profile": "mify",
+      "baseline_role": "full_lane_baseline",
+      "baseline_run_dir": "output/household/household-cleanup/agent-sdk-extra-lanes-0609c/camera-grounded-labels/0609_1733/seed-7",
+      "candidate_run_dir": "output/household/household-cleanup/agent-sdk-perf-opt-0610/mimo-camera-grounded/0610_0917/seed-7"
+    }
+  ]
+}
