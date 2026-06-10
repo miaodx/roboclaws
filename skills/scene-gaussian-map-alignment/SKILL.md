@@ -89,7 +89,20 @@ exist at candidate poses; it does not by itself prove Nav2 planner parity.
      --output output/<run>/alignment_evidence_summary.json
    ```
 
-5. Report the open blockers and next promotion step. Prefer one precise blocker
+5. Write the lightweight alignment manifest. This is the fusion contract for
+   future runs; it is not a fused USD/Gaussian scene:
+
+   ```bash
+   python skills/scene-gaussian-map-alignment/scripts/summarize_alignment_evidence.py \
+     manifest \
+     --readiness-artifact output/<run>/readiness_with_navigation.json \
+     --navigation-artifact output/<run>/navigation_smoke.json \
+     --evidence-summary output/<run>/alignment_evidence_summary.json \
+     --map-bundle assets/maps/<bundle-name> \
+     --output output/<run>/alignment_manifest.json
+   ```
+
+6. Report the open blockers and next promotion step. Prefer one precise blocker
    over broad language like "alignment done".
 
 ## Honest Labels
@@ -118,7 +131,7 @@ When handing off results, include:
 - navigation evidence status and whether it is planner-backed;
 - artifact paths such as `readiness.json`, `navigation_smoke.json`,
   `readiness_with_navigation.json`, `alignment_evidence_summary.json`,
-  `report.html`, and any map bundle;
+  `alignment_manifest.json`, `report.html`, and any map bundle;
 - the exact next step needed to promote the evidence tier.
 
 ## Acceptance

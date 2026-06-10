@@ -29,6 +29,7 @@
     "navigation_smoke.json",
     "readiness_with_navigation.json",
     "alignment_evidence_summary.json",
+    "alignment_manifest.json",
     "report.html",
     "assets/maps/<map-bundle>/"
   ],

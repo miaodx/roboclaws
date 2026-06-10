@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 SUMMARY_SCHEMA = "scene_gaussian_map_alignment_evidence_summary_v1"
+MANIFEST_SCHEMA = "scene_gaussian_map_alignment_manifest_v1"
 TIERS = {"blocked", "candidate", "verified", "runtime_proven", "planner_backed"}
 
 
@@ -14,8 +15,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Summarize scene Gaussian/map alignment evidence without inventing claims."
     )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("summarize", "manifest"),
+        default="summarize",
+    )
     parser.add_argument("--readiness-artifact", type=Path, required=True)
     parser.add_argument("--navigation-artifact", type=Path)
+    parser.add_argument("--evidence-summary", type=Path)
+    parser.add_argument("--map-bundle", type=Path)
+    parser.add_argument("--alignment-id", default="")
     parser.add_argument("--output", type=Path)
     return parser.parse_args(argv)
 
@@ -24,13 +34,30 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     readiness = _read_json(args.readiness_artifact)
     navigation = _read_json(args.navigation_artifact) if args.navigation_artifact else None
-    summary = summarize_alignment_evidence(
-        readiness,
-        navigation,
-        readiness_artifact=str(args.readiness_artifact),
-        navigation_artifact=str(args.navigation_artifact) if args.navigation_artifact else "",
+    summary = (
+        _read_json(args.evidence_summary)
+        if args.evidence_summary
+        else summarize_alignment_evidence(
+            readiness,
+            navigation,
+            readiness_artifact=str(args.readiness_artifact),
+            navigation_artifact=str(args.navigation_artifact) if args.navigation_artifact else "",
+        )
     )
-    text = json.dumps(summary, indent=2, sort_keys=True) + "\n"
+    if args.command == "manifest":
+        payload = build_alignment_manifest(
+            readiness,
+            navigation,
+            evidence_summary=summary,
+            readiness_artifact=str(args.readiness_artifact),
+            navigation_artifact=str(args.navigation_artifact) if args.navigation_artifact else "",
+            evidence_summary_artifact=str(args.evidence_summary) if args.evidence_summary else "",
+            map_bundle=str(args.map_bundle) if args.map_bundle else "",
+            alignment_id=args.alignment_id,
+        )
+    else:
+        payload = summary
+    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text, encoding="utf-8")
@@ -102,6 +129,98 @@ def summarize_alignment_evidence(
     }
     _assert_known_tier(summary["alignment_tier"])
     return summary
+
+
+def build_alignment_manifest(
+    readiness: dict[str, Any],
+    navigation: dict[str, Any] | None = None,
+    *,
+    evidence_summary: dict[str, Any] | None = None,
+    readiness_artifact: str = "",
+    navigation_artifact: str = "",
+    evidence_summary_artifact: str = "",
+    map_bundle: str = "",
+    alignment_id: str = "",
+) -> dict[str, Any]:
+    navigation = navigation or {}
+    summary = evidence_summary or summarize_alignment_evidence(
+        readiness,
+        navigation,
+        readiness_artifact=readiness_artifact,
+        navigation_artifact=navigation_artifact,
+    )
+    _assert_known_tier(str(summary["alignment_tier"]))
+    overlay = _dict(readiness.get("map12_overlay"))
+    transform = _dict(overlay.get("transform"))
+    manifest = {
+        "schema": MANIFEST_SCHEMA,
+        "alignment_id": alignment_id or _default_alignment_id(readiness, map_bundle),
+        "contract_note": (
+            "This is a lightweight alignment contract. It records how independent "
+            "scene, Gaussian, and map artifacts were related for evidence review; "
+            "it is not a fused USD/Gaussian scene and does not make semantic USD truth claims."
+        ),
+        "source_assets": {
+            "scene_root": str(readiness.get("b1_root") or ""),
+            "scene_usd": str(_nested(readiness, "b1_geometry", "local_geometry", "path") or ""),
+            "full_floor_usd": str(
+                _nested(readiness, "b1_geometry", "full_floor_usd", "path") or ""
+            ),
+            "map_root": str(readiness.get("map12_root") or ""),
+            "map_bundle": map_bundle,
+            "semantic_source": readiness.get("semantic_source")
+            or navigation.get("semantic_source"),
+        },
+        "frames": {
+            "map_frame": transform.get("source_frame") or "robot_map_12_map",
+            "scene_frame": transform.get("target_frame") or "b1_livingroom_usd_world_candidate",
+            "pose_source": readiness.get("semantic_source") or navigation.get("semantic_source"),
+        },
+        "transform": {
+            "status": readiness.get("map12_to_b1_usd_transform_status")
+            or overlay.get("transform_status"),
+            "method": transform.get("method"),
+            "parameters": _transform_parameters(transform),
+            "source_bounds": overlay.get("source_bounds") or {},
+            "target_bounds": overlay.get("target_bounds") or {},
+            "residual_evidence": overlay.get("residual_evidence") or {},
+        },
+        "candidate_correspondences": _candidate_correspondences(overlay),
+        "evidence": {
+            "alignment_tier": summary["alignment_tier"],
+            "tier_reason": summary.get("tier_reason"),
+            "readiness_artifact": readiness_artifact,
+            "navigation_artifact": navigation_artifact,
+            "evidence_summary_artifact": evidence_summary_artifact,
+            "report_artifact": _default_report_artifact(navigation_artifact, readiness_artifact),
+            "robot_view_evidence_status": _nested(
+                summary, "navigation", "robot_view_evidence_status"
+            ),
+            "navigation_provenance": _nested(summary, "navigation", "navigation_provenance"),
+            "planner_backed": bool(_nested(summary, "navigation", "planner_backed")),
+            "waypoint_count": int(_nested(summary, "navigation", "waypoint_count") or 0),
+        },
+        "gaussian_assets": summary.get("gaussian_assets") or {},
+        "semantics": summary.get("semantics") or {},
+        "open_blockers": list(summary.get("open_blockers") or []),
+        "next_promotion_step": summary.get("next_promotion_step") or "",
+        "promotion_requirements": {
+            "verified": "Add at least three named map/scene anchor correspondences with residuals.",
+            "runtime_proven": (
+                "Render or navigate robot views from the verified or candidate transform."
+            ),
+            "planner_backed": "Add Nav2-equivalent planner path proof in the aligned frame.",
+            "semantic_usd_truth": (
+                "Add segmentation, object manifest, or anchor-to-USD correspondences "
+                "before claiming semantic_anchors_are_usd_truth."
+            ),
+            "fused_scene": (
+                "Generate fused USD/Gaussian only after transform and semantic binding "
+                "are verified enough to avoid baking candidate overlay into truth."
+            ),
+        },
+    }
+    return manifest
 
 
 def _read_json(path: Path | None) -> dict[str, Any]:
@@ -225,6 +344,49 @@ def _validation_errors(payload: dict[str, Any]) -> list[str]:
     if validation.get("status") in {None, "passed"}:
         return []
     return [str(error) for error in validation.get("errors") or ["validation failed"]]
+
+
+def _dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _transform_parameters(transform: dict[str, Any]) -> dict[str, Any]:
+    keys = ("scale_x", "scale_y", "translate_x", "translate_y")
+    return {key: transform[key] for key in keys if key in transform}
+
+
+def _candidate_correspondences(overlay: dict[str, Any]) -> list[dict[str, Any]]:
+    correspondences = []
+    for waypoint in overlay.get("candidate_waypoints") or []:
+        if not isinstance(waypoint, dict):
+            continue
+        correspondences.append(
+            {
+                "status": "candidate",
+                "source_anchor_id": waypoint.get("source_anchor_id"),
+                "waypoint_id": waypoint.get("waypoint_id"),
+                "label": waypoint.get("label"),
+                "semantic_source": waypoint.get("semantic_source"),
+                "map_pose": waypoint.get("map12_nav_goal") or {},
+                "scene_pose": waypoint.get("b1_pose") or {},
+                "usd_binding_status": "not_bound",
+            }
+        )
+    return correspondences
+
+
+def _default_alignment_id(readiness: dict[str, Any], map_bundle: str) -> str:
+    bundle_name = Path(map_bundle).name if map_bundle else "map12"
+    scene_path = str(_nested(readiness, "b1_geometry", "local_geometry", "path") or "")
+    scene_name = Path(scene_path).stem if scene_path else "scene"
+    return f"{scene_name}-{bundle_name}-candidate-overlay"
+
+
+def _default_report_artifact(navigation_artifact: str, readiness_artifact: str) -> str:
+    for artifact in (navigation_artifact, readiness_artifact):
+        if artifact:
+            return str(Path(artifact).parent / "report.html")
+    return ""
 
 
 def _overlay_status(readiness: dict[str, Any]) -> str:
