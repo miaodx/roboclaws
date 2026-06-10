@@ -103,7 +103,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Use Steer or Ask Why" in app
     assert "/api/readiness" in app
     assert "refreshSelectedRouteReadiness" in app
-    assert "checker_status.message" in app
+    assert "checkerStatus.message" in app
 
 
 def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> None:
@@ -169,6 +169,21 @@ def test_static_app_announces_run_state_via_live_region() -> None:
     assert 'id="event-log"' in html
     assert 'role="status"' in html
     assert 'aria-live="polite"' in html
+
+
+def test_static_app_renders_stop_result_before_detaching_run() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    detach_body = app.split("function detachRunAfterStop(result) {", 1)[1].split(
+        "\n}\n\nasync function toggleRawEvidence",
+        1,
+    )[0]
+
+    assert "state.activeState = result;" in detach_body
+    assert "renderRunState(result);" in detach_body
+    assert detach_body.index("renderRunState(result);") < detach_body.index(
+        "state.activeRunId = null;"
+    )
+    assert app.count("const checkerStatus = payload.checker_status || {};") >= 2
 
 
 def test_static_app_has_resizable_run_evidence_panel() -> None:

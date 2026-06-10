@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -53,6 +54,7 @@ CLAUDE_PROVIDER_REQUIRED_ENV = {
     "mify-anthropic": ("XM_LLM_API_KEY",),
 }
 ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CLAUDE_PROVIDER"}
+RUN_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
 
 class ConsoleLaunchError(ValueError):
@@ -1102,6 +1104,14 @@ def _tcp_port_free(host: str, port: int) -> bool:
         return True
 
 
-def _new_run_id(route: ConsoleRoute) -> str:
+def _new_run_id(route: ConsoleLaunchSelection | ConsoleRoute) -> str:
     timestamp = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-    return f"{timestamp}-{route.id}"
+    return f"{timestamp}-{_safe_run_id_suffix(route.id)}"
+
+
+def _safe_run_id_suffix(raw: str) -> str:
+    """Return a readable id fragment that is safe in paths and Docker bind specs."""
+
+    slug = RUN_ID_SAFE_RE.sub("-", raw).strip("-._")
+    slug = re.sub(r"-{2,}", "-", slug)
+    return slug or "run"

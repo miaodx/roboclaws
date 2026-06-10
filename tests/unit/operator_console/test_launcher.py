@@ -11,6 +11,7 @@ import pytest
 from roboclaws.operator_console.launcher import (
     ConsoleLaunchError,
     LaunchRequest,
+    _new_run_id,
     _terminate_process_group,
     build_launch_argv,
     load_repo_dotenv,
@@ -20,12 +21,23 @@ from roboclaws.operator_console.launcher import (
 )
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
-from roboclaws.operator_console.routes import get_route
+from roboclaws.operator_console.routes import get_route, get_selection
 
 CODEX_ENV = {
     "CODEX_BASE_URL": "https://codex.example.test/v1",
     "CODEX_API_KEY": "key",
 }
+
+
+def test_new_console_run_id_is_filesystem_and_docker_mount_safe() -> None:
+    run_id = _new_run_id(
+        get_selection("molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels")
+    )
+
+    assert "/" not in run_id
+    assert ":" not in run_id
+    assert "::" not in run_id
+    assert run_id.endswith("-molmospaces-val_0-mujoco-cleanup-codex-cli-world-oracle-labels")
 
 
 def _free_port() -> str:

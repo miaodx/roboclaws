@@ -7,6 +7,7 @@ import socket
 import subprocess
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from functools import partial
 from http.server import ThreadingHTTPServer
@@ -439,6 +440,59 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert launch_request.intent_id == "open-ended"
     assert launch_request.operator_session_id == "session-test"
     assert launch_request.parent_run_id == run_id
+
+
+def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path: Path) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "20260610-224107-molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    attempt_dir = run_dir / "0610_2241" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 99999999,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{urllib.parse.quote(run_id, safe='')}/stop",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with (
+            patch("roboclaws.operator_console.launcher._stop_live_child_run"),
+            patch("roboclaws.operator_console.launcher._terminate_process_group"),
+        ):
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["run_id"] == run_id
+    assert payload["phase"] == "stopped_by_operator"
+    assert ResourceLock(tmp_path, route.lock_name).read().held is False
 
 
 def test_operator_console_continue_endpoint_is_not_public(tmp_path: Path) -> None:

@@ -195,20 +195,21 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     route_id=str(payload.get("route_id") or ""),
                 )
                 return self._json(start_console_run(self.repo_root, request), status=201)
-            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/ask-why"):
-                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/ask-why")
+            run_action = _parse_run_action_path(parsed.path)
+            if run_action and run_action[1] == "ask-why":
+                run_id = run_action[0]
                 return self._json(
                     append_ask_why(self.repo_root, run_id, str(payload.get("question") or "")),
                     status=201,
                 )
-            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/messages"):
-                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/messages")
+            if run_action and run_action[1] == "messages":
+                run_id = run_action[0]
                 return self._json(
                     append_steer_message(self.repo_root, run_id, str(payload.get("body") or "")),
                     status=201,
                 )
-            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/next-goal"):
-                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/next-goal")
+            if run_action and run_action[1] == "next-goal":
+                run_id = run_action[0]
                 follow_up = append_next_goal_request(
                     self.repo_root,
                     run_id,
@@ -243,8 +244,8 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     except ConsoleLaunchError as exc:
                         follow_up["start_error"] = str(exc)
                 return self._json(follow_up, status=201)
-            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/pause"):
-                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/pause")
+            if run_action and run_action[1] == "pause":
+                run_id = run_action[0]
                 return self._json(
                     {
                         "run_id": run_id,
@@ -252,11 +253,11 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                         "reason": PAUSE_UNAVAILABLE_REASON,
                     }
                 )
-            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/stop"):
-                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/stop")
+            if run_action and run_action[1] == "stop":
+                run_id = run_action[0]
                 return self._json(stop_console_run(self.repo_root, run_id))
-            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/emergency-stop"):
-                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/emergency-stop")
+            if run_action and run_action[1] == "emergency-stop":
+                run_id = run_action[0]
                 return self._json(stop_console_run(self.repo_root, run_id, emergency=True))
         except (ConsoleLaunchError, InteractionError, KeyError, ValueError) as exc:
             return self._json({"error": str(exc)}, status=400)
@@ -350,3 +351,15 @@ def _is_relative_to(path: Path, root: Path) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _parse_run_action_path(path: str) -> tuple[str, str] | None:
+    prefix = "/api/runs/"
+    if not path.startswith(prefix):
+        return None
+    remainder = path.removeprefix(prefix)
+    for action in ("emergency-stop", "next-goal", "ask-why", "messages", "pause", "stop"):
+        suffix = f"/{action}"
+        if remainder.endswith(suffix):
+            return unquote(remainder[: -len(suffix)]), action
+    return None

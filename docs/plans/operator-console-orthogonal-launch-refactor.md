@@ -903,6 +903,10 @@ To execute:
   (`household-world.cleanup`, `codex-cli`) instead of legacy task/driver pairs
   (`household-cleanup`, `codex`). The private `agent::run` recipe normalizes
   those launch-shaped values before calling existing implementation recipes.
+- 2026-06-10: Continued parked browser-click proof on the work network. The
+  proof exposed and fixed console run ids that were unsafe for Docker bind
+  mount paths, browser-encoded run-action ids that were not decoded by POST
+  handlers, and partial stop payloads that the UI did not render safely.
 
 ## Verification Evidence
 
@@ -1008,15 +1012,68 @@ Evidence:
   `run_live_openai_agents_cleanup`, or `roboclaws.cli.agent_server` processes,
   no matching cleanup tmux sessions, and port `18788` free.
 
+Parked browser-click follow-up run on 2026-06-10:
+
+```bash
+just dev::network-status
+just console::run 127.0.0.1 8891
+NODE_PATH=/home/mi/ws/intuitive-flow/vendor/gstack/node_modules node <<'JS'
+# inline Playwright browser-click proof script
+JS
+.venv/bin/python -m compileall -q roboclaws/launch roboclaws/cli/task_run.py roboclaws/operator_console
+node --check roboclaws/operator_console/static/app.js
+.venv/bin/ruff check roboclaws/launch roboclaws/operator_console roboclaws/household/apple2apple_test_grid.py scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py scripts/molmo_cleanup/run_codex_cleanup_harness8.py tests/unit/launch tests/unit/operator_console tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_code_just_recipes.py
+.venv/bin/ruff format --check roboclaws/launch roboclaws/operator_console roboclaws/household/apple2apple_test_grid.py scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py scripts/molmo_cleanup/run_codex_cleanup_harness8.py tests/unit/launch tests/unit/operator_console tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_code_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch tests/unit/operator_console tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_code_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_apple2apple_test_grid.py tests/unit/molmo_cleanup/test_ci_live_reports.py tests/unit/molmo_cleanup/test_codex_cleanup_harness8.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/reports/test_molmo_cleanup_report.py tests/contract/reports/test_reporter.py tests/contract/reports/test_render_autonomous_replay.py tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit tests/contract/dev_tools
+just --summary
+git diff --check
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual
+```
+
+Evidence:
+
+- The browser proof used vendored Playwright with Chromium sandbox disabled
+  because gstack browse itself failed on this host's Chromium sandbox. It drove
+  the visible UI controls: `Start Agent Run` -> `Launch Run` confirmation ->
+  observed child attempt -> `Stop Run` -> `Stop Run` confirmation.
+- Initial browser-click proof exposed two lifecycle bugs that were fixed in the
+  follow-up slice: canonical selection ids containing `/` and `::` produced
+  invalid Docker bind-mount paths when reused directly as console run ids, and
+  POST run-action endpoints did not URL-decode browser-encoded run ids before
+  stop/message/next-goal dispatch.
+- The final browser proof wrote
+  `output/operator-console/browser-click-proof/browser-click-proof.json` plus
+  screenshots `41-before-start.png`, `42-after-start.png`, and
+  `43-after-stop.png`.
+- Final browser proof run id:
+  `20260610-225945-molmospaces-val_0-mujoco-cleanup-codex-cli-world-oracle-labels`.
+  It observed child display attempt `0610_2259/seed-7`, then stopped the run.
+- Final browser proof recorded `stoppedState.phase=stopped_by_operator`,
+  `stoppedState.terminal_reason=stopped_by_operator`, and DOM `afterStop`
+  values `status=stopped_by_operator`, `phase=stopped_by_operator`,
+  `terminal=stopped_by_operator`, `stopDisabled=true`.
+- Final browser proof recorded no browser console messages and no page errors.
+- Post-stop checks found the console lock directory empty, ports `18788` and
+  `18789` free, no matching live cleanup runner or `roboclaws.cli.agent_server`
+  processes, and no matching cleanup tmux sessions.
+- Broadened tests passed after the browser-proof fixes. The only warnings were
+  existing Pillow `mode` deprecation warnings from Isaac/openclaw unit tests.
+- `just --summary` still exposes `agent::gateway agent::harness agent::mcp
+  agent::run agent::verify console::run run::surface`; `task::run` is not
+  exposed.
+
 ## Parked Work
 
-- Full live browser start/stop proof is materially completed for supported
-  work-network console routes through API readiness/start/stop: Codex CLI,
-  Claude Code through repo-local `mimo-anthropic`, and OpenAI Agents SDK through
-  repo-local `codex-env` all proved console launch path, child runner creation,
-  operator stop, terminal state propagation, lock release, and port cleanup. A
-  human-observed browser click-through remains optional UI evidence, not the
-  only proof of the launch lifecycle.
+- Full live browser start/stop proof is completed for the work-network-supported
+  Codex CLI console route through a real browser click flow. API start/stop
+  proof is also completed for Claude Code through repo-local
+  `mimo-anthropic`, and OpenAI Agents SDK through repo-local `codex-env`; those
+  proved console launch path, child runner creation, operator stop, terminal
+  state propagation, lock release, and port cleanup.
 - Provider/Docker/live-agent proof is completed for the work-network-supported
   console routes above. OpenClaw remains unclaimed because the console does not
   expose an OpenClaw cleanup combination and OpenClaw Gateway is blocked by the

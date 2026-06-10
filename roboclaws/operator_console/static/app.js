@@ -1349,9 +1349,10 @@ function renderRunState(payload) {
     ${decision.blocked_reason ? `<p class="field-help">${escapeHtml(decision.blocked_reason)}</p>` : ""}
   `;
   renderToolPanel(payload);
-  els.proofPanel.textContent = `${payload.checker_status.status || "pending"}: ${
-    payload.checker_status.message ||
-    payload.checker_status.checker_log ||
+  const checkerStatus = payload.checker_status || {};
+  els.proofPanel.textContent = `${checkerStatus.status || "pending"}: ${
+    checkerStatus.message ||
+    checkerStatus.checker_log ||
     "Checker has not run yet."
   }`;
   renderArtifacts(payload.artifact_paths || []);
@@ -1526,11 +1527,12 @@ function openImageDialog({ src, title, path }) {
 }
 
 function renderEvents(payload) {
+  const checkerStatus = payload.checker_status || {};
   const bits = [
     `phase=${payload.phase}`,
     payload.terminal_reason ? `reason=${payload.terminal_reason}` : "",
     `action=${payload.latest_action || "none"}`,
-    `checker=${payload.checker_status.status || "pending"}`,
+    `checker=${checkerStatus.status || "pending"}`,
     `outputs=${payload.display_run_dir || payload.run_dir}`,
   ].filter(Boolean);
   els.eventList.textContent = bits.join("  ");
@@ -1648,9 +1650,10 @@ function detachRunAfterStop(result) {
     clearInterval(state.pollTimer);
     state.pollTimer = null;
   }
+  state.activeState = result;
+  renderRunState(result);
   state.activeRunId = null;
   state.activeRouteId = "";
-  state.activeState = null;
   els.eventList.textContent =
     result.terminal_reason || result.phase || "Run stopped; backend lock released.";
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
