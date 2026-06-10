@@ -23,9 +23,11 @@ evidence_lane/report + scenario_setup
 ```
 
 The legacy public `task::run` facade and public `driver=` /
-`environment_setup=` arguments are removed. Lower implementation names such as
-`household-cleanup`, `semantic-map-build`, `ai2thor-nav`, `generated_mess_count`,
-and lower driver strings remain private dispatch details behind `agent::run`.
+`environment_setup=` arguments are removed. Public launches now lower to
+launch-shaped private dispatch targets such as `household-world.cleanup` and
+`ai2thor-world.navigate`; `agent::run` owns the final adapter step into older
+implementation recipes that still need values such as `household-cleanup` or
+`generated_mess_count`.
 
 ## Goal
 
@@ -896,6 +898,11 @@ To execute:
   `agent_engine=openai-agents-sdk` for supported household cleanup routes.
 - 2026-06-10: Aligned active README/architecture/Just/agent/human runbooks and
   added supersession notes to older conflicting console and launch plans.
+- 2026-06-10: Continued parked lower-dispatch cleanup on the work network:
+  launch/catalog code now emits private dispatch targets and agent-engine ids
+  (`household-world.cleanup`, `codex-cli`) instead of legacy task/driver pairs
+  (`household-cleanup`, `codex`). The private `agent::run` recipe normalizes
+  those launch-shaped values before calling existing implementation recipes.
 
 ## Verification Evidence
 
@@ -941,16 +948,85 @@ Codex CLI, Agibot fields appear, Start is gated for missing run-level approvals,
 and the screenshot was written to
 `output/operator-console/orthogonal-launch-smoke.png`.
 
+Parked lower-dispatch cleanup follow-up run on 2026-06-10:
+
+```bash
+.venv/bin/python -m compileall -q roboclaws/launch roboclaws/cli/task_run.py roboclaws/operator_console/routes.py
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console
+```
+
+Work-network live console start/stop proof run on 2026-06-10:
+
+```bash
+just dev::network-status
+just console::run 127.0.0.1 8891
+curl -sS 'http://127.0.0.1:8891/api/readiness?selection_id=molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels&provider_profile=codex-env&port=18788'
+curl -sS -X POST http://127.0.0.1:8891/api/runs ...
+curl -sS -X POST 'http://127.0.0.1:8891/api/runs/20260610-221750-molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels/stop'
+curl -sS 'http://127.0.0.1:8891/api/readiness?selection_id=molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels&provider_profile=mimo-anthropic&port=18788'
+curl -sS -X POST http://127.0.0.1:8891/api/runs ...
+curl -sS -X POST 'http://127.0.0.1:8891/api/runs/20260610-222223-molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels/stop'
+curl -sS 'http://127.0.0.1:8891/api/readiness?selection_id=molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels&provider_profile=codex-env&port=18788'
+curl -sS -X POST http://127.0.0.1:8891/api/runs ...
+curl -sS -X POST 'http://127.0.0.1:8891/api/runs/20260610-222247-molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels/stop'
+```
+
+Evidence:
+
+- Readiness returned `can_start=true` with `provider=codex-env`, no missing
+  `CODEX_BASE_URL` / `CODEX_API_KEY`, and MCP port `127.0.0.1:18788` ready.
+- Codex started run:
+  `output/operator-console/runs/20260610-221750-molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels/`.
+- The console launched the child Codex cleanup runner at
+  `0610_2217/seed-7/`; `console-launch.log` recorded
+  `network guard ok: work network with repo-local Codex provider (codex-env)`
+  and a detached Codex Molmo cleanup tmux session.
+- Stop API marked `operator_state.json` with `phase=stopped_by_operator` and
+  `terminal_reason=stopped_by_operator`; child `live_status.json` recorded
+  `exit_status=130`, `phase=stopped_by_operator`, and
+  `terminal_reason=stopped_by_operator`.
+- Claude Code readiness returned `can_start=true` with
+  `provider=mimo-anthropic`, no missing `MIMO_TP_KEY`, and MCP port ready.
+  Start/stop proof wrote
+  `output/operator-console/runs/20260610-222223-molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels/`;
+  `console-launch.log` recorded `driver: claude-live` and
+  `network guard ok: work network with repo-local Claude provider
+  (mimo-anthropic)`. Operator and child status both ended
+  `stopped_by_operator`.
+- OpenAI Agents SDK readiness returned `can_start=true` with
+  `provider=codex-env`, no missing `CODEX_BASE_URL` / `CODEX_API_KEY`, and MCP
+  port ready. Start/stop proof wrote
+  `output/operator-console/runs/20260610-222247-molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels/`;
+  `console-launch.log` recorded `driver: openai-agents-live` and
+  `network guard ok: work network with repo-local Codex provider (codex-env)`.
+  Operator and child status both ended `stopped_by_operator`.
+- Post-stop checks found the `molmospaces_mujoco` console lock released, no
+  matching live `run_live_codex_cleanup`, `run_live_claude_cleanup`,
+  `run_live_openai_agents_cleanup`, or `roboclaws.cli.agent_server` processes,
+  no matching cleanup tmux sessions, and port `18788` free.
+
 ## Parked Work
 
-- Full live browser start/stop proof remains local-only. The browser smoke
-  covered page render, selection changes, Agibot gates, and console errors, but
-  deliberately did not launch a live agent run.
-- Provider/Docker/live-agent proof remains local-only. Run Codex, Claude Code,
-  OpenAI Agents SDK, OpenClaw, and real simulator/provider gates before claiming
-  full product validation.
-- Lower private dispatch still uses task-like names and lower driver strings
-  behind `agent::run`. They are intentionally private after this slice; remove
-  or rename them only in a later lower-dispatch cleanup.
+- Full live browser start/stop proof is materially completed for supported
+  work-network console routes through API readiness/start/stop: Codex CLI,
+  Claude Code through repo-local `mimo-anthropic`, and OpenAI Agents SDK through
+  repo-local `codex-env` all proved console launch path, child runner creation,
+  operator stop, terminal state propagation, lock release, and port cleanup. A
+  human-observed browser click-through remains optional UI evidence, not the
+  only proof of the launch lifecycle.
+- Provider/Docker/live-agent proof is completed for the work-network-supported
+  console routes above. OpenClaw remains unclaimed because the console does not
+  expose an OpenClaw cleanup combination and OpenClaw Gateway is blocked by the
+  work-network guard. System-provider Claude Code is also blocked by the
+  work-network guard; only repo-local Anthropic-compatible profiles were used.
+- Lower private dispatch cleanup is partially completed: active launch/catalog
+  code no longer emits legacy task/driver pairs as its dispatch target.
+  Remaining old implementation names are confined to `agent::run`,
+  `molmo::cleanup`, MCP server entrypoints, prompts, artifact paths, and
+  historical/implementation-specific tests where existing runner scripts still
+  require them.
 - Old route-id history is best-effort display-only. Do not add relaunch support
   for old route-card records unless a future migration explicitly needs it.

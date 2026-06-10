@@ -11,10 +11,10 @@ from roboclaws.launch.goals import GoalContract
 class LaunchPlan:
     """Resolved public surface/intent route before execution.
 
-    The launch plan names the canonical axes first, then the lower command that
-    the current implementation should execute. The command intentionally still
-    points at ``just agent::run`` in the first migration checkpoint; later
-    slices can replace that target without changing the public facade.
+    The launch plan names the canonical axes first, then the private dispatch
+    command that the current implementation should execute. The command
+    intentionally still points at ``just agent::run``; that dispatcher owns the
+    final lowering into implementation recipes.
     """
 
     argv: tuple[str, ...]
@@ -26,9 +26,8 @@ class LaunchPlan:
     agent_engine: str
     provider_profile: str | None
     internal_runner_class: str
-    lower_driver: str
-    lower_task: str
-    driver: str
+    dispatch_runner: str
+    dispatch_target: str
     evidence_mode: str
     profile: str | None
     report: str | None
@@ -45,12 +44,6 @@ class LaunchPlan:
     supported_reports: tuple[str, ...]
     supported_profiles: tuple[str, ...]
     overrides: tuple[str, ...]
-
-    @property
-    def task(self) -> str:
-        """Compatibility name for the lower task dispatcher target."""
-
-        return self.lower_task
 
     @property
     def mode(self) -> str:

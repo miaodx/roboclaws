@@ -10,19 +10,95 @@ set positional-arguments
 default:
     @just --list agent
 
-# Run a normalized task/driver/report-or-evidence-lane tuple.
-run task driver mode="" *overrides:
+# Run a normalized private dispatch target / agent-engine tuple.
+run dispatch_target agent_engine mode="" *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
 
     args=("$@")
-    task="${args[0]}"
-    driver="${args[1]}"
+    dispatch_target="${args[0]}"
+    agent_engine="${args[1]}"
     mode="${args[2]}"
     raw_overrides=("${args[@]:3}")
 
-    task="${task#task=}"
-    driver="${driver#driver=}"
+    dispatch_target="${dispatch_target#dispatch_target=}"
+    dispatch_target="${dispatch_target#task=}"
+    agent_engine="${agent_engine#agent_engine=}"
+    agent_engine="${agent_engine#driver=}"
+
+    has_raw_override_key() {
+      local wanted="$1"
+      local override
+      for override in "${raw_overrides[@]}"; do
+        if [[ "$override" == "$wanted="* || "$override" == "--$wanted="* ]]; then
+          return 0
+        fi
+      done
+      return 1
+    }
+
+    dispatch_intent="${dispatch_target##*.}"
+    case "$dispatch_target" in
+      household-world.cleanup)
+        task="household-cleanup"
+        ;;
+      household-world.map-build)
+        task="semantic-map-build"
+        ;;
+      household-world.open-ended)
+        task="household-cleanup"
+        if ! has_raw_override_key task_intent; then
+          raw_overrides+=("task_intent=open-ended")
+        fi
+        ;;
+      ai2thor-world.navigate)
+        task="ai2thor-nav"
+        ;;
+      ai2thor-world.photo-capture)
+        task="photo-chairs"
+        ;;
+      ai2thor-games.territory)
+        task="territory"
+        ;;
+      ai2thor-games.coverage)
+        task="coverage"
+        ;;
+      planner-proof.planner-proof)
+        task="molmo-planner-proof"
+        ;;
+      *)
+        task="$dispatch_target"
+        ;;
+    esac
+    case "$agent_engine" in
+      codex-cli)
+        driver="codex"
+        ;;
+      claude-code)
+        driver="claude"
+        ;;
+      openai-agents-sdk)
+        driver="openai-agents-live"
+        ;;
+      direct-runner)
+        driver="direct"
+        if [[ "$mode" == "smoke" && ( "$dispatch_intent" == "cleanup" || "$dispatch_intent" == "open-ended" ) ]]; then
+          driver="mcp-smoke"
+        fi
+        ;;
+      openclaw-gateway)
+        driver="openclaw"
+        ;;
+      vlm-policy)
+        driver="vlm"
+        ;;
+      script-runner)
+        driver="script"
+        ;;
+      *)
+        driver="$agent_engine"
+        ;;
+    esac
     case "$mode" in
       report=*)
         mode="${mode#report=}"

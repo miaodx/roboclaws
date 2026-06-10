@@ -248,8 +248,8 @@ def test_photo_task_facade_accepts_coding_agent_drivers() -> None:
     assert codex.argv == (
         "just",
         "agent::run",
-        "photo-chairs",
-        "codex",
+        "ai2thor-world.photo-capture",
+        "codex-cli",
         "visual",
         "scene=FloorPlan201",
         "backend=ai2thor",
@@ -257,8 +257,8 @@ def test_photo_task_facade_accepts_coding_agent_drivers() -> None:
     assert claude.argv == (
         "just",
         "agent::run",
-        "photo-chairs",
-        "claude",
+        "ai2thor-world.photo-capture",
+        "claude-code",
         "visual",
         "scene=FloorPlan201",
         "backend=ai2thor",

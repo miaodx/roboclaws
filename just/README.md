@@ -357,12 +357,17 @@ Prompt mappings for agents:
 Use `agent::*` only when you are intentionally bypassing the human task grammar:
 
 ```bash
-just agent::run <task> <driver> [report] [key=value ...]
+just agent::run <dispatch-target> <agent-engine> [report|evidence-lane] [key=value ...]
 just agent::verify <target> [args ...]
 just agent::harness <target> [args ...]
 just agent::mcp up
 just agent::gateway up
 ```
+
+`agent::run` is a private maintainer dispatcher. Public callers should use
+`run::surface`; the dispatcher accepts launch-shaped targets such as
+`household-world.cleanup` and normalizes them to older implementation recipes
+only after the public axes have been resolved.
 
 The required PR gate is reproducible locally with
 `just agent::verify ci-required`. Use `just agent::verify mock` for a faster

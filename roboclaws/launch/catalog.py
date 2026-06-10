@@ -6,8 +6,9 @@ The public launch catalog resolves orthogonal launch axes:
 ``provider_profile`` + evidence/report mode + ``scenario_setup``.
 
 The current implementation still lowers to the private ``agent::run``
-dispatcher. Legacy task names and lower drivers therefore remain implementation
-details, not public catalog identifiers.
+dispatcher. That dispatcher may call older implementation recipes, but the
+catalog emits launch-shaped private dispatch targets rather than legacy public
+task ids.
 """
 
 from __future__ import annotations
@@ -52,11 +53,11 @@ SURFACE_SPECS: dict[str, TaskSurfaceSpec] = {
 }
 
 SUPPORTED_SURFACE_ROUTES: set[tuple[str, str, str]] = {
-    (surface_id, intent_id, lower_driver)
+    (surface_id, intent_id, dispatch_runner)
     for surface_id, spec in SURFACE_SPECS.items()
     for intent_id in spec.supported_intents
-    for lower_driver in spec.supported_drivers
-    if lower_driver in TASK_INTENT_SPECS[intent_id].supported_drivers
+    for dispatch_runner in spec.supported_dispatch_runners
+    if dispatch_runner in TASK_INTENT_SPECS[intent_id].supported_dispatch_runners
 }
 
 
@@ -136,13 +137,13 @@ def _resolve_launch(
             f"intent '{intent.intent_id}' cannot run on surface '{surface.surface_id}'"
         )
 
-    lower_driver = _lower_driver_for_selection(
+    dispatch_runner = _dispatch_runner_for_selection(
         agent_engine=agent_engine,
         intent=intent,
         raw_mode=raw_mode,
         overrides=overrides,
     )
-    if (surface.surface_id, intent.intent_id, lower_driver) not in SUPPORTED_SURFACE_ROUTES:
+    if (surface.surface_id, intent.intent_id, dispatch_runner) not in SUPPORTED_SURFACE_ROUTES:
         raise LaunchError(
             f"agent_engine '{agent_engine.id}' cannot run surface '{surface.surface_id}' "
             f"intent '{intent.intent_id}'"
@@ -177,8 +178,8 @@ def _resolve_launch(
         *dispatch_setup_overrides,
     )
     argv = build_agent_run_argv(
-        task=intent.lower_task,
-        lower_driver=lower_driver,
+        dispatch_target=intent.dispatch_target,
+        agent_engine=agent_engine.id,
         mode=evidence_mode,
         overrides=dispatch_overrides,
     )
@@ -194,12 +195,11 @@ def _resolve_launch(
         provider_profile=resolved_provider_profile,
         internal_runner_class=_internal_runner_class(
             agent_engine=agent_engine,
-            lower_driver=lower_driver,
+            dispatch_runner=dispatch_runner,
             evidence_mode=evidence_mode,
         ),
-        lower_driver=lower_driver,
-        lower_task=intent.lower_task,
-        driver=agent_engine.id,
+        dispatch_runner=dispatch_runner,
+        dispatch_target=intent.dispatch_target,
         evidence_mode=evidence_mode,
         profile=profile,
         report=report,
@@ -377,7 +377,7 @@ def _resolve_provider_profile(
     return selected
 
 
-def _lower_driver_for_selection(
+def _dispatch_runner_for_selection(
     *,
     agent_engine: AgentEngineSpec,
     intent: TaskIntentSpec,
@@ -388,16 +388,16 @@ def _lower_driver_for_selection(
         profile = raw_mode or _override_value(overrides, "evidence_lane") or ""
         if profile == "smoke" and intent.intent_id in {"cleanup", "open-ended"}:
             return "mcp-smoke"
-    return agent_engine.lower_driver
+    return agent_engine.dispatch_runner
 
 
 def _internal_runner_class(
     *,
     agent_engine: AgentEngineSpec,
-    lower_driver: str,
+    dispatch_runner: str,
     evidence_mode: str,
 ) -> str:
-    if lower_driver == "mcp-smoke" or evidence_mode == "smoke":
+    if dispatch_runner == "mcp-smoke" or evidence_mode == "smoke":
         return "smoke"
     return agent_engine.internal_runner_class
 

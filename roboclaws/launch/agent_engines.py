@@ -11,7 +11,7 @@ class AgentEngineSpec:
 
     id: str
     label: str
-    lower_driver: str
+    dispatch_runner: str
     internal_runner_class: str
     supported_provider_profiles: tuple[str, ...]
     default_provider_profile: str | None
@@ -24,7 +24,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
     "codex-cli": AgentEngineSpec(
         id="codex-cli",
         label="Codex CLI",
-        lower_driver="codex",
+        dispatch_runner="codex",
         internal_runner_class="live-agent",
         supported_provider_profiles=("codex-env", "mify"),
         default_provider_profile="codex-env",
@@ -33,7 +33,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
     "claude-code": AgentEngineSpec(
         id="claude-code",
         label="Claude Code",
-        lower_driver="claude",
+        dispatch_runner="claude",
         internal_runner_class="live-agent",
         supported_provider_profiles=("kimi-anthropic", "mimo-anthropic", "mify-anthropic"),
         default_provider_profile="mimo-anthropic",
@@ -42,7 +42,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
     "openai-agents-sdk": AgentEngineSpec(
         id="openai-agents-sdk",
         label="OpenAI Agents SDK",
-        lower_driver="openai-agents-live",
+        dispatch_runner="openai-agents-live",
         internal_runner_class="live-agent",
         supported_provider_profiles=("codex-env", "mify"),
         default_provider_profile="codex-env",
@@ -53,7 +53,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
     "direct-runner": AgentEngineSpec(
         id="direct-runner",
         label="Direct Runner",
-        lower_driver="direct",
+        dispatch_runner="direct",
         internal_runner_class="deterministic",
         supported_provider_profiles=(),
         default_provider_profile=None,
@@ -61,7 +61,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
     "openclaw-gateway": AgentEngineSpec(
         id="openclaw-gateway",
         label="OpenClaw Gateway",
-        lower_driver="openclaw",
+        dispatch_runner="openclaw",
         internal_runner_class="gateway",
         supported_provider_profiles=("kimi",),
         default_provider_profile="kimi",
@@ -69,7 +69,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
     "vlm-policy": AgentEngineSpec(
         id="vlm-policy",
         label="VLM Policy",
-        lower_driver="vlm",
+        dispatch_runner="vlm",
         internal_runner_class="model-policy",
         supported_provider_profiles=("kimi",),
         default_provider_profile="kimi",
@@ -77,7 +77,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
     "script-runner": AgentEngineSpec(
         id="script-runner",
         label="Script Runner",
-        lower_driver="script",
+        dispatch_runner="script",
         internal_runner_class="script",
         supported_provider_profiles=(),
         default_provider_profile=None,

@@ -431,7 +431,7 @@ def test_agent_module_exposes_compact_dispatchers() -> None:
     text = AGENT_JUST.read_text(encoding="utf-8")
 
     expected_headers = (
-        r"^run task driver mode=\"\" \*overrides:",
+        r"^run dispatch_target agent_engine mode=\"\" \*overrides:",
         r"^verify target=\"mock\" \*args:",
         r"^harness target \*args:",
         r"^mcp action=\"up\"",
@@ -584,7 +584,7 @@ def test_surface_open_ended_supports_mcp_smoke_for_local_gate() -> None:
     assert plan.surface == "household-world"
     assert plan.intent == "open-ended"
     assert plan.agent_engine == "direct-runner"
-    assert plan.lower_driver == "mcp-smoke"
+    assert plan.dispatch_runner == "mcp-smoke"
     assert plan.internal_runner_class == "smoke"
     assert plan.goal_contract.goal_scope == "agent-declared"
     assert env["ROBOCLAWS_TASK_INTENT"] == "open-ended"
@@ -627,7 +627,7 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
     assert plan.agent_engine == "codex-cli"
     assert plan.provider_profile == "codex-env"
     assert plan.intent == "map-build"
-    assert plan.task == "semantic-map-build"
+    assert plan.dispatch_target == "household-world.map-build"
     assert plan.goal_contract.schema == "roboclaws_goal_contract_v1"
     assert plan.goal_contract.surface == "household-world"
     assert plan.goal_contract.intent == "map-build"
@@ -667,7 +667,7 @@ def test_surface_launch_plan_keeps_explicit_non_household_report_axis() -> None:
 
     assert plan.surface == "ai2thor-world"
     assert plan.intent == "navigate"
-    assert plan.task == "ai2thor-nav"
+    assert plan.dispatch_target == "ai2thor-world.navigate"
     assert plan.profile is None
     assert plan.report == "visual"
     assert plan.backend == "ai2thor"
@@ -749,7 +749,7 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
         )
     )
     assert plan.agent_engine == "openai-agents-sdk"
-    assert plan.lower_driver == "openai-agents-live"
+    assert plan.dispatch_runner == "openai-agents-live"
     assert plan.internal_runner_class == "smoke"
 
 
@@ -824,8 +824,8 @@ def test_surface_router_is_importable_source_of_truth() -> None:
     assert resolved.argv == (
         "just",
         "agent::run",
-        "household-cleanup",
-        "codex",
+        "household-world.cleanup",
+        "codex-cli",
         "smoke",
         "output_dir=output/custom",
         "scene_source=procthor-10k-val",
@@ -861,8 +861,8 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
     assert plan.argv == (
         "just",
         "agent::run",
-        "household-cleanup",
-        "codex",
+        "household-world.cleanup",
+        "codex-cli",
         "smoke",
         "backend=agibot_gdk",
         "generated_mess_count=5",
@@ -870,9 +870,9 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
     assert "scenario_setup=relocate-cleanup-related-objects" in plan.overrides
     assert "relocation_count=5" in plan.overrides
     assert not any(item.startswith("generated_mess_count=") for item in plan.overrides)
-    assert plan.task == "household-cleanup"
-    assert plan.driver == "codex-cli"
-    assert plan.lower_driver == "codex"
+    assert plan.dispatch_target == "household-world.cleanup"
+    assert plan.agent_engine == "codex-cli"
+    assert plan.dispatch_runner == "codex"
     assert plan.profile == "smoke"
     assert plan.report is None
     assert plan.world == "agibot-g2/map-12"
@@ -900,8 +900,8 @@ def test_surface_launch_plan_keeps_non_household_report_axis() -> None:
     assert plan.argv == (
         "just",
         "agent::run",
-        "ai2thor-nav",
-        "openclaw",
+        "ai2thor-world.navigate",
+        "openclaw-gateway",
         "minimal",
         "scene=FloorPlan201",
         "backend=ai2thor",
@@ -930,14 +930,15 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
         "agent_engine=codex-cli",
         "provider_profile=codex-env",
     ]
-    assert "lower_driver=codex" in plan_trace
+    assert "dispatch_runner=codex" in plan_trace
+    assert "dispatch_target=household-world.cleanup" in plan_trace
     assert "mode=camera-grounded-labels" in plan_trace
     assert "profile=camera-grounded-labels" in plan_trace
     assert "report=" in plan_trace
     assert "prompt=household_cleanup" in plan_trace
     assert "checker=cleanup_report" in plan_trace
     assert (
-        "target=just agent::run household-cleanup codex camera-grounded-labels "
+        "target=just agent::run household-world.cleanup codex-cli camera-grounded-labels "
         "camera_labeler=grounding-dino scene_source=procthor-10k-val scene_index=0 "
         "backend=molmospaces_subprocess generated_mess_count=5"
     ) in plan_trace
@@ -965,8 +966,8 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
     assert plan.argv == (
         "just",
         "agent::run",
-        "household-cleanup",
-        "codex",
+        "household-world.cleanup",
+        "codex-cli",
         "world-public-labels",
         "scene_source=procthor-10k-val",
         "scene_index=0",

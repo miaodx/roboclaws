@@ -10,14 +10,14 @@ from roboclaws.launch.environment_setup_metadata import (
 
 def build_agent_run_argv(
     *,
-    task: str,
-    lower_driver: str,
+    dispatch_target: str,
+    agent_engine: str,
     mode: str,
     overrides: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """Return the current lower dispatcher command for a public task route."""
+    """Return the private dispatcher command for a public launch route."""
 
-    return ("just", "agent::run", task, lower_driver, mode, *overrides)
+    return ("just", "agent::run", dispatch_target, agent_engine, mode, *overrides)
 
 
 def export_env_from_overrides(overrides: tuple[str, ...]) -> dict[str, str]:

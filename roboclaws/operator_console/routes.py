@@ -210,7 +210,7 @@ class ConsoleRoute:
 
     @property
     def driver(self) -> str:
-        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].lower_driver
+        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].dispatch_runner
 
     @property
     def driver_label(self) -> str:

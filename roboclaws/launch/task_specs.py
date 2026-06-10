@@ -10,12 +10,12 @@ class TaskSurfaceSpec:
     """Declarative execution-surface metadata.
 
     Specs describe runnable environments and capability surfaces. They do not
-    import driver implementations, backend adapters, or MCP server code.
+    import runner implementations, backend adapters, or MCP server code.
     """
 
     surface_id: str
     domain: str
-    supported_drivers: tuple[str, ...]
+    supported_dispatch_runners: tuple[str, ...]
     supported_intents: tuple[str, ...]
     default_intent: str
     supported_reports: tuple[str, ...]
