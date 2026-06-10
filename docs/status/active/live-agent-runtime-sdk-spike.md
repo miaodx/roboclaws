@@ -88,6 +88,32 @@ No-touch scope preserved:
 
 Parked work:
 
+- Post-optimization reduce-entropy batch captured in
+  `docs/plans/live-agent-runtime-sdk-spike.md`:
+  - OpenAI Agents SDK skill parity: the current plain SDK route names
+    `molmo-realworld-cleanup` but does not automatically mount/read the
+    `SKILL.md` the way Codex/Claude live workspaces do.
+  - Full provider/model x evidence-lane matrix before new speed claims.
+  - Optional per-model-call racing inside the SDK model interface, only with
+    per-arm cache/cost telemetry and explicit live-run approval.
+  - Agent-visible state delta/compaction and selective visual artifact capture
+    as later speed levers.
+  - Additional SDK-native reduce-entropy candidates captured after the first
+    batch: explicit `ModelSettings`/`RunConfig` performance profiles,
+    Responses/session continuation, `call_model_input_filter` compaction,
+    prompt-cache stable-prefix evidence, parallel-tool-call policy audit, and
+    non-tool response turn-waste classification.
+  - Trace-backed second-pass candidates: evidence-lane tool-surface pruning,
+    repeated `metric_map` delta contract, camera-grounded observe/label
+    two-step collapse, raw-FPV visual-candidate failure rails, and a
+    trace-derived irreducible-floor/waste classifier.
+  - Big-flow infrastructure candidates: unified experiment matrix runner,
+    feature-flag attribution, offline replay/fake-provider preflight,
+    artifact privacy/schema gate, live cost/time/concurrency budget gate,
+    variance/repeatability gate, cross-client regression guard, decision
+    dashboard, behavior-quality regression comparator, and raw-FPV image-memory
+    policy.
+  - Default MCP composite/merge tools remain out of scope.
 - Anthropic Claude Agent SDK spike.
 - Pi SDK MCP adapter prototype.
 - Public/default route promotion for `openai-agents-live`.
