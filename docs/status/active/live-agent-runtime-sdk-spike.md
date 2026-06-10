@@ -24,6 +24,12 @@ Result:
 - Agent SDK performance profiles now persist resolved prompt mode,
   continuation mode, SDK turn cap, context budgets, raw-FPV budgets, and cache
   settings in `live_timing.json`.
+- Agent SDK model-service fallback now retries classified transient
+  model-service failures once by default at the SDK model request boundary,
+  with CLI/env controls for retry budget and delay.
+- `live_timing.json` and `timeline.latency_attribution` now include
+  `model_service_fallback_metrics`, derived from sanitized fallback events
+  rather than raw prompts or model/tool payloads.
 - Compact continuation uses a public-safe state packet instead of replaying the
   full kickoff prompt when the profile requests it or context crosses the soft
   limit.
@@ -72,9 +78,17 @@ Raw-FPV failure classification:
   hard limit, and `context_window_failure_detected=false`.
 - The SDK exception classifier has regression coverage for provider-wrapped
   context failures and SDK max-turn budget exhaustion.
+- Model-service fallback has regression coverage for model-unavailable/5xx/
+  transport retryability, auth/config/context/tool non-retryability, successful
+  one-retry recovery, retry-budget exhaustion, and timing/timeline artifact
+  summaries.
 
 Verification:
 
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_molmo_cleanup_report.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 - `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/reports/test_molmo_cleanup_report.py tests/unit/molmo_cleanup/test_summarize_live_run.py -q`
 - `.venv/bin/ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py roboclaws/agents/prompts/household_cleanup.py scripts/molmo_cleanup/summarize_live_run.py tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/molmo_cleanup/test_summarize_live_run.py`
 

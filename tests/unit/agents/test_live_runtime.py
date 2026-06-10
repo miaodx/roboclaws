@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from argparse import Namespace
 from datetime import UTC, datetime
@@ -11,7 +12,9 @@ import pytest
 from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
     _failure_from_exception,
+    _RetryingModel,
     _RoboclawsSpanRecorder,
+    _should_retry_model_service_failure,
 )
 from roboclaws.agents.live_runtime import (
     LiveAgentMCPServer,
@@ -29,6 +32,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _context_metrics,
     _live_timing_timeline,
     _mcp_control_plane_metrics,
+    _model_service_fallback_metrics,
     _openai_agents_event_metrics,
     _openai_agents_span_metrics,
     _resolve_agent_sdk_perf_profile,
@@ -193,6 +197,151 @@ def test_openai_agents_runtime_classifies_sdk_max_turn_budget() -> None:
     assert failure.resume_available is False
 
 
+def test_openai_agents_runtime_classifies_model_service_retryability() -> None:
+    retryable_messages = [
+        "Error code: 500 - internal server error",
+        "model unavailable",
+        "transport error: connection reset",
+    ]
+    for message in retryable_messages:
+        should_retry, failure = _should_retry_model_service_failure(
+            RuntimeError(message),
+            attempt_index=0,
+            retry_attempts=1,
+        )
+        assert should_retry is True
+        assert failure.reason == "provider_transient_failure"
+        assert failure.retryable is True
+
+    non_retryable_messages = [
+        "invalid api key 401",
+        "codex-env requires CODEX_API_KEY",
+        "Your input exceeds the context window",
+        "tool failed while calling cleanup MCP",
+    ]
+    for message in non_retryable_messages:
+        should_retry, failure = _should_retry_model_service_failure(
+            RuntimeError(message),
+            attempt_index=0,
+            retry_attempts=1,
+        )
+        assert should_retry is False
+        assert failure.retryable is False
+
+
+def test_openai_agents_retrying_model_retries_transient_once(tmp_path: Path) -> None:
+    class FakeModel:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def get_response(self, *_args, **_kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("Error code: 503 - service unavailable")
+            return SimpleNamespace(output="ok")
+
+        async def close(self) -> None:
+            return None
+
+        def stream_response(self, *_args, **_kwargs):
+            raise AssertionError("not used")
+
+    events_path = tmp_path / "openai-agents-events.jsonl"
+    spans_path = tmp_path / "openai-agents-spans.jsonl"
+    model = _RetryingModel(
+        FakeModel(),
+        retry_attempts=1,
+        retry_sleep_s=0,
+        events_path=events_path,
+        spans_path=spans_path,
+        runtime_config={
+            "runtime": "openai-agents-live",
+            "provider_profile": "codex-env",
+            "model": "gpt-5.5",
+        },
+    )
+
+    result = asyncio.run(
+        model.get_response(
+            None,
+            "clean the room",
+            object(),
+            [],
+            None,
+            [],
+            object(),
+            previous_response_id=None,
+            conversation_id=None,
+            prompt=None,
+        )
+    )
+
+    assert result.output == "ok"
+    events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
+    assert [event["event"] for event in events] == [
+        "model_service_attempt",
+        "model_service_failure",
+        "model_service_retry_scheduled",
+        "model_service_attempt",
+        "model_service_success",
+    ]
+    assert events[1]["failure_class"] == "provider_transient_failure"
+    assert "clean the room" not in events_path.read_text(encoding="utf-8")
+    span_events = [json.loads(line) for line in spans_path.read_text(encoding="utf-8").splitlines()]
+    assert all(event["span_type"] == "model_service_fallback" for event in span_events)
+
+
+def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -> None:
+    class FakeModel:
+        async def get_response(self, *_args, **_kwargs):
+            raise RuntimeError("model unavailable")
+
+        def stream_response(self, *_args, **_kwargs):
+            raise AssertionError("not used")
+
+    events_path = tmp_path / "openai-agents-events.jsonl"
+    spans_path = tmp_path / "openai-agents-spans.jsonl"
+    model = _RetryingModel(
+        FakeModel(),
+        retry_attempts=1,
+        retry_sleep_s=0,
+        events_path=events_path,
+        spans_path=spans_path,
+        runtime_config={
+            "runtime": "openai-agents-live",
+            "provider_profile": "mify",
+            "model": "xiaomi/mimo-v2.5",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        asyncio.run(
+            model.get_response(
+                None,
+                "clean the room",
+                object(),
+                [],
+                None,
+                [],
+                object(),
+                previous_response_id=None,
+                conversation_id=None,
+                prompt=None,
+            )
+        )
+
+    metrics = _model_service_fallback_metrics(tmp_path)
+    assert metrics["available"] is True
+    assert metrics["attempt_event_count"] == 2
+    assert metrics["retry_scheduled_count"] == 1
+    assert metrics["failure_event_count"] == 2
+    assert metrics["retry_exhausted"] is True
+    assert metrics["failure_classes"] == {"provider_transient_failure": 2}
+    assert metrics["provider_reasons"] == {"upstream_unavailable": 2}
+    assert metrics["attempted_models"] == ["xiaomi/mimo-v2.5"]
+    assert metrics["attempted_provider_profiles"] == ["mify"]
+
+
 def test_openai_agents_runtime_turn_completion_does_not_infer_cleanup_success(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -288,7 +437,9 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert captured["model"] == "gpt-5.5"
     assert captured["base_url"] == "https://codex.example.test/v1"
     assert captured["api_key"] == "fake-codex-key"
-    assert captured["agent_kwargs"]["model"] is captured["responses_model"]
+    wrapped_model = captured["agent_kwargs"]["model"]
+    assert isinstance(wrapped_model, _RetryingModel)
+    assert wrapped_model.base_model is captured["responses_model"]
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is True
     assert "client_session_timeout_seconds" not in captured["mcp_server_kwargs"]
     assert captured["agent_kwargs"]["mcp_config"]["failure_error_function"]
@@ -512,6 +663,8 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
         max_observe_per_waypoint=None,
         raw_fpv_candidate_budget=None,
         done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
         server_startup_timeout_s=1.0,
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
@@ -543,6 +696,8 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert timing["agent_sdk_perf_profile"]["prompt_mode"] == "full"
     assert timing["agent_sdk_perf_profile"]["continuation_mode"] == "repeat_full_prompt"
     assert timing["agent_sdk_perf_profile"]["max_turns"] == 128
+    assert timing["agent_sdk_perf_profile"]["model_service_retry_attempts"] == 1
+    assert timing["agent_sdk_perf_profile"]["model_service_retry_sleep_s"] == 1.0
     assert timing["openai_agents"]["trace_id"] == "trace_1"
     assert timing["mcp_control_plane_metrics"]["available"] is False
     assert timing["openai_agents_event_metrics"]["available"] is True
@@ -673,6 +828,8 @@ def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
         max_observe_per_waypoint=None,
         raw_fpv_candidate_budget=None,
         done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
         server_startup_timeout_s=1.0,
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
@@ -829,6 +986,8 @@ def test_openai_agents_cleanup_runner_compact_continuation_excludes_full_prompt(
         max_observe_per_waypoint=None,
         raw_fpv_candidate_budget=None,
         done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
         server_startup_timeout_s=1.0,
         kickoff_prompt=full_prompt,
         backend="molmospaces_subprocess",
@@ -934,6 +1093,8 @@ def test_openai_agents_cleanup_runner_uses_profiled_compact_kickoff_prompt(
         max_observe_per_waypoint=None,
         raw_fpv_candidate_budget=None,
         done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
         server_startup_timeout_s=1.0,
         kickoff_prompt="FULL PROMPT THAT SHOULD BE REPLACED",
         backend="molmospaces_subprocess",
@@ -1207,6 +1368,8 @@ def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
         max_observe_per_waypoint=None,
         raw_fpv_candidate_budget=None,
         done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
         server_startup_timeout_s=1.0,
         kickoff_prompt="clean the room",
         backend="molmospaces_subprocess",
@@ -1253,6 +1416,8 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
         max_observe_per_waypoint=None,
         raw_fpv_candidate_budget=None,
         done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
     )
 
     baseline = _resolve_agent_sdk_perf_profile(base_args)
@@ -1657,6 +1822,23 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "span_type_counts": {"function": 2, "response": 1},
             "limitations": [],
         },
+        "model_service_fallback_metrics": {
+            "available": True,
+            "source": "openai_agents_model_service_fallback_events",
+            "limitations": [],
+            "attempt_event_count": 2,
+            "retry_scheduled_count": 1,
+            "failure_event_count": 1,
+            "success_event_count": 1,
+            "failure_classes": {"provider_transient_failure": 1},
+            "provider_reasons": {"upstream_unavailable": 1},
+            "attempted_models": ["gpt-5.5"],
+            "attempted_provider_profiles": ["codex-env"],
+            "retry_delay_s_total": 1.0,
+            "retry_delay_count": 1,
+            "retry_exhausted": False,
+            "final_outcomes": {"success": 1},
+        },
         "context_metrics": {
             "available": True,
             "source": "openai_agents_span_usage",
@@ -1737,6 +1919,23 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
     assert timeline["latency_attribution"]["openai_agents_span_type_counts"] == {
         "function": 2,
         "response": 1,
+    }
+    assert timeline["latency_attribution"]["model_service_fallback_metrics"] == {
+        "available": True,
+        "source": "openai_agents_model_service_fallback_events",
+        "limitations": [],
+        "attempt_event_count": 2,
+        "retry_scheduled_count": 1,
+        "failure_event_count": 1,
+        "success_event_count": 1,
+        "failure_classes": {"provider_transient_failure": 1},
+        "provider_reasons": {"upstream_unavailable": 1},
+        "attempted_models": ["gpt-5.5"],
+        "attempted_provider_profiles": ["codex-env"],
+        "retry_delay_s_total": 1.0,
+        "retry_delay_count": 1,
+        "retry_exhausted": False,
+        "final_outcomes": {"success": 1},
     }
     assert timeline["latency_attribution"]["context_metrics"] == {
         "available": True,

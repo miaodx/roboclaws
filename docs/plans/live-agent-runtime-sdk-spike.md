@@ -763,6 +763,77 @@ and private evaluator truth are not written to the span artifacts; error samples
 may be retained only when they are useful for failure classification and do not
 contain secrets.
 
+### Agent SDK Service Fallback Prerequisite
+
+Status: implemented on 2026-06-10 before the next performance/matrix slice.
+
+Before optimizing Agent SDK latency, Roboclaws needs SDK-level protection
+against transient model service failures. A single provider-side model outage,
+model-unavailable response, transport 5xx, or equivalent transient service
+error should not automatically fail the whole cleanup run when the request can
+be safely replayed.
+
+Required behavior:
+
+- Add a bounded model-service fallback/retry layer at the Agent SDK model
+  request boundary.
+- On classified transient model service failures, retry the same model request
+  with the same agent input, tool context, and run state. The first fallback may
+  be a same-provider retry; a secondary fallback model/provider route is allowed
+  only when explicitly configured.
+- Keep retry budgets small and visible. Exhausted fallback must produce a
+  classified provider-transient failure, not an unstructured run failure.
+- Do not retry non-transient failures: MCP tool errors, auth/config errors,
+  context-window failures, malformed request validation failures, checker
+  failures, or `done` responses that legitimately report task failure.
+- Persist fallback evidence in `live_timing.json` and sanitized span/timeline
+  artifacts: attempt count, failure class, provider/model attempted, fallback
+  provider/model when used, elapsed retry delay, and final outcome. Do not store
+  raw prompts, model text, credentials, private evaluator truth, or full tool
+  payload bodies.
+- Preserve existing cleanup semantics. Model fallback is infrastructure
+  resilience only; it must not change MCP capability semantics, run-state
+  progression, checker gates, or `done`/`run_result.json` as the only cleanup
+  success signal.
+
+Acceptance criteria before performance optimization:
+
+- Unit tests classify model-unavailable/5xx/transport transient failures as
+  retryable and auth/config/context/tool/checker failures as non-retryable.
+- A focused Agent SDK runner test proves that one transient model failure is
+  retried with the same request and can continue the same run.
+- A failure-exhaustion test proves retry budget exhaustion is reported as a
+  structured provider-transient failure.
+- Timing/timeline artifacts expose fallback attempts without leaking prompt or
+  private task data.
+
+With this in place, performance optimization can compare latency and context
+behavior without conflating model-service flakiness with prompt/profile quality.
+
+Implementation evidence:
+
+- `OpenAIAgentsLiveRuntime` now wraps `OpenAIResponsesModel` in a bounded
+  model-service retry layer by default.
+- The retry layer is at the SDK model request boundary, so it can replay a
+  transient failed model request without replaying completed MCP tool calls or
+  changing cleanup state.
+- Default retry budget is one same-provider retry, configurable through
+  `--model-service-retry-attempts`,
+  `--model-service-retry-sleep-s`,
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS`, and
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S`.
+- Fallback evidence is written as sanitized
+  `openai_agents_model_service_fallback_v1` events and summarized in
+  `live_timing.json` / `timeline.latency_attribution` under
+  `model_service_fallback_metrics`.
+- The artifact surface records attempt counts, failure classes,
+  provider/model attempted, retry delay, retry exhaustion, and final outcome.
+  It does not persist raw prompts, model text, credentials, private evaluator
+  truth, or full tool payload bodies.
+- Focused deterministic tests cover retryable model-unavailable/5xx/transport
+  failures, non-retryable auth/config/context/tool failures, one successful
+  transient retry, exhausted retry budget, and timing/timeline summarization.
+
 ### Agent SDK Performance Plan
 
 Status: planning contract ready on 2026-06-10 after comparing the final
@@ -772,7 +843,8 @@ pre-GSD plan for the next Agent SDK performance slice.
 
 Goal:
 
-- Reduce model-side latency for GPT/codex-env and MiMo/mify
+- With the model-service fallback prerequisite in place, reduce model-side
+  latency for GPT/codex-env and MiMo/mify
   `openai-agents-live` cleanup runs without changing public route exposure,
   MCP capability semantics, checker gates, or `done`/`run_result.json` as the
   only cleanup success signal.
@@ -1381,13 +1453,16 @@ Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`.
 Route: durable `intuitive-flow`.
 
 Goal: implement the first Agent SDK performance optimization pass for
-`openai-agents-live`, starting with telemetry/profile proof and then applying
-bounded context, continuation, label-lane cadence, raw-FPV safety, and
-cross-run comparison without changing public route or cleanup success
-semantics.
+`openai-agents-live`, starting with model-service fallback resilience and
+telemetry/profile proof, then applying bounded context, continuation,
+label-lane cadence, raw-FPV safety, and cross-run comparison without changing
+public route or cleanup success semantics.
 
 Scope:
 
+- Phase 0: add bounded model-service fallback/retry for classified transient
+  Agent SDK model request failures, with structured timing/timeline evidence and
+  no retry for auth/config/context/tool/checker failures.
 - Phase 1: add telemetry V2 metrics and profile persistence with no behavior
   change.
 - Phase 2: add private Agent SDK performance profile resolution and CLI/env
@@ -3203,3 +3278,13 @@ preflight. To start durable execution from the main session, use the exact
   `max_input_tokens=67040` under the 96k hard limit,
   `context_window_failure_detected=false`, 40 response spans, and no
   `run_result.json` as expected for this safety-only phase.
+- 2026-06-10: Completed the Agent SDK model-service fallback prerequisite.
+  `openai-agents-live` now wraps SDK model requests in a bounded retry layer
+  for classified transient model-service failures, defaults to one same-provider
+  retry, persists sanitized fallback evidence in event/span artifacts, and
+  summarizes fallback attempts in `live_timing.json` and
+  `timeline.latency_attribution`. Focused verification passed:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`,
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_molmo_cleanup_report.py`,
+  and `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`.
