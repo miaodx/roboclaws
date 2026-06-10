@@ -1,13 +1,31 @@
 ---
 plan_scope: operator-console-orthogonal-launch-refactor
-status: proposed
+status: DONE
 source:
   - 2026-06-10 operator-console UI abstraction discussion
   - intuitive-reduce-entropy
-workflow: pre-gsd plan; implement later through intuitive-flow
+workflow: implemented through intuitive-flow
+last_verified: 2026-06-10
 ---
 
 # Operator Console Orthogonal Launch Refactor
+
+## Status
+
+DONE
+
+Implemented through `intuitive-flow` on 2026-06-10. The public
+`run::surface` grammar now requires explicit launch axes:
+
+```text
+surface + world + backend + intent + agent_engine + provider_profile +
+evidence_lane/report + scenario_setup
+```
+
+The legacy public `task::run` facade and public `driver=` /
+`environment_setup=` arguments are removed. Lower implementation names such as
+`household-cleanup`, `semantic-map-build`, `ai2thor-nav`, `generated_mess_count`,
+and lower driver strings remain private dispatch details behind `agent::run`.
 
 ## Goal
 
@@ -859,3 +877,80 @@ To execute:
 ```text
 /goal execute docs/plans/operator-console-orthogonal-launch-refactor.md with intuitive-flow
 ```
+
+## Execution Log
+
+- 2026-06-10: Added launch-axis specs in `roboclaws/launch/worlds.py`,
+  `roboclaws/launch/backends.py`, and `roboclaws/launch/agent_engines.py`.
+- 2026-06-10: Reworked `roboclaws/launch/catalog.py` so public
+  `run::surface` resolves world, backend, intent, agent engine, provider
+  profile, evidence lane/report, and scenario setup before lowering to private
+  dispatch.
+- 2026-06-10: Removed the public `task::run` facade, rejected public `driver=`
+  and `environment_setup=`, and updated generated rerun commands to emit
+  `run::surface` with explicit launch axes.
+- 2026-06-10: Reworked the standalone operator console to present World /
+  Scene, backend, task intent, agent engine, provider profile, evidence lane,
+  and scenario setup selections from catalog-backed metadata.
+- 2026-06-10: Added OpenAI Agents SDK as experimental
+  `agent_engine=openai-agents-sdk` for supported household cleanup routes.
+- 2026-06-10: Aligned active README/architecture/Just/agent/human runbooks and
+  added supersession notes to older conflicting console and launch plans.
+
+## Verification Evidence
+
+Already run during execution:
+
+```bash
+node --check roboclaws/operator_console/static/app.js
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_launcher.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch tests/unit/operator_console
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch tests/unit/operator_console tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_apple2apple_test_grid.py tests/unit/molmo_cleanup/test_ci_live_reports.py tests/unit/molmo_cleanup/test_codex_cleanup_harness8.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/reports/test_molmo_cleanup_report.py tests/contract/reports/test_reporter.py tests/contract/reports/test_render_autonomous_replay.py tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual
+```
+
+Final closeout reran the focused and broadened deterministic gates:
+
+```bash
+.venv/bin/ruff check roboclaws/launch roboclaws/operator_console roboclaws/household/apple2apple_test_grid.py scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py scripts/molmo_cleanup/run_codex_cleanup_harness8.py tests/unit/launch tests/unit/operator_console tests/contract/dev_tools/test_task_agent_just_recipes.py
+.venv/bin/ruff format --check roboclaws/launch roboclaws/operator_console roboclaws/household/apple2apple_test_grid.py scripts/molmo_cleanup/run_ci_live_cleanup_matrix.py scripts/molmo_cleanup/run_codex_cleanup_harness8.py tests/unit/launch tests/unit/operator_console tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch tests/unit/operator_console tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit tests/contract/dev_tools
+node --check roboclaws/operator_console/static/app.js
+just --summary
+git diff --check
+```
+
+Local browser/API smoke also passed on 2026-06-10 without launching a live
+agent:
+
+```bash
+just console::run 127.0.0.1 8876
+curl -sS http://127.0.0.1:8876/api/routes
+curl -sS 'http://127.0.0.1:8876/api/readiness?selection_id=molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels&provider_profile=codex-env'
+```
+
+Browser smoke used vendored Playwright with Chromium sandbox disabled for this
+host. It verified the page rendered without console errors, MolmoSpaces defaults
+to MuJoCo cleanup with Codex CLI, Agibot switches to Agibot GDK map-build with
+Codex CLI, Agibot fields appear, Start is gated for missing run-level approvals,
+and the screenshot was written to
+`output/operator-console/orthogonal-launch-smoke.png`.
+
+## Parked Work
+
+- Full live browser start/stop proof remains local-only. The browser smoke
+  covered page render, selection changes, Agibot gates, and console errors, but
+  deliberately did not launch a live agent run.
+- Provider/Docker/live-agent proof remains local-only. Run Codex, Claude Code,
+  OpenAI Agents SDK, OpenClaw, and real simulator/provider gates before claiming
+  full product validation.
+- Lower private dispatch still uses task-like names and lower driver strings
+  behind `agent::run`. They are intentionally private after this slice; remove
+  or rename them only in a later lower-dispatch cleanup.
+- Old route-id history is best-effort display-only. Do not add relaunch support
+  for old route-card records unless a future migration explicitly needs it.

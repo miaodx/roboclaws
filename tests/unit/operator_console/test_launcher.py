@@ -106,7 +106,6 @@ def test_launcher_builds_route_specific_overrides(tmp_path: Path) -> None:
         run_id="run-1",
         overrides={
             "context_json": str(tmp_path / "context.json"),
-            "visual_grounding": "grounding-dino",
             "real_movement_enabled": "true",
         },
     )
@@ -123,16 +122,16 @@ def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
         run_id="run-1",
         overrides={
             "seed": "9",
-            "environment_setup": "relocate-loose-objects",
+            "scenario_setup": "relocate-loose-objects",
             "relocation_count": "2",
         },
     )
 
     assert "seed=7" not in argv
-    assert "environment_setup=relocate-cleanup-related-objects" not in argv
+    assert "scenario_setup=relocate-cleanup-related-objects" not in argv
     assert "relocation_count=5" not in argv
     assert "seed=9" in argv
-    assert "environment_setup=relocate-loose-objects" in argv
+    assert "scenario_setup=relocate-loose-objects" in argv
     assert "relocation_count=2" in argv
     assert not any(item.startswith("generated_mess_count=") for item in argv)
 
@@ -156,12 +155,12 @@ def test_launcher_drops_relocation_count_for_baseline_setup(tmp_path: Path) -> N
         root=tmp_path,
         run_id="run-1",
         overrides={
-            "environment_setup": "baseline",
+            "scenario_setup": "baseline",
             "relocation_count": "2",
         },
     )
 
-    assert "environment_setup=baseline" in argv
+    assert "scenario_setup=baseline" in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
     assert not any(item.startswith("generated_mess_count=") for item in argv)
 
@@ -201,7 +200,7 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
             tmp_path,
             LaunchRequest(
                 route_id=route.id,
-                intent="open-ended",
+                intent_id="open-ended",
                 prompt="收拾桌面上的杯子",
                 next_goal_packet={"schema": "operator_console_next_goal_packet_v1"},
                 env_overrides={
@@ -231,7 +230,7 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
         if line.strip()
     ]
     assert history_rows[-1]["run_id"] == state["run_id"]
-    assert history_rows[-1]["route_id"] == route.id
+    assert history_rows[-1]["selection_id"] == route.selection.id
     assert history_rows[-1]["run_dir"] == str(
         console_output_root(tmp_path) / "runs" / state["run_id"]
     )
@@ -692,7 +691,16 @@ def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
     route = get_route("claude-mujoco-cleanup")
     argv = build_launch_argv(route, root=tmp_path, run_id="run-1")
 
-    assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=claude"]
+    assert argv[:7] == [
+        "just",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=claude-code",
+    ]
     assert "intent=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
-    assert "backend=molmospaces_subprocess" in argv
+    assert "provider_profile=mimo-anthropic" in argv
+    assert "scenario_setup=relocate-cleanup-related-objects" in argv

@@ -32,7 +32,14 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "cleanup": TaskIntentSpec(
         intent_id="cleanup",
         surface_ids=("household-world",),
-        supported_drivers=("direct", "mcp-smoke", "codex", "claude", "openclaw"),
+        supported_drivers=(
+            "direct",
+            "mcp-smoke",
+            "codex",
+            "claude",
+            "openai-agents-live",
+            "openclaw",
+        ),
         lower_task="household-cleanup",
         prompt_id="household_cleanup",
         checker_id="cleanup_report",

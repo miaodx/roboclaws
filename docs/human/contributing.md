@@ -24,7 +24,7 @@ binaries with no system-package dependencies — install once, forget.
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
 | [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock`, including the standard MolmoSpaces/MuJoCo CPU runtime |
-| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing runs use `just run::surface surface=<surface> driver=<driver> [intent=<intent>]` with lower-level modules hidden from completion but still available for debugging |
+| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing runs use `just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>]` with lower-level modules hidden from completion but still available for debugging |
 
 ### Install
 
@@ -58,8 +58,8 @@ just --summary             # run::surface plus compact agent::* dispatchers
 Invoke recipes with the `module::recipe` form:
 
 ```bash
-just run::surface surface=ai2thor-world driver=openclaw intent=navigate
-just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke
+just run::surface surface=ai2thor-world agent_engine=openclaw-gateway intent=navigate
+just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=smoke
 just agent::verify mock
 just agent::verify ci-required
 ```

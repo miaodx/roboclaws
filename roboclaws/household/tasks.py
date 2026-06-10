@@ -11,7 +11,14 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
     "household-world": TaskSurfaceSpec(
         surface_id="household-world",
         domain="household",
-        supported_drivers=("direct", "mcp-smoke", "codex", "claude", "openclaw"),
+        supported_drivers=(
+            "direct",
+            "mcp-smoke",
+            "codex",
+            "claude",
+            "openai-agents-live",
+            "openclaw",
+        ),
         supported_intents=("cleanup", "map-build", "open-ended"),
         default_intent="cleanup",
         supported_reports=(),

@@ -1,5 +1,13 @@
 # Refactor: Domain-First Launch Architecture
 
+> **Supersession note (2026-06-10):** The public `task::run` grammar and
+> task/driver terminology in this completed launch-root plan were superseded by
+> `docs/plans/operator-console-orthogonal-launch-refactor.md`. Current public
+> routes use `just run::surface` with explicit `world=`, `backend=`,
+> `intent=`, `agent_engine=`, `provider_profile=`, evidence lane, and
+> `scenario_setup=` axes. Keep this file as historical evidence for the first
+> domain launch root, not as current command guidance.
+
 **Status:** DONE
 **Created:** 2026-06-02
 **Source:** server-entrypoint entropy review, `$intuitive-reduce-entropy`,

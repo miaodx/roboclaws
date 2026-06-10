@@ -70,16 +70,16 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Baseline does not relocate objects" in html
     assert "Generated mess count" not in html
     assert 'id="mess-count-input"' not in html
-    assert 'id="environment-setup-input"' in html
-    assert 'name="environment_setup"' in html
+    assert 'id="scenario-setup-input"' in html
+    assert 'name="scenario_setup"' in html
     assert "Relocate loose objects" in html
     assert "Relocate cleanup-related objects" in html
     assert 'id="relocation-count-field"' in html
     assert 'id="relocation-count-input"' in html
     assert 'name="relocation_count"' in html
-    assert "renderEnvironmentSetup" in app
-    assert "defaultEnvironmentSetup" in app
-    assert "selectedEnvironmentSetup" in app
+    assert "renderScenarioSetup" in app
+    assert "defaultScenarioSetup" in app
+    assert "selectedScenarioSetup" in app
     assert "generated_mess_count" not in app
     assert 'data-operator-mode="ask_why"' in html
     assert 'data-operator-mode="steer"' in html
@@ -117,7 +117,11 @@ def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> Non
     assert "selectedIntentForRoute" in app
     assert "launchInterpretation" in app
     assert "route.intent_options" in app
-    assert "intent: selectedIntent()" in app
+    assert "intent_id: selectedIntent()" in app
+    assert "world_id: route.world_id" in app
+    assert "backend_id: route.backend_id" in app
+    assert "agent_engine_id: route.agent_engine_id" in app
+    assert "scenario_setup: selectedScenarioSetup()" in app
     assert "intent=${selected}" in app
     assert '"open-ended": "Open-ended"' in app
     assert "Goal scope" in app

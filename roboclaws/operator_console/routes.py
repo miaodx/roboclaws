@@ -1,4 +1,4 @@
-"""Explicit route registry for the standalone agent operator console."""
+"""Launch-axis registry for the standalone agent operator console."""
 
 from __future__ import annotations
 
@@ -6,18 +6,21 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from roboclaws.launch.catalog import resolve_surface_launch
+from roboclaws.launch.agent_engines import AGENT_ENGINE_SPECS
+from roboclaws.launch.backends import BACKEND_SPECS, BackendSpec
+from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.launch.environment_setup import (
     ENVIRONMENT_SETUP_BASELINE,
     ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
 )
 from roboclaws.launch.intents import TASK_INTENT_SPECS
+from roboclaws.launch.worlds import WORLD_SPECS
 
-B1_MAP12_BUNDLE = "agibot-robot-map-12"
-B1_MAP12_LIVINGROOM_USD = (
-    "data/robot-data-lab/scene-engine/data/B1_floor2_slow/"
-    "usda/livingroom/livingroom_usdz_unpacked/livingroom.usda"
-)
+DEFAULT_PROMPTS = {
+    "cleanup": "帮我收拾这个房间",
+    "map-build": "帮我建立这个房间的语义地图",
+    "open-ended": "在这个场景中完成开放性导航任务，并报告你看到的证据。",
+}
 
 
 @dataclass(frozen=True)
@@ -36,84 +39,249 @@ class RouteGate:
 
 
 @dataclass(frozen=True)
-class ConsoleRoute:
-    """One route card in the local operator console."""
+class ConsoleLaunchSelection:
+    """Canonical operator-console launch selection."""
 
-    id: str
-    label: str
-    task: str
-    surface: str
-    intent: str
-    driver: str
-    profile: str
-    backend: str
-    lock_name: str
-    supports_prompt: bool
-    enabled: bool
-    checker_id: str
-    task_prompt_default: str
-    supported_intents: tuple[str, ...] = ()
+    world_id: str
+    backend_id: str
+    intent_id: str
+    agent_engine_id: str
+    provider_profile: str | None
+    evidence_lane: str
+    scenario_setup: str
+    enabled: bool = True
+    unsupported_reason: str = ""
     required_overrides: tuple[str, ...] = ()
     default_overrides: tuple[str, ...] = ()
     gates: tuple[RouteGate, ...] = ()
-    disabled_reason: str = ""
+    supports_prompt: bool = True
+    supports_operator_steer: bool = False
     pause_supported: bool = False
     emergency_stop_required: bool = False
-    supports_operator_steer: bool = False
-    resource_kind: str = "simulator"
-    driver_label: str = ""
-    driver_family: str = "coding_agent"
-    field_groups: tuple[str, ...] = ()
-    view_modes: tuple[str, ...] = ()
 
-    def supported_intent_ids(self) -> tuple[str, ...]:
-        return self.supported_intents or (self.intent,)
-
-    def selected_intent(self, intent: str = "") -> str:
-        selected = str(intent or self.intent).strip()
-        if selected.startswith("intent="):
-            selected = selected.removeprefix("intent=")
-        if selected not in self.supported_intent_ids():
-            supported = "|".join(self.supported_intent_ids())
-            raise ValueError(
-                f"unsupported intent '{selected}' for route '{self.id}'; expected {supported}"
+    @property
+    def id(self) -> str:
+        return "::".join(
+            (
+                self.world_id,
+                self.backend_id,
+                self.intent_id,
+                self.agent_engine_id,
+                self.evidence_lane,
             )
-        return selected
+        )
 
-    def base_args(self, *, intent: str = "") -> list[str]:
-        selected_intent = self.selected_intent(intent)
-        return [
-            f"surface={self.surface}",
-            f"driver={self.driver}",
-            f"intent={selected_intent}",
-            f"evidence_lane={self.profile}",
-            f"backend={self.backend}",
+    @property
+    def surface(self) -> str:
+        return WORLD_SPECS[self.world_id].surface_id
+
+    @property
+    def backend(self) -> BackendSpec:
+        return BACKEND_SPECS[self.backend_id]
+
+    @property
+    def lock_name(self) -> str:
+        return self.backend.lock_name
+
+    @property
+    def resource_kind(self) -> str:
+        return self.backend.resource_kind
+
+    @property
+    def checker_id(self) -> str:
+        return TASK_INTENT_SPECS[self.intent_id].checker_id
+
+    @property
+    def task_prompt_default(self) -> str:
+        return DEFAULT_PROMPTS.get(self.intent_id, "")
+
+    @property
+    def launch_default_overrides(self) -> tuple[str, ...]:
+        return (
+            *WORLD_SPECS[self.world_id].default_overrides,
+            *BACKEND_SPECS[self.backend_id].default_overrides,
             *self.default_overrides,
+        )
+
+    @property
+    def label(self) -> str:
+        world = WORLD_SPECS[self.world_id].label
+        backend = self.backend.label
+        intent = _intent_label(self.intent_id)
+        engine = AGENT_ENGINE_SPECS[self.agent_engine_id].label
+        return f"{world} / {backend} / {intent} / {engine}"
+
+    @property
+    def disabled_reason(self) -> str:
+        return self.unsupported_reason
+
+    def base_args(self) -> list[str]:
+        args = [
+            f"surface={self.surface}",
+            f"world={self.world_id}",
+            f"backend={self.backend_id}",
+            f"intent={self.intent_id}",
+            f"agent_engine={self.agent_engine_id}",
+            f"evidence_lane={self.evidence_lane}",
+            f"scenario_setup={self.scenario_setup}",
+            *self.launch_default_overrides,
         ]
+        if self.provider_profile:
+            args.append(f"provider_profile={self.provider_profile}")
+        return args
 
     def to_payload(self) -> dict[str, Any]:
-        payload = asdict(self)
-        payload["argv_preview"] = ["just", "run::surface", *self.base_args()]
-        payload["command_preview"] = payload["argv_preview"]
-        payload["default_intent"] = self.intent
-        payload["supported_intents"] = list(self.supported_intent_ids())
-        payload["intent_options"] = [
-            _intent_option(intent_id) for intent_id in self.supported_intent_ids()
-        ]
-        payload["gates"] = [gate.to_payload() for gate in self.gates]
-        payload["required_gates"] = [gate for gate in payload["gates"] if gate["required"]]
-        payload["state"] = "enabled" if self.enabled else "disabled"
-        payload["blocker"] = self.disabled_reason
-        payload["prompt_disabled_reason"] = (
-            ""
-            if self.supports_prompt
-            else "This route cannot accept a custom prompt safely. Use the default task prompt."
-        )
-        payload["default_prompt"] = self.task_prompt_default
-        payload["driver_label"] = self.driver_label or self.driver.title()
-        payload["field_groups"] = list(self.field_groups or _default_field_groups(self))
-        payload["view_modes"] = list(self.view_modes or _default_view_modes(self))
+        world = WORLD_SPECS[self.world_id]
+        backend = self.backend
+        engine = AGENT_ENGINE_SPECS[self.agent_engine_id]
+        payload = {
+            "id": self.id,
+            "label": self.label,
+            "world_id": self.world_id,
+            "world_label": world.label,
+            "backend_id": self.backend_id,
+            "backend_label": backend.label,
+            "intent_id": self.intent_id,
+            "intent": self.intent_id,
+            "agent_engine_id": self.agent_engine_id,
+            "agent_engine_label": engine.label,
+            "provider_profile": self.provider_profile or "",
+            "evidence_lane": self.evidence_lane,
+            "scenario_setup": self.scenario_setup,
+            "surface": self.surface,
+            "enabled": self.enabled,
+            "unsupported_reason": self.unsupported_reason,
+            "checker_id": self.checker_id,
+            "lock_name": backend.lock_name,
+            "resource_kind": backend.resource_kind,
+            "supports_prompt": self.supports_prompt,
+            "supports_operator_steer": self.supports_operator_steer,
+            "pause_supported": self.pause_supported,
+            "emergency_stop_required": self.emergency_stop_required,
+            "required_overrides": list(self.required_overrides),
+            "default_overrides": list(self.default_overrides),
+            "launch_default_overrides": list(self.launch_default_overrides),
+            "gates": [gate.to_payload() for gate in self.gates],
+            "required_gates": [gate.to_payload() for gate in self.gates if gate.required],
+            "state": "enabled" if self.enabled else "disabled",
+            "blocker": self.unsupported_reason,
+            "default_prompt": self.task_prompt_default,
+            "prompt_disabled_reason": (
+                ""
+                if self.supports_prompt
+                else (
+                    "This selection cannot accept a custom prompt safely. "
+                    "Use the default task prompt."
+                )
+            ),
+            "field_groups": list(backend.field_groups),
+            "view_modes": list(backend.view_modes),
+            "argv_preview": ["just", "run::surface", *self.base_args()],
+            "command_preview": ["just", "run::surface", *self.base_args()],
+            "intent_options": [_intent_option(self.intent_id)],
+            "default_intent": self.intent_id,
+            "supported_intents": [self.intent_id],
+        }
         return payload
+
+
+@dataclass(frozen=True)
+class ConsoleRoute:
+    """Legacy display wrapper for older route-id history records."""
+
+    id: str
+    label: str
+    selection: ConsoleLaunchSelection
+
+    def to_payload(self) -> dict[str, Any]:
+        payload = self.selection.to_payload()
+        payload["legacy_route_id"] = self.id
+        payload["id"] = self.id
+        payload["label"] = self.label
+        return payload
+
+    @property
+    def surface(self) -> str:
+        return self.selection.surface
+
+    @property
+    def intent(self) -> str:
+        return self.selection.intent_id
+
+    @property
+    def driver(self) -> str:
+        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].lower_driver
+
+    @property
+    def driver_label(self) -> str:
+        return AGENT_ENGINE_SPECS[self.selection.agent_engine_id].label
+
+    @property
+    def profile(self) -> str:
+        return self.selection.evidence_lane
+
+    @property
+    def backend(self) -> str:
+        return self.selection.backend.implementation_backend
+
+    @property
+    def default_overrides(self) -> tuple[str, ...]:
+        return self.selection.default_overrides
+
+    @property
+    def launch_default_overrides(self) -> tuple[str, ...]:
+        return self.selection.launch_default_overrides
+
+    @property
+    def required_overrides(self) -> tuple[str, ...]:
+        return self.selection.required_overrides
+
+    @property
+    def gates(self) -> tuple[RouteGate, ...]:
+        return self.selection.gates
+
+    @property
+    def enabled(self) -> bool:
+        return self.selection.enabled
+
+    @property
+    def disabled_reason(self) -> str:
+        return self.selection.disabled_reason
+
+    @property
+    def lock_name(self) -> str:
+        return self.selection.lock_name
+
+    @property
+    def supports_prompt(self) -> bool:
+        return self.selection.supports_prompt
+
+    @property
+    def supports_operator_steer(self) -> bool:
+        return self.selection.supports_operator_steer
+
+    @property
+    def pause_supported(self) -> bool:
+        return self.selection.pause_supported
+
+    @property
+    def emergency_stop_required(self) -> bool:
+        return self.selection.emergency_stop_required
+
+    @property
+    def resource_kind(self) -> str:
+        return self.selection.resource_kind
+
+    @property
+    def checker_id(self) -> str:
+        return self.selection.checker_id
+
+    @property
+    def task_prompt_default(self) -> str:
+        return self.selection.task_prompt_default
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.selection, name)
 
 
 PROVIDER_KEY_GATE = RouteGate(
@@ -171,248 +339,76 @@ AGIBOT_ESTOP_GATE = RouteGate(
 )
 
 
-def _cleanup_route(
-    *,
-    route_id: str,
-    label: str,
-    driver: str,
-    backend: str,
-    lock_name: str,
-    default_relocation_count: int,
-    gates: tuple[RouteGate, ...],
-    resource_kind: str = "simulator",
-    supports_operator_steer: bool = True,
-) -> ConsoleRoute:
-    return ConsoleRoute(
-        id=route_id,
-        label=label,
-        task="household-cleanup",
-        surface="household-world",
-        intent="cleanup",
-        driver=driver,
-        profile="world-oracle-labels",
-        backend=backend,
-        lock_name=lock_name,
-        supports_prompt=True,
-        enabled=True,
-        checker_id="cleanup_report",
-        task_prompt_default="帮我收拾这个房间",
-        supported_intents=("cleanup", "open-ended"),
-        default_overrides=(
-            "seed=7",
-            f"environment_setup={ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS}",
-            f"relocation_count={default_relocation_count}",
-        ),
-        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, *gates),
-        resource_kind=resource_kind,
-        supports_operator_steer=supports_operator_steer,
-        driver_label="Claude Code" if driver == "claude" else "Codex",
-    )
+def list_worlds(*, include_hidden: bool = False) -> tuple[dict[str, Any], ...]:
+    """Return searchable world/scene metadata for the console rail."""
+
+    rows = []
+    for world in WORLD_SPECS.values():
+        if world.availability == "hidden" and not include_hidden:
+            continue
+        rows.append(
+            {
+                "id": world.id,
+                "label": world.label,
+                "surface_id": world.surface_id,
+                "available_backends": list(world.available_backends),
+                "scene_source": world.scene_source,
+                "tags": list(world.tags),
+                "default_backend": world.default_backend,
+                "resource_kind": world.resource_kind,
+                "availability": world.availability,
+            }
+        )
+    return tuple(rows)
 
 
-SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
-    ConsoleRoute(
-        id="codex-mujoco-cleanup",
-        label="MuJoCo Cleanup",
-        task="household-cleanup",
-        surface="household-world",
-        intent="cleanup",
-        driver="codex",
-        profile="world-oracle-labels",
-        backend="molmospaces_subprocess",
-        lock_name="molmospaces_mujoco",
-        supports_prompt=True,
-        enabled=True,
-        checker_id="cleanup_report",
-        task_prompt_default="帮我收拾这个房间",
-        supported_intents=("cleanup", "open-ended"),
-        default_overrides=(
-            "seed=7",
-            f"environment_setup={ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS}",
-            "relocation_count=5",
-        ),
-        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
-        driver_label="Codex",
-        supports_operator_steer=True,
-    ),
-    _cleanup_route(
-        route_id="claude-mujoco-cleanup",
-        label="MuJoCo Cleanup",
-        driver="claude",
-        backend="molmospaces_subprocess",
-        lock_name="molmospaces_mujoco",
-        default_relocation_count=5,
-        gates=(),
-        supports_operator_steer=True,
-    ),
-    _cleanup_route(
-        route_id="codex-isaac-cleanup",
-        label="Isaac Cleanup",
-        driver="codex",
-        backend="isaaclab_subprocess",
-        lock_name="isaac_gpu",
-        default_relocation_count=1,
-        gates=(ISAAC_PREFLIGHT_GATE,),
-        resource_kind="gpu",
-        supports_operator_steer=True,
-    ),
-    _cleanup_route(
-        route_id="claude-isaac-cleanup",
-        label="Isaac Cleanup",
-        driver="claude",
-        backend="isaaclab_subprocess",
-        lock_name="isaac_gpu",
-        default_relocation_count=1,
-        gates=(ISAAC_PREFLIGHT_GATE,),
-        resource_kind="gpu",
-        supports_operator_steer=True,
-    ),
-    ConsoleRoute(
-        id="codex-agibot-g2-map-build",
-        label="Agibot G2 Map Build",
-        task="semantic-map-build",
-        surface="household-world",
-        intent="map-build",
-        driver="codex",
-        profile="camera-grounded-labels",
-        backend="agibot_gdk",
-        lock_name="agibot_g2",
-        supports_prompt=True,
-        enabled=True,
-        checker_id="runtime_metric_map",
-        task_prompt_default="帮我建立这个房间的语义地图",
-        required_overrides=("context_json",),
-        default_overrides=(
-            "policy=codex_agibot_semantic_map_build_pilot",
-            "camera_labeler=grounding-dino",
-            "visual_grounding_timeout_s=20",
-            f"environment_setup={ENVIRONMENT_SETUP_BASELINE}",
-        ),
-        gates=(
-            PROVIDER_KEY_GATE,
-            MCP_PORT_FREE_GATE,
-            AGIBOT_CONTEXT_GATE,
-            AGIBOT_LOCALIZATION_GATE,
-            AGIBOT_ENABLEMENT_GATE,
-            AGIBOT_ESTOP_GATE,
-        ),
-        emergency_stop_required=True,
-        resource_kind="physical_robot",
-        driver_label="Codex",
-    ),
-    ConsoleRoute(
-        id="codex-mujoco-map-build",
-        label="MuJoCo Map Build",
-        task="semantic-map-build",
-        surface="household-world",
-        intent="map-build",
-        driver="codex",
-        profile="world-oracle-labels",
-        backend="molmospaces_subprocess",
-        lock_name="molmospaces_mujoco",
-        supports_prompt=True,
-        enabled=True,
-        checker_id="runtime_metric_map",
-        task_prompt_default="帮我建立这个房间的语义地图",
-        default_overrides=("seed=7", f"environment_setup={ENVIRONMENT_SETUP_BASELINE}"),
-        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
-        driver_label="Codex",
-    ),
-    ConsoleRoute(
-        id="codex-isaac-map-build",
-        label="Isaac Map Build",
-        task="semantic-map-build",
-        surface="household-world",
-        intent="map-build",
-        driver="codex",
-        profile="world-oracle-labels",
-        backend="isaaclab_subprocess",
-        lock_name="isaac_gpu",
-        supports_prompt=True,
-        enabled=True,
-        checker_id="runtime_metric_map",
-        task_prompt_default="帮我建立这个房间的语义地图",
-        default_overrides=("seed=7", f"environment_setup={ENVIRONMENT_SETUP_BASELINE}"),
-        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, ISAAC_PREFLIGHT_GATE),
-        resource_kind="gpu",
-        driver_label="Codex",
-    ),
-    ConsoleRoute(
-        id="codex-b1-map12-open-ended",
-        label="B1 Map 12 Open-Ended",
-        task="household-open-ended",
-        surface="household-world",
-        intent="open-ended",
-        driver="codex",
-        profile="world-oracle-labels",
-        backend="isaaclab_subprocess",
-        lock_name="isaac_gpu",
-        supports_prompt=True,
-        enabled=True,
-        checker_id="open_ended_report",
-        task_prompt_default="在 B1 / Map 12 场景中完成开放性导航任务，并报告你看到的证据。",
-        supported_intents=("open-ended",),
-        default_overrides=(
-            "seed=7",
-            f"environment_setup={ENVIRONMENT_SETUP_BASELINE}",
-            f"map_bundle={B1_MAP12_BUNDLE}",
-            f"isaac_scene_usd_path={B1_MAP12_LIVINGROOM_USD}",
-            "robot_views=on",
-        ),
-        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, ISAAC_PREFLIGHT_GATE),
-        resource_kind="gpu",
-        supports_operator_steer=True,
-        driver_label="Codex",
-    ),
-)
+def list_console_combinations(
+    *, include_disabled: bool = True
+) -> tuple[ConsoleLaunchSelection, ...]:
+    """Return the catalog-backed console support matrix."""
+
+    rows = _enabled_combinations()
+    disabled = _disabled_combinations()
+    if include_disabled:
+        return (*rows, *disabled)
+    return rows
 
 
-DISABLED_ROUTES: tuple[ConsoleRoute, ...] = (
-    ConsoleRoute(
-        id="agibot-g2-cleanup",
-        label="Agibot G2 Cleanup",
-        task="household-cleanup",
-        surface="household-world",
-        intent="cleanup",
-        driver="codex",
-        profile="camera-grounded-labels",
-        backend="agibot_gdk",
-        lock_name="agibot_g2",
-        supports_prompt=False,
-        enabled=False,
-        checker_id="blocked_capability",
-        task_prompt_default="",
-        disabled_reason=(
-            "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
-        ),
-        emergency_stop_required=True,
-        resource_kind="physical_robot",
-        driver_label="Codex",
-    ),
-)
+def get_selection(selection_id: str) -> ConsoleLaunchSelection:
+    for selection in list_console_combinations(include_disabled=True):
+        if selection.id == selection_id:
+            return selection
+    legacy = _LEGACY_ROUTE_BY_ID.get(selection_id)
+    if legacy:
+        return legacy.selection
+    raise KeyError(selection_id)
 
 
 def list_console_routes(*, include_disabled: bool = True) -> tuple[ConsoleRoute, ...]:
-    """Return the v1 route matrix for the console."""
+    """Return legacy route wrappers for old callers."""
 
+    routes = tuple(_LEGACY_ROUTE_BY_ID.values())
     if include_disabled:
-        return (*SUPPORTED_ROUTES, *DISABLED_ROUTES)
-    return SUPPORTED_ROUTES
+        return routes
+    return tuple(route for route in routes if route.selection.enabled)
 
 
 def get_route(route_id: str) -> ConsoleRoute:
-    for route in list_console_routes(include_disabled=True):
-        if route.id == route_id:
-            return route
-    raise KeyError(route_id)
+    route = _LEGACY_ROUTE_BY_ID.get(route_id)
+    if route:
+        return route
+    selection = get_selection(route_id)
+    return ConsoleRoute(id=selection.id, label=selection.label, selection=selection)
 
 
 def validate_supported_routes_against_catalog() -> None:
-    """Fail if supported console routes drift away from the public catalog."""
+    """Fail if supported console combinations drift away from launch catalog."""
 
-    for route in SUPPORTED_ROUTES:
-        for intent in route.supported_intent_ids():
-            resolve_surface_launch(route.base_args(intent=intent))
+    for selection in list_console_combinations(include_disabled=False):
+        try:
+            resolve_surface_launch(selection.base_args())
+        except LaunchError as exc:  # pragma: no cover - assertion context
+            raise AssertionError(f"invalid console selection {selection.id}: {exc}") from exc
 
 
 def accepted_isaac_preflight(root: Path) -> Path | None:
@@ -428,31 +424,272 @@ def accepted_isaac_preflight(root: Path) -> Path | None:
     return max(existing, key=lambda path: path.stat().st_mtime)
 
 
-def _default_field_groups(route: ConsoleRoute) -> tuple[str, ...]:
-    groups = ["common"]
-    gate_ids = {gate.id for gate in route.gates}
-    if "isaac_preflight" in gate_ids:
-        groups.append("isaac")
-    if "context_json" in gate_ids:
-        groups.append("agibot")
-    if {"localization_ready", "run_enabled", "estop_ready"} & gate_ids:
-        groups.append("agibot_gates")
-    return tuple(groups)
-
-
-def _default_view_modes(route: ConsoleRoute) -> tuple[str, ...]:
-    modes = ["overview", "fpv", "map"]
-    has_grounding = (
-        route.profile == "camera-grounded-labels"
-        or route.backend == "isaaclab_subprocess"
-        or any(item.startswith("camera_labeler=") for item in route.default_overrides)
+def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
+    common_gates = (PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE)
+    return (
+        _selection(
+            "molmospaces/val_0",
+            "mujoco",
+            "cleanup",
+            "codex-cli",
+            "codex-env",
+            gates=common_gates,
+            default_overrides=("seed=7",),
+            supports_operator_steer=True,
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "mujoco",
+            "cleanup",
+            "claude-code",
+            "mimo-anthropic",
+            gates=common_gates,
+            default_overrides=("seed=7",),
+            supports_operator_steer=True,
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "mujoco",
+            "cleanup",
+            "openai-agents-sdk",
+            "codex-env",
+            gates=common_gates,
+            default_overrides=("seed=7",),
+            supports_operator_steer=True,
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "mujoco",
+            "map-build",
+            "codex-cli",
+            "codex-env",
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            gates=common_gates,
+            default_overrides=("seed=7",),
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "mujoco",
+            "map-build",
+            "direct-runner",
+            None,
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            gates=(MCP_PORT_FREE_GATE,),
+            default_overrides=("seed=7",),
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "isaaclab",
+            "cleanup",
+            "codex-cli",
+            "codex-env",
+            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7", "relocation_count=1"),
+            supports_operator_steer=True,
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "isaaclab",
+            "cleanup",
+            "claude-code",
+            "mimo-anthropic",
+            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7", "relocation_count=1"),
+            supports_operator_steer=True,
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "isaaclab",
+            "map-build",
+            "codex-cli",
+            "codex-env",
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7",),
+        ),
+        _selection(
+            "agibot-g2/map-12",
+            "agibot-gdk",
+            "map-build",
+            "codex-cli",
+            "codex-env",
+            evidence_lane="camera-grounded-labels",
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            gates=(
+                *common_gates,
+                AGIBOT_CONTEXT_GATE,
+                AGIBOT_LOCALIZATION_GATE,
+                AGIBOT_ENABLEMENT_GATE,
+                AGIBOT_ESTOP_GATE,
+            ),
+            required_overrides=("context_json",),
+            default_overrides=(
+                "policy=codex_agibot_semantic_map_build_pilot",
+                "camera_labeler=grounding-dino",
+                "visual_grounding_timeout_s=20",
+            ),
+            emergency_stop_required=True,
+        ),
+        _selection(
+            "b1-map12",
+            "isaaclab",
+            "open-ended",
+            "codex-cli",
+            "codex-env",
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7",),
+            supports_operator_steer=True,
+        ),
     )
-    if has_grounding:
-        modes.append("grounding")
-    if route.backend in {"molmospaces_subprocess", "isaaclab_subprocess"}:
-        modes.append("chase")
-    modes.append("outputs")
-    return tuple(modes)
+
+
+def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
+    return (
+        _selection(
+            "agibot-g2/map-12",
+            "agibot-gdk",
+            "cleanup",
+            "codex-cli",
+            "codex-env",
+            evidence_lane="camera-grounded-labels",
+            enabled=False,
+            unsupported_reason=(
+                "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
+            ),
+            supports_prompt=False,
+            emergency_stop_required=True,
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "mujoco",
+            "map-build",
+            "claude-code",
+            "mimo-anthropic",
+            enabled=False,
+            unsupported_reason=(
+                "Map-build is currently proven for Codex CLI and direct runner only."
+            ),
+        ),
+        _selection(
+            "molmospaces/val_0",
+            "mujoco",
+            "open-ended",
+            "openai-agents-sdk",
+            "codex-env",
+            enabled=False,
+            unsupported_reason="OpenAI Agents SDK is not proven for open-ended household runs yet.",
+        ),
+    )
+
+
+def _selection(
+    world_id: str,
+    backend_id: str,
+    intent_id: str,
+    agent_engine_id: str,
+    provider_profile: str | None,
+    *,
+    evidence_lane: str = "world-oracle-labels",
+    scenario_setup: str | None = None,
+    enabled: bool = True,
+    unsupported_reason: str = "",
+    required_overrides: tuple[str, ...] = (),
+    default_overrides: tuple[str, ...] = (),
+    gates: tuple[RouteGate, ...] = (),
+    supports_prompt: bool = True,
+    supports_operator_steer: bool = False,
+    pause_supported: bool = False,
+    emergency_stop_required: bool = False,
+) -> ConsoleLaunchSelection:
+    setup = scenario_setup or (
+        ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS
+        if intent_id == "cleanup"
+        else ENVIRONMENT_SETUP_BASELINE
+    )
+    return ConsoleLaunchSelection(
+        world_id=world_id,
+        backend_id=backend_id,
+        intent_id=intent_id,
+        agent_engine_id=agent_engine_id,
+        provider_profile=provider_profile,
+        evidence_lane=evidence_lane,
+        scenario_setup=setup,
+        enabled=enabled,
+        unsupported_reason=unsupported_reason,
+        required_overrides=required_overrides,
+        default_overrides=default_overrides,
+        gates=gates,
+        supports_prompt=supports_prompt,
+        supports_operator_steer=supports_operator_steer,
+        pause_supported=pause_supported,
+        emergency_stop_required=emergency_stop_required,
+    )
+
+
+_LEGACY_ROUTE_BY_ID: dict[str, ConsoleRoute] = {
+    "codex-mujoco-cleanup": ConsoleRoute(
+        id="codex-mujoco-cleanup",
+        label="MolmoSpaces val_0 / MuJoCo / Cleanup / Codex CLI",
+        selection=get_selection(
+            "molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+        ),
+    ),
+    "claude-mujoco-cleanup": ConsoleRoute(
+        id="claude-mujoco-cleanup",
+        label="MolmoSpaces val_0 / MuJoCo / Cleanup / Claude Code",
+        selection=get_selection(
+            "molmospaces/val_0::mujoco::cleanup::claude-code::world-oracle-labels"
+        ),
+    ),
+    "codex-isaac-cleanup": ConsoleRoute(
+        id="codex-isaac-cleanup",
+        label="MolmoSpaces val_0 / Isaac Lab / Cleanup / Codex CLI",
+        selection=get_selection(
+            "molmospaces/val_0::isaaclab::cleanup::codex-cli::world-oracle-labels"
+        ),
+    ),
+    "claude-isaac-cleanup": ConsoleRoute(
+        id="claude-isaac-cleanup",
+        label="MolmoSpaces val_0 / Isaac Lab / Cleanup / Claude Code",
+        selection=get_selection(
+            "molmospaces/val_0::isaaclab::cleanup::claude-code::world-oracle-labels"
+        ),
+    ),
+    "codex-agibot-g2-map-build": ConsoleRoute(
+        id="codex-agibot-g2-map-build",
+        label="Agibot G2 Map 12 / Agibot GDK / Map Build / Codex CLI",
+        selection=get_selection(
+            "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+        ),
+    ),
+    "codex-mujoco-map-build": ConsoleRoute(
+        id="codex-mujoco-map-build",
+        label="MolmoSpaces val_0 / MuJoCo / Map Build / Codex CLI",
+        selection=get_selection(
+            "molmospaces/val_0::mujoco::map-build::codex-cli::world-oracle-labels"
+        ),
+    ),
+    "codex-isaac-map-build": ConsoleRoute(
+        id="codex-isaac-map-build",
+        label="MolmoSpaces val_0 / Isaac Lab / Map Build / Codex CLI",
+        selection=get_selection(
+            "molmospaces/val_0::isaaclab::map-build::codex-cli::world-oracle-labels"
+        ),
+    ),
+    "codex-b1-map12-open-ended": ConsoleRoute(
+        id="codex-b1-map12-open-ended",
+        label="B1 / Map 12 / Isaac Lab / Open-ended / Codex CLI",
+        selection=get_selection("b1-map12::isaaclab::open-ended::codex-cli::world-oracle-labels"),
+    ),
+    "agibot-g2-cleanup": ConsoleRoute(
+        id="agibot-g2-cleanup",
+        label="Agibot G2 Map 12 / Agibot GDK / Cleanup / Codex CLI",
+        selection=get_selection(
+            "agibot-g2/map-12::agibot-gdk::cleanup::codex-cli::camera-grounded-labels"
+        ),
+    ),
+}
 
 
 def _intent_option(intent_id: str) -> dict[str, str]:

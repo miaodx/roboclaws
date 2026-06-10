@@ -69,10 +69,12 @@ The `dev` extra includes the standard MolmoSpaces/MuJoCo CPU runtime used by
 local cleanup demos. Isaac Lab remains intentionally isolated in
 `.venv-isaaclab/`; use the Isaac preflight harness when testing that backend.
 
-The public command grammar is named-parameter only:
+The public command grammar is named-parameter only. Public launches name the
+operator-facing surface, world or scene, backend runtime, task intent, and agent
+engine separately:
 
 ```bash
-just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
+just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>] [key=value ...]
 ```
 
 For full command routing, profiles, and maintainer-only recipes, read
@@ -85,8 +87,8 @@ standalone browser console, run:
 just console::run
 ```
 
-The console supports route metadata for local coding-agent drivers such as
-Codex and Claude Code; it does not accept arbitrary browser-submitted shell
+The console uses the same world/backend/intent/agent-engine catalog for local
+coding-agent runs; it does not accept arbitrary browser-submitted shell
 commands.
 
 ## Demo Matrix
@@ -99,14 +101,14 @@ Pages republishes from successful `main` runs.
 | Demo | What it proves | Run it locally | Live CI report |
 | --- | --- | --- | --- |
 | AI2-THOR territory | Multiple robots compete for reachable cells in an iTHOR scene. | Local VLM route is being repaired; use mock/OpenClaw reports for now. | [mock](https://miaodx.com/roboclaws/territory/report.html), [Kimi smoke](https://miaodx.com/roboclaws/smoke/territory/report.html), [OpenClaw](https://miaodx.com/roboclaws/openclaw/territory/report.html) |
-| AI2-THOR coverage | Multiple robots cooperate to cover as much of the room as possible. | `just run::surface surface=ai2thor-games driver=vlm intent=coverage report=visual agents=2 steps=100` | [mock](https://miaodx.com/roboclaws/coverage/report.html), [Kimi smoke](https://miaodx.com/roboclaws/smoke/coverage/report.html), [OpenClaw](https://miaodx.com/roboclaws/openclaw/coverage/report.html) |
-| OpenClaw navigation | OpenClaw Gateway agents control robots through the shared Roboclaws APIs. | `just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual` | [openclaw/demo/report.html](https://miaodx.com/roboclaws/openclaw/demo/report.html) |
-| Coding-agent MCP control | Docker-backed Codex or Claude Code drives the robot directly through MCP tools. | `just run::surface surface=ai2thor-world driver=codex intent=navigate report=visual` or `just run::surface surface=ai2thor-world driver=claude intent=navigate report=visual` | Local-only today; reports write to `output/runs/<stamp>/`. |
-| Photo task | A robot navigates the room and photographs chairs/sofas. | `just run::surface surface=ai2thor-world driver=openclaw intent=photo-capture report=visual` | Local/OpenClaw report artifact. |
-| Semantic map build | A no-cleanup sweep starts from the minimal navigation map and builds public runtime map evidence. Online `runtime_metric_map.json` output and converted Agibot `navigation_memory.json` can both feed the canonical Actionable Semantic Map Snapshot contract. | `just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels seed=7 environment_setup=baseline` | Local artifact today. |
-| Household cleanup | A cleanup agent tidies a relocated household setup from minimal map context while private scoring stays hidden. | `just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=world-oracle-labels seed=7 environment_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2.5](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5/seed-7/report.html) |
-| Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels seed=7 environment_setup=relocate-cleanup-related-objects relocation_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
-| Agent operator console | Standalone local browser console for supported Codex and Claude Code household routes with backend locks, route-specific gates, live state, and artifact links. | `just console::run` | Local-only operator surface. |
+| AI2-THOR coverage | Multiple robots cooperate to cover as much of the room as possible. | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=coverage agent_engine=vlm-policy report=visual agents=2 steps=100` | [mock](https://miaodx.com/roboclaws/coverage/report.html), [Kimi smoke](https://miaodx.com/roboclaws/smoke/coverage/report.html), [OpenClaw](https://miaodx.com/roboclaws/openclaw/coverage/report.html) |
+| OpenClaw navigation | OpenClaw Gateway agents control robots through the shared Roboclaws APIs. | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual` | [openclaw/demo/report.html](https://miaodx.com/roboclaws/openclaw/demo/report.html) |
+| Coding-agent MCP control | Docker-backed Codex or Claude Code drives the robot directly through MCP tools. | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=codex-cli report=visual` or `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=claude-code report=visual` | Local-only today; reports write to `output/runs/<stamp>/`. |
+| Photo task | A robot navigates the room and photographs chairs/sofas. | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=photo-capture agent_engine=openclaw-gateway report=visual` | Local/OpenClaw report artifact. |
+| Semantic map build | A no-cleanup sweep starts from the minimal navigation map and builds public runtime map evidence. Online `runtime_metric_map.json` output and converted Agibot `navigation_memory.json` can both feed the canonical Actionable Semantic Map Snapshot contract. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline` | Local artifact today. |
+| Household cleanup | A cleanup agent tidies a relocated household setup from minimal map context while private scoring stays hidden. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2.5](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5/seed-7/report.html) |
+| Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
+| Agent operator console | Standalone local browser console for supported Codex, Claude Code, and experimental OpenAI Agents SDK household routes with backend locks, launch-axis gates, live state, and artifact links. | `just console::run` | Local-only operator surface. |
 | Railway appliance | Single-container hosted demo with UI, viewer, Gateway, and AI2-THOR. | `DEMO_PASSWORD=demo just appliance::run local` | Local appliance surface. |
 | Maintainer gate | Fast mock confidence check before shipping repo changes. | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
 

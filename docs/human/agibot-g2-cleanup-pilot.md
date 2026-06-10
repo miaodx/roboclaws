@@ -86,8 +86,7 @@ PNC、真实相机或 DINO。
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just run::surface surface=household-world driver=direct intent=map-build evidence_lane=camera-grounded-labels \
-  backend=agibot_molmospaces_sim \
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels \
   runtime=fixture \
   rehearsal_mode=contract \
   camera_labeler=grounding-dino \
@@ -106,8 +105,8 @@ just run::surface surface=household-world driver=direct intent=map-build evidenc
 
 ### 4. Console route sanity
 
-HTML control console 已经注册了 `Agibot G2 Map Build` route。可以自动验证 route、
-gate 和 launcher 仍然可用：
+HTML control console 已经注册了 Agibot G2 Map 12 world + Agibot GDK backend +
+map-build intent + Codex CLI engine 组合。可以自动验证 gate 和 launcher 仍然可用：
 
 ```bash
 ./scripts/dev/run_pytest_standalone.sh \
@@ -120,8 +119,7 @@ gate 和 launcher 仍然可用：
 Codex 或机器人：
 
 ```bash
-ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels \
-  backend=agibot_gdk \
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/example/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -297,8 +295,7 @@ VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just run::surface surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels \
-  backend=agibot_gdk \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-codex-dry-run \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -321,8 +318,7 @@ dry run 不能称为 hardware evidence。
 只有 operator 确认 run-level gate 后，才启用 movement：
 
 ```bash
-just run::surface surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels \
-  backend=agibot_gdk \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -340,8 +336,8 @@ output/agibot/semantic-map-build-hardware/<stamp>/seed-7/
 
 ## HTML control console
 
-可以和 HTML control console 结合。console 仍然走同一个 public route：
-`surface=household-world driver=codex intent=map-build evidence_lane=camera-grounded-labels backend=agibot_gdk`。
+可以和 HTML control console 结合。console 仍然走同一个 public selection：
+`surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli evidence_lane=camera-grounded-labels`。
 
 启动 console：
 

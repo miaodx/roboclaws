@@ -17,11 +17,12 @@ The current human-facing layers are:
 
 ```text
 Open-ended goal
-  -> Runnable Surface and Intent
+  -> Runnable Surface, World / Scene, and Intent
+  -> Backend Runtime
   -> Agent Skill
+  -> Agent Engine and Provider Profile
   -> Capability Profile requirements
   -> MCP Capability Tools
-  -> Backend Variant
   -> Artifacts and reports
 ```
 
@@ -30,14 +31,23 @@ Open-ended goal
   `surface=household-world intent=map-build`, and
   `surface=household-world intent=cleanup`. They own command names,
   parameters, report shape, and acceptance gates.
+- **Worlds / Scenes** are operator-facing rooms, maps, or digital twins such as
+  `world=molmospaces/val_0`, `world=agibot-g2/map-12`, or
+  `world=ai2thor/FloorPlan201`.
+- **Backend Runtimes** are swappable execution environments such as
+  `backend=mujoco`, `backend=isaaclab`, `backend=agibot-gdk`, or
+  `backend=ai2thor`.
 - **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
   and trace-preserving routines such as `navigate -> pick -> place`.
+- **Agent Engines And Provider Profiles** distinguish the product runtime
+  (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
+  `direct-runner`, `openclaw-gateway`, `vlm-policy`, or `script-runner`) from
+  the model/key route (`provider_profile=codex-env`, `mify`,
+  `mimo-anthropic`, and related profiles).
 - **Capability Profiles** define reusable capability environments. Skills
   require profiles; profiles should not be copied into task-specific supersets.
 - **MCP Tools** are the stable public robot interface: observe, navigate, map,
   pick, place, done, and related bounded capabilities.
-- **Backend Variants** implement the same public shape in mock, simulator, API,
-  or physical-robot environments.
 
 The real-robot rule is: physical runs should reuse the same surface, intent,
 skill, profile, and MCP tool layers. They differ by backend variant,
@@ -124,15 +134,15 @@ The clean-slate direction is:
 The public command grammar is intentionally small:
 
 ```bash
-just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
+just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>] [provider_profile=<profile>] [key=value ...]
 ```
 
 Examples:
 
 ```bash
-just run::surface surface=ai2thor-world driver=codex intent=navigate report=visual
-just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels seed=7
-just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=world-oracle-labels seed=7
+just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=codex-cli report=visual
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=relocate-cleanup-related-objects seed=7
 just console::run
 ```
 
@@ -165,8 +175,8 @@ canonical task layer.
 
 `just console::run` starts a standalone local operator console for supported
 coding-agent household routes. The console does not expose arbitrary shell
-commands: route selection comes from explicit console metadata and still
-resolves through the public surface/intent catalog constraints.
+commands: world, backend, intent, agent engine, provider profile, evidence lane,
+and scenario setup all resolve through the public launch catalog.
 
 ## Capability Profiles
 
@@ -181,12 +191,14 @@ Going forward:
 - Add a new runnable surface or intent by adding a domain `tasks.py` spec and
   registering it in `roboclaws/launch/catalog.py`; keep behavior in the domain
   package.
-- Add a new backend as a reusable adapter under the owning domain package, then
-  expose it through task metadata or launch validation.
-- Add a new coding-agent driver under `roboclaws/agents/drivers/` and keep
-  task-specific kickoff text in `roboclaws/agents/prompts/`. Shared launcher
-  and status semantics should flow through `roboclaws/agents/live_runtime.py`
-  when the driver is a live coding-agent runtime.
+- Add a new world or scene in `roboclaws/launch/worlds.py`, and expose only
+  operator-facing ids such as room, map, or digital-twin names.
+- Add a new backend runtime in `roboclaws/launch/backends.py` as a reusable
+  adapter boundary; implementation backend ids stay private metadata.
+- Add a new agent engine in `roboclaws/launch/agent_engines.py`. For live
+  coding agents, shared launcher and status semantics should flow through
+  `roboclaws/agents/live_runtime.py`, with task-specific kickoff text in
+  `roboclaws/agents/prompts/`.
 - Add or revise MCP tools in the domain-local MCP module when the capability
   surface is stable enough to reuse across skills.
 - Profiles describe reusable capability environments, not whole tasks.

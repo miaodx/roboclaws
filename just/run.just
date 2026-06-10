@@ -1,7 +1,9 @@
 # Human-facing surface grammar.
 #
 # Canonical form:
-#   just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
+#   just run::surface surface=<surface> agent_engine=<engine> [world=<world>]
+#     [backend=<backend>] [intent=<intent>] [provider_profile=<profile>]
+#     [key=value ...]
 #
 # Surfaces:
 #   household-world | ai2thor-world | ai2thor-games | planner-proof
@@ -17,7 +19,7 @@ set positional-arguments
 default:
     @just --list run
 
-# Run a canonical surface/intent route through a driver.
+# Run a canonical surface/intent route through explicit launch axes.
 surface *overrides:
     #!/usr/bin/env bash
     set -euo pipefail

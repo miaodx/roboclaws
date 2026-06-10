@@ -20,12 +20,18 @@ class LaunchPlan:
     argv: tuple[str, ...]
     surface: str
     intent: str
+    world: str
+    backend: str
+    implementation_backend: str
+    agent_engine: str
+    provider_profile: str | None
+    internal_runner_class: str
+    lower_driver: str
     lower_task: str
     driver: str
     evidence_mode: str
     profile: str | None
     report: str | None
-    backend: str
     prompt_id: str
     checker_id: str
     mcp_server_id: str

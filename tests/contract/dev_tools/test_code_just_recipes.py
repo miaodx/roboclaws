@@ -16,7 +16,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from roboclaws.devtools.commands import resolve_task_run
+from roboclaws.devtools.commands import resolve_surface_run
 
 
 def _repo_root() -> Path:
@@ -238,11 +238,31 @@ def test_photo_coding_agent_routes_use_photo_skill_only() -> None:
 
 
 def test_photo_task_facade_accepts_coding_agent_drivers() -> None:
-    codex = resolve_task_run(("photo-chairs", "codex"))
-    claude = resolve_task_run(("photo-chairs", "claude"))
+    codex = resolve_surface_run(
+        ("surface=ai2thor-world", "intent=photo-capture", "agent_engine=codex-cli")
+    )
+    claude = resolve_surface_run(
+        ("surface=ai2thor-world", "intent=photo-capture", "agent_engine=claude-code")
+    )
 
-    assert codex.argv == ("just", "agent::run", "photo-chairs", "codex", "visual")
-    assert claude.argv == ("just", "agent::run", "photo-chairs", "claude", "visual")
+    assert codex.argv == (
+        "just",
+        "agent::run",
+        "photo-chairs",
+        "codex",
+        "visual",
+        "scene=FloorPlan201",
+        "backend=ai2thor",
+    )
+    assert claude.argv == (
+        "just",
+        "agent::run",
+        "photo-chairs",
+        "claude",
+        "visual",
+        "scene=FloorPlan201",
+        "backend=ai2thor",
+    )
 
 
 def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:

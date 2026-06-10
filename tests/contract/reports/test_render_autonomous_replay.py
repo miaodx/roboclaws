@@ -172,7 +172,10 @@ def test_renders_html_without_rebuildable_gif_by_default(tmp_path: Path) -> None
 
     _run_renderer(
         run_dir,
-        rerun_command="just task::run ai2thor-nav codex visual scene=FloorPlan201",
+        rerun_command=(
+            "just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 "
+            "backend=ai2thor intent=navigate agent_engine=codex-cli report=visual"
+        ),
     )
 
     replay_gif = run_dir / "replay.gif"
@@ -192,7 +195,7 @@ def test_renders_html_without_rebuildable_gif_by_default(tmp_path: Path) -> None
     assert "fresh observation" in report_text
     assert "fresh observe-driven move" in report_text
     assert "Rerun Locally" in report_text
-    assert "just task::run ai2thor-nav codex visual scene=FloorPlan201" in report_text
+    assert "just run::surface surface=ai2thor-world" in report_text
     assert summary_json.exists()
 
 

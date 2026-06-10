@@ -109,17 +109,25 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         prompt="pick up the mug; rm -rf /",
         overrides={
             "seed": "8",
-            "environment_setup": "relocate-loose-objects",
+            "scenario_setup": "relocate-loose-objects",
             "relocation_count": "2",
         },
     )
 
-    assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=codex"]
+    assert argv[:7] == [
+        "just",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=codex-cli",
+    ]
     assert "intent=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
-    assert "backend=molmospaces_subprocess" in argv
+    assert "provider_profile=codex-env" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
-    assert "environment_setup=relocate-loose-objects" in argv
+    assert "scenario_setup=relocate-loose-objects" in argv
     assert "relocation_count=2" in argv
     assert not any(item.startswith("generated_mess_count=") for item in argv)
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
@@ -133,7 +141,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     )
     assert "intent=open-ended" in open_ended
     assert "intent=cleanup" not in open_ended
-    assert "environment_setup=baseline" in open_ended
+    assert "scenario_setup=baseline" in open_ended
     assert not any(item.startswith("relocation_count=") for item in open_ended)
     assert not any(item.startswith("generated_mess_count=") for item in open_ended)
 
@@ -353,7 +361,7 @@ def test_operator_console_run_endpoint_passes_explicit_intent(tmp_path: Path) ->
     assert payload["run_id"] == "started-run"
     launch_request = launched["request"]
     assert launch_request.route_id == "codex-mujoco-cleanup"
-    assert launch_request.intent == "open-ended"
+    assert launch_request.intent_id == "open-ended"
     assert launch_request.prompt == "收拾桌面上的杯子"
 
 
@@ -428,7 +436,7 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert payload["started_run"]["run_id"] == "child-run"
     launch_request = launched["request"]
     assert launch_request.route_id == route.id
-    assert launch_request.intent == "open-ended"
+    assert launch_request.intent_id == "open-ended"
     assert launch_request.operator_session_id == "session-test"
     assert launch_request.parent_run_id == run_id
 

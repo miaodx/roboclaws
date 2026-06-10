@@ -169,7 +169,53 @@ run task driver mode="" *overrides:
       esac
     fi
 
-    report_rerun_parts=("just" "task::run" "$task" "$driver")
+    report_rerun_parts=("just" "run::surface")
+    case "$task" in
+      ai2thor-nav)
+        report_rerun_parts+=("surface=ai2thor-world" "intent=navigate")
+        ;;
+      photo-chairs)
+        report_rerun_parts+=("surface=ai2thor-world" "intent=photo-capture")
+        ;;
+      territory|coverage)
+        report_rerun_parts+=("surface=ai2thor-games" "intent=$task")
+        ;;
+      semantic-map-build)
+        report_rerun_parts+=("surface=household-world" "intent=map-build")
+        ;;
+      household-cleanup)
+        report_rerun_parts+=("surface=household-world" "intent=${kv[task_intent]:-cleanup}")
+        ;;
+      molmo-planner-proof)
+        report_rerun_parts+=("surface=planner-proof" "intent=planner-proof")
+        ;;
+    esac
+    case "$driver" in
+      codex)
+        report_rerun_parts+=("agent_engine=codex-cli")
+        ;;
+      claude)
+        report_rerun_parts+=("agent_engine=claude-code")
+        ;;
+      openai-agents-live)
+        report_rerun_parts+=("agent_engine=openai-agents-sdk")
+        ;;
+      direct)
+        report_rerun_parts+=("agent_engine=direct-runner")
+        ;;
+      mcp-smoke)
+        report_rerun_parts+=("agent_engine=direct-runner")
+        ;;
+      openclaw)
+        report_rerun_parts+=("agent_engine=openclaw-gateway")
+        ;;
+      vlm)
+        report_rerun_parts+=("agent_engine=vlm-policy")
+        ;;
+      script)
+        report_rerun_parts+=("agent_engine=script-runner")
+        ;;
+    esac
     if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
       report_rerun_parts+=("evidence_lane=$profile")
     else
@@ -264,7 +310,7 @@ run task driver mode="" *overrides:
         ;;
 
       semantic-map-build:direct|semantic-map-build:codex|household-cleanup:direct|household-cleanup:mcp-smoke|\
-      household-cleanup:codex|household-cleanup:claude|household-cleanup:openclaw)
+      household-cleanup:codex|household-cleanup:claude|household-cleanup:openai-agents-live|household-cleanup:openclaw)
         case "$driver" in
           direct|mcp-smoke)
             impl_driver="$driver"
@@ -274,6 +320,9 @@ run task driver mode="" *overrides:
             ;;
           claude)
             impl_driver="claude-live"
+            ;;
+          openai-agents-live)
+            impl_driver="openai-agents-live"
             ;;
           openclaw)
             impl_driver="openclaw-live"

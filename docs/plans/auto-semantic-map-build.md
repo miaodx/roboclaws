@@ -293,10 +293,12 @@ success; it is evidence that a sparse map can be enriched into a useful Runtime
 Metric Map through the same public observation path a physical Agibot run will
 use.
 
-Default command surface for the first slice:
-`just task::run semantic-map-build direct <profile> map_mode=minimal`. Keep the
-driver `direct` until the deterministic minimal-map contract and report are
-stable. Do not add a new MCP tool for exploration candidates in this slice;
+Default command surface for the first slice was superseded on 2026-06-10 by the
+orthogonal public launch grammar in
+`docs/plans/operator-console-orthogonal-launch-refactor.md`. Use:
+`just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=<lane> map_mode=minimal scenario_setup=baseline`.
+Keep the deterministic direct runner until the minimal-map contract and report
+are stable. Do not add a new MCP tool for exploration candidates in this slice;
 represent them as `generated_*` inspection waypoints and use the existing
 `navigate_to_waypoint` tool.
 

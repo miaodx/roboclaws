@@ -11,13 +11,13 @@ from roboclaws.launch.environment_setup_metadata import (
 def build_agent_run_argv(
     *,
     task: str,
-    driver: str,
+    lower_driver: str,
     mode: str,
     overrides: tuple[str, ...],
 ) -> tuple[str, ...]:
     """Return the current lower dispatcher command for a public task route."""
 
-    return ("just", "agent::run", task, driver, mode, *overrides)
+    return ("just", "agent::run", task, lower_driver, mode, *overrides)
 
 
 def export_env_from_overrides(overrides: tuple[str, ...]) -> dict[str, str]:
@@ -33,7 +33,15 @@ def export_env_from_overrides(overrides: tuple[str, ...]) -> dict[str, str]:
             env["ROBOCLAWS_TASK_SURFACE"] = override.removeprefix("task_surface=")
         elif override.startswith("task_intent="):
             env["ROBOCLAWS_TASK_INTENT"] = override.removeprefix("task_intent=")
-    setup = _override_value(overrides, "environment_setup")
+    agent_engine = _override_value(overrides, "agent_engine")
+    provider_profile = _override_value(overrides, "provider_profile")
+    if agent_engine == "codex-cli" and provider_profile:
+        env["ROBOCLAWS_CODEX_PROVIDER"] = provider_profile
+    elif agent_engine == "claude-code" and provider_profile:
+        env["ROBOCLAWS_CLAUDE_PROVIDER"] = provider_profile
+    elif agent_engine == "openai-agents-sdk" and provider_profile:
+        env["ROBOCLAWS_CODEX_PROVIDER"] = provider_profile
+    setup = _override_value(overrides, "scenario_setup")
     if setup:
         env[ENVIRONMENT_SETUP_METADATA_ENV] = environment_setup_metadata_json(
             setup=setup,

@@ -21,6 +21,8 @@ class AgentRoute:
     route_id: str
     label: str
     driver: str
+    agent_engine: str
+    provider_profile: str
     env: dict[str, str]
     required_env: tuple[str, ...]
 
@@ -39,6 +41,8 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
         route_id="codex-api-router",
         label="Codex API router",
         driver="codex",
+        agent_engine="codex-cli",
+        provider_profile="codex-env",
         env={"ROBOCLAWS_CODEX_PROVIDER": "codex-env"},
         required_env=("CODEX_BASE_URL", "CODEX_API_KEY"),
     ),
@@ -46,6 +50,8 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
         route_id="claude-kimi",
         label="Claude Code Kimi",
         driver="claude",
+        agent_engine="claude-code",
+        provider_profile="kimi-anthropic",
         env={
             "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
             "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
@@ -56,6 +62,8 @@ AGENT_ROUTES: tuple[AgentRoute, ...] = (
         route_id="claude-mimo-v25",
         label="Claude Code MiMo v2.5",
         driver="claude",
+        agent_engine="claude-code",
+        provider_profile="mimo-anthropic",
         env={
             "ROBOCLAWS_CLAUDE_PROVIDER": "mimo-anthropic",
             "ROBOCLAWS_CLAUDE_MODEL": "mimo-v2.5",
@@ -221,12 +229,15 @@ def _semantic_map_prior_row(
     row_output_dir = output_dir / "_offline-semantic-map-prior"
     command = [
         "just",
-        "task::run",
-        "semantic-map-build",
-        "direct",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=map-build",
+        "agent_engine=direct-runner",
         "evidence_lane=world-oracle-labels",
+        "scenario_setup=baseline",
         f"seed={seed}",
-        f"generated_mess_count={generated_mess_count}",
         f"output_dir={row_output_dir}",
         f"task={task}",
         f"map_bundle={map_bundle}",
@@ -266,12 +277,17 @@ def _cleanup_grid_row(
     row_output_dir = output_dir / row_id
     command = [
         "just",
-        "task::run",
-        "household-cleanup",
-        agent_route.driver,
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        f"agent_engine={agent_route.agent_engine}",
+        f"provider_profile={agent_route.provider_profile}",
         f"evidence_lane={lane.profile}",
         f"seed={seed}",
-        f"generated_mess_count={generated_mess_count}",
+        "scenario_setup=relocate-cleanup-related-objects",
+        f"relocation_count={generated_mess_count}",
         f"output_dir={row_output_dir}",
         f"task={task}",
         f"map_bundle={map_bundle}",

@@ -30,7 +30,12 @@ from roboclaws.operator_console.launcher import (
     stop_console_run,
 )
 from roboclaws.operator_console.paths import OUTPUT_ROOT_ENV, console_output_root
-from roboclaws.operator_console.routes import get_route, list_console_routes
+from roboclaws.operator_console.routes import (
+    get_route,
+    get_selection,
+    list_console_combinations,
+    list_worlds,
+)
 from roboclaws.operator_console.state import derive_operator_state, redacted_artifact_text
 
 PAUSE_UNAVAILABLE_REASON = "Pause is unavailable for this route. Use Stop or Emergency Stop."
@@ -51,20 +56,45 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
         if parsed.path == "/api/routes":
             return self._json(
                 {
-                    "routes": [route.to_payload() for route in list_console_routes()],
+                    "worlds": list(list_worlds()),
+                    "combinations": [
+                        selection.to_payload()
+                        for selection in list_console_combinations(include_disabled=True)
+                    ],
+                    "routes": [
+                        selection.to_payload()
+                        for selection in list_console_combinations(include_disabled=True)
+                    ],
                     "readiness": {
-                        route.id: route_readiness(self.repo_root, route)
-                        for route in list_console_routes(include_disabled=False)
+                        selection.id: route_readiness(self.repo_root, selection)
+                        for selection in list_console_combinations(include_disabled=False)
                     },
                 }
             )
         if parsed.path == "/api/readiness":
             try:
                 query = parse_qs(parsed.query)
-                route = get_route(str(query.get("route_id", [""])[0]))
+                selection_id = str(query.get("selection_id", [""])[0])
+                if not selection_id:
+                    world_id = str(query.get("world_id", [""])[0])
+                    backend_id = str(query.get("backend_id", [""])[0])
+                    intent_id = str(query.get("intent_id", [""])[0])
+                    agent_engine_id = str(query.get("agent_engine_id", [""])[0])
+                    evidence_lane = str(query.get("evidence_lane", ["world-oracle-labels"])[0])
+                    selection_id = "::".join(
+                        (world_id, backend_id, intent_id, agent_engine_id, evidence_lane)
+                    )
+                route = get_selection(selection_id)
                 overrides = {
                     key: str(query[key][0])
-                    for key in ("host", "port", "context_json", "real_movement_enabled")
+                    for key in (
+                        "host",
+                        "port",
+                        "context_json",
+                        "real_movement_enabled",
+                        "scenario_setup",
+                        "provider_profile",
+                    )
                     if query.get(key, [""])[0]
                 }
                 gates = {
@@ -148,8 +178,13 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 return self._json(create_operator_session(self.repo_root), status=201)
             if parsed.path == "/api/runs":
                 request = LaunchRequest(
-                    route_id=str(payload.get("route_id") or ""),
-                    intent=str(payload.get("intent") or ""),
+                    world_id=str(payload.get("world_id") or ""),
+                    backend_id=str(payload.get("backend_id") or ""),
+                    intent_id=str(payload.get("intent_id") or payload.get("intent") or ""),
+                    agent_engine_id=str(payload.get("agent_engine_id") or ""),
+                    provider_profile=str(payload.get("provider_profile") or ""),
+                    evidence_lane=str(payload.get("evidence_lane") or ""),
+                    scenario_setup=str(payload.get("scenario_setup") or ""),
                     prompt=str(payload.get("prompt") or ""),
                     overrides=dict(payload.get("overrides") or {}),
                     env_overrides=dict(payload.get("env_overrides") or {}),
@@ -157,6 +192,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     operator_session_id=str(payload.get("operator_session_id") or ""),
                     parent_run_id=str(payload.get("parent_run_id") or ""),
                     next_goal_packet=dict(payload.get("next_goal_packet") or {}),
+                    route_id=str(payload.get("route_id") or ""),
                 )
                 return self._json(start_console_run(self.repo_root, request), status=201)
             if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/ask-why"):
@@ -184,12 +220,23 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 ):
                     launch = LaunchRequest(
                         route_id=str(follow_up.get("route_id") or ""),
-                        intent=str(follow_up.get("intent") or ""),
+                        intent_id=str(follow_up.get("intent") or ""),
                         prompt=str(follow_up.get("body") or ""),
                         operator_session_id=str(follow_up.get("operator_session_id") or ""),
                         parent_run_id=run_id,
                         next_goal_packet=dict(follow_up.get("next_goal_packet") or {}),
                     )
+                    selection_id = str(follow_up.get("selection_id") or "")
+                    if selection_id:
+                        parts = selection_id.split("::")
+                        if len(parts) == 5:
+                            (
+                                launch.world_id,
+                                launch.backend_id,
+                                launch.intent_id,
+                                launch.agent_engine_id,
+                                launch.evidence_lane,
+                            ) = parts
                     try:
                         follow_up["started_run"] = start_console_run(self.repo_root, launch)
                         follow_up["status"] = "started"

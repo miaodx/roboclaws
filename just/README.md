@@ -1,7 +1,7 @@
 # Just Command Surface
 
 Roboclaws uses a small composable Just grammar instead of exposing every
-task/driver/report combination as a separate recipe.
+world/backend/intent/agent-engine combination as a separate recipe.
 
 ## Public Namespaces
 
@@ -9,7 +9,7 @@ task/driver/report combination as a separate recipe.
 - `agent::*` is for maintainer-level dispatch into private implementation
   modules.
 
-Lower modules such as `task::*`, `openclaw::*`, `vlm::*`, `molmo::*`,
+Lower modules such as `openclaw::*`, `vlm::*`, `molmo::*`,
 `harness::*`, `verify::*`, `mcp::*`, `code::*`, `chat::*`, `appliance::*`,
 and `dev::*` are private. They remain runnable for debugging, but they are
 hidden from `just --summary` and shell completion.
@@ -17,7 +17,7 @@ hidden from `just --summary` and shell completion.
 ## Main Grammar
 
 ```bash
-just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
+just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>] [provider_profile=<profile>] [key=value ...]
 ```
 
 Surfaces:
@@ -38,15 +38,36 @@ Intents:
 - `open-ended`
 - `planner-proof`
 
-Drivers:
+Worlds and scenes:
 
-- `openclaw`
-- `vlm`
-- `codex`
-- `claude`
-- `script`
-- `direct`
-- `mcp-smoke`
+- `molmospaces/val_0`
+- `agibot-g2/map-12`
+- `b1-map12`
+- `ai2thor/FloorPlan201`
+- `ai2thor-games/FloorPlan201`
+- `planner-proof/default`
+
+Backends:
+
+- `mujoco`
+- `isaaclab`
+- `agibot-gdk`
+- `ai2thor`
+
+Agent engines:
+
+- `codex-cli`
+- `claude-code`
+- `openai-agents-sdk`
+- `direct-runner`
+- `openclaw-gateway`
+- `vlm-policy`
+- `script-runner`
+
+Provider profiles are selected only for agent engines that need a model/key
+route. Examples include `codex-env`, `mify`, `kimi-anthropic`,
+`mimo-anthropic`, and `mify-anthropic`. Deterministic engines such as
+`direct-runner` and `script-runner` do not accept `provider_profile`.
 
 Reports for non-Molmo tasks:
 
@@ -94,7 +115,7 @@ scope while keeping cleanup evaluation.
 
 ## Live Agent Launch Behavior
 
-`just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels` launches a detached tmux session.
+`just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels` launches a detached tmux session.
 The session owns the cleanup MCP server, the `codex exec` process, raw Codex
 logs, the MCP trace, and the final checker. The invoking terminal returns after
 printing the tmux session name and artifact directory, so monitor sessions do
@@ -114,8 +135,8 @@ The probe summarizes tmux liveness, elapsed time, MCP tool progress,
 available. Only one detached Molmo/Codex cleanup run is allowed at a time
 because each visual run owns a MuJoCo-backed MolmoSpaces backend. If a run is
 active or the requested MCP port is already accepting connections, the launcher
-fails instead of choosing another port. `claude` and `openclaw` live cleanup
-drivers still use their existing interactive launch paths.
+fails instead of choosing another port. Claude Code and OpenClaw live cleanup
+engines still use their existing interactive launch paths.
 
 Repo-local `.env` keys route live Codex and Claude launchers without editing
 user-level CLI config. Normal users configure keys only; command shape controls
@@ -144,7 +165,7 @@ does not run Codex or Codex provider smoke.
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash
-just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=claude-code provider_profile=mimo-anthropic intent=cleanup evidence_lane=world-oracle-labels
 ```
 
 The image is defined by `Dockerfile.coding-agents` and pins
@@ -157,7 +178,7 @@ Codex runs use repo-local `.env` credentials in the pinned container. Host
 `~/.codex` auth/config is not copied into repo workflows:
 
 ```bash
-just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli provider_profile=codex-env intent=cleanup evidence_lane=world-oracle-labels
 ```
 
 Docker-backed coding-agent tasks use an isolated generated workspace owned by
@@ -170,7 +191,7 @@ Current task mappings:
 - `ai2thor-nav` direct Codex/Claude: `ai2thor-navigator`
 - `photo-chairs` direct Codex/Claude: `capture-object-photo`
 - `semantic-map-build` direct: `molmo-realworld-cleanup` with cleanup actions disabled
-- `semantic-map-build` live Codex: `molmo-realworld-cleanup` with cleanup actions disabled for simulator backends; dedicated Agibot map-build runner for `backend=agibot_gdk`
+- `semantic-map-build` live Codex: `molmo-realworld-cleanup` with cleanup actions disabled for simulator backends; dedicated Agibot map-build runner for public `backend=agibot-gdk`, lowered internally to implementation backend `agibot_gdk`
 - `household-cleanup` live Codex/Claude: `molmo-realworld-cleanup`
 
 Python owns route metadata and reusable launch pieces:
@@ -197,25 +218,25 @@ namespaces such as `mcp__<server>__`.
 ## Examples
 
 ```bash
-just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels
-just run::surface surface=household-world driver=codex intent=cleanup
-just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke
-just run::surface surface=household-world driver=codex prompt="我渴了，帮我找些解渴的东西"
-just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=world-oracle-labels runtime_map_prior=output/map/runtime_metric_map.json
-just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-raw-fpv
-just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
-just run::surface surface=household-world driver=mcp-smoke intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=fake-http
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=smoke
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels runtime_map_prior=output/map/runtime_metric_map.json
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
 .venv/bin/python scripts/visual_grounding/build_representative_visual_grounding_corpus.py output --output output/visual-grounding-corpora/representative-raw-fpv/representative_raw_fpv_corpus.json
 .venv/bin/python scripts/visual_grounding/build_molmospaces_visual_grounding_bbox_corpus.py --output output/visual-grounding-corpora/molmospaces-bbox-10x10/corpus.json --scene-indices 0-9 --targets-per-scene 10
 VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline real-router --adapter-mode real
-just run::surface surface=ai2thor-world driver=openclaw intent=navigate
-just run::surface surface=ai2thor-world driver=codex intent=photo-capture
-just run::surface surface=ai2thor-games driver=vlm intent=territory steps=20 agents=2
-just run::surface surface=ai2thor-games driver=script intent=coverage output_dir=output/script/coverage-smoke
-just run::surface surface=planner-proof driver=direct intent=planner-proof mode=dry-run
+just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway
+just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=photo-capture agent_engine=codex-cli provider_profile=codex-env
+just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=territory agent_engine=vlm-policy steps=20 agents=2
+just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=coverage agent_engine=script-runner output_dir=output/script/coverage-smoke
+just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 ```
 
 For `pipeline=fake-http` visual-grounding runs, start the configurable service
@@ -323,13 +344,13 @@ Prompt mappings for agents:
 
 | Prompt | Command |
 |---|---|
-| "run the semantic map build task" | `just run::surface surface=household-world driver=direct intent=map-build evidence_lane=world-oracle-labels` |
-| "run the semantic map build task with codex" | `just run::surface surface=household-world driver=codex intent=map-build evidence_lane=world-oracle-labels backend=molmospaces_subprocess` |
-| "run the household cleanup task with codex" | `just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels` |
-| "run the household cleanup task with codex with smoke profile" | `just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke` |
-| "run an open-ended household goal with codex" | `just run::surface surface=household-world driver=codex prompt="我渴了，帮我找些解渴的东西"` |
-| "run the household cleanup camera raw lane" | `just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-raw-fpv` |
-| "run the ai2thor nav task with openclaw" | `just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual` |
+| "run the semantic map build task" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels` |
+| "run the semantic map build task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels` |
+| "run the household cleanup task with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels` |
+| "run the household cleanup task with codex with smoke profile" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=smoke` |
+| "run an open-ended household goal with codex" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"` |
+| "run the household cleanup camera raw lane" | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-raw-fpv` |
+| "run the ai2thor nav task with openclaw" | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual` |
 
 ## Maintainer Dispatch
 
