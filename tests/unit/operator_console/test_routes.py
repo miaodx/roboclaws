@@ -117,6 +117,9 @@ def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:
     assert [option["id"] for option in mujoco["intent_options"]] == ["cleanup", "open-ended"]
     assert mujoco["intent_options"][0]["checker_id"] == "cleanup_report"
     assert mujoco["intent_options"][1]["checker_id"] == "open_ended_report"
+    assert "environment_setup=relocate-cleanup-related-objects" in mujoco["default_overrides"]
+    assert "relocation_count=5" in mujoco["default_overrides"]
+    assert not any(item.startswith("generated_mess_count=") for item in mujoco["default_overrides"])
 
     assert isaac["field_groups"] == ["common", "isaac"]
     assert "grounding" in isaac["view_modes"]
@@ -153,7 +156,20 @@ def test_open_ended_launch_requires_explicit_operator_intent(tmp_path) -> None:
 
     assert "intent=open-ended" in argv
     assert "intent=cleanup" not in argv
+    assert "environment_setup=baseline" in argv
+    assert not any(item.startswith("relocation_count=") for item in argv)
+    assert not any(item.startswith("generated_mess_count=") for item in argv)
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
+
+
+def test_map_build_launch_defaults_to_baseline_environment_setup(tmp_path) -> None:
+    route = get_route("codex-mujoco-map-build")
+    argv = build_launch_argv(route, root=tmp_path, run_id="run-1")
+
+    assert "intent=map-build" in argv
+    assert "environment_setup=baseline" in argv
+    assert not any(item.startswith("relocation_count=") for item in argv)
+    assert not any(item.startswith("generated_mess_count=") for item in argv)
 
 
 def test_launch_rejects_route_unsupported_intent(tmp_path) -> None:

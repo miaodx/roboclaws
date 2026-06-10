@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from roboclaws.household.scenario import build_cleanup_scenario, write_scenario_bundle
+from roboclaws.household.scoring import score_cleanup
 from roboclaws.household.types import PrivateScoringManifest
 
 
@@ -43,3 +44,20 @@ def test_write_scenario_bundle_splits_public_and_private_files(tmp_path: Path) -
     assert "targets" not in public
     assert private["targets"][0]["valid_receptacle_ids"]
     assert round_tripped == scenario.private_manifest
+
+
+def test_zero_target_private_manifest_scores_as_success() -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    manifest = PrivateScoringManifest(
+        scenario_id="baseline",
+        targets=(),
+        success_threshold=0,
+    )
+
+    score = score_cleanup(scenario.object_locations(), manifest).to_dict()
+
+    assert score["status"] == "success"
+    assert score["total_targets"] == 0
+    assert score["success_threshold"] == 0
+    assert score["restored_object_ids"] == []
+    assert score["missed_object_ids"] == []

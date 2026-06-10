@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.launch.catalog import resolve_surface_launch
+from roboclaws.launch.environment_setup import (
+    ENVIRONMENT_SETUP_BASELINE,
+    ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
+)
 from roboclaws.launch.intents import TASK_INTENT_SPECS
 
 
@@ -168,7 +172,7 @@ def _cleanup_route(
     driver: str,
     backend: str,
     lock_name: str,
-    default_mess_count: int,
+    default_relocation_count: int,
     gates: tuple[RouteGate, ...],
     resource_kind: str = "simulator",
     supports_operator_steer: bool = True,
@@ -188,7 +192,11 @@ def _cleanup_route(
         checker_id="cleanup_report",
         task_prompt_default="帮我收拾这个房间",
         supported_intents=("cleanup", "open-ended"),
-        default_overrides=("seed=7", f"generated_mess_count={default_mess_count}"),
+        default_overrides=(
+            "seed=7",
+            f"environment_setup={ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS}",
+            f"relocation_count={default_relocation_count}",
+        ),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, *gates),
         resource_kind=resource_kind,
         supports_operator_steer=supports_operator_steer,
@@ -212,7 +220,11 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         checker_id="cleanup_report",
         task_prompt_default="帮我收拾这个房间",
         supported_intents=("cleanup", "open-ended"),
-        default_overrides=("seed=7", "generated_mess_count=5"),
+        default_overrides=(
+            "seed=7",
+            f"environment_setup={ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS}",
+            "relocation_count=5",
+        ),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
         driver_label="Codex",
         supports_operator_steer=True,
@@ -223,7 +235,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         driver="claude",
         backend="molmospaces_subprocess",
         lock_name="molmospaces_mujoco",
-        default_mess_count=5,
+        default_relocation_count=5,
         gates=(),
         supports_operator_steer=True,
     ),
@@ -233,7 +245,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         driver="codex",
         backend="isaaclab_subprocess",
         lock_name="isaac_gpu",
-        default_mess_count=1,
+        default_relocation_count=1,
         gates=(ISAAC_PREFLIGHT_GATE,),
         resource_kind="gpu",
         supports_operator_steer=True,
@@ -244,7 +256,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         driver="claude",
         backend="isaaclab_subprocess",
         lock_name="isaac_gpu",
-        default_mess_count=1,
+        default_relocation_count=1,
         gates=(ISAAC_PREFLIGHT_GATE,),
         resource_kind="gpu",
         supports_operator_steer=True,
@@ -268,6 +280,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
             "policy=codex_agibot_semantic_map_build_pilot",
             "camera_labeler=grounding-dino",
             "visual_grounding_timeout_s=20",
+            f"environment_setup={ENVIRONMENT_SETUP_BASELINE}",
         ),
         gates=(
             PROVIDER_KEY_GATE,
@@ -295,7 +308,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         enabled=True,
         checker_id="runtime_metric_map",
         task_prompt_default="帮我建立这个房间的语义地图",
-        default_overrides=("seed=7", "generated_mess_count=5"),
+        default_overrides=("seed=7", f"environment_setup={ENVIRONMENT_SETUP_BASELINE}"),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
         driver_label="Codex",
     ),
@@ -313,7 +326,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         enabled=True,
         checker_id="runtime_metric_map",
         task_prompt_default="帮我建立这个房间的语义地图",
-        default_overrides=("seed=7", "generated_mess_count=1"),
+        default_overrides=("seed=7", f"environment_setup={ENVIRONMENT_SETUP_BASELINE}"),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, ISAAC_PREFLIGHT_GATE),
         resource_kind="gpu",
         driver_label="Codex",

@@ -487,7 +487,7 @@ support Codex, but may run supported Claude Code and OpenClaw routes. Use the
 same key set when comparing Kimi/MiMo results across machines:
 
 ```bash
-just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels seed=7 generated_mess_count=5
+just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels seed=7 environment_setup=relocate-cleanup-related-objects relocation_count=5
 ```
 
 Default CLI pins are recorded in `scripts/dev/coding_agent_toolchain.env`.

@@ -10,6 +10,7 @@ const state = {
   readinessTimer: null,
   activeView: "overview",
   selectedIntent: "",
+  setupSelectionKey: "",
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -34,7 +35,9 @@ const els = {
   intentInput: document.getElementById("intent-input"),
   intentPreview: document.getElementById("intent-preview"),
   seedInput: document.getElementById("seed-input"),
-  messInput: document.getElementById("mess-count-input"),
+  environmentSetupInput: document.getElementById("environment-setup-input"),
+  relocationCountField: document.getElementById("relocation-count-field"),
+  relocationCountInput: document.getElementById("relocation-count-input"),
   portInput: document.getElementById("port-input"),
   selectedRouteSummary: document.getElementById("selected-route-summary"),
   commonFields: document.getElementById("common-fields"),
@@ -108,6 +111,8 @@ function bindEvents() {
   });
   [
     els.contextInput,
+    els.environmentSetupInput,
+    els.relocationCountInput,
     els.codexProviderInput,
     els.claudeProviderInput,
     els.portInput,
@@ -427,6 +432,7 @@ function renderSelection() {
   ensureActiveViewAvailable(route);
   renderViewModes(route);
   renderIntentSelector(route);
+  renderEnvironmentSetup(route);
   renderOperatorInput(route);
 
   const gates = readiness.gates || route.gates || [];
@@ -558,6 +564,31 @@ function renderRouteFields(route) {
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
 }
 
+function renderEnvironmentSetup(route) {
+  const defaults = routeDefaultOverrides(route);
+  const intent = selectedIntentForRoute(route);
+  const selectionKey = `${route.id}:${intent}`;
+  const defaultSetup = defaultEnvironmentSetup(route, intent, defaults);
+  if (state.setupSelectionKey !== selectionKey) {
+    els.environmentSetupInput.value = defaultSetup;
+    els.relocationCountInput.value = defaults.relocation_count || "5";
+    state.setupSelectionKey = selectionKey;
+  }
+  if (!els.relocationCountInput.value && defaults.relocation_count) {
+    els.relocationCountInput.value = defaults.relocation_count;
+  }
+  const relocation = selectedEnvironmentSetup() !== "baseline";
+  els.relocationCountField.hidden = !relocation;
+  els.relocationCountInput.disabled = !relocation;
+}
+
+function defaultEnvironmentSetup(route, intent, defaults) {
+  if (intent === "cleanup") {
+    return defaults.environment_setup || "relocate-cleanup-related-objects";
+  }
+  return "baseline";
+}
+
 function renderIntentSelector(route) {
   const options = intentOptions(route);
   state.selectedIntent = selectedIntentForRoute(route);
@@ -598,7 +629,40 @@ function commandPreview(route) {
   if (route.supports_prompt && prompt) {
     parts.push(`prompt=${prompt}`);
   }
-  return parts.join(" ");
+  return commandPartsWithSetup(parts).join(" ");
+}
+
+function commandPartsWithSetup(parts) {
+  const setup = selectedEnvironmentSetup();
+  const next = withoutKeys(parts, ["environment_setup", "relocation_count"]);
+  next.push(`environment_setup=${setup}`);
+  if (setup !== "baseline") {
+    next.push(`relocation_count=${els.relocationCountInput.value || "5"}`);
+  }
+  return next;
+}
+
+function withoutKeys(parts, keys) {
+  return parts.filter((part) => {
+    const text = String(part);
+    return !keys.some((key) => text.startsWith(`${key}=`));
+  });
+}
+
+function selectedEnvironmentSetup() {
+  return els.environmentSetupInput.value || "baseline";
+}
+
+function routeDefaultOverrides(route) {
+  const defaults = {};
+  for (const item of route.default_overrides || []) {
+    const text = String(item);
+    const index = text.indexOf("=");
+    if (index > 0) {
+      defaults[text.slice(0, index)] = text.slice(index + 1);
+    }
+  }
+  return defaults;
 }
 
 function launchPromptText() {
@@ -1063,8 +1127,9 @@ async function launchRun() {
       estop_ready: els.estopGate.checked,
     },
   };
-  if (els.messInput.value) {
-    body.overrides.generated_mess_count = els.messInput.value;
+  body.overrides.environment_setup = selectedEnvironmentSetup();
+  if (body.overrides.environment_setup !== "baseline" && els.relocationCountInput.value) {
+    body.overrides.relocation_count = els.relocationCountInput.value;
   }
   if (els.contextInput.value) {
     body.overrides.context_json = els.contextInput.value;

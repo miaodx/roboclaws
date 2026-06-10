@@ -124,6 +124,13 @@ _FORBIDDEN_AGENT_VIEW_KEYS = frozenset(
     {
         "generated_mess_set",
         "generated_mess_count",
+        "environment_setup",
+        "relocation_policy",
+        "relocation_count",
+        "relocated_object_ids",
+        "relocated_objects",
+        "before_relocation_positions",
+        "after_relocation_positions",
         "target_count",
         "acceptable_destination_sets",
         "valid_receptacle_ids",

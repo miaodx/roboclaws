@@ -240,7 +240,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     case "$profile" in
       smoke)
         backend="api_semantic_synthetic"
-        min_generated_mess_count="5"
+        min_generated_mess_count="$generated_mess_count"
         ;;
       world-oracle-labels)
         backend="molmospaces_subprocess"

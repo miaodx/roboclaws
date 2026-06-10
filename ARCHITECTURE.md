@@ -193,7 +193,7 @@ Going forward:
 - Skills compose profiles by requirement; profiles should not copy other
   profiles' tool lists.
 - Backend variants belong in metadata/config, not in public task names.
-- Private generated mess sets, acceptable destinations, hidden target lists,
+- Private relocation/generated mess sets, acceptable destinations, hidden target lists,
   private manifests, and private scorer truth must not appear in public profile
   metadata or agent-facing inputs.
 

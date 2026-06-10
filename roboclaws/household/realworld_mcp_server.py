@@ -78,6 +78,9 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_client_from_env,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_metric_map_instruction
+from roboclaws.launch.environment_setup_metadata import (
+    environment_setup_run_metadata_from_env,
+)
 from roboclaws.launch.goals import (
     GoalContract,
     completion_claim_from_done_reason,
@@ -595,9 +598,12 @@ class RealWorldMolmoCleanupMCPServer:
             run_result["evidence_lane"] = profile_metadata["evidence_lane"]
             run_result["cleanup_profile"] = profile_metadata["evidence_lane"]
             run_result["cleanup_profile_metadata"] = profile_metadata
+        run_metadata = environment_setup_run_metadata_from_env()
         override_hook = getattr(self.contract, "run_result_overrides", None)
         if callable(override_hook):
-            run_result.update(override_hook())
+            run_metadata = _merge_run_metadata(run_metadata, override_hook())
+        if run_metadata:
+            run_result = _merge_run_metadata(run_result, run_metadata)
         attach_nav2_map_bundle_snapshot(
             run_result=run_result,
             run_dir=self.run_dir,
@@ -1324,6 +1330,19 @@ def _add_backend_runtime_metadata(run_result: dict[str, Any], backend: Any) -> N
     if robot is not None:
         run_result["robot"] = robot
         run_result["robot_name"] = robot.get("robot_name")
+
+
+def _merge_run_metadata(
+    run_result: dict[str, Any],
+    overrides: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(run_result)
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = {**merged[key], **value}
+        else:
+            merged[key] = value
+    return merged
 
 
 def _startup_probe_host(host: str) -> str:

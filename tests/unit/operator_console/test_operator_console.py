@@ -111,7 +111,11 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         root=tmp_path,
         run_id="run-1",
         prompt="pick up the mug; rm -rf /",
-        overrides={"seed": "8", "generated_mess_count": "2"},
+        overrides={
+            "seed": "8",
+            "environment_setup": "relocate-loose-objects",
+            "relocation_count": "2",
+        },
     )
 
     assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=codex"]
@@ -119,6 +123,9 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     assert "evidence_lane=world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
+    assert "environment_setup=relocate-loose-objects" in argv
+    assert "relocation_count=2" in argv
+    assert not any(item.startswith("generated_mess_count=") for item in argv)
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
 
     open_ended = build_launch_argv(
@@ -130,6 +137,9 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     )
     assert "intent=open-ended" in open_ended
     assert "intent=cleanup" not in open_ended
+    assert "environment_setup=baseline" in open_ended
+    assert not any(item.startswith("relocation_count=") for item in open_ended)
+    assert not any(item.startswith("generated_mess_count=") for item in open_ended)
 
     disabled = get_route("agibot-g2-cleanup")
     with pytest.raises(ConsoleLaunchError, match="cannot accept a custom prompt"):
