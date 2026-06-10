@@ -372,7 +372,10 @@ def test_openai_agents_runtime_turn_completion_does_not_infer_cleanup_success(
     assert payload["phase"] == "agent-turn-complete"
     assert payload["trace_id"] == "trace_123"
     trace_payload = json.loads((tmp_path / "run" / "openai-agents-trace.json").read_text())
-    assert trace_payload["final_output"] == "I stopped before calling done."
+    assert "I stopped before calling done." not in json.dumps(trace_payload)
+    assert trace_payload["final_output_present"] is True
+    assert trace_payload["final_output_chars"] == len("I stopped before calling done.")
+    assert trace_payload["message"].startswith("OpenAI Agents SDK result captured")
 
 
 def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(

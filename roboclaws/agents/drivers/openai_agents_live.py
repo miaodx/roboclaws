@@ -334,11 +334,24 @@ def _classify_tool_error(message: str) -> str:
 
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {}
-    for attr in ("final_output", "last_agent", "trace_id"):
-        value = getattr(result, attr, None)
-        if value is None:
-            continue
-        payload[attr] = str(value)
+    final_output = getattr(result, "final_output", None)
+    if final_output is not None:
+        final_output_text = str(final_output)
+        payload["final_output_present"] = True
+        payload["final_output_chars"] = len(final_output_text)
+        payload["message"] = (
+            "OpenAI Agents SDK result captured; assistant output redacted by "
+            "artifact privacy policy."
+        )
+    last_agent = getattr(result, "last_agent", None)
+    if last_agent is not None:
+        name = getattr(last_agent, "name", None)
+        if name:
+            payload["last_agent_name"] = str(name)
+        payload["last_agent_class"] = last_agent.__class__.__name__
+    trace_id = getattr(result, "trace_id", None)
+    if trace_id is not None:
+        payload["trace_id"] = str(trace_id)
     usage = getattr(result, "usage", None)
     if usage is not None:
         payload["usage"] = _to_jsonable(usage)

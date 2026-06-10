@@ -2895,7 +2895,7 @@ Explicit non-goal for this follow-up batch:
 
 ### Execution Preflight: Agent SDK Unified Speedup Foundation
 
-Preflight status: DRAFT
+Preflight status: IMPLEMENTED on 2026-06-10.
 
 Task source: user request plus the Post-Optimization Reduce-Entropy Batch in
 this file.
@@ -2908,6 +2908,31 @@ Goal: implement the Group 0 foundation for the unified Agent SDK speedup
 validation flow, so later speed candidates can be tried in priority order with
 bounded cost, privacy gates, comparable metrics, and clear acceptance
 decisions.
+
+Implementation evidence:
+
+- Added `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py` as a no-provider
+  matrix runner for Group 0 dry-run, offline preflight, artifact privacy scan,
+  behavior-quality comparison, reducible-bucket recommendations, and decision
+  packet generation.
+- Added the deterministic manifest
+  `docs/status/active/agent-sdk-speedup-foundation-matrix.json`. It uses
+  committed fake-provider fixtures under
+  `tests/fixtures/agent_sdk_speedup_foundation/`, plans zero provider calls,
+  and records unsupported Kimi/Claude-compatible rows as `unsupported` rather
+  than blocking the no-provider gate.
+- Hardened future OpenAI Agents SDK result artifacts by redacting raw
+  `final_output` text and SDK `last_agent` reprs from
+  `openai-agents-events*.jsonl` / `openai-agents-trace*.json`; summaries keep
+  only presence/length, usage, trace/session metadata, and public agent
+  identifiers.
+- Dry-run proof:
+  `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
+  listed 7 rows, 5 supported rows, 2 unsupported rows, serial concurrency,
+  `max_live_runs=0`, `max_wall_clock_s=0`, and no planned provider calls.
+- Offline preflight proof:
+  `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+  passed with 5 accepted fixture-backed rows and 2 unsupported rows.
 
 Scope:
 

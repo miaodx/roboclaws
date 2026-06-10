@@ -40,6 +40,18 @@ Result:
   for the first raw-FPV performance pass.
 - The comparison workflow now accepts an explicit manifest and rejects smoke
   references as full-lane baselines.
+- Group 0 unified speedup foundation tooling now exists as a no-provider
+  preflight:
+  `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py` plus
+  `docs/status/active/agent-sdk-speedup-foundation-matrix.json`.
+- The Group 0 manifest uses committed fake-provider fixtures under
+  `tests/fixtures/agent_sdk_speedup_foundation/`, plans zero provider calls,
+  records 5 supported rows and 2 unsupported Kimi/Claude-compatible rows, and
+  produces a decision packet with privacy, quality, budget, and reducible-bucket
+  gates.
+- Future OpenAI Agents SDK result summaries redact raw assistant output and SDK
+  `last_agent` reprs from event/trace artifacts while keeping trace/session,
+  usage, output length, and public agent-name metadata.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -82,6 +94,10 @@ Raw-FPV failure classification:
   transport retryability, auth/config/context/tool non-retryability, successful
   one-retry recovery, retry-budget exhaustion, and timing/timeline artifact
   summaries.
+- Group 0 matrix preflight has regression coverage for dry-run budgets,
+  unsupported rows, forbidden artifact keys/secret markers, faster-but-worse
+  quality rejection, accepted same-or-better rows, and reducible-bucket
+  recommendations.
 
 Verification:
 
@@ -91,6 +107,10 @@ Verification:
 - `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 - `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/reports/test_molmo_cleanup_report.py tests/unit/molmo_cleanup/test_summarize_live_run.py -q`
 - `.venv/bin/ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py roboclaws/agents/prompts/household_cleanup.py scripts/molmo_cleanup/summarize_live_run.py tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/molmo_cleanup/test_summarize_live_run.py`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py`
 
 No-touch scope preserved:
 
@@ -121,12 +141,10 @@ Parked work:
     repeated `metric_map` delta contract, camera-grounded observe/label
     two-step collapse, raw-FPV visual-candidate failure rails, and a
     trace-derived irreducible-floor/waste classifier.
-  - Big-flow infrastructure candidates: unified experiment matrix runner,
-    feature-flag attribution, offline replay/fake-provider preflight,
-    artifact privacy/schema gate, live cost/time/concurrency budget gate,
-    variance/repeatability gate, cross-client regression guard, decision
-    dashboard, behavior-quality regression comparator, and raw-FPV image-memory
-    policy.
+  - Big-flow infrastructure follow-ups after the Group 0 foundation: live
+    matrix execution approval, richer feature-flag attribution in live timing,
+    variance/repeatability policy for publishable claims, cross-client
+    regression guard, and raw-FPV image-memory policy.
   - Default MCP composite/merge tools remain out of scope.
 - Anthropic Claude Agent SDK spike.
 - Pi SDK MCP adapter prototype.
