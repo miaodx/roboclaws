@@ -20,6 +20,7 @@ def test_route_registry_exposes_supported_agent_targets() -> None:
         "codex-agibot-g2-map-build",
         "codex-mujoco-map-build",
         "codex-isaac-map-build",
+        "codex-b1-map12-open-ended",
     }
     assert {route.driver for route in enabled} == {"codex", "claude"}
     assert {
@@ -82,6 +83,14 @@ def test_route_registry_exposes_supported_agent_targets() -> None:
             "isaaclab_subprocess",
             "isaac_gpu",
         ),
+        (
+            "household-world",
+            "open-ended",
+            "codex",
+            "world-oracle-labels",
+            "isaaclab_subprocess",
+            "isaac_gpu",
+        ),
     }
     validate_supported_routes_against_catalog()
 
@@ -102,6 +111,7 @@ def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:
     mujoco = get_route("codex-mujoco-cleanup").to_payload()
     isaac = get_route("codex-isaac-cleanup").to_payload()
     agibot = get_route("codex-agibot-g2-map-build").to_payload()
+    b1 = get_route("codex-b1-map12-open-ended").to_payload()
 
     assert mujoco["supports_operator_steer"] is True
     assert isaac["supports_operator_steer"] is True
@@ -127,6 +137,17 @@ def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:
     assert agibot["field_groups"] == ["common", "agibot", "agibot_gates"]
     assert "grounding" in agibot["view_modes"]
     assert "chase" not in agibot["view_modes"]
+
+    assert b1["field_groups"] == ["common", "isaac"]
+    assert b1["default_intent"] == "open-ended"
+    assert b1["supported_intents"] == ["open-ended"]
+    assert b1["checker_id"] == "open_ended_report"
+    assert "map_bundle=agibot-robot-map-12" in b1["default_overrides"]
+    assert "robot_views=on" in b1["default_overrides"]
+    assert any(
+        item.startswith("isaac_scene_usd_path=data/robot-data-lab/")
+        for item in b1["default_overrides"]
+    )
 
 
 def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
@@ -170,6 +191,32 @@ def test_map_build_launch_defaults_to_baseline_environment_setup(tmp_path) -> No
     assert "environment_setup=baseline" in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
     assert not any(item.startswith("generated_mess_count=") for item in argv)
+
+
+def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
+    route = get_route("codex-b1-map12-open-ended")
+    argv = build_launch_argv(route, root=tmp_path, run_id="run-1")
+
+    assert "intent=open-ended" in argv
+    assert "backend=isaaclab_subprocess" in argv
+    assert "environment_setup=baseline" in argv
+    assert "map_bundle=agibot-robot-map-12" in argv
+    assert "robot_views=on" in argv
+    assert any(item.startswith("isaac_scene_usd_path=data/robot-data-lab/") for item in argv)
+    assert not any(item.startswith("relocation_count=") for item in argv)
+
+
+def test_b1_map12_open_ended_allows_operator_map_bundle_override(tmp_path) -> None:
+    route = get_route("codex-b1-map12-open-ended")
+    argv = build_launch_argv(
+        route,
+        root=tmp_path,
+        run_id="run-1",
+        overrides={"map_bundle": "custom-bundle"},
+    )
+
+    assert "map_bundle=agibot-robot-map-12" not in argv
+    assert "map_bundle=custom-bundle" in argv
 
 
 def test_launch_rejects_route_unsupported_intent(tmp_path) -> None:

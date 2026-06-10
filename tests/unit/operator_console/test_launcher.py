@@ -58,6 +58,17 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
     assert isaac_map_gate["severity"] == "advisory"
     assert isaac_map_gate["blocks_start"] is False
 
+    b1_map12 = route_readiness(
+        tmp_path,
+        get_route("codex-b1-map12-open-ended"),
+        overrides={"port": _free_port()},
+        env=CODEX_ENV,
+    )
+    assert b1_map12["can_start"] is True
+    b1_gate = next(gate for gate in b1_map12["gates"] if gate["id"] == "isaac_preflight")
+    assert b1_gate["severity"] == "advisory"
+    assert b1_gate["blocks_start"] is False
+
     agibot = route_readiness(
         tmp_path,
         get_route("codex-agibot-g2-map-build"),

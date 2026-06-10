@@ -935,6 +935,11 @@ b1-map12-navigation-smoke *overrides:
       final_args+=(--require-navigation-success)
     fi
     "$runtime_python" scripts/isaac_lab_cleanup/check_b1_map12_readiness.py "${final_args[@]}"
+    .venv/bin/python scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py \
+      --run-dir "$run_dir" \
+      --navigation-artifact "${run_dir}/navigation_smoke.json" \
+      --readiness-artifact "${run_dir}/readiness_with_navigation.json"
+    echo "==> report: ${run_dir}/report.html"
 
 # Strict local Isaac Lab cleanup report smoke. This uses the existing
 # household-cleanup backend selector, then applies report-level Isaac gates so a

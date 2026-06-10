@@ -413,6 +413,7 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
         "scene_source",
         "scene_index",
         "isaac_scene_usd_path",
+        "map_bundle",
         "robot_views",
         "record_robot_views",
         "real_movement_enabled",

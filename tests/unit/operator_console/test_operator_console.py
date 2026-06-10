@@ -68,6 +68,7 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
         "codex-agibot-g2-map-build",
         "codex-mujoco-map-build",
         "codex-isaac-map-build",
+        "codex-b1-map12-open-ended",
     }
     assert {route.driver for route in supported} == {"codex", "claude"}
     assert {route.lock_name for route in supported} == {

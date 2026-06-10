@@ -13,6 +13,12 @@ from roboclaws.launch.environment_setup import (
 )
 from roboclaws.launch.intents import TASK_INTENT_SPECS
 
+B1_MAP12_BUNDLE = "agibot-robot-map-12"
+B1_MAP12_LIVINGROOM_USD = (
+    "data/robot-data-lab/scene-engine/data/B1_floor2_slow/"
+    "usda/livingroom/livingroom_usdz_unpacked/livingroom.usda"
+)
+
 
 @dataclass(frozen=True)
 class RouteGate:
@@ -329,6 +335,33 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         default_overrides=("seed=7", f"environment_setup={ENVIRONMENT_SETUP_BASELINE}"),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, ISAAC_PREFLIGHT_GATE),
         resource_kind="gpu",
+        driver_label="Codex",
+    ),
+    ConsoleRoute(
+        id="codex-b1-map12-open-ended",
+        label="B1 Map 12 Open-Ended",
+        task="household-open-ended",
+        surface="household-world",
+        intent="open-ended",
+        driver="codex",
+        profile="world-oracle-labels",
+        backend="isaaclab_subprocess",
+        lock_name="isaac_gpu",
+        supports_prompt=True,
+        enabled=True,
+        checker_id="open_ended_report",
+        task_prompt_default="在 B1 / Map 12 场景中完成开放性导航任务，并报告你看到的证据。",
+        supported_intents=("open-ended",),
+        default_overrides=(
+            "seed=7",
+            f"environment_setup={ENVIRONMENT_SETUP_BASELINE}",
+            f"map_bundle={B1_MAP12_BUNDLE}",
+            f"isaac_scene_usd_path={B1_MAP12_LIVINGROOM_USD}",
+            "robot_views=on",
+        ),
+        gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, ISAAC_PREFLIGHT_GATE),
+        resource_kind="gpu",
+        supports_operator_steer=True,
         driver_label="Codex",
     ),
 )
