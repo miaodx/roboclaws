@@ -1,0 +1,49 @@
+{
+  "schema": "roboclaws_skill_manifest_v1",
+  "name": "scene-gaussian-map-alignment",
+  "summary": "Guide scene-specific alignment of Gaussian/splat, USD/mesh, and robot semantic-map assets while keeping evidence labels honest.",
+  "abstraction_level": "agent_skill",
+  "role": "scene_map_alignment",
+  "status": "active",
+  "mcp": {
+    "profiles": ["household_world_v1"],
+    "required_tools": [],
+    "optional_tools": [],
+    "privileged_tools": [],
+    "boundary_notes": "This skill operates at the offline scene/map artifact boundary. It may prepare evidence for household-world runs, but alignment judgment and report labeling stay outside public robot capabilities until a stable MCP contract exists."
+  },
+  "capability_requirements": {
+    "profiles": ["household_world_v1"],
+    "backend_variants": ["isaaclab_subprocess", "agibot_gdk", "artifact_only"],
+    "notes": "The workflow can consume B1/Map12-style assets, future Gaussian scene drops, Isaac render smoke artifacts, and exported robot map bundles."
+  },
+  "scripts": [
+    {
+      "path": "scripts/summarize_alignment_evidence.py",
+      "kind": "summarizer",
+      "summary": "Reads readiness and navigation-smoke artifacts and emits a compact evidence-tier summary without making new alignment claims."
+    }
+  ],
+  "evidence_outputs": [
+    "readiness.json",
+    "navigation_smoke.json",
+    "readiness_with_navigation.json",
+    "alignment_evidence_summary.json",
+    "report.html",
+    "assets/maps/<map-bundle>/"
+  ],
+  "lifecycle": {
+    "refactor_signals": [
+      "multiple scene drops need the same deterministic transform or anchor matching code",
+      "manual evidence-tier decisions become repeatable enough to validate in tests",
+      "Gaussian rendering moves from inventory evidence into a stable renderer path",
+      "semantic anchor to USD object binding has a durable manifest format"
+    ],
+    "promote_to_mcp_when": [
+      "alignment inputs and outputs stabilize across scene providers",
+      "public/private artifact boundaries can be enforced in traces",
+      "multiple skills need the same online map-to-scene alignment capability",
+      "planner-backed evidence can be reported through one contract profile"
+    ]
+  }
+}
