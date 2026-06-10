@@ -23,11 +23,43 @@ saturation audit after glossary updates.
 A user instruction describing desired robot work in open-ended language.
 _Avoid_: task API, recipe, benchmark name
 
-**Runnable Task**:
-A public run-catalog entry such as `semantic-map-build`, `household-cleanup`,
-`ai2thor-nav`, or `photo-chairs`, usually invoked through `just task::run`.
-It owns command name, parameters, report shape, and acceptance gates.
+**Runnable Surface And Intent**:
+A public run-catalog selection such as `surface=household-world
+intent=map-build`, `surface=household-world intent=cleanup`, or
+`surface=ai2thor-world intent=navigate`. It owns command parameters, report
+shape, and acceptance gates.
 _Avoid_: Agent Skill, Capability Profile, backend script, hidden evaluator
+
+**Launch World / Scene**:
+The operator-facing room, map, site, or digital-twin scene where a runnable
+surface and intent execute, such as a MolmoSpaces room, B1 Map 12, an Agibot
+map, or a Gaussian scene.
+_Avoid_: backend runtime, task intent, agent engine, provider profile
+
+**Launch Backend**:
+The runtime used to execute or render a Launch World / Scene, such as MuJoCo,
+Isaac Lab, Agibot GDK, or a future independent Gaussian runtime. Gaussian
+content that currently runs through Isaac should be modeled as a world/scene
+source with `backend=isaaclab`, not as a separate Gaussian backend.
+_Avoid_: task intent, world id, provider profile
+
+**Agent Engine**:
+The operator-facing control engine that drives the run, such as Codex CLI,
+Claude Code, OpenAI Agents SDK, or a direct deterministic runner.
+_Avoid_: model provider, evidence lane, backend variant
+
+**Provider Profile**:
+The model/provider route used by an Agent Engine, such as `codex-env`, `mify`,
+`kimi-anthropic`, or `mimo-anthropic`. It applies to live model-backed engines;
+deterministic direct runners do not require one.
+_Avoid_: agent engine, task intent, evidence lane
+
+**Internal Runner Class**:
+The derived execution category behind a launch, such as `live-agent`,
+`deterministic`, `smoke`, `gateway`, or `script`. It is catalog/runtime
+metadata, not an operator-facing public choice. Smoke is an evidence or runner
+mode, not an Agent Engine.
+_Avoid_: public task name, provider profile, capability profile, UI selector
 
 **Agent Skill**:
 A reusable package of model operating knowledge, scripts, heuristics, examples,
@@ -59,16 +91,16 @@ _Avoid_: new public task, new profile name, agent-facing tool namespace
 
 ## Household World And Cleanup Vocabulary
 
-**Environment Setup**:
-A private pre-run world initialization choice that prepares the room before a
-task starts. Public launch routes expose `environment_setup=baseline` or a
+**Scenario Setup**:
+A private pre-run world initialization choice that prepares the selected world
+before a task starts. Public launch routes expose `scenario_setup=baseline` or a
 relocation setup; reports may record setup provenance, but Agent View must not.
 _Avoid_: task intent, cleanup scenario, agent-facing context
 
 **Relocation Policy**:
-An Environment Setup mode that moves eligible loose or cleanup-related objects
-before the run starts. The policy, object IDs, before/after locations, and
-relocation count stay private/report-side.
+A Scenario Setup mode that moves eligible loose or cleanup-related objects before
+the run starts. The policy, object IDs, before/after locations, and relocation
+count stay private/report-side.
 _Avoid_: public mess generator, cleanup worklist, private scoring truth
 
 **Navigation Map Artifact**:
@@ -105,18 +137,18 @@ Semantic-map-build may create these anchors from observations over a minimal
 source map; cleanup may use fixture/receptacle anchors as destination hints.
 _Avoid_: small movable object, private acceptable destination, unreviewed source-map mutation
 
-**Semantic Map Build Task**:
-A first-class Runnable Task that navigates and observes to produce a Runtime
-Metric Map snapshot for later robot tasks. It selects a map-building skill,
-requires household world capabilities, and disables manipulation. In the
+**Map-Build Intent**:
+A first-class household-world intent that navigates and observes to produce a
+Runtime Metric Map snapshot for later robot tasks. It selects a map-building
+skill, requires household world capabilities, and disables manipulation. In the
 minimal-map mainline, it turns sparse maps into cleanup-usable public evidence.
 _Avoid_: cleanup profile, private target discovery, source-map mutation, MCP tool
 
-**Household Cleanup Task**:
-A first-class Runnable Task that consumes household world evidence and combines
-it with manipulation capability requirements to tidy movable objects. It may use
-current fixture/receptacle anchors as destination hints; older movable-object
-priors need current-run confirmation before pick/place.
+**Cleanup Intent**:
+A first-class household-world intent that consumes household world evidence and
+combines it with manipulation capability requirements to tidy movable objects.
+It may use current fixture/receptacle anchors as destination hints; older
+movable-object priors need current-run confirmation before pick/place.
 _Avoid_: source-map builder, semantic-map owner, capability profile
 
 **Household World Capability Profile**:
@@ -157,9 +189,8 @@ waypoint projection is unclear. Physical execution still needs robot gates.
 _Avoid_: agent-created arbitrary coordinate goal, hidden route plan
 
 **Semantic Sweep Mode**:
-An internal no-cleanup-action execution mode behind `semantic-map-build`. It
-uses the same online Runtime Metric Map update path while disabling
-manipulation.
+An internal no-cleanup-action execution mode behind `intent=map-build`. It uses
+the same online Runtime Metric Map update path while disabling manipulation.
 _Avoid_: separate map architecture, private target discovery, cleanup execution
 
 **Cleanup Worklist**:
@@ -214,9 +245,9 @@ _Avoid_: private evaluator answer, final scoring target
 ## Real Robot Vocabulary
 
 **Real-Robot Deployment Target**:
-A physical-robot acceptance target for a Runnable Task. It reuses the same
-public task/profile/tool layers as simulation while backend variants report
-physical provenance, safety gates, operator map context, and blocked
+A physical-robot acceptance target for a Runnable Surface And Intent. It reuses
+the same public intent/profile/tool layers as simulation while backend variants
+report physical provenance, safety gates, operator map context, and blocked
 capabilities.
 _Avoid_: simulator-only proof, robot-only task fork, hidden manual intervention
 
@@ -233,9 +264,9 @@ manipulation remain disabled or blocked.
 _Avoid_: cleanup execution, object navigation, physical pick/place proof
 
 **Simulator/Hardware Contract Parity**:
-The expectation that simulator and physical runs share public task/profile/tool
-shape while reports distinguish backend variant, provenance, and blocked
-capabilities.
+The expectation that simulator and physical runs share public
+surface/intent/profile/tool shape while reports distinguish backend variant,
+provenance, and blocked capabilities.
 _Avoid_: simulator proof as hardware proof, robot-specific tool namespace
 
 **Operator-Recorded Waypoint**:
@@ -292,26 +323,28 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 
   ```text
   Open-ended goal
-    -> Runnable Task
+    -> Runnable Surface And Intent
     -> Agent Skill
     -> Capability Profile requirements
     -> MCP Capability Tools
     -> Backend Variant
   ```
 
-- Runnable Tasks own command names, parameters, reports, and acceptance gates;
-  Agent Skills own strategy, recovery, scripts, examples, and trace-preserving
-  composition; Capability Profiles are reusable environments required by skills.
+- Runnable Surfaces And Intents own command parameters, reports, and acceptance
+  gates; Agent Skills own strategy, recovery, scripts, examples, and
+  trace-preserving composition; Capability Profiles are reusable environments
+  required by skills.
 - MCP tools expose bounded robot capabilities, not whole user tasks such as
-  `cleanup_room()`. `semantic-map-build` and `household-cleanup` are Runnable
-  Tasks; cleanup consumes household world evidence and does not own mapping.
+  `cleanup_room()`. `surface=household-world intent=map-build` creates world
+  evidence; `surface=household-world intent=cleanup` consumes household world
+  evidence and does not own mapping.
 - `household_world_v1` should exclude manipulation tools such as `pick`,
   `place`, `open_receptacle`, and `close_receptacle`.
 - Small movable cleanup objects belong in runtime observations/worklists, not
   static map semantics.
 - Minimal-map simulator runs should not receive richer public semantics than
   the equivalent physical robot map path would provide.
-- Generated exploration candidates may seed semantic-map-build sweeps, but they
+- Generated exploration candidates may seed map-build sweeps, but they
   are not source-map semantics and are not direct permission for arbitrary robot
   motion.
 - Runtime observations and map update candidates must not silently mutate the
@@ -324,9 +357,9 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
   blockers must be derived from public traces/worklists and must not disclose
   private target membership, hidden acceptable destinations, or private scorer
   truth.
-- Physical robot runs should reuse the same public task/profile/tool shape as
-  simulation and differ by backend variant, provenance, safety gates, and
-  blocked-capability status.
+- Physical robot runs should reuse the same public surface/intent/profile/tool
+  shape as simulation and differ by backend variant, provenance, safety gates,
+  and blocked-capability status.
 - First physical pilots should prove navigation and observation before claiming
   manipulation readiness.
 - The first Agibot G2 map-build pilot should accept only waypoint-level
@@ -343,19 +376,20 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 
 ## Resolved Ambiguities
 
-- **Task/skill/profile**: use Runnable Task for public run surfaces, Agent Skill
-  for reusable strategy, and Capability Profile for reusable environments.
+- **Surface/intent/skill/profile**: use Runnable Surface And Intent for public
+  run contracts, Agent Skill for reusable strategy, and Capability Profile for
+  reusable environments.
   Compose profiles by requirement; do not copy one into a task-specific bundle.
 - **Metric map source vs runtime map**: Navigation Map Artifact is the source;
   Metric Map Projection is the public static view; Runtime Metric Map is the
   current-run enriched view.
 - **Rich vs minimal maps**: rich map bundles may contain authored public
   semantics; minimal map artifacts intentionally start near raw occupancy maps
-  so online/offline semantic-map-build can enrich them through public evidence.
+  so online/offline map-build can enrich them through public evidence.
   The real-robot mainline starts from minimal maps, not rich authored semantics.
-- **Semantic map build vs cleanup**: semantic-map-build creates world evidence;
-  cleanup consumes it. Simulator or dry-run evidence is useful, but it is not
-  physical execution proof.
+- **Map build vs cleanup**: `intent=map-build` creates world evidence;
+  `intent=cleanup` consumes it. Simulator or dry-run evidence is useful, but it
+  is not physical execution proof.
 - **Anchors vs priors**: fixture/receptacle Public Semantic Anchors in a
   current Runtime Metric Map can guide cleanup destinations; older movable
   priors must be confirmed by current camera evidence before manipulation.
