@@ -102,9 +102,7 @@ def test_disabled_routes_have_concrete_blockers() -> None:
     assert get_route("agibot-g2-cleanup").disabled_reason == (
         "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
     )
-    assert get_route("claude-map-build").disabled_reason == (
-        "semantic-map-build does not support the Claude driver yet."
-    )
+    assert {route.id for route in disabled} == {"agibot-g2-cleanup"}
 
 
 def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:

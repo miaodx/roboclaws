@@ -79,12 +79,7 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
     assert disabled["agibot-g2-cleanup"] == (
         "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
     )
-    assert disabled["unsupported-drivers"] == (
-        "This console supports local coding-agent drivers only."
-    )
-    assert disabled["claude-map-build"] == (
-        "semantic-map-build does not support the Claude driver yet."
-    )
+    assert set(disabled) == {"agibot-g2-cleanup"}
     validate_supported_routes_against_catalog()
 
 

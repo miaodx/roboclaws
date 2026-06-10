@@ -66,6 +66,8 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Operator Input" in setup_html
     assert "Operator Input" not in state_rail_html
     assert 'id="prompt-label"' in html
+    assert "Scenario seed for reproducible runs" in html
+    assert "Baseline does not relocate objects" in html
     assert "Generated mess count" not in html
     assert 'id="mess-count-input"' not in html
     assert 'id="environment-setup-input"' in html
