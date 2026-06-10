@@ -1444,7 +1444,7 @@ Accepted on 2026-06-10:
 
 #### Execution Preflight: Agent SDK Performance Optimization
 
-Preflight status: DRAFT
+Preflight status: DONE on 2026-06-10.
 
 Task source: user request plus the Agent SDK Performance Plan in this file.
 
