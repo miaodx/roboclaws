@@ -238,7 +238,7 @@ def test_realworld_mcp_done_persists_facade_rerun_command(
         "backend=mujoco intent=cleanup agent_engine=codex-cli "
         "provider_profile=codex-env evidence_lane=world-oracle-labels seed=7 "
         "scenario_setup=relocate-cleanup-related-objects relocation_count=5 "
-        "map_mode=minimal robot_views=on "
+        "robot_views=on "
         f"runtime_map_prior={prior} "
         f"output_dir={tmp_path}"
     )

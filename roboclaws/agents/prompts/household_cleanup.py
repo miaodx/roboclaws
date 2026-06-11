@@ -455,7 +455,7 @@ def render_kickoff_prompt(
 
 
 def render_semantic_map_build_prompt(profile: str, task: str) -> str:
-    """Render the live-agent kickoff prompt for a semantic-map-build lane."""
+    """Render the live-agent kickoff prompt for intent=map-build."""
 
     prompt = COMMON_PREFIX + SEMANTIC_MAP_BUILD_RULES.format(task=task)
     if profile == "camera-raw-fpv":

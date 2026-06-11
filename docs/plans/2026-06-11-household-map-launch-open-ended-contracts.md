@@ -979,6 +979,62 @@ Remaining before this plan can be marked done:
 - finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
   already collapsed to read-only history only.
 
+### 2026-06-11 Rerun Command Surface Cleanup
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 / Candidate 1 saturation slice:
+
+- removed `map_mode=minimal` from current copyable `run::surface` rerun-command
+  fixtures in MCP and report tests;
+- updated the semantic map-build prompt helper docstring from
+  `semantic-map-build lane` to `intent=map-build`;
+- kept historical artifact paths, private server ids, and negative route tests
+  unchanged.
+
+Verified this slice:
+
+```bash
+rg -n -F -e 'map_mode=minimal' -e 'map_mode=rich' -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md just/README.md \
+  docs/human docs/plans skills just roboclaws tests scripts .github
+rg -n -F -e 'semantic-map-build lane' -e 'household-cleanup lane' \
+  -e 'This run is semantic-map-build' -e 'This run is household-cleanup' -- \
+  README.md ARCHITECTURE.md STATUS.md docs/human skills roboclaws tests scripts just
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_done_persists_facade_rerun_command \
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_persists_facade_rerun_command \
+  tests/contract/reports/test_molmo_cleanup_report.py::test_cleanup_report_prefers_recorded_rerun_command
+uv run ruff check roboclaws/agents/prompts/household_cleanup.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py \
+  tests/contract/reports/test_molmo_cleanup_report.py
+git diff --check -- \
+  roboclaws/agents/prompts/household_cleanup.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py \
+  tests/contract/reports/test_molmo_cleanup_report.py \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
+```
+
+Observed proof:
+
+- active generated rerun-command fixtures no longer include public
+  `map_mode=minimal`;
+- active prompt helper wording no longer describes map-build as a
+  `semantic-map-build lane`;
+- remaining `map_mode=minimal`, `household-cleanup`, and `semantic-map-build`
+  hits are historical plans, private lowerer/server ids, artifact paths,
+  compatibility tests, or negative public-route assertions.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch terminology audit where it still points
+  future agents at legacy task names;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
 ### 2026-06-11 Candidate 1 Minimal-Only Contract Saturation
 
 Status remains `CONTINUE`.
