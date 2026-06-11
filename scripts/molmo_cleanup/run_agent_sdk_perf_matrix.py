@@ -9,40 +9,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-FORBIDDEN_PRIVACY_KEYS = {
-    "api_key",
-    "compact_continuation_state",
-    "credentials",
-    "final_output",
-    "function_input",
-    "function_output",
-    "full_tool_payload",
-    "instructions",
-    "last_agent",
-    "model_output",
-    "model_text",
-    "output_text",
-    "private_evaluator_truth",
-    "private_manifest",
-    "private_target_truth",
-    "raw_prompt",
-    "tool_payload_body",
-}
-FORBIDDEN_PRIVACY_MARKERS = {
-    "bearer ",
-    "compact_continuation_state:",
-    "private_evaluator_truth",
-    "private_manifest",
-    "private_target_truth",
-    "raw_prompt",
-    "sk-",
-    "tool_payload_body",
-}
-SAFE_SCAN_GLOBS = (
-    "live_status.json",
-    "live_timing.json",
-    "openai-agents-events*.jsonl",
-    "openai-agents-spans*.jsonl",
+from roboclaws.reports.live_performance import (
+    compare_report_performance_metrics,
+    extract_report_performance_metrics,
+    privacy_findings_for_packet,
+    privacy_findings_for_run_dir,
 )
 
 
@@ -312,49 +283,39 @@ def _load_row_runs(row: dict[str, Any]) -> None:
 
 
 def _run_summary(run_dir: Path) -> dict[str, Any]:
-    live_timing = _read_json(run_dir / "live_timing.json")
-    live_status = _read_json(run_dir / "live_status.json")
-    run_result = _read_json(run_dir / "run_result.json")
-    trace_events = _read_jsonl(run_dir / "trace.jsonl")
-    runner_timing = _dict(live_timing.get("runner_timing"))
-    mcp_timing = _dict(live_timing.get("mcp_trace_timing"))
-    score = _dict(run_result.get("score"))
+    metrics = extract_report_performance_metrics(run_dir)
+    quality = _dict(metrics.get("quality"))
+    timing = _dict(metrics.get("timing"))
+    call_counts = _dict(metrics.get("call_counts"))
     return {
         "run_dir": str(run_dir),
-        "elapsed_s": _float_or_none(runner_timing.get("total_elapsed_s")),
-        "between_tool_gap_s": _float_or_none(mcp_timing.get("between_tool_gap_s")),
-        "robot_view_capture_s": _float_or_none(mcp_timing.get("robot_view_capture_s")),
-        "tool_handler_s": _float_or_none(mcp_timing.get("tool_handler_s")),
-        "terminal": _terminal_state(live_timing, live_status),
-        "checker": "result-present" if run_result else str(live_status.get("reason") or "missing"),
-        "run_result_present": bool(run_result),
-        "cleanup_status": run_result.get("cleanup_status"),
-        "completion_status": run_result.get("completion_status"),
-        "restored_count": _int_or_none(score.get("restored_count")),
-        "total_targets": _int_or_none(score.get("total_targets")),
-        "mess_restoration_rate": _float_or_none(
-            run_result.get("mess_restoration_rate") or score.get("mess_restoration_rate")
-        ),
-        "sweep_coverage_rate": _float_or_none(run_result.get("sweep_coverage_rate")),
-        "disturbance_count": _int_or_none(
-            run_result.get("disturbance_count") or score.get("disturbance_count")
-        )
-        or 0,
-        "semantic_accepted_count": _semantic_accepted_count(score),
-        "failed_or_noop_tool_count": _failed_or_noop_tool_count(trace_events),
-        "tool_counts": _tool_counts(trace_events),
-        "trace_events": trace_events,
-        "live_timing": live_timing,
+        "elapsed_s": _float_or_none(timing.get("observed_wall_s")),
+        "between_tool_gap_s": _float_or_none(timing.get("mcp_between_tool_gap_s")),
+        "robot_view_capture_s": _float_or_none(timing.get("robot_view_capture_s")),
+        "tool_handler_s": _float_or_none(timing.get("mcp_tool_handler_s")),
+        "terminal": quality.get("terminal"),
+        "checker": quality.get("checker_state"),
+        "run_result_present": quality.get("checker_state") == "result-present",
+        "cleanup_status": quality.get("cleanup_status"),
+        "completion_status": quality.get("completion_status"),
+        "restored_count": quality.get("restored_count"),
+        "total_targets": quality.get("total_targets"),
+        "mess_restoration_rate": quality.get("mess_restoration_rate"),
+        "sweep_coverage_rate": quality.get("sweep_coverage_rate"),
+        "disturbance_count": quality.get("disturbance_count"),
+        "semantic_accepted_count": quality.get("semantic_accepted_count"),
+        "failed_or_noop_tool_count": quality.get("failed_or_noop_tool_count"),
+        "tool_counts": _dict(call_counts.get("mcp_tool_counts")),
+        "metrics": metrics,
     }
 
 
 def _speed_comparison(baseline: dict[str, Any], candidate: dict[str, Any]) -> dict[str, Any]:
+    comparison = compare_report_performance_metrics(baseline["metrics"], candidate["metrics"])
+    timing = _dict(comparison.get("timing_comparison"))
     return {
-        "elapsed_delta_s": _delta(candidate.get("elapsed_s"), baseline.get("elapsed_s")),
-        "between_tool_gap_delta_s": _delta(
-            candidate.get("between_tool_gap_s"),
-            baseline.get("between_tool_gap_s"),
-        ),
+        "elapsed_delta_s": timing.get("observed_wall_delta_s"),
+        "between_tool_gap_delta_s": timing.get("mcp_between_tool_gap_delta_s"),
     }
 
 
@@ -364,33 +325,9 @@ def _quality_comparison(
     *,
     lane: str,
 ) -> dict[str, Any]:
-    checks = {
-        "run_result_present": not baseline["run_result_present"] or candidate["run_result_present"],
-        "restored_count": _not_lower(
-            candidate.get("restored_count"),
-            baseline.get("restored_count"),
-        ),
-        "mess_restoration_rate": _not_lower(
-            candidate.get("mess_restoration_rate"),
-            baseline.get("mess_restoration_rate"),
-        ),
-        "sweep_coverage_rate": _not_lower(
-            candidate.get("sweep_coverage_rate"),
-            baseline.get("sweep_coverage_rate"),
-        ),
-        "disturbance_count": _not_higher(
-            candidate.get("disturbance_count"),
-            baseline.get("disturbance_count"),
-        ),
-        "semantic_accepted_count": _not_lower(
-            candidate.get("semantic_accepted_count"),
-            baseline.get("semantic_accepted_count"),
-        ),
-        "failed_or_noop_tool_count": _not_higher(
-            candidate.get("failed_or_noop_tool_count"),
-            baseline.get("failed_or_noop_tool_count"),
-        ),
-    }
+    comparison = compare_report_performance_metrics(baseline["metrics"], candidate["metrics"])
+    quality = _dict(comparison.get("quality_comparison"))
+    checks = _dict(quality.get("checks"))
     if lane == "camera-raw-fpv" and not candidate["run_result_present"]:
         checks["run_result_present"] = candidate["terminal"] not in {"unknown", "missing", ""}
     regressed = not all(checks.values())
@@ -474,75 +411,13 @@ def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str,
 
 
 def _privacy_findings(packet: dict[str, Any]) -> list[dict[str, Any]]:
-    findings = _privacy_scan_payload(packet, source="decision_packet", row_id="")
+    findings = privacy_findings_for_packet(packet)
     for row in packet["rows"]:
         for key in ("baseline_run_dir", "candidate_run_dir"):
             run_dir = row.get(key)
             if not run_dir:
                 continue
-            findings.extend(_privacy_scan_run_dir(Path(str(run_dir)), row_id=row["row_id"]))
-    return findings
-
-
-def _privacy_scan_run_dir(run_dir: Path, *, row_id: str) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    for pattern in SAFE_SCAN_GLOBS:
-        for path in sorted(run_dir.glob(pattern)):
-            findings.extend(_privacy_scan_text(path.read_text(encoding="utf-8"), path, row_id))
-    return findings
-
-
-def _privacy_scan_text(text: str, path: Path, row_id: str) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-    for line_number, line in enumerate(text.splitlines(), start=1):
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            payload = {"text": line}
-        findings.extend(
-            _privacy_scan_payload(payload, source=f"{path}:{line_number}", row_id=row_id)
-        )
-    return findings
-
-
-def _privacy_scan_payload(payload: Any, *, source: str, row_id: str) -> list[dict[str, Any]]:
-    findings: list[dict[str, Any]] = []
-
-    def visit(value: Any, path: str) -> None:
-        if isinstance(value, dict):
-            for key, item in value.items():
-                key_text = str(key)
-                normalized_key = key_text.lower()
-                if normalized_key in FORBIDDEN_PRIVACY_KEYS:
-                    findings.append(
-                        {
-                            "row_id": row_id,
-                            "source": source,
-                            "path": f"{path}.{key_text}" if path else key_text,
-                            "reason": f"forbidden key {key_text}",
-                        }
-                    )
-                visit(item, f"{path}.{key_text}" if path else key_text)
-            return
-        if isinstance(value, list):
-            for index, item in enumerate(value):
-                visit(item, f"{path}[{index}]")
-            return
-        if isinstance(value, str):
-            lowered = value.lower()
-            for marker in FORBIDDEN_PRIVACY_MARKERS:
-                if marker in lowered:
-                    findings.append(
-                        {
-                            "row_id": row_id,
-                            "source": source,
-                            "path": path,
-                            "reason": f"forbidden marker {marker}",
-                        }
-                    )
-                    break
-
-    visit(payload, "")
+            findings.extend(privacy_findings_for_run_dir(Path(str(run_dir)), row_id=row["row_id"]))
     return findings
 
 

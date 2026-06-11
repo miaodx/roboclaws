@@ -37,6 +37,10 @@ from roboclaws.launch.evaluation import (
     household_intent_id_for_checker,
     merge_checker_flags,
 )
+from roboclaws.reports.live_performance import (
+    extract_model_call_metrics,
+    write_model_call_metrics_jsonl,
+)
 
 try:
     sys.stdout.reconfigure(line_buffering=True)
@@ -522,6 +526,10 @@ class LiveCodexCleanupRunner:
             "Codex event timing was not available.",
         )
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        write_model_call_metrics_jsonl(
+            self.run_dir / "model_call_metrics.jsonl",
+            extract_model_call_metrics(self.run_dir, live_timing=payload),
+        )
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc

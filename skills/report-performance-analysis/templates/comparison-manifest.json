@@ -1,0 +1,13 @@
+{
+  "schema": "roboclaws_report_performance_comparison_manifest_v1",
+  "comparisons": [
+    {
+      "key": "example_pair",
+      "baseline_role": "full_lane_baseline",
+      "baseline_run_dir": "output/baseline/seed-7",
+      "candidate_run_dir": "output/candidate/seed-7",
+      "quality_waiver": "",
+      "diagnostic": false
+    }
+  ]
+}

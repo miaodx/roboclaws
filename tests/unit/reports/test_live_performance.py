@@ -1,0 +1,206 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from roboclaws.reports.live_performance import (
+    MODEL_CALL_METRIC_SCHEMA,
+    REPORT_PERFORMANCE_SCHEMA,
+    compare_run_dirs,
+    extract_model_call_metrics,
+    extract_report_performance_metrics,
+    privacy_findings_for_run_dir,
+    write_model_call_metrics_jsonl,
+)
+
+
+def test_extract_report_performance_metrics_covers_quality_model_work_and_timing(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(
+        tmp_path / "run",
+        restored=5,
+        elapsed_s=70,
+        gap_s=30,
+        input_tokens=400,
+        cached_tokens=100,
+        output_tokens=20,
+        reasoning_tokens=4,
+        duration_s=12.5,
+    )
+
+    packet = extract_report_performance_metrics(run_dir, write_model_call_metrics=True)
+
+    assert packet["schema"] == REPORT_PERFORMANCE_SCHEMA
+    assert packet["quality"]["restored_count"] == 5
+    assert packet["quality"]["failed_or_noop_tool_count"] == 0
+    assert packet["call_counts"]["model_call_count"] == 1
+    assert packet["call_counts"]["mcp_tool_counts"]["done"] == 1
+    assert packet["model_work"]["total_input_tokens"] == 400
+    assert packet["model_work"]["total_uncached_input_tokens"] == 300
+    assert packet["model_work"]["total_output_tokens"] == 20
+    assert packet["model_work"]["total_reasoning_tokens"] == 4
+    assert packet["timing"]["observed_wall_s"] == 70
+    assert packet["timing"]["observed_model_api_s"] == 12.5
+    assert packet["timing"]["estimated_model_work_s"]["available"] is False
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "model_call_metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows[0]["schema"] == MODEL_CALL_METRIC_SCHEMA
+    assert rows[0]["source"] == "openai_agents_span"
+
+
+def test_model_call_metrics_reports_unavailable_without_zeroing_missing_telemetry(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "claude"
+    run_dir.mkdir()
+    (run_dir / "live_timing.json").write_text(
+        json.dumps({"runtime": "claude-code", "provider_profile": "mimo-anthropic"}),
+        encoding="utf-8",
+    )
+    (run_dir / "claude-events.jsonl").write_text('{"type":"result"}\n', encoding="utf-8")
+
+    rows = extract_model_call_metrics(run_dir)
+
+    assert rows == [
+        {
+            "schema": MODEL_CALL_METRIC_SCHEMA,
+            "agent_engine": "claude-code",
+            "provider_profile": "mimo-anthropic",
+            "model": "",
+            "attempt_index": 0,
+            "call_index": 0,
+            "started_at_epoch": None,
+            "duration_s": None,
+            "input_tokens": None,
+            "cached_input_tokens": None,
+            "uncached_input_tokens": None,
+            "output_tokens": None,
+            "reasoning_tokens": None,
+            "image_input_count": 0,
+            "image_input_pixels": 0,
+            "status": "unavailable",
+            "failure_class": "",
+            "source": "unavailable",
+            "limitations": ["claude-code_model_call_telemetry_unavailable"],
+        }
+    ]
+
+
+def test_compare_rejects_faster_but_worse_candidate(tmp_path: Path) -> None:
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100, gap_s=50)
+    candidate = _write_run(tmp_path / "candidate", restored=4, elapsed_s=50, gap_s=25)
+
+    comparison = compare_run_dirs(baseline_dir=baseline, candidate_dir=candidate)
+
+    assert comparison["status"] == "rejected"
+    assert "candidate is faster but worse" in comparison["reasons"]
+    assert comparison["quality_comparison"]["regressed"] is True
+    assert comparison["timing_comparison"]["observed_wall_delta_s"] == -50
+
+
+def test_privacy_gate_scans_model_call_metrics(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    write_model_call_metrics_jsonl(
+        run_dir / "model_call_metrics.jsonl",
+        [
+            {
+                "schema": MODEL_CALL_METRIC_SCHEMA,
+                "agent_engine": "codex-cli",
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "raw_prompt": "do not persist",
+            }
+        ],
+    )
+
+    findings = privacy_findings_for_run_dir(run_dir)
+
+    assert any(finding["reason"] == "forbidden key raw_prompt" for finding in findings)
+
+
+def _write_run(
+    run_dir: Path,
+    *,
+    restored: int,
+    elapsed_s: float,
+    gap_s: float,
+    input_tokens: int = 100,
+    cached_tokens: int = 0,
+    output_tokens: int = 10,
+    reasoning_tokens: int = 0,
+    duration_s: float = 5.0,
+) -> Path:
+    run_dir.mkdir()
+    (run_dir / "live_timing.json").write_text(
+        json.dumps(
+            {
+                "runtime": "openai-agents-live",
+                "surface": "household-world",
+                "intent": "cleanup",
+                "task_name": "household-cleanup",
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "evidence_lane": "world-public-labels",
+                "runner_timing": {"total_elapsed_s": elapsed_s},
+                "mcp_trace_timing": {"between_tool_gap_s": gap_s, "tool_handler_s": 5.0},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    (run_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "task_surface": "household-world",
+                "task_intent": "cleanup",
+                "task_name": "household-cleanup",
+                "cleanup_status": "success",
+                "completion_status": "success",
+                "mess_restoration_rate": restored / 5,
+                "sweep_coverage_rate": 1.0,
+                "disturbance_count": 0,
+                "score": {
+                    "restored_count": restored,
+                    "total_targets": 5,
+                    "object_results": [{"restored": True} for _ in range(restored)],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(
+            json.dumps({"event": "response", "tool": tool, "response": {"ok": True}})
+            for tool in ["observe", "pick", "place", "done"]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "openai-agents-spans.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "span_end",
+                "span_type": "response",
+                "ts_epoch": 1.0,
+                "duration_s": duration_s,
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "usage": {
+                    "input_tokens": input_tokens,
+                    "input_tokens_details": {"cached_tokens": cached_tokens},
+                    "output_tokens": output_tokens,
+                    "output_tokens_details": {"reasoning_tokens": reasoning_tokens},
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return run_dir

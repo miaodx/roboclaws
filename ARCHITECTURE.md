@@ -215,6 +215,13 @@ Every serious run should produce reviewable evidence:
 
 - `trace.jsonl` for tool calls and state transitions.
 - `agent_view.json` / `run_result.json` for public agent-facing state.
+- `model_call_metrics.jsonl` for sanitized per-call model-work rows when a
+  live Agent SDK, Codex CLI, or Claude Code route exposes compatible usage or
+  timing telemetry.
+- `roboclaws_report_performance_metrics_v1` packets, usually produced by the
+  report-performance extractor, for maintainer comparisons of quality,
+  call-count work, model work, normalized-estimate availability, and residual
+  latency.
 - `runtime_metric_map.json` when a run builds or updates household world
   evidence.
 - `actionable_semantic_map_snapshot.json` when online runtime-map output or

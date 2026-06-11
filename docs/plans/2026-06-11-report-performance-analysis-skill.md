@@ -1,6 +1,6 @@
 ---
 plan_scope: report-performance-analysis-skill
-status: Proposed
+status: Partially implemented
 created: 2026-06-11
 last_reviewed: 2026-06-11
 source:
@@ -12,6 +12,31 @@ related_adrs:
 ---
 
 # Report Performance Analysis Skill
+
+## Intuitive-Flow Autoplan Reconciliation
+
+Review route: `intuitive-flow` inline autoplan precheck. This checkout does not
+expose a noninteractive `gstack-autoplan` executable, so the plan was reviewed
+against ADR-0135, the repo context vocabulary, and the already generated agent
+validation matrix artifacts. No hard-stop scope changes were found.
+
+Accepted decisions:
+
+- Keep ADR-0135 as the privacy and speed-claim boundary.
+- Implement the first deterministic slice without provider-backed live rows.
+- Use one shared extractor as the source of truth for summaries, comparisons,
+  matrix gates, and the repo-local skill.
+- Treat missing usage, duration, image, or calibration telemetry as
+  unavailable, never zero.
+- Keep product/live route no-regression claims blocked until the selected live
+  gates run with credentials, runtime approval, and budget acknowledgement.
+
+Parked from this precheck:
+
+- Full external `autoplan` reviewer artifacts, because the executable route is
+  unavailable in this checkout.
+- Provider-backed live speed claims and product route no-regression claims,
+  which remain behind the live gates listed below.
 
 ## Goal
 
@@ -36,21 +61,30 @@ discovery loop over the report/live-agent performance surface.
 
 ## Current Evidence
 
+- The deterministic implementation slice now adds
+  `roboclaws.reports.live_performance` as the shared extractor for
+  `roboclaws_report_performance_metrics_v1` and
+  `roboclaws_model_call_metric_v1`.
+- `scripts/reports/extract_live_report_metrics.py` and
+  `scripts/reports/compare_live_report_metrics.py` provide machine-readable
+  JSON extraction and comparison wrappers. The repo-local
+  `skills/report-performance-analysis/` skill delegates to those fixed scripts.
 - `openai-agents-live` already records rich SDK telemetry in `live_timing.json`,
   including `context_metrics`, `cache_metrics`, `context_growth_metrics`, and
-  `model_or_sdk_unattributed_s`.
+  `model_or_sdk_unattributed_s`; new run ends also emit
+  `model_call_metrics.jsonl`.
 - `run_live_codex_cleanup.py` records runner timing, MCP trace timing, Codex
   event counts, usage, and best-effort model API duration when Codex JSON events
-  expose duration fields.
-- `run_live_claude_cleanup.py` writes `claude-events.jsonl` but does not yet
-  write a `live_timing.json` equivalent, so cross-engine comparison is
-  asymmetric.
-- `summarize_live_run.py` can summarize one run and compare an explicit Agent
-  SDK comparison manifest, but it still has a hard-coded `18m30s` single-run
-  baseline display and SDK-specific comparison language.
-- `run_agent_sdk_perf_matrix.py` has quality and privacy gates, but its metric
-  extraction duplicates part of `summarize_live_run.py` and is scoped to the
-  Agent SDK speedup matrix.
+  expose duration fields; new run ends also emit `model_call_metrics.jsonl`.
+- `run_live_claude_cleanup.py` now writes deterministic `live_timing.json`
+  parity and `model_call_metrics.jsonl` rows when sanitized stream-json usage is
+  present, with explicit unavailable rows otherwise.
+- `summarize_live_run.py` no longer prints the hard-coded `18m30s` single-run
+  baseline and its comparison manifest path now reports generic report
+  performance status.
+- `run_agent_sdk_perf_matrix.py` now consumes the shared extractor for run
+  quality/speed summaries and extends privacy scanning to
+  `model_call_metrics.jsonl`.
 
 ## Non-Goals
 
@@ -561,6 +595,81 @@ Success requires:
   packet records the waiver.
 - The repo skill scripts run against committed fixtures and answer from
   generated metric JSON, not `report.html` scraping.
+
+## Implementation Status
+
+Deterministic slice status: implemented on 2026-06-11.
+
+Implemented artifacts:
+
+- Shared extractor: `roboclaws/reports/live_performance.py`.
+- Report CLIs: `scripts/reports/extract_live_report_metrics.py` and
+  `scripts/reports/compare_live_report_metrics.py`.
+- Runner artifact hooks:
+  `run_live_openai_agents_cleanup.py`, `run_live_codex_cleanup.py`, and
+  `run_live_claude_cleanup.py` emit `model_call_metrics.jsonl`; Claude Code now
+  writes `live_timing.json` parity.
+- Summary/matrix consumers:
+  `summarize_live_run.py` and `run_agent_sdk_perf_matrix.py` use the shared
+  extractor and no longer rely on the old single-run hard-coded speed baseline.
+- Repo skill:
+  `skills/report-performance-analysis/` includes fixed wrappers, calibration
+  helper, metric-contract reference, and comparison manifest template.
+
+Verified deterministic evidence:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/unit/molmo_cleanup/test_summarize_live_run.py \
+  tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py \
+  tests/unit/agents/test_live_runtime.py \
+  tests/unit/molmo_cleanup/test_ci_live_reports.py \
+  tests/unit/reports/test_live_performance.py
+
+.venv/bin/ruff check \
+  scripts/molmo_cleanup/summarize_live_run.py \
+  scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  tests/unit/molmo_cleanup/test_summarize_live_run.py \
+  tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py \
+  tests/unit/agents/test_live_runtime.py \
+  roboclaws/reports/live_performance.py \
+  scripts/reports/extract_live_report_metrics.py \
+  scripts/reports/compare_live_report_metrics.py \
+  tests/unit/reports/test_live_performance.py \
+  skills/report-performance-analysis/scripts/extract_live_report_metrics.py \
+  skills/report-performance-analysis/scripts/compare_live_report_metrics.py \
+  skills/report-performance-analysis/scripts/calibrate_model_latency.py
+
+.venv/bin/python skills/report-performance-analysis/scripts/extract_live_report_metrics.py \
+  tests/fixtures/agent_sdk_speedup_foundation/world_public_candidate \
+  --output /tmp/roboclaws-skill-proof-metrics.json
+```
+
+Selected deterministic cleanup-policy gates passed:
+
+```bash
+tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py
+tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py
+tests/unit/molmo_cleanup/test_molmo_semantic_cleanup_loop.py
+```
+
+Additional selector route gate:
+
+- `tests/contract/dev_tools/test_task_agent_just_recipes.py` passed in the
+  current dirty checkout. Treat this as a current-worktree sanity check, not
+  clean committed-slice evidence, because route/catalog files have unrelated
+  unstaged launch-contract edits outside this report-performance slice.
+
+Remaining blocked/live evidence:
+
+- Product/live route no-regression and live speed claims still require the
+  product/live gates below with credentials, runtime approval, network
+  preflight, and budget acknowledgement.
+- Calibration coefficients remain unavailable by design until a named dataset
+  with sample counts and error statistics exists.
 
 Implementation is blocked if:
 
