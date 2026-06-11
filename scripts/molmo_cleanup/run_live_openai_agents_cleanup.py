@@ -66,6 +66,7 @@ MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION
 CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
+RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
 MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH = Path("skills/molmo-realworld-cleanup/SKILL.md")
 MAX_AGENT_SDK_SKILL_CONTEXT_BYTES = 24_000
@@ -184,6 +185,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--context-hard-limit-tokens", type=int, default=None)
     parser.add_argument("--max-observe-per-waypoint", type=int, default=None)
     parser.add_argument("--raw-fpv-candidate-budget", type=int, default=None)
+    parser.add_argument("--raw-fpv-repeated-failure-limit", type=int, default=None)
     parser.add_argument("--done-retry-budget", type=int, default=None)
     parser.add_argument(
         "--model-service-retry-attempts",
@@ -880,6 +882,13 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=defaults["raw_fpv_candidate_budget"],
             allow_none=True,
         ),
+        "raw_fpv_repeated_failure_limit": _int_setting(
+            args,
+            "raw_fpv_repeated_failure_limit",
+            RAW_FPV_REPEATED_FAILURE_LIMIT_ENV,
+            default=defaults["raw_fpv_repeated_failure_limit"],
+            allow_none=True,
+        ),
         "done_retry_budget": _int_setting(
             args,
             "done_retry_budget",
@@ -1056,6 +1065,7 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
         "max_turns": DEFAULT_OPENAI_AGENTS_MAX_TURNS,
         "max_continuations": DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
         "raw_fpv_candidate_budget": None,
+        "raw_fpv_repeated_failure_limit": None,
         "done_retry_budget": None,
         "max_observe_per_waypoint": None,
         "context_soft_limit_tokens": None,
@@ -1109,6 +1119,7 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
             "max_turns": 40,
             "max_continuations": 1,
             "raw_fpv_candidate_budget": 24,
+            "raw_fpv_repeated_failure_limit": 3,
             "done_retry_budget": 1,
             "max_observe_per_waypoint": 1,
             "context_soft_limit_tokens": 64_000,
@@ -1501,14 +1512,25 @@ def _raw_fpv_budget_failure(
     if str(timing.get("evidence_lane") or timing.get("profile") or "") != "camera-raw-fpv":
         return None
     candidate_budget = _int_or_none(profile.get("raw_fpv_candidate_budget"))
+    repeated_failure_limit = _int_or_none(profile.get("raw_fpv_repeated_failure_limit"))
     observe_budget = _int_or_none(profile.get("max_observe_per_waypoint"))
-    if candidate_budget is None and observe_budget is None:
+    if candidate_budget is None and observe_budget is None and repeated_failure_limit is None:
         return None
     trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
     if not trace_events:
         return None
     metrics = _raw_fpv_budget_metrics(trace_events)
     reasons: list[str] = []
+    if repeated_failure_limit is not None:
+        repeated_failures = [
+            item
+            for item in metrics["repeated_failure_fingerprints"]
+            if int(item.get("count") or 0) >= repeated_failure_limit
+        ]
+        if repeated_failures:
+            metrics["repeated_failure_limit"] = repeated_failure_limit
+            metrics["repeated_failure_limit_hits"] = repeated_failures[:12]
+            reasons.append("raw_fpv_repeated_candidate_failure")
     if candidate_budget is not None and metrics["candidate_attempt_count"] >= candidate_budget:
         reasons.append("raw_fpv_candidate_budget_exhausted")
     if observe_budget is not None:
@@ -1522,8 +1544,13 @@ def _raw_fpv_budget_failure(
             reasons.append("raw_fpv_observe_budget_exhausted")
     if not reasons:
         return None
-    reason = "raw_fpv_candidate_budget_exhausted"
-    if "raw_fpv_candidate_budget_exhausted" not in reasons:
+    reason = "raw_fpv_repeated_candidate_failure"
+    if "raw_fpv_repeated_candidate_failure" not in reasons:
+        reason = "raw_fpv_candidate_budget_exhausted"
+    if (
+        "raw_fpv_repeated_candidate_failure" not in reasons
+        and "raw_fpv_candidate_budget_exhausted" not in reasons
+    ):
         reason = "raw_fpv_observe_budget_exhausted"
     detail = json.dumps(
         {
@@ -1531,6 +1558,7 @@ def _raw_fpv_budget_failure(
             "profile_id": profile.get("profile_id") or "baseline",
             "reasons": reasons,
             "raw_fpv_candidate_budget": candidate_budget,
+            "raw_fpv_repeated_failure_limit": repeated_failure_limit,
             "max_observe_per_waypoint": observe_budget,
             **metrics,
         },
@@ -1548,6 +1576,7 @@ def _raw_fpv_budget_metrics(trace_events: list[dict[str, Any]]) -> dict[str, Any
     candidate_attempts: list[dict[str, str]] = []
     observe_count_by_waypoint: dict[str, int] = {}
     failure_fingerprints: dict[str, int] = {}
+    failure_fingerprint_details: dict[str, dict[str, str]] = {}
     for event in trace_events:
         tool = str(event.get("tool") or "")
         event_type = str(event.get("event") or "")
@@ -1592,8 +1621,22 @@ def _raw_fpv_budget_metrics(trace_events: list[dict[str, Any]]) -> dict[str, Any
         if event_type == "response" and failure_reason:
             fingerprint = "|".join((source_id, category, region, candidate_id, failure_reason))
             failure_fingerprints[fingerprint] = failure_fingerprints.get(fingerprint, 0) + 1
+            failure_fingerprint_details.setdefault(
+                fingerprint,
+                {
+                    "source_observation_id": source_id,
+                    "category": category,
+                    "region": region,
+                    "candidate_id": candidate_id,
+                    "failure_reason": failure_reason,
+                },
+            )
     repeated_failures = [
-        {"fingerprint": key, "count": count}
+        {
+            "fingerprint": key,
+            "count": count,
+            **failure_fingerprint_details.get(key, {}),
+        }
         for key, count in sorted(failure_fingerprints.items())
         if count > 1
     ][:12]
@@ -2113,6 +2156,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         if isinstance(timing.get("context_growth_metrics"), dict)
         else {}
     )
+    budget_terminal = (
+        timing.get("agent_sdk_budget_terminal")
+        if isinstance(timing.get("agent_sdk_budget_terminal"), dict)
+        else {}
+    )
     sdk_elapsed = _float_or_none(runner_timing.get("openai_agents_elapsed_s"))
     mcp_elapsed = _float_or_none(mcp_timing.get("total_elapsed_s"))
     model_or_sdk_unattributed_s = _model_or_sdk_unattributed_seconds(timing)
@@ -2136,6 +2184,7 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
         "model_service_fallback_metrics": _compact_metric_group(fallback_metrics),
         "model_input_filter_metrics": _compact_metric_group(model_input_filter_metrics),
+        "agent_sdk_budget_terminal": _compact_metric_group(budget_terminal),
         "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
         "context_metrics": _compact_metric_group(context_metrics),
         "cache_metrics": _compact_metric_group(cache_metrics),
@@ -2803,8 +2852,46 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "metric_map_bytes_after",
         "metric_map_bytes_reduced",
         "metric_map_byte_reduction_ratio",
+        "reason",
+        "provider_reason",
+        "retryable",
+        "resume_available",
+        "detail_schema",
+        "raw_fpv_candidate_budget",
+        "raw_fpv_repeated_failure_limit",
+        "max_observe_per_waypoint",
+        "candidate_attempt_count",
+        "repeated_failure_count",
+        "repeated_failure_limit_hit_count",
+        "observe_waypoint_count",
     )
-    return {key: metrics.get(key) for key in keys if key in metrics}
+    compact = {key: metrics.get(key) for key in keys if key in metrics}
+    detail = metrics.get("detail")
+    if isinstance(detail, str) and detail:
+        try:
+            parsed = json.loads(detail)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            compact.setdefault("detail_schema", parsed.get("schema"))
+            for key in (
+                "raw_fpv_candidate_budget",
+                "raw_fpv_repeated_failure_limit",
+                "max_observe_per_waypoint",
+                "candidate_attempt_count",
+            ):
+                if key in parsed:
+                    compact.setdefault(key, parsed.get(key))
+            repeated = parsed.get("repeated_failure_fingerprints")
+            if isinstance(repeated, list):
+                compact.setdefault("repeated_failure_count", len(repeated))
+            hits = parsed.get("repeated_failure_limit_hits")
+            if isinstance(hits, list):
+                compact.setdefault("repeated_failure_limit_hit_count", len(hits))
+            observe_counts = parsed.get("observe_count_by_waypoint")
+            if isinstance(observe_counts, dict):
+                compact.setdefault("observe_waypoint_count", len(observe_counts))
+    return compact
 
 
 def _nearest_rank_percentile(values: list[int], percentile: float) -> int | None:

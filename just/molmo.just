@@ -871,6 +871,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET:-}" ]]; then
             runner_args+=(--raw-fpv-candidate-budget "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET}")
           fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT:-}" ]]; then
+            runner_args+=(--raw-fpv-repeated-failure-limit "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT}")
+          fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET:-}" ]]; then
             runner_args+=(--done-retry-budget "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET}")
           fi

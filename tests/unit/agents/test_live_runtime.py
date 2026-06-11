@@ -2048,6 +2048,73 @@ def test_openai_agents_budget_guard_classifies_raw_fpv_candidate_exhaustion(
     assert detail["candidate_attempts_sample"][0]["source_observation_id"] == "raw_fpv_001"
 
 
+def test_openai_agents_budget_guard_classifies_repeated_raw_fpv_failures(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    events = []
+    for _ in range(3):
+        events.extend(
+            [
+                {
+                    "event": "request",
+                    "tool": "navigate_to_visual_candidate",
+                    "request": {
+                        "source_observation_id": "raw_fpv_001",
+                        "category": "cup",
+                        "image_region": {"type": "bbox", "value": [1, 2, 3, 4]},
+                    },
+                },
+                {
+                    "event": "response",
+                    "tool": "navigate_to_visual_candidate",
+                    "request": {
+                        "source_observation_id": "raw_fpv_001",
+                        "category": "cup",
+                        "image_region": {"type": "bbox", "value": [1, 2, 3, 4]},
+                    },
+                    "response": {
+                        "ok": False,
+                        "source_observation_id": "raw_fpv_001",
+                        "category": "cup",
+                        "error_reason": "source_observation_locality_unresolved",
+                    },
+                },
+            ]
+        )
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(json.dumps(item) for item in events) + "\n",
+        encoding="utf-8",
+    )
+
+    failure = _budget_failure_from_run_state(
+        run_dir,
+        {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
+        {
+            "profile_id": "raw_fpv_budgeted_v1",
+            "context_hard_limit_tokens": None,
+            "raw_fpv_candidate_budget": 24,
+            "raw_fpv_repeated_failure_limit": 3,
+            "max_observe_per_waypoint": None,
+        },
+    )
+
+    assert failure is not None
+    assert failure.reason == "raw_fpv_repeated_candidate_failure"
+    assert failure.retryable is False
+    detail = json.loads(failure.detail)
+    assert detail["reasons"] == ["raw_fpv_repeated_candidate_failure"]
+    assert detail["raw_fpv_repeated_failure_limit"] == 3
+    assert detail["candidate_attempt_count"] == 3
+    assert detail["repeated_failure_limit_hits"][0]["count"] == 3
+    assert detail["repeated_failure_limit_hits"][0]["category"] == "cup"
+    assert detail["repeated_failure_limit_hits"][0]["failure_reason"] == (
+        "source_observation_locality_unresolved"
+    )
+    assert "image_region" not in json.dumps(detail)
+
+
 def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -2263,6 +2330,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert raw["max_turns"] == 40
     assert raw["max_continuations"] == 1
     assert raw["raw_fpv_candidate_budget"] == 24
+    assert raw["raw_fpv_repeated_failure_limit"] == 3
     assert raw["done_retry_budget"] == 1
 
     custom = _resolve_agent_sdk_perf_profile(
@@ -2278,6 +2346,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
                 "context_hard_limit_tokens": 34,
                 "max_observe_per_waypoint": 2,
                 "raw_fpv_candidate_budget": 3,
+                "raw_fpv_repeated_failure_limit": 2,
                 "done_retry_budget": 4,
             }
         )
@@ -2289,6 +2358,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert custom["context_soft_limit_tokens"] == 12
     assert custom["context_hard_limit_tokens"] == 34
     assert custom["max_observe_per_waypoint"] == 2
+    assert custom["raw_fpv_repeated_failure_limit"] == 2
     assert custom["model_input_compaction"]["candidate_ids"] == ["I", "N"]
 
     compaction = _resolve_agent_sdk_perf_profile(
