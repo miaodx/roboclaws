@@ -49,6 +49,7 @@ the default architecture decision surface.
 | [0132](0132-keep-cleanup-memory-skill-first-and-remove-promoted-composite.md) | Keep Cleanup Memory Skill-First And Remove Promoted Composite | Accepted |
 | [0133](0133-use-http-visual-grounding-service-for-real-camera-labels.md) | Use HTTP Visual Grounding Service For Real Camera Labels | Accepted |
 | [0134](0134-use-public-done-readiness-gates.md) | Use Public Done Readiness Gates | Accepted |
+| [0135](0135-use-sanitized-report-performance-artifacts-for-speed-claims.md) | Use Sanitized Report Performance Artifacts For Speed Claims | Accepted |
 
 ## Adding A New ADR
 

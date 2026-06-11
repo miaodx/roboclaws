@@ -57,6 +57,7 @@ aid, not a source of truth for current priority.
 - [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
+- [Report Performance Analysis Skill](2026-06-11-report-performance-analysis-skill.md)
 - [Auto Semantic Map Build](auto-semantic-map-build.md)
 - [Operator Console Orthogonal Launch Refactor](operator-console-orthogonal-launch-refactor.md)
 - [RAW-FPV Subagent Visual Labeling Probe](raw-fpv-subagent-visual-labeling-probe.md)

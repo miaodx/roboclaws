@@ -74,6 +74,14 @@ skipped, run, or blocked. It is not an MCP capability, task skill, or fixed
 benchmark grid.
 _Avoid_: manual checklist, hidden evaluator, one-size-fits-all harness
 
+**Report Performance Artifact Contract**:
+A durable maintainer artifact contract for comparing live-agent report
+performance under unstable provider/network conditions. It uses sanitized
+quality, call-count, token/image-work, timing, normalized model-work, and
+residual-latency fields. It is not a public command surface, MCP tool contract,
+or external API, and missing telemetry is unavailable rather than zero.
+_Avoid_: wall-clock-only speedup, raw prompt telemetry, public API
+
 **Trace-Preserving Skill Routine**:
 A reusable skill routine that composes lower-level public tools while recording
 substeps, evidence, status, and recovery context.
