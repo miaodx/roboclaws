@@ -1,24 +1,12 @@
 """Write the landing ``index.html`` for the RoboClaws Pages site.
 
-Used both by the local demo generator and by the CI ``publish-pages`` job so
-the two landing pages stay in sync.
+Used by the CI ``publish-pages`` job after assembling household report
+artifacts. The public site currently advertises the MolmoSpaces live cleanup
+index when ``site/molmo/live/live-report-manifest.json`` is present.
 
 Usage::
 
-    # Mock-only demo (no real AI2-THOR section)
-    python scripts/reports/write_pages_index.py output/demo
-
-    # Full site including real-model smoke output at ./smoke/territory/
-    # and ./smoke/coverage/
-    python scripts/reports/write_pages_index.py site --include-smoke
-
-    # Include all available OpenClaw tiles (whichever subdirs exist under
-    # site/openclaw/ are auto-detected when --include-openclaw is passed)
-    python scripts/reports/write_pages_index.py site --include-smoke --include-openclaw
-
-    # Include opt-in Molmo live cleanup tiles from
-    # site/molmo/live/live-report-manifest.json
-    python scripts/reports/write_pages_index.py site --include-smoke --include-molmo-live
+    python scripts/reports/write_pages_index.py site --include-molmo-live
 """
 
 from __future__ import annotations
@@ -27,45 +15,6 @@ import argparse
 import html
 import json
 from pathlib import Path
-
-_SMOKE_ITEMS = (
-    '  <li><a href="smoke/territory/report.html">'
-    "&#x25B6; Territory Control &mdash; Real AI2-THOR + Kimi</a>"
-    '<span class="tag">real model</span>'
-    '      <div class="desc">Adversarial 2-agent territory game in a real indoor scene, '
-    "driven by the Kimi VLM via the <code>real-model-smoke</code> CI job.</div></li>\n"
-    '  <li><a href="smoke/coverage/report.html">'
-    "&#x25B6; Cooperative Coverage &mdash; Real AI2-THOR + Kimi</a>"
-    '<span class="tag">real model</span>'
-    '      <div class="desc">Cooperative 2-agent coverage game in a real indoor scene, '
-    "driven by the Kimi VLM via the <code>real-model-smoke</code> CI job.</div></li>"
-)
-
-_OPENCLAW_ITEM_DEMO = (
-    '  <li><a href="openclaw/demo/report.html">'
-    "&#x25B6; Navigation Demo &mdash; OpenClaw + Kimi</a>"
-    '<span class="tag">openclaw</span>'
-    '      <div class="desc">Multi-agent AI2-THOR navigation routed through '
-    "a local OpenClaw Gateway (Phase 2.1 transport smoke).</div></li>"
-)
-
-_OPENCLAW_ITEM_TERRITORY = (
-    '  <li><a href="openclaw/territory/report.html">'
-    "&#x25B6; Territory Control &mdash; OpenClaw + Kimi</a>"
-    '<span class="tag">openclaw</span>'
-    '      <div class="desc">Adversarial 2-agent territory game over OpenClaw with '
-    "per-agent SOULs (aggressive=red / defensive=blue trails). "
-    "Phase 2.2 long-running Gateway demo.</div></li>"
-)
-
-_OPENCLAW_ITEM_COVERAGE = (
-    '  <li><a href="openclaw/coverage/report.html">'
-    "&#x25B6; Cooperative Coverage &mdash; OpenClaw + Kimi</a>"
-    '<span class="tag">openclaw</span>'
-    '      <div class="desc">Cooperative 2-agent coverage game over OpenClaw with '
-    "cooperative SOUL personas (cooperative=green trails). "
-    "Phase 2.2 long-running Gateway demo.</div></li>"
-)
 
 _TEMPLATE = """<!DOCTYPE html>
 <html lang="en"><head>
@@ -89,17 +38,7 @@ _TEMPLATE = """<!DOCTYPE html>
 </style></head><body>
 <h1>RoboClaws &mdash; Demo Reports</h1>
 <p class="sub">Regenerated on every push to <code>main</code> by GitHub Actions.</p>
-
-<h2>Mock-engine demos (every push)</h2>
-<ul>
-  <li><a href="territory/report.html">&#x25B6; Territory Control</a>
-      <div class="desc">2-3 VLM agents compete to claim grid cells.</div></li>
-  <li><a href="coverage/report.html">&#x25B6; Cooperative Coverage</a>
-      <div class="desc">2-3 VLM agents cooperate to cover a room.</div></li>
-  <li><a href="report_compare.html">&#x25B6; A/B Comparison</a>
-      <div class="desc">Two runs side-by-side.</div></li>
-</ul>
-{smoke_section}{openclaw_section}
+{molmo_live_section}
 <p><a href="https://github.com/MiaoDX/roboclaws">&larr; Back to the repository</a></p>
 </body></html>
 """
@@ -107,50 +46,25 @@ _TEMPLATE = """<!DOCTYPE html>
 
 def write_index(
     site_dir: Path,
-    include_smoke: bool = False,
-    include_openclaw: bool = False,
     include_molmo_live: bool = False,
 ) -> Path:
     """Write ``index.html`` into *site_dir* and return its path.
 
-    When ``include_openclaw`` is True, the OpenClaw section is built by
-    auto-detecting which tiles are present under ``site_dir/openclaw/``
-    (demo, territory, coverage). Missing tiles are silently omitted so a
-    partial CI run still produces a valid page.
+    ``include_molmo_live`` reads the live cleanup manifest under
+    ``site_dir/molmo/live``. When no manifest exists, the page still renders
+    with a short placeholder section.
     """
-    smoke_section = (
-        "<h2>Real AI2-THOR + Kimi (push to <code>main</code> only)</h2>\n<ul>\n"
-        f"{_SMOKE_ITEMS}\n</ul>"
-        if include_smoke
-        else ""
-    )
-
-    openclaw_items: list[str] = []
-    if include_openclaw:
-        # Enumerate the 4 cases: none / demo-only / territory-only / coverage-only /
-        # any combination — missing artifact dir → omit tile (matches CI best-effort pattern).
-        openclaw_dir = site_dir / "openclaw"
-        if (openclaw_dir / "demo" / "report.html").is_file():
-            openclaw_items.append(_OPENCLAW_ITEM_DEMO)
-        if (openclaw_dir / "territory" / "report.html").is_file():
-            openclaw_items.append(_OPENCLAW_ITEM_TERRITORY)
-        if (openclaw_dir / "coverage" / "report.html").is_file():
-            openclaw_items.append(_OPENCLAW_ITEM_COVERAGE)
-
-    openclaw_section = (
-        "\n<h2>OpenClaw Gateway (Phase 2, push to <code>main</code> only)</h2>\n<ul>\n"
-        + "\n".join(openclaw_items)
-        + "\n</ul>"
-        if openclaw_items
-        else ""
-    )
-
     molmo_live_section = _molmo_live_section(site_dir) if include_molmo_live else ""
+    if not molmo_live_section:
+        molmo_live_section = (
+            "<h2>Household Reports</h2>\n"
+            '<p class="sub">No published household cleanup reports are available yet.</p>\n'
+        )
 
     html = _TEMPLATE.format(
-        smoke_section=smoke_section,
-        openclaw_section=openclaw_section + molmo_live_section,
+        molmo_live_section=molmo_live_section,
     )
+    site_dir.mkdir(parents=True, exist_ok=True)
     out = site_dir / "index.html"
     out.write_text(html, encoding="utf-8")
     return out
@@ -160,19 +74,6 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("site_dir", type=Path, help="Directory to write index.html into")
     p.add_argument(
-        "--include-smoke",
-        action="store_true",
-        help="Include links to smoke/territory/report.html and smoke/coverage/report.html",
-    )
-    p.add_argument(
-        "--include-openclaw",
-        action="store_true",
-        help=(
-            "Include OpenClaw tiles (auto-detected from "
-            "site_dir/openclaw/{demo,territory,coverage}/)"
-        ),
-    )
-    p.add_argument(
         "--include-molmo-live",
         action="store_true",
         help="Include Molmo live cleanup tiles from site_dir/molmo/live/live-report-manifest.json",
@@ -181,8 +82,6 @@ def main(argv: list[str] | None = None) -> None:
     args.site_dir.mkdir(parents=True, exist_ok=True)
     out = write_index(
         args.site_dir,
-        include_smoke=args.include_smoke,
-        include_openclaw=args.include_openclaw,
         include_molmo_live=args.include_molmo_live,
     )
     print(f"Wrote {out}")

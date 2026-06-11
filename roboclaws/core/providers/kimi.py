@@ -5,12 +5,6 @@ import os
 import time
 from typing import Any
 
-from roboclaws.core.action_decision import (
-    action_decision_from_fields,
-    fallback_action_decision,
-    parse_action_decision,
-)
-from roboclaws.core.engine import NAVIGATION_ACTIONS
 from roboclaws.core.provider_safety import (
     build_provider_status,
     handle_provider_exception,
@@ -19,9 +13,13 @@ from roboclaws.core.provider_safety import (
 from roboclaws.core.providers.anthropic import _AnthropicBase
 from roboclaws.core.vlm import (
     _COST_PER_M,
+    NAVIGATION_ACTIONS,
     _build_agent_action_model,
     _maybe_open_circuit,
     _record_call_success,
+    action_decision_from_fields,
+    fallback_action_decision,
+    parse_action_decision,
 )
 
 _KIMI_HTTP_TIMEOUT_ENV = "KIMI_HTTP_TIMEOUT"
@@ -207,10 +205,9 @@ class KimiCodingProvider:
             raise ImportError("httpx is required for KimiCodingProvider") from exc
 
         if http_timeout is None:
-            # Real AI2-THOR frames + SOUL + json_schema push Kimi to 40-60s
-            # with reasoning_effort=low.  Solid-red probe at 60s was fine;
-            # in-game frames occasionally exceed it.  120s gives 2× headroom
-            # and the circuit-breaker still fires within retry budget.
+            # Multi-image robot prompts + SOUL + json_schema can push Kimi to
+            # 40-60s with reasoning_effort=low.  120s gives 2x headroom and
+            # the circuit-breaker still fires within retry budget.
             http_timeout = _kimi_timeout(120.0)
 
         self._model = model

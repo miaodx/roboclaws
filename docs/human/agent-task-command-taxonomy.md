@@ -1,161 +1,82 @@
-# Agent and Task Command Taxonomy Plan
+# Surface And Agent Command Taxonomy
 
-Status: historical. The implemented `task::run` taxonomy was superseded by the
-surface/intent model in `just/run.just` and [`just/README.md`](../../just/README.md).
+The implemented public command model is the surface/intent catalog in
+`just run::surface`. Older `task::run` and AI2-THOR task ids are retired.
 
-This plan defines the human-facing command layers for robot/agent demos while
-keeping the existing implementation modules available for lower-level debugging.
+## Public Surface
 
-## Goal
+Normal users should start with:
 
-Make command discovery follow what users care about:
-
-- `task::*` owns the small user grammar:
-  `task::run <task> <driver> [report] [key=value ...]`.
-- `agent::*` owns compact maintainer dispatchers: `run`, `verify`, `harness`,
-  `mcp`, and `gateway`.
-- Existing implementation modules keep their current ownership:
-  `code::*`, `chat::*`, `openclaw::*`, `vlm::*`, `molmo::*`, `harness::*`,
-  `verify::*`, but are hidden from completion.
-
-## Non-Goal
-
-Do not move all recipe bodies into one large file. The lower-level files remain
-the source of implementation detail for their subsystem.
-
-## Dependency Rule
-
-The command graph must be one-way:
-
-```text
-task::* -> agent::* or molmo::* or harness::* or verify::*
-agent::* -> code::* or chat::* or openclaw::* or vlm::* or molmo::* or scripts/examples
-verify::* -> harness::* or focused tests
-harness::* -> scripts/examples
-lower modules must not call task::*
-lower modules must not call agent::*
+```bash
+just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>] [provider_profile=<profile>] [key=value ...]
 ```
 
-This avoids circular references. In particular:
+Current surfaces:
 
-- `task::*` may call `agent::*`.
-- `agent::*` must not call `task::*`.
-- `verify::*` should not depend on `task::*`; gates should stay strict and
-  stable.
-- `harness::*` should not depend on `task::*` or `agent::*`; harness recipes are
-  implementation rigs.
+- `household-world`
+- `planner-proof`
 
-## Implemented User Surface
+Current household intents:
 
-`task::*` public recipe:
+- `map-build`
+- `cleanup`
+- `open-ended`
 
-- `task::run <task> <driver> [report|profile] [key=value ...]`
+Current household backends:
 
-Tasks:
+- `mujoco`
+- `isaaclab`
+- `agibot-gdk`
 
-- `ai2thor-nav`
-- `territory`
-- `coverage`
-- `photo-chairs`
-- `semantic-map-build`
-- `household-cleanup`
-- `molmo-planner-proof`
+Current agent engines:
 
-Drivers:
+- `direct-runner`
+- `codex-cli`
+- `claude-code`
+- `openai-agents-sdk`
+- `openclaw-gateway`
+- `script-runner`
 
-- `openclaw`
-- `vlm`
-- `codex`
-- `claude`
-- `script`
-- `direct`
-- `mcp-smoke`
+`prompt=...` without an explicit household intent resolves to
+`intent=open-ended`. `intent=cleanup prompt=...` keeps cleanup semantics while
+narrowing the user-scoped cleanup request.
 
-Reports for non-Molmo tasks:
+## Maintainer Dispatch
 
-- `visual` by default.
-- `minimal` for cheap semantic agent iteration.
+`agent::*` is the compact maintainer facade:
 
-Household cleanup input/evidence lanes:
+```bash
+just agent::run <dispatch-target> <agent-engine> [evidence-lane|mode] [key=value ...]
+just agent::verify <target> [args ...]
+just agent::harness <target> [args ...]
+just agent::mcp up|down
+just agent::gateway up|down|pull-image
+```
 
-- `world-oracle-labels` by default.
-- `world-public-labels` for structured detections without destination/tool
-  oracle hints.
-- `robot_views=off` for local timing work that keeps the `world-oracle-labels`
-  input contract while disabling per-tool robot-view capture.
-- `smoke` for cheap synthetic contract iteration.
-- `camera-raw-fpv` for raw camera input evidence.
-- `camera-grounded-labels` for camera-derived structured candidates; requires
-  `camera_labeler=<labeler>`.
+Lower modules such as `molmo::*`, `harness::*`, `verify::*`, `mcp::*`,
+`code::*`, `chat::*`, and `openclaw::*` are private implementation details.
+They remain runnable for debugging, but they are hidden from `just --summary`
+and should not be the first response to natural-language run requests.
 
-These lanes describe the agent input and report/evidence gates. They do not
-select online/offline map behavior; map projection is `map_mode`, and a prior
-map is passed with `runtime_map_prior=...`.
+## Evidence Lanes
 
-`agent::*` public recipes:
+Household cleanup/map-build routes use `evidence_lane` to describe what the
+agent sees:
 
-- `agent::run`
-- `agent::verify`
-- `agent::harness`
-- `agent::mcp`
-- `agent::gateway`
+- `world-oracle-labels`
+- `world-public-labels`
+- `camera-raw-fpv`
+- `camera-grounded-labels` with `camera_labeler=<labeler>`
 
-## Documentation Updates
-
-- README should point normal users to `task::*`.
-- Human docs should describe the layer model and when to drop down to
-  `agent::*` or lower implementation modules.
-- Existing lower-level docs can keep implementation recipes where useful.
+`smoke` is a cheap verification preset/private runner mode, not a public
+evidence lane.
 
 ## Verification
 
-Add cheap command-surface tests that prove:
+The command taxonomy is covered by:
 
-- `task` and `agent` modules are registered in the root `justfile`.
-- `just --summary` exposes only the small public facade.
-- `task::run` routes prompt-derived commands to the expected lower modules.
-- Molmo cleanup profile defaults and overrides choose the expected cleanup run shape.
-- lower-level modules do not call `task::*`.
-- no `task::* <-> agent::*` cycle exists.
-- coding-agent launches still satisfy the existing full-permission guard.
-
-No live Codex, Claude Code, OpenClaw Gateway, VLM API, or MolmoSpaces simulator
-run is required for this command taxonomy refactor.
-
-## Implementation Evidence
-
-Completed on 2026-05-12 and updated on 2026-05-26 for the household task
-rename plus `semantic-map-build`:
-
-- Collapsed public task recipes into `task::run`.
-- Collapsed public agent recipes into compact dispatchers.
-- Marked implementation modules private in the root `justfile`.
-- Added `just/README.md`.
-- Route metadata now lives in `roboclaws.launch`; task specs live in domain
-  packages.
-- Live household kickoff prompts and server module selectors moved under
-  `roboclaws.agents`.
-- Household direct cleanup runs use `python -m roboclaws.household.realworld_cleanup`.
-- Household live MCP servers start through
-  `python -m roboclaws.cli.agent_server household-cleanup` or
-  `python -m roboclaws.cli.agent_server semantic-map-build`.
-- Updated README and human docs to point normal users at `task::run`.
-- Updated `tests/contract/dev_tools/test_task_agent_just_recipes.py`.
-
-Verification run:
-
-- `just --summary`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run household-cleanup codex`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run household-cleanup codex smoke`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run semantic-map-build direct evidence_lane=world-oracle-labels`
-- `ROBOCLAWS_JUST_TRACE=1 just task::run ai2thor-nav openclaw`
-- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools`
-- `.venv/bin/ruff check tests/contract/dev_tools/test_task_agent_just_recipes.py`
-- `.venv/bin/ruff format --check tests/contract/dev_tools/test_task_agent_just_recipes.py`
-- `git diff --check`
-
-Skipped by design:
-
-- Live Codex / Claude Code / OpenClaw Gateway runs.
-- Direct VLM API runs.
-- Real MolmoSpaces subprocess visual reports.
+```bash
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools
+just --summary
+just agent::verify ci-required
+```

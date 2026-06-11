@@ -1183,23 +1183,16 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
     assert "Kimi K2.6 diagnostics" in html
 
 
-def test_pages_index_omits_openclaw_tiles_without_report_html(tmp_path: Path) -> None:
+def test_pages_index_without_live_manifest_renders_household_placeholder(tmp_path: Path) -> None:
     write_pages_index = _load_module(PAGES_INDEX_PATH, "write_pages_index")
-    site = tmp_path / "site"
-    (site / "openclaw" / "demo" / "demo").mkdir(parents=True)
-    (site / "openclaw" / "territory").mkdir(parents=True)
-    (site / "openclaw" / "coverage").mkdir(parents=True)
-    (site / "openclaw" / "coverage" / "report.html").write_text(
-        "<!doctype html>",
-        encoding="utf-8",
-    )
 
-    out = write_pages_index.write_index(site, include_openclaw=True)
+    out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
     html = out.read_text(encoding="utf-8")
 
+    assert "Household Reports" in html
+    assert "No published household cleanup reports are available yet." in html
     assert "openclaw/demo/report.html" not in html
-    assert "openclaw/territory/report.html" not in html
-    assert "openclaw/coverage/report.html" in html
+    assert "territory/report.html" not in html
 
 
 def test_assemble_ci_live_pages_runs_without_site_packages(tmp_path: Path) -> None:

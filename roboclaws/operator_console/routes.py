@@ -999,5 +999,4 @@ def _intent_label(intent_id: str) -> str:
         "cleanup": "Cleanup",
         "open-ended": "Open-ended",
         "map-build": "Map build",
-        "coverage": "Coverage",
     }.get(intent_id, intent_id.replace("-", " ").title())

@@ -51,15 +51,6 @@ BACKEND_SPECS: dict[str, BackendSpec] = {
         view_modes=("overview", "fpv", "map", "grounding", "outputs"),
         gates=("context_json", "localization_ready", "run_enabled", "estop_ready"),
     ),
-    "ai2thor": BackendSpec(
-        id="ai2thor",
-        label="AI2-THOR",
-        implementation_backend="ai2thor",
-        lock_name="ai2thor",
-        resource_kind="simulator",
-        field_groups=("common",),
-        view_modes=("overview", "fpv", "map", "outputs"),
-    ),
 }
 
 

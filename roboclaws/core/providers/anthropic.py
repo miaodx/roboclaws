@@ -4,7 +4,6 @@ import os
 import time
 from typing import Any
 
-from roboclaws.core.action_decision import action_decision_from_fields
 from roboclaws.core.provider_safety import (
     build_provider_status,
     handle_provider_exception,
@@ -17,6 +16,7 @@ from roboclaws.core.vlm import (
     _build_agent_action_model,
     _maybe_open_circuit,
     _record_call_success,
+    action_decision_from_fields,
 )
 
 

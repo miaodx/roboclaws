@@ -227,11 +227,11 @@ def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_pat
 
 
 def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
+    assert not (JUST_DIR / "appliance.just").exists()
+
     openclaw_guarded_files = (
         JUST_DIR / "openclaw.just",
         JUST_DIR / "chat.just",
-        JUST_DIR / "appliance.just",
-        JUST_DIR / "verify.just",
         JUST_DIR / "dev.just",
     )
 
@@ -239,11 +239,11 @@ def test_claude_and_openclaw_just_recipes_use_network_guard() -> None:
         text = path.read_text(encoding="utf-8")
         assert "bash scripts/dev/network_status.sh --assert-off-work" in text, path
 
-    for path in (JUST_DIR / "code.just", JUST_DIR / "harness.just", JUST_DIR / "molmo.just"):
+    for path in (JUST_DIR / "molmo.just",):
         text = path.read_text(encoding="utf-8")
         assert "roboclaws_assert_claude_code_network_allowed" in text, path
 
-    for path in (JUST_DIR / "code.just", JUST_DIR / "molmo.just"):
+    for path in (JUST_DIR / "code.just", JUST_DIR / "agent.just", JUST_DIR / "molmo.just"):
         text = path.read_text(encoding="utf-8")
         assert "roboclaws_assert_codex_network_allowed" in text, path
 

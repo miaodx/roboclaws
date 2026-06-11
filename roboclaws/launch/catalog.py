@@ -13,8 +13,6 @@ task ids.
 
 from __future__ import annotations
 
-from roboclaws.ai2thor.tasks import AI2THOR_TASK_SPECS
-from roboclaws.games.tasks import GAME_TASK_SPECS
 from roboclaws.household.profiles import (
     cleanup_profile_names,
     validate_evidence_lane_camera_labeler,
@@ -37,8 +35,6 @@ from roboclaws.launch.task_specs import TaskSurfaceSpec
 from roboclaws.launch.worlds import DEFAULT_WORLD_BY_SURFACE, WORLD_SPECS, WorldSpec
 
 CANONICAL_SURFACES: set[str] = {
-    "ai2thor-world",
-    "ai2thor-games",
     "household-world",
     "planner-proof",
 }
@@ -47,8 +43,6 @@ CANONICAL_INTENTS: set[str] = set(TASK_INTENT_SPECS)
 CANONICAL_AGENT_ENGINES: set[str] = set(AGENT_ENGINE_SPECS)
 
 SURFACE_SPECS: dict[str, TaskSurfaceSpec] = {
-    **AI2THOR_TASK_SPECS,
-    **GAME_TASK_SPECS,
     **HOUSEHOLD_TASK_SPECS,
 }
 
@@ -246,7 +240,7 @@ def _normalize_surface(value: str) -> str:
     if surface not in CANONICAL_SURFACES:
         raise LaunchError(
             f"unsupported surface '{surface}'",
-            "expected ai2thor-world|ai2thor-games|household-world|planner-proof",
+            "expected household-world|planner-proof",
         )
     return surface
 
@@ -284,7 +278,7 @@ def _normalize_agent_engine(value: str) -> AgentEngineSpec:
         raise LaunchError(
             f"unsupported agent_engine '{agent_engine}'",
             "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|"
-            "openclaw-gateway|vlm-policy|script-runner",
+            "openclaw-gateway|script-runner",
         )
     return spec
 

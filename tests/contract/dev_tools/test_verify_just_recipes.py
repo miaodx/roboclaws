@@ -42,20 +42,17 @@ def test_required_ci_gate_has_one_local_verify_facade() -> None:
     agent_text = (JUST_DIR / "agent.just").read_text(encoding="utf-8")
     workflow_text = CI_WORKFLOW.read_text(encoding="utf-8")
 
-    assert re.search(
-        r"^ci-required output_dir=\"output/demo\" steps=\"30\":", verify_text, re.MULTILINE
-    )
+    assert re.search(r"^ci-required output_dir=\"output/demo\":", verify_text, re.MULTILINE)
     ci_gate = re.search(
-        r"^ci-required output_dir=\"output/demo\" steps=\"30\":[\s\S]*?(?=^# |^[a-zA-Z0-9_-]+|\Z)",
+        r"^ci-required output_dir=\"output/demo\":[\s\S]*?(?=^# |^[a-zA-Z0-9_-]+|\Z)",
         verify_text,
         re.MULTILINE,
     )
     assert ci_gate is not None
     body = ci_gate.group(0)
     assert "just verify::mock" in body
-    assert "scripts/reports/generate_demo_report.py" in body
-    assert '--output-dir "$output_dir"' in body
-    assert '--steps "$steps"' in body
+    assert "scripts/reports/generate_demo_report.py" not in body
+    assert 'mkdir -p "$output_dir"' in body
 
     assert "static|mock|ci-required|contract" in agent_text
     assert "run: just agent::verify ci-required" in workflow_text
@@ -104,10 +101,6 @@ def test_verify_delegates_scenario_gates_to_harness() -> None:
     text = VERIFY_JUST.read_text(encoding="utf-8")
 
     expected_calls = (
-        "just harness::regression",
-        "just harness::sim",
-        "just harness::openclaw",
-        "just harness::navigator",
         "just harness::molmo-realworld-cleanup",
         "just harness::molmo-realworld-agent-mcp",
         "just harness::molmo-realworld-agent-dogfood-kit",
@@ -126,10 +119,6 @@ def test_harness_exposes_named_execution_rigs() -> None:
     text = HARNESS_JUST.read_text(encoding="utf-8")
 
     expected_headers = (
-        r"^navigator task cap=\"900\":$",
-        r"^regression mode=\"mock\"",
-        r"^sim scenes=\"FloorPlan201\"",
-        r"^openclaw scenes=\"FloorPlan201\"",
         r"^molmo-cleanup-codex-perf \*overrides:",
         r"^molmo-realworld-cleanup seeds=\"1 2 3\"",
         r"^molmo-realworld-agent-mcp seeds=\"1\"",
@@ -267,7 +256,7 @@ def test_openclaw_visual_kit_uses_real_visual_backend_and_checker() -> None:
     text = HARNESS_JUST.read_text(encoding="utf-8")
 
     recipe = re.search(
-        r"^molmo-realworld-openclaw-visual-dogfood-kit[\s\S]*?(?=^# List task files)",
+        r"^molmo-realworld-openclaw-visual-dogfood-kit[\s\S]*?(?=^# |\Z)",
         text,
         re.MULTILINE,
     )
@@ -310,7 +299,7 @@ def test_raw_fpv_harness_uses_raw_mode_and_checker() -> None:
     text = HARNESS_JUST.read_text(encoding="utf-8")
 
     recipe = re.search(
-        r"^molmo-realworld-raw-fpv[\s\S]*?(?=^# List task files)",
+        r"^molmo-realworld-raw-fpv[\s\S]*?(?=^# |\Z)",
         text,
         re.MULTILINE,
     )
@@ -331,7 +320,7 @@ def test_planner_manipulation_probe_accepts_only_explicit_blocked_gate() -> None
     text = HARNESS_JUST.read_text(encoding="utf-8")
 
     recipe = re.search(
-        r"^molmo-planner-manipulation-probe[\s\S]*?(?=^# List task files)",
+        r"^molmo-planner-manipulation-probe[\s\S]*?(?=^# |\Z)",
         text,
         re.MULTILINE,
     )

@@ -9,16 +9,15 @@ def test_prune_pages_site_keeps_html_and_referenced_molmo_images(tmp_path: Path)
     site = tmp_path / "site"
     molmo_seed = site / "molmo" / "live" / "kimi-k2.6" / "seed-7"
     robot_views = molmo_seed / "robot_views"
-    smoke = site / "smoke" / "territory"
-    agent_frames = smoke / "agent_frames"
+    diagnostics = site / "molmo" / "live" / "kimi-k2.6" / "diagnostics" / "seed-7"
     robot_views.mkdir(parents=True)
-    agent_frames.mkdir(parents=True)
+    diagnostics.mkdir(parents=True)
 
     _write(
         site / "index.html",
         """
         <a href="molmo/live/">Molmo live</a>
-        <a href="smoke/territory/report.html">Smoke</a>
+        <a href="molmo/live/kimi-k2.6/diagnostics/seed-7/diagnostics.html">Diagnostics</a>
         """,
     )
     _write(
@@ -35,7 +34,7 @@ def test_prune_pages_site_keeps_html_and_referenced_molmo_images(tmp_path: Path)
         <div style="background-image:url('robot_views/step-001.verify.png')"></div>
         """,
     )
-    _write(smoke / "report.html", "<h1>self-contained smoke report</h1>")
+    _write(diagnostics / "diagnostics.html", "<h1>self-contained diagnostics report</h1>")
 
     referenced = [
         molmo_seed / "before.png",
@@ -52,8 +51,8 @@ def test_prune_pages_site_keeps_html_and_referenced_molmo_images(tmp_path: Path)
         robot_views / "unused.png",
         molmo_seed / "claude-events.jsonl",
         molmo_seed / "status.json",
-        smoke / "replay.json",
-        agent_frames / "0001_agent0.png",
+        diagnostics / "claude-events.jsonl",
+        diagnostics / "raw-status.json",
     ]
     for path in unreferenced:
         _write_bytes(path, b"raw evidence")
@@ -67,7 +66,7 @@ def test_prune_pages_site_keeps_html_and_referenced_molmo_images(tmp_path: Path)
         assert not path.exists()
     assert (site / "index.html").is_file()
     assert (site / "molmo" / "live" / "index.html").is_file()
-    assert (smoke / "report.html").is_file()
+    assert (diagnostics / "diagnostics.html").is_file()
 
 
 def test_prune_pages_site_reports_missing_local_references(tmp_path: Path) -> None:

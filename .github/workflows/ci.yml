@@ -12,23 +12,13 @@ on:
         required: false
         default: "true"
 
-# Needed by the deploy-pages job (push to main only) to publish report.html
-# to https://miaodx.github.io/roboclaws/ via GitHub Pages.
 permissions:
   actions: read
   contents: read
   pages: write
   id-token: write
 
-env:
-  # Override in repo settings to roll the Gateway without code edits.
-  # Empty means bootstrap.sh uses OPENCLAW_DEFAULTS.
-  OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE }}
-
 jobs:
-  # ---------------------------------------------------------------------------
-  # Job 1: Lint + mock tests (every push and PR)
-  # ---------------------------------------------------------------------------
   lint-and-mock:
     name: Lint & mock tests
     runs-on: ubuntu-latest
@@ -41,27 +31,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      # Cache the AI2-THOR Unity binary (~1 GB) so it doesn't re-download each run.
-      # The cache is populated on first run; subsequent runs restore instantly.
-      - name: Cache AI2-THOR Unity build
-        uses: actions/cache@v4
-        with:
-          path: ~/.ai2thor
-          key: ${{ runner.os }}-ai2thor-v1
-
-      # Xvfb provides a virtual display for AI2-THOR's Unity renderer.
-      # libgl1 / libglib2.0-0 are runtime libraries Unity needs on Linux.
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Install just
         env:
@@ -74,510 +45,19 @@ jobs:
           "$HOME/.local/bin/just" --version
 
       - name: Install Python dependencies
-        run: pip install -e ".[dev]"
+        run: uv sync --extra dev
 
       - name: Run required PR gate
         run: just agent::verify ci-required
 
-      - name: Upload HTML reports
+      - name: Upload required-gate output
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: report-mock
+          name: report-required
           path: output/demo/**
           if-no-files-found: warn
 
-  # ---------------------------------------------------------------------------
-  # Job 2: Real-model smoke test (push to main only, to control API cost)
-  # ---------------------------------------------------------------------------
-  real-model-smoke:
-    name: Real-model smoke test (Kimi)
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      # Share the AI2-THOR Unity build cache with the mock job (~1 GB).
-      - name: Cache AI2-THOR Unity build
-        uses: actions/cache@v4
-        with:
-          path: ~/.ai2thor
-          key: ${{ runner.os }}-ai2thor-v1
-
-      # Xvfb + GL runtime libs are required for the headless Unity renderer.
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0
-
-      - name: Install Python dependencies
-        run: pip install -e ".[dev]"
-
-      # Advisory probe only: transient Kimi overloads should not block the real
-      # smoke run before it even starts. The actual smoke games below now have
-      # provider-level retries and are the authoritative gate for this job.
-      - name: Validate KIMI_API_KEY (advisory)
-        continue-on-error: true
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-        run: python scripts/dev/check_kimi_key.py
-
-      # Real smoke test: territory game driven by Kimi inside a real AI2-THOR
-      # scene.  Budget is 100 steps so the #41 termination logic (all reachable
-      # cells claimed, or 2*agent_count stale steps) can actually fire for the
-      # right reason instead of always hitting max_steps at step 5.  Kimi cost
-      # is ~2 cents per 100-step agent → ~4 cents for this step.
-      - name: Run territory smoke game (Kimi + AI2-THOR)
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-        run: |
-          xvfb-run -a python examples/games/territory_game.py \
-            --model kimi --agents 2 --steps 100 \
-            --output-dir output/smoke/territory
-
-      - name: Generate HTML report from smoke replay
-        run: |
-          python -m roboclaws.core.reporter output/smoke/territory \
-            --rerun-command "just task::run territory vlm visual model=kimi agents=2 steps=100 output_dir=output/smoke/territory"
-
-      # Cooperative counterpart of the territory smoke.  Same 100-step budget
-      # so the coverage-game 95% early-termination re-enabled by #41 has a real
-      # chance to fire before max_steps.  Total push cost stays well under the
-      # "few cents per run" budget noted above.
-      - name: Run coverage smoke game (Kimi + AI2-THOR)
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-        run: |
-          xvfb-run -a python examples/games/coverage_game.py \
-            --model kimi --agents 2 --steps 100 \
-            --output-dir output/smoke/coverage
-
-      - name: Generate HTML report from coverage smoke replay
-        run: |
-          python -m roboclaws.core.reporter output/smoke/coverage \
-            --rerun-command "just task::run coverage vlm visual model=kimi agents=2 steps=100 output_dir=output/smoke/coverage"
-
-      - name: Upload smoke replay + HTML report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: report-real-model
-          path: output/smoke/**
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  # Job 3: Ephemeral OpenClaw navigation smoke (Phase 2 shipping path).
-  #
-  # Bootstraps a local OpenClaw Gateway with N named agents (agent-0, agent-1,
-  # ...) using scripts/openclaw/openclaw-bootstrap.sh — same entry point users run
-  # locally (see docs/openclaw-local.md). Then runs examples/openclaw/openclaw_demo.py
-  # which posts each turn to /v1/chat/completions with
-  # model="openclaw/agent-<id>". No bind mount: frames flow inline as
-  # data:image/jpeg;base64 URLs.
-  #
-  # Job-level continue-on-error keeps a Gateway-outage from blocking `main`;
-  # publish-pages still runs and simply omits the OpenClaw card when the
-  # artifact isn't uploaded.
-  # ---------------------------------------------------------------------------
-  openclaw-smoke:
-    name: OpenClaw ephemeral integration (Kimi)
-    runs-on: ubuntu-latest
-    needs: lint-and-mock
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    continue-on-error: true
-
-    env:
-      OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      - name: Cache AI2-THOR Unity build
-        uses: actions/cache@v4
-        with:
-          path: ~/.ai2thor
-          key: ${{ runner.os }}-ai2thor-v1
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0
-
-      - name: Install Python dependencies
-        run: pip install -e ".[dev]"
-
-      # Single source of truth for Gateway setup — bootstrap.sh pulls/runs
-      # the pinned image, pre-seeds the config volume, registers N named
-      # agents (agent-0..agent-(AGENTS-1)) with per-agent Kimi auth, waits
-      # for /readyz, probes agent-0 with a PONG turn, and echoes the live
-      # bearer token on stdout. Everything else goes to stderr.
-      - name: Bootstrap OpenClaw Gateway (2 named agents)
-        id: gateway
-        continue-on-error: true
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          AGENTS: "2"
-          ROBOCLAWS_MCP_ENABLED: "0"
-          HOST_IP: "127.0.0.1"
-          PORT: "18789"
-        run: |
-          TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)
-          echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
-      # Match the local-dev defaults (200-step cap + auto-convergence on
-      # `3*agent_count` stale steps).  The demo exits early with
-      # termination_reason="stale" once the two agents can't reach a new
-      # grid cell for 6 consecutive turns, which in FloorPlan201 typically
-      # fires well before step 60 — so actual Kimi spend stays comparable
-      # to the old 10-step cap while CI exercises the same code path a
-      # local user hits.  The deep game-mode VLM smokes still live in
-      # real-model-smoke.
-      - name: Run OpenClaw navigation demo
-        if: steps.gateway.outcome == 'success'
-        env:
-          OPENCLAW_GATEWAY_TOKEN: ${{ steps.gateway.outputs.token }}
-          OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
-        run: |
-          xvfb-run -a python examples/openclaw/openclaw_demo.py \
-            --agents 2 --steps 200 \
-            --output-dir output/openclaw/demo
-
-      - name: Generate demo HTML report
-        if: steps.gateway.outcome == 'success'
-        run: |
-          python -m roboclaws.core.reporter output/openclaw/demo \
-            --rerun-command "just task::run ai2thor-nav openclaw visual agents=2 steps=200 output_dir=output/openclaw/demo"
-
-      - name: Dump Gateway logs on failure
-        if: failure() && steps.gateway.outcome == 'success'
-        run: docker logs openclaw-gateway || true
-
-      - name: Stop Gateway
-        if: always() && steps.gateway.outcome == 'success'
-        run: docker rm -f openclaw-gateway || true
-
-      - name: Upload OpenClaw reports
-        if: always() && steps.gateway.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-openclaw
-          path: output/openclaw/**
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  # Job 4a: Territory game over OpenClaw (Kimi, push to main only).
-  # Chained after openclaw-smoke to avoid hitting the Kimi rate budget
-  # simultaneously. continue-on-error so a yellow job doesn't block Pages.
-  # ---------------------------------------------------------------------------
-  territory-openclaw-smoke:
-    name: OpenClaw territory smoke (Kimi)
-    runs-on: ubuntu-latest
-    needs: openclaw-smoke
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    continue-on-error: true
-    concurrency:
-      group: openclaw-kimi
-      cancel-in-progress: false
-
-    env:
-      OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      - name: Cache AI2-THOR Unity build
-        uses: actions/cache@v4
-        with:
-          path: ~/.ai2thor
-          key: ${{ runner.os }}-ai2thor-v1
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0
-
-      - name: Install Python dependencies
-        run: pip install -e ".[dev]"
-
-      - name: Bootstrap OpenClaw Gateway (2 agents — aggressive, defensive)
-        id: gateway
-        continue-on-error: true
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          AGENTS: "2"
-          AGENT_SOULS: "aggressive,defensive"
-          ROBOCLAWS_MCP_ENABLED: "0"
-          HOST_IP: "127.0.0.1"
-          PORT: "18789"
-        run: |
-          TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)
-          echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Run territory game over OpenClaw
-        if: steps.gateway.outcome == 'success'
-        env:
-          OPENCLAW_GATEWAY_TOKEN: ${{ steps.gateway.outputs.token }}
-          OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
-          AGENT_SOULS: "aggressive,defensive"
-        run: |
-          xvfb-run -a python examples/games/territory_game.py \
-            --backend openclaw --agents 2 --steps 30 \
-            --output-dir output/openclaw/territory
-
-      - name: Generate territory HTML report
-        if: steps.gateway.outcome == 'success'
-        run: |
-          python -m roboclaws.core.reporter output/openclaw/territory \
-            --rerun-command "just task::run territory openclaw visual agents=2 steps=30 souls=aggressive,defensive output_dir=output/openclaw/territory"
-
-      - name: Dump Gateway logs on failure
-        if: failure() && steps.gateway.outcome == 'success'
-        run: docker logs openclaw-gateway || true
-
-      - name: Stop Gateway
-        if: always() && steps.gateway.outcome == 'success'
-        run: docker rm -f openclaw-gateway || true
-
-      - name: Upload OpenClaw territory reports
-        if: always() && steps.gateway.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-openclaw-territory
-          path: output/openclaw/territory/**
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  # Job 4b: Coverage game over OpenClaw (Kimi, push to main only).
-  # Chained after territory-openclaw-smoke to avoid rate-budget collisions.
-  # ---------------------------------------------------------------------------
-  coverage-openclaw-smoke:
-    name: OpenClaw coverage smoke (Kimi)
-    runs-on: ubuntu-latest
-    needs: territory-openclaw-smoke
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    continue-on-error: true
-    concurrency:
-      group: openclaw-kimi
-      cancel-in-progress: false
-
-    env:
-      OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      - name: Cache AI2-THOR Unity build
-        uses: actions/cache@v4
-        with:
-          path: ~/.ai2thor
-          key: ${{ runner.os }}-ai2thor-v1
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0
-
-      - name: Install Python dependencies
-        run: pip install -e ".[dev]"
-
-      - name: Bootstrap OpenClaw Gateway (2 agents — cooperative)
-        id: gateway
-        continue-on-error: true
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          AGENTS: "2"
-          AGENT_SOULS: "cooperative,cooperative"
-          PERSONALITY_PROBE: "0"
-          ROBOCLAWS_MCP_ENABLED: "0"
-          HOST_IP: "127.0.0.1"
-          PORT: "18789"
-        run: |
-          TOKEN=$(./scripts/openclaw/openclaw-bootstrap.sh)
-          echo "::add-mask::$TOKEN"
-          echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
-
-      - name: Run coverage game over OpenClaw
-        if: steps.gateway.outcome == 'success'
-        env:
-          OPENCLAW_GATEWAY_TOKEN: ${{ steps.gateway.outputs.token }}
-          OPENCLAW_GATEWAY_URL: ${{ env.OPENCLAW_GATEWAY_URL }}
-          AGENT_SOULS: "cooperative,cooperative"
-        run: |
-          xvfb-run -a python examples/games/coverage_game.py \
-            --backend openclaw --agents 2 --steps 30 \
-            --output-dir output/openclaw/coverage
-
-      - name: Generate coverage HTML report
-        if: steps.gateway.outcome == 'success'
-        run: |
-          python -m roboclaws.core.reporter output/openclaw/coverage \
-            --rerun-command "just task::run coverage openclaw visual agents=2 steps=30 souls=cooperative,cooperative output_dir=output/openclaw/coverage"
-
-      - name: Dump Gateway logs on failure
-        if: failure() && steps.gateway.outcome == 'success'
-        run: docker logs openclaw-gateway || true
-
-      - name: Stop Gateway
-        if: always() && steps.gateway.outcome == 'success'
-        run: docker rm -f openclaw-gateway || true
-
-      - name: Upload OpenClaw coverage reports
-        if: always() && steps.gateway.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-openclaw-coverage
-          path: output/openclaw/coverage/**
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  # Job 4c: Photo-task autonomous smoke (Kimi, opt-in via commit message tag).
-  #
-  # The "walk the room and photograph each chair/sofa" hand-test, scriptable.
-  # Runs examples/openclaw/openclaw_photo_task.py against a real Gateway+Kimi, then
-  # scores with scripts/openclaw/check_photo_task.py — fails if the agent didn't emit
-  # ≥2 distinct labeled snapshots OR didn't terminate via roboclaws__done.
-  #
-  # Opt-in (not on every push) because the photo task is open-ended: 200-move
-  # budget + 15-min wall, more Kimi spend than the bare nav smoke. Tag your
-  # commit message with [photo-smoke] when you want this run.
-  # ---------------------------------------------------------------------------
-  photo-task-smoke:
-    name: OpenClaw photo-task smoke (Kimi)
-    runs-on: ubuntu-latest
-    needs: lint-and-mock
-    if: |
-      github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && contains(github.event.head_commit.message, '[photo-smoke]')
-    continue-on-error: true
-    concurrency:
-      group: openclaw-kimi
-      cancel-in-progress: false
-
-    env:
-      OPENCLAW_GATEWAY_URL: http://127.0.0.1:18789
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('pyproject.toml') }}
-          restore-keys: ${{ runner.os }}-pip-
-
-      - name: Cache AI2-THOR Unity build
-        uses: actions/cache@v4
-        with:
-          path: ~/.ai2thor
-          key: ${{ runner.os }}-ai2thor-v1
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y xvfb libgl1 libglib2.0-0
-
-      - name: Install Python dependencies
-        run: pip install -e ".[dev]"
-
-      - name: Run photo task (autonomous, self-bootstraps Gateway)
-        env:
-          KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
-          PROVIDER: kimi
-        run: |
-          xvfb-run -a python examples/openclaw/openclaw_photo_task.py \
-            --max-moves 200 --wall-budget 900 \
-            --output-dir output/openclaw/photo-task
-
-      - name: Score photo-task run
-        if: always()
-        run: |
-          python scripts/openclaw/check_photo_task.py \
-            --run-dir output/openclaw/photo-task \
-            --min-targets 2
-
-      - name: Dump Gateway logs on failure
-        if: failure()
-        run: docker logs openclaw-gateway || true
-
-      - name: Stop Gateway
-        if: always()
-        run: docker rm -f openclaw-gateway || true
-
-      - name: Upload photo-task reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: report-photo-task
-          path: output/openclaw/photo-task/**
-          if-no-files-found: warn
-
-  # ---------------------------------------------------------------------------
-  # Job 4d: Opt-in MolmoSpaces live cleanup reports.
-  #
-  # Runs only on manual dispatch or `[molmo-live]` pushes to main. Each matrix
-  # entry gets its own GitHub-hosted runner, so the Kimi/MiMo live reports can
-  # run in parallel while sharing the same restored MolmoSpaces runtime cache.
-  # Failures are uploaded as status JSON so Pages can show skipped/failed tiles
-  # instead of silently omitting models.
-  # ---------------------------------------------------------------------------
   molmo-live-cleanup:
     name: Molmo live cleanup (${{ matrix.model_entry }})
     runs-on: ubuntu-latest
@@ -677,180 +157,63 @@ jobs:
           path: output/molmo/ci-live-published/${{ matrix.model_entry }}/**
           if-no-files-found: warn
 
-  # ---------------------------------------------------------------------------
-  # Job 5: Publish the latest reports to GitHub Pages (main only).
-  # Combines the mock-engine demo (fast, every-push visualization of the report
-  # infrastructure), the real AI2-THOR + Kimi smoke output, and — when
-  # available — the ephemeral OpenClaw reports into a single site served from
-  # https://<owner>.github.io/<repo>/.
-  # ---------------------------------------------------------------------------
   publish-pages:
     name: Publish reports to GitHub Pages
-    # All three openclaw jobs are listed but not hard-required: their
-    # `continue-on-error` means failures surface as yellow and do NOT block
-    # publish-pages. Each download step below is best-effort so missing
-    # artifacts simply omit that tile from the landing page.
-    needs: [lint-and-mock, real-model-smoke, openclaw-smoke, territory-openclaw-smoke, coverage-openclaw-smoke, molmo-live-cleanup]
+    needs: [lint-and-mock, molmo-live-cleanup]
     if: |
       always()
       && needs.lint-and-mock.result == 'success'
       && github.ref == 'refs/heads/main'
       && (
-        (
-          github.event_name == 'push'
-          && needs.real-model-smoke.result == 'success'
-        )
+        github.event_name == 'workflow_dispatch'
         || (
-          github.event_name == 'workflow_dispatch'
-          && github.event.inputs.molmo_live == 'true'
+          github.event_name == 'push'
+          && contains(github.event.head_commit.message, '[molmo-live]')
         )
       )
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
-      # Need the repo checked out so scripts/reports/write_pages_index.py is available.
       - uses: actions/checkout@v4
 
-      - name: Download mock demo artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: report-mock
-          path: site
-
-      - name: Download real-model smoke artifact
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: report-real-model
-          path: smoke-src
-
-      # Best-effort: runs where openclaw-smoke degraded to yellow won't have
-      # these artifacts. `continue-on-error` keeps Pages publishing regardless.
-      - name: Download OpenClaw nav demo artifact (best-effort)
-        id: download_openclaw
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: report-openclaw
-          path: openclaw-src
-
-      - name: Download OpenClaw territory artifact (best-effort)
-        id: download_openclaw_territory
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: report-openclaw-territory
-          path: openclaw-src/territory
-
-      - name: Download OpenClaw coverage artifact (best-effort)
-        id: download_openclaw_coverage
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: report-openclaw-coverage
-          path: openclaw-src/coverage
-
-      - name: Download Molmo live Kimi artifact (best-effort)
-        id: download_molmo_live_kimi
+      - name: Download Molmo live Kimi artifact
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: report-molmo-live-kimi-k2.6
           path: molmo-live-src/kimi-k2.6
 
-      - name: Download Molmo live MiMo v2.5 artifact (best-effort)
-        id: download_molmo_live_mimo_v25
+      - name: Download Molmo live MiMo v2.5 artifact
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: report-molmo-live-mimo-v2.5
           path: molmo-live-src/mimo-v2.5
 
-      - name: Download Molmo live Kimi RAW_FPV artifact (best-effort)
-        id: download_molmo_live_kimi_camera_raw
+      - name: Download Molmo live Kimi RAW_FPV artifact
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: report-molmo-live-kimi-k2.6-camera-raw
           path: molmo-live-src/kimi-k2.6-camera-raw
 
-      - name: Download Molmo live MiMo v2.5 RAW_FPV artifact (best-effort)
-        id: download_molmo_live_mimo_v25_camera_raw
+      - name: Download Molmo live MiMo v2.5 RAW_FPV artifact
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: report-molmo-live-mimo-v2.5-camera-raw
           path: molmo-live-src/mimo-v2.5-camera-raw
 
-      # Normal main pushes do not run the opt-in Molmo live matrix, but they
-      # still redeploy Pages. Rehydrate the latest successful live dispatch so
-      # routine report publishes do not erase the public Molmo live section.
-      - name: Download latest Molmo live dispatch artifacts (best-effort)
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -f molmo-live-src/kimi-k2.6/status.json ] \
-             || [ -f molmo-live-src/mimo-v2.5/status.json ] \
-             || [ -f molmo-live-src/kimi-k2.6-camera-raw/status.json ] \
-             || [ -f molmo-live-src/mimo-v2.5-camera-raw/status.json ]; then
-            echo "Molmo live artifacts are already present in this workflow run."
-            exit 0
-          fi
-
-          run_id="$(gh run list \
-            --workflow ci.yml \
-            --branch main \
-            --event workflow_dispatch \
-            --status success \
-            --limit 10 \
-            --json databaseId \
-            --jq '.[0].databaseId // ""')"
-          if [ -z "$run_id" ]; then
-            echo "No prior successful Molmo live workflow_dispatch run found."
-            exit 0
-          fi
-
-          echo "Downloading Molmo live artifacts from workflow run ${run_id}."
-          gh run download "$run_id" \
-            --name report-molmo-live-kimi-k2.6 \
-            --dir molmo-live-src/kimi-k2.6 || true
-          gh run download "$run_id" \
-            --name report-molmo-live-mimo-v2.5 \
-            --dir molmo-live-src/mimo-v2.5 || true
-          gh run download "$run_id" \
-            --name report-molmo-live-kimi-k2.6-camera-raw \
-            --dir molmo-live-src/kimi-k2.6-camera-raw || true
-          gh run download "$run_id" \
-            --name report-molmo-live-mimo-v2.5-camera-raw \
-            --dir molmo-live-src/mimo-v2.5-camera-raw || true
-
-      # Slot replays at /smoke/{territory,coverage}/ and (when present)
-      # /openclaw/{demo,territory,coverage}/, then rewrite index.html so
-      # the landing page exposes every stack side-by-side.
       - name: Assemble Pages site
         run: |
-          INDEX_FLAGS=""
-          if [ -d smoke-src/territory ] && [ -d smoke-src/coverage ]; then
-            mkdir -p site/smoke
-            cp -r smoke-src/territory site/smoke/territory
-            cp -r smoke-src/coverage site/smoke/coverage
-            INDEX_FLAGS="$INDEX_FLAGS --include-smoke"
-          fi
-          if [ -d openclaw-src/demo ] || [ -d openclaw-src/territory ] || [ -d openclaw-src/coverage ]; then
-            mkdir -p site/openclaw
-            [ -d openclaw-src/demo ]      && cp -r openclaw-src/demo      site/openclaw/demo
-            [ -d openclaw-src/territory ] && cp -r openclaw-src/territory site/openclaw/territory
-            [ -d openclaw-src/coverage ]  && cp -r openclaw-src/coverage  site/openclaw/coverage
-            INDEX_FLAGS="$INDEX_FLAGS --include-openclaw"
-          fi
+          mkdir -p site
           if [ -d molmo-live-src ]; then
             python3 scripts/molmo_cleanup/assemble_ci_live_pages.py molmo-live-src site/molmo/live
-            INDEX_FLAGS="$INDEX_FLAGS --include-molmo-live"
           fi
-          python3 scripts/reports/write_pages_index.py site $INDEX_FLAGS
+          python3 scripts/reports/write_pages_index.py site --include-molmo-live
 
       - name: Prune public Pages artifact
         run: python3 scripts/reports/prune_pages_site.py site

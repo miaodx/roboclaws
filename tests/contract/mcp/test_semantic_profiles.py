@@ -11,8 +11,6 @@ from roboclaws.mcp.entrypoint import (
     register_profile_tools,
 )
 from roboclaws.mcp.profiles import (
-    AI2THOR_NAVIGATION_PROFILE,
-    CLASSIFICATION_PRIVILEGED_TOOL,
     HOUSEHOLD_EPISODE_PROFILE,
     HOUSEHOLD_MANIPULATION_PROFILE,
     HOUSEHOLD_WORLD_PROFILE,
@@ -22,7 +20,6 @@ from roboclaws.mcp.profiles import (
     ToolDescriptor,
     assert_public_profile_metadata_safe,
     contract_profile,
-    contract_profile_metadata,
     contract_profile_names,
     validate_contract_profile,
 )
@@ -55,28 +52,12 @@ def _handlers(profile_id: str) -> dict[str, Any]:
 
 def test_contract_profile_registry_contains_backend_domain_profiles() -> None:
     assert contract_profile_names() == (
-        AI2THOR_NAVIGATION_PROFILE,
         HOUSEHOLD_WORLD_PROFILE,
         HOUSEHOLD_MANIPULATION_PROFILE,
         HOUSEHOLD_EPISODE_PROFILE,
         MOLMOSPACES_CLEANUP_PROFILE,
         REAL_ROBOT_CLEANUP_PROFILE,
     )
-
-
-def test_ai2thor_profile_labels_scene_objects_and_goto_as_privileged_tools() -> None:
-    metadata = contract_profile_metadata(AI2THOR_NAVIGATION_PROFILE)
-
-    public_names = {tool["name"] for tool in metadata["public_tools"]}
-    privileged_tool_names = {tool["name"] for tool in metadata["privileged_tools"]}
-
-    assert {"observe", "observe_archived", "move", "done"} <= public_names
-    assert "scene_objects" not in public_names
-    assert "goto" not in public_names
-    assert {"scene_objects", "goto"} <= privileged_tool_names
-    assert {tool["classification"] for tool in metadata["privileged_tools"]} == {
-        CLASSIFICATION_PRIVILEGED_TOOL
-    }
 
 
 def test_household_world_profile_is_task_neutral_and_world_only() -> None:
@@ -215,14 +196,14 @@ def test_public_profile_safety_rejects_private_terms_in_serialized_metadata() ->
 
 def test_router_registers_only_selected_profile_public_tools() -> None:
     fake_mcp = FakeFastMCP()
-    router = MCPProfileRouter(AI2THOR_NAVIGATION_PROFILE, _handlers(AI2THOR_NAVIGATION_PROFILE))
+    router = MCPProfileRouter(HOUSEHOLD_WORLD_PROFILE, _handlers(HOUSEHOLD_WORLD_PROFILE))
 
     registered = router.register_tools(fake_mcp)
 
-    assert set(registered) == set(contract_profile(AI2THOR_NAVIGATION_PROFILE).public_tool_names())
+    assert set(registered) == set(contract_profile(HOUSEHOLD_WORLD_PROFILE).public_tool_names())
     assert set(fake_mcp.tools) == set(registered)
-    assert "scene_objects" not in fake_mcp.tools
-    assert "goto" not in fake_mcp.tools
+    assert "pick" not in fake_mcp.tools
+    assert "done" not in fake_mcp.tools
 
 
 def test_register_profile_tools_helper_registers_selected_public_tools() -> None:
@@ -241,16 +222,16 @@ def test_register_profile_tools_helper_registers_selected_public_tools() -> None
 def test_router_rejects_unknown_profile_with_allowed_ids() -> None:
     with pytest.raises(
         ValueError,
-        match="allowed profiles: ai2thor_navigation_v1, household_world_v1, "
-        "household_manipulation_v1, household_episode_v1, molmospaces_cleanup_v1, "
+        match="allowed profiles: household_world_v1, household_manipulation_v1, "
+        "household_episode_v1, molmospaces_cleanup_v1, "
         "real_robot_cleanup_v1",
     ):
         load_contract_profile("missing_profile")
 
 
 def test_router_rejects_handlers_not_in_public_profile() -> None:
-    handlers = _handlers(AI2THOR_NAVIGATION_PROFILE)
-    handlers["goto"] = lambda **_: {"ok": True}
+    handlers = _handlers(HOUSEHOLD_WORLD_PROFILE)
+    handlers["pick"] = lambda **_: {"ok": True}
 
-    with pytest.raises(ValueError, match="handlers outside public profile: goto"):
-        MCPProfileRouter(AI2THOR_NAVIGATION_PROFILE, handlers)
+    with pytest.raises(ValueError, match="handlers outside public profile: pick"):
+        MCPProfileRouter(HOUSEHOLD_WORLD_PROFILE, handlers)

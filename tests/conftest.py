@@ -29,7 +29,6 @@ CONTRACT_NAME_PARTS = (
     "mcp",
     "openclaw",
     "realworld",
-    "render_autonomous_replay",
     "replay",
     "report",
     "run_artifacts",

@@ -27,21 +27,21 @@ Open-ended goal
 ```
 
 - **Runnable Surfaces And Intents** are public run contracts such as
-  `surface=ai2thor-world intent=navigate`,
-  `surface=household-world intent=map-build`, and
-  `surface=household-world intent=cleanup`. They own command names,
+  `surface=household-world intent=map-build`,
+  `surface=household-world intent=cleanup`,
+  `surface=household-world intent=open-ended`, and
+  `surface=planner-proof intent=planner-proof`. They own command names,
   parameters, report shape, and acceptance gates.
 - **Worlds / Scenes** are operator-facing rooms, maps, or digital twins such as
-  `world=molmospaces/val_0`, `world=agibot-g2/map-12`, or
-  `world=ai2thor/FloorPlan201`.
+  `world=molmospaces/val_0`, `world=agibot-g2/map-12`,
+  `world=b1-map12`, or `world=planner-proof/default`.
 - **Backend Runtimes** are swappable execution environments such as
-  `backend=mujoco`, `backend=isaaclab`, `backend=agibot-gdk`, or
-  `backend=ai2thor`.
+  `backend=mujoco`, `backend=isaaclab`, or `backend=agibot-gdk`.
 - **Agent Skills** own strategy: prompts, scripts, examples, recovery loops,
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
   (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
-  `direct-runner`, `openclaw-gateway`, `vlm-policy`, or `script-runner`) from
+  `direct-runner`, `openclaw-gateway`, or `script-runner`) from
   the model/key route (`provider_profile=codex-env`, `mify`,
   `mimo-anthropic`, and related profiles).
 - **Capability Profiles** define reusable capability environments. Skills
@@ -55,31 +55,9 @@ provenance, safety gates, operator map context, and blocked-capability status.
 
 ## Major Stacks
 
-Roboclaws currently has two embodied-demo stacks.
-
-### AI2-THOR Navigation
-
-This stack proves multi-agent navigation and coding-agent MCP control over
-AI2-THOR scenes.
-
-Key pieces:
-
-- `roboclaws/core/engine.py` owns the `MultiAgentEngine` wrapper around
-  AI2-THOR.
-- `roboclaws/core/vlm.py` and `roboclaws/core/providers/` own provider routing.
-- `roboclaws/ai2thor/navigation_mcp.py` exposes the AI2-THOR navigation MCP
-  surface.
-- `roboclaws/cli/agent_server.py` starts coding-agent MCP servers for
-  `ai2thor-nav`, `household-cleanup`, and `semantic-map-build`.
-- `roboclaws/agents/live_runtime.py` defines the provider-neutral runtime
-  contract for one live coding-agent invocation. Current Codex and Claude Code
-  CLI routes remain the product baselines; experimental SDK runtimes live under
-  `roboclaws/agents/drivers/` without changing public task strategy.
-- `examples/games/` contains runnable game examples.
-
-The canonical navigation tools are `observe`, `observe_archived`, `move`, and
-`done`. Simulator helpers such as `scene_objects` and `goto` are privileged
-opt-ins for demos; they are not real-robot capability claims.
+Roboclaws currently centers on the household-world demo stack. Retired
+AI2-THOR, direct-VLM, and route-card demos may still appear in historical
+plans or archived reports, but they are not current public launch axes.
 
 ### Household World And Cleanup
 
@@ -140,9 +118,10 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 Examples:
 
 ```bash
-just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=codex-cli report=visual
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=baseline seed=7
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels scenario_setup=relocate-cleanup-related-objects seed=7
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"
+just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
 just console::run
 ```
 
@@ -157,13 +136,13 @@ open-vocabulary bbox proposer. `camera_labeler` is invalid for world-label and
 raw-FPV lanes. The `smoke` token remains a cheap synthetic preset, not an
 evidence lane.
 
-Cleanup lanes do not select online/offline map behavior. The default map
-projection is `map_mode=minimal`, which exposes occupancy geometry, generated
-exploration candidates, and runtime semantic anchors instead of authored room
-or fixture labels. Use `runtime_map_prior=...` to consume a raw runtime map or
-canonical Actionable Semantic Map Snapshot prior. `map_mode=rich` remains only
-as an explicit legacy/debug shortcut for tests that need pre-authored public
-fixture semantics.
+Cleanup lanes do not select online/offline map behavior. The default
+start-of-run map context is the Base Navigation Map: occupancy geometry,
+generated exploration candidates, and public room-category hints when
+available. Use `runtime_map_prior=...` to consume a raw runtime map or canonical
+Actionable Semantic Map Snapshot prior. Historical `minimal` / `rich` map
+artifacts may still be readable, but current product docs should not ask
+operators or agents to choose those modes.
 
 The clean-slate household public shape is `surface=household-world` plus
 explicit intents. `intent=map-build` produces Runtime Metric Map evidence,

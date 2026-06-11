@@ -1,1 +1,0 @@
-games/coverage_game.py

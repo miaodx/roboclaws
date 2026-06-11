@@ -18,6 +18,7 @@ from roboclaws.agents.prompts.household_cleanup import (
 )
 from roboclaws.devtools.commands import CommandError, resolve_surface_run
 from roboclaws.launch import resolve_surface_launch
+from roboclaws.launch.catalog import LaunchError
 from roboclaws.launch.evaluation import (
     checker_flags_for_household_intent,
     household_intent_id_for_checker,
@@ -217,10 +218,6 @@ def surface_args_from_legacy_task_args(*args: str) -> tuple[str, ...]:
         mode = ""
 
     task_map = {
-        "ai2thor-nav": ("surface=ai2thor-world", "intent=navigate"),
-        "photo-chairs": ("surface=ai2thor-world", "intent=photo-capture"),
-        "territory": ("surface=ai2thor-games", "intent=territory"),
-        "coverage": ("surface=ai2thor-games", "intent=coverage"),
         "semantic-map-build": ("surface=household-world", "intent=map-build"),
         "household-cleanup": ("surface=household-world", "intent=cleanup"),
         "molmo-cleanup": ("surface=household-world", "intent=cleanup"),
@@ -233,7 +230,6 @@ def surface_args_from_legacy_task_args(*args: str) -> tuple[str, ...]:
         "direct": "agent_engine=direct-runner",
         "mcp-smoke": "agent_engine=direct-runner",
         "openclaw": "agent_engine=openclaw-gateway",
-        "vlm": "agent_engine=vlm-policy",
         "script": "agent_engine=script-runner",
     }
     normalized_overrides: list[str] = []
@@ -392,9 +388,7 @@ def test_justfile_marks_implementation_modules_private() -> None:
 
     for module in (
         "openclaw",
-        "vlm",
         "chat",
-        "appliance",
         "dev",
         "mcp",
         "code",
@@ -642,23 +636,17 @@ def test_surface_launch_exports_goal_contract_to_lower_recipe_environment() -> N
     assert json.loads(env["ROBOCLAWS_GOAL_CONTRACT_JSON"])["intent"] == "cleanup"
 
 
-def test_surface_launch_plan_keeps_explicit_non_household_report_axis() -> None:
-    plan = resolve_surface_launch(
-        (
-            "surface=ai2thor-world",
-            "agent_engine=openclaw-gateway",
-            "intent=navigate",
+def test_surface_launch_rejects_retired_ai2thor_surface() -> None:
+    with pytest.raises(LaunchError, match="unsupported surface 'ai2thor-world'") as exc:
+        resolve_surface_launch(
+            (
+                "surface=ai2thor-world",
+                "agent_engine=openclaw-gateway",
+                "intent=navigate",
+            )
         )
-    )
 
-    assert plan.surface == "ai2thor-world"
-    assert plan.intent == "navigate"
-    assert plan.dispatch_target == "ai2thor-world.navigate"
-    assert plan.profile is None
-    assert plan.report == "visual"
-    assert plan.backend == "ai2thor"
-    assert plan.goal_contract.surface == "ai2thor-world"
-    assert plan.goal_contract.intent == "navigate"
+    assert exc.value.hint == "expected household-world|planner-proof"
 
 
 def test_household_checker_flags_are_generated_from_intent_policy() -> None:
@@ -873,29 +861,21 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
     )
 
 
-def test_surface_launch_plan_keeps_non_household_report_axis() -> None:
-    plan = resolve_surface_launch(
-        (
-            "surface=ai2thor-world",
-            "agent_engine=openclaw-gateway",
-            "intent=navigate",
-            "report=minimal",
+def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
+    with pytest.raises(LaunchError, match="unsupported agent_engine 'vlm-policy'") as exc:
+        resolve_surface_launch(
+            (
+                "surface=household-world",
+                "agent_engine=vlm-policy",
+                "intent=cleanup",
+                "evidence_lane=world-oracle-labels",
+            )
         )
-    )
 
-    assert plan.argv == (
-        "just",
-        "agent::run",
-        "ai2thor-world.navigate",
-        "openclaw-gateway",
-        "minimal",
-        "scene=FloorPlan201",
-        "backend=ai2thor",
+    assert exc.value.hint == (
+        "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|"
+        "openclaw-gateway|script-runner"
     )
-    assert plan.profile is None
-    assert plan.report == "minimal"
-    assert plan.backend == "ai2thor"
-    assert plan.prompt_id == "ai2thor_nav"
 
 
 def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
@@ -965,25 +945,38 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
     assert not any(item.startswith("generated_mess_count=") for item in plan.overrides)
 
 
-def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
-    route = trace_task_run("ai2thor-nav", "openclaw")
+def test_prompt_mapping_rejects_retired_ai2thor_nav_task() -> None:
+    stderr = assert_task_run_fails("ai2thor-nav", "openclaw")
 
-    assert route == [
-        "just",
-        "openclaw::run",
-        "nav",
-        "2",
-        "10",
-        "kimi",
-        "output/openclaw/nav",
-    ]
+    assert "unsupported surface 'ai2thor-nav'" in stderr
+    assert "expected household-world|planner-proof" in stderr
 
 
-def test_openclaw_direct_game_recipe_disables_mcp_tools() -> None:
+def test_openclaw_module_no_longer_exposes_direct_game_recipe() -> None:
     text = OPENCLAW_JUST.read_text(encoding="utf-8")
 
-    assert 'if [[ "{{game}}" != "photo" ]]; then' in text
-    assert "bootstrap_cmd+=(ROBOCLAWS_MCP_ENABLED=0)" in text
+    assert not re.search(r"^run\b", text, re.MULTILINE)
+    assert "ROBOCLAWS_MCP_URL is required" in text
+    assert "openclaw::run" not in text
+
+
+@pytest.mark.parametrize("target", ("navigator", "regression", "sim", "openclaw"))
+def test_agent_harness_rejects_retired_targets(target: str) -> None:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "agent::harness", target],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert f"unsupported harness target '{target}'" in result.stderr
 
 
 def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
@@ -1966,18 +1959,18 @@ def test_ci_does_not_define_codex_live_proof() -> None:
     assert ".tmp/coding-agent-bin/codex" not in workflow
 
 
-def test_ci_direct_openclaw_game_smokes_disable_mcp_tools() -> None:
+def test_ci_no_longer_defines_retired_openclaw_game_smokes() -> None:
     workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
 
-    assert workflow.count('ROBOCLAWS_MCP_ENABLED: "0"') == 3
-    for job_name in (
-        "Bootstrap OpenClaw Gateway (2 named agents)",
-        "Bootstrap OpenClaw Gateway (2 agents — aggressive, defensive)",
-        "Bootstrap OpenClaw Gateway (2 agents — cooperative)",
+    assert 'ROBOCLAWS_MCP_ENABLED: "0"' not in workflow
+    for retired_name in (
+        "territory-openclaw-smoke",
+        "coverage-openclaw-smoke",
+        "openclaw-smoke",
+        "photo-task-smoke",
+        "real-model-smoke",
     ):
-        job_start = workflow.index(job_name)
-        job_chunk = workflow[job_start : job_start + 500]
-        assert 'ROBOCLAWS_MCP_ENABLED: "0"' in job_chunk
+        assert retired_name not in workflow
 
 
 def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback() -> None:
@@ -2448,18 +2441,9 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "source scripts/dev/coding_agent_env.sh" in code_text
     assert "roboclaws_load_dotenv .env" in code_text
     assert "roboclaws_codex_provider_args codex_model_args" in code_text
-    assert "roboclaws_claude_provider_args claude_model_args claude_env_args" in code_text
-    assert 'docker_codex=("$repo_root/scripts/dev/coding_agent_docker.sh" run codex)' in code_text
-    assert '"${docker_codex[@]}" "${codex_model_args[@]}" {{codex_full_permission_args}}' in (
-        code_text
-    )
-    assert (
-        'claude_command=("${docker_claude[@]}" "${claude_model_args[@]}" '
-        "{{claude_full_permission_args}})" in code_text
-    )
-    assert 'for entry in "${claude_env_args[@]}"; do' in code_text
-    assert 'export "$entry"' in code_text
-    assert "export ANTHROPIC_API_KEY" not in code_text
+    assert "roboclaws_claude_provider_args claude_model_args claude_env_args" not in code_text
+    assert not re.search(r"^codex\s", code_text, re.MULTILINE)
+    assert not re.search(r"^cc\s", code_text, re.MULTILINE)
 
     assert "source scripts/dev/coding_agent_env.sh" in molmo_text
     assert "roboclaws_codex_provider_args codex_model_args" in molmo_text

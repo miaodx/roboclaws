@@ -1,6 +1,6 @@
 # Contributing to Roboclaws
 
-## Development setup
+## Development Setup
 
 ```bash
 git clone https://github.com/MiaoDX/roboclaws.git
@@ -8,167 +8,98 @@ cd roboclaws
 uv sync --extra dev
 ```
 
-Run the linter and tests before every commit:
+Run the fast gate before ordinary commits:
 
 ```bash
 ruff check .
 ruff format --check .
-pytest
+./scripts/dev/run_pytest_standalone.sh -q
 ```
 
-## Dev tooling: `uv` and `just`
+Use the standalone pytest wrapper on hosts where ROS site-packages leak into
+pytest collection.
 
-Two helper binaries make the day-to-day workflows tolerable. Both are single
-binaries with no system-package dependencies — install once, forget.
+## Dev Tooling
 
 | Tool | What it does | Why we use it |
-|------|--------------|---------------|
-| [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock`, including the standard MolmoSpaces/MuJoCo CPU runtime |
-| [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing runs use `just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>]` with lower-level modules hidden from completion but still available for debugging |
+| --- | --- | --- |
+| `uv` | project environment manager | Builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock`, including the standard MolmoSpaces/MuJoCo CPU runtime. |
+| `just` | command runner | Exposes the small public `run::surface` and `agent::*` facade while keeping implementation modules private. |
 
-### Install
+Install with the upstream single-binary installers if your package manager has
+an older `just`:
 
 ```bash
-# uv — single binary, into ~/.local/bin
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# just — single binary, into ~/.local/bin (Ubuntu apt is stuck at 1.21,
-# which predates module support; use the official script)
 curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
   | bash -s -- --to ~/.local/bin
-
-# Verify (just modules need ≥ 1.31 — current is 1.50+)
-uv --version
-just --version
 ```
 
-If either binary isn't found after install, add `~/.local/bin` to your `$PATH`
-(`export PATH="$HOME/.local/bin:$PATH"` in your shell rc).
-
-### Discover recipes
+Discover commands:
 
 ```bash
-just                       # default: prints the small public facade
-just --list                # same
-just --list run            # human-facing surface grammar
-just --list agent          # maintainer dispatchers
-just --summary             # run::surface plus compact agent::* dispatchers
+just
+just --summary
+just --list run
+just --list agent
 ```
 
-Invoke recipes with the `module::recipe` form:
+Current public examples:
 
 ```bash
-just run::surface surface=ai2thor-world agent_engine=openclaw-gateway intent=navigate
-just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=smoke
-just agent::verify mock
+just run::surface surface=household-world agent_engine=direct-runner intent=map-build evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
 just agent::verify ci-required
 ```
 
-`just <module> <recipe>` (space-separated) also works, but `module::recipe`
-keeps the namespace visible at a glance.
+## Development Topology
 
-### Tab completion (one-time per machine)
+Day-to-day work is split between cloud-style and local sessions.
 
-`just`'s install script does **not** wire up shell completions. Run this
-once to make `just <TAB>`, `just run::<TAB>`, `just agent::<TAB>`, etc.
-work in any directory that has a `justfile`:
+| | Cloud session | Local session |
+| --- | --- | --- |
+| Provider/API keys | usually no | yes, from repo-local `.env` |
+| Simulator/GPU/display resources | no | yes, when configured locally |
+| Backend services | no | yes |
+| Good tasks | docs, CI, mock-covered refactors, issue work | real-provider validation, GPU/backend runs, long debug loops |
+| Validation ceiling | lint, unit, contract, mock gates | real provider + simulator/backend evidence |
 
-```bash
-echo 'source <(just --completions bash)' >> ~/.bashrc
-source ~/.bashrc
-```
+The first validation of a real-provider, GPU, robot, or backend-specific claim
+happens locally. CI keeps accepted proof continuously visible; it should not be
+the first place a local-only claim is exercised.
 
-Zsh / fish equivalents:
-
-```bash
-just --completions zsh  > ~/.zfunc/_just                            # zsh (ensure ~/.zfunc is in fpath)
-just --completions fish > ~/.config/fish/completions/just.fish      # fish
-```
-
-This is per-machine, not per-repo — the completion script reads whichever
-`justfile` is in the current directory, so it works for every `just` project
-you ever clone.
-
-## Development topology: cloud + local
-
-Day-to-day work on this repo is split between two kinds of sessions, sized
-accordingly. The full playbook lives in [`AGENTS.md §7`](../../AGENTS.md);
-contributors should read it before picking up work.
-
-| | Cloud session (Claude Code on the web) | Local session (your workstation) |
-|---|---|---|
-| Has VLM API keys? | no | yes |
-| Has AI2-THOR Unity + GPU/display? | no | yes |
-| Can run OpenClaw Gateway? | no | yes |
-| Typical tasks | research, CI edits, doc edits, mock-covered refactors, opening issues | anything `local-dev`-tagged, real-model validation, long debug loops |
-| Validation ceiling | `ruff` + `pytest` + mock-engine HTML demo pipeline | real Kimi + real Unity end-to-end |
-
-**The first validation of a real-model claim happens in a local session**, not
-in CI. CI's role is to keep that proof continuously live for anyone reading the
-repo. When a cloud session lands a change whose core claim depends on real
-hardware (e.g. "territory terminates early on real AI2-THOR"), it files a
-`local-dev` issue with exact commands + acceptance criteria, and hands off. See
-issue #50 for the template.
-
-## CI overview
-
-CI has one required fast job plus several push-to-`main` smoke/report jobs:
+## CI Overview
 
 | Job | Trigger | Purpose |
-|-----|---------|---------|
-| `lint-and-mock` | every push + PR | `just agent::verify ci-required`: ruff lint, format check, pytest, mock-engine HTML demo |
-| `real-model-smoke` | push to `main` only | 100-step Kimi + real AI2-THOR territory + coverage games |
-| `openclaw-smoke` | push to `main` only (`continue-on-error`) | ephemeral Gateway + Kimi navigation smoke |
-| `territory-openclaw-smoke` | push to `main` only (`continue-on-error`) | OpenClaw-backed territory smoke |
-| `coverage-openclaw-smoke` | push to `main` only (`continue-on-error`) | OpenClaw-backed coverage smoke |
-| `photo-task-smoke` | push to `main` with `[photo-smoke]` in the commit message | chair/sofa photo-task smoke scored by `scripts/openclaw/check_photo_task.py` |
-| `publish-pages` | push to `main` after required smoke inputs | publishes mock, real-model, and available OpenClaw reports to GitHub Pages |
+| --- | --- | --- |
+| `lint-and-mock` | every push and PR | `just agent::verify ci-required`: ruff, format check, deterministic pytest, and active household report contracts. |
+| `molmo-live-cleanup` | push to `main` or manual workflow | Opt-in live household cleanup reports through configured provider profiles. |
+| `publish-pages` | push to `main` | Publishes the Molmo live report site and Pages index. |
 
-## Secrets required for CI
+Required CI must stay deterministic and secret-light. Real provider, Gateway,
+GPU, Isaac, Agibot, and robot-backed runs belong in advisory, manual, scheduled,
+or local-only gates unless explicitly promoted.
 
-### `KIMI_API_KEY`
+## Secrets
 
-**What it is:** API key for the [Moonshot AI (Kimi)](https://platform.moonshot.cn/) service.
-Roboclaws uses the Kimi model in CI because it is OpenAI-compatible, cost-effective
-(~¢8 per 100-step 2-game smoke run), and does not require a separate SDK.
-
-**Where to get it:**
-1. Sign up at <https://platform.moonshot.cn/>.
-2. Navigate to **API Keys** in the dashboard and create a new key.
-
-**How to add it to GitHub Actions:**
-1. Open your fork / the repository on GitHub.
-2. Go to **Settings → Secrets and variables → Actions**.
-3. Click **New repository secret**.
-4. Name: `KIMI_API_KEY`; Value: your key (starts with `sk-`).
-
-**Local validation:**
+Repo-local `.env` is the normal local route and is ignored by git. Common keys:
 
 ```bash
-KIMI_API_KEY=sk-... python scripts/dev/check_kimi_key.py
+KIMI_API_KEY=
+MIMO_TP_KEY=
+NV_API_KEY=
+XM_LLM_API_KEY=
+CODEX_BASE_URL=
+CODEX_API_KEY=
 ```
 
-A successful run prints:
+GitHub secrets are needed only for workflows that run live provider profiles.
+Do not paste secrets into logs, PR descriptions, reports, or planning files.
 
-```
-response: {"action": "MoveAhead"}
-✓ KIMI_API_KEY is valid and returns parseable JSON
-```
-
-## Headless AI2-THOR on Linux
-
-AI2-THOR requires a display.  On CI (and headless servers) use `xvfb-run`:
-
-```bash
-sudo apt-get install xvfb libgl1 libglib2.0-0
-xvfb-run python examples/games/territory_game.py --agents 2 --steps 5 --model mock
-```
-
-The Unity binary (~1 GB) is downloaded to `~/.ai2thor/` on first run and
-cached by the CI workflow automatically.
-
-## Git workflow
+## Git Workflow
 
 - Branch from `main`.
-- Commit messages: `type: description` (feat, fix, ci, docs, refactor).
+- Keep commits scoped.
+- Use `type: description` commit messages such as `fix: tighten cleanup gate`.
 - Push to a feature branch and open a PR targeting `main`.

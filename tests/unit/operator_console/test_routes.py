@@ -55,10 +55,8 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == (
         "/asset-previews/maps/agibot-robot-map-12/preview.png"
     )
-    if "ai2thor/FloorPlan201" in worlds:
-        assert worlds["ai2thor/FloorPlan201"]["preview_assets"] == {}
-    if "ai2thor-games/FloorPlan201" in worlds:
-        assert worlds["ai2thor-games/FloorPlan201"]["preview_assets"] == {}
+    assert "ai2thor/FloorPlan201" not in worlds
+    assert "ai2thor-games/FloorPlan201" not in worlds
     assert worlds["planner-proof/default"]["preview_assets"] == {
         "map": {
             "path": "/previews/molmospaces-val_0-map.png",
