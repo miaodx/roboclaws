@@ -2,7 +2,7 @@
 
 **Status:** Completed for Phase 88 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0079-carry-forward-nested-prior-proof-evidence.md`
+**ADR:** `docs/adr/archive/execution-log/0079-carry-forward-nested-prior-proof-evidence.md`
 
 ## Goal
 

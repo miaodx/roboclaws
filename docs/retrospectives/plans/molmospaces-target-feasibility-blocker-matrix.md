@@ -1,7 +1,7 @@
 # MolmoSpaces Target Feasibility Blocker Matrix
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0066-render-target-feasibility-blocker-matrix.md`
+**ADR:** `docs/adr/archive/execution-log/0066-render-target-feasibility-blocker-matrix.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/75-molmospaces-target-feasibility-blocker-matrix/`
 
 ## Problem

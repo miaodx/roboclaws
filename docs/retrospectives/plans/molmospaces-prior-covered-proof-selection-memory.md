@@ -2,7 +2,7 @@
 
 **Status:** Completed for Phase 92 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0083-exclude-prior-covered-planner-proofs.md`
+**ADR:** `docs/adr/archive/execution-log/0083-exclude-prior-covered-planner-proofs.md`
 
 ## Goal
 

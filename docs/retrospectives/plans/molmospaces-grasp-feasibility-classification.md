@@ -2,7 +2,7 @@
 
 **Status:** Completed for Phase 82 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0073-classify-grasp-feasibility-blockers.md`
+**ADR:** `docs/adr/archive/execution-log/0073-classify-grasp-feasibility-blockers.md`
 
 ## Goal
 

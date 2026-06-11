@@ -2,7 +2,7 @@
 
 **Status:** Completed in Phase 78 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0069-add-task-sampler-robot-placement-profile.md`
+**ADR:** `docs/adr/archive/execution-log/0069-add-task-sampler-robot-placement-profile.md`
 
 ## Goal
 

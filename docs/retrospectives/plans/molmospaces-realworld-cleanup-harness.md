@@ -100,7 +100,7 @@ sweep baseline before evaluating coding-agent or OpenClaw policies.
   the Agent View.
 
 See ADR-0003:
-[`docs/adr/0003-separate-cleanup-agent-view-from-private-evaluation.md`](../adr/0003-separate-cleanup-agent-view-from-private-evaluation.md).
+[`docs/adr/0003-separate-cleanup-agent-view-from-private-evaluation.md`](../../adr/0003-separate-cleanup-agent-view-from-private-evaluation.md).
 
 ## Public Contract
 

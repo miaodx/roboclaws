@@ -1,7 +1,7 @@
 # MolmoSpaces Exact-Scene Fallback Alias Validation
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0054-filter-fallback-aliases-to-exact-scene-runtime-names.md`
+**ADR:** `docs/adr/archive/execution-log/0054-filter-fallback-aliases-to-exact-scene-runtime-names.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/63-molmospaces-exact-scene-fallback-alias-validation/`
 
 ## Problem

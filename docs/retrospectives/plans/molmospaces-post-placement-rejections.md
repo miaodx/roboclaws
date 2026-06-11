@@ -2,7 +2,7 @@
 
 **Status:** Completed in Phase 81 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0072-capture-post-placement-candidate-rejections.md`
+**ADR:** `docs/adr/archive/execution-log/0072-capture-post-placement-candidate-rejections.md`
 
 ## Goal
 

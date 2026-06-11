@@ -1,7 +1,7 @@
 # MolmoSpaces Pickup Root Variant Filter
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0060-filter-non-root-pickup-runtime-aliases.md`
+**ADR:** `docs/adr/archive/execution-log/0060-filter-non-root-pickup-runtime-aliases.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/69-molmospaces-pickup-root-variant-filter/`
 
 ## Problem

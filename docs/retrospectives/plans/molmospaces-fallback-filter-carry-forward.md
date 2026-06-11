@@ -1,7 +1,7 @@
 # MolmoSpaces Fallback Filter Carry-Forward
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0059-carry-forward-filtered-fallback-candidates.md`
+**ADR:** `docs/adr/archive/execution-log/0059-carry-forward-filtered-fallback-candidates.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/68-molmospaces-fallback-filter-carry-forward/`
 
 ## Problem

@@ -2,7 +2,7 @@
 
 **Status:** Completed for Phase 85 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0076-ingest-standalone-prior-proof-results.md`
+**ADR:** `docs/adr/archive/execution-log/0076-ingest-standalone-prior-proof-results.md`
 
 ## Goal
 

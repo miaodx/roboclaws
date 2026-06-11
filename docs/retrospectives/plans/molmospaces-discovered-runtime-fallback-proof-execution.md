@@ -1,7 +1,7 @@
 # MolmoSpaces Discovered Runtime Fallback Proof Execution
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0056-run-discovered-runtime-fallback-proofs.md`
+**ADR:** `docs/adr/archive/execution-log/0056-run-discovered-runtime-fallback-proofs.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/65-molmospaces-discovered-runtime-fallback-proof-execution/`
 
 ## Problem

@@ -1,7 +1,7 @@
 # MolmoSpaces Pickup Root Alias Normalization
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0064-normalize-pickup-root-runtime-aliases.md`
+**ADR:** `docs/adr/archive/execution-log/0064-normalize-pickup-root-runtime-aliases.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/73-molmospaces-pickup-root-alias-normalization/`
 
 ## Problem

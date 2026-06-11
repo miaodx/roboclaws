@@ -713,8 +713,8 @@ just harness::molmo-planner-proof-bundle-execute-rerun
   camera-model policy mode.
 - [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
   model-declared observations bridge camera evidence to cleanup handles.
-- [Model-declared observations plan](../plans/molmospaces-model-declared-observations-raw-fpv-cleanup.md):
+- [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
   implementation and harness plan for raw-FPV cleanup.
-- [ADR-0028](../adr/0028-add-planner-cleanup-bridge-readiness-evidence.md):
+- [ADR-0028](../adr/archive/execution-log/0028-add-planner-cleanup-bridge-readiness-evidence.md):
   planner cleanup bridge readiness.
 - [`domain.md`](domain.md): domain vocabulary and shipped-history notes.
