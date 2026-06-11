@@ -54,8 +54,8 @@ for system-CLI debugging.
 The private MCP helper is available for manual debugging:
 
 ```bash
-just mcp::up household-cleanup 127.0.0.1 18788 output/debug/household-mcp
-just mcp::up semantic-map-build 127.0.0.1 18788 output/debug/map-build-mcp
+just agent::mcp up household-world.cleanup 127.0.0.1 18788 output/debug/household-mcp
+just agent::mcp up household-world.map-build 127.0.0.1 18788 output/debug/map-build-mcp
 just mcp::down
 ```
 
@@ -66,8 +66,9 @@ http://127.0.0.1:18788/mcp
 ```
 
 Normal live-agent runs start and stop the appropriate server themselves. The
-server entrypoint is `python -m roboclaws.cli.agent_server`, and it accepts only
-current household server ids: `household-cleanup` and `semantic-map-build`.
+private implementation entrypoint is `python -m roboclaws.cli.agent_server`;
+the maintainer facade uses canonical dispatch targets such as
+`household-world.cleanup` and `household-world.map-build`.
 
 ## Isolated Agent Workspace
 
