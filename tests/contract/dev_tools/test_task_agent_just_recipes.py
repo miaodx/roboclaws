@@ -315,22 +315,19 @@ def test_public_just_summary_is_small_facade() -> None:
     assert summary.isdisjoint(hidden_recipes)
 
 
-def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
+def test_harness_agent_validation_recipe_writes_recommendation(tmp_path: Path) -> None:
     binary = just_bin()
     env = os.environ.copy()
     env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
-    output_dir = tmp_path / "codex-harness8"
+    output_dir = tmp_path / "agent-validation"
     result = subprocess.run(
         [
             binary,
-            "molmo::codex-harness8",
-            "dry-run",
+            "harness::agent-validation",
+            "recommend",
             f"output_dir={output_dir}",
-            "row=direct-world-public-labels",
-            "provider_retry_attempts=2",
-            "provider_retry_sleep_s=0",
-            "parallelism=2",
-            "base_port=18788",
+            "changed_file=roboclaws/agents/drivers/openai_agents_live.py",
+            "budget=focused",
         ],
         cwd=REPO_ROOT,
         env=env,
@@ -339,67 +336,55 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
         text=True,
     )
 
-    assert f"codex harness8 manifest: {output_dir / 'codex_cleanup_harness8.json'}" in result.stdout
-    manifest = json.loads((output_dir / "codex_cleanup_harness8.json").read_text(encoding="utf-8"))
-    assert manifest["schema"] == "codex_cleanup_harness8_v1"
-    assert manifest["parallelism"] == 2
-    assert manifest["base_port"] == 18788
-    assert len(manifest["rows"]) == 8
-    assert {row["row_id"] for row in manifest["rows"]} == {
-        "direct-world-oracle-labels",
-        "direct-world-public-labels",
-        "direct-camera-grounded-labels-grounding-dino",
-        "direct-camera-raw-fpv",
-        "dino-prior-world-oracle-labels",
-        "dino-prior-world-public-labels",
-        "dino-prior-camera-grounded-labels-grounding-dino",
-        "dino-prior-camera-raw-fpv",
-    }
-    setup_command = manifest["setup_rows"][0]["command"]
-    assert setup_command[:8] == [
-        "just",
-        "run::surface",
-        "surface=household-world",
-        "world=molmospaces/val_0",
-        "backend=mujoco",
-        "intent=map-build",
-        "agent_engine=direct-runner",
-        "evidence_lane=camera-grounded-labels",
-    ]
-    assert "scenario_setup=baseline" in setup_command
-    assert "camera_labeler=grounding-dino" in setup_command
-    direct_rows = {
-        row["row_id"]: row
-        for row in manifest["rows"]
-        if row["row_id"] in {"direct-world-oracle-labels", "direct-world-public-labels"}
-    }
-    assert direct_rows["direct-world-oracle-labels"]["assigned_port"] == 18788
-    assert direct_rows["direct-world-public-labels"]["assigned_port"] == 18790
-    assert "port=18788" in direct_rows["direct-world-oracle-labels"]["command"]
-    assert "port=18790" in direct_rows["direct-world-public-labels"]["command"]
-    assert (
-        direct_rows["direct-world-oracle-labels"]["env"]["ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS"]
-        == "2"
-    )
+    assert f"agent validation matrix: {output_dir / 'validation_matrix.json'}" in result.stdout
+    manifest = json.loads((output_dir / "validation_matrix.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "agent_validation_matrix_v1"
+    selected_gate_ids = {gate["gate_id"] for gate in manifest["gates"] if gate["selected"]}
+    assert "openai-agents-sdk-cleanup" in selected_gate_ids
+    assert (output_dir / "validation_matrix.md").exists()
+    assert (output_dir / "validation_matrix.html").exists()
 
 
-def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
+def test_agent_harness_allows_agent_validation_target() -> None:
     route = trace_agent_harness(
-        "codex-cleanup-harness8",
-        "dry-run",
-        "output_dir=/tmp/roboclaws-codex-harness8",
-        "row=direct-world-oracle-labels",
-        "parallelism=2",
+        "agent-validation",
+        "recommend",
+        "plan=docs/plans/2026-06-11-agent-validation-matrix-skill.md",
+        "budget=focused",
     )
 
     assert route == [
         "just",
-        "harness::codex-cleanup-harness8",
-        "dry-run",
-        "output_dir=/tmp/roboclaws-codex-harness8",
-        "row=direct-world-oracle-labels",
-        "parallelism=2",
+        "harness::agent-validation",
+        "recommend",
+        "plan=docs/plans/2026-06-11-agent-validation-matrix-skill.md",
+        "budget=focused",
     ]
+
+
+def test_old_codex_cleanup_harness_routes_are_unsupported() -> None:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+
+    agent_result = subprocess.run(
+        [binary, "agent::harness", "codex-cleanup-harness8", "dry-run"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    molmo_result = subprocess.run(
+        [binary, "molmo::codex-harness8", "dry-run"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert agent_result.returncode != 0
+    assert "unsupported harness target 'codex-cleanup-harness8'" in agent_result.stderr
+    assert molmo_result.returncode != 0
 
 
 def test_justfile_marks_implementation_modules_private() -> None:
@@ -472,17 +457,18 @@ def test_agent_harness_allows_molmo_codex_perf_target() -> None:
     assert '"skill" "$robot_views"' in harness_text
 
 
-def test_agent_harness_allows_codex_cleanup_harness8() -> None:
+def test_agent_harness_advertises_agent_validation_not_fixed_harness() -> None:
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     harness_text = (JUST_DIR / "harness.just").read_text(encoding="utf-8")
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
 
-    assert "codex-cleanup-harness8" in agent_text
+    assert "agent-validation" in agent_text
     assert re.search(
-        r"^codex-cleanup-harness8 mode=\"dry-run\" \*overrides:",
-        harness_text,
-        re.MULTILINE,
+        r"^agent-validation mode=\"recommend\" \*overrides:", harness_text, re.MULTILINE
     )
-    assert "just molmo::codex-harness8" in harness_text
+    assert "codex-cleanup-harness8" not in agent_text
+    assert "codex-cleanup-harness8" not in harness_text
+    assert "codex-harness8" not in molmo_text
 
 
 def test_agent_harness_allows_molmo_visual_grounding_benchmark_target() -> None:

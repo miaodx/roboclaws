@@ -513,21 +513,17 @@ MolmoSpaces backend. If an interactive Codex tmux session is active or the
 requested MCP port is busy, the launcher fails instead of silently starting
 another simulator on a different port.
 
-Batch harness routes may opt into bounded visual backend concurrency. The
-measured local development setting is:
+Adaptive validation matrix runs may select multiple visual cleanup rows:
 
 ```bash
-ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS=2 \
-  just agent::harness codex-cleanup-harness8 execute parallelism=2
+just agent::harness agent-validation execute \
+  plan=docs/plans/2026-06-11-agent-validation-matrix-skill.md
 ```
 
-The harness keeps semantic-map-prior setup serialized, then runs cleanup rows
-with distinct MCP ports, output directories, live status files, backend state,
-persistent workers, and coding-agent workspaces. A third visual row is not
-launched while two slot leases are active. Local measurement on the current
-RBY1M/EGL path showed about 2 GiB PSS per warm visual worker, so lower the slot
-limit when Isaac Lab, visual-grounding sidecars, browser consoles, or other
-memory-heavy tools are running.
+The matrix records relevant rows and reports local runtime blockers honestly.
+Live Codex Molmo cleanup remains single-session by launcher policy; if one row
+is active, later live Codex rows are blocked rather than moved to a hidden port
+or silently replaced by a cheaper substitute.
 
 For quick axis overrides, use positional values or `driver=` / `profile=`
 prefixes:
@@ -546,7 +542,7 @@ sections.
 | Shape | Required Settings | Expected Sections |
 |-------|-------------------|-------------------|
 | Synthetic cleanup smoke | `api_semantic_synthetic` | Summary, before/after, semantic substeps, score, advisory/private sections where available. No robot timeline. |
-| Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, chase, map, verification. |
+| Real visual cleanup | `molmospaces_subprocess`, `include_robot`, `record_robot_views` | Synthetic sections plus Robot View Timeline with FPV, top-down scene view, and verification. Semantic Map is rendered separately from public map/runtime evidence. |
 | Raw FPV evidence | `perception_mode=raw_fpv_only`, robot views enabled | Raw FPV Observations plus visual timeline. No structured observed-object table before declaration. |
 | Sanitized detector evidence | `evidence_lane=world-public-labels` | Structured detections with producer/source/actionability fields. Destination, tool selection, and navigation authorization remain policy-required until source-FPV confirmation. |
 | Model-declared camera cleanup | `camera-raw-fpv` or `camera-grounded-labels` with declaration evidence | Raw FPV Observations plus Model-Declared Observations and normal semantic cleanup sections. |

@@ -961,8 +961,8 @@ harness target *args:
 
     case "$target" in
       run|navigator|regression|sim|openclaw|molmo-realworld-cleanup|\
+      agent-validation|\
       molmo-cleanup-codex-perf|\
-      codex-cleanup-harness8|\
       molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\

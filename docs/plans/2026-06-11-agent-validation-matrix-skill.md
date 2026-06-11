@@ -1,9 +1,9 @@
 # Agent Validation Matrix Skill
 
-**Status:** Proposed
+**Status:** Partially implemented
 **Created:** 2026-06-11
 **Last reviewed:** 2026-06-11
-**Current implementation contract:** Replace the fixed Codex cleanup harness skill with an adaptive validation skill that selects and executes relevant deterministic, product, live-agent, Agent SDK, perception, and simulator gates from the current plan or diff.
+**Current implementation contract:** `just agent::harness agent-validation recommend|execute ...` selects and reports deterministic, product, live-agent, Agent SDK, perception, simulator, and map/cleanup-consumer gates from an explicit plan, `since=` diff, or explicit `changed_file=` / axis overrides. The retired fixed `codex-cleanup-harness8` and `molmo::codex-harness8` routes are unsupported.
 **Related ADRs:** None yet.
 **Supersedes / Superseded by:** Supersedes the fixed `skills/codex-cleanup-harness8` shape during implementation; no backwards-compatible command or preset is required.
 
@@ -363,6 +363,52 @@ shape, route-trace assertions, and recommendation-mode smoke runs. Full
 `execute` validation is a local/live gate because provider keys, Docker gateway,
 DINO sidecars, MuJoCo/Isaac, GPU, and hardware availability are environment
 dependent.
+
+## Implementation Evidence
+
+Implemented in the 2026-06-11 local Flow slice:
+
+- added `skills/agent-validation-matrix/` with `SKILL.md`, `skill.json`,
+  deterministic selector, and runner;
+- added `just agent::harness agent-validation recommend|execute ...`;
+- removed the fixed `skills/codex-cleanup-harness8` skill, wrapper script,
+  `scripts/molmo_cleanup/run_codex_cleanup_harness8.py`, and the
+  `molmo::codex-harness8` route;
+- replaced fixed-harness tests with adaptive selector/runner and route tests;
+- cleaned active human/skill docs so they point to `agent-validation`.
+
+Shipped evidence generated during this slice:
+
+- `output/agent-validation-matrix/0611_plan_recommend/validation_matrix.json`
+  and `.html`: focused recommend run against this plan.
+- `output/agent-validation-matrix/0611_diff_execute_fixed/validation_matrix.json`
+  and `.html`: focused execute run for cleanup + Agent SDK signals. It ran
+  route/cleanup tests and direct product gates, selected live Codex and OpenAI
+  Agents SDK gates, and recorded OpenAI Agents SDK as
+  `required_blocked: missing_optional_dependency`.
+- `output/agent-validation-matrix/0611_raw_fpv_active_session_block/validation_matrix.json`
+  and `.html`: focused execute run proving live Codex active-session conflicts
+  are reported as `required_blocked: live_session_active`, while direct RAW-FPV
+  evidence ran and wrote `report.html`.
+- `output/agent-validation-matrix/0611_visual_grounding_recommend_fixed/validation_matrix.json`
+  and `.html`: focused recommend run proving visual-grounding changes select
+  `camera_labeler=grounding-dino` without unrelated dirty-worktree widening.
+- `output/agent-validation-matrix/0611_visual_grounding_execute/validation_matrix.json`
+  and `.html`: local execute evidence from before the explicit-source
+  isolation fix. It still proves the real DINO gate is selected and marked
+  `required_blocked: dino_sidecar_unavailable` when the sidecar is not
+  reachable.
+
+Remaining gates before this plan can be marked fully implemented:
+
+- rerun a focused visual-grounding execute after starting the real
+  visual-grounding sidecar, or keep the DINO gate explicitly blocked in the
+  next local validation handoff;
+- install/enable the OpenAI Agents SDK optional runtime before claiming the
+  Agent SDK live gate passes;
+- avoid launching a second live Codex cleanup row while a detached Codex Molmo
+  run is active, or run a serialized live matrix after the active session
+  finishes.
 
 ## ADR Threshold
 

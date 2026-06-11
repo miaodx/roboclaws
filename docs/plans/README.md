@@ -10,6 +10,17 @@ private-data, MCP/tool, command-surface, or architecture-layer decision, create
 a short ADR in `docs/adr/` and link it from the plan. Keep execution details in
 the plan.
 
+For agent-facing implementation plans, prefer an adaptive validation section
+that starts with:
+
+```bash
+just agent::harness agent-validation recommend plan=docs/plans/<plan>.md budget=focused
+just agent::harness agent-validation execute plan=docs/plans/<plan>.md budget=focused
+```
+
+Add explicit overrides only when the plan already knows a required axis such as
+`agent_engine=...`, `evidence_lane=...`, or `camera_labeler=...`.
+
 ## Naming
 
 For new plan files, use a date-prefixed slug:

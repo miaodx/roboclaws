@@ -8,7 +8,7 @@
 # - just harness::run <task>          run one iteration on a task
 # - just harness::navigator <task>    explicit navigator-harness alias
 # - just harness::molmo-cleanup-codex-perf  live Codex cleanup performance lane
-# - just harness::codex-cleanup-harness8  eight-case Codex cleanup regression grid
+# - just harness::agent-validation  adaptive validation matrix from plan/diff signals
 # - just harness::molmo-realworld-cleanup  ADR-0003 public/private cleanup harness
 # - just harness::molmo-realworld-agent-mcp  ADR-0003 MCP smoke agent harness
 # - just harness::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit smoke
@@ -181,9 +181,52 @@ molmo-cleanup-codex-perf *overrides:
     fi
     exec "${cmd[@]}"
 
-# Eight-case live Codex cleanup regression grid.
-codex-cleanup-harness8 mode="dry-run" *overrides:
-    just molmo::codex-harness8 "{{mode}}" {{overrides}}
+# Adaptive agent validation matrix from plan/diff signals.
+agent-validation mode="recommend" *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mode="{{mode}}"
+    mode="${mode#mode=}"
+    case "$mode" in
+      recommend|execute)
+        ;;
+      *)
+        echo "error: unsupported agent-validation mode '$mode' (expected recommend or execute)" >&2
+        exit 1
+        ;;
+    esac
+    args=("$mode")
+    for override in {{overrides}}; do
+      [[ -z "$override" ]] && continue
+      if [[ "$override" != *=* ]]; then
+        echo "error: override '$override' is not key=value" >&2
+        exit 1
+      fi
+      key="${override%%=*}"
+      value="${override#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        budget|plan|since|changed_file|agent_engine|provider_profile|evidence_lane|camera_labeler|output_dir)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      args+=("--${key//_/-}" "$value")
+    done
+    python_bin="${ROBOCLAWS_PYTHON:-}"
+    if [[ -z "$python_bin" ]]; then
+      if [[ -x ".venv/bin/python" ]]; then
+        python_bin=".venv/bin/python"
+      elif command -v python3 >/dev/null 2>&1; then
+        python_bin="python3"
+      else
+        python_bin="python"
+      fi
+    fi
+    "$python_bin" skills/agent-validation-matrix/scripts/run_validation_matrix.py "${args[@]}"
 
 # ADR-0003 real-world-style cleanup harness. The default runs the real
 # MolmoSpaces subprocess backend over three mess seeds, with the agent limited
