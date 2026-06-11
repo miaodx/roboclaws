@@ -7,62 +7,168 @@ focus, next action, and active source links, read [`STATUS.md`](STATUS.md).
 One entry = one self-contained missing item. Shipped phases are tracked under
 `docs/retrospectives/`, not here.
 
+Each entry should answer:
+
+- `Created`: when the item first became parked work.
+- `Updated`: when this TODO entry was last materially rechecked or reshaped.
+- `Status`: current state, not a promise that work is in progress.
+- `Why`: the maintenance or product reason this still deserves to exist.
+- `Next action`: the smallest useful action for the next maintainer.
+- `Evidence`: current source links, artifacts, or files to start from.
+- `Try now`: whether this is suitable for an ordinary coding-agent turn.
+
 ## Missing Work
 
-- **Autonomous-nav `report.html` parity with VLM report**
-  Add per-step reasoning, if Gateway exposes or the agent emits a public reason
-  tag, and add frame-by-frame navigation controls to
-  `scripts/render_autonomous_replay.py`.
-
-- **Phase 2.6 deferred-items sweep**
-  Re-check
-  `.planning/milestones/v1.98-phases/02.6-openclaw-mcp-tools-integration/deferred-items.md`.
-  Close it with evidence if the Kimi-era / Phase 2.2 lint drift is already
-  obsolete.
+- **Autonomous-nav decision reasoning in `report.html`**
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked report UX enhancement.
+  - Why: Autonomous navigation reports already have frame-by-frame controls,
+    but they still do not show rich public decision reasoning comparable to VLM
+    game reports. Better decision summaries reduce replay rediscovery during
+    navigation debugging.
+  - Next action: Render public per-step reason data when Gateway exposes it or
+    when the agent emits a public reason tag. Do not expose hidden or encrypted
+    chain-of-thought.
+  - Evidence:
+    `scripts/reports/render_autonomous_replay.py`;
+    `scripts/templates/autonomous_report.html.j2`;
+    `tests/contract/reports/test_render_autonomous_replay.py`.
+  - Try now: Yes, if scoped to existing public trace fields. Broader Gateway
+    changes need a separate design pass.
 
 - **OpenClaw `minimal+alsoAllow:[bundle-mcp]` vs `coding` profile benchmark**
-  Compare photo and territory probes under both profiles, then update
-  `docs/openclw/openclaw-tool-profiles.md` with the verdict.
-
-- **OpenClaw cold-start remaining gap**
-  Reopen only if a future image bump regresses cold start past the current
-  baseline. Start from
-  `docs/retrospectives/openclaw-cold-start-2026-04-28.md`.
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked local OpenClaw benchmark.
+  - Why: Roboclaws currently keeps `minimal+alsoAllow:[bundle-mcp]` as the
+    safer default because `coding` exposes broader tools. A focused benchmark
+    could prove whether `coding` is acceptable for photo and territory probes
+    and remove or confirm the `alsoAllow` workaround.
+  - Next action: Run comparable photo and territory probes under both profiles,
+    then update the profile verdict.
+  - Evidence:
+    `docs/ai/openclaw/tool-profiles.md`;
+    `docs/human/openclaw/gateway-internals.md`;
+    `scripts/openclaw/openclaw-bootstrap.sh`;
+    `tests/contract/openclaw/test_openclaw_bootstrap.py`.
+  - Try now: Partially. Benchmark planning is safe; real evidence needs local
+    OpenClaw Gateway access and must honor the work-network guard.
 
 - **LeRobotDataset rollout export**
-  Map current replay fields to LeRobotDataset concepts and identify missing
-  action/state/camera metadata before implementation.
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked optional data-format compatibility study.
+  - Why: LeRobotDataset is a useful future interoperability target for robot
+    rollout data, but current Roboclaws architecture does not depend on it.
+  - Next action: Map current replay/run fields to LeRobotDataset concepts and
+    list missing action, state, camera, and metadata fields before any exporter
+    implementation.
+  - Evidence:
+    `docs/research-checkpoints/2026-04.md`;
+    `docs/research-checkpoints/2026-05.md`;
+    `roboclaws/core/run_artifacts.py`.
+  - Try now: Yes for a spec or mapping document; exporter code should wait
+    until the mapping is reviewed.
 
 - **Multi-agent coding-agent harness expansion**
-  Explore lock/context/state isolation, generated skill transfer, SOUL
-  overfitting, shared simulation state, and scoring for multiple coding agents.
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked architecture/research item.
+  - Why: Multi-agent coding-agent runs could expose lock, context, state
+    isolation, shared simulation, and scoring problems that single-agent live
+    routes hide.
+  - Next action: Write a small design packet that builds on `LiveAgentRuntime`
+    instead of adding another launch path.
+  - Evidence:
+    `docs/plans/live-agent-runtime-sdk-spike.md`;
+    `roboclaws/agents/live_runtime.py`;
+    `examples/games/territory_game.py`.
+  - Try now: No for implementation. Start with planning or a bounded harness
+    spike.
 
-- **Real robot navigation-stack integration**
-  Investigate a bridge from current MCP/navigation contracts to ROS 2 Nav2,
-  EasyNavigation, or another real navigation stack.
+- **Real Nav2 hardware adapter execution**
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked local hardware proof.
+  - Why: The map-bundle contract, `DirectNav2Adapter`, and physical navigation
+    pilot exist with mock tests, but Roboclaws still lacks a real ROS 2/Nav2
+    operator-run proof.
+  - Next action: Run the physical Nav2 cleanup pilot against a real Nav2 stack,
+    capture report evidence, and keep ROS topics/actions hidden behind MCP.
+  - Evidence:
+    `docs/status/active/real-robot-nav2-cleanup-pilot.md`;
+    `docs/adr/0127-use-direct-nav2-adapter-before-rosclaw.md`;
+    `roboclaws/household/nav2_adapter.py`;
+    `roboclaws/household/physical_nav2_pilot.py`;
+    `scripts/molmo_cleanup/run_physical_nav2_cleanup_pilot.py`;
+    `tests/contract/molmo_cleanup/test_nav2_adapter.py`;
+    `tests/contract/molmo_cleanup/test_physical_nav2_pilot.py`.
+  - Try now: No for closure. It needs ROS 2/Nav2 hardware or a configured local
+    Nav2 graph; documentation or checklist work is safe.
 
 - **Async route perception during cleanup navigation**
-  After the waypoint-honest cleanup flow is stable, add support for perception
-  events observed while moving between task locations, such as carrying an
-  object from room A to a target fixture in room B and noticing another cleanup
-  candidate along the route. The first implementation should define how
-  in-transit observations update the observed-handle worklist without
-  interrupting a held-object delivery, and how the report distinguishes route
-  observations from deliberate waypoint/fixture observations. Reference design
-  for a dedicated edge-side Perception Producer feeding ADR-0126 model-declared
-  observations lives in
-  `docs/research/06-visual-grounding-perception-producer.md`.
+  - Created: 2026-05-11.
+  - Updated: 2026-05-31.
+  - Status: Parked feature slice with research reference.
+  - Why: Cleanup agents should eventually notice useful objects while moving
+    between task locations without interrupting a held-object delivery, and
+    reports need to distinguish route observations from deliberate waypoint
+    observations.
+  - Next action: Turn the Perception Producer reference into a bounded plan or
+    simulator-first slice that updates the observed-handle worklist and report
+    provenance.
+  - Evidence:
+    `docs/research/06-visual-grounding-perception-producer.md`;
+    `docs/plans/molmospaces-waypoint-honest-cleanup-flow.md`;
+    `roboclaws/household/realworld_mcp_server.py`.
+  - Try now: Partially. Planning is ready; implementation needs a scoped
+    feature contract.
 
 - **Memory-depth ablation for territory control**
-  Measure whether SOUL / MEMORY / FTS / vector memory helps short-horizon
-  territory tasks across a small fixed configuration set.
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked experiment.
+  - Why: Territory control is short-horizon enough that SOUL, MEMORY, FTS, or
+    vector memory may add overhead without measurable benefit. A fixed ablation
+    would prevent memory features from being cargo-culted into the game path.
+  - Next action: Define a small fixed configuration set and compare score,
+    coverage, tool calls, latency, and cost across memory depths.
+  - Evidence:
+    `examples/games/territory_game.py`;
+    `docs/human/openclaw/gateway-internals.md`;
+    `docs/retrospectives/phase-2.6.md`.
+  - Try now: Partially. Harness design is safe; meaningful results need VLM or
+    Gateway runs.
 
 - **Supported access to encrypted model reasoning**
-  Investigate first-party, user-consented ways to export plaintext reasoning
-  summaries for local harness analysis. Do not implement decryption bypasses.
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked compliance/product research item.
+  - Why: Local harness analysis would benefit from plaintext reasoning
+    summaries, but Roboclaws must not implement decryption bypasses or expose
+    hidden chain-of-thought.
+  - Next action: Research first-party, user-consented reasoning-summary export
+    paths and document only supported approaches.
+  - Evidence:
+    `roboclaws/agents/drivers/openai_agents_live.py`;
+    `docs/plans/live-agent-runtime-sdk-spike.md`.
+  - Try now: Yes for docs research only; no code bypass work is acceptable.
 
 - **Weekly coding-agent model/settings benchmark**
-  Define a small stable demo suite that recommends the current default
-  coding-agent model and reasoning setting.
+  - Created: 2026-05-11.
+  - Updated: 2026-06-11.
+  - Status: Parked benchmark design.
+  - Why: Coding-agent defaults drift as models, provider routes, and reasoning
+    settings change. A stable weekly suite would make default recommendations
+    evidence-based instead of anecdotal.
+  - Next action: Define a small stable suite, model/settings matrix, cost
+    budget, and published report shape. Reuse agent-validation where possible.
+  - Evidence:
+    `skills/agent-validation-matrix/SKILL.md`;
+    `docs/plans/2026-06-11-agent-validation-matrix-skill.md`;
+    `just/README.md`.
+  - Try now: Yes for benchmark design; recurring live execution needs provider
+    budget and local-network constraints.
 
 _If this list empties, next work should come from a new plan or issue._
