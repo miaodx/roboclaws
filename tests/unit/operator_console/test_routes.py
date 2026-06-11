@@ -169,6 +169,22 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "world-oracle-labels",
         ),
         (
+            "molmospaces/val_0",
+            "mujoco",
+            "open-ended",
+            "codex-cli",
+            "codex-env",
+            "world-oracle-labels",
+        ),
+        (
+            "molmospaces/val_1",
+            "mujoco",
+            "open-ended",
+            "codex-cli",
+            "codex-env",
+            "world-oracle-labels",
+        ),
+        (
             "agibot-g2/map-12",
             "agibot-gdk",
             "map-build",
@@ -204,6 +220,8 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
         assert f"molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::map-build::codex-cli::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::map-build::direct-runner::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::open-ended::codex-cli::{lane}" in enabled_ids
+        assert f"molmospaces/val_1::mujoco::open-ended::codex-cli::{lane}" in enabled_ids
         assert f"agibot-g2/map-12::agibot-gdk::map-build::codex-cli::{lane}" in enabled_ids
 
     grounded = get_selection(
@@ -260,15 +278,13 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     )
     assert "molmospaces/val_1::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
     assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_1::mujoco::open-ended::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_2::mujoco::open-ended::codex-cli::world-oracle-labels" in enabled_ids
     val0_openai_open_ended = (
         "molmospaces/val_0::mujoco::open-ended::openai-agents-sdk::world-oracle-labels"
     )
     assert val0_openai_open_ended in disabled
     assert "OpenAI Agents SDK is not proven" in disabled[val0_openai_open_ended]
-    assert not any(
-        route_id.startswith("molmospaces/val_0::mujoco::open-ended::codex-cli::")
-        for route_id in all_ids
-    )
 
     enabled_mujoco_cleanup_worlds = {
         route.world_id
