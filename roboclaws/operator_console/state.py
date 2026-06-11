@@ -44,9 +44,7 @@ class ArtifactLink:
             "label": self.label,
             "kind": self.kind,
             "path": str(self.path),
-            "href": f"/artifacts/{self.path.relative_to(root)}"
-            if _is_relative_to(self.path, root)
-            else "",
+            "href": _artifact_href(root, self.path),
         }
 
 
@@ -546,10 +544,16 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
         path = max(matches, key=lambda item: item.stat().st_mtime).resolve()
         output[key] = {
             "path": str(path),
-            "href": f"/artifacts/{path.relative_to(root)}" if _is_relative_to(path, root) else "",
+            "href": _artifact_href(root, path),
             "mtime": str(path.stat().st_mtime),
         }
     return output
+
+
+def _artifact_href(root: Path, path: Path) -> str:
+    if not _is_relative_to(path, root):
+        return ""
+    return f"/artifacts/{path.relative_to(root)}?v={path.stat().st_mtime_ns}"
 
 
 def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> dict[str, Any]:

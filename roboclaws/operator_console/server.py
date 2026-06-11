@@ -48,12 +48,20 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args: object, root: Path, **kwargs: object) -> None:
         self.repo_root = root.resolve()
         static_root = Path(__file__).resolve().parent / "static"
+        self.static_root = static_root.resolve()
         super().__init__(*args, directory=str(static_root), **kwargs)
 
     def do_GET(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         if parsed.path in {"/", "/index.html", "/app.js", "/styles.css"}:
             return self._static_file(parsed.path)
+        if parsed.path.startswith("/previews/"):
+            rel = Path(unquote(parsed.path.removeprefix("/previews/")))
+            path = (self.static_root / "previews" / rel).resolve()
+            preview_root = (self.static_root / "previews").resolve()
+            if not _is_relative_to(path, preview_root) or not path.exists():
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            return self._file(path)
         if parsed.path == "/api/routes":
             return self._json(
                 {

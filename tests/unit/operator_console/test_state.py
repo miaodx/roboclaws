@@ -474,6 +474,8 @@ def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
     state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
 
     assert state["latest_view_assets"]["map"]["path"] == str(robot_map.resolve())
+    assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
+    assert "?v=" in state["latest_view_assets"]["map"]["href"]
 
 
 def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:
