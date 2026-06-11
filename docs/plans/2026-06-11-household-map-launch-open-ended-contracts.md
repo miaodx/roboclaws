@@ -1,13 +1,13 @@
 ---
 plan_scope: household-map-launch-open-ended-contracts
-status: CONTINUE
+status: DONE
 created: 2026-06-11
 last_reviewed: 2026-06-11
 accepted_severities:
   - P1
   - P2
 implementation_allowed: true
-implementation_note: selected slices are being executed by later intuitive-flow runs
+implementation_note: selected slices were executed by focused intuitive-flow runs
 source:
   - user request to consolidate reduce-entropy directions into one plan file
   - intuitive-reduce-entropy discovery loop
@@ -23,11 +23,13 @@ related_context:
 
 # Household Map, Launch, And Open-Ended Contracts
 
-Status: CONTINUE
+Status: DONE
 
 This started as a planning-only discovery artifact. Later `intuitive-flow`
-runs selected and executed bounded slices from this file. Keep `Status:
-CONTINUE` until the saturation stop condition is fully green.
+runs selected and executed bounded slices from this file. The saturation stop
+condition is now green for current public surfaces; remaining old task strings
+are private implementation ids, artifact paths, fixtures, negative regression
+tests, or historical records.
 
 ## Loop Goal
 
@@ -1978,3 +1980,82 @@ Remaining before this plan can be marked done:
   artifact paths, fixture data, negative regressions, or historical docs;
 - finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
   any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Final Legacy Task-Id Audit And Closeout
+
+Status is `DONE`.
+
+Closed the final Candidate 3 audit without source/runtime changes:
+
+- `README.md`, `ARCHITECTURE.md`, `STATUS.md`, `AGENTS.md`, `CLAUDE.md`,
+  `just/README.md`, and current active skills use the canonical public launch
+  shape: `just run::surface surface=household-world ... intent=map-build`,
+  `intent=cleanup`, or inferred `intent=open-ended`.
+- `just agent::run` rejects raw `household-cleanup`, `semantic-map-build`, and
+  `molmo-cleanup` dispatch targets; remaining hits in `just/agent.just` are
+  under `implementation_task_name`, lower report/artifact arguments, or
+  negative route guards.
+- `just/molmo.just` still carries private positional compatibility such as
+  `task_name="household-cleanup"` and a `semantic-map-build` lowerer branch so
+  existing run-result and checker paths keep their implementation identity.
+  Public callers route through `run::surface`.
+- `roboclaws.cli.agent_server` accepts canonical server targets
+  `household-world.cleanup` and `household-world.map-build`, then maps them to
+  concrete internal modules named by the old task ids. Raw legacy server tokens
+  are rejected by the CLI.
+- Runtime helpers, live runners, report/checker code, and Agibot rehearsal code
+  keep old `task_name` values only as artifact, schema, checker, or historical
+  compatibility identities.
+- Script hits are existing-output summarizers, raw-FPV corpus/probe paths,
+  private coding-agent isolated workspace naming, or live-runner compatibility.
+- Test hits are fixture data, artifact path expectations, private lowerer
+  assertions, or explicit negative regressions proving retired public targets
+  are rejected.
+- Human-doc hits are classified history or artifact paths:
+  `docs/human/local-runtime.md`,
+  `docs/human/molmospaces-visual-grounding-results.md`,
+  `docs/human/molmospaces-cleanup-mode-architecture.md`, and
+  `docs/human/agibot-g2-cleanup-pilot.md`.
+- The unrelated dirty B1/Map12/Isaac worktree files contain private lower-runner
+  comments or separate plan work and were left untouched.
+
+Verified this closeout:
+
+```bash
+rg -n -F -e 'task::run' -e 'household-cleanup' -e 'semantic-map-build' -- \
+  README.md ARCHITECTURE.md STATUS.md docs/human docs/plans/README.md \
+  skills just roboclaws tests scripts .github
+rg -n -F -e 'agent::run household-cleanup' \
+  -e 'agent::run semantic-map-build' \
+  -e 'just agent::run household-cleanup' \
+  -e 'just agent::run semantic-map-build' \
+  -e 'task::run' -- \
+  README.md ARCHITECTURE.md STATUS.md docs/human docs/plans/README.md \
+  skills just roboclaws tests scripts .github
+rg -n -F -e 'RICH_MAP_MODE' -e 'map_mode=rich' -e 'map_mode=minimal' \
+  -e 'evidence_lane=smoke' -e 'task_intent_mode=custom' -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md just/README.md \
+  docs/human docs/plans/README.md skills just roboclaws tests scripts .github
+```
+
+Observed proof:
+
+- the only remaining `task::run` hits are one historical human-doc note and
+  tests asserting active skills / command summaries no longer expose it;
+- no current doc, script, or test directly calls `agent::run` with raw
+  `household-cleanup` or `semantic-map-build`;
+- stale map-mode, smoke-lane, and custom-intent-mode public-surface probes hit
+  only explicit negative regression tests;
+- `docs/plans/refactor-retire-ai2thor-vlm-direct.md` is already `DONE`, so
+  older execution-log bullets that named the AI2-THOR/direct-VLM retirement as
+  remaining are superseded.
+
+Parked after closeout:
+
+- Historical design docs still contain old `profile=` / `cleanup_profile`
+  vocabulary in explicitly superseded implementation-result sections. They are
+  not current public launch guidance; rewrite only if a later docs cleanup
+  chooses to archive or compress those historical records.
+- Private `task_name` compatibility can be removed only with a broader artifact
+  and checker migration. That is a new compatibility-policy decision, not part
+  of this public-surface saturation plan.
