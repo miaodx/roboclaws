@@ -398,6 +398,20 @@ Shipped evidence generated during this slice:
   isolation fix. It still proves the real DINO gate is selected and marked
   `required_blocked: dino_sidecar_unavailable` when the sidecar is not
   reachable.
+- `output/agent-validation-matrix/0611_visual_grounding_execute/gates/codex-cleanup-world-oracle/run/0611_1329/seed-7/report.html`:
+  serialized live Codex world-oracle cleanup finished after the active-session
+  blocker cleared with `completion=success`, `restored=4/5`, and `sweep=1.0`.
+- `output/agent-validation-matrix/0611_raw_fpv_serialized_codex/validation_matrix.json`
+  and `.html`: focused RAW-FPV execute run launched after the active-session
+  blocker cleared. The matrix records both RAW-FPV gates as run, but the live
+  Codex row was detached and finalized after the matrix command returned. It
+  stopped at 2026-06-11 14:13 CST with `exit=1`, no final
+  `run_result.json`/`report.html`, and a RAW-FPV done-readiness failure at
+  `output/agent-validation-matrix/0611_raw_fpv_serialized_codex/gates/codex-cleanup-camera-raw-fpv/run/0611_1347/seed-7`
+  after cleaning 2 grounded objects; the runtime required 4 grounded cleanup
+  chains before `done`.
+  Check it with
+  `just molmo::status output/agent-validation-matrix/0611_raw_fpv_serialized_codex/gates/codex-cleanup-camera-raw-fpv/run/0611_1347/seed-7`.
 
 Remaining gates before this plan can be marked fully implemented:
 
@@ -406,9 +420,9 @@ Remaining gates before this plan can be marked fully implemented:
   next local validation handoff;
 - install/enable the OpenAI Agents SDK optional runtime before claiming the
   Agent SDK live gate passes;
-- avoid launching a second live Codex cleanup row while a detached Codex Molmo
-  run is active, or run a serialized live matrix after the active session
-  finishes.
+- decide whether RAW-FPV live Codex should remain a failing validation gate for
+  this plan, lower its closeout requirement, or get a separate RAW-FPV recovery
+  slice that can satisfy the 4-chain done-readiness policy.
 
 ## ADR Threshold
 
