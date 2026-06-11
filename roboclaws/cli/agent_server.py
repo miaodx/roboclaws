@@ -5,8 +5,6 @@ from __future__ import annotations
 import sys
 
 SUPPORTED_SERVER_TARGETS = ("household-world.cleanup", "household-world.map-build")
-LEGACY_SERVER_TARGETS = ("household-cleanup", "semantic-map-build")
-SUPPORTED_SERVERS = (*SUPPORTED_SERVER_TARGETS, *LEGACY_SERVER_TARGETS)
 SERVER_TARGET_ALIASES = {
     "household-world.cleanup": "household-cleanup",
     "cleanup": "household-cleanup",
@@ -26,7 +24,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     raw_server = args.pop(0)
-    server = SERVER_TARGET_ALIASES.get(raw_server, raw_server)
+    server = SERVER_TARGET_ALIASES.get(raw_server)
+    if server is None:
+        print(
+            f"error: unsupported server {raw_server!r} (expected {_expected_server_text()})",
+            file=sys.stderr,
+        )
+        return 2
     if server == "household-cleanup":
         from roboclaws.cli.household_agent_server import main as household_main
 

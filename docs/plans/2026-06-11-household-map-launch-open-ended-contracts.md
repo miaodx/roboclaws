@@ -1763,3 +1763,69 @@ Remaining before this plan can be marked done:
   of rewriting blindly;
 - finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
   any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Canonical MCP Server Launch Targets
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 3 dispatch-boundary slice:
+
+- changed household live-agent server helpers to launch
+  `python -m roboclaws.cli.agent_server household-world.cleanup` and
+  `household-world.map-build`;
+- made `roboclaws.cli.agent_server` reject raw legacy server target tokens
+  `household-cleanup` and `semantic-map-build` while still accepting canonical
+  launch-shaped targets plus short aliases `cleanup` and `map-build`;
+- removed legacy target normalization from `just mcp::up` and
+  `just agent::mcp up`;
+- changed the live cleanup lowerer and active-server guard in `just/molmo.just`
+  to use `household-world.cleanup`;
+- added route tests that pin canonical MCP targets and legacy-target rejection.
+
+Verified this slice:
+
+```bash
+rg -n \
+  'agent_server household-cleanup|agent_server semantic-map-build|LEGACY_SERVER_TARGETS|SUPPORTED_SERVERS|household-cleanup\)|semantic-map-build\)' -- \
+  just/mcp.just just/agent.just just/molmo.just \
+  roboclaws/cli/agent_server.py roboclaws/agents/drivers/household_live.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+.venv/bin/ruff check \
+  roboclaws/agents/drivers/household_live.py \
+  roboclaws/cli/agent_server.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+.venv/bin/ruff format --check \
+  roboclaws/agents/drivers/household_live.py \
+  roboclaws/cli/agent_server.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+git diff --check -- \
+  roboclaws/agents/drivers/household_live.py \
+  roboclaws/cli/agent_server.py \
+  just/mcp.just just/agent.just just/molmo.just \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_mcp_accepts_canonical_household_dispatch_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_mcp_rejects_legacy_household_dispatch_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_agent_server_routes_use_cli_modules_not_examples \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_accepts_canonical_household_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_rejects_legacy_household_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_errors_use_canonical_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checker
+```
+
+Observed proof:
+
+- current MCP server process launch no longer emits
+  `roboclaws.cli.agent_server household-cleanup`;
+- `agent_server` accepts canonical server targets and short aliases, but rejects
+  raw legacy target tokens before importing concrete servers;
+- remaining dispatch-scope grep hits are task intent lowerer cases in
+  `just/agent.just` / `just/molmo.just` and explicit negative route tests.
+
+Remaining before this plan can be marked done:
+
+- classify and, where current-facing, collapse remaining `household-cleanup`
+  and `semantic-map-build` hits in private task lowerers, artifact naming,
+  tests, skills, and historical docs;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.

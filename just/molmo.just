@@ -533,7 +533,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
               active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_openai_agents_cleanup[.]py' || true)"
               ;;
           esac
-          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-cleanup' || true)"
+          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-world[.]cleanup' || true)"
           if [[ -n "$active_runner$active_server$active_sessions" ]]; then
             echo "error: another non-Molmo live cleanup run appears to be active" >&2
             [[ -n "$active_sessions" ]] && echo "active tmux sessions:" >&2 && echo "$active_sessions" >&2
@@ -905,7 +905,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           printf '%s\n' "$visual_slot_json" > "${run_dir}/visual_backend_slot.json"
           visual_slot_path="$(printf '%s' "$visual_slot_json" | .venv/bin/python -c 'import json, sys; print(json.load(sys.stdin)["path"])')"
         fi
-        .venv/bin/python -m roboclaws.cli.agent_server household-cleanup "${server_args[@]}" &
+        .venv/bin/python -m roboclaws.cli.agent_server household-world.cleanup "${server_args[@]}" &
         server_pid="$!"
         cleanup_server() {
           set +e

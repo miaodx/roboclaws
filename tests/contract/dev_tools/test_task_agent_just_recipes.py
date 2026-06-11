@@ -43,6 +43,7 @@ LIVE_OPENAI_AGENTS_RUNNER = (
 AGIBOT_MAP_BUILD_CODEX_RUNNER = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_agibot_map_build.py"
 )
+HOUSEHOLD_LIVE_DRIVER = REPO_ROOT / "roboclaws" / "agents" / "drivers" / "household_live.py"
 HOUSEHOLD_AGENT_SERVER_MODULE = "roboclaws.cli.agent_server"
 CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_PROVIDER",
@@ -560,6 +561,18 @@ def test_agent_mcp_accepts_canonical_household_dispatch_targets() -> None:
         "18788",
         "output/debug/map-build-mcp",
     ]
+
+
+def test_agent_mcp_rejects_legacy_household_dispatch_targets() -> None:
+    text = AGENT_JUST.read_text(encoding="utf-8")
+    mcp_recipe = re.search(r"^mcp action=.*?(?=^# |\\Z)", text, re.MULTILINE | re.DOTALL)
+    assert mcp_recipe is not None
+    body = mcp_recipe.group(0)
+
+    assert "household-world.cleanup|cleanup)" in body
+    assert "household-world.map-build|map-build)" in body
+    assert "household-cleanup)" not in body
+    assert "semantic-map-build)" not in body
 
 
 def test_surface_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
@@ -1485,7 +1498,7 @@ def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> N
             os.environ.get("ROBOCLAWS_DEVTOOLS_PYTHON") or sys.executable,
             "-m",
             HOUSEHOLD_AGENT_SERVER_MODULE,
-            "household-cleanup",
+            "household-world.cleanup",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -2062,7 +2075,8 @@ def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
     codex_runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
     agibot_runner_text = AGIBOT_MAP_BUILD_CODEX_RUNNER.read_text(encoding="utf-8")
 
-    assert "roboclaws.cli.agent_server household-cleanup" in molmo_text
+    assert "roboclaws.cli.agent_server household-world.cleanup" in molmo_text
+    assert "roboclaws.cli.agent_server household-cleanup" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in codex_runner_text
     assert "examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py" not in (
@@ -2099,11 +2113,44 @@ def test_agent_server_cli_accepts_canonical_household_targets(
 
     assert agent_server.main(["household-world.cleanup", "--host", "127.0.0.1"]) == 0
     assert agent_server.main(["household-world.map-build", "--policy", "codex_agent"]) == 0
+    assert agent_server.main(["cleanup", "--port", "18788"]) == 0
+    assert agent_server.main(["map-build", "--host", "127.0.0.1"]) == 0
 
     assert calls == [
         ("cleanup", ["--host", "127.0.0.1"]),
         ("map-build", ["--policy", "codex_agent"]),
+        ("cleanup", ["--port", "18788"]),
+        ("map-build", ["--host", "127.0.0.1"]),
     ]
+
+
+def test_agent_server_cli_rejects_legacy_household_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from roboclaws.cli import agent_server
+
+    def fail_if_called(_args: list[str]) -> int:
+        raise AssertionError("legacy server target should not import a concrete server")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.household_agent_server",
+        types.SimpleNamespace(main=fail_if_called),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.agibot_map_build_agent_server",
+        types.SimpleNamespace(main=fail_if_called),
+    )
+
+    assert agent_server.main(["household-cleanup"]) == 2
+    assert agent_server.main(["semantic-map-build"]) == 2
+
+    stderr = capsys.readouterr().err
+    assert "unsupported server 'household-cleanup'" in stderr
+    assert "unsupported server 'semantic-map-build'" in stderr
+    assert "household-world.cleanup|household-world.map-build" in stderr
 
 
 def test_agent_server_cli_errors_use_canonical_targets(
@@ -2743,6 +2790,9 @@ def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checke
     assert '"--expect-task-name",' in runner_text
     assert 'task_name = getattr(self.args, "task_name", "household-cleanup")' in runner_text
     assert "household_intent_id_for_checker" in runner_text
+    assert 'SEMANTIC_MAP_BUILD_SERVER_TASK = "household-world.map-build"' in (
+        HOUSEHOLD_LIVE_DRIVER.read_text(encoding="utf-8")
+    )
     assert (
         household_intent_id_for_checker(
             task_name="semantic-map-build",

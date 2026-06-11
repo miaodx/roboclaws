@@ -41,12 +41,6 @@ up server="household-world.cleanup" host="127.0.0.1" port="18788" output_dir=".t
       household-world.map-build|map-build)
         server="household-world.map-build"
         ;;
-      household-cleanup)
-        server="household-world.cleanup"
-        ;;
-      semantic-map-build)
-        server="household-world.map-build"
-        ;;
       *)
         echo "error: unsupported MCP server '$server' (expected household-world.cleanup|household-world.map-build)" >&2
         exit 1
