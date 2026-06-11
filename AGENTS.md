@@ -361,9 +361,23 @@ routine progress.
 
 ## 9) Just command routing
 
-When a user asks in natural language to run a demo, cleanup task, proof task, or
-verification gate, translate it to the composable public surface/intent command
-instead of searching for a bespoke recipe name.
+When a user asks in natural language to run a demo, cleanup task, or proof task,
+translate it to the composable public surface/intent command instead of
+searching for a bespoke recipe name.
+
+When a plan, diff, PR, or handoff asks which verification gates to run for
+agent-facing changes, prefer the adaptive matrix:
+
+```bash
+just agent::harness agent-validation recommend plan=<path> budget=focused
+just agent::harness agent-validation execute since=<base> budget=focused
+```
+
+Use this instead of hand-writing fixed live/product gate lists. The matrix
+selects deterministic, product, live-agent, Agent SDK, perception/DINO,
+simulator, and map/cleanup-consumer gates from plan, diff, or explicit axis
+signals, and records run/skipped/blocked rationale under
+`output/agent-validation-matrix/`.
 
 Primary grammar:
 

@@ -1,6 +1,6 @@
 # Agent Validation Matrix Skill
 
-**Status:** Partially implemented
+**Status:** Fully implemented; RAW-FPV behavior recovery parked
 **Created:** 2026-06-11
 **Last reviewed:** 2026-06-11
 **Current implementation contract:** `just agent::harness agent-validation recommend|execute ...` selects and reports deterministic, product, live-agent, Agent SDK, perception, simulator, and map/cleanup-consumer gates from an explicit plan, `since=` diff, or explicit `changed_file=` / axis overrides. The retired fixed `codex-cleanup-harness8` and `molmo::codex-harness8` routes are unsupported.
@@ -422,14 +422,40 @@ Shipped evidence generated during this slice:
   default with the documented visual-grounding service port
   `http://127.0.0.1:18880`. The observed DINO block was connection refused
   before model inference, not a Grounding DINO inference failure.
+- Follow-up rerun on 2026-06-11:
+  `output/agent-validation-matrix/0611_dino_execute_rerun/validation_matrix.json`
+  passed the focused visual-grounding matrix against the real sidecar. Selected
+  gates `route-trace-contract-tests`,
+  `direct-camera-grounded-sim-control`, and
+  `direct-camera-grounded-grounding-dino` all passed. Grounding DINO is no
+  longer a validation-matrix blocker for this plan.
+- Follow-up rerun on 2026-06-11:
+  `output/agent-validation-matrix/0611_agent_sdk_execute_rerun/validation_matrix.json`
+  confirmed the Agent SDK row now gets past dependency/provider setup and starts
+  the MCP-backed route through `codex-env`, but the live cleanup row fails before
+  task execution with
+  `Agent model must be a string, Model, or None, got _RetryingModel`. Treat this
+  as an OpenAI Agents SDK driver compatibility follow-up, not an
+  agent-validation matrix skill blocker.
+- Follow-up fix on 2026-06-11: make `_RetryingModel` subclass the installed
+  OpenAI Agents SDK `Model` interface when the optional SDK is available, while
+  preserving importability without the optional dependency.
+- Follow-up rerun on 2026-06-11:
+  `output/agent-validation-matrix/0611_agent_sdk_execute_rerun_fixed/validation_matrix.json`
+  passed the focused Agent SDK matrix. Selected gates
+  `route-trace-contract-tests` and `openai-agents-sdk-cleanup` both passed.
+  The live SDK cleanup run wrote `run_result.json`, `report.html`, and
+  `live_timing.json` under
+  `output/agent-validation-matrix/0611_agent_sdk_execute_rerun_fixed/gates/openai-agents-sdk-cleanup/run/0611_1507/seed-7/`,
+  with `cleanup_status=success`, `restored_count=4`, semantic acceptability
+  success, and `sweep_coverage_rate=1.0`.
 
-Remaining gates before this plan can be marked fully implemented:
+Closeout decision for this plan:
 
-- rerun a focused visual-grounding execute after starting the real
-  visual-grounding sidecar on `VISUAL_GROUNDING_BASE_URL` or the default
-  `127.0.0.1:18880`;
-- rerun the Agent SDK live row after syncing the updated `dev` extra and
-  sourcing a supported provider profile.
+- the adaptive matrix skill is implemented and has deterministic,
+  recommendation, focused execute, real DINO, and live Agent SDK pass evidence;
+- RAW-FPV live behavior recovery remains parked because the user accepted it as
+  a known performance/readiness limitation.
 
 Parked follow-ups:
 
