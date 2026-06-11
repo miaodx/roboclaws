@@ -166,6 +166,12 @@ def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> Non
     assert 'id="intent-preview"' in html
     assert "selectedIntent" in app
     assert "selectedIntentForRoute" in app
+    assert "state.selectedIntent = els.intentInput.value;" in app
+    assert "state.selectedIntent = selectedIntent();" not in app
+    assert "syncAxesFromRoute" in app
+    assert "currentSelectValue" in app
+    assert "currentSelectValue(\n          els.intentInput" in app
+    assert "const scopedCombos = axisMatches.length ? axisMatches : combos;" in app
     assert "launchInterpretation" in app
     assert "route.intent_options" in app
     assert "intent_id: selectedIntent()" in app

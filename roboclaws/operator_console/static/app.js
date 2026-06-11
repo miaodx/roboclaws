@@ -15,6 +15,7 @@ const state = {
   activeView: "overview",
   selectedIntent: "",
   setupSelectionKey: "",
+  syncAxesFromRoute: false,
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -114,6 +115,8 @@ async function boot() {
   if (state.selectedRoute) {
     state.selectedWorld =
       state.worlds.find((world) => world.id === state.selectedRoute.world_id) || state.selectedWorld;
+    state.selectedIntent = state.selectedRoute.intent_id || "";
+    state.syncAxesFromRoute = true;
   }
   renderRoutes();
   renderSelection();
@@ -150,7 +153,7 @@ function bindEvents() {
     renderSelection();
   });
   els.intentInput.addEventListener("change", () => {
-    state.selectedIntent = selectedIntent();
+    state.selectedIntent = els.intentInput.value;
     renderSelection();
   });
   [
@@ -464,6 +467,7 @@ function renderRoutes() {
         combinationsForWorld(world.id).find((item) => item.enabled) ||
         combinationsForWorld(world.id)[0];
       state.selectedIntent = state.selectedRoute ? state.selectedRoute.intent_id : "";
+      state.syncAxesFromRoute = true;
       renderRoutes();
       renderSelection();
       refreshSelectedRouteReadiness();
@@ -555,28 +559,58 @@ function renderSelection() {
 function renderAxisSelectors() {
   const worldId = state.selectedWorld && state.selectedWorld.id;
   const combos = combinationsForWorld(worldId);
+  const syncFromRoute = state.syncAxesFromRoute;
+  const route = state.selectedRoute;
+  const backendOptions = uniqueOptions(combos, "backend_id", "backend_label");
   renderSelectOptions(
     els.backendInput,
-    uniqueOptions(combos, "backend_id", "backend_label"),
-    state.selectedRoute && state.selectedRoute.backend_id
+    backendOptions,
+    syncFromRoute && route
+      ? route.backend_id
+      : currentSelectValue(els.backendInput, backendOptions, route && route.backend_id)
   );
+  const agentOptions = uniqueOptions(combos, "agent_engine_id", "agent_engine_label");
   renderSelectOptions(
     els.agentEngineInput,
-    uniqueOptions(combos, "agent_engine_id", "agent_engine_label"),
-    state.selectedRoute && state.selectedRoute.agent_engine_id
+    agentOptions,
+    syncFromRoute && route
+      ? route.agent_engine_id
+      : currentSelectValue(els.agentEngineInput, agentOptions, route && route.agent_engine_id)
   );
+  const intentOptions = intentOptionsForCurrentAxes(combos);
   renderSelectOptions(
     els.intentInput,
-    intentOptionsForCurrentAxes(combos),
-    state.selectedIntent || (state.selectedRoute && state.selectedRoute.intent_id)
+    intentOptions,
+    syncFromRoute && route
+      ? route.intent_id
+      : currentSelectValue(
+          els.intentInput,
+          intentOptions,
+          state.selectedIntent || (route && route.intent_id)
+        )
   );
+  const laneOptions = evidenceLaneOptions(combos);
   renderSelectOptions(
     els.evidenceLaneInput,
-    evidenceLaneOptions(combos),
-    state.selectedRoute && state.selectedRoute.evidence_lane
+    laneOptions,
+    syncFromRoute && route
+      ? route.evidence_lane
+      : currentSelectValue(els.evidenceLaneInput, laneOptions, route && route.evidence_lane)
   );
+  state.syncAxesFromRoute = false;
   const selected = selectedCombinationFromAxes();
   renderProviderProfileOptions(selected);
+}
+
+function currentSelectValue(select, options, fallbackValue = "") {
+  const current = select.value || "";
+  if (current && options.some((option) => option.value === current)) {
+    return current;
+  }
+  if (fallbackValue && options.some((option) => option.value === fallbackValue)) {
+    return fallbackValue;
+  }
+  return current || fallbackValue || "";
 }
 
 function uniqueOptions(items, valueKey, labelKey, labelFn) {
@@ -599,11 +633,15 @@ function uniqueOptions(items, valueKey, labelKey, labelFn) {
 function intentOptionsForCurrentAxes(combos) {
   const backendId = els.backendInput.value;
   const agentEngineId = els.agentEngineInput.value;
+  const axisMatches = combos.filter(
+    (item) => item.backend_id === backendId && item.agent_engine_id === agentEngineId
+  );
+  const scopedCombos = axisMatches.length ? axisMatches : combos;
   const intentValues = [
-    ...new Set(combos.map((item) => item.intent_id).filter(Boolean)),
+    ...new Set(scopedCombos.map((item) => item.intent_id).filter(Boolean)),
   ];
   return intentValues.map((value) => {
-    const matching = combos.filter(
+    const matching = scopedCombos.filter(
       (item) =>
         item.backend_id === backendId &&
         item.agent_engine_id === agentEngineId &&
@@ -1134,6 +1172,8 @@ async function attachLatestResult() {
   );
   if (route) {
     state.selectedRoute = route;
+    state.selectedIntent = route.intent_id || "";
+    state.syncAxesFromRoute = true;
     renderRoutes();
     renderSelection();
   }

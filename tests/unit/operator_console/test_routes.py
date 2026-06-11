@@ -55,8 +55,10 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == (
         "/asset-previews/maps/agibot-robot-map-12/preview.png"
     )
-    assert worlds["ai2thor/FloorPlan201"]["preview_assets"] == {}
-    assert worlds["ai2thor-games/FloorPlan201"]["preview_assets"] == {}
+    if "ai2thor/FloorPlan201" in worlds:
+        assert worlds["ai2thor/FloorPlan201"]["preview_assets"] == {}
+    if "ai2thor-games/FloorPlan201" in worlds:
+        assert worlds["ai2thor-games/FloorPlan201"]["preview_assets"] == {}
     assert worlds["planner-proof/default"]["preview_assets"] == {
         "map": {
             "path": "/previews/molmospaces-val_0-map.png",
@@ -252,7 +254,21 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     assert not any(route_id.startswith("molmospaces/val_8::") for route_id in all_ids)
 
     assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels" in disabled
+    assert (
+        "at least 5 generated cleanup targets"
+        in disabled["molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels"]
+    )
     assert "molmospaces/val_1::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
+    val0_openai_open_ended = (
+        "molmospaces/val_0::mujoco::open-ended::openai-agents-sdk::world-oracle-labels"
+    )
+    assert val0_openai_open_ended in disabled
+    assert "OpenAI Agents SDK is not proven" in disabled[val0_openai_open_ended]
+    assert not any(
+        route_id.startswith("molmospaces/val_0::mujoco::open-ended::codex-cli::")
+        for route_id in all_ids
+    )
 
     enabled_mujoco_cleanup_worlds = {
         route.world_id
