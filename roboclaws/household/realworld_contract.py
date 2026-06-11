@@ -67,10 +67,9 @@ INSPECTION_OBSERVATION_SCHEMA = "target_inspection_observation_v1"
 CLEANUP_WORKLIST_SCHEMA = "cleanup_worklist_v1"
 CLEANUP_POLICY_TRACE_SCHEMA = "cleanup_policy_trace_v1"
 REAL_ROBOT_READINESS_SCHEMA = "real_robot_readiness_v1"
-RICH_MAP_MODE = "rich"
 MINIMAL_MAP_MODE = "minimal"
 DEFAULT_MAP_MODE = MINIMAL_MAP_MODE
-REALWORLD_MAP_MODES = frozenset({RICH_MAP_MODE, MINIMAL_MAP_MODE})
+REALWORLD_MAP_MODES = frozenset({MINIMAL_MAP_MODE})
 DETERMINISTIC_SWEEP_POLICY = "deterministic_sweep_baseline"
 DEFAULT_REALWORLD_TASK = "帮我收拾这个房间"
 VISIBLE_OBJECT_DETECTIONS_MODE = "visible_object_detections"
@@ -1332,10 +1331,14 @@ class RealWorldCleanupContract:
         source_receptacle_id: str = "",
         tools: list[str] | tuple[str, ...] | None = None,
     ) -> dict[str, Any]:
+        internal_target_receptacle_id = (
+            self.internal_fixture_id_for_public_reference(target_receptacle_id)
+            or target_receptacle_id
+        )
         return observed_handle_planner_binding(
             self,
             object_id=object_id,
-            target_receptacle_id=target_receptacle_id,
+            target_receptacle_id=internal_target_receptacle_id,
             source_receptacle_id=source_receptacle_id,
             tools=tools,
         )
@@ -5337,6 +5340,9 @@ def infer_target_fixture_for_detection(
     detection: dict[str, Any],
     fixture_hints: dict[str, Any],
 ) -> dict[str, Any] | None:
+    direct_candidate = _target_fixture_from_detection_anchor(detection)
+    if direct_candidate is not None:
+        return direct_candidate
     fixture_candidates = [
         fixture
         for room in fixture_hints.get("rooms", [])
@@ -5355,6 +5361,31 @@ def infer_target_fixture_for_detection(
             if match is not None:
                 return match
     return None
+
+
+def _target_fixture_from_detection_anchor(detection: dict[str, Any]) -> dict[str, Any] | None:
+    fixture_id = str(detection.get("candidate_fixture_id") or "")
+    if not fixture_id.startswith("anchor_fixture_"):
+        return None
+    category = str(detection.get("candidate_fixture_category") or "")
+    tool = str(detection.get("recommended_tool") or "")
+    affordances = ["observe", "place"]
+    if tool == "place_inside" or _fixture_requires_open({"category": category}):
+        affordances.append("place_inside")
+    if _fixture_requires_open({"category": category}):
+        affordances.extend(["open", "close"])
+    waypoint_id = str(detection.get("waypoint_id") or "")
+    return {
+        "fixture_id": fixture_id,
+        "receptacle_id": fixture_id,
+        "category": category,
+        "name": category or fixture_id,
+        "room_id": str(detection.get("current_room_id") or ""),
+        "affordances": affordances,
+        "preferred_inspection_waypoint_id": waypoint_id,
+        "preferred_manipulation_waypoint_id": waypoint_id,
+        "public_fixture_source": "runtime_semantic_anchor",
+    }
 
 
 def forbidden_agent_view_keys() -> set[str]:
@@ -6491,7 +6522,7 @@ def _visual_candidate_validation_error(
     candidate: Any,
     *,
     require_target_fixture_id: bool = True,
-    map_mode: str = RICH_MAP_MODE,
+    map_mode: str = MINIMAL_MAP_MODE,
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     producer_type: str = "",
 ) -> dict[str, str] | None:

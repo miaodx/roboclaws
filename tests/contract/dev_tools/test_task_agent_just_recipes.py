@@ -1730,7 +1730,7 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "plain verbal_region" in prompt
     assert "Do not retry the same source_observation_id/category/region combination" in prompt
     assert "fresh source_observation_id and a tighter bbox" in prompt
-    assert "Omit source_fixture_id in minimal map mode" in prompt
+    assert "Omit source_fixture_id with Base Navigation Map context" in prompt
     assert "Never send bbox_normalized" in prompt
     assert 'target_fixture_id=""' in prompt
     assert 'target_fixture_id="None"' in prompt

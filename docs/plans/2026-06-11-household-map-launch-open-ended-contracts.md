@@ -979,6 +979,80 @@ Remaining before this plan can be marked done:
 - finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
   already collapsed to read-only history only.
 
+### 2026-06-11 Candidate 1 Minimal-Only Contract Saturation
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 1's lower-contract saturation slice:
+
+- removed the active `RICH_MAP_MODE` constant and left `REALWORLD_MAP_MODES`
+  as minimal-only private compatibility;
+- made private `molmo::cleanup map_mode=...` validation accept only `minimal`;
+- migrated contract, checker, map-bundle, MCP, planner-binding, and cleanup
+  skill tests from rich static fixture expectations to Base Navigation Map plus
+  runtime public anchors;
+- let deterministic direct cleanup re-evaluate same-anchor observations after
+  visual confirmation and current worklist evidence so it can use discovered
+  runtime anchors instead of stale first-sighting hints;
+- kept planner-proof bindings strict while updating tests to bind cleanup
+  proofs to public `anchor_fixture_*` target ids;
+- updated active cleanup prompts, RAW-FPV recovery guidance, and the cleanup
+  skill so agents are instructed in Base Navigation Map terms rather than
+  `minimal map mode` terms;
+- ran the final human-doc alignment check and updated README / human cleanup
+  architecture wording from minimal-map / `map_mode` behavior to Base
+  Navigation Map plus optional `runtime_map_prior` evidence.
+
+Verified this slice:
+
+```bash
+uv sync --extra dev
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py \
+  tests/unit/molmo_cleanup/test_molmo_planner_observed_binding.py
+uv run ruff check \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/raw_fpv_guidance.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/household/realworld_cleanup.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/maps/bundle.py \
+  skills/molmo-realworld-cleanup/SKILL.md \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/unit/molmo_cleanup/test_molmo_planner_observed_binding.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_minimal_raw_fpv_navigate_validation_returns_schema_recovery
+rg -n -F -e 'RICH_MAP_MODE' -e 'map_mode=RICH_MAP_MODE' \
+  -e 'rich is' -e 'expected rich|minimal' -- \
+  roboclaws tests scripts skills docs/human docs/plans just
+```
+
+Observed proof:
+
+- the focused household map-mode/checker/MCP suite passes with the
+  Base Navigation Map contract;
+- active production code and tests have no `RICH_MAP_MODE` or
+  `expected rich|minimal` hits;
+- remaining grep hits are plan-history references documenting this cleanup.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 generated rerun/private-dispatch terminology where it
+  still points future agents at legacy task names;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
 ### 2026-06-11 Public Map Mode Facade Rejection
 
 Status remains `CONTINUE`.

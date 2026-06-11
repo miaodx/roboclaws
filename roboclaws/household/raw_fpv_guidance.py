@@ -43,9 +43,9 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         "pillow). Use broader cleanup categories such as "
         f"{RAW_FPV_CATEGORY_HINT} only when the exact object class is uncertain. "
         "Call navigate_to_visual_candidate with source_observation_id, category, "
-        "evidence_note, and image_region before pick. In minimal map mode, omit "
-        "target_fixture_id and normally omit source_fixture_id; do not invent "
-        "fixture ids from stale map labels or guesses about the room. "
+        "evidence_note, and image_region before pick. With Base Navigation Map "
+        "context, omit target_fixture_id and normally omit source_fixture_id; "
+        "do not invent fixture ids from stale map labels or guesses about the room. "
         "Use the candidate_fixture_id/recommended_tool returned by "
         "navigate_to_visual_candidate plus runtime_metric_map.public_semantic_anchors. "
         "When a destination is named or stale, resolve it through resolve_target_query "
@@ -101,7 +101,7 @@ def raw_fpv_visual_candidate_recovery_hint(
     map_mode: str = "minimal",
 ) -> str:
     target_rule = (
-        "omit target_fixture_id in minimal map mode"
+        "omit target_fixture_id with Base Navigation Map context"
         if map_mode == "minimal"
         else "use target_fixture_id only from public runtime-map anchors"
     )

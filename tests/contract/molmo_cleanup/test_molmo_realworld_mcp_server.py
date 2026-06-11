@@ -15,7 +15,6 @@ from roboclaws.household.realworld_contract import (
     MINIMAL_MAP_MODE,
     RAW_FPV_ONLY_MODE,
     REALWORLD_CONTRACT,
-    RICH_MAP_MODE,
     RealWorldCleanupContract,
 )
 from roboclaws.household.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_NAMES
@@ -146,7 +145,7 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         map_bundle_dir=PREBUILT_BUNDLE,
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         metric_map = server.call_tool("metric_map")
@@ -179,7 +178,7 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         perception_mode=CAMERA_MODEL_POLICY_MODE,
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         metric_map = prior_server.call_tool("metric_map")
@@ -203,7 +202,7 @@ def test_realworld_mcp_can_seed_runtime_metric_map_priors(tmp_path: Path) -> Non
         perception_mode=CAMERA_MODEL_POLICY_MODE,
         runtime_map_prior=prior_snapshot,
         runtime_map_prior_source="prior/runtime_metric_map.json",
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
     try:
         runtime_map = server._agent_view_payload()["runtime_metric_map"]

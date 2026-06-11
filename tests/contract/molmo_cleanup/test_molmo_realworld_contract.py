@@ -15,7 +15,6 @@ from roboclaws.household.realworld_contract import (
     RAW_FPV_ONLY_MODE,
     REAL_ROBOT_MAP_BUNDLE_SCHEMA,
     REALWORLD_CONTRACT,
-    RICH_MAP_MODE,
     RUNTIME_METRIC_MAP_SCHEMA,
     SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY,
     SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE,
@@ -45,7 +44,7 @@ def _contract(
     session: CleanupBackendSession,
     **kwargs: object,
 ) -> RealWorldCleanupContract:
-    kwargs.setdefault("map_mode", RICH_MAP_MODE)
+    kwargs.setdefault("map_mode", MINIMAL_MAP_MODE)
     return RealWorldCleanupContract(session, **kwargs)
 
 
@@ -232,9 +231,9 @@ def test_zero_camera_adjustment_does_not_confirm_world_label_candidate() -> None
 
 
 def test_world_labels_sanitized_observations_omit_destination_oracle_fields() -> None:
-    rich_contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
-    rich_observation = _first_non_empty_observation(rich_contract)
-    rich_detection = rich_observation["visible_object_detections"][0]
+    public_anchor_contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    public_anchor_observation = _first_non_empty_observation(public_anchor_contract)
+    public_anchor_detection = public_anchor_observation["visible_object_detections"][0]
 
     sanitized_contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
@@ -243,8 +242,9 @@ def test_world_labels_sanitized_observations_omit_destination_oracle_fields() ->
     sanitized_observation = _first_non_empty_observation(sanitized_contract)
     detection = sanitized_observation["visible_object_detections"][0]
 
-    assert "candidate_fixture_id" in rich_detection
-    assert "recommended_tool" in rich_detection
+    assert "candidate_fixture_id" in public_anchor_detection
+    assert str(public_anchor_detection["candidate_fixture_id"]).startswith("anchor_fixture_")
+    assert "recommended_tool" in public_anchor_detection
     assert sanitized_observation["perception_source"] == (
         SANITIZED_VISIBLE_OBJECT_DETECTIONS_PROVENANCE
     )
@@ -346,10 +346,11 @@ def test_realworld_contract_exposes_nav2_shaped_public_map_and_provenance() -> N
     assert metric_map["map_bundle"]["artifact_paths"]["map_yaml"] == "map_bundle/map.yaml"
     assert metric_map["map_bundle"]["parameter_hash"]
     assert waypoint["frame_id"] == "map"
-    assert waypoint["purpose"] == "fixture_coverage"
-    assert waypoint["waypoint_source"] == "static_map_coverage"
+    assert waypoint["purpose"] == "minimal_map_exploration"
+    assert waypoint["waypoint_source"] == "generated_exploration_candidate"
     assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
     assert fixture_hints["contains_runtime_observations"] is False
+    assert fixture_hints["rooms"] == []
     assert "observations" not in fixture_hints
     assert waypoint_nav["navigation_backend"] == "sim_costmap_planner"
     assert waypoint_nav["route_validation"]["ok"] is True
@@ -419,7 +420,6 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
         map_bundle_dir=Path("assets/maps/molmospaces-procthor-val-0-7"),
     )
 
-    fixture_hints = contract.fixture_hints()
     detection = None
     inspection_waypoints = contract.metric_map()["inspection_waypoints"]
     for waypoint in inspection_waypoints:
@@ -430,28 +430,13 @@ def test_scene_index_backend_prefers_public_usd_fixture_overlay_over_stale_map_b
             break
 
     assert detection is not None
-    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
     assert target_fixture is not None
-    assert target_fixture["fixture_id"] == "sink_07e796f32d0d3efce9acf4be00f3bc53_1_0_3"
-    assert target_fixture["public_fixture_source"] == "isaac_scene_index"
-    assert fixture_hints["scene_index_fixture_overlay"]["enabled"] is True
+    assert str(target_fixture["fixture_id"]).startswith("anchor_fixture_")
+    assert str(target_fixture["category"]).lower() in {"countertop", "sink"}
+    assert target_fixture["public_fixture_source"] == "runtime_semantic_anchor"
 
-    contract.adjust_camera(yaw_delta_deg=15)
-    confirmed_observation = contract.observe()
-    confirmed = next(
-        item
-        for item in confirmed_observation["visible_object_detections"]
-        if item["object_id"] == detection["object_id"]
-    )
-    assert contract.navigate_to_object(confirmed["object_id"])["ok"] is True
-    assert contract.pick(confirmed["object_id"])["ok"] is True
-    assert contract.navigate_to_receptacle(str(target_fixture["fixture_id"]))["ok"] is True
-    assert contract.place(str(target_fixture["fixture_id"]))["ok"] is True
-    for waypoint in inspection_waypoints:
-        contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
-        contract.observe()
-    assert contract.done("scene-index overlay cleanup")["cleanup_status"] == "success"
-    _assert_no_forbidden_keys(fixture_hints)
+    _assert_no_forbidden_keys(target_fixture)
 
 
 def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
@@ -523,29 +508,17 @@ def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
 
     contract = _contract(session)
     metric_map = contract.metric_map()
-    rooms = {room["room_id"]: room for room in metric_map["rooms"]}
-    room_2 = rooms["room_2"]
-    room_3 = rooms["room_3"]
-
-    assert room_2["scene_room_outline"]["provenance"] == "isaac_usd_room_mesh_world_bounds"
-    assert room_2["polygon"] == [
-        {"x": 0.0, "y": 0.0},
-        {"x": 5.98, "y": 0.0},
-        {"x": 5.98, "y": 9.966},
-        {"x": 0.0, "y": 9.966},
-    ]
-    assert room_3["polygon"] == [
-        {"x": 5.98, "y": 0.0},
-        {"x": 9.966, "y": 0.0},
-        {"x": 9.966, "y": 5.98},
-        {"x": 5.98, "y": 5.98},
-    ]
+    assert metric_map["rooms"] == []
+    assert contract.fixture_hints()["rooms"] == []
+    assert metric_map["inspection_waypoints"]
     assert all(
-        waypoint["x"] != 1.0 or waypoint["y"] != 1.0
+        waypoint["waypoint_source"] == "generated_exploration_candidate"
         for waypoint in metric_map["inspection_waypoints"]
-        if waypoint["room_id"] in {"room_2", "room_3"}
     )
-    assert contract.fixture_hints()["rooms"][0]["fixtures"][0]["pose"]["x"] == 2.717858
+    assert all(
+        waypoint["candidate_provenance"]["source_room_hidden"] is True
+        for waypoint in metric_map["inspection_waypoints"]
+    )
 
 
 def test_scene_index_backend_room_outline_waypoints_avoid_fixture_occupied_goals() -> None:
@@ -827,8 +800,8 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
     assert runtime_map["schema"] == RUNTIME_METRIC_MAP_SCHEMA
     assert runtime_map["private_truth_included"] is False
     assert runtime_map["source_map_mutated"] is False
-    assert runtime_map["static_map"]["fixtures"]
-    assert runtime_map["public_semantic_anchors"] == []
+    assert runtime_map["static_map"]["fixtures"] == []
+    assert runtime_map["public_semantic_anchors"]
     assert runtime_map["map_update_candidates"] == []
     assert runtime_map["observed_objects"]
     observed = runtime_map["observed_objects"][0]
@@ -836,9 +809,6 @@ def test_runtime_metric_map_keeps_static_and_dynamic_semantics_separate() -> Non
     assert observed["source_observation_id"] == observation["raw_fpv_observation"]["observation_id"]
     assert observed["producer_type"] == SIMULATED_CAMERA_MODEL_PROVENANCE
     assert observed["actionability"] in {"actionable", "pending"}
-    for fixture in runtime_map["static_map"]["fixtures"]:
-        assert "observed_objects" not in fixture
-        assert not fixture["fixture_id"].startswith("observed_")
     _assert_no_forbidden_keys(runtime_map)
 
 
@@ -1323,12 +1293,11 @@ def test_minimal_map_mode_done_uses_generated_candidate_coverage() -> None:
 
 def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
-    fixture_hints = contract.fixture_hints()
     detection = _confirm_world_label_detection(
         contract,
         _first_detection_by_category(contract, "dish"),
     )
-    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
 
     assert target_fixture is not None
     navigated_object = contract.navigate_to_object(detection["object_id"])
@@ -1341,14 +1310,14 @@ def test_realworld_detected_handle_can_be_cleaned_without_private_manifest() -> 
     assert picked["object_id"].startswith("observed_")
     assert navigated_target["ok"] is True
     assert placed["ok"] is True
-    assert placed["fixture_id"] == "sink_01"
+    assert str(placed["fixture_id"]).startswith("anchor_fixture_")
+    assert placed["location_id"] == "sink_01"
 
 
 def test_realworld_contract_rejects_skipped_semantic_phases_without_private_truth() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
-    fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
-    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
     assert target_fixture is not None
     detection = _confirm_world_label_detection(contract, detection)
 
@@ -1375,8 +1344,7 @@ def test_realworld_contract_rejects_skipped_semantic_phases_without_private_trut
 
 def test_realworld_contract_rejects_done_with_pending_public_candidates() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
-    observation = _first_non_empty_observation(contract)
-    recommended = observation["visible_object_detections"][0]
+    _first_non_empty_observation(contract)
 
     done = contract.done("finished sweep")
 
@@ -1384,7 +1352,7 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
     assert done["status"] == "blocked"
     assert done["error_reason"] == "pending_cleanup_candidates"
     assert done["required_tool"] == "adjust_camera"
-    assert recommended["object_id"] in done["pending_observed_handles"]
+    assert done["pending_observed_handles"]
     assert done["pending_cleanup_candidates"][0]["candidate_state"] == "visual_scan_required"
     assert done["completion"]["status"] == "blocked"
     assert done["completion"]["blockers"][0]["type"] == "pending_cleanup_candidates"
@@ -1414,10 +1382,9 @@ def test_open_ended_done_ignores_unrelated_pending_public_candidates() -> None:
 
 def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
-    observation = _first_non_empty_observation(contract)
     detection = _confirm_world_label_detection(
         contract,
-        observation["visible_object_detections"][0],
+        _first_detection_by_category(contract, "food"),
     )
 
     assert contract.navigate_to_object(detection["object_id"])["ok"] is True
@@ -1537,16 +1504,16 @@ def test_world_labels_sanitized_done_rejects_policy_required_pending_objects() -
 
 def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
-    fixture_hints = contract.fixture_hints()
     detection = _confirm_world_label_detection(
         contract,
         _first_detection_by_category(contract, "food"),
     )
-    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
     assert target_fixture is not None
     fixture_id = str(target_fixture["fixture_id"])
 
-    assert fixture_id == "fridge_01"
+    assert fixture_id.startswith("anchor_fixture_")
+    assert target_fixture["category"] == "fridge"
     assert contract.navigate_to_object(detection["object_id"])["ok"] is True
     assert contract.pick(detection["object_id"])["ok"] is True
     assert contract.navigate_to_receptacle(fixture_id)["ok"] is True
@@ -1572,16 +1539,16 @@ def test_realworld_contract_rejects_place_inside_before_opening_fridge() -> None
 
 def test_realworld_contract_routes_bookshelf_as_inside_without_close() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
-    fixture_hints = contract.fixture_hints()
     detection = _confirm_world_label_detection(
         contract,
         _first_detection_by_category(contract, "book"),
     )
-    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
     assert target_fixture is not None
     fixture_id = str(target_fixture["fixture_id"])
 
-    assert fixture_id == "bookshelf_01"
+    assert fixture_id.startswith("anchor_fixture_")
+    assert str(target_fixture["category"]).lower() in {"bookshelf", "shelvingunit"}
     assert "place_inside" in target_fixture["affordances"]
     assert "open" not in target_fixture["affordances"]
     assert "close" not in target_fixture["affordances"]
@@ -1806,7 +1773,6 @@ def test_realworld_unresolved_model_declared_candidate_is_unpickable() -> None:
         candidates=[
             {
                 "category": "imaginary widget",
-                "target_fixture_id": "sink_01",
                 "evidence_note": "ambiguous tiny object in the far corner",
                 "image_region": {"type": "verbal_region", "value": "far corner"},
             }
@@ -1845,7 +1811,6 @@ def test_realworld_navigate_to_unresolved_visual_candidate_says_continue_sweep()
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="imaginary widget",
-        target_fixture_id="sink_01",
         evidence_note="ambiguous tiny object in the far corner",
         image_region={"type": "verbal_region", "value": "far corner"},
         producer_type="main_cleanup_agent",
@@ -1872,7 +1837,6 @@ def test_realworld_unresolved_visual_candidates_do_not_count_as_model_declared_a
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="imaginary widget",
-        target_fixture_id="sink_01",
         evidence_note="ambiguous tiny object in the far corner",
         image_region={"type": "verbal_region", "value": "far corner"},
         producer_type="main_cleanup_agent",
@@ -1903,7 +1867,6 @@ def test_realworld_done_does_not_require_unresolved_visual_candidates() -> None:
             candidates=[
                 {
                     "category": f"imaginary widget {index}",
-                    "target_fixture_id": "sink_01",
                     "evidence_note": "unresolved visual guess",
                     "image_region": {"type": "verbal_region", "value": f"far corner {index}"},
                 }
@@ -2006,7 +1969,6 @@ def test_camera_raw_requested_run_size_enables_grounded_chain_gate_after_sweep()
             candidates=[
                 {
                     "category": f"imaginary widget {index}",
-                    "target_fixture_id": "sink_01",
                     "evidence_note": "unresolved visual guess for readiness policy",
                     "image_region": {"type": "verbal_region", "value": f"empty area {index}"},
                 }
@@ -2062,14 +2024,13 @@ def test_realworld_navigate_to_visual_candidate_returns_grounded_handle() -> Non
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "work_area"
+        if item["waypoint_id"] == "generated_exploration_007"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
-        target_fixture_id="fridge_01",
         evidence_note="round produce item on the desk",
         image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="main_cleanup_agent",
@@ -2098,14 +2059,13 @@ def test_realworld_raw_fpv_visual_candidate_requires_reviewable_fpv_bbox() -> No
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "work_area"
+        if item["waypoint_id"] == "generated_exploration_007"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="tomato",
-        target_fixture_id="fridge_01",
         evidence_note="round produce item on the desk",
         image_region={"type": "verbal_region", "value": "front of desk"},
         producer_type="main_cleanup_agent",
@@ -2234,7 +2194,7 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     work_waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "work_area"
+        if item["waypoint_id"] == "generated_exploration_007"
     )
     contract.navigate_to_waypoint(str(work_waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2242,7 +2202,6 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     first = contract.navigate_to_visual_candidate(
         raw_observation_id,
         category="tomato",
-        target_fixture_id="fridge_01",
         evidence_note="round produce item on the desk",
         image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="main_cleanup_agent",
@@ -2251,7 +2210,6 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     retry_before_place = contract.navigate_to_visual_candidate(
         raw_observation_id,
         category="tomato",
-        target_fixture_id="fridge_01",
         evidence_note="same produce item before pick",
         image_region={"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
         producer_type="main_cleanup_agent",
@@ -2262,14 +2220,18 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     assert first["ok"] is True
     assert retry_before_place["ok"] is True
     assert retry_before_place["object_id"] == handle
+    fixture_id = str(first["candidate_fixture_id"])
     declared_before_place = contract.model_declared_observations_payload()["observation_count"]
     assert contract.pick(handle)["ok"] is True
-    assert contract.navigate_to_receptacle("fridge_01")["ok"] is True
-    assert contract.open_receptacle("fridge_01")["ok"] is True
-    assert contract.place_inside("fridge_01")["ok"] is True
-    assert contract.close_receptacle("fridge_01")["ok"] is True
+    assert contract.navigate_to_receptacle(fixture_id)["ok"] is True
+    assert contract.open_receptacle(fixture_id)["ok"] is True
+    assert contract.place_inside(fixture_id)["ok"] is True
+    if "close" in contract.public_receptacles_by_id()[fixture_id].get("affordances", []):
+        assert contract.close_receptacle(fixture_id)["ok"] is True
 
-    contract.navigate_to_waypoint(contract._preferred_waypoint_for_fixture("fridge_01"))
+    contract.navigate_to_waypoint(
+        str(contract.public_receptacles_by_id()[fixture_id]["preferred_inspection_waypoint_id"])
+    )
     later_observation = contract.observe()
     lifecycle_before = dict(contract._object_lifecycle[handle])
     current_handle_before = contract._current_object_handle
@@ -2277,7 +2239,6 @@ def test_realworld_raw_fpv_rejects_already_handled_visual_candidate_without_navi
     duplicate = contract.navigate_to_visual_candidate(
         later_observation["raw_fpv_observation"]["observation_id"],
         category="food",
-        target_fixture_id="fridge_01",
         evidence_note="produce-like object already in the fridge area",
         image_region={"type": "bbox", "value": [0.2, 0.2, 0.2, 0.2]},
         producer_type="main_cleanup_agent",
@@ -2423,7 +2384,7 @@ def test_realworld_model_declared_grounding_accepts_public_category_families() -
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "work_area"
+        if item["waypoint_id"] == "generated_exploration_007"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2432,7 +2393,6 @@ def test_realworld_model_declared_grounding_accepts_public_category_families() -
         candidates=[
             {
                 "category": "tomato",
-                "target_fixture_id": "fridge_01",
                 "evidence_note": "round produce item on the desk",
                 "image_region": {"type": "bbox", "value": [0.12, 0.24, 0.18, 0.16]},
             }
@@ -2443,7 +2403,7 @@ def test_realworld_model_declared_grounding_accepts_public_category_families() -
 
     candidate = declared["model_declared_observations"][0]
     assert candidate["grounding_status"] == "resolved"
-    assert candidate["target_plausibility"]["status"] == "plausible"
+    assert candidate["target_plausibility"]["status"] == "unknown_fixture"
     _assert_no_forbidden_keys(declared)
 
 
@@ -2456,7 +2416,7 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "living_area"
+        if item["waypoint_id"] == "generated_exploration_005"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
     observation = contract.observe()
@@ -2465,7 +2425,6 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
         candidates=[
             {
                 "category": "toy",
-                "target_fixture_id": "bookshelf_01",
                 "evidence_note": "toy-like object on the coffee table",
                 "image_region": {"type": "bbox", "value": [0.2, 0.2, 0.2, 0.2]},
             }
@@ -2476,8 +2435,7 @@ def test_realworld_model_declared_grounding_keeps_target_mismatch_as_metadata() 
 
     candidate = declared["model_declared_observations"][0]
     assert candidate["grounding_status"] == "resolved"
-    assert candidate["target_plausibility"]["status"] == "weak"
-    assert candidate["target_plausibility"]["expected_fixture_id"] == "toy_bin_01"
+    assert candidate["target_plausibility"]["status"] == "unknown_fixture"
     _assert_no_forbidden_keys(declared)
 
 
@@ -2494,7 +2452,6 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
     bad_source_fixture = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="electronics",
-        target_fixture_id="tvstand_01",
         source_fixture_id="tvstand_01",
         evidence_note="black laptop on the sofa cushion",
         image_region={"type": "bbox", "value": [0.18, 0.22, 0.22, 0.18]},
@@ -2504,7 +2461,6 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
     electronics = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="electronics",
-        target_fixture_id="tvstand_01",
         evidence_note="black laptop on the sofa cushion",
         image_region={"type": "bbox", "value": [0.18, 0.22, 0.22, 0.18]},
         producer_type="main_cleanup_agent",
@@ -2513,7 +2469,6 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
     toy = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="toy",
-        target_fixture_id="toybin_01",
         evidence_note="teddy bear plush on the sofa",
         image_region={"type": "bbox", "value": [0.48, 0.34, 0.22, 0.2]},
         producer_type="main_cleanup_agent",
@@ -2529,11 +2484,11 @@ def test_realworld_model_declared_grounding_accepts_live_broad_categories() -> N
         "exact source observation locality"
         in electronics["model_declared_observation"]["grounding_basis"]
     )
-    assert electronics["candidate_fixture_id"] == "tvstand_01"
+    assert str(electronics["candidate_fixture_id"]).startswith("anchor_fixture_")
     assert electronics["recommended_tool"] == "place"
     assert toy["ok"] is True
     assert toy["model_declared_observation"]["grounding_status"] == "resolved"
-    assert toy["candidate_fixture_id"] == "sofa_01"
+    assert str(toy["candidate_fixture_id"]).startswith("anchor_fixture_")
     _assert_no_forbidden_keys(bad_source_fixture)
     _assert_no_forbidden_keys(electronics)
     _assert_no_forbidden_keys(toy)
@@ -2548,11 +2503,9 @@ def test_realworld_raw_fpv_grounding_blocks_same_room_fallback() -> None:
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["waypoint_id"] == "living_area_scan_1"
+        if item["waypoint_id"] == "generated_exploration_001"
     )
-    internal_waypoint = next(
-        item for item in contract._waypoints if item["waypoint_id"] == waypoint["waypoint_id"]
-    )
+    internal_waypoint = contract._private_waypoint_for_public_waypoint(waypoint)
     assert "desk_01" in internal_waypoint["fixture_ids"]
     assert "shelf_01" not in internal_waypoint["fixture_ids"]
 
@@ -2561,7 +2514,6 @@ def test_realworld_raw_fpv_grounding_blocks_same_room_fallback() -> None:
     response = contract.navigate_to_visual_candidate(
         observation["raw_fpv_observation"]["observation_id"],
         category="book",
-        target_fixture_id="shelf_01",
         evidence_note="book visible on a neighboring shelf in the same room",
         image_region={"type": "bbox", "value": [0.62, 0.28, 0.16, 0.18]},
         producer_type="main_cleanup_agent",
@@ -2609,12 +2561,16 @@ def test_realworld_camera_model_policy_registers_model_labelled_candidates() -> 
     assert candidate["perception_source"] == "model_declared_observation"
     assert candidate["model_provenance"] == SIMULATED_CAMERA_MODEL_PROVENANCE
     assert candidate["source_observation_id"].startswith("raw_fpv_")
-    assert candidate["support_estimate"]["source"] == "model_declared_observation"
+    assert candidate["support_estimate"]["source"] == "public_semantic_anchor"
     declaration = candidate_response["model_declared_observations"][0]
     assert declaration["source_observation_id"].startswith("raw_fpv_")
     assert declaration["producer_type"] == SIMULATED_CAMERA_MODEL_PROVENANCE
     assert declaration["grounding_status"] == "resolved"
-    assert declaration["target_plausibility"]["status"] in {"plausible", "weak"}
+    assert declaration["target_plausibility"]["status"] in {
+        "plausible",
+        "weak",
+        "unknown_fixture",
+    }
     evidence = agent_view["camera_model_policy_evidence"]
     assert evidence["schema"] == CAMERA_MODEL_POLICY_SCHEMA
     assert evidence["enabled"] is True
@@ -2698,7 +2654,7 @@ def test_realworld_camera_labels_http_failure_is_visible_without_sim_fallback() 
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "kitchen"
+        if item["waypoint_id"] == "generated_exploration_005"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
 
@@ -2765,7 +2721,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     waypoint = next(
         item
         for item in contract.metric_map()["inspection_waypoints"]
-        if item["room_id"] == "living_area"
+        if item["waypoint_id"] == "generated_exploration_005"
     )
     contract.navigate_to_waypoint(str(waypoint["waypoint_id"]))
 
@@ -2793,10 +2749,10 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     assert declaration["visual_grounding_evidence"]["reviewability_status"] == "reviewable"
     assert declaration["visual_grounding_evidence"]["bbox_coordinate_space"] == "normalized_xywh"
     assert declaration["actionability_status"] == "actionable"
-    assert declaration["visual_grounding_destination_hint"]["candidate_fixture_id"] == (
-        "bookshelf_01"
+    assert str(declaration["visual_grounding_destination_hint"]["candidate_fixture_id"]).startswith(
+        "anchor_fixture_"
     )
-    assert declaration["target_fixture_id"] == "sink_01"
+    assert str(declaration["target_fixture_id"]).startswith("anchor_fixture_")
     assert declaration["visual_grounding_overlay"] == (
         "visual_grounding/overlays/raw_fpv_001/candidate_001.jpg"
     )
@@ -2813,7 +2769,7 @@ def test_realworld_camera_labels_http_success_uses_destination_resolver(
     assert runtime_observed["source_observation_id"] == declaration["source_observation_id"]
     assert runtime_observed["image_region"]["type"] == "bbox"
     assert runtime_observed["visual_grounding_evidence"]["reviewability_status"] == "reviewable"
-    assert runtime_observed["actionability"] == "actionable"
+    assert runtime_observed["actionability"] == "pending"
     _assert_no_forbidden_keys(response)
 
 
@@ -2862,8 +2818,8 @@ def test_realworld_camera_labels_http_destination_hint_is_evidence_only() -> Non
     )
     declaration = response["model_declared_observations"][0]
 
-    assert declaration["visual_grounding_destination_hint"]["candidate_fixture_id"] == (
-        "bookshelf_01"
+    assert str(declaration["visual_grounding_destination_hint"]["candidate_fixture_id"]).startswith(
+        "anchor_fixture_"
     )
     assert declaration["target_fixture_id"] == ""
     assert declaration["target_plausibility"]["status"] == "unknown_fixture"

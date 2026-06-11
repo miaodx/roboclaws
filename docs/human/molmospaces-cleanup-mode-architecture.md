@@ -409,8 +409,9 @@ The most important regression test is:
 
 ```text
 profile=world-labels must not be described as image reasoning, online mapping,
-or offline prior-map cleanup. Map behavior is selected by map_mode and
-runtime_map_prior.
+or offline prior-map cleanup. Cleanup starts from the Base Navigation Map by
+default; runtime_map_prior may add prior Runtime Metric Map or Actionable
+Semantic Map Snapshot evidence.
 ```
 
 The fair-comparison regression test is:

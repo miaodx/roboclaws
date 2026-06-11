@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from roboclaws.household.backend_contract import CleanupBackendSession
-from roboclaws.household.realworld_contract import RICH_MAP_MODE, RealWorldCleanupContract
+from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE, RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.maps.bundle import validate_nav2_map_bundle, write_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
@@ -115,15 +115,21 @@ def test_bundle_writer_normalizes_wide_room_only_fixture_hints(tmp_path: Path) -
 
 
 def test_route_validation_blocks_occupied_goal(tmp_path: Path) -> None:
-    agent_view = _agent_view()
+    agent_view = _wide_room_only_agent_view()
     metric_map = agent_view["metric_map"]
     fixture_hints = agent_view["fixture_hints"]
     first_fixture = fixture_hints["rooms"][0]["fixtures"][0]
-    blocked_waypoint = dict(metric_map["inspection_waypoints"][0])
+    start_waypoint = dict(metric_map["inspection_waypoints"][0])
+    start_waypoint["x"] = 1.5
+    metric_map = dict(metric_map)
+    metric_map["inspection_waypoints"] = [
+        start_waypoint,
+        *metric_map["inspection_waypoints"][1:],
+    ]
+    blocked_waypoint = dict(start_waypoint)
     blocked_waypoint["waypoint_id"] = "blocked_goal"
     blocked_waypoint["x"] = first_fixture["pose"]["x"]
     blocked_waypoint["y"] = first_fixture["pose"]["y"]
-    metric_map = dict(metric_map)
     metric_map["inspection_waypoints"] = [*metric_map["inspection_waypoints"], blocked_waypoint]
 
     result = validate_metric_map_route(
@@ -142,7 +148,7 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         map_bundle_dir=PREBUILT_BUNDLE,
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
 
     metric_map = contract.metric_map()
@@ -153,7 +159,8 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
     assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
     assert metric_map["map_id"] == "molmo-cleanup-default-7_semantic_map"
     assert all(item["visited"] is False for item in waypoints)
-    assert fixture_hints["rooms"][0]["fixtures"][0]["fixture_id"] == "laundry_hamper_01"
+    assert fixture_hints["rooms"] == []
+    assert waypoints[0]["waypoint_source"] == "generated_exploration_candidate"
     assert navigation["navigation_backend"] == SIM_COSTMAP_PLANNER
     assert navigation["route_validation"]["ok"] is True
     assert navigation["route_validation"]["goal_waypoint_id"] == str(waypoints[-1]["waypoint_id"])
@@ -162,7 +169,7 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
 def _agent_view() -> dict:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
     return {
         "metric_map": contract.metric_map(),

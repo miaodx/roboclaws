@@ -304,7 +304,7 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
         "most of the item visible in the frame; skip tiny slivers, permanent fixtures, "
         "ambiguous decor, and areas already cleaned or already tried from that same "
         "source observation. " + raw_fpv_inline_candidate_instruction() + " "
-        "Omit source_fixture_id in minimal map mode. If visual candidate grounding is "
+        "Omit source_fixture_id with Base Navigation Map context. If visual candidate grounding is "
         "unresolved, continue the waypoint sweep instead of calling done; if your "
         f"successful cleanup count is still below {cleanup_count_text}, reobserve from "
         "another public waypoint or adjust_camera once, observe again, and retry only "
@@ -349,7 +349,7 @@ def _camera_raw_compact_prompt(
         f"{candidate_budget} raw-FPV candidate attempts. Never retry the same "
         "source_observation_id/category/region or visual-candidate id after a public failure. "
         + raw_fpv_inline_candidate_instruction()
-        + " Omit source_fixture_id in minimal map mode. Use "
+        + " Omit source_fixture_id with Base Navigation Map context. Use "
         "navigate_to_visual_candidate -> pick -> navigate_to_receptacle -> open? -> "
         "place/place_inside when grounding succeeds, then observe once before choosing another "
         "candidate. Use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets. If "

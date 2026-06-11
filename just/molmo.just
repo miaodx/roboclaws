@@ -218,10 +218,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       exit 1
     fi
     case "$map_mode" in
-      rich|minimal)
+      minimal)
         ;;
       *)
-        echo "error: unsupported map_mode '$map_mode' (expected rich|minimal)" >&2
+        echo "error: unsupported map_mode '$map_mode' (expected minimal)" >&2
         exit 1
         ;;
     esac

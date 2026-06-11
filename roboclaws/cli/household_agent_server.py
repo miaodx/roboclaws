@@ -128,9 +128,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=tuple(sorted(REALWORLD_MAP_MODES)),
         default=DEFAULT_MAP_MODE,
         help=(
-            "Agent-facing map projection. Default minimal exposes occupancy geometry and "
-            "generated exploration candidates; rich is an explicit legacy/debug projection "
-            "with authored public semantics."
+            "Agent-facing Base Navigation Map projection: occupancy geometry, "
+            "generated exploration candidates, and public room hints when available."
         ),
     )
     parser.add_argument("--include-robot", action="store_true")
