@@ -9,16 +9,25 @@ visual grounding, coarse navigation maps, and Agibot map parity.
 **Workflow:** Pre-GSD plan. Use this as the source for a later bounded
 implementation phase.
 
-**Deployment target:** the same public task/profile/tool layers should support
-eventual physical-robot runs. Early real-robot acceptance may prove only
+**Current implementation contract, 2026-06-11:** this plan predates the
+orthogonal launch grammar. For implementation, read older references to
+`semantic-map-build` as `surface=household-world intent=map-build`, and older
+references to `household-cleanup` as `surface=household-world intent=cleanup`.
+Do not reintroduce legacy task ids, profile ids, or command shapes from the
+historical wording below. `household_world_v1` remains the shared capability
+profile; `map-build` and `cleanup` are intents selected through the public
+launch catalog.
+
+**Deployment target:** the same public surface/intent/profile/tool layers should
+support eventual physical-robot runs. Early real-robot acceptance may prove only
 navigation, observation, and runtime-map evidence while manipulation remains a
 declared blocked capability.
 
 **Accepted direction, 2026-05-29:** make the minimal source map the real-robot
 mainline. Rich authored semantic map bundles may remain as development,
 simulation, or explicitly selected aids, but the product path should assume a
-sparse occupancy/free-space map and let `semantic-map-build` enrich the
-Runtime Metric Map through public observation evidence. Cleanup should consume
+sparse occupancy/free-space map and let `intent=map-build` enrich the Runtime
+Metric Map through public observation evidence. `intent=cleanup` should consume
 that enriched Runtime Metric Map instead of depending on hand-authored fixture
 semantics.
 
@@ -34,8 +43,8 @@ model-declared observation.
 That path is currently richer than many physical robot maps. Agibot G2 map
 artifacts, for example, can start as occupancy/free-space data without public
 rooms, fixtures, or inspection waypoints. To make simulator rehearsal predictive
-for that path, semantic-map-build needs an occ-only/minimal-map mode where the
-runtime map is enriched from public observation rather than seeded from a
+for that path, the `map-build` intent needs an occ-only/minimal-map mode where
+the runtime map is enriched from public observation rather than seeded from a
 complete authored semantic bundle.
 
 The next useful step is to let household robot tasks build and update a
@@ -64,18 +73,18 @@ that a separate query surface is necessary.
   allowed targets even when the static map or current semantic prior lacks the
   requested label.
 - Treat semantic map build as a task-neutral world-understanding capability:
-  the clean public task name should be `semantic-map-build`, and cleanup should
-  consume its snapshots rather than own the abstraction.
-- Keep the public task layer separate from the skill layer: `semantic-map-build`
-  and `household-cleanup` are Runnable Tasks; each task selects or defaults an
-  Agent Skill that owns prompt strategy, scripts, recovery, and examples.
+  the clean public shape is `surface=household-world intent=map-build`, and
+  `intent=cleanup` should consume its snapshots rather than own the abstraction.
+- Keep the public surface/intent layer separate from the skill layer:
+  `intent=map-build` and `intent=cleanup` each select or default an Agent Skill
+  that owns prompt strategy, scripts, recovery, and examples.
 - Prefer a clean task-neutral contract/profile name such as
   `household_world_v1` for the shared surface instead of making the long-term
   profile cleanup-owned.
 - Keep `household_world_v1` broad but not vague: it should cover household
-  world understanding and evidence capture, while each Runnable Task keeps its
-  own success criteria/report gates and each selected Agent Skill declares its
-  capability requirements.
+  world understanding and evidence capture, while each surface/intent selection
+  keeps its own success criteria/report gates and each selected Agent Skill
+  declares its capability requirements.
 - Keep one agent-facing map surface: extend the meaning of `metric_map()` /
   Agent View rather than adding a new MCP tool.
 - Support an occ-only/minimal-map rehearsal mode in simulation so the agent sees
@@ -99,7 +108,7 @@ that a separate query surface is necessary.
 - Keep private generated mess sets, acceptable destinations, and evaluator
   labels out of Agent View and normal runtime map updates.
 - Preserve simulator/hardware parity: physical backends should reuse the same
-  Runnable Task, capability profile, and MCP tool shape, while reporting
+  surface/intent, capability profile, and MCP tool shape, while reporting
   backend provenance, blocked capabilities, safety gates, and operator-selected
   physical map context.
 
@@ -109,12 +118,12 @@ that a separate query surface is necessary.
 - Do not make semantic map build a cleanup profile. It should be a first-class
   task intent with cleanup/manipulation disabled.
 - Do not make `household_world_v1` a monolithic profile for every possible
-  household task. It should stay world-understanding only; Runnable Tasks and
-  their selected Agent Skills compose it through capability requirements when
-  they need cleanup, search, inspection, photo capture, navigation rehearsal, or
-  later household behaviors.
-- Do not require backward-compatible command names when the public task/profile
-  surface is cleaned up.
+  household task. It should stay world-understanding only; surface/intent
+  selections and their selected Agent Skills compose it through capability
+  requirements when they need cleanup, search, inspection, photo capture,
+  navigation rehearsal, or later household behaviors.
+- Do not require backward-compatible command names when the public
+  surface/intent/profile contract is cleaned up.
 - Do not silently write runtime observations back into `map_bundle/semantics.json`
   or an Agibot source map context.
 - Do not promote small movable cleanup targets into static map semantics.
@@ -144,7 +153,7 @@ This plan uses the terms added to `CONTEXT.md`:
   metadata without preauthored room, fixture, or object semantics.
 - **Runtime Metric Map**: the current-run `metric_map()` view after public
   runtime observation evidence is added.
-- **Semantic Map Build Task**: a first-class Runnable Task that navigates and
+- **Map-Build Intent**: a first-class household-world intent that navigates and
   observes to produce a Runtime Metric Map snapshot for later household tasks.
 - **Household World Capability Profile**: the clean task-neutral capability
   profile for shared mapping/perception/world-state tools that can support map
@@ -157,8 +166,9 @@ This plan uses the terms added to `CONTEXT.md`:
   declares. A cleanup skill can require `household_world_v1` plus manipulation
   capabilities without redefining the world contract.
 - **Real-Robot Deployment Target**: a physical acceptance target that reuses
-  the same public task/profile/tool layers as simulation, while backend variants
-  declare physical provenance, blocked capabilities, and safety gates.
+  the same public surface/intent/profile/tool layers as simulation, while
+  backend variants declare physical provenance, blocked capabilities, and safety
+  gates.
 - **Observed Object Prior**: a movable cleanup-object observation loaded from an
   earlier sweep or snapshot into a later run.
 - **Map Update Candidate**: a proposed static-semantics update for a large
@@ -295,7 +305,7 @@ Minimal-map rehearsal is the simulator bridge to raw physical maps:
 load occupancy/free-space map plus pose/frame/safety metadata
 derive safe exploration candidates from public free space
 project candidates as generated_* waypoint entries in metric_map
-agent chooses candidate order through semantic-map-build skill
+agent chooses candidate order through the selected map-build skill
 navigate / observe / declare_visual_candidates
 update runtime semantic anchors, fixture/receptacle candidates, observed objects,
 and map candidates
@@ -381,9 +391,9 @@ after the HTTP service is available.
 
 ### Semantic-anchor acceptance
 
-- A semantic-map-build run over a minimal source map can create Public Semantic
-  Anchors for fixed or semi-static places: room areas, surfaces, receptacles,
-  fixtures, and observation waypoints.
+- A `surface=household-world intent=map-build` run over a minimal source map can
+  create Public Semantic Anchors for fixed or semi-static places: room areas,
+  surfaces, receptacles, fixtures, and observation waypoints.
 - Each accepted anchor includes a stable public id, label/category, waypoint or
   pose link, affordances when known, producer provenance, confidence, and source
   observation evidence.
@@ -426,8 +436,9 @@ after the HTTP service is available.
 
 ### Cleanup-consumer acceptance
 
-- `household-cleanup` can consume a `runtime_map_prior=<runtime_metric_map.json>`
-  produced by a minimal-map `semantic-map-build` run.
+- `surface=household-world intent=cleanup` can consume a
+  `runtime_map_prior=<runtime_metric_map.json>` produced by a minimal-map
+  `surface=household-world intent=map-build` run.
 - Fixture/receptacle Public Semantic Anchors from the current Runtime Metric Map
   can be used as public destination hints for cleanup planning.
 - Movable objects loaded from an older runtime-map snapshot enter cleanup only
@@ -455,8 +466,8 @@ after the HTTP service is available.
 
 ### G2 map-build pilot acceptance
 
-- The first Agibot G2 hardware acceptance target is `semantic-map-build`, not
-  full physical cleanup.
+- The first Agibot G2 hardware acceptance target is
+  `surface=household-world intent=map-build`, not full physical cleanup.
 - The accepted pilot proves operator/backend-approved waypoint navigation,
   robot-local `head_color` or RAW_FPV observation capture, visual candidate
   declaration or grounding output, Runtime Metric Map snapshot writing, and a
@@ -535,14 +546,16 @@ Rejected/deferred review decisions:
 
 ## Clean-Slate Layering Decision
 
-Discussion on 2026-05-26 accepted a cleaner task/skill/capability/profile split
-with no backward-compatibility requirement for old public names:
+Discussion on 2026-05-26 accepted a cleaner
+surface/intent/skill/capability/profile split with no backward-compatibility
+requirement for old public names. Updated for the 2026-06-10 orthogonal launch
+grammar:
 
-- `semantic-map-build` should become the first-class public Runnable Task for
-  building a Runtime Metric Map snapshot. It is not a cleanup profile, Agent
-  Skill, or new MCP tool.
-- `household-cleanup` should remain a first-class public Runnable Task for
-  cleanup runs, not the name of the reusable world capability profile.
+- `surface=household-world intent=map-build` is the first-class public
+  selection for building a Runtime Metric Map snapshot. It is not a cleanup
+  profile, Agent Skill, or new MCP tool.
+- `surface=household-world intent=cleanup` is the first-class public selection
+  for cleanup runs, not the name of the reusable world capability profile.
 - Cleanup should be a consumer of household world evidence, not the owner of the
   semantic-map abstraction.
 - The long-term shared capability-profile name should be task-neutral. Prefer
@@ -555,24 +568,25 @@ with no backward-compatibility requirement for old public names:
   priors, and map update candidates.
 - `household_world_v1` should exclude manipulation and task-completion tools
   such as `pick`, `place`, `open_receptacle`, and `close_receptacle`.
-- Task-specific household Runnable Tasks compose reusable capability profiles
-  through their selected Agent Skills and skill capability requirements. Future
-  tasks can cover object search, inspection, photo capture, navigation
-  rehearsal, or later household work without changing the world capability
-  profile.
-- `household-cleanup` can accept
+- Task-specific household surface/intent selections compose reusable capability
+  profiles through their selected Agent Skills and skill capability
+  requirements. Future intents can cover object search, inspection, photo
+  capture, navigation rehearsal, or later household work without changing the
+  world capability profile.
+- `surface=household-world intent=cleanup` can accept
   `runtime_map_prior=<runtime_metric_map.json>` from an earlier
-  `semantic-map-build` run; its selected cleanup skill consumes that prior as
-  part of its strategy.
+  `surface=household-world intent=map-build` run; its selected cleanup skill
+  consumes that prior as part of its strategy.
 - Backend variants should be expressed as variant/config metadata, not profile
   names: examples include `molmospaces_subprocess`, `api_semantic_synthetic`,
   `agibot_g2`, and `ros2_nav2`.
 - Real-robot deployment should reuse these same layers. A physical
-  `semantic-map-build` or `household-cleanup` run should differ by backend
-  variant, provenance, safety gates, and blocked-capability status, not by
-  inventing a separate robot-only task/profile taxonomy.
+  `surface=household-world intent=map-build` or
+  `surface=household-world intent=cleanup` run should differ by backend variant,
+  provenance, safety gates, and blocked-capability status, not by inventing a
+  separate robot-only surface/intent/profile taxonomy.
 - `Semantic Sweep Mode` remains the internal no-cleanup-action execution mode
-  behind the public `semantic-map-build` task.
+  behind `surface=household-world intent=map-build`.
 - The clean naming does not change the map contract boundaries: no new
   `semantic_map()` MCP tool, no source-map mutation, and no private evaluator
   truth in the Runtime Metric Map.
@@ -614,8 +628,8 @@ Default target-search semantics:
   candidates, or generated target inspection candidates.
 - `world-oracle-labels` and `world-public-labels` may use cheaper candidate
   resolution, but they must produce the same Target Actionability Status values
-  as semantic-map-build and RAW-FPV lanes.
-- `camera-raw-fpv` and semantic-map-build need active search support:
+  as map-build and RAW-FPV lanes.
+- `camera-raw-fpv` and map-build need active search support:
   multiple viewpoints, generated inspection candidates, and reports that show
   what was inspected before a target was declared missing.
 - A room or anchor may have multiple public navigation or inspection points.
@@ -664,8 +678,8 @@ plan. Until then, this plan owns the execution details.
 - Generate safe exploration candidates from occupancy/free-space geometry,
   current pose, and safety bounds.
 - Expose candidates as `generated_*` waypoint entries and run
-  `semantic-map-build direct ... map_mode=minimal` over those candidates with
-  cleanup actions disabled.
+  `surface=household-world intent=map-build ... map_mode=minimal` over those
+  candidates with cleanup actions disabled.
 - Produce Runtime Metric Map Public Semantic Anchors for observed fixed or
   semi-static rooms, surfaces, receptacles, fixtures, and observation waypoints
   so a later cleanup run can use the snapshot without relying on the old
