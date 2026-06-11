@@ -1021,6 +1021,127 @@ Remaining before this plan can be marked done:
   `minimal` as active map choices;
 - finish Candidate 3 saturation around legacy task-route terminology.
 
+### 2026-06-11 Maintainer MCP Facade Dispatch Targets
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 3's maintainer-MCP slice:
+
+- made `just agent::mcp up` accept canonical dispatch targets
+  `household-world.cleanup` and `household-world.map-build`;
+- kept `mcp::up household-cleanup|semantic-map-build` as the private lower
+  helper behind the maintainer facade;
+- updated current human debugging docs to use `agent::mcp` with canonical
+  dispatch targets instead of direct `mcp::up` examples.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+ROBOCLAWS_JUST_TRACE=1 just agent::mcp up \
+  household-world.cleanup 127.0.0.1 18788 output/debug/household-mcp
+ROBOCLAWS_JUST_TRACE=1 just agent::mcp up \
+  household-world.map-build 127.0.0.1 18788 output/debug/map-build-mcp
+rg -n -F -e 'just mcp::up' -e 'task::run' -e 'household-cleanup' \
+  -e 'semantic-map-build' -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md just/README.md \
+  docs/human skills/molmo-realworld-cleanup roboclaws/launch \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+```
+
+Observed proof:
+
+- canonical `agent::mcp` targets lower to the existing private server ids in
+  trace mode;
+- current human docs no longer recommend direct `just mcp::up ...` commands;
+- remaining `household-cleanup` / `semantic-map-build` hits are private
+  implementation ids, artifact paths, active skill wording, historical docs,
+  or tests asserting the private lowering.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 saturation around lower private `map_mode` plumbing,
+  `RICH_MAP_MODE`, and stale plan/docs/tests that still treat `rich` or
+  `minimal` as active map choices;
+- finish Candidate 3 active skill wording and generated rerun/private-dispatch
+  terminology where it still points future agents at legacy task names.
+
+### 2026-06-11 Active Cleanup Skill Intent Wording
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 3's active-skill wording slice:
+
+- changed the mounted cleanup skill instructions from `semantic-map-build` task
+  wording to `intent=map-build`;
+- changed the skill manifest capability note from `household-cleanup` /
+  `semantic-map-build` task IDs to `intent=cleanup` / `intent=map-build`.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+rg -n -F -e 'semantic-map-build' -e 'household-cleanup' -e 'task::run' -- \
+  skills/molmo-realworld-cleanup
+```
+
+Observed proof:
+
+- the active `molmo-realworld-cleanup` skill no longer contains
+  `semantic-map-build`, `household-cleanup`, or `task::run` wording;
+- skill and route contracts pass with the intent-based wording.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 saturation around lower private `map_mode` plumbing,
+  `RICH_MAP_MODE`, and stale plan/docs/tests that still treat `rich` or
+  `minimal` as active map choices;
+- finish Candidate 3 generated rerun/private-dispatch terminology where it
+  still points future agents at legacy task names.
+
+### 2026-06-11 Agent Prompt Surface/Intent Headlines
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 3's agent-facing prompt slice:
+
+- changed cleanup kickoff prompt text from `This run is household-cleanup` to
+  `This run is surface=household-world intent=cleanup`;
+- changed map-build kickoff prompt text from `This run is semantic-map-build`
+  to `This run is surface=household-world intent=map-build`;
+- kept the cleanup-disabling instruction for map-build as plain behavior
+  wording instead of naming the old cleanup task id in the prompt headline.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+rg -n -F -e 'This run is household-cleanup' \
+  -e 'This run is semantic-map-build' -- roboclaws tests skills docs README.md \
+  ARCHITECTURE.md just
+```
+
+Observed proof:
+
+- route/prompt contracts pass;
+- the old agent-facing prompt headlines no longer appear in current code,
+  tests, docs, or skills.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 saturation around lower private `map_mode` plumbing,
+  `RICH_MAP_MODE`, and stale plan/docs/tests that still treat `rich` or
+  `minimal` as active map choices;
+- finish Candidate 3 generated rerun/private-dispatch terminology where it
+  still points future agents at legacy task names.
+
 ### 2026-06-11 Operator Console Legacy Route Launch Boundary
 
 Status remains `CONTINUE`.

@@ -1900,7 +1900,7 @@ def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     prompt = render_kickoff_prompt("world-oracle-labels")
 
-    assert "This run is household-cleanup" in prompt
+    assert "This run is surface=household-world intent=cleanup" in prompt
     assert "User task: clean up this room" in prompt
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
@@ -2024,7 +2024,8 @@ def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:
         "帮我建立这个房间的语义地图",
     )
 
-    assert "This run is semantic-map-build, not household-cleanup" in prompt
+    assert "This run is surface=household-world intent=map-build" in prompt
+    assert "This is not a cleanup run" in prompt
     assert "User task: 帮我建立这个房间的语义地图" in prompt
     assert "Do not pick, place, place_inside" in prompt
     assert "sweep every inspection waypoint" in prompt

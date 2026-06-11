@@ -33,7 +33,7 @@
   "capability_requirements": {
     "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
     "backend_variants": ["api_semantic_synthetic", "molmospaces_subprocess", "nav2_ros2", "agibot_gdk"],
-    "notes": "household-cleanup composes world evidence, manipulation, and task lifecycle; semantic-map-build should require household_world_v1 without manipulation."
+    "notes": "intent=cleanup composes world evidence, manipulation, and task lifecycle; intent=map-build should require household_world_v1 without manipulation."
   },
   "scripts": [
     {

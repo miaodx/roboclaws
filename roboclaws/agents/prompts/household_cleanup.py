@@ -73,7 +73,9 @@ OPEN_ENDED_TASK_RULES = (
 )
 CUSTOM_TASK_RULES = OPEN_ENDED_TASK_RULES
 
-HOUSEHOLD_CLEANUP_TASK_PREFIX = "This run is household-cleanup. User task: {task}. "
+HOUSEHOLD_CLEANUP_TASK_PREFIX = (
+    "This run is surface=household-world intent=cleanup. User task: {task}. "
+)
 OPEN_ENDED_HOUSEHOLD_TASK_PREFIX = (
     "This run is surface=household-world intent=open-ended. "
     "The following operator task is authoritative and overrides the default cleanup "
@@ -185,7 +187,8 @@ _task_prefix_legacy = _legacy_task_prefix
 
 
 SEMANTIC_MAP_BUILD_RULES = (
-    "This run is semantic-map-build, not household-cleanup. User task: {task}. "
+    "This run is surface=household-world intent=map-build. "
+    "This is not a cleanup run. User task: {task}. "
     "Do not pick, place, place_inside, open_receptacle, close_receptacle, or clean any "
     "object. Call metric_map first, build an exact waypoint "
     "checklist from metric_map.inspection_waypoints, and sweep every inspection "

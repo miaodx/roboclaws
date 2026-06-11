@@ -82,7 +82,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    In `camera-grounded-labels` runs, use
    `roboclaws__declare_visual_candidates()` to register producer-labelled
    candidates before cleanup selection.
-   For `semantic-map-build`, use the same public map and target tools but do
+   For `intent=map-build`, use the same public map and target tools but do
    not run cleanup actions. Map-build waypoints are coverage candidates, not
    one-shot observations: when a target query, visual candidate, anchor, or
    waypoint observation is incomplete, use one bounded
