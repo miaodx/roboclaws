@@ -111,6 +111,23 @@ Bare host `codex` or `claude` launches are unsupported and must not be used
 unless the human explicitly asks for a system-CLI debugging run. If that happens,
 state that it is outside the supported demo path.
 
+### 1.1.3 Browser QA sandbox fallback
+
+When using gstack `browse` / Playwright for local UI dogfooding, Ubuntu 24.04
+hosts may fail Chromium startup with `No usable sandbox!` even when
+`kernel.unprivileged_userns_clone=1`; AppArmor can still restrict
+unprivileged user namespaces via `apparmor_restrict_unprivileged_userns=1`.
+Do not weaken system AppArmor/sysctl settings for repo QA. Use the per-command
+fallback instead:
+
+```bash
+GSTACK_CHROMIUM_NO_SANDBOX=1 browse goto http://127.0.0.1:<port>
+```
+
+Apply the same environment variable to other gstack `browse` commands in that
+session. This is a local browser-test workaround only; it is not a demo runtime
+setting and should not be committed into application code or launch recipes.
+
 ### 1.2 Verify AI2-THOR is available
 
 ```bash
