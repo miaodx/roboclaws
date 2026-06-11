@@ -525,7 +525,16 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
             "map_bundle/preview.png",
         ),
         "topdown": ("*map*.png", "*map*.jpg"),
-        "grounding": ("*grounding*.png", "*bbox*.png", "*detection*.png"),
+        "grounding": (
+            "visual_grounding/overlays/**/*.jpg",
+            "visual_grounding/overlays/**/*.png",
+            "*grounding*.png",
+            "*grounding*.jpg",
+            "*bbox*.png",
+            "*bbox*.jpg",
+            "*detection*.png",
+            "*detection*.jpg",
+        ),
     }
     preferred_dirs = {
         "fpv": ("robot_views",),
@@ -551,6 +560,11 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
             "path": str(path),
             "href": _artifact_href(root, path),
             "mtime": str(path.stat().st_mtime),
+        }
+    if "grounding" in output:
+        output["fpv"] = {
+            **output["grounding"],
+            "display_source": "visual_grounding_overlay",
         }
     return output
 
