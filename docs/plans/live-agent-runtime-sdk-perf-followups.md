@@ -57,7 +57,9 @@ only: it can replace oversized public tool outputs with hash/size summaries
 before a model call, while MCP traces, reports, and run artifacts remain
 complete. Sanitized events record aggregate counts and byte deltas only, not
 raw prompts, model text, tool payload bodies, credentials, or private truth.
-No provider-backed speed claim is made.
+`live_timing.json` / `timeline.latency_attribution` summarize the same
+compaction arm through `model_input_filter_metrics`. No provider-backed speed
+claim is made.
 
 ## Completed Prerequisites
 
@@ -98,6 +100,11 @@ No provider-backed speed claim is made.
   record whether Responses-only continuation/session levers are available for
   the active `wire_api`, and keep server-managed continuation disabled by
   default until a live A/B row proves task-state/report completeness.
+- Group 0 offline preflight now explicitly keeps raw-FPV expected-terminal rows
+  as classified diagnostic evidence instead of applying the full cleanup
+  `run_result.json` success gate to that lane. The privacy gate scans
+  `openai-agents-events*.jsonl`, including model-input-filter events, for
+  forbidden keys and markers.
 
 ## Not Done
 

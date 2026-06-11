@@ -218,12 +218,12 @@ def _apply_quality_gate(packet: dict[str, Any]) -> None:
         if row["quality_waiver"]:
             row["status"] = "accepted"
             row["reasons"].append(f"quality waiver: {row['quality_waiver']}")
+        elif _raw_fpv_classified_diagnostic(row, candidate):
+            row["status"] = "accepted"
+            row["reasons"].append("raw-FPV accepted as classified diagnostic evidence")
         elif quality["regressed"]:
             row["status"] = "rejected"
             row["reasons"].append("behavior quality regressed")
-        elif row["evidence_lane"] == "camera-raw-fpv" and candidate["terminal"] != "finished":
-            row["status"] = "accepted"
-            row["reasons"].append("raw-FPV accepted as classified diagnostic evidence")
         else:
             row["status"] = "accepted"
 
@@ -352,6 +352,16 @@ def _quality_fields(summary: dict[str, Any]) -> dict[str, Any]:
         "failed_or_noop_tool_count": summary.get("failed_or_noop_tool_count"),
         "terminal": summary.get("terminal"),
     }
+
+
+def _raw_fpv_classified_diagnostic(row: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    if row.get("evidence_lane") != "camera-raw-fpv":
+        return False
+    terminal = str(candidate.get("terminal") or "")
+    if terminal in {"", "unknown", "missing", "finished"}:
+        return False
+    expected = str(row.get("expected_terminal") or "")
+    return not expected or terminal == expected
 
 
 def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str, Any]:

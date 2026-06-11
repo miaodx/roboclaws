@@ -85,7 +85,9 @@ Result:
   replaced with hash/size summaries before model calls while MCP traces,
   reports, and run artifacts remain complete. Events persist aggregate counts
   and byte deltas only, not raw prompts, model text, tool payload bodies,
-  credentials, or private truth.
+  credentials, or private truth. `live_timing.json` and
+  `timeline.latency_attribution` summarize the aggregate
+  `model_input_filter_metrics`.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -130,8 +132,9 @@ Raw-FPV failure classification:
   summaries.
 - Group 0 matrix preflight has regression coverage for dry-run budgets,
   unsupported rows, forbidden artifact keys/secret markers, faster-but-worse
-  quality rejection, accepted same-or-better rows, and reducible-bucket
-  recommendations.
+  quality rejection, accepted same-or-better rows, expected-terminal raw-FPV
+  diagnostic evidence, model-input-filter event privacy scanning, and
+  reducible-bucket recommendations.
 
 Verification:
 
@@ -150,6 +153,11 @@ Verification:
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/ruff format --check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
