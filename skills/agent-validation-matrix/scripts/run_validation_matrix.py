@@ -38,6 +38,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--agent-engine", default="")
     parser.add_argument("--provider-profile", default="")
+    parser.add_argument("--intent", default="")
     parser.add_argument("--evidence-lane", default="")
     parser.add_argument("--camera-labeler", default="")
     parser.add_argument("--output-dir", type=Path)
@@ -54,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
         changed_files=selector._split_csv_values(args.changed_file),
         agent_engine=selector._split_csv(args.agent_engine),
         provider_profile=selector._split_csv(args.provider_profile),
+        intent=selector._split_csv(args.intent),
         evidence_lane=selector._split_csv(args.evidence_lane),
         camera_labeler=selector._split_csv(args.camera_labeler),
         output_dir=args.output_dir,
@@ -198,14 +200,18 @@ def _classify_failed_gate(gate: dict[str, Any], *, stderr: str, stdout: str) -> 
     if gate.get("exit_code") == 0:
         return
     combined = f"{stderr}\n{stdout}".lower()
-    if "another interactive codex molmo cleanup session appears to be active" in combined:
+    if (
+        "another interactive codex molmo cleanup session appears to be active" in combined
+        or ("requested mcp port" in combined and "is already accepting connections" in combined)
+        or "no molmospaces visual backend slot is available" in combined
+    ):
         gate["status"] = "required_blocked"
         gate["outcome"] = "blocked"
         gate["blocker_category"] = "live_session_active"
         gate["blockers"] = [
             {
                 "category": "live_session_active",
-                "detail": "another interactive Codex Molmo cleanup session is active",
+                "detail": "another live Molmo cleanup MCP session or port owner is active",
             }
         ]
 
