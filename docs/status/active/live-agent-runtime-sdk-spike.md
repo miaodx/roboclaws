@@ -5,15 +5,17 @@ Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 Current slice: Agent SDK performance optimization, Group 0 matrix foundation,
 Candidate A skill-context parity, Candidate G/J deterministic settings
 attribution, Candidate I/AB deterministic prep, and Q/Y deterministic
-recommendation enrichment, and Candidate N deterministic repeated-map prep for
-the private `openai-agents-live` route.
+recommendation enrichment, Candidate N deterministic repeated-map prep, and
+Candidate O deterministic camera-grounded composite prep for the private
+`openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
 skill-context proof and Candidate G/J deterministic settings/cache attribution
 were accepted on 2026-06-11. Candidate I/AB deterministic prep and Q/Y
 deterministic recommendation enrichment were accepted on 2026-06-12. Candidate
-N deterministic repeated-map prep was accepted on 2026-06-12. The full live
+N deterministic repeated-map prep and Candidate O deterministic
+camera-grounded composite prep were accepted on 2026-06-12. The full live
 provider/model x evidence-lane performance matrix is not done; it remains
 parked pending explicit live-run approval,
 credentials/backend availability, and budget acknowledgement. The follow-up
@@ -231,8 +233,11 @@ Parked work:
     current no-provider packet pointed to Group 2 N/O after already-accepted
     Group 1 prep.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
-    model-input compaction arm; Group 2 O is the next deterministic prep
-    direction, while raw-FPV P/AA remains lane-specific and live speed claims
+    model-input compaction arm.
+  - Candidate O deterministic prep is accepted as an SDK-private opt-in
+    `observe_camera_grounded_candidates` MCP shortcut for
+    `camera-grounded-labels`; default public MCP/profile tools remain
+    unchanged, while raw-FPV P/AA remains lane-specific and live speed claims
     remain gated.
   - Full provider/model x evidence-lane matrix before new speed claims.
   - Optional per-model-call racing inside the SDK model interface, only with
@@ -245,14 +250,16 @@ Parked work:
     prompt-cache stable-prefix evidence, parallel-tool-call policy audit, and
     non-tool response turn-waste classification.
   - Trace-backed second-pass candidates: evidence-lane tool-surface pruning,
-    repeated `metric_map` delta contract, camera-grounded observe/label
-    two-step collapse, raw-FPV visual-candidate failure rails, and a
-    trace-derived irreducible-floor/waste classifier.
+    raw-FPV visual-candidate failure rails, and a trace-derived
+    irreducible-floor/waste classifier. Repeated `metric_map` delta prep and
+    the camera-grounded observe/label two-step collapse have deterministic prep
+    accepted.
   - Big-flow infrastructure follow-ups after the Group 0 foundation: live
     matrix execution approval, richer feature-flag attribution in live timing,
     variance/repeatability policy for publishable claims, cross-client
     regression guard, and raw-FPV image-memory policy.
-  - Default MCP composite/merge tools remain out of scope.
+  - Default MCP composite/merge tools remain out of scope; Candidate O is
+    SDK-private and opt-in only.
 - Anthropic Claude Agent SDK spike.
 - Pi SDK MCP adapter prototype.
 - Public/default route promotion for `openai-agents-live`.

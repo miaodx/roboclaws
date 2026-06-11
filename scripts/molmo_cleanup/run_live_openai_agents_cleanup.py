@@ -63,6 +63,7 @@ CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
 CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
 MODEL_INPUT_COMPACTION_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION"
 MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
+CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
@@ -169,6 +170,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--model-input-compaction-min-chars", type=int, default=None)
+    parser.add_argument(
+        "--camera-grounded-composite-tools",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to private Agent SDK Candidate-O MCP composite tools for "
+            "camera-grounded-labels. The cleanup server enables the extra tool only "
+            "for this SDK run."
+        ),
+    )
     parser.add_argument("--context-soft-limit-tokens", type=int, default=None)
     parser.add_argument("--context-hard-limit-tokens", type=int, default=None)
     parser.add_argument("--max-observe-per-waypoint", type=int, default=None)
@@ -266,6 +277,9 @@ class LiveOpenAIAgentsCleanupRunner:
                 max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
             ),
             "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
+            "agent_sdk_camera_grounded_composite_tools": (
+                self.agent_sdk_perf_profile["camera_grounded_composite_tools"]
+            ),
             "prompt_profile_id": self.agent_sdk_perf_profile["profile_id"],
             "agent_sdk_skill_context": _skill_context_timing_summary(self.skill_context),
         }
@@ -386,6 +400,11 @@ class LiveOpenAIAgentsCleanupRunner:
             *household_cleanup_server_argv(str(self.args.repo_root / ".venv/bin/python")),
             *self.args.server_arg,
         ]
+        if _camera_grounded_composite_tools_enabled_for_run(
+            self.agent_sdk_perf_profile,
+            evidence_lane=str(getattr(self.args, "profile", "") or ""),
+        ):
+            command.append("--agent-sdk-camera-grounded-composite-tools")
         env = os.environ.copy()
         if env.get(REPORT_RERUN_COMMAND_ENV):
             command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
@@ -890,6 +909,10 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             allow_none=True,
         ),
         "model_input_compaction": _model_input_compaction_profile(args, defaults),
+        "camera_grounded_composite_tools": _camera_grounded_composite_tools_profile(
+            args,
+            defaults,
+        ),
         "model_service_retry_attempts": _int_setting(
             args,
             "model_service_retry_attempts",
@@ -1043,6 +1066,16 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
             "mode": "off",
             "min_chars": 1200,
         },
+        "camera_grounded_composite_tools": {
+            "schema": "agent_sdk_camera_grounded_composite_tools_v1",
+            "enabled": False,
+            "tool_names": [],
+            "candidate_ids": ["O"],
+            "private_artifact_policy": (
+                "SDK-private MCP tool addition only; default public MCP/profile tools remain "
+                "unchanged"
+            ),
+        },
     }
     if profile_id in {"baseline", "custom"}:
         return baseline
@@ -1118,6 +1151,46 @@ def _model_input_compaction_profile(
             "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
         ),
     }
+
+
+def _camera_grounded_composite_tools_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    default_config = (
+        defaults.get("camera_grounded_composite_tools")
+        if isinstance(defaults.get("camera_grounded_composite_tools"), dict)
+        else {}
+    )
+    default_enabled = bool(default_config.get("enabled", False))
+    enabled = _bool_arg_setting(
+        args,
+        "camera_grounded_composite_tools",
+        CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV,
+        default=default_enabled,
+    )
+    return {
+        "schema": "agent_sdk_camera_grounded_composite_tools_v1",
+        "enabled": enabled,
+        "tool_names": ["observe_camera_grounded_candidates"] if enabled else [],
+        "candidate_ids": ["O"],
+        "scope": "camera-grounded-labels only",
+        "hook": "cleanup MCP server private extra tool",
+        "private_artifact_policy": (
+            "SDK-private MCP tool addition only; default public MCP/profile tools remain unchanged"
+        ),
+    }
+
+
+def _camera_grounded_composite_tools_enabled_for_run(
+    profile: dict[str, Any],
+    *,
+    evidence_lane: str,
+) -> bool:
+    config = profile.get("camera_grounded_composite_tools")
+    if not isinstance(config, dict) or not config.get("enabled"):
+        return False
+    return evidence_lane == "camera-grounded-labels"
 
 
 def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
