@@ -2,10 +2,14 @@
 
 Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 
-Current slice: Agent SDK performance optimization for the private
-`openai-agents-live` route.
+Current slice: Agent SDK performance optimization and Group 0 matrix
+foundation for the private `openai-agents-live` route.
 
-Status: completed on 2026-06-10.
+Status: SDK runtime spike, first performance optimization pass, and Group 0
+no-provider matrix foundation completed on 2026-06-10. The full live
+provider/model x evidence-lane performance matrix is not done; it remains
+parked pending explicit live-run approval, credentials/backend availability,
+and budget acknowledgement.
 
 Result:
 
@@ -49,6 +53,9 @@ Result:
   records 5 supported rows and 2 unsupported Kimi/Claude-compatible rows, and
   produces a decision packet with privacy, quality, budget, and reducible-bucket
   gates.
+- This Group 0 matrix is a foundation/preflight artifact only. It is not the
+  full live provider/model x evidence-lane performance matrix and must not be
+  used as a publishable speedup claim.
 - Future OpenAI Agents SDK result summaries redact raw assistant output and SDK
   `last_agent` reprs from event/trace artifacts while keeping trace/session,
   usage, output length, and public agent-name metadata.

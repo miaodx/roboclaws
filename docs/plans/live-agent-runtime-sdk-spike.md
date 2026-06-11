@@ -2915,6 +2915,10 @@ Implementation evidence:
   matrix runner for Group 0 dry-run, offline preflight, artifact privacy scan,
   behavior-quality comparison, reducible-bucket recommendations, and decision
   packet generation.
+- This implementation completes only the Group 0 foundation/preflight. It does
+  not complete the later live provider/model x evidence-lane performance
+  matrix, does not execute provider-backed matrix rows, and does not create a
+  publishable speedup claim.
 - Added the deterministic manifest
   `docs/status/active/agent-sdk-speedup-foundation-matrix.json`. It uses
   committed fake-provider fixtures under
