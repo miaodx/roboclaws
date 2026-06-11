@@ -170,6 +170,22 @@ def trace_agent_run(*args: str) -> list[str]:
     return result.stdout.strip().split("\t")
 
 
+def trace_agent_mcp(*args: str) -> list[str]:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "agent::mcp", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip().split("\t")
+
+
 def assert_task_run_fails(*args: str) -> str:
     return assert_surface_run_fails(*surface_args_from_legacy_task_args(*args))
 
@@ -507,6 +523,40 @@ def test_run_module_exposes_surface_publicly() -> None:
     assert "-m roboclaws.cli.main run surface" in text
 
 
+def test_agent_mcp_accepts_canonical_household_dispatch_targets() -> None:
+    cleanup = trace_agent_mcp(
+        "up",
+        "household-world.cleanup",
+        "127.0.0.1",
+        "18788",
+        "output/debug/household-mcp",
+    )
+    map_build = trace_agent_mcp(
+        "up",
+        "household-world.map-build",
+        "127.0.0.1",
+        "18788",
+        "output/debug/map-build-mcp",
+    )
+
+    assert cleanup == [
+        "just",
+        "mcp::up",
+        "household-cleanup",
+        "127.0.0.1",
+        "18788",
+        "output/debug/household-mcp",
+    ]
+    assert map_build == [
+        "just",
+        "mcp::up",
+        "semantic-map-build",
+        "127.0.0.1",
+        "18788",
+        "output/debug/map-build-mcp",
+    ]
+
+
 def test_surface_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
     route = trace_surface_run(
         "surface=household-world",
@@ -626,6 +676,24 @@ def test_surface_launch_rejects_public_visual_grounding_axis() -> None:
     assert exc.value.hint == (
         "use camera_labeler=<labeler> with evidence_lane=camera-grounded-labels"
     )
+
+
+def test_surface_launch_rejects_public_map_mode_axis() -> None:
+    with pytest.raises(
+        LaunchError,
+        match="map_mode= is no longer a public run::surface argument",
+    ) as exc:
+        resolve_surface_launch(
+            (
+                "surface=household-world",
+                "agent_engine=direct-runner",
+                "intent=cleanup",
+                "map_mode=minimal",
+            )
+        )
+
+    assert "Base Navigation Map" in str(exc.value.hint)
+    assert "runtime_map_prior=" in str(exc.value.hint)
 
 
 def test_surface_cleanup_prompt_stays_cleanup_intent_when_explicit() -> None:
@@ -1052,8 +1120,8 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
-def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
-    route = trace_task_run(
+def test_semantic_map_build_rejects_public_map_mode_axis() -> None:
+    stderr = assert_task_run_fails(
         "semantic-map-build",
         "direct",
         "world-oracle-labels",
@@ -1061,26 +1129,7 @@ def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
         "output_dir=output/custom-map",
     )
 
-    assert route[:6] == [
-        "just",
-        "molmo::cleanup",
-        "direct",
-        "world-oracle-labels",
-        "7",
-        "output/custom-map",
-    ]
-    assert route[15:] == [
-        "on",
-        "",
-        "molmospaces_subprocess",
-        "minimal",
-        "procthor-10k-val",
-        "0",
-        "",
-        "auto",
-        "",
-        "semantic-map-build",
-    ]
+    assert "map_mode= is no longer a public run::surface argument" in stderr
 
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
@@ -1159,15 +1208,26 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
     ]
 
 
-def test_molmo_cleanup_route_allows_explicit_legacy_rich_map_mode() -> None:
-    route = trace_task_run(
+def test_household_cleanup_rejects_public_legacy_rich_map_mode() -> None:
+    stderr = assert_task_run_fails(
         "household-cleanup",
         "direct",
         "world-oracle-labels",
         "map_mode=rich",
     )
 
-    assert route[18] == "rich"
+    assert "map_mode= is no longer a public run::surface argument" in stderr
+
+
+def test_agent_run_rejects_public_map_mode_override() -> None:
+    stderr = assert_agent_run_fails(
+        "household-world.cleanup",
+        "direct-runner",
+        "world-oracle-labels",
+        "map_mode=minimal",
+    )
+
+    assert "map_mode is no longer a public agent::run override" in stderr
 
 
 def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:

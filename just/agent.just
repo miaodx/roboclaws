@@ -135,13 +135,17 @@ run dispatch_target agent_engine mode="" *overrides:
       value="${override#*=}"
       key="${key#--}"
       key="${key//-/_}"
+      if [[ "$key" == "map_mode" ]]; then
+        echo "error: map_mode is no longer a public agent::run override; Base Navigation Map is the start-of-run map contract" >&2
+        exit 1
+      fi
       case "$key" in
         agibot_map_artifact_dir|backend|baseline|candidate|cap|context_json|\
         generated_mess_count|\
         cleanup_object_count|\
         cleanup_routine|record_robot_views|robot_views|\
         host|max_wall_seconds|min_generated_mess_count|\
-        map_bundle|map_mode|mode|output_dir|policy|port|prompt|provider|\
+        map_bundle|mode|output_dir|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|task_intent|task_intent_mode|task_surface|goal_contract_json|goal_contract_path|\
@@ -870,7 +874,7 @@ harness target *args:
     esac
 
 # Manage a household MCP server.
-mcp action="up" server="household-cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/roboclaws-mcp/run":
+mcp action="up" server="household-world.cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/roboclaws-mcp/run":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -889,7 +893,22 @@ mcp action="up" server="household-cleanup" host="127.0.0.1" port="18788" output_
 
     case "$action" in
       up)
-        trace_or_exec mcp::up "$2" "$3" "$4" "$5"
+        server="$2"
+        case "$server" in
+          household-world.cleanup|cleanup)
+            server="household-cleanup"
+            ;;
+          household-world.map-build|map-build)
+            server="semantic-map-build"
+            ;;
+          household-cleanup|semantic-map-build)
+            ;;
+          *)
+            echo "error: unsupported MCP dispatch target '$server' (expected household-world.cleanup|household-world.map-build)" >&2
+            exit 1
+            ;;
+        esac
+        trace_or_exec mcp::up "$server" "$3" "$4" "$5"
         ;;
       down)
         trace_or_exec mcp::down

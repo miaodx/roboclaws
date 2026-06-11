@@ -221,6 +221,12 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
             "driver= is no longer a public run::surface argument",
             "use agent_engine=codex-cli|claude-code|openai-agents-sdk|direct-runner",
         )
+    if _override_value(overrides, "map_mode"):
+        raise LaunchError(
+            "map_mode= is no longer a public run::surface argument",
+            "Base Navigation Map is the start-of-run map contract; "
+            "use runtime_map_prior=<path> to supply Runtime Metric Map evidence",
+        )
     if _override_value(overrides, "environment_setup"):
         raise LaunchError(
             "environment_setup= is no longer a public run::surface argument",
