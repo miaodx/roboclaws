@@ -10,7 +10,7 @@ from typing import Any
 
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.redaction import redact_text
-from roboclaws.operator_console.routes import ConsoleRoute
+from roboclaws.operator_console.routes import ConsoleLaunchSelection, ConsoleRoute
 
 LIVE_RUN_MARKERS = (
     "live_status.json",
@@ -49,7 +49,7 @@ class ArtifactLink:
 
 
 def derive_operator_state(
-    root: Path, run_dir: Path, route: ConsoleRoute | None = None
+    root: Path, run_dir: Path, route: ConsoleLaunchSelection | ConsoleRoute | None = None
 ) -> dict[str, Any]:
     """Read a run directory and return the console's normalized live state."""
 
@@ -871,7 +871,7 @@ def _stop_available(
     *,
     root: Path,
     run_id: str,
-    route: ConsoleRoute | None,
+    route: ConsoleLaunchSelection | ConsoleRoute | None,
     status: dict[str, Any],
     phase: str,
 ) -> bool:

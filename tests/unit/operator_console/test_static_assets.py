@@ -108,6 +108,8 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "/api/runs/latest" in app
     assert "attachExistingRun" in app
     assert "attachable_run" in app
+    assert "?selection_id=" in app
+    assert "?route=" not in app
     assert "renderStartAction" in app
     assert "compactRunId" in app
     assert "compactDisplayRunId" in app

@@ -1367,6 +1367,55 @@ Remaining before this plan can be marked done:
 - finish Candidate 1 and Candidate 3 saturation around public map-mode and
   legacy task-route terminology.
 
+### 2026-06-11 Operator Console Reload Selection Boundary
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 8's reload-boundary cleanup:
+
+- changed browser polling from `/api/runs/<run_id>?route=...` to
+  `/api/runs/<run_id>?selection_id=...`;
+- changed the reload handler to resolve only canonical selection ids with
+  `get_selection()`, so `?route=codex-mujoco-cleanup` can no longer inject a
+  legacy route wrapper into current run state;
+- widened state normalization to accept canonical `ConsoleLaunchSelection`
+  payloads directly while preserving historical `ConsoleRoute` display records.
+
+Verified this slice:
+
+```bash
+rg -n -F '?route=' -- roboclaws/operator_console tests/unit/operator_console
+git diff --check -- \
+  roboclaws/operator_console/server.py \
+  roboclaws/operator_console/state.py \
+  roboclaws/operator_console/static/app.js \
+  tests/unit/operator_console/test_operator_console.py \
+  tests/unit/operator_console/test_static_assets.py \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
+uv run ruff check \
+  roboclaws/operator_console/server.py \
+  roboclaws/operator_console/state.py \
+  tests/unit/operator_console/test_operator_console.py \
+  tests/unit/operator_console/test_static_assets.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console
+```
+
+Observed proof:
+
+- legacy `?route=` remains only in the explicit negative reload test and static
+  asset guard;
+- `GET /api/runs/<id>?route=codex-mujoco-cleanup` now leaves a route-less run
+  route-less instead of using a legacy wrapper;
+- operator-console unit tests pass with the canonical `selection_id` reload
+  query.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch terminology audit where lower
+  implementation ids remain private and do not point users at legacy public
+  commands.
+
 ### 2026-06-11 Runtime Metric Map Guidance And Active MCP Cleanup
 
 Status remains `CONTINUE`.

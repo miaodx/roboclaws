@@ -32,7 +32,6 @@ from roboclaws.operator_console.launcher import (
 from roboclaws.operator_console.messup import preview_messup
 from roboclaws.operator_console.paths import OUTPUT_ROOT_ENV, console_output_root
 from roboclaws.operator_console.routes import (
-    get_route,
     get_selection,
     list_console_combinations,
     list_evidence_lanes,
@@ -167,8 +166,8 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     return self._json(list_operator_messages(self.repo_root, run_id))
                 except InteractionError as exc:
                     return self._json({"error": str(exc)}, status=404)
-            route_id = parse_qs(parsed.query).get("route", [""])[0]
-            route = get_route(route_id) if route_id else None
+            selection_id = parse_qs(parsed.query).get("selection_id", [""])[0]
+            route = get_selection(selection_id) if selection_id else None
             run_dir = console_output_root(self.repo_root) / "runs" / run_id
             return self._json(derive_operator_state(self.repo_root, run_dir, route))
         if parsed.path.startswith("/api/raw/"):

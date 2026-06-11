@@ -488,6 +488,35 @@ def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     assert payload["run_dir"] == str(run_dir.resolve())
 
 
+def test_operator_console_run_reload_ignores_legacy_route_query(tmp_path: Path) -> None:
+    run_id = "route-less-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps({"run_id": run_id, "phase": "running"}),
+        encoding="utf-8",
+    )
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        with urllib.request.urlopen(
+            f"http://{host}:{port}/api/runs/{run_id}?route=codex-mujoco-cleanup"
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["run_id"] == run_id
+    assert payload["route"] is None
+    assert payload["selected_intent"] == ""
+
+
 def test_operator_console_run_endpoint_rejects_legacy_route_id_launch(
     tmp_path: Path,
 ) -> None:
