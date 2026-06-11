@@ -1,6 +1,6 @@
 {
   "backend": "mujoco",
-  "generated_at": "2026-06-11T07:19:27Z",
+  "generated_at": "2026-06-11T08:10:14Z",
   "render_resolution": {
     "height": 560,
     "width": 900
@@ -11,6 +11,81 @@
   "schema": "operator_console_scene_preview_v1",
   "seed": 7,
   "views": {
+    "chase": {
+      "camera": "robot_0/camera_follower",
+      "camera_diagnostics": {
+        "camera_id": 0,
+        "camera_name": "robot_0/camera_follower",
+        "camera_type": "fixed",
+        "fovy_deg": 45.0,
+        "model_pos": [
+          -1.3,
+          0.0,
+          2.7
+        ],
+        "model_quat_wxyz": [
+          0.653288,
+          0.270582,
+          -0.270582,
+          -0.653288
+        ],
+        "schema": "mujoco_fixed_camera_diagnostics_v1",
+        "status": "ready",
+        "world_position": [
+          10.224,
+          0.17185,
+          2.705
+        ],
+        "world_xmat_rowmajor": [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0,
+          0.707141,
+          -0.707073,
+          0.0,
+          0.707073,
+          0.707141
+        ],
+        "zfar": 50.0,
+        "znear": 0.001
+      },
+      "candidate_count_evaluated": 1,
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            241
+          ],
+          [
+            0,
+            241
+          ],
+          [
+            0,
+            241
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 241.0,
+        "max_stddev": 58.069,
+        "mean_rgb": [
+          152.034,
+          67.95,
+          43.249
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "navigation_status": "ok",
+      "path": "molmospaces-val_9-chase.png",
+      "provenance": "mujoco_robot_camera_follower_public_waypoint",
+      "selection_policy": "first_reviewable_public_waypoint_fallback_to_first",
+      "selection_status": "first_waypoint_reviewable",
+      "view": "chase_camera",
+      "waypoint_id": "generated_exploration_001"
+    },
     "fpv": {
       "camera": "robot_0/head_camera",
       "camera_diagnostics": {
@@ -83,24 +158,75 @@
       "view": "raw_fpv",
       "waypoint_id": "generated_exploration_001"
     },
+    "map": {
+      "alignment_status": "aligned_to_topdown_scene_bounds",
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            15,
+            246
+          ],
+          [
+            23,
+            248
+          ],
+          [
+            11,
+            247
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 236.0,
+        "max_stddev": 29.654,
+        "mean_rgb": [
+          232.104,
+          233.056,
+          234.271
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "path": "molmospaces-val_9-map.png",
+      "provenance": "scene_state_semantic_overlay_shared_bounds",
+      "scene_alignment": {
+        "bounds": {
+          "max_x": 24.552125,
+          "max_y": 18.753,
+          "min_x": -6.149125,
+          "min_y": -0.35
+        },
+        "camera_span_m": 30.70125,
+        "center": [
+          9.2015,
+          9.2015,
+          0.4
+        ],
+        "schema": "operator_console_scene_alignment_v1",
+        "screen_coordinate_convention": "screen_x_world_positive_x_screen_y_world_negative_y",
+        "span_x_m": 30.70125,
+        "span_y_m": 19.103,
+        "topdown_azimuth_deg": 90.0
+      },
+      "semantic_map_fallback": false,
+      "view": "semantic_map_aligned_preview"
+    },
     "topdown": {
       "alignment_status": "mujoco_scene_rendered",
       "camera_model": "canonical_eye_target_camera_v1",
       "camera_pose": {
+        "azimuth": 90.0,
+        "distance": 23.981735274646883,
+        "elevation": -90.0,
         "eye": [
           9.2015,
           9.2015,
-          23.003749999999997
+          24.381735274646882
         ],
         "target": [
           9.2015,
           9.2015,
           0.4
-        ],
-        "up": [
-          0.0,
-          1.0,
-          0.0
         ]
       },
       "image_diagnostics": {
@@ -120,11 +246,11 @@
         ],
         "height": 560,
         "max_channel_range": 241.0,
-        "max_stddev": 54.744,
+        "max_stddev": 52.684,
         "mean_rgb": [
-          138.374,
-          122.223,
-          107.355
+          128.143,
+          113.564,
+          99.977
         ],
         "schema": "operator_console_preview_image_diagnostics_v1",
         "visual_status": "reviewable",
@@ -132,6 +258,25 @@
       },
       "path": "molmospaces-val_9-topdown.png",
       "provenance": "mujoco_camera_control_canonical_eye_target",
+      "scene_alignment": {
+        "bounds": {
+          "max_x": 24.552125,
+          "max_y": 18.753,
+          "min_x": -6.149125,
+          "min_y": -0.35
+        },
+        "camera_span_m": 30.70125,
+        "center": [
+          9.2015,
+          9.2015,
+          0.4
+        ],
+        "schema": "operator_console_scene_alignment_v1",
+        "screen_coordinate_convention": "screen_x_world_positive_x_screen_y_world_negative_y",
+        "span_x_m": 30.70125,
+        "span_y_m": 19.103,
+        "topdown_azimuth_deg": 90.0
+      },
       "semantic_map_fallback": false,
       "view": "topdown_scene_render",
       "waypoint_id": "generated_exploration_001"

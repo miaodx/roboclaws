@@ -38,6 +38,10 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
             "path": "/previews/molmospaces-val_9-map.png",
             "href": "/previews/molmospaces-val_9-map.png",
         },
+        "chase": {
+            "path": "/previews/molmospaces-val_9-chase.png",
+            "href": "/previews/molmospaces-val_9-chase.png",
+        },
         "topdown": {
             "path": "/previews/molmospaces-val_9-topdown.png",
             "href": "/previews/molmospaces-val_9-topdown.png",
@@ -63,15 +67,20 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     assert worlds["b1-map12"]["default_backend"] == "isaaclab"
 
 
-def test_scene_preview_topdown_never_aliases_semantic_map() -> None:
+def test_scene_preview_rendered_views_never_alias_other_preview_types() -> None:
     worlds = {world["id"]: world for world in list_worlds()}
 
     for world_id, world in worlds.items():
         previews = world["preview_assets"]
-        if "topdown" not in previews:
-            continue
-        assert previews["topdown"]["href"] != previews.get("map", {}).get("href"), world_id
-        assert "-topdown." in previews["topdown"]["href"], world_id
+        if "topdown" in previews:
+            assert previews["topdown"]["href"] != previews.get("map", {}).get("href"), world_id
+            assert previews["topdown"]["href"] != previews.get("fpv", {}).get("href"), world_id
+            assert "-topdown." in previews["topdown"]["href"], world_id
+        if "chase" in previews:
+            assert previews["chase"]["href"] != previews.get("map", {}).get("href"), world_id
+            assert previews["chase"]["href"] != previews.get("fpv", {}).get("href"), world_id
+            assert previews["chase"]["href"] != previews.get("topdown", {}).get("href"), world_id
+            assert "-chase." in previews["chase"]["href"], world_id
 
 
 def test_molmospaces_scene_previews_have_render_provenance() -> None:
@@ -91,6 +100,19 @@ def test_molmospaces_scene_previews_have_render_provenance() -> None:
         assert metadata["views"]["fpv"]["provenance"] == (
             "mujoco_robot_head_camera_first_public_waypoint"
         )
+        assert metadata["views"]["chase"]["view"] == "chase_camera"
+        assert metadata["views"]["chase"]["waypoint_id"]
+        assert metadata["views"]["chase"]["provenance"] == (
+            "mujoco_robot_camera_follower_public_waypoint"
+        )
+        assert metadata["views"]["chase"]["selection_policy"] == (
+            "first_reviewable_public_waypoint_fallback_to_first"
+        )
+        assert metadata["views"]["chase"]["selection_status"] in {
+            "first_waypoint_reviewable",
+            "alternate_waypoint_reviewable",
+            "fallback_first_waypoint_low_detail",
+        }
         assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
         assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
         assert metadata["views"]["topdown"]["provenance"] == (

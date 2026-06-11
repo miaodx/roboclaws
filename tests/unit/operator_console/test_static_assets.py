@@ -133,18 +133,27 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert "Grounding will appear after a camera-grounded run starts." in app
 
     preview_files = sorted(path.name for path in preview_dir.glob("molmospaces-val_*-*.png"))
-    assert len(preview_files) == 28
+    assert len(preview_files) == 36
     for scene_index in (0, 1, 2, 3, 4, 5, 7, 9):
-        for view_name in ("fpv", "map", "topdown"):
+        for view_name in ("fpv", "map", "chase", "topdown"):
             path = preview_dir / f"molmospaces-val_{scene_index}-{view_name}.png"
             assert path.is_file()
             assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
         metadata_path = preview_dir / f"molmospaces-val_{scene_index}-preview.json"
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
         assert metadata["views"]["fpv"]["view"] == "raw_fpv"
+        assert metadata["views"]["map"]["view"] == "semantic_map_aligned_preview"
+        assert metadata["views"]["chase"]["view"] == "chase_camera"
+        assert metadata["views"]["chase"]["image_diagnostics"]["visual_status"] == "reviewable"
         assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
         assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
+        assert (
+            metadata["views"]["map"]["scene_alignment"]
+            == metadata["views"]["topdown"]["scene_alignment"]
+        )
         assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
+        assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
+        assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
     assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 

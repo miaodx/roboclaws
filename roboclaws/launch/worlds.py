@@ -51,6 +51,7 @@ def _molmospaces_world_spec(scene_index: int) -> WorldSpec:
         preview_assets=(
             ("fpv", f"/previews/molmospaces-{scene_name}-fpv.png"),
             ("map", f"/previews/molmospaces-{scene_name}-map.png"),
+            ("chase", f"/previews/molmospaces-{scene_name}-chase.png"),
             ("topdown", f"/previews/molmospaces-{scene_name}-topdown.png"),
         ),
     )

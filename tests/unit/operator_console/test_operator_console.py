@@ -326,6 +326,9 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
     assert worlds["molmospaces/val_9"]["preview_assets"]["topdown"]["href"] == (
         "/previews/molmospaces-val_9-topdown.png"
     )
+    assert worlds["molmospaces/val_9"]["preview_assets"]["chase"]["href"] == (
+        "/previews/molmospaces-val_9-chase.png"
+    )
     assert (
         worlds["molmospaces/val_9"]["preview_assets"]["topdown"]["href"]
         != (worlds["molmospaces/val_9"]["preview_assets"]["map"]["href"])
@@ -335,6 +338,12 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
             "preview_assets"
         ]["fpv"]["href"]
         == "/previews/molmospaces-val_9-fpv.png"
+    )
+    assert (
+        routes["molmospaces/val_9::mujoco::cleanup::codex-cli::world-oracle-labels"][
+            "preview_assets"
+        ]["chase"]["href"]
+        == "/previews/molmospaces-val_9-chase.png"
     )
     assert (
         routes["molmospaces/val_9::mujoco::cleanup::codex-cli::world-oracle-labels"][
@@ -374,9 +383,15 @@ def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == b"\x89PNG\r\n\x1a\n"
         with urllib.request.urlopen(
+            f"http://{host}:{port}/previews/molmospaces-val_9-chase.png"
+        ) as response:
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
+        with urllib.request.urlopen(
             f"http://{host}:{port}/previews/molmospaces-val_9-preview.json"
         ) as response:
             preview = json.loads(response.read().decode("utf-8"))
+            assert preview["views"]["chase"]["view"] == "chase_camera"
             assert preview["views"]["topdown"]["semantic_map_fallback"] is False
         with pytest.raises(urllib.error.HTTPError) as exc_info:
             urllib.request.urlopen(f"http://{host}:{port}/previews/../app.js")
