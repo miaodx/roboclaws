@@ -161,8 +161,6 @@ function bindEvents() {
   });
   [
     els.contextInput,
-    els.scenarioSetupInput,
-    els.relocationCountInput,
     els.codexProviderInput,
     els.claudeProviderInput,
     els.portInput,
@@ -181,6 +179,20 @@ function bindEvents() {
     input.addEventListener("change", renderSelection);
     input.addEventListener("change", renderRoutes);
     input.addEventListener("change", refreshSelectedRouteReadiness);
+  });
+  [els.scenarioSetupInput, els.relocationCountInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      resetMessupStatusForManualSetup();
+      renderSelection();
+      renderRoutes();
+      scheduleReadinessRefresh();
+    });
+    input.addEventListener("change", () => {
+      resetMessupStatusForManualSetup();
+      renderSelection();
+      renderRoutes();
+      refreshSelectedRouteReadiness();
+    });
   });
   els.startButton.addEventListener("click", handleStartAction);
   els.messupButton.addEventListener("click", previewMessup);
@@ -883,6 +895,17 @@ function renderMessupAction(route) {
   }
 }
 
+function resetMessupStatusForManualSetup() {
+  const route = state.selectedRoute;
+  if (!route || !route.world_id || !route.world_id.startsWith("molmospaces/")) {
+    return;
+  }
+  const relocation = selectedScenarioSetup() !== "baseline";
+  els.messupStatus.textContent = relocation
+    ? "Mess-up check is optional; run it again after changing setup or count."
+    : "Baseline means no pre-run relocation. Start Agent Run will not mess up objects.";
+}
+
 function renderIntentSelector(route) {
   state.selectedIntent = selectedIntentForRoute(route);
   els.intentFields.hidden = !route.enabled;
@@ -1424,19 +1447,23 @@ async function previewMessup() {
   if (result.ok) {
     els.scenarioSetupInput.value = result.scenario_setup || "relocate-cleanup-related-objects";
     els.relocationCountInput.value = String(result.requested_count || requestedCount);
-    state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
+    markCurrentSetupSelection(route);
     els.messupStatus.textContent =
       `Mess-up ready: ${result.selected_count} / ${result.requested_count} targets. ` +
       "Start Agent Run will use this relocation setup.";
   } else {
     els.scenarioSetupInput.value = "baseline";
-    state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
+    markCurrentSetupSelection(route);
     els.messupStatus.textContent =
       `Mess-up unavailable: ${result.message || "not enough eligible targets"}. ` +
       "Baseline remains available for follow-up tests.";
   }
   renderSelection();
   scheduleReadinessRefresh();
+}
+
+function markCurrentSetupSelection(route) {
+  state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
 }
 
 async function launchRun() {

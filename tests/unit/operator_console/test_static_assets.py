@@ -87,6 +87,9 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "previewMessup" in app
     assert "/api/messup-preview" in app
     assert "Baseline remains available" in app
+    assert "Baseline means no pre-run relocation" in app
+    assert "markCurrentSetupSelection" in app
+    assert "resetMessupStatusForManualSetup" in app
     assert "generated_mess_count" not in app
     assert 'data-operator-mode="ask_why"' in html
     assert 'data-operator-mode="steer"' in html
