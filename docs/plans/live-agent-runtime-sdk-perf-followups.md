@@ -21,6 +21,11 @@ work. The completed SDK runtime spike remains in
 This plan is a re-planned candidate queue, not a promise to run every item. Run
 one candidate or group, summarize evidence, update the queue, then continue.
 
+2026-06-11 review after timing-analysis updates: the plan now treats
+`roboclaws.reports.live_performance` as the canonical speed/quality packet,
+records provider HTTP timing as transport-only evidence, and keeps `wire_api`
+as a matrix axis so Responses and Chat-compatible SDK rows are not conflated.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -31,11 +36,30 @@ one candidate or group, summarize evidence, update the queue, then continue.
 - Group 0 no-provider foundation exists through
   `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py` and
   `docs/status/active/agent-sdk-speedup-foundation-matrix.json`.
+- Shared report-performance analysis now exists through
+  `roboclaws.reports.live_performance`,
+  `scripts/reports/extract_live_report_metrics.py`, and
+  `scripts/reports/compare_live_report_metrics.py`. Speed and quality
+  comparisons should reuse `roboclaws_report_performance_metrics_v1`, not a
+  separate SDK-only metric contract.
+- Provider timing proxy artifacts now exist for benchmark-style Codex/Claude
+  routes through `provider_request_metrics.jsonl`. Treat those rows as observed
+  HTTP transport timing with explicit limitations, not provider-internal model
+  compute time. Do not use Codex/Claude proxy rows as direct evidence for an
+  OpenAI Agents SDK speed claim unless the candidate run itself records
+  comparable SDK route metrics.
 
 ## Not Done
 
 - Full live GPT/MiMo x evidence-lane matrix.
 - Follow-up optimization groups 1-5.
+- Explicit Responses-native feature evaluation: server-managed continuation,
+  conversation/session state, prompt-cache retention, and other SDK features
+  that only apply when the provider really supports the Responses API.
+- OpenAI Agents SDK provider-backed matrix rows for Chat-compatible profiles
+  such as `mimo-openai-chat` and `kimi-openai-chat`, if those route changes land
+  and credentials are available. These rows prove compatibility unless their own
+  metrics support a speed claim.
 - Publishable speedup claim across all relevant lanes and providers.
 
 ## Hard Constraints
@@ -50,6 +74,16 @@ one candidate or group, summarize evidence, update the queue, then continue.
   credentials, private evaluator truth, or full compact continuation packets.
 - Faster-but-worse behavior is rejected unless a decision packet explicitly
   names and accepts the tradeoff.
+- Performance packets and decision rows must use the shared report-performance
+  contract where available. Missing usage, duration, image, provider timing, or
+  calibration telemetry is `unavailable`, never zero.
+- Provider HTTP timing from `provider_request_metrics.jsonl` is transport
+  evidence. Do not relabel it as model compute time or use it as a normalized
+  speed claim without a separate calibration decision.
+- `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py` remains the Group 0
+  preflight and decision-packet gate. Baseline/candidate speed claims should be
+  judged from shared report-performance packets or comparisons, not from the
+  foundation dry-run packet alone.
 
 ## Matrix Scope
 
@@ -58,25 +92,52 @@ First live matrix scope:
 - Provider/model profiles: GPT through `codex-env`, MiMo through `mify`.
 - Evidence lanes: `world-public-labels`, `camera-grounded-labels`,
   `camera-raw-fpv`.
-- Kimi/Claude SDK rows stay `unsupported` or `blocked` until route/provider
-  support exists. Do not turn this perf pass into provider-integration work.
+- Responses rows: `codex-env` and `mify`.
+- Chat-compatible rows: `mimo-openai-chat` and `kimi-openai-chat` only after the
+  route, dependency, and credential gates pass.
+- Claude SDK rows stay `unsupported` or `blocked` until a Claude SDK
+  route/provider exists. Do not turn this perf pass into provider-integration
+  work.
 
 Raw-FPV remains diagnostic by default. It may pass as classified bounded
 evidence without cleanup success unless a later lane-specific pass explicitly
 changes the gate.
+
+### Wire/API Surface Scope
+
+Treat the provider wire format as a first-class experiment axis:
+
+- `responses`: preferred performance/capability path for `codex-env` and any
+  truly Responses-compatible profile. This path may use Responses-only levers
+  such as `previous_response_id`, conversation/session state, server-managed
+  continuation, prompt-cache retention/stable prefixes, and SDK features whose
+  implementation depends on `OpenAIResponsesModel`.
+- `chat-completions`: compatibility path for OpenAI-compatible providers that
+  expose Chat Completions but not Responses. This path can still use ordinary
+  tool calls through the Agents SDK's `OpenAIChatCompletionsModel`, but it must
+  not be credited with Responses-only speedups unless equivalent evidence is
+  recorded from that provider.
+
+Do not collapse these into one "OpenAI-compatible" bucket in matrix rows,
+decision packets, or performance claims. A faster/better Responses run proves a
+Responses-route result; a successful Chat route proves provider coverage and
+tool-call compatibility unless its own metrics show a comparable speed effect.
 
 ## Current Default Queue
 
 Use this queue unless fresh evidence changes it:
 
 1. Re-run Group 0 dry-run/offline preflight only as a gate check.
-2. Do A as deterministic skill-context proof.
-3. Do G, with J folded into the same settings/cache evidence.
-4. Do I, with Q/L measurement folded into the same analysis.
-5. Run scoped B live baseline refresh before any strong speed claim, if live
+2. Generate or refresh shared report-performance packets for the relevant
+   baseline/candidate rows before changing speed levers.
+3. Do A as deterministic skill-context proof.
+4. Do G, with J folded into the same settings/cache evidence.
+5. Do AB for Responses-only levers when the row uses `wire_api=responses`.
+6. Do I, with Q/L measurement folded into the same analysis.
+7. Run scoped B live baseline refresh before any strong speed claim, if live
    approval and budget are available.
-6. Use Q/Z/Y output to choose O/N or P/AA next.
-7. Defer C/D/K/E/F/M/W/X unless the dependency evidence below appears.
+8. Use Q/Z/Y output to choose O/N or P/AA next.
+9. Defer C/D/K/E/F/M/W/X unless the dependency evidence below appears.
 
 Do not spend more time on standalone Group 0 unless a new candidate changes the
 manifest, artifact schema, budget gate, privacy gate, comparator, or decision
@@ -106,10 +167,10 @@ decision-ready. Expected direct speedup is none.
 | U | gate, mostly done | Run artifact privacy/schema gates. | More telemetry must not leak prompts, model text, tool bodies, secrets, or private truth. | Forbidden keys/content fail; allowed aggregate fields pass. | Block publication and live continuation on privacy failure. |
 | V | gate | Gate live cost, time, concurrency, context, and racing multiplier. | Matrices and racing can burn budget and backend time. | Dry-run prints max runs, wall-clock, turn/context caps, concurrency, and multiplier. | Refuse live execution without acknowledged caps. |
 | W | defer | Add repeatability policy for publishable claims. | One live run can be lucky. | Winner rows can be repeated or paired; single-run rows are labeled diagnostic. | Do not require repeats for first diagnostic pass; repeat only winners. |
-| Y | gate, mostly done | Generate decision packet/dashboard. | Reviewers need one closeout artifact. | Packet records accepted/rejected/inconclusive/blocked/bypassed/superseded/added rows. | Missing decision data means inconclusive, not accepted. |
-| B | keep | Refresh live provider/model x evidence-lane baseline matrix. | GPT/MiMo and lanes differ materially; anecdotes are insufficient. | GPT/codex-env and MiMo/mify rows cover label lanes and raw-FPV with unsupported rows labeled. | Live rows require approval/budget/backend; do not expand into Kimi/Claude integration. |
-| Z | gate, mostly done | Compare behavior quality, not only time. | Faster can still mean worse cleanup. | Rows include restored rate, semantic acceptance, sweep coverage, disturbances, premature done, failed/noop tools, raw-FPV terminal class, and report presence. | Reject faster-but-worse unless explicitly waived. |
-| Q | keep | Classify irreducible floor and remaining waste. | Next work should target the largest reducible bucket. | Summary separates model, MCP/backend, visual capture, between-tool gaps, context growth, and turn/tool waste. | Stop or bypass next arms when remaining gain is smaller than cost/risk. |
+| Y | gate, mostly done | Generate decision packet/dashboard from shared performance packets. | Reviewers need one closeout artifact, but the metrics source should be canonical. | Packet records accepted/rejected/inconclusive/blocked/bypassed/superseded/added rows and links to `roboclaws_report_performance_metrics_v1` packets. | Missing decision data means inconclusive, not accepted. |
+| B | keep | Refresh live provider/model x evidence-lane baseline matrix with `wire_api` as an axis. | GPT/MiMo, Responses/Chat routes, and evidence lanes differ materially; anecdotes are insufficient. | Responses rows cover `codex-env`/`mify`; Chat-compatible rows cover `mimo-openai-chat`/`kimi-openai-chat` only when supported; unsupported rows are labeled. | Live rows require approval/budget/backend; do not expand into Claude SDK integration. |
+| Z | gate, mostly done | Use shared report-performance comparison for quality and timing guardrails. | Faster can still mean worse cleanup. | Rows include shared quality fields plus wall, model/API, provider HTTP, context, call-count, and residual timing fields where available. | Reject faster-but-worse unless explicitly waived; missing telemetry is unavailable, not zero. |
+| Q | keep | Classify irreducible floor and remaining waste from shared performance packets. | Next work should target the largest reducible bucket. | Summary separates model/API timing, provider HTTP transport, MCP/backend, visual capture, between-tool gaps, context growth, and turn/tool waste. | Stop or bypass next arms when remaining gain is smaller than cost/risk. |
 
 ### Group 1: Private SDK Levers
 
@@ -120,10 +181,11 @@ without changing default MCP/profile behavior.
 | --- | --- | --- | --- | --- | --- |
 | A | keep, quality-first | Give the SDK route bounded, auditable access to canonical `molmo-realworld-cleanup` skill context. | Current SDK route names the skill but does not mount/read `SKILL.md` like Codex/Claude workspaces. | Artifacts show exact skill context received; deterministic proof passes without private leaks. | Live A/B only if context remains bounded; stop if skill packaging changes runtime topology without approval. |
 | G | keep | Expose explicit SDK `ModelSettings` / `RunConfig` performance profiles. | Current runtime relies too much on provider defaults while turns/context remain high. | Timing records exact settings; A/B lowers turns, latency, output, or context with same-or-better quality. | Stop on checker regression, unsupported SDK option behavior, missing attribution, or context failure. |
-| J | merge into G/Q | Record prompt-cache retention and stable-prefix evidence. | Cache behavior can explain or hide speed wins. | G/Q output shows stable-prefix/cache settings and cached vs uncached input when available. | Do not claim cache speedup when usage is unavailable or prefix changes are untracked. |
+| J | merge into G/Q/AB | Record prompt-cache retention and stable-prefix evidence. | Cache behavior can explain or hide speed wins, and some cache levers are Responses-specific. | G/Q/AB output shows stable-prefix/cache settings and cached vs uncached input when available. | Do not claim cache speedup when usage is unavailable, provider is Chat-only, or prefix changes are untracked. |
 | H | bypass-for-now | Use SDK-native session/Responses continuation instead of prompt replay. | Prompt replay can grow context, but compact continuation already fixed the immediate replay issue. | Only reconsider if Q shows continuation replay remains a top context source. | Do not run as next pass; stop if continuation changes task state or hides failure state. |
 | I | keep | Add SDK `call_model_input_filter` or equivalent state compaction. | Repeated public tool state is a likely context driver after kickoff compaction. | Replay/fake-provider proof shows repeated payload bytes drop while reports and traces remain complete. | Stop on missing public state, private truth leak, report evidence loss, or checker regression. |
 | L | merge into Q/Y | Audit non-tool responses and turn-count waste. | 72-78 model turns suggests avoidable text-only or deferred-action turns. | Q/Y records non-tool, deferred, noop, and turn-waste counts. | Create a separate fix arm only if waste is material. |
+| AB | keep, Responses-only | Add a Responses-native feature audit and A/B arm before broad protocol fallback work. | The SDK route now has both Responses and Chat-compatible directions; speed claims must not mix them. | Decision packet records `wire_api=responses`, enabled Responses-only levers, and shared performance deltas for server-managed continuation/session state, prompt-cache retention/stable prefixes, or related SDK settings. | Stop if provider is Chat-only, SDK state hides MCP-visible task state, artifacts lose trace/report completeness, or privacy gates require raw prompt/tool payload persistence. Chat support is compatibility work unless its own metrics prove speed. |
 
 ### Group 2: Lane-Specific Reductions
 
@@ -206,7 +268,8 @@ the same Group 0 dry-run/offline/privacy/budget gates.
 Each candidate arm writes one decision row:
 
 - candidate ids;
-- provider profile, model, evidence lane, seed, repeat index;
+- agent engine, provider profile, `wire_api`, model, evidence lane, seed,
+  repeat index;
 - feature flags and dependency candidate ids;
 - elapsed time, response/model turns, context max, cache metrics, and major
   latency buckets;
@@ -231,16 +294,39 @@ Required no-provider gates before any live row:
   --decision-packet output/agent-sdk-speedup-foundation/decision.json
 ```
 
+Shared performance extraction and comparison are now the canonical analysis
+surface for baseline/candidate rows:
+
+```bash
+.venv/bin/python scripts/reports/extract_live_report_metrics.py \
+  --write-model-call-metrics \
+  <baseline-run-dir> <candidate-run-dir>
+
+.venv/bin/python scripts/reports/compare_live_report_metrics.py \
+  --baseline-run-dir <baseline-run-dir> \
+  --candidate-run-dir <candidate-run-dir> \
+  --output output/agent-sdk-perf-followups/<row-id>-comparison.json
+```
+
+Use the generated `roboclaws_report_performance_metrics_v1` packets for Q, Y,
+and Z decisions. If `provider_request_metrics.jsonl` exists, include its
+provider HTTP fields as transport timing only. If it does not exist, record
+provider timing as unavailable rather than inferring it from wall time.
+
 Focused deterministic gates for runner/schema changes:
 
 ```bash
 ./scripts/dev/run_pytest_standalone.sh -q \
   tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py \
-  tests/unit/agents/test_live_runtime.py
+  tests/unit/agents/test_live_runtime.py \
+  tests/unit/reports/test_live_performance.py
 
 .venv/bin/ruff check \
   scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py \
+  scripts/reports/extract_live_report_metrics.py \
+  scripts/reports/compare_live_report_metrics.py \
   tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py \
+  tests/unit/reports/test_live_performance.py \
   roboclaws/agents/drivers/openai_agents_live.py \
   tests/unit/agents/test_live_runtime.py
 ```
