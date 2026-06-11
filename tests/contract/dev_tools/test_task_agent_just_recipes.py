@@ -1914,6 +1914,12 @@ def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:
     assert "Do not pick, place, place_inside" in prompt
     assert "sweep every inspection waypoint" in prompt
     assert "declare_visual_candidates" in prompt
+    assert "adjust_camera" in prompt
+    assert "observe again" in prompt
+    assert "required_next_tool" in prompt
+    assert "required_tool" in prompt
+    assert "generated target-inspection candidate" in prompt
+    assert "public inspection waypoint" in prompt
     assert "runtime_metric_map.json" in prompt
 
 

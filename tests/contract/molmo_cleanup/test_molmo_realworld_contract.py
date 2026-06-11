@@ -1020,7 +1020,7 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     _assert_no_forbidden_keys(agent_view)
 
 
-def test_target_candidates_track_camera_adjustment_and_visual_actionability() -> None:
+def test_target_candidates_force_adaptive_public_reinspection_path() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     first_observation = _first_non_empty_observation(contract)
     handle = first_observation["visible_object_detections"][0]["object_id"]
@@ -1056,7 +1056,11 @@ def test_target_candidates_track_camera_adjustment_and_visual_actionability() ->
         == pre_scan_candidate["candidate_id"]
     )
     assert generated_waypoint_id in {str(item["waypoint_id"]) for item in metric_waypoints}
-    assert contract.navigate_to_object(handle)["ok"] is False
+    blocked_navigation = contract.navigate_to_object(handle)
+    assert blocked_navigation["ok"] is False
+    assert blocked_navigation["error_reason"] == "visual_evidence_not_reviewable"
+    assert blocked_navigation["required_next_tool"] == "adjust_camera"
+    assert "adjust_camera" in blocked_navigation["recovery_tool_options"]
 
     waypoint_navigation = contract.navigate_to_waypoint(generated_waypoint_id)
     waypoint_observation = contract.observe()
@@ -1073,7 +1077,9 @@ def test_target_candidates_track_camera_adjustment_and_visual_actionability() ->
     assert waypoint_candidate["target_actionability_status"] == "actionable"
     assert waypoint_candidate["inspection_budget"]["observed"] is True
 
-    contract.adjust_camera(yaw_delta_deg=15)
+    adjustment = contract.adjust_camera(yaw_delta_deg=15)
+    assert adjustment["ok"] is True
+    assert adjustment["camera_offset"]["yaw_delta_deg"] == 15.0
     confirmed_observation = contract.observe()
     confirmed = next(
         item

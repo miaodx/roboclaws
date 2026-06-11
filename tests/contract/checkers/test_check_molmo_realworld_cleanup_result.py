@@ -103,6 +103,80 @@ def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
     assert result["runtime_metric_map"]["observed_objects"]
 
 
+def test_checker_adaptive_adjust_camera_threshold_is_opt_in(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    result["tool_event_counts"]["adjust_camera:request"] = 0
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_camera_model_policy=True,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_semantic_sweep=True,
+            require_camera_model_policy=True,
+            min_adjust_camera_count=1,
+        )
+
+
+def test_checker_can_require_generated_target_inspection_candidates(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        map_mode="minimal",
+    )
+    result["runtime_metric_map"]["generated_target_inspection_candidates"] = []
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_camera_model_policy=True,
+    )
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_semantic_sweep=True,
+            require_camera_model_policy=True,
+            min_generated_target_inspection_candidates=1,
+        )
+
+
 def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
     tmp_path: Path,
 ) -> None:

@@ -83,6 +83,18 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    In `camera-grounded-labels` runs, use
    `roboclaws__declare_visual_candidates()` to register producer-labelled
    candidates before cleanup selection.
+   For `semantic-map-build`, use the same public map and target tools but do
+   not run cleanup actions. Map-build waypoints are coverage candidates, not
+   one-shot observations: when a target query, visual candidate, anchor, or
+   waypoint observation is incomplete, use one bounded
+   `roboclaws__adjust_camera()` -> `roboclaws__observe()` retry when public
+   camera budget remains. If a target candidate is `visible_only`,
+   `needs_observe`, or references a generated target-inspection candidate,
+   convert it only through the public waypoint returned by
+   `metric_map`, `resolve_target_query`, or tool recovery, then observe from
+   that waypoint before calling it actionable. A `not_found` map-build answer
+   must cite the public search budget, inspected viewpoints, and any camera
+   adjustment attempts.
 3. Prefer a local cleanup loop after each useful observation instead of a full
    up-front survey. Clean plausible misplaced objects with only observed
    object handles using the Trace-Preserving Skill Routine below.
