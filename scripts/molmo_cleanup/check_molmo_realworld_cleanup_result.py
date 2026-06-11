@@ -415,7 +415,15 @@ def _assert_result(
         assert data.get("agent_driven") is True, data
 
     agent_view = data.get("agent_view") or {}
-    _assert_public_agent_view(agent_view)
+    semantic_sweep = (
+        data.get("semantic_sweep_mode") is True
+        or (data.get("runtime_metric_map") or {}).get("mode") == "semantic_sweep"
+    )
+    _assert_public_agent_view(
+        agent_view,
+        open_ended_intent=_is_open_ended_intent(data),
+        semantic_sweep=semantic_sweep,
+    )
     if require_minimal_map:
         _assert_minimal_map(data, agent_view)
     if require_runtime_metric_map:
@@ -430,10 +438,7 @@ def _assert_result(
     runtime_metric_map = (
         data.get("runtime_metric_map") or agent_view.get("runtime_metric_map") or {}
     )
-    semantic_sweep = (
-        data.get("semantic_sweep_mode") is True
-        or runtime_metric_map.get("mode") == "semantic_sweep"
-    )
+    semantic_sweep = semantic_sweep or runtime_metric_map.get("mode") == "semantic_sweep"
     if require_semantic_sweep:
         assert semantic_sweep, data
         assert data.get("cleanup_actions_disabled") is True, data
@@ -516,6 +521,7 @@ def _assert_result(
             report_text,
             expect_pipeline_id=expect_visual_grounding_pipeline,
             require_failure=require_visual_grounding_failure,
+            semantic_sweep=semantic_sweep,
         )
     if require_model_declared_observations:
         _assert_model_declared_observations(
@@ -990,7 +996,12 @@ def _successful_semantic_phase_set(data: dict[str, Any]) -> set[str]:
     return phases
 
 
-def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
+def _assert_public_agent_view(
+    agent_view: dict[str, Any],
+    *,
+    open_ended_intent: bool = False,
+    semantic_sweep: bool = False,
+) -> None:
     assert agent_view.get("contract") == REALWORLD_CONTRACT, agent_view
     assert agent_view.get("forbidden_private_fields_absent") is True, agent_view
     assert "metric_map" in agent_view, agent_view
@@ -1040,6 +1051,10 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
         assert evidence.get("schema") == CAMERA_MODEL_POLICY_SCHEMA, evidence
         assert evidence.get("enabled") is True, evidence
         observed = agent_view.get("observed_objects") or []
+        if not observed and (open_ended_intent or semantic_sweep):
+            assert agent_view.get("model_declared_observations") == [], agent_view
+            assert (agent_view.get("runtime_metric_map") or {}).get("target_candidates"), agent_view
+            return
         assert observed, agent_view
         allowed_producer_types = {
             SIMULATED_CAMERA_MODEL_PROVENANCE,
@@ -1076,6 +1091,13 @@ def _assert_public_agent_view(agent_view: dict[str, Any]) -> None:
             assert "target_receptacle_id" not in item, item
         return
     observed = agent_view.get("observed_objects") or []
+    if not observed and (open_ended_intent or semantic_sweep):
+        assert agent_view.get("perception_mode") == "visible_object_detections", agent_view
+        assert agent_view.get("structured_detections_available") is True, agent_view
+        assert agent_view.get("raw_fpv_observations") == [], agent_view
+        assert agent_view.get("model_declared_observations") == [], agent_view
+        assert (agent_view.get("runtime_metric_map") or {}).get("target_candidates"), agent_view
+        return
     assert observed, agent_view
     for item in observed:
         assert str(item.get("object_id", "")).startswith("observed_"), item
@@ -1157,6 +1179,51 @@ def _assert_runtime_metric_map(
             assert item.get("actionability") != "actionable", item
         assert "target_receptacle_id" not in item, item
         assert "is_misplaced" not in item, item
+    target_candidates = runtime_metric_map.get("target_candidates") or []
+    assert isinstance(target_candidates, list), runtime_metric_map
+    assert target_candidates, runtime_metric_map
+    allowed_actionability = {
+        "query_unmatched",
+        "visible_only",
+        "anchor_unbound",
+        "unreachable",
+        "needs_observe",
+        "actionable",
+    }
+    for candidate in target_candidates:
+        for key in (
+            "candidate_id",
+            "candidate_type",
+            "query",
+            "label",
+            "category",
+            "evidence_lane",
+            "producer_type",
+            "producer_id",
+            "target_actionability_status",
+            "confidence",
+            "inspection_budget",
+        ):
+            assert key in candidate, candidate
+        assert candidate.get("target_actionability_status") in allowed_actionability, candidate
+        assert candidate.get("actionability") == candidate.get("target_actionability_status"), (
+            candidate
+        )
+        assert isinstance(candidate.get("inspection_budget") or {}, dict), candidate
+        assert "target_receptacle_id" not in candidate, candidate
+        assert "is_misplaced" not in candidate, candidate
+        if candidate.get("target_actionability_status") != "actionable":
+            assert candidate.get("rejection_reason"), candidate
+    target_search = runtime_metric_map.get("target_search_summary") or {}
+    assert target_search.get("schema") == "target_search_summary_v1", runtime_metric_map
+    assert target_search.get("private_truth_included") is False, target_search
+    assert target_search.get("candidate_count") == len(target_candidates), target_search
+    viewpoint_budget = target_search.get("viewpoint_budget") or {}
+    assert "total_public_waypoints" in viewpoint_budget, target_search
+    assert "visited_waypoint_count" in viewpoint_budget, target_search
+    camera_budget = target_search.get("camera_adjustment_budget") or {}
+    assert "attempt_count" in camera_budget, target_search
+    assert isinstance(target_search.get("inspection_observations") or [], list), target_search
     assert isinstance(runtime_metric_map.get("map_update_candidates") or [], list), (
         runtime_metric_map
     )
@@ -1211,11 +1278,23 @@ def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> Non
     waypoints = metric_map.get("inspection_waypoints") or []
     assert waypoints, metric_map
     generated = runtime_map.get("generated_exploration_candidates") or []
-    assert len(generated) == len(waypoints), runtime_map
+    generated_target_inspection = runtime_map.get("generated_target_inspection_candidates") or []
+    exploration_waypoints = [
+        item
+        for item in waypoints
+        if item.get("waypoint_source") == "generated_exploration_candidate"
+    ]
+    target_inspection_waypoints = [
+        item
+        for item in waypoints
+        if item.get("waypoint_source") == "generated_target_inspection_candidate"
+    ]
+    assert len(generated) == len(exploration_waypoints), runtime_map
+    assert len(generated_target_inspection) == len(target_inspection_waypoints), runtime_map
     anchors = runtime_map.get("public_semantic_anchors") or []
     assert anchors, runtime_map
     assert any(item.get("anchor_type") == "observation_waypoint" for item in anchors), anchors
-    for waypoint in waypoints:
+    for waypoint in exploration_waypoints:
         assert str(waypoint.get("waypoint_id") or "").startswith("generated_"), waypoint
         assert waypoint.get("waypoint_source") == "generated_exploration_candidate", waypoint
         assert waypoint.get("purpose") == "minimal_map_exploration", waypoint
@@ -1225,6 +1304,18 @@ def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> Non
         assert provenance.get("source_fixtures_hidden") is True, waypoint
         assert provenance.get("source_waypoint_hidden") is True, waypoint
         assert "source_waypoint_id" not in provenance, waypoint
+    for waypoint in target_inspection_waypoints:
+        assert str(waypoint.get("waypoint_id") or "").startswith("generated_inspection_"), waypoint
+        assert waypoint.get("purpose") == "target_inspection", waypoint
+        assert waypoint.get("verified_navigation") is True, waypoint
+        assert waypoint.get("source_observation_id"), waypoint
+        assert waypoint.get("source_target_candidate_id"), waypoint
+        provenance = waypoint.get("candidate_provenance") or {}
+        assert provenance.get("source") == "server_verified_standoff_from_visible_evidence", (
+            waypoint
+        )
+        assert provenance.get("source_waypoint_id"), waypoint
+        assert provenance.get("source_observation_id"), waypoint
     semantic_sweep = data.get("semantic_sweep")
     if semantic_sweep is not None:
         assert semantic_sweep.get("minimal_map_mode") is True, data
@@ -2347,6 +2438,7 @@ def _assert_camera_model_policy(
     *,
     expect_pipeline_id: str | None = None,
     require_failure: bool = False,
+    semantic_sweep: bool = False,
 ) -> None:
     assert data.get("perception_mode") == CAMERA_MODEL_POLICY_MODE, data
     evidence = data.get("camera_model_policy_evidence") or (
@@ -2379,6 +2471,8 @@ def _assert_camera_model_policy(
     failure_count = int(evidence.get("visual_grounding_failure_count") or 0)
     if require_failure:
         assert failure_count >= 1, evidence
+    elif semantic_sweep and (data.get("runtime_metric_map") or {}).get("target_candidates"):
+        assert int(evidence.get("event_count") or 0) >= 1, evidence
     else:
         assert int(evidence.get("candidate_count") or 0) >= 1, evidence
     assert evidence.get("events"), evidence
@@ -2681,15 +2775,37 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
         }
         if metric_map.get("mode") == "minimal":
             allowed_sources.add("generated_exploration_candidate")
+            allowed_sources.add("generated_target_inspection_candidate")
         assert waypoint.get("waypoint_source") in allowed_sources, waypoint
         assert waypoint.get("purpose"), waypoint
-        label_text = f"{waypoint.get('waypoint_source', '')} {waypoint.get('purpose', '')}".lower()
-        assert not any(word in label_text for word in forbidden_words), waypoint
+        if waypoint.get("waypoint_source") == "generated_target_inspection_candidate":
+            assert waypoint.get("purpose") == "target_inspection", waypoint
+            assert waypoint.get("verified_navigation") is True, waypoint
+            assert waypoint.get("source_observation_id"), waypoint
+            assert waypoint.get("source_target_candidate_id"), waypoint
+            provenance = waypoint.get("candidate_provenance") or {}
+            assert provenance.get("source") == "server_verified_standoff_from_visible_evidence", (
+                waypoint
+            )
+        else:
+            label_text = (
+                f"{waypoint.get('waypoint_source', '')} {waypoint.get('purpose', '')}".lower()
+            )
+            assert not any(word in label_text for word in forbidden_words), waypoint
     worklist = agent_view.get("cleanup_worklist") or {}
     assert worklist.get("schema") == CLEANUP_WORKLIST_SCHEMA, worklist
-    assert worklist.get("objects"), worklist
-    assert worklist.get("waypoints"), worklist
     trace = data.get("cleanup_policy_trace") or {}
+    open_ended_scan_only = (
+        _is_open_ended_intent(data) and int(trace.get("cleanup_action_count") or 0) == 0
+    )
+    semantic_sweep_scan_only = (
+        data.get("semantic_sweep_mode") is True and int(trace.get("cleanup_action_count") or 0) == 0
+    )
+    if open_ended_scan_only or semantic_sweep_scan_only:
+        assert isinstance(worklist.get("objects") or [], list), worklist
+    else:
+        assert worklist.get("objects"), worklist
+    assert worklist.get("waypoints"), worklist
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
     if metric_map.get("mode") == "minimal":
         assert trace.get("waypoint_source") == "generated_exploration_candidate", trace

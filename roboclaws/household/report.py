@@ -5557,6 +5557,8 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
     static_map = runtime_metric_map.get("static_map") or {}
     anchors = runtime_metric_map.get("public_semantic_anchors") or []
     observed = runtime_metric_map.get("observed_objects") or []
+    target_candidates = runtime_metric_map.get("target_candidates") or []
+    target_search = runtime_metric_map.get("target_search_summary") or {}
     candidates = runtime_metric_map.get("map_update_candidates") or []
     map_mode = runtime_metric_map.get("map_mode", "rich")
     generated = runtime_metric_map.get("generated_exploration_candidates") or []
@@ -5565,7 +5567,8 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
         f"map mode={map_mode}, "
         f"static fixtures={len(static_map.get('fixtures') or [])}, "
         f"public semantic anchors={len(anchors)}, "
-        f"observed objects={len(observed)}, update candidates={len(candidates)}, "
+        f"observed objects={len(observed)}, target candidates={len(target_candidates)}, "
+        f"update candidates={len(candidates)}, "
         f"generated exploration candidates={len(generated)}, "
         f"source map mutated={runtime_metric_map.get('source_map_mutated')}"
     )
@@ -5622,11 +5625,48 @@ def _runtime_metric_map_table(runtime_metric_map: dict[str, Any]) -> str:
         if not candidates
         else f"<p>{len(candidates)} map update candidates proposed for review.</p>"
     )
+    target_rows = []
+    for item in target_candidates:
+        budget = item.get("inspection_budget") or {}
+        target_rows.append(
+            "<tr>"
+            f"<td>{html.escape(str(item.get('candidate_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('candidate_type', '')))}</td>"
+            f"<td>{html.escape(str(item.get('label', '')))}</td>"
+            f"<td>{html.escape(str(item.get('waypoint_id', '')))}</td>"
+            f"<td>{html.escape(str(item.get('target_actionability_status', '')))}</td>"
+            f"<td>{html.escape(str(item.get('evidence_lane', '')))}</td>"
+            f"<td>{html.escape(str(budget.get('observation_count', '')))}</td>"
+            f"<td>{html.escape(str(budget.get('camera_adjustment_attempt_count', '')))}</td>"
+            f"<td>{html.escape(str(item.get('rejection_reason', '')))}</td>"
+            "</tr>"
+        )
+    target_table = (
+        "<p>No target candidates yet.</p>"
+        if not target_rows
+        else (
+            '<div class="table-wrap"><table><thead><tr><th>Candidate</th>'
+            "<th>Type</th><th>Label</th><th>Waypoint</th><th>Actionability</th>"
+            "<th>Lane</th><th>Observes</th><th>Camera adjusts</th><th>Reason</th>"
+            "</tr></thead><tbody>" + "".join(target_rows) + "</tbody></table></div>"
+        )
+    )
+    budget = target_search.get("viewpoint_budget") or {}
+    camera_budget = target_search.get("camera_adjustment_budget") or {}
+    target_summary = (
+        "<h3>Target Candidates</h3>"
+        f'<p class="note">Public target search budget: '
+        f"{html.escape(str(budget.get('visited_waypoint_count', 0)))} visited / "
+        f"{html.escape(str(budget.get('total_public_waypoints', 0)))} waypoints, "
+        f"{html.escape(str(camera_budget.get('attempt_count', 0)))} camera adjustments. "
+        f"{html.escape(str(target_search.get('missing_target_policy', '')))}</p>"
+        f"{target_table}"
+    )
     return (
         "<h3>Runtime Metric Map</h3>"
         f'<p class="note">{html.escape(summary)}. Static map, observed objects, '
         "public semantic anchors, and map update candidates remain separate.</p>"
-        f"{anchor_table}{observed_table}{candidate_note}"
+        f"{anchor_table}{observed_table}{target_summary}{candidate_note}"
     )
 
 
@@ -6717,10 +6757,7 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
         focus = annotate_focus_visual_grounding(step.get("focus") or {}) or {}
         semantic_phase = step.get("semantic_phase")
         fpv_bbox = _write_fpv_bbox_verification(run_dir, step, index)
-        pose_text = (
-            f"x={pose.get('x', '?')} y={pose.get('y', '?')} "
-            f"theta={pose.get('theta', '?')} head_pitch={pose.get('head_pitch', '?')}"
-        )
+        pose_text = _robot_timeline_pose_text(pose)
         fpv_bbox_figure = _view_figure(fpv_bbox, "FPV + bbox verification") if fpv_bbox else ""
         top_view_verify = (
             _view_figure(views.get("verify"), "Top-view bbox verification sim-only")
@@ -6784,6 +6821,15 @@ def _robot_timeline(run_dir: Path, steps: list[dict[str, Any]]) -> str:
 
 def _timeline_uses_static_isaac_captures(steps: list[dict[str, Any]]) -> bool:
     return any(_step_uses_static_isaac_capture(step) for step in steps)
+
+
+def _robot_timeline_pose_text(pose: dict[str, Any]) -> str:
+    theta = pose.get("theta", pose.get("yaw_deg", "?"))
+    theta_label = "theta" if "theta" in pose else "yaw_deg"
+    return (
+        f"x={pose.get('x', '?')} y={pose.get('y', '?')} "
+        f"{theta_label}={theta} head_pitch={pose.get('head_pitch', '?')}"
+    )
 
 
 def _step_uses_static_isaac_capture(step: dict[str, Any]) -> bool:

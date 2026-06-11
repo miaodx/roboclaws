@@ -352,8 +352,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           continue
         fi
         case "$checker_arg" in
-          --min-semantic-accepted-count|--min-model-declared-actions)
+          --min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions)
             skip_checker_arg_value="true"
+            ;;
+          --require-model-declared-observations)
             ;;
           *)
             filtered_checker_visual_args+=("$checker_arg")
@@ -373,8 +375,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           continue
         fi
         case "$checker_arg" in
-          --min-semantic-accepted-count|--min-model-declared-actions)
+          --min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions)
             skip_checker_arg_value="true"
+            ;;
+          --require-model-declared-observations)
             ;;
           *)
             filtered_checker_visual_args+=("$checker_arg")

@@ -43,6 +43,8 @@ aid, not a source of truth for current priority.
 
 ### Active Or Recently Touched
 
+- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
+- [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Auto Semantic Map Build](auto-semantic-map-build.md)
 - [Operator Console Orthogonal Launch Refactor](operator-console-orthogonal-launch-refactor.md)
 - [RAW-FPV Subagent Visual Labeling Probe](raw-fpv-subagent-visual-labeling-probe.md)
@@ -51,6 +53,7 @@ aid, not a source of truth for current priority.
 
 ### Household World, Map Build, And Cleanup
 
+- [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Mujoco Isaac Minimal Map Task Parity](mujoco-isaac-minimal-map-task-parity.md)
 - [Actionable Semantic Map Snapshot](refactor-actionable-semantic-map-snapshot.md)
 - [Minimal-First Semantic Map Pipeline](refactor-reduce-entropy-minimal-semantic-map.md)
@@ -90,6 +93,7 @@ aid, not a source of truth for current priority.
 
 ### Launch, Console, And Agent Runtime
 
+- [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
 - [Task Surface, Intent, And Goal Contract Refactor](task-surface-intent-goal-contract-refactor.md)
 - [Domain-First Launch Architecture](refactor-reduce-entropy-domain-first-launch-architecture.md)
 - [Operator Console Agent Interaction](operator-console-agent-interaction.md)

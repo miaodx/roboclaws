@@ -1467,7 +1467,11 @@ def test_molmo_semantic_sweep_strips_cleanup_quality_gate() -> None:
     assert 'if [[ "$semantic_sweep_enabled" == "true" && "$driver" == "codex-live" ]]; then' in text
     assert "checker_semantic_args=(--require-runtime-metric-map)" in text
     assert 'elif [[ "$semantic_sweep_enabled" == "true" ]]; then' in text
-    assert "--min-semantic-accepted-count|--min-model-declared-actions" in text
+    assert (
+        "--min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions"
+        in text
+    )
+    assert "--require-model-declared-observations)" in text
     assert "filtered_checker_visual_args" in text
     assert 'checker_visual_args=("${filtered_checker_visual_args[@]}")' in text
 
