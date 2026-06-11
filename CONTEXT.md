@@ -137,6 +137,22 @@ Semantic-map-build may create these anchors from observations over a minimal
 source map; cleanup may use fixture/receptacle anchors as destination hints.
 _Avoid_: small movable object, private acceptable destination, unreviewed source-map mutation
 
+**Target Candidate**:
+A public result for an open-ended target query such as "find the fridge" or
+"find the speaker." It wraps a Public Semantic Anchor, observed prior, or
+current observation match with query match evidence, confidence,
+source_observation_id when available, nearest public waypoint or generated
+inspection candidate, and Target Actionability Status.
+_Avoid_: raw fixture id guess, private object inventory, agent-created coordinate
+
+**Target Actionability Status**:
+The public state that tells an agent or skill what can safely happen next for a
+Target Candidate: `query_unmatched`, `visible_only`, `anchor_unbound`,
+`unreachable`, `needs_observe`, or `actionable`. Checkers and reports should use
+these states instead of collapsing target-search outcomes into generic missing
+observations.
+_Avoid_: report-only wording, hidden reachability decision, private target truth
+
 **Map-Build Intent**:
 A first-class household-world intent that navigates and observes to produce a
 Runtime Metric Map snapshot for later robot tasks. It selects a map-building
@@ -187,6 +203,12 @@ free space, safety bounds, and pose. First project candidates as generated
 waypoints for `navigate_to_waypoint`; add a tool only if later evidence shows
 waypoint projection is unclear. Physical execution still needs robot gates.
 _Avoid_: agent-created arbitrary coordinate goal, hidden route plan
+
+**Generated Target Inspection Candidate**:
+A runtime generated waypoint or standoff pose proposed to inspect or bind a
+Target Candidate. It must be produced or verified by the server/backend/operator
+navigation layer before becoming executable through public waypoint navigation.
+_Avoid_: agent-invented coordinates, unverified standoff pose, hidden route plan
 
 **Semantic Sweep Mode**:
 An internal no-cleanup-action execution mode behind `intent=map-build`. It uses
@@ -350,6 +372,12 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 - Runtime observations and map update candidates must not silently mutate the
   source Navigation Map Artifact. Observed Object Priors need current-run
   confirmation before becoming actionable cleanup handles.
+- Open-ended target search should return Target Candidates and public anchor or
+  waypoint ids, not raw fixture ids. A stale raw fixture-id guess should recover
+  through public target-query resolution, search, or observation.
+- Target search may create Generated Target Inspection Candidates only through
+  backend/operator-verified public waypoint or standoff generation. Agents must
+  not invent map coordinates.
 - Private relocation/generated mess sets, acceptable destinations, hidden target lists,
   private manifests, and scorer truth must not enter public profile metadata,
   Agent View, skill prompts, or MCP responses.
@@ -393,6 +421,13 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 - **Anchors vs priors**: fixture/receptacle Public Semantic Anchors in a
   current Runtime Metric Map can guide cleanup destinations; older movable
   priors must be confirmed by current camera evidence before manipulation.
+- **Target search vs navigation target**: semantic labels, visual matches, and
+  Target Candidates are not executable navigation targets until they resolve to
+  a public anchor, observed handle, or backend-verified waypoint/standoff with
+  actionable status.
+- **Search reuse in cleanup**: cleanup may reuse target search for discovering
+  receptacles, surfaces, fixtures, and inspection areas, but movable-object
+  manipulation still requires a current Observed Object Handle.
 - **Nav2 vs Agibot**: Nav2 and Agibot are backend variants/provenance choices
   when public tool shape remains stable.
 - **Recorded vs verified waypoint**: an operator-recorded waypoint is not

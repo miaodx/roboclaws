@@ -59,6 +59,10 @@ that a separate query surface is necessary.
   point. The builder should recover cleanup-usable room/fixture/receptacle
   semantics from public observation evidence instead of assuming a preauthored
   semantic map.
+- Support open-ended target search as part of household world understanding:
+  map-build, cleanup, and later household skills should be able to search for
+  allowed targets even when the static map or current semantic prior lacks the
+  requested label.
 - Treat semantic map build as a task-neutral world-understanding capability:
   the clean public task name should be `semantic-map-build`, and cleanup should
   consume its snapshots rather than own the abstraction.
@@ -125,6 +129,9 @@ that a separate query surface is necessary.
   robot coordinates. For minimal maps, system-generated safe exploration
   candidates form the first navigation surface; physical backends still apply
   localization, run-enablement, and waypoint/reachability gates.
+- Do not expose an opaque `find_and_go` MCP tool or treat a semantic label,
+  visual match, fixture id, or model guess as permission to navigate to an
+  arbitrary coordinate.
 - Do not make real Grounding DINO, YOLOE, Qwen, MiMo, vLLM, or SGLang
   dependencies part of the core cleanup runtime.
 
@@ -162,12 +169,21 @@ This plan uses the terms added to `CONTEXT.md`:
   when known, producer provenance, and confidence. Cleanup may use
   fixture/receptacle anchors as destination hints, but they do not mutate the
   source map unless a later review workflow accepts them.
+- **Target Candidate**: a public result for an open-ended target query. It wraps
+  a public semantic anchor, observed prior, current observation match, or
+  generated inspection candidate with match evidence and actionability status.
+- **Target Actionability Status**: the public state that tells the skill what
+  can safely happen next: `query_unmatched`, `visible_only`, `anchor_unbound`,
+  `unreachable`, `needs_observe`, or `actionable`.
 - **Semantic Sweep Mode**: a no-cleanup-action mode that navigates and observes
   to build or refresh runtime-map evidence.
 - **Generated Exploration Candidate**: a safe navigation or observation
   candidate derived from public free-space geometry and safety bounds. The agent
   may choose among candidates, but they are not source-map semantics or
   arbitrary robot-motion permission.
+- **Generated Target Inspection Candidate**: a backend, server, or
+  operator-verified waypoint or standoff pose proposed to inspect or bind a
+  Target Candidate.
 
 ## Runtime Map Shape
 
@@ -561,6 +577,63 @@ with no backward-compatibility requirement for old public names:
   `semantic_map()` MCP tool, no source-map mutation, and no private evaluator
   truth in the Runtime Metric Map.
 
+## Target Search / Inspection Extension
+
+Discussion on 2026-06-11 accepted that the "semantic label exists but the agent
+cannot get to it" failure is systemic, not specific to Gaussian assets. The
+missing layer is target resolution and actionability: a semantic label, raw
+fixture id, or visual match is not yet an executable navigation target.
+
+The first implementation should keep search strategy skill-side and expose only
+bounded public capability support:
+
+- Agent Skills own the search plan: query variants, evidence lane choice,
+  search budget, waypoint ordering, camera views, recovery after stale
+  references, and the decision to stop searching.
+- The MCP/server contract owns public Target Candidate output, actionability
+  status, stale-reference recovery, and stable public ids. It must not return
+  private inventory, hidden fixture ids, scorer truth, or unverified coordinates.
+- Backend adapters and operator map layers own reachability, safety, waypoint,
+  and standoff verification. Generated target inspection candidates become
+  executable only after this layer produces or verifies them.
+- Checkers and reports own evidence classification: candidate status,
+  exhausted search budget, private-truth exclusion, stale-reference recovery,
+  and whether a failed goal was a perception gap, map gap, navigation gap, or
+  skill-budget decision.
+
+Default target-search semantics:
+
+- `where is X` and `is there X` may answer with `visible_only` or
+  `anchor_unbound` candidates if the response carries a caveat and next
+  inspection step.
+- `go to X`, `use X`, and `place into/on X` require an `actionable` candidate.
+  `visible_only`, `anchor_unbound`, `needs_observe`, and raw fixture-id guesses
+  are not enough.
+- `not found` is valid only after the skill has exhausted a declared public
+  search budget over available anchors, waypoints, generated exploration
+  candidates, or generated target inspection candidates.
+- `world-oracle-labels` and `world-public-labels` may use cheaper candidate
+  resolution, but they must produce the same Target Actionability Status values
+  as semantic-map-build and RAW-FPV lanes.
+- `camera-raw-fpv` and semantic-map-build need active search support:
+  multiple viewpoints, generated inspection candidates, and reports that show
+  what was inspected before a target was declared missing.
+- A room or anchor may have multiple public navigation or inspection points.
+  The selected point must be ranked with evidence and actionability status,
+  not hidden behind a single room-level destination.
+- Custom new navigation points are allowed only when produced or verified by
+  the server/backend/operator layer as Generated Target Inspection Candidates.
+  Agents must not create arbitrary coordinate goals.
+- Cleanup may reuse target search for receptacles, surfaces, fixtures, and
+  inspection areas. Movable-object manipulation still requires a current
+  Observed Object Handle before `pick`, `place`, or hidden-worklist success.
+
+ADR status: no new ADR is required until implementation selects a durable
+public MCP shape. If a slice adds a reusable `resolve_target_query` or
+`search_targets` tool, changes `metric_map()` target-candidate payloads, or
+changes public profile guarantees, create a small ADR and link it from this
+plan. Until then, this plan owns the execution details.
+
 ### Slice 1: Runtime map schema and report evidence
 
 - Add a runtime-map payload builder from existing `metric_map`, observed
@@ -603,6 +676,21 @@ with no backward-compatibility requirement for old public names:
 - Require the report to show candidate provenance, runtime enrichment, and no
   private-truth leakage.
 
+### Slice 3B: Target search and inspection support
+
+- Add a skill-side target-search routine that can query Runtime Metric Map
+  anchors, current observations, priors, generated exploration candidates, and
+  evidence-lane-specific observation results.
+- Return Target Candidates with Target Actionability Status rather than raw
+  fixture ids. A stale raw fixture-id guess should recover through public
+  target-query resolution, search, or observation.
+- Generate target inspection candidates as public waypoint/standoff entries
+  only through backend, server, or operator verification.
+- Teach cleanup to reuse target search for destination discovery while keeping
+  movable-object manipulation gated on current Observed Object Handles.
+- Extend reports and checkers to show searched viewpoints, candidate ranking,
+  actionability transitions, exhausted budgets, and no private-truth leakage.
+
 ### Slice 4: Snapshot priors and merge
 
 - Load a prior runtime-map snapshot into a new cleanup run.
@@ -627,6 +715,9 @@ These should not block planning:
 - Whether runtime-map snapshots live under `map_snapshot/`,
   `runtime_metric_map.json`, or another run-local artifact path.
 - Exact heuristic for linking a prior object to a current-run observation.
+- Exact target-candidate ranking heuristic, search budget defaults, and whether
+  target query output initially lives in Agent View, tool responses, or a later
+  dedicated public resolver.
 - Whether map-update-candidate promotion is an operator-only command or a later
   reviewed batch exporter.
 
