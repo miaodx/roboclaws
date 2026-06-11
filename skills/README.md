@@ -35,8 +35,9 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
   AI2-THOR demo helpers.
 - `molmo-realworld-cleanup`: household cleanup behavior over public household
   world, manipulation, and episode capabilities.
-- `codex-cleanup-harness8`: repeatable eight-case Codex cleanup regression
-  grid for source and cleanup-skill changes.
+- `codex-cleanup-harness8`: fixed eight-case Codex cleanup regression grid.
+  This is slated to be replaced by the adaptive Agent Validation Matrix skill;
+  no backwards-compatible harness surface is required for that replacement.
 - `raw-fpv-visual-labeler`: perception-only RAW-FPV frame-group labeling
   contract for visible cleanup-relevant movable objects.
 - `actionable-semantic-map-conversion`: offline robot semantic-memory conversion

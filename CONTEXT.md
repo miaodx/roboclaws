@@ -66,6 +66,14 @@ A reusable package of model operating knowledge, scripts, heuristics, examples,
 and checks that attempts goals by calling available tools.
 _Avoid_: robot capability claim, MCP contract, backend primitive
 
+**Agent Validation Matrix**:
+An agent-facing verification skill that selects and optionally executes the
+relevant deterministic, product, live-agent, Agent SDK, perception, simulator,
+or hardware gates for a plan or diff. It records why gates were selected,
+skipped, run, or blocked. It is not an MCP capability, task skill, or fixed
+benchmark grid.
+_Avoid_: manual checklist, hidden evaluator, one-size-fits-all harness
+
 **Trace-Preserving Skill Routine**:
 A reusable skill routine that composes lower-level public tools while recording
 substeps, evidence, status, and recovery context.
