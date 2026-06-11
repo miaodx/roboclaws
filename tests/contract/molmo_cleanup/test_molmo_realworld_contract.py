@@ -29,6 +29,7 @@ from roboclaws.household.realworld_contract import (
     infer_target_fixture_for_detection,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.target_query import resolve_target_query
 from roboclaws.household.types import (
     CleanupObject,
     CleanupReceptacle,
@@ -1096,6 +1097,52 @@ def test_target_candidates_track_camera_adjustment_and_visual_actionability() ->
     )
     assert contract.navigate_to_object(handle)["ok"] is True
     _assert_no_forbidden_keys(post_scan_map)
+
+
+def test_target_query_recovery_resolves_stale_fixture_id_through_public_anchor() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    _observe_all_public_waypoints(contract)
+
+    runtime_map = contract.agent_view_payload()["runtime_metric_map"]
+    direct = resolve_target_query(runtime_map, "sink_01", operation="destination")
+    tool = contract.resolve_target_query("sink_01", operation="destination")
+
+    assert direct["status"] == "matched"
+    assert direct["best_match"]["anchor_id"].startswith("anchor_fixture_")
+    assert "sink" in direct["best_match"]["category"].lower()
+    assert direct["best_match"]["actionable_for_operation"] is True
+    assert direct["best_match"]["required_next_tool"] in {
+        "navigate_to_waypoint",
+        "navigate_to_receptacle",
+    }
+    assert direct["public_search_budget"]["viewpoint_budget"]["unvisited_waypoint_count"] == 0
+    assert tool["ok"] is True
+    assert tool["schema"] == "target_query_resolution_v1"
+    assert tool["best_match"]["anchor_id"] == direct["best_match"]["anchor_id"]
+    _assert_no_forbidden_keys(tool)
+
+
+def test_target_query_recovery_not_found_includes_public_search_budget() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    metric_map = _observe_all_public_waypoints(contract)
+
+    resolution = contract.resolve_target_query("purple piano", operation="inspect")
+
+    assert resolution["ok"] is True
+    assert resolution["status"] == "not_found"
+    assert resolution["match_count"] == 0
+    assert resolution["exhausted_public_search_budget"] is True
+    assert resolution["missing_target_reason"] == "public_search_budget_exhausted"
+    assert resolution["public_search_budget"]["inspection_observation_count"] >= len(
+        metric_map["inspection_waypoints"]
+    )
+    _assert_no_forbidden_keys(resolution)
 
 
 def test_minimal_runtime_map_current_anchor_overrides_same_id_prior_anchor() -> None:
@@ -2857,6 +2904,26 @@ def _first_non_empty_observation(contract: RealWorldCleanupContract) -> dict:
         if observation["visible_object_detections"]:
             return observation
     raise AssertionError("expected at least one visible object detection")
+
+
+def _observe_all_public_waypoints(contract: RealWorldCleanupContract) -> dict:
+    seen: set[str] = set()
+    metric_map = contract.metric_map()
+    for _ in range(20):
+        pending = [
+            item
+            for item in metric_map["inspection_waypoints"]
+            if str(item["waypoint_id"]) not in seen
+        ]
+        if not pending:
+            return metric_map
+        for waypoint in pending:
+            waypoint_id = str(waypoint["waypoint_id"])
+            contract.navigate_to_waypoint(waypoint_id)
+            contract.observe()
+            seen.add(waypoint_id)
+        metric_map = contract.metric_map()
+    raise AssertionError("public waypoint budget did not converge")
 
 
 def _first_detection_by_category(

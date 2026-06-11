@@ -2135,6 +2135,81 @@ def test_checker_can_require_raw_fpv_observation_artifacts(tmp_path: Path) -> No
     )
 
 
+def test_checker_accepts_live_raw_fpv_semantic_map_build_shape(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+        perception_mode="raw_fpv_only",
+        semantic_sweep=True,
+    )
+    result["task_name"] = "semantic-map-build"
+    result["task_intent"] = "map-build"
+    result["policy"] = "codex_agent"
+    result["agent_driven"] = True
+    result["mcp_server"] = "molmo_cleanup_realworld"
+    result["semantic_sweep"] = None
+    result["semantic_sweep_mode"] = None
+    result["cleanup_actions_disabled"] = None
+    result["generated_mess_count"] = 0
+    result["semantic_substeps"] = []
+    result["private_evaluation"]["generated_mess_count"] = 0
+    result["private_evaluation"]["acceptable_destination_sets"] = {}
+    result["score"]["total_targets"] = 0
+    result["score"]["sweep_coverage_rate"] = 1.0
+    result["sweep_coverage_rate"] = 1.0
+    trace = result["cleanup_policy_trace"]
+    trace["loop_style"] = "scan_only"
+    trace["cleanup_action_count"] = 0
+    trace["placed_object_count"] = 0
+    trace["post_place_observe_count"] = 0
+    trace["first_cleanup_before_full_survey"] = False
+    result["tool_event_counts"] = {
+        key: value
+        for key, value in result["tool_event_counts"].items()
+        if not key.startswith(
+            (
+                "navigate_to_object:",
+                "navigate_to_visual_candidate:",
+                "pick:",
+                "navigate_to_receptacle:",
+                "open_receptacle:",
+                "place:",
+                "place_inside:",
+                "close_receptacle:",
+            )
+        )
+    }
+    robot_views = tmp_path / "robot_views"
+    robot_views.mkdir(exist_ok=True)
+    (robot_views / "raw.fpv.png").write_bytes(b"placeholder")
+    result["artifacts"]["robot_views"] = str(robot_views)
+    for item in result["raw_fpv_observations"]:
+        item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
+    for item in result["agent_view"]["raw_fpv_observations"]:
+        item["image_artifacts"] = {"fpv": "robot_views/raw.fpv.png"}
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        expect_task_name="semantic-map-build",
+        expect_policy="codex_agent",
+        expect_mcp_server="molmo_cleanup_realworld",
+        min_generated_mess_count=0,
+        require_agent_driven=True,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_minimal_map=True,
+        require_raw_fpv_observations=True,
+        min_sweep_coverage=1.0,
+    )
+
+
 def test_checker_can_require_raw_fpv_model_declared_success_gate(tmp_path: Path) -> None:
     smoke = _load_module(SMOKE_PATH, "run_molmo_realworld_agent_mcp_smoke")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")

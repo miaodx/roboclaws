@@ -1,12 +1,15 @@
 # Adaptive Target Inspection
 
-**Status:** Partially implemented
+**Status:** Implemented with parked exploratory gates
 **Created:** 2026-06-11
 **Last reviewed:** 2026-06-11
-**Current implementation contract:** slices 1-3 are implemented for the
-deterministic household-world/MolmoSpaces direct-runner path. Keep this file as
-the remaining source plan for target-query recovery, live detector validation,
-and any future public MCP-tool promotion.
+**Current implementation contract:** slices 1-5 are implemented for the
+deterministic household-world/MolmoSpaces direct-runner path, including public
+target-query recovery. The real Grounding-DINO direct-runner product gate and
+one Codex RAW-FPV live-agent map-build gate have passed. A small
+Grounding-DINO + MiMo refiner smoke benchmark has also passed. Remaining work
+is parked live-agent DINO validation, not a blocker for the implemented
+contract.
 **Related ADRs:** none yet. Create an ADR only if implementation adds a durable
 public MCP tool, changes `metric_map()` / Agent View payload guarantees, or
 changes public profile guarantees.
@@ -28,6 +31,10 @@ Implemented on 2026-06-11:
 - Semantic-sweep map-build checkers accept scan-only camera-grounded/RAW-FPV
   evidence when public runtime-map target candidates and viewpoint budgets are
   present; cleanup still requires current observed handles for manipulation.
+- `resolve_target_query` is exposed through the public household MCP surface
+  and resolves stale labels, raw fixture ids, destination categories, and
+  open-ended target text through public `runtime_metric_map.target_candidates`
+  only. Not-found responses include public search-budget evidence.
 
 Verified deterministic evidence:
 
@@ -47,17 +54,61 @@ Verified deterministic evidence:
   `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-public-labels map_mode=minimal scenario_setup=relocate-cleanup-related-objects relocation_count=5 seed=7 runtime_map_prior=output/household/semantic-map-build/direct-camera-grounded-labels/0611_1227/seed-7/runtime_metric_map.json`
   - report:
     `output/household/household-cleanup/direct-world-public-labels/0611_1230/seed-7/report.html`
+- Target-query recovery helper gate:
+  `.venv/bin/python skills/molmo-realworld-cleanup/scripts/target_query_recovery.py output/household/semantic-map-build/direct-camera-grounded-labels/0611_1309/seed-7/runtime_metric_map.json sink_01 --operation destination --max-results 1`
+  - result: `status=matched`, best match is the public Sink anchor
+    `anchor_fixture_010` at `generated_exploration_014`, with
+    `required_next_tool=navigate_to_waypoint` and
+    `private_truth_included=false`.
+- Grounding-DINO direct-runner product gate:
+  `VISUAL_GROUNDING_BASE_URL=http://127.0.0.1:18881 VISUAL_GROUNDING_TIMEOUT_S=120 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino map_mode=minimal scenario_setup=baseline seed=7`
+  - report:
+    `output/household/semantic-map-build/direct-camera-grounded-labels/0611_1309/seed-7/report.html`
+  - checker:
+    `.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py --expect-backend molmospaces_subprocess --expect-policy semantic_sweep_baseline --expect-profile camera-grounded-labels --min-generated-mess-count 0 --require-runtime-metric-map --require-semantic-sweep --require-minimal-map --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --min-sweep-coverage 1.0 output/household/semantic-map-build/direct-camera-grounded-labels/0611_1309/seed-7/run_result.json`
+  - result: 14/14 public waypoints visited, 42 camera-model policy events,
+    193 detector candidates, 28 camera adjustments, sweep coverage 1.0, and
+    no cleanup actions.
+- Codex RAW-FPV live-agent exploratory gate:
+  `output/household/semantic-map-build/codex-camera-raw-fpv/0611_1313/seed-7/report.html`
+  - checker:
+    `.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py --expect-task-name semantic-map-build --expect-backend molmospaces_subprocess --expect-policy codex_agent --expect-profile camera-raw-fpv --expect-mcp-server molmo_cleanup_realworld --min-generated-mess-count 0 --require-agent-driven --require-runtime-metric-map --require-semantic-sweep --require-minimal-map --require-raw-fpv-observations --min-sweep-coverage 1.0 output/household/semantic-map-build/codex-camera-raw-fpv/0611_1313/seed-7/run_result.json`
+  - result: `policy=codex_agent`, 14/14 public waypoints visited, 14 raw-FPV
+    observations, 33 MCP tool calls, zero cleanup actions, sweep coverage 1.0.
+    Runner wall time was 316.295s (about 5m16s), down from the earlier
+    18m30s baseline for this live-agent map-build path.
+- Grounding-DINO + MiMo refiner smoke benchmark:
+  `output/visual-grounding-benchmark/0611_refiner_smoke/0611_1404/visual_grounding_benchmark_report.html`
+  - command:
+    `VISUAL_GROUNDING_BASE_URL=http://127.0.0.1:18882 VISUAL_GROUNDING_TIMEOUT_S=240 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino+mimo-v2.5 corpus=harness/visual_grounding/smoke_corpus.json timeout_s=240 output_dir=output/visual-grounding-benchmark/0611_refiner_smoke`
+  - result: 3/3 observations completed, zero failures/timeouts, 2 candidates,
+    bbox precision 1.0, bbox recall 1.0, mean bbox IoU 0.851509, 3 rejected
+    proposals, no private labels in requests, and `auth_mode=bearer_configured`.
+    The DINO proposer ran on CUDA (`NVIDIA RTX 3500 Ada Generation Laptop GPU`,
+    Torch `2.12.0+cu130`); the hosted MiMo refiner used 8,572 total reported
+    tokens. Stage latency was about 3.9s average for the proposer and 31.6s
+    average for the refiner, confirming the refiner route works but remains too
+    slow for default low-latency cleanup gates.
 
-Remaining gates:
+Latest focused verification:
 
-- Slice 4 target-query recovery for map-build, cleanup destination discovery,
-  and open-ended household goals.
-- Full slice 5 product validation for
-  `camera_labeler=grounding-dino`; this remains
-  `BLOCKED_NEEDS_LOCAL_VALIDATION` when the visual-grounding runtime, model
-  weights, GPU/CPU budget, or sidecar dependencies are unavailable.
-- Live-agent exploratory gates for camera-grounded/RAW-FPV and any
-  Grounding-DINO refiner combinations.
+- `uv run ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
+- `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_live_raw_fpv_semantic_map_build_shape tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_smoke_writes_agent_artifacts -q`
+
+Parked exploratory gates:
+
+- Live-agent `camera-grounded-labels + camera_labeler=grounding-dino` has not
+  been run yet. The direct Grounding-DINO product gate already proves the real
+  camera labeler path; the live-agent DINO combination is slower and optional
+  unless a future phase specifically needs live detector-agent behavior. During
+  the 2026-06-11 follow-up pass, the local live-agent backend slot and port
+  `18788` were already held by an active RAW-FPV cleanup validation, so this
+  gate stayed queued to avoid corrupting that run.
+- Grounding-DINO refiner combinations are no longer completely unrun: the
+  `grounding-dino+mimo-v2.5` smoke benchmark above passed on the 3-observation
+  smoke corpus. Broader detector/refiner ranking remains parked until there is
+  a broader bbox-labeled comparison corpus or an explicit phase budget for the
+  hosted-refiner cost and latency.
 
 ## Problem
 
@@ -319,9 +370,11 @@ Disallowed executable navigation inputs:
 
 ## Execution Preflight
 
-**Preflight status:** Approved and partially executed, 2026-06-11. Slices 1-3
-are implemented for deterministic direct-runner gates; keep this preflight for
-remaining slice 4/5 work and local/live validation.
+**Preflight status:** Approved and executed, 2026-06-11. Slices 1-5 are
+implemented for deterministic direct-runner gates, with Grounding-DINO direct
+validation and one Codex RAW-FPV live-agent exploratory gate completed. Keep
+this preflight for historical scope and future optional live/refiner
+validation, not as an active implementation backlog.
 
 **Route:** durable `$intuitive-flow`.
 
@@ -420,9 +473,11 @@ explicit actionability.
 
 - Main session: root supervisor, route decisions, source-plan/status updates,
   final commit audit.
-- Worker: `skill-runner` worker recommended for implementation.
-- Worker-local goal: implement adaptive target inspection slices 1-3 first;
-  stop with diff, tests, and remaining slices.
+- Worker: `skill-runner` worker was recommended for the original
+  implementation; no active worker is required for the completed contract.
+- Worker-local goal: historical first slice was adaptive target inspection
+  slices 1-3; follow-up slice 4/5 and validation were completed in the main
+  flow.
 
 **To execute:**
 

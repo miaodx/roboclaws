@@ -26,6 +26,7 @@ SEMANTIC_CLEANUP_TOOL_NAMES = (
     "declare_visual_candidates",
     "navigate_to_visual_candidate",
     "inspect_visible_object",
+    "resolve_target_query",
 )
 
 
@@ -109,6 +110,20 @@ def register_semantic_cleanup_tools(server: Any) -> None:
         """Inspect a previously observed object handle."""
         return server.call_tool("inspect_visible_object", object_id=object_id)
 
+    @server._mcp.tool()
+    def resolve_target_query(
+        query: str,
+        operation: str = "inspect",
+        max_results: int = 8,
+    ) -> dict:
+        """Resolve a target query against public runtime-map target candidates."""
+        return server.call_tool(
+            "resolve_target_query",
+            query=query,
+            operation=operation,
+            max_results=max_results,
+        )
+
 
 def semantic_cleanup_handlers(
     server: Any,
@@ -159,5 +174,10 @@ def semantic_cleanup_handlers(
         ),
         "inspect_visible_object": lambda: server.contract.inspect_visible_object(
             str(kwargs.get("object_id", ""))
+        ),
+        "resolve_target_query": lambda: server.contract.resolve_target_query(
+            str(kwargs.get("query", "")),
+            operation=str(kwargs.get("operation", "inspect")),
+            max_results=int(kwargs.get("max_results") or 8),
         ),
     }

@@ -19,6 +19,15 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `fixture_hints.rooms` may be empty, and the useful destination anchors come
    from `cleanup_worklist.candidate_fixture_id`,
    `runtime_metric_map.public_semantic_anchors`, and successful tool responses.
+   For any named destination, stale fixture id, old label, or open-ended target
+   request, call `roboclaws__resolve_target_query(query, operation=...)` or use
+   the same public `runtime_metric_map.target_candidates` resolution logic
+   before choosing a waypoint or anchor. A match may still be non-actionable:
+   follow its `required_next_tool` and `target_actionability_status` instead of
+   navigating, picking, or placing from the raw query text. A `not_found`
+   answer is valid only when the returned `public_search_budget` shows the
+   inspected viewpoints and remaining budget; otherwise continue the public
+   waypoint/camera search.
    In explicit rich legacy/debug runs, non-empty fixture hints may still provide
    static public landmarks. Build an exact checklist from
    `metric_map.inspection_waypoints`, then for each useful waypoint or
@@ -89,10 +98,11 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    In `world-public-labels`, detections intentionally omit
    `candidate_fixture_id`, `cleanup_recommended`, and `recommended_tool`.
    Treat `destination_policy` as public category/fixture-affordance guidance:
-   match `destination_policy.preferred_fixture_categories` against
+   resolve each preferred category through `resolve_target_query` with
+   `operation=destination`, then match the returned public anchors against
    `runtime_metric_map.public_semantic_anchors` or other public fixture
-   evidence, then use `destination_policy.placement_tool` unless a tool
-   recovery response requires a different public tool. When
+   evidence. Use `destination_policy.placement_tool` unless a tool recovery
+   response requires a different public tool. When
    `destination_policy.placement_tool_by_fixture_category` has an entry for the
    matched public fixture category, use that entry. This policy is not private
    destination truth; it only says which public fixture categories are
@@ -173,6 +183,24 @@ The reference routine lives at
 as executable documentation for the public call order and recovery shape. It
 delegates to the repo canonical routine engine and is not permission to bypass
 MCP or read private backend state.
+
+## Target Query Recovery
+
+Use `resolve_target_query` for map-build target search, cleanup destination
+discovery, and custom/open-ended household goals. The tool and helper script
+read only public Runtime Metric Map target candidates:
+
+```text
+resolve_target_query(query="sink_01", operation="destination")
+```
+
+The helper script for offline artifact review is
+`skills/molmo-realworld-cleanup/scripts/target_query_recovery.py`. It is useful
+for inspecting a saved `runtime_metric_map.json`; it is not permission to read
+private manifests or simulator inventory. A stale id such as `sink_01` must
+recover to a public anchor or waypoint when one exists. If it does not, report
+the returned `public_search_budget` and continue public inspection while budget
+remains.
 
 ## Skill Scratchpad
 

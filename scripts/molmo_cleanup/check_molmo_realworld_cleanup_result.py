@@ -415,10 +415,7 @@ def _assert_result(
         assert data.get("agent_driven") is True, data
 
     agent_view = data.get("agent_view") or {}
-    semantic_sweep = (
-        data.get("semantic_sweep_mode") is True
-        or (data.get("runtime_metric_map") or {}).get("mode") == "semantic_sweep"
-    )
+    semantic_sweep = _is_semantic_sweep_or_map_build(data)
     _assert_public_agent_view(
         agent_view,
         open_ended_intent=_is_open_ended_intent(data),
@@ -441,10 +438,13 @@ def _assert_result(
     semantic_sweep = semantic_sweep or runtime_metric_map.get("mode") == "semantic_sweep"
     if require_semantic_sweep:
         assert semantic_sweep, data
-        assert data.get("cleanup_actions_disabled") is True, data
-        assert data.get("policy") == "semantic_sweep_baseline", data
-        assert (data.get("semantic_sweep") or {}).get("snapshot_artifact"), data
-        assert len((data.get("semantic_sweep") or {}).get("camera_schedule") or []) >= 1, data
+        if _is_live_semantic_map_build(data):
+            _assert_live_semantic_map_build_scan_only(data)
+        else:
+            assert data.get("cleanup_actions_disabled") is True, data
+            assert data.get("policy") == "semantic_sweep_baseline", data
+            assert (data.get("semantic_sweep") or {}).get("snapshot_artifact"), data
+            assert len((data.get("semantic_sweep") or {}).get("camera_schedule") or []) >= 1, data
     if semantic_sweep:
         _assert_semantic_sweep_did_not_clean(data)
     trace_path = _resolve_path(base, data["artifacts"]["trace"])
@@ -491,8 +491,11 @@ def _assert_result(
     assert "ADR-0003 real-world-style cleanup run" in report_text, report_text[:500]
     if require_runtime_metric_map:
         assert "Runtime Metric Map" in report_text, report_text[:500]
-    if require_semantic_sweep:
+    if require_semantic_sweep and not _is_live_semantic_map_build(data):
         assert "Semantic Sweep Mode" in report_text, report_text[:500]
+    elif require_semantic_sweep:
+        assert "Runtime Metric Map" in report_text, report_text[:500]
+        assert "Target Candidates" in report_text, report_text[:500]
     assert_cleanup_report_visual_core(
         report_text,
         require_semantic_subphases=enforce_success or bool(data.get("semantic_substeps")),
@@ -1341,6 +1344,44 @@ def _assert_semantic_sweep_did_not_clean(data: dict[str, Any]) -> None:
         if int(counts.get(f"{tool}:request") or 0)
     }
     assert not called, (called, data)
+
+
+def _is_semantic_sweep_or_map_build(data: dict[str, Any]) -> bool:
+    runtime_metric_map = data.get("runtime_metric_map") or (
+        (data.get("agent_view") or {}).get("runtime_metric_map") or {}
+    )
+    return (
+        data.get("semantic_sweep_mode") is True
+        or runtime_metric_map.get("mode") == "semantic_sweep"
+        or _is_live_semantic_map_build(data)
+    )
+
+
+def _is_live_semantic_map_build(data: dict[str, Any]) -> bool:
+    trace = data.get("cleanup_policy_trace") or {}
+    task_identity = {
+        str(data.get("task_name") or ""),
+        str(data.get("task_intent") or ""),
+    }
+    return (
+        bool({"semantic-map-build", "map-build"} & task_identity)
+        and int(trace.get("cleanup_action_count") or 0) == 0
+        and str(trace.get("loop_style") or "") == "scan_only"
+    )
+
+
+def _assert_live_semantic_map_build_scan_only(data: dict[str, Any]) -> None:
+    assert (
+        data.get("task_name") == "semantic-map-build" or data.get("task_intent") == "map-build"
+    ), data
+    trace = data.get("cleanup_policy_trace") or {}
+    assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
+    assert trace.get("loop_style") == "scan_only", trace
+    assert int(trace.get("cleanup_action_count") or 0) == 0, trace
+    assert (
+        int(trace.get("observed_waypoint_count") or 0) >= int(trace.get("total_waypoints") or 0) > 0
+    ), trace
+    assert float(data.get("sweep_coverage_rate") or 0.0) >= 1.0, data
 
 
 def _assert_trace_is_public(trace_path: Path) -> None:
@@ -2799,7 +2840,7 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
         _is_open_ended_intent(data) and int(trace.get("cleanup_action_count") or 0) == 0
     )
     semantic_sweep_scan_only = (
-        data.get("semantic_sweep_mode") is True and int(trace.get("cleanup_action_count") or 0) == 0
+        _is_semantic_sweep_or_map_build(data) and int(trace.get("cleanup_action_count") or 0) == 0
     )
     if open_ended_scan_only or semantic_sweep_scan_only:
         assert isinstance(worklist.get("objects") or [], list), worklist
@@ -2809,7 +2850,7 @@ def _assert_waypoint_honesty(data: dict[str, Any], report_text: str) -> None:
     assert trace.get("schema") == CLEANUP_POLICY_TRACE_SCHEMA, trace
     if metric_map.get("mode") == "minimal":
         assert trace.get("waypoint_source") == "generated_exploration_candidate", trace
-        if data.get("semantic_sweep_mode") is True:
+        if _is_semantic_sweep_or_map_build(data):
             assert trace.get("first_cleanup_before_full_survey") is False, trace
             assert trace.get("loop_style") == "scan_only", trace
             assert trace.get("cleanup_action_count") == 0, trace
