@@ -127,9 +127,14 @@ Validation evidence:
   overhead, but it remains diagnostic run-to-run evidence rather than a
   statistically stable benchmark.
 
-Remaining follow-up: proxy mode stays opt-in. Making it default-on, persisting
-body-derived request mappings, or claiming provider-internal compute time still
-requires a separate decision.
+Follow-up default policy, added 2026-06-11: proxy mode is now default-on for
+benchmark-style live coding-agent paths that need comparable performance
+evidence, specifically Agent Validation Matrix live Codex/Claude gates and the
+CI/live cleanup matrix. Ordinary `just run::surface` Codex/Claude launches
+remain opt-in unless their caller sets `ROBOCLAWS_PROVIDER_TIMING_PROXY=1`.
+All default-on benchmark paths preserve `ROBOCLAWS_PROVIDER_TIMING_PROXY=0` as
+an escape hatch. Persisting body-derived request mappings or claiming
+provider-internal compute time still requires a separate decision.
 
 ## Grill Batch 1 Decisions
 

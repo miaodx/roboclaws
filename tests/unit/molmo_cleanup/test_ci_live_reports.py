@@ -97,6 +97,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     assert payload["env"] == {
         "ROBOCLAWS_CLAUDE_MODEL": "kimi-k2.6",
         "ROBOCLAWS_CLAUDE_PROVIDER": "kimi-anthropic",
+        "ROBOCLAWS_PROVIDER_TIMING_PROXY": "1",
     }
     assert payload["profile"] == "world-oracle-labels"
     assert payload["generated_mess_count"] == 5
@@ -114,6 +115,7 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     assert payload["rerun_command"].startswith(
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
+        "ROBOCLAWS_PROVIDER_TIMING_PROXY=1 "
         "just run::surface surface=household-world world=molmospaces/val_0 "
         "backend=mujoco intent=cleanup agent_engine=claude-code "
         "provider_profile=kimi-anthropic evidence_lane=world-oracle-labels"
@@ -194,6 +196,42 @@ def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> Non
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["generated_mess_count"] == 12
     assert "relocation_count=12" in payload["command"]
+
+
+def test_ci_live_matrix_preserves_provider_timing_proxy_escape_hatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_matrix = _load_module(RUN_MATRIX_PATH, "run_ci_live_cleanup_matrix")
+    monkeypatch.setenv("ROBOCLAWS_PROVIDER_TIMING_PROXY", "0")
+
+    status = run_matrix.main(
+        [
+            "--entry",
+            "kimi-k2.6",
+            "--dry-run",
+            "--skip-uv-sync",
+            "--skip-prewarm",
+            "--skip-version-check",
+            "--output-dir",
+            str(tmp_path / "runs"),
+            "--published-dir",
+            str(tmp_path / "site" / "molmo" / "live"),
+        ]
+    )
+
+    assert status == 0
+    payload = json.loads(
+        (tmp_path / "site" / "molmo" / "live" / "kimi-k2.6" / "status.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["env"]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "0"
+    assert payload["rerun_command"].startswith(
+        "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
+        "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
+        "ROBOCLAWS_PROVIDER_TIMING_PROXY=0 "
+    )
 
 
 def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, monkeypatch) -> None:

@@ -214,6 +214,80 @@ def test_execute_marks_live_gate_blocked_when_provider_is_missing(
     assert gates["codex-cleanup-world-oracle"]["blocker_category"] == "missing_provider_key"
 
 
+def test_execute_defaults_provider_timing_proxy_for_live_codex_gate(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: list[dict[str, str]] = []
+    monkeypatch.delenv("ROBOCLAWS_PROVIDER_TIMING_PROXY", raising=False)
+    monkeypatch.setattr(runner, "_gate_blockers", lambda gate, matrix: [])
+
+    def fake_run(command, **kwargs):
+        if "agent_engine=codex-cli" in command:
+            env = kwargs.get("env")
+            assert isinstance(env, dict)
+            captured.append(env)
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    matrix = selector.build_validation_matrix(
+        mode="execute",
+        budget="focused",
+        changed_files=["skills/molmo-realworld-cleanup/SKILL.md"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_matrix(matrix)
+
+    assert captured
+    assert captured[0]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "1"
+    gates = _selected_gates(matrix)
+    assert gates["codex-cleanup-world-oracle"]["defaulted_provider_timing_proxy"] is True
+
+
+def test_execute_preserves_provider_timing_proxy_escape_hatch(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: list[dict[str, str]] = []
+    monkeypatch.setenv("ROBOCLAWS_PROVIDER_TIMING_PROXY", "0")
+    monkeypatch.setattr(runner, "_gate_blockers", lambda gate, matrix: [])
+
+    def fake_run(command, **kwargs):
+        if "agent_engine=codex-cli" in command:
+            env = kwargs.get("env")
+            assert isinstance(env, dict)
+            captured.append(env)
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    matrix = selector.build_validation_matrix(
+        mode="execute",
+        budget="focused",
+        changed_files=["skills/molmo-realworld-cleanup/SKILL.md"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_matrix(matrix)
+
+    assert captured
+    assert captured[0]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "0"
+    gates = _selected_gates(matrix)
+    assert "defaulted_provider_timing_proxy" not in gates["codex-cleanup-world-oracle"]
+
+
 def test_failed_live_gate_with_busy_mcp_port_is_classified_as_blocked() -> None:
     for stderr in (
         (

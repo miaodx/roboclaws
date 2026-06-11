@@ -18,6 +18,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR_PATH = SCRIPT_DIR / "select_validation_matrix.py"
 DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
+PROVIDER_TIMING_PROXY_ENV = "ROBOCLAWS_PROVIDER_TIMING_PROXY"
 
 spec = importlib.util.spec_from_file_location("agent_validation_selector", SELECTOR_PATH)
 if spec is None or spec.loader is None:
@@ -147,12 +148,14 @@ def _run_gate(gate: dict[str, Any], matrix: dict[str, Any]) -> None:
     stdout_path = gate_dir / "stdout.log"
     stderr_path = gate_dir / "stderr.log"
     command = _resolve_gate_command(gate, matrix)
+    env = _gate_environment(gate)
     result = subprocess.run(
         command,
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
         text=True,
+        env=env,
     )
     stdout_path.write_text(result.stdout, encoding="utf-8")
     stderr_path.write_text(result.stderr, encoding="utf-8")
@@ -164,6 +167,23 @@ def _run_gate(gate: dict[str, Any], matrix: dict[str, Any]) -> None:
         _display_path(stderr_path),
     ]
     _classify_failed_gate(gate, stderr=result.stderr, stdout=result.stdout)
+
+
+def _gate_environment(gate: dict[str, Any]) -> dict[str, str]:
+    env = os.environ.copy()
+    if _should_default_provider_timing_proxy(gate):
+        if PROVIDER_TIMING_PROXY_ENV not in env:
+            env[PROVIDER_TIMING_PROXY_ENV] = "1"
+            gate["defaulted_provider_timing_proxy"] = True
+    return env
+
+
+def _should_default_provider_timing_proxy(gate: dict[str, Any]) -> bool:
+    axes = gate.get("axes") or {}
+    return gate.get("expense") == "live-agent" and axes.get("agent_engine") in {
+        "codex-cli",
+        "claude-code",
+    }
 
 
 def _resolve_gate_command(gate: dict[str, Any], matrix: dict[str, Any]) -> list[str]:
