@@ -56,6 +56,7 @@ aid, not a source of truth for current priority.
 
 - [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
+- [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
 - [Auto Semantic Map Build](auto-semantic-map-build.md)
 - [Operator Console Orthogonal Launch Refactor](operator-console-orthogonal-launch-refactor.md)
 - [RAW-FPV Subagent Visual Labeling Probe](raw-fpv-subagent-visual-labeling-probe.md)
@@ -65,6 +66,7 @@ aid, not a source of truth for current priority.
 ### Household World, Map Build, And Cleanup
 
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
+- [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
 - [Mujoco Isaac Minimal Map Task Parity](mujoco-isaac-minimal-map-task-parity.md)
 - [Actionable Semantic Map Snapshot](refactor-actionable-semantic-map-snapshot.md)
 - [Minimal-First Semantic Map Pipeline](refactor-reduce-entropy-minimal-semantic-map.md)
