@@ -368,7 +368,7 @@ console 当前支持：
   `camera_labeler=grounding-dino` 和 `visual_grounding_timeout_s=20`。
 - 自定义 task prompt。
 - 持有 `agibot_g2` backend lock。
-- 启动 Codex semantic-map-build run。
+- 启动 Codex `surface=household-world intent=map-build` run。
 - 显示 FPV、map、grounding、outputs、raw evidence。
 - 提供 Stop Run 和 Emergency Stop 控件。
 

@@ -1881,3 +1881,45 @@ Remaining before this plan can be marked done:
   remaining current-facing drift;
 - finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
   any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Human Doc Legacy Task-Id Classification
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 human-doc wording slice:
+
+- changed the current Agibot G2 pilot console bullet from "Codex
+  semantic-map-build run" to canonical
+  `surface=household-world intent=map-build` wording;
+- classified remaining `docs/human/**` hits as artifact paths or historical
+  records:
+  - `docs/human/local-runtime.md` documents current output directory
+    compatibility paths;
+  - `docs/human/molmospaces-visual-grounding-results.md` names a historical
+    raw-FPV run directory;
+  - `docs/human/molmospaces-cleanup-mode-architecture.md` explicitly labels its
+    `task::run household-cleanup` note as a historical implementation result
+    superseded by newer launch-contract docs;
+  - `docs/human/agibot-g2-cleanup-pilot.md` still uses
+    `semantic-map-build-*` output directory names as artifact paths.
+
+Verified this slice:
+
+```bash
+rg -n -F -e 'semantic-map-build' -e 'household-cleanup' -e 'task::run' \
+  docs/human/agibot-g2-cleanup-pilot.md \
+  docs/human/molmospaces-cleanup-mode-architecture.md \
+  docs/human/local-runtime.md \
+  docs/human/molmospaces-visual-grounding-results.md
+git diff --check -- \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md \
+  docs/human/agibot-g2-cleanup-pilot.md
+```
+
+Remaining before this plan can be marked done:
+
+- classify or explicitly leave the remaining code/test/script hits as
+  implementation task-name compatibility, output artifact paths, fixture data,
+  or negative regressions;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.
