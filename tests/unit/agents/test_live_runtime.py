@@ -257,6 +257,7 @@ def test_openai_agents_retrying_model_retries_transient_once(tmp_path: Path) -> 
         runtime_config={
             "runtime": "openai-agents-live",
             "provider_profile": "codex-env",
+            "wire_api": "responses",
             "model": "gpt-5.5",
         },
     )
@@ -310,6 +311,7 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
         runtime_config={
             "runtime": "openai-agents-live",
             "provider_profile": "mify",
+            "wire_api": "responses",
             "model": "xiaomi/mimo-v2.5",
         },
     )
@@ -340,6 +342,7 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
     assert metrics["provider_reasons"] == {"upstream_unavailable": 2}
     assert metrics["attempted_models"] == ["xiaomi/mimo-v2.5"]
     assert metrics["attempted_provider_profiles"] == ["mify"]
+    assert metrics["attempted_wire_apis"] == ["responses"]
 
 
 def test_openai_agents_retrying_model_satisfies_sdk_model_contract(tmp_path: Path) -> None:
@@ -470,6 +473,138 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert "client_session_timeout_seconds" not in captured["mcp_server_kwargs"]
     assert captured["agent_kwargs"]["mcp_config"]["failure_error_function"]
     assert captured["runner_kwargs"]["max_turns"] == 128
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["wire_api"] == "responses"
+
+
+def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIChatCompletionsModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["chat_model"] = self
+            captured["model"] = model
+            captured["client"] = openai_client
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+
+    monkeypatch.setenv("MIMO_TP_KEY", "fake-mimo-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            OpenAIChatCompletionsModel=FakeOpenAIChatCompletionsModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        provider_profile="mimo-openai-chat",
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    assert captured["model"] == "mimo-v2.5"
+    assert captured["base_url"] == "https://token-plan-cn.xiaomimimo.com/v1"
+    assert captured["api_key"] == "fake-mimo-key"
+    wrapped_model = captured["agent_kwargs"]["model"]
+    assert isinstance(wrapped_model, _RetryingModel)
+    assert wrapped_model.base_model is captured["chat_model"]
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["provider_profile"] == "mimo-openai-chat"
+    assert events[0]["wire_api"] == "chat-completions"
+
+
+def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIChatCompletionsModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+
+    monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            OpenAIChatCompletionsModel=FakeOpenAIChatCompletionsModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        provider_profile="kimi-openai-chat",
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    assert captured["model"] == "kimi-k2.6"
+    assert captured["base_url"] == "https://api.kimi.com/coding/v1"
+    assert captured["api_key"] == "fake-kimi-key"
 
 
 def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
@@ -1450,6 +1585,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert baseline["profile_id"] == "baseline"
     assert baseline["source"] == "default"
     assert baseline["provider_profile"] == "codex-env"
+    assert baseline["wire_api"] == "responses"
     assert baseline["model_family"] == "gpt"
     assert baseline["prompt_mode"] == "full"
     assert baseline["continuation_mode"] == "repeat_full_prompt"
@@ -1478,10 +1614,23 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     )
     mimo = _resolve_agent_sdk_perf_profile(mimo_args)
     assert mimo["provider_profile"] == "mify"
+    assert mimo["wire_api"] == "responses"
     assert mimo["model_family"] == "mimo"
     assert mimo["max_continuations"] == 1
     assert mimo["context_soft_limit_tokens"] == 64_000
     assert mimo["context_hard_limit_tokens"] == 96_000
+
+    chat_args = Namespace(
+        **{
+            **vars(base_args),
+            "provider_profile": "mimo-chat",
+            "model": "mimo-v2.5",
+        }
+    )
+    chat = _resolve_agent_sdk_perf_profile(chat_args)
+    assert chat["provider_profile"] == "mimo-openai-chat"
+    assert chat["wire_api"] == "chat-completions"
+    assert chat["model_family"] == "mimo"
 
     raw = _resolve_agent_sdk_perf_profile(
         Namespace(**{**vars(base_args), "agent_sdk_perf_profile": "raw_fpv_budgeted_v1"})
@@ -1815,6 +1964,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "task_intent_mode": "default_cleanup",
         "runtime": "openai-agents-live",
         "provider_profile": "codex-env",
+        "wire_api": "responses",
         "model": "gpt-5.5",
         "evidence_lane": "world-public-labels",
         "started_at_epoch": 100.0,
@@ -1860,6 +2010,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "provider_reasons": {"upstream_unavailable": 1},
             "attempted_models": ["gpt-5.5"],
             "attempted_provider_profiles": ["codex-env"],
+            "attempted_wire_apis": ["responses"],
             "retry_delay_s_total": 1.0,
             "retry_delay_count": 1,
             "retry_exhausted": False,
@@ -1923,6 +2074,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
     assert timeline["task_intent_mode"] == "default_cleanup"
     assert timeline["runtime"] == "openai-agents-live"
     assert timeline["provider_profile"] == "codex-env"
+    assert timeline["wire_api"] == "responses"
     assert timeline["model"] == "gpt-5.5"
     assert timeline["evidence_lane"] == "world-public-labels"
     assert [segment["duration_s"] for segment in timeline["runner_segments"]] == [
@@ -1958,6 +2110,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "provider_reasons": {"upstream_unavailable": 1},
         "attempted_models": ["gpt-5.5"],
         "attempted_provider_profiles": ["codex-env"],
+        "attempted_wire_apis": ["responses"],
         "retry_delay_s_total": 1.0,
         "retry_delay_count": 1,
         "retry_exhausted": False,

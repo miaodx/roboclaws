@@ -130,7 +130,7 @@ def _run_openai_agents(
         add_trace_processor = None
         flush_traces = None
 
-    model = _responses_model(request)
+    model = _model_for_request(request)
     timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
     runtime_config = _runtime_config(
         request,
@@ -285,10 +285,12 @@ def _runtime_config(
     mcp_client_session_timeout_s: float | None,
 ) -> dict[str, Any]:
     model_retry = _model_service_retry_config(request)
+    model_settings = _safe_model_settings(request)
     return {
         "runtime": "openai-agents-live",
-        "provider_profile": request.provider_profile,
-        "model": request.model,
+        "provider_profile": model_settings.get("provider_profile") or request.provider_profile,
+        "model": model_settings.get("model") or request.model,
+        "wire_api": model_settings.get("wire_api") or "",
         "max_turns": _max_turns(request),
         "cache_tools_list": _cache_tools_list(request),
         "mcp_server": {
@@ -579,16 +581,24 @@ def _is_empty_json_value(value: Any) -> bool:
     return False
 
 
-def _responses_model(request: LiveAgentRequest) -> Any:
-    from agents import OpenAIResponsesModel  # type: ignore[import-not-found]
+def _model_for_request(request: LiveAgentRequest) -> Any:
     from openai import AsyncOpenAI  # type: ignore[import-not-found]
 
-    settings = _responses_model_settings(request)
+    settings = _model_settings(request)
     client = AsyncOpenAI(
         api_key=settings["api_key"],
         base_url=settings["base_url"],
     )
-    base_model = OpenAIResponsesModel(settings["model"], openai_client=client)
+    if settings["wire_api"] == "responses":
+        from agents import OpenAIResponsesModel  # type: ignore[import-not-found]
+
+        base_model = OpenAIResponsesModel(settings["model"], openai_client=client)
+    elif settings["wire_api"] == "chat-completions":
+        from agents import OpenAIChatCompletionsModel  # type: ignore[import-not-found]
+
+        base_model = OpenAIChatCompletionsModel(settings["model"], openai_client=client)
+    else:  # pragma: no cover - guarded by _model_settings.
+        raise RuntimeError(f"unsupported OpenAI Agents wire API: {settings['wire_api']}")
     retry_config = _model_service_retry_config(request)
     if retry_config["retry_attempts"] <= 0:
         return base_model
@@ -619,6 +629,13 @@ def _model_service_retry_config(request: LiveAgentRequest) -> dict[str, int | fl
         default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
     )
     return {"retry_attempts": attempts, "retry_sleep_s": sleep_s}
+
+
+def _safe_model_settings(request: LiveAgentRequest) -> dict[str, str]:
+    try:
+        return _model_settings(request)
+    except Exception:
+        return {}
 
 
 class _RetryingModel(_AgentsModel):
@@ -906,6 +923,7 @@ def _append_model_service_event(
             "ts_epoch": time.time(),
             "runtime": runtime_config.get("runtime"),
             "provider_profile": runtime_config.get("provider_profile"),
+            "wire_api": runtime_config.get("wire_api"),
             "model": runtime_config.get("model"),
             "attempt_index": attempt_index,
             "retry_budget": retry_budget,
@@ -922,7 +940,7 @@ def _append_model_service_event(
     _append_event(spans_path, span_payload)
 
 
-def _responses_model_settings(request: LiveAgentRequest) -> dict[str, str]:
+def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
     metadata = dict(request.metadata)
     provider = str(
         metadata.get("provider_profile")
@@ -949,13 +967,61 @@ def _responses_model_settings(request: LiveAgentRequest) -> dict[str, str]:
         _require_setting("mify", "XM_LLM_API_KEY", api_key)
         return {
             "provider_profile": "mify",
+            "wire_api": "responses",
+            "base_url": base_url,
+            "api_key": api_key,
+            "model": model,
+        }
+    if provider in {"mimo-openai-chat", "mimo-chat"}:
+        base_url = str(
+            metadata.get("base_url")
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
+            or os.environ.get("MIMO_OPENAI_BASE_URL")
+            or "https://token-plan-cn.xiaomimimo.com/v1"
+        )
+        api_key = str(metadata.get("api_key") or os.environ.get("MIMO_TP_KEY") or "")
+        model = str(
+            metadata.get("model")
+            or request.model
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
+            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
+            or "mimo-v2.5"
+        )
+        _require_setting("mimo-openai-chat", "MIMO_TP_KEY", api_key)
+        return {
+            "provider_profile": "mimo-openai-chat",
+            "wire_api": "chat-completions",
+            "base_url": base_url,
+            "api_key": api_key,
+            "model": model,
+        }
+    if provider in {"kimi-openai-chat", "kimi-chat"}:
+        base_url = str(
+            metadata.get("base_url")
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
+            or os.environ.get("KIMI_OPENAI_BASE_URL")
+            or "https://api.kimi.com/coding/v1"
+        )
+        api_key = str(metadata.get("api_key") or os.environ.get("KIMI_API_KEY") or "")
+        model = str(
+            metadata.get("model")
+            or request.model
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
+            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
+            or "kimi-k2.6"
+        )
+        _require_setting("kimi-openai-chat", "KIMI_API_KEY", api_key)
+        return {
+            "provider_profile": "kimi-openai-chat",
+            "wire_api": "chat-completions",
             "base_url": base_url,
             "api_key": api_key,
             "model": model,
         }
     if provider != "codex-env":
         raise RuntimeError(
-            "openai-agents-live supports Responses provider profiles codex-env and mify only"
+            "openai-agents-live supports provider profiles codex-env, mify, "
+            "mimo-openai-chat, and kimi-openai-chat"
         )
 
     base_url = str(metadata.get("base_url") or os.environ.get("CODEX_BASE_URL") or "")
@@ -971,6 +1037,7 @@ def _responses_model_settings(request: LiveAgentRequest) -> dict[str, str]:
     _require_setting("codex-env", "CODEX_API_KEY", api_key)
     return {
         "provider_profile": "codex-env",
+        "wire_api": "responses",
         "base_url": base_url,
         "api_key": api_key,
         "model": model,

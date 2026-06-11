@@ -42,6 +42,16 @@ CODEX_PROVIDER_REQUIRED_ENV = {
     "codex-env": ("CODEX_BASE_URL", "CODEX_API_KEY"),
     "mify": ("XM_LLM_API_KEY",),
 }
+OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS = {
+    **CODEX_PROVIDER_DEFAULT_MODELS,
+    "mimo-openai-chat": "mimo-v2.5",
+    "kimi-openai-chat": "kimi-k2.6",
+}
+OPENAI_AGENTS_PROVIDER_REQUIRED_ENV = {
+    **CODEX_PROVIDER_REQUIRED_ENV,
+    "mimo-openai-chat": ("MIMO_TP_KEY",),
+    "kimi-openai-chat": ("KIMI_API_KEY",),
+}
 CLAUDE_PROVIDER_DEFAULT = "mimo-anthropic"
 CLAUDE_PROVIDER_DEFAULT_MODELS = {
     "kimi-anthropic": "kimi-k2.6",
@@ -573,10 +583,17 @@ def _validate_env_overrides(
             raise ConsoleLaunchError("Codex provider override is only supported for Codex routes")
         if key == "ROBOCLAWS_CLAUDE_PROVIDER" and selection.agent_engine_id != "claude-code":
             raise ConsoleLaunchError("Claude provider override is only supported for Claude routes")
-        if key == "ROBOCLAWS_CODEX_PROVIDER" and value not in CODEX_PROVIDER_DEFAULT_MODELS:
-            raise ConsoleLaunchError(
-                f"unsupported Codex provider override: {value}; expected codex-env or mify"
-            )
+        if key == "ROBOCLAWS_CODEX_PROVIDER":
+            if selection.agent_engine_id == "openai-agents-sdk":
+                allowed = OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS
+                expected = "codex-env, mify, mimo-openai-chat, or kimi-openai-chat"
+            else:
+                allowed = CODEX_PROVIDER_DEFAULT_MODELS
+                expected = "codex-env or mify"
+            if value not in allowed:
+                raise ConsoleLaunchError(
+                    f"unsupported Codex provider override: {value}; expected {expected}"
+                )
         if key == "ROBOCLAWS_CLAUDE_PROVIDER" and value not in CLAUDE_PROVIDER_DEFAULT_MODELS:
             raise ConsoleLaunchError(
                 "unsupported Claude provider override: "
@@ -610,8 +627,10 @@ def _provider_status(
     route: ConsoleLaunchSelection | ConsoleRoute, env_map: dict[str, str]
 ) -> dict[str, Any]:
     selection = route.selection if isinstance(route, ConsoleRoute) else route
-    if selection.agent_engine_id in {"codex-cli", "openai-agents-sdk"}:
+    if selection.agent_engine_id == "codex-cli":
         return _codex_provider_status(env_map)
+    if selection.agent_engine_id == "openai-agents-sdk":
+        return _openai_agents_provider_status(env_map)
     if selection.agent_engine_id == "claude-code":
         return _claude_provider_status(env_map)
     return {
@@ -696,6 +715,45 @@ def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
         message = ""
     return {
         "driver": "codex",
+        "provider": provider,
+        "model": model,
+        "required_env": required_env,
+        "missing_env": missing_env,
+        "ok": not missing_env,
+        "message": message,
+    }
+
+
+def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
+    provider = (
+        env_map.get("ROBOCLAWS_CODEX_PROVIDER")
+        or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
+        or CODEX_PROVIDER_DEFAULT
+    )
+    model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
+    if provider not in OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS:
+        return {
+            "driver": "openai-agents-sdk",
+            "provider": provider,
+            "model": model or "",
+            "required_env": [],
+            "missing_env": [],
+            "ok": False,
+            "message": (
+                f"Unsupported OpenAI Agents SDK provider {provider!r}; choose "
+                "codex-env, mify, MiMo OpenAI Chat, or Kimi OpenAI Chat."
+            ),
+        }
+    model = model or OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS[provider]
+    required_env = list(OPENAI_AGENTS_PROVIDER_REQUIRED_ENV[provider])
+    missing_env = [key for key in required_env if not env_map.get(key)]
+    if missing_env:
+        required = " and ".join(required_env)
+        message = f"OpenAI Agents SDK provider {provider} requires {required} in repo .env."
+    else:
+        message = ""
+    return {
+        "driver": "openai-agents-sdk",
         "provider": provider,
         "model": model,
         "required_env": required_env,

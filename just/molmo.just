@@ -516,7 +516,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         elif [[ "$driver" == "codex-live" ]]; then
           roboclaws_assert_codex_network_allowed "Codex Molmo cleanup live report"
         elif [[ "$driver" == "openai-agents-live" ]]; then
-          roboclaws_assert_codex_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
+          roboclaws_assert_openai_agents_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
         fi
         if [[ "$backend" != "molmospaces_subprocess" ]]; then
           active_runner=""

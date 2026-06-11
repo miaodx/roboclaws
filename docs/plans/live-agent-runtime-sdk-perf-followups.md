@@ -26,6 +26,12 @@ one candidate or group, summarize evidence, update the queue, then continue.
 records provider HTTP timing as transport-only evidence, and keeps `wire_api`
 as a matrix axis so Responses and Chat-compatible SDK rows are not conflated.
 
+2026-06-11 route-support update: the private OpenAI Agents SDK route supports
+Responses profiles (`codex-env`, `mify`) and Chat-compatible profiles
+(`mimo-openai-chat`, `kimi-openai-chat`). Matrix rows and shared performance
+packets now carry `wire_api`; Chat rows remain compatibility evidence unless
+their own metrics justify a speed claim.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -57,8 +63,8 @@ as a matrix axis so Responses and Chat-compatible SDK rows are not conflated.
   conversation/session state, prompt-cache retention, and other SDK features
   that only apply when the provider really supports the Responses API.
 - OpenAI Agents SDK provider-backed matrix rows for Chat-compatible profiles
-  such as `mimo-openai-chat` and `kimi-openai-chat`, if those route changes land
-  and credentials are available. These rows prove compatibility unless their own
+  such as `mimo-openai-chat` and `kimi-openai-chat`, when credentials and live
+  approval are available. These rows prove compatibility unless their own
   metrics support a speed claim.
 - Publishable speedup claim across all relevant lanes and providers.
 
@@ -93,8 +99,8 @@ First live matrix scope:
 - Evidence lanes: `world-public-labels`, `camera-grounded-labels`,
   `camera-raw-fpv`.
 - Responses rows: `codex-env` and `mify`.
-- Chat-compatible rows: `mimo-openai-chat` and `kimi-openai-chat` only after the
-  route, dependency, and credential gates pass.
+- Chat-compatible rows: `mimo-openai-chat` and `kimi-openai-chat` after
+  dependency, credential, and live-approval gates pass.
 - Claude SDK rows stay `unsupported` or `blocked` until a Claude SDK
   route/provider exists. Do not turn this perf pass into provider-integration
   work.

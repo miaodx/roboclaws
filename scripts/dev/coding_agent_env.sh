@@ -60,6 +60,12 @@ roboclaws_code_agent_profile_default_model() {
     mify)
       printf 'xiaomi/mimo-v2.5\n'
       ;;
+    mimo-openai-chat|mimo-chat)
+      printf 'mimo-v2.5\n'
+      ;;
+    kimi-openai-chat|kimi-chat)
+      printf 'kimi-k2.6\n'
+      ;;
     kimi-anthropic)
       printf 'kimi-k2.6\n'
       ;;
@@ -112,6 +118,12 @@ roboclaws_code_agent_profile_base_url() {
     mify)
       printf '%s\n' "${XM_LLM_BASE_URL:-https://api.llm.mioffice.cn/v1}"
       ;;
+    mimo-openai-chat|mimo-chat)
+      printf '%s\n' "${MIMO_OPENAI_BASE_URL:-https://token-plan-cn.xiaomimimo.com/v1}"
+      ;;
+    kimi-openai-chat|kimi-chat)
+      printf '%s\n' "${KIMI_OPENAI_BASE_URL:-https://api.kimi.com/coding/v1}"
+      ;;
     kimi-anthropic)
       printf 'https://api.kimi.com/coding/\n'
       ;;
@@ -140,6 +152,12 @@ roboclaws_code_agent_profile_key_env() {
     mify)
       printf 'XM_LLM_API_KEY\n'
       ;;
+    mimo-openai-chat|mimo-chat)
+      printf 'MIMO_TP_KEY\n'
+      ;;
+    kimi-openai-chat|kimi-chat)
+      printf 'KIMI_API_KEY\n'
+      ;;
     kimi-anthropic)
       printf 'KIMI_API_KEY\n'
       ;;
@@ -164,6 +182,9 @@ roboclaws_code_agent_profile_wire_api() {
   case "$provider" in
     codex-env|mify)
       printf 'responses\n'
+      ;;
+    mimo-openai-chat|mimo-chat|kimi-openai-chat|kimi-chat)
+      printf 'chat-completions\n'
       ;;
     kimi-anthropic|mify-anthropic|mimo-anthropic)
       printf 'anthropic\n'
@@ -395,6 +416,40 @@ roboclaws_assert_codex_network_allowed() {
   case "$rc" in
     0)
       echo "==> network guard ok: work network with repo-local Codex provider (${provider})" >&2
+      ;;
+    1)
+      echo "==> network guard ok: off work network" >&2
+      ;;
+    *)
+      echo "error: cannot determine network status; curl is required for ${label}." >&2
+      return 2
+      ;;
+  esac
+}
+
+roboclaws_assert_openai_agents_network_allowed() {
+  local label="${1:-OpenAI Agents SDK}"
+  local provider
+  provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
+  case "$provider" in
+    codex-env|mify|mimo-openai-chat|mimo-chat|kimi-openai-chat|kimi-chat)
+      ;;
+    *)
+      echo "error: unsupported OpenAI Agents SDK provider '${provider}'; expected codex-env, mify, mimo-openai-chat, or kimi-openai-chat" >&2
+      return 2
+      ;;
+  esac
+
+  local rc
+  if bash scripts/dev/network_status.sh --is-work-network >/dev/null 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+
+  case "$rc" in
+    0)
+      echo "==> network guard ok: work network with repo-local OpenAI Agents SDK provider (${provider})" >&2
       ;;
     1)
       echo "==> network guard ok: off work network" >&2

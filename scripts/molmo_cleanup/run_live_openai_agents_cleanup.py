@@ -230,6 +230,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "policy": getattr(args, "policy", ""),
             "runtime": "openai-agents-live",
             "provider_profile": getattr(args, "provider_profile", ""),
+            "wire_api": self.agent_sdk_perf_profile["wire_api"],
             "model": getattr(args, "model", ""),
             "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
             "kickoff_prompt_chars": len(self.initial_kickoff_prompt),
@@ -791,6 +792,7 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
         "profile_id": profile_id,
         "source": profile_source,
         "provider_profile": provider_profile,
+        "wire_api": _wire_api_for_provider_profile(provider_profile),
         "model_family": model_family,
         "prompt_mode": _string_setting(
             args,
@@ -960,7 +962,17 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
 def _normal_provider_profile(provider_profile: str) -> str:
     if provider_profile in {"codex-mify", "mify"}:
         return "mify"
+    if provider_profile in {"mimo-chat", "mimo-openai-chat"}:
+        return "mimo-openai-chat"
+    if provider_profile in {"kimi-chat", "kimi-openai-chat"}:
+        return "kimi-openai-chat"
     return provider_profile or "codex-env"
+
+
+def _wire_api_for_provider_profile(provider_profile: str) -> str:
+    if provider_profile in {"mimo-openai-chat", "kimi-openai-chat"}:
+        return "chat-completions"
+    return "responses"
 
 
 def _model_family(provider_profile: str, model: str) -> str:
@@ -1676,6 +1688,7 @@ def _live_timing_timeline(timing: dict[str, Any]) -> dict[str, Any]:
         "task_intent_mode": timing.get("task_intent_mode", ""),
         "runtime": timing.get("runtime", ""),
         "provider_profile": timing.get("provider_profile", ""),
+        "wire_api": timing.get("wire_api", ""),
         "model": timing.get("model", ""),
         "evidence_lane": timing.get("evidence_lane") or timing.get("profile", ""),
         "started_at_epoch": started_at,
@@ -1997,6 +2010,7 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
     provider_reasons: dict[str, int] = {}
     attempted_models: set[str] = set()
     attempted_provider_profiles: set[str] = set()
+    attempted_wire_apis: set[str] = set()
     retry_delay_s_total = 0.0
     retry_delay_count = 0
     retry_exhausted = False
@@ -2011,6 +2025,9 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
         provider_profile = str(event.get("provider_profile") or "")
         if provider_profile:
             attempted_provider_profiles.add(provider_profile)
+        wire_api = str(event.get("wire_api") or "")
+        if wire_api:
+            attempted_wire_apis.add(wire_api)
         if event_type == "model_service_failure":
             failure_class = str(event.get("failure_class") or "")
             if failure_class:
@@ -2040,6 +2057,7 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
         "provider_reasons": dict(sorted(provider_reasons.items())),
         "attempted_models": sorted(attempted_models),
         "attempted_provider_profiles": sorted(attempted_provider_profiles),
+        "attempted_wire_apis": sorted(attempted_wire_apis),
         "retry_delay_s_total": _round_duration(retry_delay_s_total),
         "retry_delay_count": retry_delay_count,
         "retry_exhausted": retry_exhausted,
@@ -2348,6 +2366,7 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "provider_reasons",
         "attempted_models",
         "attempted_provider_profiles",
+        "attempted_wire_apis",
         "retry_delay_s_total",
         "retry_delay_count",
         "retry_exhausted",

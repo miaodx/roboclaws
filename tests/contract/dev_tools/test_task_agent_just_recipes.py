@@ -2398,6 +2398,72 @@ def test_coding_agent_codex_explicit_mify_profile_uses_xm_key() -> None:
     ]
 
 
+def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=mimo-openai-chat
+            MIMO_TP_KEY=fake-mimo-key
+            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
+            ROBOCLAWS_CODEX_PROVIDER=kimi-openai-chat
+            KIMI_API_KEY=fake-kimi-key
+            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        (
+            "mimo-openai-chat model=mimo-v2.5 "
+            "base_url=https://token-plan-cn.xiaomimimo.com/v1 "
+            "key_env=MIMO_TP_KEY protocol=chat-completions"
+        ),
+        (
+            "kimi-openai-chat model=kimi-k2.6 "
+            "base_url=https://api.kimi.com/coding/v1 "
+            "key_env=KIMI_API_KEY protocol=chat-completions"
+        ),
+    ]
+
+
+def test_coding_agent_codex_provider_args_reject_openai_agents_chat_profile() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=mimo-openai-chat
+            MIMO_TP_KEY=fake-mimo-key
+            args=()
+            roboclaws_codex_provider_args args
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "unsupported Codex provider 'mimo-openai-chat'" in result.stderr
+
+
 def test_coding_agent_codex_can_disable_responses_websockets() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
