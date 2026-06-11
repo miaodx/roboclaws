@@ -34,6 +34,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _live_timing_timeline,
     _load_agent_sdk_skill_context,
     _mcp_control_plane_metrics,
+    _model_input_filter_metrics,
     _model_service_fallback_metrics,
     _openai_agents_event_metrics,
     _openai_agents_span_metrics,
@@ -2406,6 +2407,81 @@ def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Pa
     assert cache["stable_prefix_hash"] == "stable-hash"
 
 
+def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-events.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "schema": "openai_agents_model_input_filter_v1",
+                        "event": "model_input_filter",
+                        "provider_profile": "codex-env",
+                        "wire_api": "responses",
+                        "model": "gpt-5.5",
+                        "config": {
+                            "enabled": True,
+                            "mode": "public_tool_result_summary_v1",
+                        },
+                        "metrics": {
+                            "input_item_count": 3,
+                            "compacted_item_count": 2,
+                            "unchanged_item_count": 1,
+                            "repeated_item_count": 1,
+                            "input_bytes_before": 2000,
+                            "input_bytes_after": 800,
+                            "input_bytes_reduced": 1200,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "schema": "openai_agents_model_input_filter_v1",
+                        "event": "model_input_filter",
+                        "provider_profile": "codex-env",
+                        "wire_api": "responses",
+                        "model": "gpt-5.5",
+                        "config": {
+                            "enabled": True,
+                            "mode": "public_tool_result_summary_v1",
+                        },
+                        "metrics": {
+                            "input_item_count": 2,
+                            "compacted_item_count": 0,
+                            "unchanged_item_count": 2,
+                            "input_bytes_before": 500,
+                            "input_bytes_after": 500,
+                            "input_bytes_reduced": 0,
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = _model_input_filter_metrics(run_dir)
+
+    assert metrics["available"] is True
+    assert metrics["source"] == "openai_agents_model_input_filter_events"
+    assert metrics["event_count"] == 2
+    assert metrics["enabled"] is True
+    assert metrics["modes"] == ["public_tool_result_summary_v1"]
+    assert metrics["attempted_provider_profiles"] == ["codex-env"]
+    assert metrics["attempted_wire_apis"] == ["responses"]
+    assert metrics["compacted_item_count"] == 2
+    assert metrics["unchanged_item_count"] == 3
+    assert metrics["repeated_item_count"] == 1
+    assert metrics["input_bytes_before"] == 2500
+    assert metrics["input_bytes_after"] == 1300
+    assert metrics["input_bytes_reduced"] == 1200
+    assert metrics["input_byte_reduction_ratio"] == 0.48
+    assert "Raw prompts" in metrics["privacy_note"]
+    assert "tool payload bodies" in metrics["privacy_note"]
+
+
 def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() -> None:
     timing = {
         "surface": "household-world",
@@ -2465,6 +2541,24 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "retry_delay_count": 1,
             "retry_exhausted": False,
             "final_outcomes": {"success": 1},
+        },
+        "model_input_filter_metrics": {
+            "available": True,
+            "source": "openai_agents_model_input_filter_events",
+            "limitations": [],
+            "event_count": 2,
+            "enabled": True,
+            "modes": ["public_tool_result_summary_v1"],
+            "attempted_models": ["gpt-5.5"],
+            "attempted_provider_profiles": ["codex-env"],
+            "attempted_wire_apis": ["responses"],
+            "compacted_item_count": 2,
+            "unchanged_item_count": 3,
+            "repeated_item_count": 1,
+            "input_bytes_before": 2500,
+            "input_bytes_after": 1300,
+            "input_bytes_reduced": 1200,
+            "input_byte_reduction_ratio": 0.48,
         },
         "context_metrics": {
             "available": True,
@@ -2565,6 +2659,24 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "retry_delay_count": 1,
         "retry_exhausted": False,
         "final_outcomes": {"success": 1},
+    }
+    assert timeline["latency_attribution"]["model_input_filter_metrics"] == {
+        "available": True,
+        "source": "openai_agents_model_input_filter_events",
+        "limitations": [],
+        "event_count": 2,
+        "enabled": True,
+        "modes": ["public_tool_result_summary_v1"],
+        "attempted_models": ["gpt-5.5"],
+        "attempted_provider_profiles": ["codex-env"],
+        "attempted_wire_apis": ["responses"],
+        "compacted_item_count": 2,
+        "unchanged_item_count": 3,
+        "repeated_item_count": 1,
+        "input_bytes_before": 2500,
+        "input_bytes_after": 1300,
+        "input_bytes_reduced": 1200,
+        "input_byte_reduction_ratio": 0.48,
     }
     assert timeline["latency_attribution"]["context_metrics"] == {
         "available": True,

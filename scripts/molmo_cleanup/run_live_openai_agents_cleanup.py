@@ -679,6 +679,7 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
         payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
         payload["model_service_fallback_metrics"] = _model_service_fallback_metrics(self.run_dir)
+        payload["model_input_filter_metrics"] = _model_input_filter_metrics(self.run_dir)
         payload["context_metrics"] = _context_metrics(self.run_dir, payload)
         payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
         payload["context_growth_metrics"] = _context_growth_metrics(self.run_dir, payload)
@@ -2022,6 +2023,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         if isinstance(timing.get("model_service_fallback_metrics"), dict)
         else {}
     )
+    model_input_filter_metrics = (
+        timing.get("model_input_filter_metrics")
+        if isinstance(timing.get("model_input_filter_metrics"), dict)
+        else {}
+    )
     context_metrics = (
         timing.get("context_metrics") if isinstance(timing.get("context_metrics"), dict) else {}
     )
@@ -2055,6 +2061,7 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         "openai_agents_span_type_counts": span_metrics.get("span_type_counts"),
         "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
         "model_service_fallback_metrics": _compact_metric_group(fallback_metrics),
+        "model_input_filter_metrics": _compact_metric_group(model_input_filter_metrics),
         "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
         "context_metrics": _compact_metric_group(context_metrics),
         "cache_metrics": _compact_metric_group(cache_metrics),
@@ -2273,6 +2280,91 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
             "Fallback metrics retain attempt counts, provider/model ids, failure classes, "
             "retry delays, and outcomes only. Raw prompts, model text, credentials, and "
             "tool payload bodies are not persisted."
+        ),
+    }
+
+
+def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
+    events = [
+        event
+        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
+        for event in _read_jsonl_path(path)
+        if event.get("schema") == "openai_agents_model_input_filter_v1"
+    ]
+    if not events:
+        return {
+            "available": False,
+            "source": "openai_agents_model_input_filter_events",
+            "limitations": ["model_input_filter_events_missing"],
+        }
+
+    attempted_models: set[str] = set()
+    attempted_provider_profiles: set[str] = set()
+    attempted_wire_apis: set[str] = set()
+    input_bytes_before = 0
+    input_bytes_after = 0
+    input_bytes_reduced = 0
+    compacted_item_count = 0
+    unchanged_item_count = 0
+    repeated_item_count = 0
+    max_input_bytes_before = 0
+    max_input_bytes_after = 0
+    max_input_bytes_reduced = 0
+    enabled = False
+    modes: set[str] = set()
+    for event in events:
+        model = str(event.get("model") or "")
+        if model:
+            attempted_models.add(model)
+        provider_profile = str(event.get("provider_profile") or "")
+        if provider_profile:
+            attempted_provider_profiles.add(provider_profile)
+        wire_api = str(event.get("wire_api") or "")
+        if wire_api:
+            attempted_wire_apis.add(wire_api)
+        config = event.get("config") if isinstance(event.get("config"), dict) else {}
+        enabled = enabled or bool(config.get("enabled"))
+        mode = str(config.get("mode") or "")
+        if mode:
+            modes.add(mode)
+        metrics = event.get("metrics") if isinstance(event.get("metrics"), dict) else {}
+        before = _int_or_none(metrics.get("input_bytes_before")) or 0
+        after = _int_or_none(metrics.get("input_bytes_after")) or 0
+        reduced = _int_or_none(metrics.get("input_bytes_reduced")) or 0
+        input_bytes_before += before
+        input_bytes_after += after
+        input_bytes_reduced += reduced
+        compacted_item_count += _int_or_none(metrics.get("compacted_item_count")) or 0
+        unchanged_item_count += _int_or_none(metrics.get("unchanged_item_count")) or 0
+        repeated_item_count += _int_or_none(metrics.get("repeated_item_count")) or 0
+        max_input_bytes_before = max(max_input_bytes_before, before)
+        max_input_bytes_after = max(max_input_bytes_after, after)
+        max_input_bytes_reduced = max(max_input_bytes_reduced, reduced)
+
+    return {
+        "available": True,
+        "source": "openai_agents_model_input_filter_events",
+        "limitations": [],
+        "event_count": len(events),
+        "enabled": enabled,
+        "modes": sorted(modes),
+        "attempted_models": sorted(attempted_models),
+        "attempted_provider_profiles": sorted(attempted_provider_profiles),
+        "attempted_wire_apis": sorted(attempted_wire_apis),
+        "compacted_item_count": compacted_item_count,
+        "unchanged_item_count": unchanged_item_count,
+        "repeated_item_count": repeated_item_count,
+        "input_bytes_before": input_bytes_before,
+        "input_bytes_after": input_bytes_after,
+        "input_bytes_reduced": input_bytes_reduced,
+        "input_byte_reduction_ratio": _ratio(input_bytes_reduced, input_bytes_before),
+        "max_input_bytes_before": max_input_bytes_before,
+        "max_input_bytes_after": max_input_bytes_after,
+        "max_input_bytes_reduced": max_input_bytes_reduced,
+        "privacy_note": (
+            "Model-input filter metrics retain aggregate counts, byte sizes, mode, provider, "
+            "wire API, and model ids only. Raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted."
         ),
     }
 
@@ -2591,6 +2683,19 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "retry_delay_count",
         "retry_exhausted",
         "final_outcomes",
+        "event_count",
+        "enabled",
+        "modes",
+        "compacted_item_count",
+        "unchanged_item_count",
+        "repeated_item_count",
+        "input_bytes_before",
+        "input_bytes_after",
+        "input_bytes_reduced",
+        "input_byte_reduction_ratio",
+        "max_input_bytes_before",
+        "max_input_bytes_after",
+        "max_input_bytes_reduced",
     )
     return {key: metrics.get(key) for key in keys if key in metrics}
 
