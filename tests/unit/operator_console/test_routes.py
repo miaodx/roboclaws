@@ -7,6 +7,7 @@ from roboclaws.operator_console.routes import (
     get_route,
     get_selection,
     list_console_combinations,
+    list_evidence_lanes,
     list_worlds,
     validate_supported_routes_against_catalog,
 )
@@ -87,6 +88,51 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
     validate_supported_routes_against_catalog()
 
 
+def test_console_exposes_all_supported_household_evidence_lanes() -> None:
+    lanes = tuple(lane["id"] for lane in list_evidence_lanes())
+    assert lanes == (
+        "world-oracle-labels",
+        "world-public-labels",
+        "camera-grounded-labels",
+        "camera-raw-fpv",
+    )
+
+    enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
+    for lane in lanes:
+        assert f"molmospaces/val_0::mujoco::cleanup::codex-cli::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::cleanup::claude-code::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::map-build::codex-cli::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::map-build::direct-runner::{lane}" in enabled_ids
+        assert f"agibot-g2/map-12::agibot-gdk::map-build::codex-cli::{lane}" in enabled_ids
+
+    grounded = get_selection(
+        "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"
+    )
+    assert "camera_labeler=sim-projected-labels" in grounded.launch_default_overrides
+    agibot_grounded = get_selection(
+        "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
+    )
+    assert "camera_labeler=grounding-dino" in agibot_grounded.launch_default_overrides
+
+
+def test_console_keeps_unsupported_lane_visible_but_disabled() -> None:
+    disabled = {
+        route.id: route.disabled_reason
+        for route in list_console_combinations()
+        if not route.enabled
+    }
+
+    reason = disabled["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"]
+    assert "not wired yet" in reason
+    assert "molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels" not in {
+        route.id for route in list_console_combinations(include_disabled=False)
+    }
+    assert "molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-raw-fpv" in {
+        route.id for route in list_console_combinations(include_disabled=False)
+    }
+
+
 def test_disabled_combinations_have_concrete_reasons() -> None:
     disabled = [route for route in list_console_combinations() if not route.enabled]
 
@@ -99,6 +145,10 @@ def test_disabled_combinations_have_concrete_reasons() -> None:
     assert (
         "Map-build"
         in reasons["molmospaces/val_0::mujoco::map-build::claude-code::world-oracle-labels"]
+    )
+    assert (
+        "not wired yet"
+        in reasons["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"]
     )
 
 
@@ -181,6 +231,16 @@ def test_map_build_launch_defaults_to_baseline_scenario_setup(tmp_path) -> None:
     assert "scenario_setup=baseline" in argv
     assert not any(item.startswith("relocation_count=") for item in argv)
     assert not any(item.startswith("generated_mess_count=") for item in argv)
+
+
+def test_camera_grounded_lane_launch_includes_default_camera_labeler(tmp_path) -> None:
+    selection = get_selection(
+        "molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"
+    )
+    argv = build_launch_argv(selection, root=tmp_path, run_id="run-1")
+
+    assert "evidence_lane=camera-grounded-labels" in argv
+    assert "camera_labeler=sim-projected-labels" in argv
 
 
 def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:

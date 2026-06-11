@@ -104,6 +104,11 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "/api/readiness" in app
     assert "refreshSelectedRouteReadiness" in app
     assert "checkerStatus.message" in app
+    assert "state.evidenceLanes" in app
+    assert "payload.evidence_lanes" in app
+    assert "evidenceLaneOptions" in app
+    assert "node.disabled = Boolean(option.disabled)" in app
+    assert "node.title = option.title" in app
 
 
 def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> None:

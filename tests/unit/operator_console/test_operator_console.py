@@ -294,6 +294,35 @@ def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:
         thread.join(timeout=2)
 
 
+def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path: Path) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        with urllib.request.urlopen(f"http://{host}:{port}/api/routes") as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert [lane["id"] for lane in payload["evidence_lanes"]] == [
+        "world-oracle-labels",
+        "world-public-labels",
+        "camera-grounded-labels",
+        "camera-raw-fpv",
+    ]
+    routes = {route["id"]: route for route in payload["combinations"]}
+    assert routes["molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"][
+        "enabled"
+    ]
+    assert not routes["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"][
+        "enabled"
+    ]
+
+
 def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     tmp_path: Path,
 ) -> None:

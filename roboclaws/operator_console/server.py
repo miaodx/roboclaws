@@ -34,6 +34,7 @@ from roboclaws.operator_console.routes import (
     get_route,
     get_selection,
     list_console_combinations,
+    list_evidence_lanes,
     list_worlds,
 )
 from roboclaws.operator_console.state import derive_operator_state, redacted_artifact_text
@@ -57,6 +58,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             return self._json(
                 {
                     "worlds": list(list_worlds()),
+                    "evidence_lanes": list(list_evidence_lanes()),
                     "combinations": [
                         selection.to_payload()
                         for selection in list_console_combinations(include_disabled=True)

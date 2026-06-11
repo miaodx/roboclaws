@@ -6,6 +6,11 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household.profiles import (
+    CAMERA_GROUNDED_LABELS_LANE,
+    SIM_PROJECTED_LABELS_CAMERA_LABELER,
+    cleanup_evidence_lane_names,
+)
 from roboclaws.launch.agent_engines import AGENT_ENGINE_SPECS
 from roboclaws.launch.backends import BACKEND_SPECS, BackendSpec
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
@@ -21,6 +26,15 @@ DEFAULT_PROMPTS = {
     "map-build": "帮我建立这个房间的语义地图",
     "open-ended": "在这个场景中完成开放性导航任务，并报告你看到的证据。",
 }
+
+AGIBOT_CAMERA_LABELER = "grounding-dino"
+SIMULATION_CAMERA_LABELER = SIM_PROJECTED_LABELS_CAMERA_LABELER
+
+REAL_EVIDENCE_LANES = cleanup_evidence_lane_names()
+ISAAC_SUPPORTED_EVIDENCE_LANES = tuple(
+    lane for lane in REAL_EVIDENCE_LANES if lane != CAMERA_GROUNDED_LABELS_LANE
+)
+ISAAC_UNSUPPORTED_EVIDENCE_LANES = (CAMERA_GROUNDED_LABELS_LANE,)
 
 
 @dataclass(frozen=True)
@@ -362,6 +376,18 @@ def list_worlds(*, include_hidden: bool = False) -> tuple[dict[str, Any], ...]:
     return tuple(rows)
 
 
+def list_evidence_lanes() -> tuple[dict[str, str], ...]:
+    """Return the full operator-visible household evidence-lane list."""
+
+    return tuple(
+        {
+            "id": lane,
+            "label": lane,
+        }
+        for lane in cleanup_evidence_lane_names()
+    )
+
+
 def list_console_combinations(
     *, include_disabled: bool = True
 ) -> tuple[ConsoleLaunchSelection, ...]:
@@ -424,10 +450,14 @@ def accepted_isaac_preflight(root: Path) -> Path | None:
     return max(existing, key=lambda path: path.stat().st_mtime)
 
 
+def _common_gates() -> tuple[RouteGate, ...]:
+    return (PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE)
+
+
 def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
-    common_gates = (PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE)
+    common_gates = _common_gates()
     return (
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "mujoco",
             "cleanup",
@@ -437,7 +467,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             default_overrides=("seed=7",),
             supports_operator_steer=True,
         ),
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "mujoco",
             "cleanup",
@@ -447,7 +477,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             default_overrides=("seed=7",),
             supports_operator_steer=True,
         ),
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "mujoco",
             "cleanup",
@@ -457,7 +487,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             default_overrides=("seed=7",),
             supports_operator_steer=True,
         ),
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "mujoco",
             "map-build",
@@ -467,7 +497,7 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             gates=common_gates,
             default_overrides=("seed=7",),
         ),
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "mujoco",
             "map-build",
@@ -477,43 +507,46 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             gates=(MCP_PORT_FREE_GATE,),
             default_overrides=("seed=7",),
         ),
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "isaaclab",
             "cleanup",
             "codex-cli",
             "codex-env",
+            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
             gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
             default_overrides=("seed=7", "relocation_count=1"),
             supports_operator_steer=True,
         ),
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "isaaclab",
             "cleanup",
             "claude-code",
             "mimo-anthropic",
+            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
             gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
             default_overrides=("seed=7", "relocation_count=1"),
             supports_operator_steer=True,
         ),
-        _selection(
+        *_lane_selections(
             "molmospaces/val_0",
             "isaaclab",
             "map-build",
             "codex-cli",
             "codex-env",
+            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
             scenario_setup=ENVIRONMENT_SETUP_BASELINE,
             gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
             default_overrides=("seed=7",),
         ),
-        _selection(
+        *_lane_selections(
             "agibot-g2/map-12",
             "agibot-gdk",
             "map-build",
             "codex-cli",
             "codex-env",
-            evidence_lane="camera-grounded-labels",
+            camera_labeler=AGIBOT_CAMERA_LABELER,
             scenario_setup=ENVIRONMENT_SETUP_BASELINE,
             gates=(
                 *common_gates,
@@ -525,17 +558,17 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             required_overrides=("context_json",),
             default_overrides=(
                 "policy=codex_agibot_semantic_map_build_pilot",
-                "camera_labeler=grounding-dino",
                 "visual_grounding_timeout_s=20",
             ),
             emergency_stop_required=True,
         ),
-        _selection(
+        *_lane_selections(
             "b1-map12",
             "isaaclab",
             "open-ended",
             "codex-cli",
             "codex-env",
+            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
             scenario_setup=ENVIRONMENT_SETUP_BASELINE,
             gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
             default_overrides=("seed=7",),
@@ -546,6 +579,67 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
 
 def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
     return (
+        *_lane_selections(
+            "molmospaces/val_0",
+            "isaaclab",
+            "cleanup",
+            "codex-cli",
+            "codex-env",
+            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
+            enabled=False,
+            unsupported_reason=(
+                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
+            ),
+            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7", "relocation_count=1"),
+            supports_operator_steer=True,
+        ),
+        *_lane_selections(
+            "molmospaces/val_0",
+            "isaaclab",
+            "cleanup",
+            "claude-code",
+            "mimo-anthropic",
+            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
+            enabled=False,
+            unsupported_reason=(
+                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
+            ),
+            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7", "relocation_count=1"),
+            supports_operator_steer=True,
+        ),
+        *_lane_selections(
+            "molmospaces/val_0",
+            "isaaclab",
+            "map-build",
+            "codex-cli",
+            "codex-env",
+            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            enabled=False,
+            unsupported_reason=(
+                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
+            ),
+            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7",),
+        ),
+        *_lane_selections(
+            "b1-map12",
+            "isaaclab",
+            "open-ended",
+            "codex-cli",
+            "codex-env",
+            evidence_lanes=ISAAC_UNSUPPORTED_EVIDENCE_LANES,
+            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+            enabled=False,
+            unsupported_reason=(
+                "Isaac Lab camera-grounded labels are not wired yet; use world labels or raw FPV."
+            ),
+            gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+            default_overrides=("seed=7",),
+            supports_operator_steer=True,
+        ),
         _selection(
             "agibot-g2/map-12",
             "agibot-gdk",
@@ -625,6 +719,57 @@ def _selection(
         pause_supported=pause_supported,
         emergency_stop_required=emergency_stop_required,
     )
+
+
+def _lane_selections(
+    world_id: str,
+    backend_id: str,
+    intent_id: str,
+    agent_engine_id: str,
+    provider_profile: str | None,
+    *,
+    evidence_lanes: tuple[str, ...] = REAL_EVIDENCE_LANES,
+    camera_labeler: str = SIMULATION_CAMERA_LABELER,
+    scenario_setup: str | None = None,
+    enabled: bool = True,
+    unsupported_reason: str = "",
+    required_overrides: tuple[str, ...] = (),
+    default_overrides: tuple[str, ...] = (),
+    gates: tuple[RouteGate, ...] = (),
+    supports_prompt: bool = True,
+    supports_operator_steer: bool = False,
+    pause_supported: bool = False,
+    emergency_stop_required: bool = False,
+) -> tuple[ConsoleLaunchSelection, ...]:
+    rows: list[ConsoleLaunchSelection] = []
+    for evidence_lane in evidence_lanes:
+        lane_default_overrides = default_overrides
+        if evidence_lane == CAMERA_GROUNDED_LABELS_LANE:
+            lane_default_overrides = (
+                *lane_default_overrides,
+                f"camera_labeler={camera_labeler}",
+            )
+        rows.append(
+            _selection(
+                world_id,
+                backend_id,
+                intent_id,
+                agent_engine_id,
+                provider_profile,
+                evidence_lane=evidence_lane,
+                scenario_setup=scenario_setup,
+                enabled=enabled,
+                unsupported_reason=unsupported_reason,
+                required_overrides=required_overrides,
+                default_overrides=lane_default_overrides,
+                gates=gates,
+                supports_prompt=supports_prompt,
+                supports_operator_steer=supports_operator_steer,
+                pause_supported=pause_supported,
+                emergency_stop_required=emergency_stop_required,
+            )
+        )
+    return tuple(rows)
 
 
 _LEGACY_ROUTE_BY_ID: dict[str, ConsoleRoute] = {

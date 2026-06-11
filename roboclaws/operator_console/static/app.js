@@ -2,6 +2,7 @@ const state = {
   worlds: [],
   routes: [],
   combinations: [],
+  evidenceLanes: [],
   readiness: {},
   selectedWorld: null,
   selectedRoute: null,
@@ -101,6 +102,7 @@ const els = {
 async function boot() {
   const payload = await fetchJson("/api/routes");
   state.worlds = payload.worlds || [];
+  state.evidenceLanes = payload.evidence_lanes || [];
   state.combinations = payload.combinations || payload.routes || [];
   state.routes = state.combinations;
   state.readiness = payload.readiness || {};
@@ -457,17 +459,25 @@ function selectedCombinationFromAxes() {
   const intentId = els.intentInput.value || state.selectedIntent;
   const agentEngineId = els.agentEngineInput.value;
   const evidenceLane = els.evidenceLaneInput.value || "world-oracle-labels";
-  const candidates = combinationsForWorld(worldId).filter(
+  const axisCandidates = combinationsForWorld(worldId).filter(
     (item) =>
       item.backend_id === backendId &&
       item.intent_id === intentId &&
-      item.agent_engine_id === agentEngineId &&
-      item.evidence_lane === evidenceLane
+      item.agent_engine_id === agentEngineId
   );
+  const candidates = axisCandidates.filter((item) => item.evidence_lane === evidenceLane);
   const providerProfile = els.providerProfileInput.value;
   return (
-    candidates.find((item) => !item.provider_profile || item.provider_profile === providerProfile) ||
+    candidates.find(
+      (item) => item.enabled && (!item.provider_profile || item.provider_profile === providerProfile)
+    ) ||
+    candidates.find((item) => item.enabled) ||
+    axisCandidates.find(
+      (item) => item.enabled && (!item.provider_profile || item.provider_profile === providerProfile)
+    ) ||
+    axisCandidates.find((item) => item.enabled) ||
     candidates[0] ||
+    axisCandidates[0] ||
     state.selectedRoute
   );
 }
@@ -535,7 +545,7 @@ function renderAxisSelectors() {
   );
   renderSelectOptions(
     els.evidenceLaneInput,
-    uniqueOptions(combos, "evidence_lane", "evidence_lane"),
+    evidenceLaneOptions(combos),
     state.selectedRoute && state.selectedRoute.evidence_lane
   );
   const selected = selectedCombinationFromAxes();
@@ -559,19 +569,53 @@ function uniqueOptions(items, valueKey, labelKey, labelFn) {
   return [...seen.values()];
 }
 
+function evidenceLaneOptions(combos) {
+  const backendId = els.backendInput.value;
+  const intentId = els.intentInput.value || state.selectedIntent;
+  const agentEngineId = els.agentEngineInput.value;
+  const laneRows = state.evidenceLanes.length
+    ? state.evidenceLanes
+    : uniqueOptions(combos, "evidence_lane", "evidence_lane");
+  return laneRows.map((lane) => {
+    const value = lane.id || lane.value;
+    const matching = combos.filter(
+      (item) =>
+        item.backend_id === backendId &&
+        item.intent_id === intentId &&
+        item.agent_engine_id === agentEngineId &&
+        item.evidence_lane === value
+    );
+    const enabledMatch = matching.find((item) => item.enabled);
+    const disabledMatch = matching.find((item) => !item.enabled);
+    const reason = disabledMatch
+      ? disabledMatch.unsupported_reason || disabledMatch.disabled_reason || "Unavailable for this route."
+      : "Unavailable for this route.";
+    return {
+      value,
+      label: lane.label || value,
+      disabled: !enabledMatch,
+      title: enabledMatch ? "" : reason,
+    };
+  });
+}
+
 function renderSelectOptions(select, options, selectedValue) {
-  const previous = selectedValue || select.value || (options[0] && options[0].value) || "";
+  const previous = selectedValue || select.value || "";
+  const fallback = options.find((option) => !option.disabled) || options[0];
   select.innerHTML = "";
   for (const option of options) {
     const node = document.createElement("option");
     node.value = option.value;
     node.textContent = option.label;
     node.disabled = Boolean(option.disabled);
+    if (option.title) {
+      node.title = option.title;
+    }
     node.selected = option.value === previous;
     select.appendChild(node);
   }
-  if (!select.value && options[0]) {
-    select.value = options[0].value;
+  if ((!select.value || (select.selectedOptions[0] && select.selectedOptions[0].disabled)) && fallback) {
+    select.value = fallback.value;
   }
 }
 
