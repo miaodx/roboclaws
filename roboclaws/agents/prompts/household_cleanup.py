@@ -6,8 +6,6 @@ import argparse
 
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.task_intent import (
-    HOUSEHOLD_INTENT_OPEN_ENDED,
-    TASK_INTENT_MODE_CUSTOM,
     TASK_INTENT_MODE_DEFAULT,
     household_intent_from_goal_contract,
     household_intent_is_open_ended,
@@ -71,8 +69,6 @@ OPEN_ENDED_TASK_RULES = (
     "as part of the operator task. When the operator task is satisfied and you are not "
     "holding an object, call done so the report is generated."
 )
-CUSTOM_TASK_RULES = OPEN_ENDED_TASK_RULES
-
 HOUSEHOLD_CLEANUP_TASK_PREFIX = (
     "This run is surface=household-world intent=cleanup. User task: {task}. "
 )
@@ -82,8 +78,6 @@ OPEN_ENDED_HOUSEHOLD_TASK_PREFIX = (
     "task: {task}. When this wrapper and the operator task conflict, follow the "
     "operator task subject to public tool safety and error responses. "
 )
-CUSTOM_HOUSEHOLD_TASK_PREFIX = OPEN_ENDED_HOUSEHOLD_TASK_PREFIX
-
 DEFAULT_HOUSEHOLD_CLEANUP_TASK = "clean up this room"
 PROMPT_MODE_FULL = "full"
 PROMPT_MODE_COMPACT = "compact"
@@ -110,10 +104,7 @@ def _task_prefix(
             f"Goal scope: {goal_contract.goal_scope}. Raw user goal: "
             f"{goal_contract.raw_prompt or normalized}. "
         )
-    if (
-        household_intent_is_open_ended(household_intent)
-        or task_intent_mode == TASK_INTENT_MODE_CUSTOM
-    ):
+    if household_intent_is_open_ended(household_intent):
         return OPEN_ENDED_HOUSEHOLD_TASK_PREFIX.format(task=normalized)
     return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
 
@@ -130,12 +121,7 @@ def _with_task(
     household_intent: str = "",
     goal_contract: GoalContract | None = None,
 ) -> str:
-    prefix = (
-        CUSTOM_PREFIX
-        if household_intent_is_open_ended(household_intent)
-        or task_intent_mode == TASK_INTENT_MODE_CUSTOM
-        else COMMON_PREFIX
-    )
+    prefix = CUSTOM_PREFIX if household_intent_is_open_ended(household_intent) else COMMON_PREFIX
     return (
         prefix
         + _task_prefix(
@@ -161,10 +147,7 @@ def _task_aware_prompt(
     task_intent_mode: str,
     household_intent: str,
 ) -> str:
-    if (
-        household_intent_is_open_ended(household_intent)
-        or task_intent_mode == TASK_INTENT_MODE_CUSTOM
-    ):
+    if household_intent_is_open_ended(household_intent):
         return prompt + _open_ended_scope_suffix()
     return prompt
 
@@ -383,10 +366,7 @@ def render_kickoff_prompt(
 
     intent_mode = _normalize_task_intent_mode(task_intent_mode)
     household_intent = household_intent_from_goal_contract(goal_contract, fallback=intent)
-    if intent_mode == TASK_INTENT_MODE_CUSTOM:
-        household_intent = HOUSEHOLD_INTENT_OPEN_ENDED
-    else:
-        household_intent = normalize_household_intent(household_intent)
+    household_intent = normalize_household_intent(household_intent)
     open_ended = household_intent_is_open_ended(household_intent)
     mode = _normalize_prompt_mode(prompt_mode)
     if profile == "camera-raw-fpv":

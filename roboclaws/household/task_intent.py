@@ -5,29 +5,21 @@ from __future__ import annotations
 from typing import Any
 
 TASK_INTENT_MODE_DEFAULT = "default_cleanup"
-TASK_INTENT_MODE_CUSTOM = "custom"
-TASK_INTENT_MODES = frozenset({TASK_INTENT_MODE_DEFAULT, TASK_INTENT_MODE_CUSTOM})
+TASK_INTENT_MODES = frozenset({TASK_INTENT_MODE_DEFAULT})
 HOUSEHOLD_INTENT_CLEANUP = "cleanup"
 HOUSEHOLD_INTENT_MAP_BUILD = "map-build"
 HOUSEHOLD_INTENT_OPEN_ENDED = "open-ended"
 
 
-def normalize_task_intent_mode(value: str | None) -> str:
-    normalized = str(value or TASK_INTENT_MODE_DEFAULT).strip().lower().replace("_", "-")
-    if normalized in {"custom", "operator-custom", "custom-task"}:
-        return TASK_INTENT_MODE_CUSTOM
+def normalize_task_intent_mode(_value: str | None) -> str:
     return TASK_INTENT_MODE_DEFAULT
-
-
-def task_intent_is_custom(value: str | None) -> bool:
-    return normalize_task_intent_mode(value) == TASK_INTENT_MODE_CUSTOM
 
 
 def normalize_household_intent(value: str | None, *, task_name: str = "") -> str:
     """Normalize the first-class household intent.
 
-    ``task_intent_mode=custom`` is tolerated as historical input, but new
-    runtime semantics should use ``intent=open-ended``.
+    Legacy task-intent aliases are tolerated only as historical artifact input;
+    current runtime semantics use ``intent=open-ended``.
     """
 
     normalized = str(value or "").strip().lower().replace("_", "-")

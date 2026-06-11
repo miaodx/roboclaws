@@ -43,12 +43,9 @@ from roboclaws.household.subprocess_backend import (
     MolmoSpacesSubprocessBackend,
 )
 from roboclaws.household.task_intent import (
-    HOUSEHOLD_INTENT_OPEN_ENDED,
-    TASK_INTENT_MODE_CUSTOM,
     TASK_INTENT_MODE_DEFAULT,
     household_intent_from_goal_contract,
     household_intent_is_open_ended,
-    normalize_task_intent_mode,
 )
 from roboclaws.household.types import CleanupScenario, PrivateScoringManifest
 from roboclaws.household.visual_grounding import (
@@ -217,9 +214,7 @@ def print_setup(
         )
     print(f"  {commands['OpenClaw']}")
     print("\nThen start the agent and use this kickoff:")
-    open_ended_task = household_intent_is_open_ended(task_intent) or (
-        normalize_task_intent_mode(task_intent_mode) == TASK_INTENT_MODE_CUSTOM
-    )
+    open_ended_task = household_intent_is_open_ended(task_intent)
     if open_ended_task:
         print("  Treat the operator task as the authoritative goal scope.")
         print("  Call roboclaws__metric_map first.")
@@ -379,12 +374,7 @@ def run_molmo_realworld_cleanup_agent_server(
     goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
         goal_contract_path
     )
-    task_intent = household_intent_from_goal_contract(
-        goal_contract,
-        fallback=HOUSEHOLD_INTENT_OPEN_ENDED
-        if normalize_task_intent_mode(task_intent_mode) == TASK_INTENT_MODE_CUSTOM
-        else "",
-    )
+    task_intent = household_intent_from_goal_contract(goal_contract)
 
     try:
         server = make_molmo_realworld_cleanup_mcp(

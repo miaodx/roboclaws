@@ -126,7 +126,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       esac
     fi
     open_ended_intent="false"
-    if [[ "$task_intent" == "open-ended" || "$task_intent_mode" == "custom" ]]; then
+    if [[ "$task_intent" == "open-ended" ]]; then
       open_ended_intent="true"
     fi
     if [[ -z "$goal_contract_json" && -z "$goal_contract_path" ]]; then

@@ -36,10 +36,8 @@ from roboclaws.household.subprocess_backend import (  # noqa: E402
 )
 from roboclaws.household.task_intent import (  # noqa: E402
     HOUSEHOLD_INTENT_OPEN_ENDED,
-    TASK_INTENT_MODE_CUSTOM,
     TASK_INTENT_MODE_DEFAULT,
     household_intent_from_goal_contract,
-    normalize_task_intent_mode,
 )
 from roboclaws.household.types import CleanupScenario, PrivateScoringManifest  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
@@ -162,12 +160,7 @@ def run_smoke(
     goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
         goal_contract_path
     )
-    task_intent = household_intent_from_goal_contract(
-        goal_contract,
-        fallback=HOUSEHOLD_INTENT_OPEN_ENDED
-        if normalize_task_intent_mode(task_intent_mode) == TASK_INTENT_MODE_CUSTOM
-        else "",
-    )
+    task_intent = household_intent_from_goal_contract(goal_contract)
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=output_dir,
         scenario=scenario,

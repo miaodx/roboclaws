@@ -1672,3 +1672,94 @@ Remaining before this plan can be marked done:
   legacy task-route terminology;
 - finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
   already collapsed to read-only history only.
+
+### 2026-06-11 Residual Custom Intent Mode Runtime Cleanup
+
+Status remains `CONTINUE`.
+
+Closed Candidate 9's residual current-runtime branch cleanup:
+
+- removed `TASK_INTENT_MODE_CUSTOM` and current runtime comparisons against
+  `task_intent_mode=custom`;
+- made `normalize_task_intent_mode(...)` canonicalize all historical inputs to
+  `default_cleanup`;
+- made prompt rendering, MCP server setup text, MCP contract done policy,
+  deterministic smoke, `just` lowerers, and live-runner checker gates rely on
+  first-class `task_intent` / `goal_contract.intent` for open-ended behavior;
+- renamed the live-runner checker helper parameter from `custom_task` to
+  `open_ended_task`;
+- added regression coverage proving legacy `task_intent_mode=custom` does not
+  create open-ended prompts or open-ended done policy, while explicit
+  `intent=open-ended` remains green.
+
+Verified this slice:
+
+```bash
+uv sync --extra dev
+rg -n \
+  'TASK_INTENT_MODE_CUSTOM|task_intent_mode=custom|task_intent_mode.*custom|\$task_intent_mode" == "custom|task_intent_is_custom|_custom_task_intent|custom_task' -- \
+  README.md ARCHITECTURE.md docs/human docs/plans/README.md skills just roboclaws tests scripts .github
+.venv/bin/ruff check \
+  roboclaws/household/task_intent.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/launch/evaluation.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py
+.venv/bin/ruff format --check \
+  roboclaws/household/task_intent.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/launch/evaluation.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py
+git diff --check -- \
+  just/agent.just just/molmo.just \
+  roboclaws/household/task_intent.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/launch/evaluation.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/unit/agents/test_live_runtime.py \
+  tests/unit/operator_console
+```
+
+Observed proof:
+
+- the residual grep now reports only the historical plan entry plus explicit
+  negative regression tests that pass `task_intent_mode=custom`;
+- current open-ended prompt, done-policy, and checker behavior require
+  first-class `intent=open-ended` / `task_intent=open-ended`;
+- the focused route, MCP, checker, live-runtime, and operator-console tests
+  pass.
+
+Remaining before this plan can be marked done:
+
+- finish Candidate 3 saturation around current `household-cleanup` and
+  `semantic-map-build` references, classifying private implementation ids,
+  artifact paths, fixtures, historical docs, and public-facing drift instead
+  of rewriting blindly;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.

@@ -34,7 +34,6 @@ from roboclaws.household.task_intent import (
     household_intent_is_open_ended,
     normalize_household_intent,
     normalize_task_intent_mode,
-    task_intent_is_custom,
 )
 from roboclaws.household.types import CleanupScenario
 from roboclaws.household.visual_grounding import (
@@ -1841,11 +1840,8 @@ class RealWorldCleanupContract:
             "unvisited_waypoint_ids": unvisited,
         }
 
-    def _custom_task_intent(self) -> bool:
-        return task_intent_is_custom(self.task_intent_mode)
-
     def _open_ended_task_intent(self) -> bool:
-        return household_intent_is_open_ended(self.task_intent) or self._custom_task_intent()
+        return household_intent_is_open_ended(self.task_intent)
 
     def agent_view_payload(self) -> dict[str, Any]:
         observed_objects = [

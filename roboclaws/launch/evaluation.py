@@ -118,7 +118,7 @@ def household_intent_id_for_checker(
     *,
     task_name: str,
     task_intent: str = "",
-    custom_task: bool = False,
+    open_ended_task: bool = False,
 ) -> str:
     """Infer the canonical household intent for legacy live runner checker calls."""
 
@@ -126,7 +126,7 @@ def household_intent_id_for_checker(
         return task_intent
     if task_name == "semantic-map-build":
         return "map-build"
-    if custom_task:
+    if open_ended_task:
         return "open-ended"
     return "cleanup"
 

@@ -749,7 +749,7 @@ run dispatch_target agent_engine mode="" *overrides:
           "$min_generated_mess_count" "$generated_mess_object_ids" "$task"
           "$operator_messages_path"
         )
-        if [[ "$task" == "household-cleanup" || "$resolved_task_intent" == "open-ended" || "$task_intent_mode" == "custom" ]]; then
+        if [[ "$task" == "household-cleanup" || "$resolved_task_intent" == "open-ended" ]]; then
           molmo_args+=("$task_intent_mode")
         fi
         ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \

@@ -30,11 +30,7 @@ from roboclaws.agents.provider_timing_proxy import (
     stop_provider_timing_proxy,
 )
 from roboclaws.household.report import runtime_timing_from_trace
-from roboclaws.household.task_intent import (
-    TASK_INTENT_MODE_CUSTOM,
-    TASK_INTENT_MODE_DEFAULT,
-    normalize_task_intent_mode,
-)
+from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT
 from roboclaws.household.visual_backend_slots import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     VisualBackendSlotError,
@@ -489,17 +485,14 @@ class LiveCodexCleanupRunner:
         self._mark_timing("checker_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
         task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
-        open_ended_task = task_intent == "open-ended" or (
-            normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
-            == TASK_INTENT_MODE_CUSTOM
-        )
+        open_ended_task = task_intent == "open-ended"
         checker_visual_args = list(self.args.checker_visual_arg)
         if open_ended_task:
             checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
         intent_id = household_intent_id_for_checker(
             task_name=task_name,
             task_intent=task_intent,
-            custom_task=open_ended_task,
+            open_ended_task=open_ended_task,
         )
         checker_policy_args = checker_flags_for_household_intent(
             intent_id=intent_id,

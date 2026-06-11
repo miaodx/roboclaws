@@ -1951,6 +1951,19 @@ def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
     assert "call done only after every metric_map.inspection_waypoints" not in prompt
 
 
+def test_molmo_cleanup_live_prompt_ignores_legacy_custom_mode_without_open_ended_intent() -> None:
+    prompt = render_kickoff_prompt(
+        "world-oracle-labels",
+        task="我渴了，帮我找些解渴的东西",
+        task_intent_mode="custom",
+    )
+
+    assert "This run is surface=household-world intent=cleanup" in prompt
+    assert "This run is surface=household-world intent=open-ended" not in prompt
+    assert "The operator task is the only goal" not in prompt
+    assert "Use the bundled molmo-realworld-cleanup skill instructions" in prompt
+
+
 def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
     prompt = render_kickoff_prompt("world-public-labels")
 
@@ -2734,7 +2747,7 @@ def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checke
         household_intent_id_for_checker(
             task_name="semantic-map-build",
             task_intent="",
-            custom_task=False,
+            open_ended_task=False,
         )
         == "map-build"
     )

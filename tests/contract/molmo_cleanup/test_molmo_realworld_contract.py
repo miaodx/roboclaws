@@ -1397,6 +1397,25 @@ def test_open_ended_done_ignores_unrelated_pending_public_candidates() -> None:
     _assert_no_forbidden_keys(done)
 
 
+def test_legacy_custom_task_intent_mode_does_not_create_open_ended_done_policy() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        task_prompt="我渴了，帮我找些解渴的东西",
+        public_acceptance_config={"task_intent_mode": "custom"},
+    )
+    observation = _first_non_empty_observation(contract)
+    assert observation["visible_object_detections"]
+
+    done = contract.done("legacy custom-mode task finished")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    readiness = contract.evaluate_done_readiness()
+    assert readiness["task_intent"] == "cleanup"
+    assert readiness["task_intent_mode"] == "default_cleanup"
+    _assert_no_forbidden_keys(done)
+
+
 def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     detection = _confirm_world_label_detection(
