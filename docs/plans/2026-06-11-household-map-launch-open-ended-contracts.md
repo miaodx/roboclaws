@@ -1829,3 +1829,55 @@ Remaining before this plan can be marked done:
   tests, skills, and historical docs;
 - finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
   any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Canonical `agent::run` Dispatch Targets
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 3 private-dispatch slice:
+
+- made `just agent::run` reject raw legacy dispatch targets
+  `household-cleanup`, `semantic-map-build`, and `molmo-cleanup`;
+- kept canonical maintainer dispatch targets as
+  `household-world.cleanup`, `household-world.map-build`,
+  `household-world.open-ended`, and `planner-proof.planner-proof`;
+- renamed the private lowered route variable in `just/agent.just` to
+  `implementation_task_name`, so remaining legacy strings in that recipe are
+  visibly implementation task/report/artifact identities, not accepted
+  maintainer dispatch targets;
+- updated direct `agent::run` contract tests to call canonical dispatch targets
+  and added a negative regression for raw legacy targets.
+
+Verified this slice:
+
+```bash
+rg -n -U \
+  'agent::run",\s*\n\s*"(household-cleanup|semantic-map-build)|agent::run\s+(household-cleanup|semantic-map-build)|just agent::run (household-cleanup|semantic-map-build)' -- \
+  tests scripts just docs roboclaws skills .github
+.venv/bin/ruff check \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+.venv/bin/ruff format --check \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+```
+
+Observed proof:
+
+- no current test/script/doc grep hit directly calls `agent::run` with raw
+  `household-cleanup` or `semantic-map-build`;
+- direct maintainer dispatch uses canonical launch-shaped targets;
+- remaining `household-cleanup` / `semantic-map-build` hits in `just/agent.just`
+  are now under `implementation_task_name` or artifact/task-name arguments for
+  lower compatibility.
+
+Remaining before this plan can be marked done:
+
+- classify the remaining `household-cleanup` / `semantic-map-build` hits as
+  private implementation ids, artifact paths, fixtures, historical docs, or
+  remaining current-facing drift;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.

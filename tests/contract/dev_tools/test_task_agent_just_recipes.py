@@ -1175,7 +1175,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
 
 def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     route = trace_agent_run(
-        "household-cleanup",
+        "household-world.cleanup",
         "mcp-smoke",
         "camera-grounded-labels",
         "camera_labeler=fake-http",
@@ -1246,6 +1246,14 @@ def test_agent_run_rejects_public_map_mode_override() -> None:
     )
 
     assert "map_mode is no longer a public agent::run override" in stderr
+
+
+@pytest.mark.parametrize("dispatch_target", ("household-cleanup", "semantic-map-build"))
+def test_agent_run_rejects_legacy_household_dispatch_targets(dispatch_target: str) -> None:
+    stderr = assert_agent_run_fails(dispatch_target, "direct-runner", "world-oracle-labels")
+
+    assert f"unsupported dispatch target '{dispatch_target}'" in stderr
+    assert "household-world.cleanup|household-world.map-build" in stderr
 
 
 def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
@@ -1395,8 +1403,8 @@ def test_household_cleanup_routes_agibot_backend_override_to_cleanup_pilot_cli()
 
 def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() -> None:
     route = trace_agent_run(
-        "household-cleanup",
-        "direct",
+        "household-world.cleanup",
+        "direct-runner",
         "world-oracle-labels",
         "backend=agibot_molmospaces_sim",
         "context_json=tests/fixtures/agibot_robot_map_9_context.completed.json",
@@ -1436,8 +1444,8 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
 
 def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehardware() -> None:
     route = trace_agent_run(
-        "semantic-map-build",
-        "direct",
+        "household-world.map-build",
+        "direct-runner",
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "run_dir=output/agibot/molmospaces-sim/map-build-test",
@@ -1467,8 +1475,8 @@ def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehard
 
 def test_semantic_map_build_agibot_sim_defaults_camera_labeler_for_public_facade() -> None:
     route = trace_agent_run(
-        "semantic-map-build",
-        "direct",
+        "household-world.map-build",
+        "direct-runner",
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "runtime=fixture",
@@ -1482,8 +1490,8 @@ def test_semantic_map_build_agibot_sim_defaults_camera_labeler_for_public_facade
 
 def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
     stderr = assert_agent_run_fails(
-        "household-cleanup",
-        "direct",
+        "household-world.cleanup",
+        "direct-runner",
         "world-oracle-labels",
         "backend=agibot_molmospaces_sim",
         "seeds=1 2",

@@ -40,22 +40,26 @@ run dispatch_target agent_engine mode="" *overrides:
     dispatch_intent="${dispatch_target##*.}"
     case "$dispatch_target" in
       household-world.cleanup)
-        task="household-cleanup"
+        implementation_task_name="household-cleanup"
         ;;
       household-world.map-build)
-        task="semantic-map-build"
+        implementation_task_name="semantic-map-build"
         ;;
       household-world.open-ended)
-        task="household-cleanup"
+        implementation_task_name="household-cleanup"
         if ! has_raw_override_key task_intent; then
           raw_overrides+=("task_intent=open-ended")
         fi
         ;;
       planner-proof.planner-proof)
-        task="molmo-planner-proof"
+        implementation_task_name="molmo-planner-proof"
+        ;;
+      household-cleanup|semantic-map-build|molmo-cleanup)
+        echo "error: unsupported dispatch target '$dispatch_target' (expected household-world.cleanup|household-world.map-build|household-world.open-ended|planner-proof.planner-proof)" >&2
+        exit 1
         ;;
       *)
-        task="$dispatch_target"
+        implementation_task_name="$dispatch_target"
         ;;
     esac
     case "$agent_engine" in
@@ -207,11 +211,7 @@ run dispatch_target agent_engine mode="" *overrides:
       done
     }
 
-    if [[ "$task" == "molmo-cleanup" ]]; then
-      task="household-cleanup"
-    fi
-
-    if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
+    if [[ "$implementation_task_name" == "household-cleanup" || "$implementation_task_name" == "semantic-map-build" ]]; then
       profile="${mode:-$(get profile "$(get evidence_lane world-oracle-labels)")}"
       case "$profile" in
         smoke|world-oracle-labels|world-public-labels|camera-raw-fpv|camera-grounded-labels)
@@ -234,7 +234,7 @@ run dispatch_target agent_engine mode="" *overrides:
     fi
 
     report_rerun_parts=("just" "run::surface")
-    case "$task" in
+    case "$implementation_task_name" in
       semantic-map-build)
         report_rerun_parts+=("surface=household-world" "intent=map-build")
         ;;
@@ -268,7 +268,7 @@ run dispatch_target agent_engine mode="" *overrides:
         report_rerun_parts+=("agent_engine=script-runner")
         ;;
     esac
-    if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
+    if [[ "$implementation_task_name" == "household-cleanup" || "$implementation_task_name" == "semantic-map-build" ]]; then
       if [[ "$profile" == "smoke" ]]; then
         report_rerun_parts+=("run_preset=smoke" "evidence_lane=world-oracle-labels")
       else
@@ -282,7 +282,7 @@ run dispatch_target agent_engine mode="" *overrides:
     done
     export ROBOCLAWS_REPORT_RERUN_COMMAND="$(shell_join "${report_rerun_parts[@]}")"
 
-    case "$task:$driver" in
+    case "$implementation_task_name:$driver" in
       semantic-map-build:direct|semantic-map-build:codex|household-cleanup:direct|household-cleanup:mcp-smoke|\
       household-cleanup:codex|household-cleanup:claude|household-cleanup:openai-agents-live|household-cleanup:openclaw)
         case "$driver" in
@@ -302,30 +302,30 @@ run dispatch_target agent_engine mode="" *overrides:
             impl_driver="openclaw-live"
             ;;
         esac
-        if [[ "$task" == "semantic-map-build" && "$driver" != "direct" && "$driver" != "codex" ]]; then
+        if [[ "$implementation_task_name" == "semantic-map-build" && "$driver" != "direct" && "$driver" != "codex" ]]; then
           echo "error: household-world.map-build currently supports direct-runner or codex-cli only" >&2
           exit 1
         fi
 
         case "$profile" in
           world-oracle-labels)
-            default_output_dir="output/household/${task}/${driver}-report"
+            default_output_dir="output/household/${implementation_task_name}/${driver}-report"
             ;;
           smoke)
-            default_output_dir="output/household/${task}/${driver}-smoke"
+            default_output_dir="output/household/${implementation_task_name}/${driver}-smoke"
             ;;
           *)
-            default_output_dir="output/household/${task}/${driver}-${profile}"
+            default_output_dir="output/household/${implementation_task_name}/${driver}-${profile}"
             ;;
         esac
-        if [[ "$task" == "household-cleanup" && "$driver" == "direct" && "$profile" == "world-oracle-labels" ]]; then
+        if [[ "$implementation_task_name" == "household-cleanup" && "$driver" == "direct" && "$profile" == "world-oracle-labels" ]]; then
           default_seeds="1 2 3"
         else
           default_seeds="7"
         fi
         seeds="$(get seeds "$(get seed "$default_seeds")")"
         output_dir="$(get output_dir "$default_output_dir")"
-        if [[ "$task" == "semantic-map-build" ]]; then
+        if [[ "$implementation_task_name" == "semantic-map-build" ]]; then
           prompt="$(semantic_map_prompt)"
         else
           prompt="$(cleanup_prompt)"
@@ -393,7 +393,7 @@ run dispatch_target agent_engine mode="" *overrides:
         esac
         visual_grounding_timeout_s="$(get visual_grounding_timeout_s "$(get visual_grounding_timeout auto)")"
         semantic_sweep="$(get semantic_sweep off)"
-        if [[ "$task" == "semantic-map-build" ]]; then
+        if [[ "$implementation_task_name" == "semantic-map-build" ]]; then
           semantic_sweep="on"
         fi
         map_mode="$(get map_mode minimal)"
@@ -408,7 +408,7 @@ run dispatch_target agent_engine mode="" *overrides:
         if [[ "$backend" == "agibot_molmospaces_sim" && ! -v "kv[seeds]" && ! -v "kv[seed]" ]]; then
           seeds="7"
         fi
-        if [[ "$task" == "semantic-map-build" && "$driver" == "codex" ]]; then
+        if [[ "$implementation_task_name" == "semantic-map-build" && "$driver" == "codex" ]]; then
           case "$backend" in
             agibot_gdk|auto|molmospaces_subprocess|isaaclab_subprocess)
               ;;
@@ -424,7 +424,7 @@ run dispatch_target agent_engine mode="" *overrides:
             exit 1
           fi
           default_rehearsal_mode="contract"
-          if [[ "$task" == "household-cleanup" ]]; then
+          if [[ "$implementation_task_name" == "household-cleanup" ]]; then
             default_rehearsal_mode="cleanup-actions"
           fi
           rehearsal_mode="$(get rehearsal_mode "$default_rehearsal_mode")"
@@ -457,7 +457,7 @@ run dispatch_target agent_engine mode="" *overrides:
             --generated-mess-count "$generated_mess_count"
             --runtime "$runtime"
             --flow prehardware
-            --task-name "$task"
+            --task-name "$implementation_task_name"
             --profile "$profile"
             --task-prompt "$prompt"
             --rehearsal-mode "$rehearsal_mode"
@@ -512,7 +512,7 @@ run dispatch_target agent_engine mode="" *overrides:
         fi
         if [[ "$backend" == "agibot_gdk" ]]; then
           context_json="$(get context_json "")"
-          if [[ "$task" == "semantic-map-build" && "$driver" == "codex" ]]; then
+          if [[ "$implementation_task_name" == "semantic-map-build" && "$driver" == "codex" ]]; then
             if [[ -z "$context_json" ]]; then
               echo "error: backend=agibot_gdk household-world.map-build codex-cli requires context_json=<agibot map context JSON>" >&2
               exit 1
@@ -590,7 +590,7 @@ run dispatch_target agent_engine mode="" *overrides:
                 --kickoff-prompt "$prompt"
                 --backend "$backend"
                 --policy "$policy"
-                --task "$task"
+                --task "$implementation_task_name"
               )
               for arg in "${server_args[@]}"; do
                 runner_args+=("--server-arg=$arg")
@@ -644,7 +644,7 @@ run dispatch_target agent_engine mode="" *overrides:
               --kickoff-prompt "$prompt"
               --backend "$backend"
               --policy "$policy"
-              --task "$task"
+              --task "$implementation_task_name"
             )
             for arg in "${server_args[@]}"; do
               runner_args+=("--server-arg=$arg")
@@ -746,10 +746,10 @@ run dispatch_target agent_engine mode="" *overrides:
           "$map_bundle" "$cleanup_routine" "$robot_views" "$camera_labeler"
           "$visual_grounding_timeout_s" "$semantic_sweep" "$runtime_map_prior" "$backend"
           "$map_mode" "$scene_source" "$scene_index" "$isaac_scene_usd_path"
-          "$min_generated_mess_count" "$generated_mess_object_ids" "$task"
+          "$min_generated_mess_count" "$generated_mess_object_ids" "$implementation_task_name"
           "$operator_messages_path"
         )
-        if [[ "$task" == "household-cleanup" || "$resolved_task_intent" == "open-ended" ]]; then
+        if [[ "$implementation_task_name" == "household-cleanup" || "$resolved_task_intent" == "open-ended" ]]; then
           molmo_args+=("$task_intent_mode")
         fi
         ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \
@@ -792,7 +792,7 @@ run dispatch_target agent_engine mode="" *overrides:
         ;;
 
       *)
-        echo "error: unsupported task/driver route '$task:$driver'" >&2
+        echo "error: unsupported task/driver route '$implementation_task_name:$driver'" >&2
         exit 1
         ;;
     esac
