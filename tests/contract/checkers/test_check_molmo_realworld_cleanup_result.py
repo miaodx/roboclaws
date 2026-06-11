@@ -451,7 +451,8 @@ def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
         require_semantic_sweep=True,
         require_minimal_map=True,
     )
-    assert result["agent_view"]["metric_map"]["rooms"] == []
+    assert result["agent_view"]["metric_map"]["rooms"]
+    assert result["agent_view"]["metric_map"]["room_category_hints"]
     assert result["agent_view"]["fixture_hints"]["rooms"] == []
     assert result["runtime_metric_map"]["static_map"]["fixtures"] == []
     assert result["runtime_metric_map"]["generated_exploration_candidates"]
@@ -3843,6 +3844,8 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
 def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Path) -> None:
     scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
     map_id = f"{scenario_id}_minimal_map"
+    public_room = _isaac_scene_index_room()
+    room_category_hints = [_room_category_hint(public_room)]
     map_bundle = {
         "schema": "nav2_map_bundle_v1",
         "environment_id": scenario_id,
@@ -3859,9 +3862,12 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
             "purpose": "minimal_map_exploration",
             "x": 2.99,
             "y": 4.983,
+            "room_id": "room_2",
+            "room_label": "Room 2",
             "candidate_provenance": {
                 "source": "public_occupancy_free_space",
-                "source_room_hidden": True,
+                "source_room_hidden": False,
+                "source_room_label_available": True,
                 "source_fixtures_hidden": True,
                 "source_waypoint_hidden": True,
             },
@@ -3872,9 +3878,12 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
             "purpose": "minimal_map_exploration",
             "x": 7.973,
             "y": 2.512,
+            "room_id": "room_2",
+            "room_label": "Room 2",
             "candidate_provenance": {
                 "source": "public_occupancy_free_space",
-                "source_room_hidden": True,
+                "source_room_hidden": False,
+                "source_room_label_available": True,
                 "source_fixtures_hidden": True,
                 "source_waypoint_hidden": True,
             },
@@ -3884,7 +3893,8 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "schema": "real_robot_map_bundle_v1",
         "mode": "minimal",
         "map_bundle": dict(map_bundle),
-        "rooms": [],
+        "rooms": [public_room],
+        "room_category_hints": room_category_hints,
         "driveable_ways": [],
         "minimal_map": {"enabled": True},
         "inspection_waypoints": list(candidates),
@@ -3896,7 +3906,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "minimal_map_mode": True,
         "static_map": {
             "map_bundle": dict(map_bundle),
-            "rooms": [],
+            "rooms": [public_room],
             "fixtures": [],
             "driveable_ways": [],
             "generated_exploration_candidates": list(candidates),
@@ -3936,7 +3946,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
                 "environment_id": scenario_id,
                 "map_id": map_id,
                 "map_version": "minimal-navigation-map-v1",
-                "rooms": [],
+                "rooms": [public_room],
                 "fixtures": [],
                 "inspection_waypoints": [],
                 "driveable_ways": [],
@@ -3953,6 +3963,22 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
         "artifact_hashes": {"semantics_json": "0" * 64},
+    }
+
+
+def _room_category_hint(room: dict[str, object]) -> dict[str, object]:
+    return {
+        "anchor_type": "room_area",
+        "category": "room_area",
+        "label": str(room["room_label"]),
+        "room_id": str(room["room_id"]),
+        "room_label": str(room["room_label"]),
+        "waypoint_id": "generated_exploration_001",
+        "affordances": ["navigate", "observe"],
+        "classification_status": "map_prior",
+        "confidence": 0.8,
+        "aliases": [str(room["room_id"]), str(room["room_label"])],
+        "producer_type": "base_navigation_map",
     }
 
 

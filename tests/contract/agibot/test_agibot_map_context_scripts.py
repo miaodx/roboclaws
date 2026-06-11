@@ -80,8 +80,10 @@ def test_generate_metric_map_from_minimal_agibot_context(tmp_path: Path) -> None
 
     assert metric_map["schema"] == "real_robot_map_bundle_v1"
     assert metric_map["mode"] == "minimal"
-    assert metric_map["rooms"] == []
-    assert metric_map["minimal_map"]["source_rooms_hidden"] is True
+    assert metric_map["rooms"][0]["room_label"] == "Open office"
+    assert metric_map["room_category_hints"][0]["room_label"] == "Open office"
+    assert metric_map["minimal_map"]["source_rooms_hidden"] is False
+    assert metric_map["minimal_map"]["source_room_labels_visible"] is True
     assert metric_map["minimal_map"]["source_fixtures_hidden"] is True
     assert metric_map["minimal_map"]["generated_candidate_count"] == 3
     assert metric_map["safety_bounds"]["polygon"]
@@ -92,6 +94,7 @@ def test_generate_metric_map_from_minimal_agibot_context(tmp_path: Path) -> None
     assert first_waypoint["purpose"] == "minimal_map_exploration"
     assert first_waypoint["reachability_status"] == "verified"
     assert first_waypoint["candidate_provenance"]["source"] == "public_free_space_sample"
+    assert first_waypoint["room_label"] == "Open office"
     assert "verification" not in first_waypoint
     assert fixture_hints["mode"] == "minimal"
     assert fixture_hints["fixture_hint_mode"] == "minimal_map_no_fixtures"
@@ -329,8 +332,10 @@ def test_sdk_runner_exports_minimal_context_generated_candidates(tmp_path: Path)
     waypoint = agent_view["metric_map"]["inspection_waypoints"][0]
 
     assert agent_view["metric_map"]["mode"] == "minimal"
-    assert agent_view["metric_map"]["rooms"] == []
+    assert agent_view["metric_map"]["rooms"][0]["room_label"] == "Open office"
+    assert agent_view["metric_map"]["room_category_hints"][0]["room_label"] == "Open office"
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
+    assert waypoint["room_label"] == "Open office"
     assert waypoint["reachability_status"] == "verified"
     assert agent_view["fixture_hints"]["fixture_hint_mode"] == "minimal_map_no_fixtures"
     assert run_result["summary"]["generated_exploration_candidates"] == 3
@@ -729,11 +734,40 @@ def _minimal_context() -> dict:
             "max_linear_speed_mps": 0.25,
         },
         "free_space_samples": [
-            {"x": 0.5, "y": 0.0, "yaw": 0.0, "reachability_status": "verified"},
-            {"x": 1.5, "y": 0.8, "yaw": 1.57, "reachability_status": "verified"},
-            {"x": 2.2, "y": 2.0, "yaw": 3.14, "reachability_status": "verified"},
+            {
+                "x": 0.5,
+                "y": 0.0,
+                "yaw": 0.0,
+                "room_id": "open_office",
+                "reachability_status": "verified",
+            },
+            {
+                "x": 1.5,
+                "y": 0.8,
+                "yaw": 1.57,
+                "room_id": "open_office",
+                "reachability_status": "verified",
+            },
+            {
+                "x": 2.2,
+                "y": 2.0,
+                "yaw": 3.14,
+                "room_id": "open_office",
+                "reachability_status": "verified",
+            },
         ],
-        "rooms": [],
+        "rooms": [
+            {
+                "room_id": "open_office",
+                "room_label": "Open office",
+                "polygon": [
+                    {"x": -1.0, "y": -1.0},
+                    {"x": 3.0, "y": -1.0},
+                    {"x": 3.0, "y": 3.0},
+                    {"x": -1.0, "y": 3.0},
+                ],
+            }
+        ],
         "fixtures": [],
         "inspection_waypoints": [],
         "driveable_ways": [],

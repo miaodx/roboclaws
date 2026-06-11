@@ -21,9 +21,10 @@ ADR-0136. The implemented retirement record is
 
 ## Next Action
 
-Review and commit the verified retirement diff, then continue any remaining
-household map/launch/open-ended saturation work from
-`docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`.
+Continue the remaining household map/launch/open-ended saturation work from
+`docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`,
+especially the `task_intent_mode=custom` compatibility removal and the final
+legacy task-id audit.
 
 ## Current Blocker
 

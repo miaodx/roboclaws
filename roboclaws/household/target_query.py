@@ -138,10 +138,13 @@ def _candidate_search_terms(candidate: dict[str, Any]) -> list[str]:
         candidate.get("object_id"),
         candidate.get("candidate_fixture_id"),
         candidate.get("source_fixture_id"),
+        candidate.get("room_id"),
+        candidate.get("room_label"),
         candidate.get("producer_type"),
         candidate.get("producer_id"),
     ]
     values.extend(candidate.get("affordances") or [])
+    values.extend(candidate.get("aliases") or [])
     generated = candidate.get("generated_inspection_candidate")
     if isinstance(generated, dict):
         values.extend(

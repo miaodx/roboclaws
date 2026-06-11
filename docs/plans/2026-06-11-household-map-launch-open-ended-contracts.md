@@ -6,7 +6,8 @@ last_reviewed: 2026-06-11
 accepted_severities:
   - P1
   - P2
-implementation_allowed: false
+implementation_allowed: true
+implementation_note: selected slices are being executed by later intuitive-flow runs
 source:
   - user request to consolidate reduce-entropy directions into one plan file
   - intuitive-reduce-entropy discovery loop
@@ -24,8 +25,9 @@ related_context:
 
 Status: CONTINUE
 
-This is a planning-only discovery artifact. Do not implement from this file
-until a later workflow explicitly selects an execution slice.
+This started as a planning-only discovery artifact. Later `intuitive-flow`
+runs selected and executed bounded slices from this file. Keep `Status:
+CONTINUE` until the saturation stop condition is fully green.
 
 ## Loop Goal
 
@@ -978,6 +980,85 @@ Remaining before this plan can be marked done:
   legacy task-route terminology;
 - finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
   already collapsed to read-only history only.
+
+### 2026-06-11 Public Room Hints In Base Navigation Map
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 1 room-hint saturation slice:
+
+- exposed public `metric_map.rooms`, `room_category_hints`, and public
+  room-to-room driveable ways in Base Navigation Map mode while keeping
+  fixture tables, source inspection waypoint ids, movable-object inventory, and
+  private scoring truth hidden;
+- propagated public room labels into generated exploration waypoints, runtime
+  room-area anchors, Runtime Metric Map target candidates, and
+  `resolve_target_query` search terms so open-ended search can use room priors;
+- added Agibot `navigation_memory.json` conversion and minimal map-context
+  generation support for public room-category hints without treating fixtures
+  as active MCP inputs;
+- updated the checker and active cleanup skill wording from “rooms hidden” to
+  “public room labels may be visible; fixture tables stay hidden.”
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/maps/test_actionable_semantic_map_snapshot.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/agibot/test_agibot_map_context_scripts.py
+uv run ruff check \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/household/realworld_mcp_server.py \
+  roboclaws/household/target_query.py \
+  roboclaws/maps/actionable_snapshot.py \
+  scripts/agibot/generate_metric_map_from_context.py \
+  scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  tests/contract/maps/test_actionable_semantic_map_snapshot.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py \
+  skills/molmo-realworld-cleanup/SKILL.md
+rg -n -F -e 'Minimal map mode hides authored rooms' \
+  -e 'source_room_hidden"] is True' \
+  -e 'metric_map.get("rooms") == []' \
+  -e 'metric_map["rooms"] == []' \
+  -e 'runtime_map["static_map"]["rooms"] == []' -- \
+  roboclaws tests scripts docs/human skills README.md ARCHITECTURE.md
+```
+
+Observed proof:
+
+- Base Navigation Map mode now publishes public room labels and
+  room-category hints while `fixture_hints["rooms"]`, static fixtures, and
+  forbidden private keys remain absent from the active agent view;
+- `resolve_target_query(runtime_map, "kitchen", operation="inspect")` matches
+  an actionable public waypoint through room labels/aliases;
+- Agibot minimal map-context output can carry public room labels without
+  requiring fixture semantics;
+- the final stale-room grep has no hits in the active proof scope. Separate
+  Agibot minimal-context generator assertions still intentionally cover the
+  public-room-label variant.
+
+Current remaining stop-condition failures:
+
+- Candidate 9 is still incomplete: current runtime code still tolerates and
+  branches on `task_intent_mode=custom` / `TASK_INTENT_MODE_CUSTOM` for
+  compatibility;
+- Candidate 3 still has remaining `household-cleanup` /
+  `semantic-map-build` hits that must be classified as private ids, artifacts,
+  historical docs, or current guidance needing another patch;
+- some older execution-log bullets in this file mention the AI2-THOR/direct-VLM
+  retirement as remaining, but `docs/plans/refactor-retire-ai2thor-vlm-direct.md`
+  is now `DONE`; treat those older bullets as superseded by this latest log
+  entry, not as a live blocker.
 
 ### 2026-06-11 Rerun Command Surface Cleanup
 

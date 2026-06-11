@@ -72,6 +72,15 @@ def test_agibot_navigation_memory_converts_to_actionable_snapshot_shape() -> Non
     assert anchors["coffee_table_1"]["actionability"] == "actionable"
     assert anchors["large_white_sofa_1"]["anchor_type"] == "surface"
     assert anchors["kitchen_center"]["anchor_type"] == "room_area"
+    assert anchors["kitchen_center"]["room_label"] == "厨房/吧台区域"
+    assert anchors["kitchen_center"]["materialization"]["waypoint"]["room_label"] == (
+        "厨房/吧台区域"
+    )
+    rooms = {item["room_id"]: item for item in snapshot["runtime_metric_map"]["rooms"]}
+    assert rooms["kitchen_center"]["room_label"] == "厨房/吧台区域"
+    assert rooms["kitchen_center"]["category"] == "kitchen"
+    assert snapshot["runtime_metric_map"]["room_category_hints"][0]["label"] == "厨房/吧台区域"
+    assert snapshot["source_navigation_map"]["room_category_hints"][0]["label"] == ("厨房/吧台区域")
     assert anchors["stone_book_decor_1"]["anchor_type"] == "landmark"
     assert anchors["stone_book_decor_1"]["actionability"] == "needs_review"
 
@@ -178,6 +187,11 @@ def test_converted_snapshot_targets_are_exposed_through_cleanup_receptacle_path(
     assert public_receptacles["anchor_sink_kitchen_1"]["public_fixture_source"] == (
         "runtime_semantic_anchor"
     )
+    runtime_rooms = {
+        item["room_id"]: item
+        for item in contract.agent_view_payload()["runtime_metric_map"]["rooms"]
+    }
+    assert runtime_rooms["kitchen_center"]["room_label"] == "厨房/吧台区域"
 
     work_waypoint = next(
         item

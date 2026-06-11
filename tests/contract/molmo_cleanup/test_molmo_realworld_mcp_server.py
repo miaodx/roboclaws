@@ -283,8 +283,10 @@ def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
         server.close()
 
     assert metric_map["mode"] == MINIMAL_MAP_MODE
-    assert metric_map["rooms"] == []
-    assert metric_map["driveable_ways"] == []
+    assert metric_map["rooms"]
+    assert all(room["room_label"] for room in metric_map["rooms"])
+    assert metric_map["room_category_hints"]
+    assert metric_map["driveable_ways"]
     assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
     assert runtime_map["static_map"]["fixtures"] == []
     assert agent_view["runtime_metric_map"]["map_mode"] == MINIMAL_MAP_MODE

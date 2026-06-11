@@ -113,6 +113,8 @@ def actionable_snapshot_from_agibot_navigation_memory(
             observed_objects.append(_prior_observed_object_from_anchor(anchor))
         elif anchor["materialization"]["fixture_candidate"]["enabled"]:
             fixture_candidates.append(anchor["materialization"]["fixture_candidate"])
+    rooms = _rooms_from_anchors(anchors)
+    room_category_hints = _room_category_hints_from_rooms(rooms)
 
     runtime_metric_map = {
         "schema": RUNTIME_METRIC_MAP_SCHEMA,
@@ -137,6 +139,9 @@ def actionable_snapshot_from_agibot_navigation_memory(
                 "occupancy_grid_artifact": "agibot/occupancy.pgm",
             },
         },
+        "rooms": rooms,
+        "room_category_hints": room_category_hints,
+        "driveable_ways": _driveable_ways(rooms),
         "public_semantic_anchors": anchors,
         "observed_objects": observed_objects,
         "map_update_candidates": [],
@@ -171,6 +176,8 @@ def actionable_snapshot_from_agibot_navigation_memory(
             if (agibot_dir / "raw_map.json.gz").is_file()
             else "",
             "source_json": "agibot/source.json",
+            "rooms": rooms,
+            "room_category_hints": room_category_hints,
             "source_hashes": _source_hashes(
                 navigation_memory_path,
                 nav2_yaml_path,
@@ -276,6 +283,8 @@ def _anchor_from_navigation_memory_item(
             "anchor_id": anchor_id,
             "anchor_type": anchor_type,
             "label": str(item.get("label") or item_id),
+            "room_id": _room_id(item, anchor_type=anchor_type),
+            "room_label": _room_label(item, anchor_type=anchor_type),
             "waypoint_source": "agibot_navigation_memory_conversion",
             "actionability": actionability,
             "reachability_status": reachability["status"],
@@ -300,10 +309,12 @@ def _anchor_from_navigation_memory_item(
         "category": _category(item, anchor_type=anchor_type),
         "label": str(item.get("label") or item_id),
         "room_id": _room_id(item, anchor_type=anchor_type),
+        "room_label": _room_label(item, anchor_type=anchor_type),
         "waypoint_id": waypoint_id,
         "pose": nav_goal,
         "object_pose": object_pose,
         "affordances": affordances,
+        "aliases": [str(alias) for alias in item.get("aliases") or []],
         "producer_type": "agibot_navigation_memory_conversion",
         "producer_id": "navigation_memory.json",
         "confidence": _confidence(item),
@@ -368,6 +379,7 @@ def _fixture_candidate(
         "category": _category(item, anchor_type=anchor_type),
         "name": str(item.get("label") or item.get("id") or anchor_id),
         "room_id": _room_id(item, anchor_type=anchor_type),
+        "room_label": _room_label(item, anchor_type=anchor_type),
         "affordances": list(affordances),
         "preferred_inspection_waypoint_id": waypoint_id,
         "preferred_manipulation_waypoint_id": waypoint_id,
@@ -510,6 +522,16 @@ def _category(item: dict[str, Any], *, anchor_type: str) -> str:
     return anchor_type
 
 
+def _room_label(item: dict[str, Any], *, anchor_type: str) -> str:
+    if anchor_type == "room_area":
+        return str(item.get("label") or item.get("id") or "room area")
+    explicit = str(item.get("room_label") or item.get("room_area") or "").strip()
+    if explicit:
+        return explicit
+    room_id = _room_id(item, anchor_type=anchor_type)
+    return room_id.replace("_", " ")
+
+
 def _room_id(item: dict[str, Any], *, anchor_type: str) -> str:
     if anchor_type == "room_area":
         return _safe_id(str(item.get("id") or "room_area"))
@@ -527,6 +549,91 @@ def _room_id(item: dict[str, Any], *, anchor_type: str) -> str:
     ):
         return "living_area"
     return "agibot_map_area"
+
+
+def _rooms_from_anchors(anchors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rooms: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for anchor in anchors:
+        if str(anchor.get("anchor_type") or "") != "room_area":
+            continue
+        room_id = str(anchor.get("room_id") or "")
+        if not room_id or room_id in seen:
+            continue
+        pose = dict(anchor.get("pose") or {})
+        room_label = str(
+            anchor.get("room_label") or anchor.get("label") or room_id.replace("_", " ")
+        )
+        rooms.append(
+            {
+                "room_id": room_id,
+                "room_label": room_label,
+                "category": _room_category_from_label(room_label, room_id),
+                "map_center": {
+                    "x": float(pose.get("x") or 0.0),
+                    "y": float(pose.get("y") or 0.0),
+                },
+                "polygon": [],
+                "source_anchor_id": str(anchor.get("anchor_id") or ""),
+                "public_room_source": "agibot_navigation_memory_room_area",
+            }
+        )
+        seen.add(room_id)
+    return rooms
+
+
+def _room_category_hints_from_rooms(rooms: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    hints = []
+    for room in rooms:
+        room_id = str(room.get("room_id") or "")
+        room_label = str(room.get("room_label") or room_id.replace("_", " "))
+        if not room_id:
+            continue
+        hints.append(
+            {
+                "anchor_type": "room_area",
+                "category": str(
+                    room.get("category") or _room_category_from_label(room_label, room_id)
+                ),
+                "label": room_label,
+                "room_id": room_id,
+                "room_label": room_label,
+                "affordances": ["navigate", "observe"],
+                "classification_status": "map_prior",
+                "confidence": 0.8,
+                "aliases": [room_id, room_label],
+                "producer_type": "agibot_navigation_memory_conversion",
+            }
+        )
+    return hints
+
+
+def _driveable_ways(rooms: list[dict[str, Any]]) -> list[dict[str, str]]:
+    return [
+        {
+            "from_room_id": str(previous.get("room_id") or ""),
+            "to_room_id": str(current.get("room_id") or ""),
+        }
+        for previous, current in zip(rooms, rooms[1:], strict=False)
+        if previous.get("room_id") and current.get("room_id")
+    ]
+
+
+def _room_category_from_label(room_label: str, room_id: str) -> str:
+    text = f"{room_label} {room_id}".lower()
+    if any(term in text for term in ("kitchen", "dining", "bar", "counter", "厨房", "吧台")):
+        return "kitchen"
+    if any(term in text for term in ("living", "sofa", "lounge", "客厅", "沙发")):
+        return "living_room"
+    if any(term in text for term in ("storage", "store", "utility", "储藏", "库房")):
+        return "storage_room"
+    if any(term in text for term in ("meeting", "conference", "会议")):
+        return "meeting_room"
+    if any(term in text for term in ("bed", "卧室")):
+        return "bedroom"
+    if any(term in text for term in ("bath", "toilet", "卫生间")):
+        return "bathroom"
+    return "room_area"
 
 
 def _affordances(item: dict[str, Any], *, anchor_type: str) -> list[str]:

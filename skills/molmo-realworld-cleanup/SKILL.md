@@ -15,8 +15,9 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 
 1. Call `roboclaws__metric_map()` first.
 2. Treat `inspection_waypoints` as public coverage candidates, not mess hints.
-   In the default Base Navigation Map contract, authored room and fixture labels are hidden:
-   useful destination anchors come from `cleanup_worklist.candidate_fixture_id`,
+   In the default Base Navigation Map contract, public room labels may be visible
+   as search priors, but fixture tables remain hidden: useful destination anchors
+   come from `cleanup_worklist.candidate_fixture_id`,
    `runtime_metric_map.public_semantic_anchors`, `resolve_target_query`, and
    successful tool responses.
    For any named destination, stale fixture id, old label, or open-ended target

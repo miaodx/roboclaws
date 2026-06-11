@@ -158,6 +158,8 @@ def test_realworld_contract_projects_from_selected_prebuilt_bundle() -> None:
 
     assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
     assert metric_map["map_id"] == "molmo-cleanup-default-7_semantic_map"
+    assert metric_map["rooms"]
+    assert all(room["room_label"] for room in metric_map["rooms"])
     assert all(item["visited"] is False for item in waypoints)
     assert fixture_hints["rooms"] == []
     assert waypoints[0]["waypoint_source"] == "generated_exploration_candidate"

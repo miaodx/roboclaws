@@ -119,6 +119,8 @@ def test_realworld_contract_defaults_to_minimal_map_mode() -> None:
 
     assert contract.map_mode == MINIMAL_MAP_MODE
     assert metric_map["mode"] == MINIMAL_MAP_MODE
+    assert metric_map["rooms"]
+    assert all(room["room_label"] for room in metric_map["rooms"])
     assert fixture_hints["rooms"] == []
 
 
@@ -508,7 +510,8 @@ def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
 
     contract = _contract(session)
     metric_map = contract.metric_map()
-    assert metric_map["rooms"] == []
+    assert metric_map["rooms"]
+    assert all(room["room_label"] for room in metric_map["rooms"])
     assert contract.fixture_hints()["rooms"] == []
     assert metric_map["inspection_waypoints"]
     assert all(
@@ -516,7 +519,11 @@ def test_scene_index_backend_public_map_uses_usd_room_outline_scale() -> None:
         for waypoint in metric_map["inspection_waypoints"]
     )
     assert all(
-        waypoint["candidate_provenance"]["source_room_hidden"] is True
+        waypoint["candidate_provenance"]["source_room_hidden"] is False
+        for waypoint in metric_map["inspection_waypoints"]
+    )
+    assert all(
+        waypoint["candidate_provenance"]["source_room_label_available"] is True
         for waypoint in metric_map["inspection_waypoints"]
     )
 
@@ -919,14 +926,17 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     runtime_map = agent_view["runtime_metric_map"]
 
     assert metric_map["mode"] == MINIMAL_MAP_MODE
-    assert metric_map["rooms"] == []
-    assert metric_map["driveable_ways"] == []
+    assert metric_map["rooms"]
+    assert all(room["room_label"] for room in metric_map["rooms"])
+    assert metric_map["room_category_hints"]
+    assert metric_map["driveable_ways"]
     assert fixture_hints["rooms"] == []
     assert waypoint["waypoint_id"].startswith("generated_")
     assert waypoint["waypoint_source"] == "generated_exploration_candidate"
     assert waypoint["candidate_provenance"]["source"] == "public_occupancy_free_space"
     assert waypoint["candidate_provenance"]["source_pose"] == "free_space_sample"
-    assert waypoint["candidate_provenance"]["source_room_hidden"] is True
+    assert waypoint["candidate_provenance"]["source_room_hidden"] is False
+    assert waypoint["candidate_provenance"]["source_room_label_available"] is True
     assert waypoint["candidate_provenance"]["source_fixtures_hidden"] is True
     assert waypoint["candidate_provenance"]["source_waypoint_hidden"] is True
     assert "source_waypoint_id" not in waypoint["candidate_provenance"]
@@ -934,9 +944,10 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     assert observation["visible_object_detections"]
     assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
     assert runtime_map["minimal_map_mode"] is True
-    assert runtime_map["static_map"]["rooms"] == []
+    assert runtime_map["static_map"]["rooms"]
+    assert all(room["room_label"] for room in runtime_map["static_map"]["rooms"])
     assert runtime_map["static_map"]["fixtures"] == []
-    assert runtime_map["static_map"]["driveable_ways"] == []
+    assert runtime_map["static_map"]["driveable_ways"]
     assert runtime_map["generated_exploration_candidates"]
     assert runtime_map["target_candidates"]
     waypoint_candidate = next(
@@ -1084,6 +1095,7 @@ def test_target_query_recovery_resolves_stale_fixture_id_through_public_anchor()
 
     runtime_map = contract.agent_view_payload()["runtime_metric_map"]
     direct = resolve_target_query(runtime_map, "sink_01", operation="destination")
+    room_query = resolve_target_query(runtime_map, "kitchen", operation="inspect")
     tool = contract.resolve_target_query("sink_01", operation="destination")
 
     assert direct["status"] == "matched"
@@ -1094,6 +1106,10 @@ def test_target_query_recovery_resolves_stale_fixture_id_through_public_anchor()
         "navigate_to_waypoint",
         "navigate_to_receptacle",
     }
+    assert room_query["status"] == "matched"
+    assert room_query["best_match"]["waypoint_id"]
+    assert room_query["best_match"]["actionable_for_operation"] is True
+    assert any("kitchen" in basis for basis in room_query["best_match"]["match_basis"])
     assert direct["public_search_budget"]["viewpoint_budget"]["unvisited_waypoint_count"] == 0
     assert tool["ok"] is True
     assert tool["schema"] == "target_query_resolution_v1"
@@ -1187,7 +1203,8 @@ def test_minimal_map_mode_keeps_public_waypoint_after_receptacle_navigation() ->
 
     assert navigation["ok"] is True
     assert post_nav_map["robot_pose"]["waypoint_id"].startswith("generated_exploration_")
-    assert post_nav_map["robot_pose"]["room_id"] == "generated_area"
+    assert post_nav_map["robot_pose"]["room_id"]
+    assert post_nav_map["robot_pose"]["room_id"] != "generated_area"
     assert post_nav_map["robot_pose"]["waypoint_id"] in {
         str(item["waypoint_id"]) for item in post_nav_map["inspection_waypoints"]
     }

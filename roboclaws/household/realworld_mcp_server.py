@@ -387,7 +387,7 @@ class RealWorldMolmoCleanupMCPServer:
         if tool == "fixture_hints":
             if self.contract.map_mode == "minimal":
                 augmented["instruction"] = (
-                    "Minimal map mode hides authored rooms and fixture hints. Use "
+                    "Base Navigation Map exposes public room labels but hides fixture hints. Use "
                     "runtime_metric_map.public_semantic_anchors and each observed object's "
                     "cleanup_worklist.candidate_fixture_id as public destination anchors. "
                     "Those anchor_fixture_* ids are valid for navigate_to_receptacle, place, "
