@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import fcntl
 import json
 import os
@@ -19,6 +20,14 @@ from typing import BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
+from roboclaws.agents.provider_timing_proxy import (
+    PROVIDER_TIMING_PROXY_UPSTREAM_ENV,
+    ProviderTimingProxyHandle,
+    provider_timing_proxy_enabled,
+    replace_base_url_origin,
+    start_provider_timing_proxy,
+    stop_provider_timing_proxy,
+)
 from roboclaws.household.report import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_CUSTOM,
@@ -97,6 +106,7 @@ class LiveClaudeCleanupRunner:
         self.timing_path = self.run_dir / "live_timing.json"
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
+        self.provider_timing_proxy: ProviderTimingProxyHandle | None = None
         self.lock_file = None
         self.visual_slot: VisualBackendSlotLease | None = None
         self.live_timing: dict[str, object] = {
@@ -122,6 +132,7 @@ class LiveClaudeCleanupRunner:
         except KeyboardInterrupt:
             self._write_status("failed", 130)
             self._write_live_timing("failed", 130, reason="keyboard_interrupt")
+            self._cleanup_provider_timing_proxy()
             self._cleanup_server()
             self._release_visual_slot()
             return 130
@@ -129,6 +140,7 @@ class LiveClaudeCleanupRunner:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, **exc.failure.status_fields())
             self._write_live_timing("failed", 1, **exc.failure.status_fields())
+            self._cleanup_provider_timing_proxy()
             self._cleanup_server()
             self._release_visual_slot()
             return 1
@@ -136,12 +148,14 @@ class LiveClaudeCleanupRunner:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
             self._write_live_timing("failed", 1, reason=str(exc))
+            self._cleanup_provider_timing_proxy()
             self._cleanup_server()
             self._release_visual_slot()
             return 1
 
         self._write_live_timing("finished", 0)
         self._write_status("finished", 0)
+        self._cleanup_provider_timing_proxy()
         self._release_visual_slot()
         return 0
 
@@ -256,6 +270,7 @@ class LiveClaudeCleanupRunner:
             if not sep:
                 raise RuntimeError(f"invalid --claude-env value: {item!r}")
             env[key] = value
+        self._configure_provider_timing_proxy(env)
         agent_workspace, agent_task_dir = _prepare_agent_workspace(
             repo_root=self.args.repo_root,
             task_name="household-cleanup",
@@ -367,6 +382,41 @@ class LiveClaudeCleanupRunner:
                 f"Claude Code failed after one live-agent turn: {failure.reason}",
                 failure,
             )
+
+    def _configure_provider_timing_proxy(self, env: dict[str, str]) -> None:
+        if not provider_timing_proxy_enabled(env):
+            self.live_timing["provider_timing_proxy"] = {"enabled": False}
+            return
+        upstream_base_url = env.get(PROVIDER_TIMING_PROXY_UPSTREAM_ENV) or env.get(
+            "ANTHROPIC_BASE_URL",
+            "",
+        )
+        if not upstream_base_url:
+            raise RuntimeError("ROBOCLAWS_PROVIDER_TIMING_PROXY=1 requires ANTHROPIC_BASE_URL")
+        provider_profile = _first_provider_summary_token(self.args.claude_provider_summary)
+        handle = asyncio.run(
+            start_provider_timing_proxy(
+                repo_root=self.args.repo_root,
+                run_dir=self.run_dir,
+                upstream_base_url=upstream_base_url,
+                agent_engine="claude-code",
+                provider_profile=provider_profile,
+                model=_model_from_claude_args(self.args.claude_model_arg),
+            )
+        )
+        proxy_base_url = replace_base_url_origin(upstream_base_url, bind_url=handle.bind_url)
+        env["ANTHROPIC_BASE_URL"] = proxy_base_url
+        env[PROVIDER_TIMING_PROXY_UPSTREAM_ENV] = upstream_base_url
+        self.provider_timing_proxy = handle
+        self.live_timing["provider_timing_proxy"] = {
+            "enabled": True,
+            "agent_engine": "claude-code",
+            "provider_profile": provider_profile,
+            "upstream_base_url": upstream_base_url,
+            "bind_url": handle.bind_url,
+            "client_base_url": proxy_base_url,
+            "metrics_path": str(handle.metrics_path),
+        }
 
     def _wait_for_server_finish(self) -> None:
         assert self.server_proc is not None
@@ -489,6 +539,14 @@ class LiveClaudeCleanupRunner:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
+
+    def _cleanup_provider_timing_proxy(self) -> None:
+        if self.provider_timing_proxy is None:
+            return
+        try:
+            asyncio.run(stop_provider_timing_proxy(self.provider_timing_proxy.process))
+        finally:
+            self.provider_timing_proxy = None
 
     def _write_status(
         self,
@@ -789,6 +847,17 @@ def _run_id_from_run_dir(run_dir: Path) -> str:
     if parent:
         return f"{parent}/{name}"
     return name
+
+
+def _model_from_claude_args(args: list[str]) -> str:
+    for index, item in enumerate(args):
+        if item == "--model" and index + 1 < len(args):
+            return args[index + 1]
+    return ""
+
+
+def _first_provider_summary_token(summary: str) -> str:
+    return summary.split(" ", 1)[0] if summary and summary != "system defaults" else ""
 
 
 if __name__ == "__main__":

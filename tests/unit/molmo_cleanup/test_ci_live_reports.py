@@ -389,6 +389,68 @@ def test_live_claude_writes_live_timing_and_model_call_metrics(tmp_path: Path) -
     assert rows[0]["input_tokens"] == 100
 
 
+def test_live_claude_provider_timing_proxy_rewrites_anthropic_base_url(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "runner.lock",
+        claude_bin="claude",
+        claude_provider_summary="mimo-anthropic model=mimo-v2.5",
+        kickoff_prompt="clean the room",
+        backend="molmospaces_subprocess",
+        policy="claude_agent",
+        task="帮我收拾这个房间",
+        min_generated_mess_count="5",
+        profile="world-oracle-labels",
+        server_arg=[],
+        claude_model_arg=["--model", "mimo-v2.5"],
+        claude_env=["ANTHROPIC_BASE_URL=https://provider.example.test/anthropic"],
+        checker_visual_arg=[],
+    )
+    runner = run_claude.LiveClaudeCleanupRunner(args)
+    env = {"ROBOCLAWS_PROVIDER_TIMING_PROXY": "1"}
+
+    async def fake_start_provider_timing_proxy(**kwargs):
+        return SimpleNamespace(
+            bind_url="http://127.0.0.1:18888",
+            upstream_base_url=kwargs["upstream_base_url"],
+            metrics_path=run_dir / "provider_request_metrics.jsonl",
+            ready_path=run_dir / "provider_timing_proxy.ready.json",
+            process=SimpleNamespace(returncode=0),
+        )
+
+    monkeypatch.setattr(
+        run_claude,
+        "start_provider_timing_proxy",
+        fake_start_provider_timing_proxy,
+    )
+
+    for item in args.claude_env:
+        key, _sep, value = item.partition("=")
+        env[key] = value
+    runner._configure_provider_timing_proxy(env)
+
+    assert env["ANTHROPIC_BASE_URL"] == "http://127.0.0.1:18888/anthropic"
+    assert env["ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL"] == (
+        "https://provider.example.test/anthropic"
+    )
+    assert runner.live_timing["provider_timing_proxy"]["enabled"] is True
+    assert runner.live_timing["provider_timing_proxy"]["provider_profile"] == "mimo-anthropic"
+    assert runner.live_timing["provider_timing_proxy"]["metrics_path"].endswith(
+        "provider_request_metrics.jsonl"
+    )
+
+
 def test_live_claude_workspace_exposes_skill_at_task_relative_path(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -608,6 +670,7 @@ def test_live_codex_prompts_block_plan_tool() -> None:
     assert "mcp__roboclaws__" in prompt
     assert "roboclaws__" in prompt
     assert "use place_inside for" in prompt
+    assert "call close_receptacle with the same fixture_id" in prompt
     assert "required_tool next" in prompt
 
 
@@ -686,6 +749,66 @@ def test_live_codex_idle_turn_fails_without_continuation(tmp_path: Path, monkeyp
     assert calls[0][1] == 3.0
     assert "Continue the same active cleanup MCP session" not in calls[0][0][-1]
     assert "codex_recoverable_errors" not in runner.live_timing
+
+
+def test_live_codex_provider_timing_proxy_rewrites_provider_base_url(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        codex_bin="codex",
+        codex_model="gpt-5.5",
+        codex_provider_summary="codex-env model=gpt-5.5",
+        kickoff_prompt="clean",
+        codex_model_arg=[
+            "-c",
+            'model="gpt-5.5"',
+            "-c",
+            'model_provider="codex-env"',
+            "-c",
+            'model_providers.codex-env.base_url="https://provider.example.test/v1"',
+            "-c",
+            'model_providers.codex-env.wire_api="responses"',
+        ],
+        backend="molmospaces_subprocess",
+        policy="codex_agent",
+        profile="world-oracle-labels",
+    )
+    runner = run_codex.LiveCodexCleanupRunner(args)
+    env = {"ROBOCLAWS_PROVIDER_TIMING_PROXY": "1"}
+
+    async def fake_start_provider_timing_proxy(**kwargs):
+        return SimpleNamespace(
+            bind_url="http://127.0.0.1:18888",
+            upstream_base_url=kwargs["upstream_base_url"],
+            metrics_path=run_dir / "provider_request_metrics.jsonl",
+            ready_path=run_dir / "provider_timing_proxy.ready.json",
+            process=SimpleNamespace(returncode=0),
+        )
+
+    monkeypatch.setattr(
+        run_codex,
+        "start_provider_timing_proxy",
+        fake_start_provider_timing_proxy,
+    )
+
+    runner._configure_provider_timing_proxy(env)
+
+    assert 'model_providers.codex-env.base_url="http://127.0.0.1:18888/v1"' in (
+        runner.args.codex_model_arg
+    )
+    assert env["ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL"] == "https://provider.example.test/v1"
+    assert env["ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS"] == "1"
+    assert runner.live_timing["provider_timing_proxy"]["enabled"] is True
+    assert runner.live_timing["provider_timing_proxy"]["provider_profile"] == "codex-env"
+    assert runner.live_timing["provider_timing_proxy"]["responses_websockets_disabled"] is True
 
 
 def test_live_codex_tool_binding_failure_is_non_retryable(tmp_path: Path, monkeypatch) -> None:

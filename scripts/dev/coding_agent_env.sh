@@ -282,7 +282,11 @@ roboclaws_codex_provider_args() {
 
 roboclaws_codex_transport_args() {
   local -n _codex_transport_out_args="$1"
-  case "${ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS:-0}" in
+  local disable_value="${ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS:-0}"
+  if [[ "${ROBOCLAWS_PROVIDER_TIMING_PROXY:-0}" =~ ^(1|true|yes|on)$ ]] && [[ -z "${ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS+x}" ]]; then
+    disable_value="1"
+  fi
+  case "${disable_value}" in
     1|true|yes)
       _codex_transport_out_args+=(--disable responses_websockets)
       _codex_transport_out_args+=(--disable responses_websockets_v2)

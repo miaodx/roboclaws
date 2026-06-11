@@ -51,6 +51,10 @@ CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODEX_MODEL",
     "ROBOCLAWS_CLAUDE_MODEL",
     "ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS",
+    "ROBOCLAWS_PROVIDER_TIMING_PROXY",
+    "ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL",
+    "ROBOCLAWS_TIMING_PROXY_BIND_HOST",
+    "ROBOCLAWS_TIMING_PROXY_BIND_PORT",
     "KIMI_API_KEY",
     "MIMO_TP_KEY",
     "OPENAI_API_KEY",
@@ -2323,6 +2327,36 @@ def test_coding_agent_codex_can_disable_responses_websockets() -> None:
     ]
 
 
+def test_coding_agent_codex_provider_timing_proxy_disables_responses_websockets() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            ROBOCLAWS_PROVIDER_TIMING_PROXY=1
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "--disable" in result.stdout.splitlines()
+    assert "responses_websockets" in result.stdout.splitlines()
+    assert 'model_providers.codex-env.wire_api="responses"' in result.stdout.splitlines()
+
+
 def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
@@ -2580,6 +2614,10 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "XM_LLM_BASE_URL" in molmo_text
     assert "XM_LLM_API_KEY" in docker_text
     assert "XM_LLM_BASE_URL" in docker_text
+    assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in docker_text
+    assert "ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL" in docker_text
+    assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in molmo_text
+    assert "ROBOCLAWS_TIMING_PROXY_BIND_PORT" in molmo_text
     assert "*self.args.codex_model_arg" in runner_text
     assert "codex_provider_summary" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text

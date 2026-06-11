@@ -1,6 +1,6 @@
 ---
 plan_scope: coding-agent-provider-timing-proxy
-status: DRAFT
+status: IMPLEMENTED
 created: 2026-06-11
 last_reviewed: 2026-06-11
 source:
@@ -50,6 +50,86 @@ Rationale:
 
 Mitmproxy remains acceptable as an ad-hoc local debugging tool, but it is not
 the planned default or report artifact producer.
+
+## Review Route
+
+Reviewed on 2026-06-11 through `intuitive-flow` inline autoplan precheck. This
+checkout does not expose a noninteractive `gstack-autoplan` executable, so the
+plan keeps the already accepted direction and grill decisions as the execution
+contract.
+
+Scope changes from precheck: none. The first implementation remains opt-in,
+privacy-safe provider HTTP timing for Codex CLI and Claude Code live cleanup
+runs, with aggregate report extraction and explicit local-live validation gates.
+
+## Implementation Status
+
+Implemented on 2026-06-11 through `intuitive-flow`.
+
+Shipped shape:
+
+- `ROBOCLAWS_PROVIDER_TIMING_PROXY=1` starts a loopback-only provider timing
+  proxy before Codex CLI or Claude Code live cleanup runs.
+- Codex routes the resolved provider `base_url` through the proxy, keeps
+  `wire_api=responses`, disables Responses WebSocket transport only in proxy
+  mode for HTTP observability, and records that in `live_timing.json`.
+- Claude Code routes `ANTHROPIC_BASE_URL` through the same proxy contract.
+- The proxy writes sanitized `provider_request_metrics.jsonl` rows with scalar
+  timing, byte counts, status codes, and safe upstream request ids only.
+- Report extraction reads the provider artifact, exposes aggregate provider
+  HTTP timing separately from `observed_model_api_s`, and adds explicit
+  limitations for aggregate-only transport timing and non-compute timing.
+
+Validation evidence:
+
+- Deterministic tests:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/reports/test_live_performance.py tests/unit/agents/test_provider_timing_proxy.py tests/unit/molmo_cleanup/test_ci_live_reports.py`
+  passed with 40 tests.
+- Integration route tests:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`
+  passed with 119 tests.
+- Lint/format:
+  `.venv/bin/ruff check` and `.venv/bin/ruff format --check` passed for the
+  touched Python files; `bash -n scripts/dev/coding_agent_docker.sh scripts/dev/coding_agent_env.sh`
+  passed for shell wiring.
+- Validation Matrix:
+  `output/agent-validation-matrix/20260611T131715Z/validation_matrix.json`
+  recorded four required passing gates: route-trace contract tests, cleanup
+  policy/semantic-loop tests, direct-runner household product gate, and Codex
+  cleanup world-oracle gate.
+- Codex proxy live gate:
+  `output/provider-timing-proxy/codex-proxy-rerun/0611_2055/seed-7`
+  finished with exit 0, cleanup success, 14/14 sweep coverage, 5/5 semantic
+  acceptability, 68 provider metric rows, and 361.167s aggregate provider HTTP
+  duration.
+- Claude proxy live gate:
+  `output/provider-timing-proxy/claude-proxy/0611_2105/seed-7`
+  finished with exit 0, cleanup success, 14/14 sweep coverage, 5/5 semantic
+  acceptability, 90 provider metric rows, and 401.994s aggregate provider HTTP
+  duration.
+- Report extraction:
+  `scripts/reports/extract_live_report_metrics.py --write-model-call-metrics`
+  over both proxy run dirs produced `provider_request_count`,
+  `provider_http_duration_s`, `provider_http_time_to_first_byte_s`,
+  `provider_http_stream_duration_s`, `provider_http_status_counts`, and
+  `provider_http_limitations`.
+- Privacy scan:
+  both proxy metric files had zero matches for authorization headers,
+  key-shaped values, prompt phrases, tool payload phrases, body JSON markers,
+  and repo-local `.env` secret values. The only body-related fields were scalar
+  byte counts: `request_body_bytes` and `response_body_bytes`.
+- Codex overhead check:
+  the proxy Codex run above was compared with the same-day no-proxy Codex
+  Validation Matrix run
+  `output/agent-validation-matrix/20260611T131715Z/gates/codex-cleanup-world-oracle/run/0611_2118/seed-7`.
+  Both reached the same success bar. The proxy run wall time was 480.599s;
+  the no-proxy run wall time was 594.426s. This sample shows no material proxy
+  overhead, but it remains diagnostic run-to-run evidence rather than a
+  statistically stable benchmark.
+
+Remaining follow-up: proxy mode stays opt-in. Making it default-on, persisting
+body-derived request mappings, or claiming provider-internal compute time still
+requires a separate decision.
 
 ## Grill Batch 1 Decisions
 
@@ -348,7 +428,7 @@ Manual acceptance checks:
 
 ## Preflight Contract
 
-Preflight status: `DRAFT`
+Preflight status: `ACCEPTED`
 
 Task source: plan path plus user request.
 
