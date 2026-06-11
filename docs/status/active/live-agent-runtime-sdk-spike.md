@@ -3,15 +3,16 @@
 Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 
 Current slice: Agent SDK performance optimization, Group 0 matrix foundation,
-and Candidate A skill-context parity for the private `openai-agents-live`
-route.
+Candidate A skill-context parity, and Candidate G/J deterministic settings
+attribution for the private `openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
-skill-context proof was accepted on 2026-06-11. The full live provider/model x
-evidence-lane performance matrix is not done; it remains parked pending explicit
-live-run approval, credentials/backend availability, and budget
-acknowledgement. The follow-up execution plan is
+skill-context proof and Candidate G/J deterministic settings/cache attribution
+were accepted on 2026-06-11. The full live provider/model x evidence-lane
+performance matrix is not done; it remains parked pending explicit live-run
+approval, credentials/backend availability, and budget acknowledgement. The
+follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -68,6 +69,11 @@ Result:
   `openai-agents-skill-context.json` metadata and `live_timing.json`
   `agent_sdk_skill_context` summary fields such as path, hash, byte counts,
   truncation state, and estimated tokens.
+- Candidate G/J now makes SDK `ModelSettings` and `RunConfig` explicit for the
+  private route, including trace privacy config, tool-call policy, truncation /
+  usage settings by wire API, prompt-cache retention policy where applicable,
+  and stable-prefix hash attribution in timing/cache summaries. This is
+  deterministic attribution only, not a live speedup claim.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -129,6 +135,9 @@ Verification:
 - `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 
 No-touch scope preserved:
 
@@ -139,6 +148,8 @@ No-touch scope preserved:
   observability artifacts.
 - Do not persist the SDK skill-context body in events, timing, status, or trace
   artifacts; only metadata/hash/size summaries are allowed.
+- Do not claim a settings/cache speedup from Candidate G/J until provider-backed
+  baseline and candidate rows exist under the live approval gate.
 
 Parked work:
 
@@ -146,6 +157,9 @@ Parked work:
   `docs/plans/live-agent-runtime-sdk-perf-followups.md`:
   - Candidate A skill parity is accepted; keep its metadata/privacy guard and
     optionally run live A/B only after live approval/budget/backend gates pass.
+  - Candidate G/J deterministic settings/cache attribution is accepted; live
+    A/B speed proof remains gated on explicit approval, credentials/backend
+    availability, and budget acknowledgement.
   - Full provider/model x evidence-lane matrix before new speed claims.
   - Optional per-model-call racing inside the SDK model interface, only with
     per-arm cache/cost telemetry and explicit live-run approval.

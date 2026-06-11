@@ -133,7 +133,7 @@ def _run_openai_agents(
     skill_context_path: Path,
 ) -> Any:
     try:
-        from agents import Agent, Runner  # type: ignore[import-not-found]
+        from agents import Agent, ModelSettings, RunConfig, Runner  # type: ignore[import-not-found]
         from agents.mcp import MCPServerStreamableHttp  # type: ignore[import-not-found]
     except ImportError:
         raise
@@ -150,6 +150,10 @@ def _run_openai_agents(
         mcp_client_session_timeout_configured=timeout_configured,
         mcp_client_session_timeout_s=timeout_s,
     )
+    model_settings_payload = _sdk_model_settings_payload(request)
+    run_config_payload = _sdk_run_config_payload(request)
+    model_settings = ModelSettings(**model_settings_payload)
+    run_config = RunConfig(model_settings=model_settings, **run_config_payload)
     server_kwargs: dict[str, Any] = {
         "name": request.mcp_server.name,
         "params": {"url": request.mcp_server.url},
@@ -173,6 +177,7 @@ def _run_openai_agents(
             )
         },
         "model": model,
+        "model_settings": model_settings,
     }
     agent = Agent(**agent_kwargs)
     events_path.parent.mkdir(parents=True, exist_ok=True)
@@ -210,8 +215,15 @@ def _run_openai_agents(
 
     try:
         if hasattr(server, "__aenter__"):
-            return _run_with_async_mcp_server(server, agent, request, events_path)
+            return _run_with_async_mcp_server(
+                server,
+                agent,
+                request,
+                events_path,
+                run_config=run_config,
+            )
         runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
+        runner_kwargs["run_config"] = run_config
         result = Runner.run_sync(agent, request.kickoff_prompt, **runner_kwargs)
         _append_event(
             events_path,
@@ -242,6 +254,8 @@ def _run_with_async_mcp_server(
     agent: Any,
     request: LiveAgentRequest,
     events_path: Path,
+    *,
+    run_config: Any,
 ) -> Any:
     import asyncio
 
@@ -249,7 +263,10 @@ def _run_with_async_mcp_server(
         from agents import Runner  # type: ignore[import-not-found]
 
         async with server:
-            runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
+            runner_kwargs: dict[str, Any] = {
+                "max_turns": _max_turns(request),
+                "run_config": run_config,
+            }
             result = await Runner.run(agent, request.kickoff_prompt, **runner_kwargs)
         _append_event(
             events_path,
@@ -307,6 +324,70 @@ def _write_skill_context_summary(path: Path, summary: dict[str, Any]) -> None:
     _write_json(path, _drop_empty(payload))
 
 
+def _sdk_model_settings_payload(request: LiveAgentRequest) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    configured = profile.get("sdk_model_settings") if isinstance(profile, dict) else None
+    if not isinstance(configured, dict):
+        configured = metadata.get("sdk_model_settings")
+    if isinstance(configured, dict):
+        return _drop_empty(_to_jsonable(configured))
+    settings = _safe_model_settings(request)
+    provider_profile = str(settings.get("provider_profile") or request.provider_profile or "")
+    wire_api = str(settings.get("wire_api") or "")
+    profile_id = str(profile.get("profile_id") if isinstance(profile, dict) else "baseline")
+    return _default_sdk_model_settings_payload(
+        provider_profile=provider_profile,
+        wire_api=wire_api,
+        profile_id=profile_id,
+    )
+
+
+def _sdk_run_config_payload(request: LiveAgentRequest) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    configured = profile.get("sdk_run_config") if isinstance(profile, dict) else None
+    if not isinstance(configured, dict):
+        configured = metadata.get("sdk_run_config")
+    allowed = {"trace_include_sensitive_data", "workflow_name", "trace_metadata"}
+    if not isinstance(configured, dict):
+        configured = _default_sdk_run_config_payload()
+    return {
+        key: value for key, value in _drop_empty(_to_jsonable(configured)).items() if key in allowed
+    }
+
+
+def _default_sdk_model_settings_payload(
+    *,
+    provider_profile: str,
+    wire_api: str,
+    profile_id: str,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+    }
+    if wire_api == "chat-completions":
+        payload["include_usage"] = True
+    else:
+        payload.update(
+            {
+                "truncation": "auto",
+                "store": False,
+            }
+        )
+        if provider_profile == "codex-env" and profile_id != "baseline":
+            payload["prompt_cache_retention"] = "in_memory"
+    return payload
+
+
+def _default_sdk_run_config_payload() -> dict[str, Any]:
+    return {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
+
+
 def _max_turns(request: LiveAgentRequest) -> int:
     if request.max_turns is not None:
         return request.max_turns
@@ -356,6 +437,8 @@ def _runtime_config(
 ) -> dict[str, Any]:
     model_retry = _model_service_retry_config(request)
     model_settings = _safe_model_settings(request)
+    sdk_model_settings = _sdk_model_settings_payload(request)
+    sdk_run_config = _sdk_run_config_payload(request)
     return {
         "runtime": "openai-agents-live",
         "provider_profile": model_settings.get("provider_profile") or request.provider_profile,
@@ -372,6 +455,10 @@ def _runtime_config(
         "mcp_client_session_timeout_s": mcp_client_session_timeout_s,
         "model_service_retry_attempts": model_retry["retry_attempts"],
         "model_service_retry_sleep_s": model_retry["retry_sleep_s"],
+        "sdk_model_settings": sdk_model_settings,
+        "sdk_run_config": sdk_run_config,
+        "prompt_cache_retention": sdk_model_settings.get("prompt_cache_retention") or "",
+        "trace_include_sensitive_data": sdk_run_config.get("trace_include_sensitive_data"),
     }
 
 

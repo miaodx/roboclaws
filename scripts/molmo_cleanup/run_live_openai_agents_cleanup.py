@@ -245,6 +245,11 @@ class LiveOpenAIAgentsCleanupRunner:
                 len(self.initial_kickoff_prompt)
             ),
             "kickoff_prompt_source": _kickoff_prompt_source(args, self.agent_sdk_perf_profile),
+            "kickoff_prompt_stable_prefix": _stable_prefix_packet(
+                self.initial_kickoff_prompt,
+                self.skill_context,
+                self.agent_sdk_perf_profile,
+            ),
             "mcp_client_session_timeout_s": _round_duration(
                 max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
             ),
@@ -541,6 +546,8 @@ class LiveOpenAIAgentsCleanupRunner:
                     self.agent_sdk_perf_profile["model_service_retry_sleep_s"] or 0.0
                 ),
                 "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
+                "sdk_model_settings": self.agent_sdk_perf_profile["sdk_model_settings"],
+                "sdk_run_config": self.agent_sdk_perf_profile["sdk_run_config"],
                 "skill_context": self.skill_context,
                 "surface": "household-world",
                 "intent": _intent_for_task_name(getattr(self.args, "task_name", "")),
@@ -882,6 +889,8 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
         ),
     }
+    payload["sdk_model_settings"] = _sdk_model_settings_for_profile(payload)
+    payload["sdk_run_config"] = _sdk_run_config_for_profile(payload)
     _validate_context_limits(payload)
     return payload
 
@@ -939,6 +948,36 @@ def _skill_context_timing_summary(skill_context: dict[str, Any]) -> dict[str, An
             "estimated_tokens",
             "error_type",
         }
+    }
+
+
+def _stable_prefix_packet(
+    prompt: str,
+    skill_context: dict[str, Any],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    skill_hash = str(skill_context.get("sha256") or "")
+    prompt_prefix = str(prompt or "")[:2048]
+    material = "\n".join(
+        [
+            str(skill_context.get("relative_path") or ""),
+            skill_hash,
+            str(profile.get("prompt_mode") or ""),
+            str(profile.get("provider_profile") or ""),
+            str(profile.get("wire_api") or ""),
+            prompt_prefix,
+        ]
+    )
+    return {
+        "schema": "agent_sdk_stable_prefix_v1",
+        "hash": hashlib.sha256(material.encode("utf-8")).hexdigest(),
+        "material": "skill-path+skill-hash+prompt-mode+provider-profile+wire-api+prompt-prefix",
+        "skill_context_sha256": skill_hash,
+        "prompt_prefix_chars": len(prompt_prefix),
+        "prompt_cache_retention": (profile.get("sdk_model_settings") or {}).get(
+            "prompt_cache_retention"
+        )
+        or "",
     }
 
 
@@ -1023,6 +1062,35 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
             "context_hard_limit_tokens": 96_000,
         }
     raise ValueError(f"unsupported OpenAI Agents SDK performance profile '{profile_id}'")
+
+
+def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    wire_api = str(profile.get("wire_api") or "")
+    provider_profile = str(profile.get("provider_profile") or "")
+    profile_id = str(profile.get("profile_id") or "baseline")
+    settings: dict[str, Any] = {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+    }
+    if wire_api == "responses":
+        settings.update(
+            {
+                "truncation": "auto",
+                "store": False,
+            }
+        )
+        if provider_profile == "codex-env" and profile_id != "baseline":
+            settings["prompt_cache_retention"] = "in_memory"
+    elif wire_api == "chat-completions":
+        settings["include_usage"] = True
+    return settings
+
+
+def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
 
 
 def _normal_provider_profile(provider_profile: str) -> str:
@@ -2276,12 +2344,24 @@ def _context_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
 
 
 def _cache_metrics(context_metrics: dict[str, Any], timing: dict[str, Any]) -> dict[str, Any]:
+    model_settings = (
+        timing.get("sdk_model_settings")
+        if isinstance(timing.get("sdk_model_settings"), dict)
+        else {}
+    )
+    stable_prefix = (
+        timing.get("kickoff_prompt_stable_prefix")
+        if isinstance(timing.get("kickoff_prompt_stable_prefix"), dict)
+        else {}
+    )
     if not context_metrics.get("available"):
         return {
             "available": False,
             "source": context_metrics.get("source") or "unavailable",
             "limitations": context_metrics.get("limitations") or ["span_usage_missing"],
             "cache_tools_list": bool(timing.get("cache_tools_list")),
+            "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
+            "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
             "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
         }
     total_input = _int_or_none(context_metrics.get("total_input_tokens")) or 0
@@ -2291,10 +2371,11 @@ def _cache_metrics(context_metrics: dict[str, Any], timing: dict[str, Any]) -> d
         "source": "openai_agents_span_usage",
         "limitations": list(context_metrics.get("limitations") or []),
         "cache_tools_list": bool(timing.get("cache_tools_list")),
+        "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
         "provider_prompt_cache_observed": total_cached > 0,
         "cached_input_token_ratio": _ratio(total_cached, total_input),
         "first_response_cached_tokens": context_metrics.get("first_response_cached_tokens"),
-        "stable_prefix_hash": "",
+        "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
         "prompt_profile_id": str(timing.get("prompt_profile_id") or "baseline"),
         "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
     }

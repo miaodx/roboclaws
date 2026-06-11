@@ -40,6 +40,13 @@ it to the OpenAI Agents SDK instructions. Artifacts record only
 truncation state, and estimated tokens. They do not persist the skill body,
 raw prompts, tool payload bodies, credentials, or private evaluator truth.
 
+2026-06-11 Candidate G/J deterministic update: the private SDK route now
+constructs explicit SDK `ModelSettings` and `RunConfig` instead of relying on
+provider defaults. Timing/event/cache summaries record sanitized settings,
+trace privacy config, prompt-cache retention policy, and a stable-prefix hash.
+This is settings attribution only; provider-backed A/B speed claims still need
+the live approval gate.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -66,6 +73,10 @@ raw prompts, tool payload bodies, credentials, or private evaluator truth.
   SDK route. The route now records the exact canonical skill context by
   metadata/hash and sends the bounded `SKILL.md` text to the SDK instructions
   without changing public MCP/profile behavior.
+- Candidate G/J deterministic settings/cache attribution is implemented. The
+  route records explicit SDK model/run settings, disables sensitive trace data,
+  tracks stable prompt-prefix hashes, and carries prompt-cache retention policy
+  through `live_timing.json` / events without making a speed claim.
 
 ## Not Done
 
@@ -149,7 +160,8 @@ Use this queue unless fresh evidence changes it:
 2. Generate or refresh shared report-performance packets for the relevant
    baseline/candidate rows before changing speed levers.
 3. Candidate A is accepted; keep its metadata/privacy guard in future rows.
-4. Do G, with J folded into the same settings/cache evidence.
+4. Candidate G/J deterministic settings and cache attribution is accepted; live
+   A/B for speed remains gated by approval and budget.
 5. Do AB for Responses-only levers when the row uses `wire_api=responses`.
 6. Do I, with Q/L measurement folded into the same analysis.
 7. Run scoped B live baseline refresh before any strong speed claim, if live
@@ -198,8 +210,8 @@ without changing default MCP/profile behavior.
 | ID | Queue | Do | Why | Success | Stop / next |
 | --- | --- | --- | --- | --- | --- |
 | A | accepted | Give the SDK route bounded, auditable access to canonical `molmo-realworld-cleanup` skill context. | Current SDK route names the skill but does not mount/read `SKILL.md` like Codex/Claude workspaces. | Implemented: the SDK instructions receive bounded canonical skill markdown, while artifacts persist only path/hash/size/truncation/token metadata. Focused unit and lint gates pass. | Live A/B remains optional and gated; keep the metadata/privacy guard in future rows. |
-| G | keep | Expose explicit SDK `ModelSettings` / `RunConfig` performance profiles. | Current runtime relies too much on provider defaults while turns/context remain high. | Timing records exact settings; A/B lowers turns, latency, output, or context with same-or-better quality. | Stop on checker regression, unsupported SDK option behavior, missing attribution, or context failure. |
-| J | merge into G/Q/AB | Record prompt-cache retention and stable-prefix evidence. | Cache behavior can explain or hide speed wins, and some cache levers are Responses-specific. | G/Q/AB output shows stable-prefix/cache settings and cached vs uncached input when available. | Do not claim cache speedup when usage is unavailable, provider is Chat-only, or prefix changes are untracked. |
+| G | accepted-deterministic, live A/B gated | Expose explicit SDK `ModelSettings` / `RunConfig` performance profiles. | Current runtime relies too much on provider defaults while turns/context remain high. | Implemented: runtime applies explicit SDK settings, disables sensitive trace data in run config, and records sanitized settings in timing/events. Live A/B speed proof remains gated. | Continue to AB/I deterministic prep or live A/B only after approval/budget/backend gates pass. |
+| J | accepted with G for attribution | Record prompt-cache retention and stable-prefix evidence. | Cache behavior can explain or hide speed wins, and some cache levers are Responses-specific. | Implemented: timing/cache summaries carry prompt-cache retention policy and stable-prefix hash; cached vs uncached usage remains unavailable unless span usage exists. | Do not claim cache speedup when usage is unavailable, provider is Chat-only, or prefix changes are untracked. |
 | H | bypass-for-now | Use SDK-native session/Responses continuation instead of prompt replay. | Prompt replay can grow context, but compact continuation already fixed the immediate replay issue. | Only reconsider if Q shows continuation replay remains a top context source. | Do not run as next pass; stop if continuation changes task state or hides failure state. |
 | I | keep | Add SDK `call_model_input_filter` or equivalent state compaction. | Repeated public tool state is a likely context driver after kickoff compaction. | Replay/fake-provider proof shows repeated payload bytes drop while reports and traces remain complete. | Stop on missing public state, private truth leak, report evidence loss, or checker regression. |
 | L | merge into Q/Y | Audit non-tool responses and turn-count waste. | 72-78 model turns suggests avoidable text-only or deferred-action turns. | Q/Y records non-tool, deferred, noop, and turn-waste counts. | Create a separate fix arm only if waste is material. |
@@ -302,6 +314,7 @@ Each candidate arm writes one decision row:
 | Candidate ids | Row | Feature flags / dependencies | Evidence | Decision | Queue decision reason | Next recommended group |
 | --- | --- | --- | --- | --- | --- | --- |
 | A | `openai-agents-live`, provider/evidence lane agnostic deterministic proof | `agent_sdk_skill_context=canonical_skill_markdown`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `roboclaws/agents/live_runtime.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted | Deterministic proof shows the SDK route receives the canonical skill text, artifact discovery includes `openai-agents-skill-context.json`, and persisted timing/event/artifact summaries omit the skill body and raw prompt/tool payloads. No speed claim is made from this row. | G/J settings and cache attribution, then AB only for `wire_api=responses` rows. |
+| G,J | `openai-agents-live`, provider/evidence lane agnostic deterministic settings attribution | `sdk_model_settings`, `sdk_run_config`, `prompt_cache_retention`, `stable_prefix_hash`; no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic, live A/B gated | Deterministic proof shows explicit SDK model/run settings are constructed and passed into Agent/Runner, sanitized runtime events expose those settings, cache summaries record retention and stable-prefix hash, and missing usage remains unavailable rather than zero. No speedup claim is made without live baseline/candidate rows. | AB Responses-only feature audit or I input compaction prep; provider-backed A/B requires live approval. |
 
 ## Evidence Ladder
 

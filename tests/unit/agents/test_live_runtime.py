@@ -46,6 +46,16 @@ def _isolated_repo_root(tmp_path: Path) -> Path:
     return repo_root
 
 
+class FakeModelSettings:
+    def __init__(self, **kwargs) -> None:
+        self.__dict__.update(kwargs)
+
+
+class FakeRunConfig:
+    def __init__(self, **kwargs) -> None:
+        self.__dict__.update(kwargs)
+
+
 def test_live_agent_request_keeps_one_turn_policy_explicit(tmp_path: Path) -> None:
     request = LiveAgentRequest(
         task_name="household-cleanup",
@@ -437,6 +447,8 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
                     captured.setdefault("runner_kwargs", kwargs) or SimpleNamespace()
                 )
             ),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
         ),
     )
@@ -470,6 +482,11 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     wrapped_model = captured["agent_kwargs"]["model"]
     assert isinstance(wrapped_model, _RetryingModel)
     assert wrapped_model.base_model is captured["responses_model"]
+    assert captured["agent_kwargs"]["model_settings"].tool_choice == "auto"
+    assert captured["agent_kwargs"]["model_settings"].parallel_tool_calls is False
+    assert captured["agent_kwargs"]["model_settings"].truncation == "auto"
+    assert captured["runner_kwargs"]["run_config"].trace_include_sensitive_data is False
+    assert captured["runner_kwargs"]["run_config"].workflow_name == "roboclaws-openai-agents-live"
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is True
     assert "client_session_timeout_seconds" not in captured["mcp_server_kwargs"]
     assert captured["agent_kwargs"]["mcp_config"]["failure_error_function"]
@@ -479,6 +496,8 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
     ]
     assert events[0]["wire_api"] == "responses"
+    assert events[0]["sdk_model_settings"]["store"] is False
+    assert events[0]["sdk_run_config"]["trace_include_sensitive_data"] is False
 
 
 def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
@@ -507,6 +526,8 @@ def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
             Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
         ),
     )
@@ -601,6 +622,8 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
             Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIChatCompletionsModel=FakeOpenAIChatCompletionsModel,
         ),
     )
@@ -635,12 +658,15 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
     wrapped_model = captured["agent_kwargs"]["model"]
     assert isinstance(wrapped_model, _RetryingModel)
     assert wrapped_model.base_model is captured["chat_model"]
+    assert captured["agent_kwargs"]["model_settings"].include_usage is True
+    assert captured["agent_kwargs"]["model_settings"].parallel_tool_calls is False
     events = [
         json.loads(line)
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
     ]
     assert events[0]["provider_profile"] == "mimo-openai-chat"
     assert events[0]["wire_api"] == "chat-completions"
+    assert events[0]["sdk_model_settings"]["include_usage"] is True
 
 
 def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
@@ -668,6 +694,8 @@ def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
             Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIChatCompletionsModel=FakeOpenAIChatCompletionsModel,
         ),
     )
@@ -726,6 +754,8 @@ def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
             Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
         ),
     )
@@ -783,6 +813,8 @@ def test_openai_agents_runtime_configures_mcp_client_session_timeout(
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
             Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
         ),
     )
@@ -953,6 +985,22 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert timing["agent_sdk_perf_profile"]["max_turns"] == 128
     assert timing["agent_sdk_perf_profile"]["model_service_retry_attempts"] == 1
     assert timing["agent_sdk_perf_profile"]["model_service_retry_sleep_s"] == 1.0
+    assert timing["agent_sdk_perf_profile"]["sdk_model_settings"] == {
+        "parallel_tool_calls": False,
+        "store": False,
+        "tool_choice": "auto",
+        "truncation": "auto",
+    }
+    assert timing["agent_sdk_perf_profile"]["sdk_run_config"] == {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
+    assert timing["kickoff_prompt_stable_prefix"]["schema"] == "agent_sdk_stable_prefix_v1"
+    assert timing["kickoff_prompt_stable_prefix"]["hash"]
+    assert (
+        timing["cache_metrics"]["stable_prefix_hash"]
+        == timing["kickoff_prompt_stable_prefix"]["hash"]
+    )
     assert timing["openai_agents"]["trace_id"] == "trace_1"
     assert timing["mcp_control_plane_metrics"]["available"] is False
     assert timing["openai_agents_event_metrics"]["available"] is True
@@ -1842,6 +1890,16 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert baseline["max_turns"] == 128
     assert baseline["max_continuations"] == 2
     assert baseline["context_soft_limit_tokens"] is None
+    assert baseline["sdk_model_settings"] == {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+        "truncation": "auto",
+        "store": False,
+    }
+    assert baseline["sdk_run_config"] == {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
 
     gpt_args = Namespace(**{**vars(base_args), "agent_sdk_perf_profile": "gpt_compact_v1"})
     gpt = _resolve_agent_sdk_perf_profile(gpt_args)
@@ -1853,6 +1911,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert gpt["context_soft_limit_tokens"] == 96_000
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
+    assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
 
     mimo_args = Namespace(
         **{
@@ -1881,6 +1940,11 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert chat["provider_profile"] == "mimo-openai-chat"
     assert chat["wire_api"] == "chat-completions"
     assert chat["model_family"] == "mimo"
+    assert chat["sdk_model_settings"] == {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+        "include_usage": True,
+    }
 
     raw = _resolve_agent_sdk_perf_profile(
         Namespace(**{**vars(base_args), "agent_sdk_perf_profile": "raw_fpv_budgeted_v1"})
@@ -2151,6 +2215,8 @@ def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path)
     timing = {
         "kickoff_prompt_chars": 80,
         "cache_tools_list": True,
+        "sdk_model_settings": {"prompt_cache_retention": "in_memory"},
+        "kickoff_prompt_stable_prefix": {"hash": "stable-hash"},
         "openai_agents_attempts": [
             {"attempt_index": 0, "continuation_prompt_chars": 0},
             {"attempt_index": 1, "continuation_prompt_chars": 40},
@@ -2177,6 +2243,8 @@ def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path)
     assert cache["available"] is True
     assert cache["provider_prompt_cache_observed"] is True
     assert cache["first_response_cached_tokens"] == 25
+    assert cache["prompt_cache_retention"] == "in_memory"
+    assert cache["stable_prefix_hash"] == "stable-hash"
     assert cache["mcp_tool_catalog_cache_enabled"] is True
     assert growth["available"] is True
     assert growth["trace_event_count"] == 3
@@ -2195,7 +2263,14 @@ def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Pa
     )
 
     context = _context_metrics(run_dir, {"cache_tools_list": True})
-    cache = _cache_metrics(context, {"cache_tools_list": True})
+    cache = _cache_metrics(
+        context,
+        {
+            "cache_tools_list": True,
+            "sdk_model_settings": {"prompt_cache_retention": "in_memory"},
+            "kickoff_prompt_stable_prefix": {"hash": "stable-hash"},
+        },
+    )
 
     assert context["available"] is False
     assert context["source"] == "openai_agents_span_usage"
@@ -2204,6 +2279,8 @@ def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Pa
     assert cache["available"] is False
     assert cache["source"] == "openai_agents_span_usage"
     assert "response_span_usage_missing" in cache["limitations"]
+    assert cache["prompt_cache_retention"] == "in_memory"
+    assert cache["stable_prefix_hash"] == "stable-hash"
 
 
 def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() -> None:
