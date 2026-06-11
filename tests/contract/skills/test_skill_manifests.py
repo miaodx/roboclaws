@@ -73,3 +73,13 @@ def test_manifest_scripts_exist_and_stay_inside_skill_dir() -> None:
             script_path = (skill_dir / script["path"]).resolve()
             assert script_path.exists()
             assert skill_dir.resolve() in script_path.parents
+
+
+def test_active_skills_use_public_surface_run_commands() -> None:
+    for skill_dir in _tracked_skill_dirs():
+        manifest = _load_manifest(skill_dir)
+        if manifest["status"] != "active":
+            continue
+
+        skill_text = (skill_dir / "SKILL.md").read_text(encoding="utf-8")
+        assert "just task::run" not in skill_text

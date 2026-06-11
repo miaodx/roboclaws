@@ -7,8 +7,8 @@ description: Convert Agibot navigation_memory map folders into Actionable Semant
 
 Use this skill when the input is an offline robot semantic-memory folder such as
 `vendors/agibot_sdk/artifacts/maps/<map>/navigation_memory.json` and downstream
-household tasks need the same artifact contract as an online `semantic-map-build`
-run.
+household tasks need the same artifact contract as an online
+`intent=map-build` run.
 
 ## Boundary
 
@@ -76,6 +76,8 @@ snapshot contract:
 For a downstream consumer proof, run a cleanup task with the generated snapshot:
 
 ```bash
-just task::run household-cleanup direct evidence_lane=world-oracle-labels \
+just run::surface surface=household-world world=agibot-g2/map-12 \
+  backend=agibot-gdk intent=cleanup agent_engine=direct-runner \
+  evidence_lane=world-oracle-labels \
   seed=7 runtime_map_prior=output/maps/robot_map_12/actionable_semantic_map_snapshot.json
 ```

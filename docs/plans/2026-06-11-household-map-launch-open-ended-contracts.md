@@ -1035,6 +1035,51 @@ Remaining before this plan can be marked done:
 - finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
   already collapsed to read-only history only.
 
+### 2026-06-11 Active Skill Public Run Command Guard
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 active-skill slice:
+
+- changed the active Actionable Semantic Map Conversion skill from online
+  `semantic-map-build` / `just task::run household-cleanup` wording to
+  `intent=map-build` and the canonical `just run::surface ... intent=cleanup`
+  downstream consumer example;
+- added a tracked-skill contract guard so active skills do not teach retired
+  `just task::run` commands.
+
+Verified this slice:
+
+```bash
+rg -n -F 'just task::run' -- \
+  README.md ARCHITECTURE.md docs/human skills just roboclaws tests scripts .github
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/skills/test_skill_manifests.py
+ROBOCLAWS_JUST_TRACE=1 just run::surface \
+  surface=household-world world=agibot-g2/map-12 backend=agibot-gdk \
+  intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels \
+  seed=7 \
+  runtime_map_prior=output/maps/robot_map_12/actionable_semantic_map_snapshot.json
+```
+
+Observed proof:
+
+- the only remaining `just task::run` grep hit is historical implementation
+  result text in `docs/human/molmospaces-cleanup-mode-architecture.md`;
+- active tracked skills now reject retired `just task::run` examples in the
+  contract suite;
+- the replacement downstream command lowers through the public launch catalog
+  in trace mode.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch terminology audit where lower
+  implementation ids remain private and do not point users at legacy public
+  commands;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
 ### 2026-06-11 Candidate 1 Minimal-Only Contract Saturation
 
 Status remains `CONTINUE`.
