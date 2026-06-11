@@ -24,7 +24,7 @@ from roboclaws.household.profiles import (
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Expose Agibot semantic-map-build tools to Codex or another MCP agent."
+        description="Expose Agibot intent=map-build tools to Codex or another MCP agent."
     )
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -81,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
         visual_grounding_timeout_s=args.visual_grounding_timeout_s,
     )
     url = f"http://{args.host}:{args.port}/mcp"
-    print("\nAgibot semantic-map-build MCP server is ready.")
+    print("\nAgibot intent=map-build MCP server is ready.")
     print(f"MCP URL      : {url}")
     print(f"Artifacts    : {run_dir}")
     print(f"Policy label : {args.policy}")

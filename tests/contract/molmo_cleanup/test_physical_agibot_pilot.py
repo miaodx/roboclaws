@@ -395,7 +395,7 @@ def test_agibot_semantic_map_build_mcp_records_agent_driven_public_trace(
     assert "AgiBot Backend Evidence" in report_text
     assert "Camera Labeler Evidence" in report_text
     assert "grounding-dino" in report_text
-    assert "Agibot semantic-map-build" in report_text
+    assert "Agibot intent=map-build" in report_text
 
 
 def test_agibot_semantic_map_build_camera_labels_call_external_grounding(

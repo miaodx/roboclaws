@@ -158,7 +158,7 @@ def actionable_snapshot_from_agibot_navigation_memory(
         },
         "public_contract_note": (
             "Offline Agibot navigation memory conversion produces the same downstream "
-            "Runtime Metric Map payload used by online semantic-map-build output. "
+            "Runtime Metric Map payload used by online intent=map-build output. "
             "Movable objects are preserved only as needs_confirm priors."
         ),
     }

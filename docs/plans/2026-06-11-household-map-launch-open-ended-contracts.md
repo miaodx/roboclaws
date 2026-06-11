@@ -1923,3 +1923,58 @@ Remaining before this plan can be marked done:
   or negative regressions;
 - finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
   any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Agibot Map-Build Current-Facing Wording
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 code-prose slice:
+
+- changed user-visible Agibot map-build CLI/MCP/report prose from
+  `semantic-map-build` task wording to `intent=map-build` wording;
+- updated the physical Agibot pilot report assertion to match the new current
+  wording;
+- left schema names, MCP server ids, output directories, constants, and
+  `task_name` compatibility values unchanged.
+
+Verified this slice:
+
+```bash
+rg -n \
+  'Agibot semantic-map-build|semantic-map-build route|semantic-map-build output|semantic-map-build tools|semantic-map-build MCP server|semantic-map-build pilot|semantic-map-build hardware run|semantic-map-build evidence lane|semantic-map-build keeps|semantic-map-build camera-grounded-labels' \
+  roboclaws scripts tests
+.venv/bin/ruff check \
+  roboclaws/maps/actionable_snapshot.py \
+  roboclaws/cli/agibot_map_build_agent_server.py \
+  scripts/molmo_cleanup/run_live_codex_agibot_map_build.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  roboclaws/household/agibot_contract_rehearsal.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+.venv/bin/ruff format --check \
+  roboclaws/maps/actionable_snapshot.py \
+  roboclaws/cli/agibot_map_build_agent_server.py \
+  scripts/molmo_cleanup/run_live_codex_agibot_map_build.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  roboclaws/household/agibot_contract_rehearsal.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_semantic_map_build_codex_routes_agibot_backend_to_live_runner \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend
+```
+
+Observed proof:
+
+- the specific current-facing Agibot phrase grep is empty;
+- Agibot map-build route, prompt, MCP, and report contract tests pass.
+
+Remaining before this plan can be marked done:
+
+- classify or explicitly leave the remaining `household-cleanup` /
+  `semantic-map-build` hits as implementation task-name compatibility, output
+  artifact paths, fixture data, negative regressions, or historical docs;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.
