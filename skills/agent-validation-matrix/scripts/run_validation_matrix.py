@@ -6,6 +6,7 @@ import html
 import importlib.util
 import json
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -79,7 +80,7 @@ def _execute_matrix(matrix: dict[str, Any]) -> None:
             gate["blocker_category"] = blockers[0]["category"]
             gate["blockers"] = blockers
             continue
-        _run_gate(gate)
+        _run_gate(gate, matrix)
 
 
 def _gate_blockers(gate: dict[str, Any], matrix: dict[str, Any]) -> list[dict[str, str]]:
@@ -138,13 +139,14 @@ def _gate_blockers(gate: dict[str, Any], matrix: dict[str, Any]) -> list[dict[st
     return blockers
 
 
-def _run_gate(gate: dict[str, Any]) -> None:
+def _run_gate(gate: dict[str, Any], matrix: dict[str, Any]) -> None:
     gate_dir = Path(gate["gate_dir"])
     gate_dir.mkdir(parents=True, exist_ok=True)
     stdout_path = gate_dir / "stdout.log"
     stderr_path = gate_dir / "stderr.log"
+    command = _resolve_gate_command(gate, matrix)
     result = subprocess.run(
-        [str(item) for item in gate["command"]],
+        command,
         cwd=REPO_ROOT,
         check=False,
         capture_output=True,
@@ -160,6 +162,36 @@ def _run_gate(gate: dict[str, Any]) -> None:
         _display_path(stderr_path),
     ]
     _classify_failed_gate(gate, stderr=result.stderr, stdout=result.stdout)
+
+
+def _resolve_gate_command(gate: dict[str, Any], matrix: dict[str, Any]) -> list[str]:
+    command = [_resolve_gate_argument(str(item), matrix) for item in gate["command"]]
+    gate["resolved_command"] = command
+    gate["resolved_command_display"] = " ".join(command)
+    return command
+
+
+def _resolve_gate_argument(argument: str, matrix: dict[str, Any]) -> str:
+    return re.sub(
+        r"\$\{([^}:]+):([^}]+)\}",
+        lambda match: str(_gate_artifact_path(matrix, match.group(1), match.group(2))),
+        argument,
+    )
+
+
+def _gate_artifact_path(matrix: dict[str, Any], gate_id: str, artifact_name: str) -> Path:
+    run_dir = _gate_run_dir(matrix, gate_id)
+    matches = sorted(run_dir.glob(f"**/{artifact_name}"))
+    if not matches:
+        raise FileNotFoundError(f"{gate_id} did not produce {artifact_name} under {run_dir}")
+    return matches[-1]
+
+
+def _gate_run_dir(matrix: dict[str, Any], gate_id: str) -> Path:
+    for gate in matrix.get("gates") or []:
+        if gate.get("gate_id") == gate_id:
+            return Path(gate["gate_dir"]) / "run"
+    raise KeyError(f"unknown validation gate id: {gate_id}")
 
 
 def _classify_failed_gate(gate: dict[str, Any], *, stderr: str, stdout: str) -> None:
