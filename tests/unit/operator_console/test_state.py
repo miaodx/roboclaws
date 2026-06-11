@@ -445,7 +445,7 @@ def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> Non
     assert reset_state["camera_state"]["latest_event"] == "navigate_to_object_reset"
 
 
-def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
+def test_state_splits_semantic_map_from_top_down_scene_view(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
@@ -466,14 +466,18 @@ def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
     )
     robot_map = robot_views / "0042_observe.map.png"
     report_map = map_bundle / "report_static_navigation_map.png"
+    semantic_map = run_dir / "semantic_map.png"
     robot_map.write_bytes(b"robot map")
     report_map.write_bytes(b"report map")
+    semantic_map.write_bytes(b"semantic map")
     os.utime(robot_map, (1, 1))
     os.utime(report_map, (2, 2))
+    os.utime(semantic_map, (3, 3))
 
     state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
 
-    assert state["latest_view_assets"]["map"]["path"] == str(robot_map.resolve())
+    assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
+    assert state["latest_view_assets"]["topdown"]["path"] == str(robot_map.resolve())
     assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
 

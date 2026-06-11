@@ -176,17 +176,23 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'data-panel="blank-chase"' in html
     assert ">Outputs<" in html
     assert "Artifacts" not in html
+    assert ">Semantic Map<" in html
+    assert ">Top-down<" in html
+    assert "topdown-frame" in html
+    assert "Top-down Scene View" in app
     assert 'activeView: "overview"' in app
     assert "visiblePanelsForView" in app
     assert "routeViewModes" in app
     assert "routeHasOverviewChase" in app
     assert 'resource_kind !== "physical_robot"' in app
+    assert 'panels.add("chase")' in app
     assert 'panels.add("blank-chase")' in app
     assert "No chase frame yet" in app
     assert "decision-proof-20260608" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
-    assert '"chase map"' in css
+    assert '"chase topdown"' in css
+    assert '.mode-overview [data-panel="chase"]' in css
     assert '.mode-overview [data-panel="blank-chase"]' in css
     assert ".blank-panel" in css
     assert "[hidden]" in css

@@ -450,6 +450,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert "Planner Proof Requests" in report_text
     assert "Waypoint Honesty & Cleanup Loop" in report_text
     assert "Real-Robot Readiness" in report_text
+    assert "Semantic Map" in report_text
     assert "Nav2 Map Bundle" in report_text
     assert "map_bundle/map.yaml" in report_text
     assert "report_only_simulation_view" in report_text

@@ -100,10 +100,24 @@ Parked exploratory gates:
 - Live-agent `camera-grounded-labels + camera_labeler=grounding-dino` has not
   been run yet. The direct Grounding-DINO product gate already proves the real
   camera labeler path; the live-agent DINO combination is slower and optional
-  unless a future phase specifically needs live detector-agent behavior. During
-  the 2026-06-11 follow-up pass, the local live-agent backend slot and port
-  `18788` were already held by an active RAW-FPV cleanup validation, so this
-  gate stayed queued to avoid corrupting that run.
+  unless a future phase specifically needs live detector-agent behavior.
+  During the 2026-06-11 follow-up pass, the first attempt was queued behind an
+  active RAW-FPV cleanup validation that held the local live-agent backend slot
+  and port `18788`; after that run naturally released the slot, a direct
+  attempt to run the gate failed before launch because another operator-console
+  interactive Codex session was active:
+  `roboclaws-molmo-codex-0611_1413-20260611-141344-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels-0611_1413-p18789-seed-7`.
+  The attempted command was
+  `VISUAL_GROUNDING_BASE_URL=http://127.0.0.1:18881 VISUAL_GROUNDING_TIMEOUT_S=120 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels camera_labeler=grounding-dino map_mode=minimal scenario_setup=baseline seed=7`.
+  The recipe refused to choose another port because each live visual cleanup run
+  owns an interactive coding-agent/backend session. As of 2026-06-11 14:17:37
+  +0800, the operator-console run was still actively writing `trace.jsonl` and
+  `codex-events.jsonl` under
+  `output/operator-console/runs/20260611-141344-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1413/seed-7/`.
+  Re-run this gate after that session exits; the Grounding-DINO sidecar proof
+  remains available from the direct product gate and the live RAW-FPV gate
+  already covers the live-agent map-build contract without structured detector
+  labels.
 - Grounding-DINO refiner combinations are no longer completely unrun: the
   `grounding-dino+mimo-v2.5` smoke benchmark above passed on the 3-observation
   smoke corpus. Broader detector/refiner ranking remains parked until there is
