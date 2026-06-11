@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -546,7 +547,7 @@ def test_agent_mcp_accepts_canonical_household_dispatch_targets() -> None:
     assert cleanup == [
         "just",
         "mcp::up",
-        "household-cleanup",
+        "household-world.cleanup",
         "127.0.0.1",
         "18788",
         "output/debug/household-mcp",
@@ -554,7 +555,7 @@ def test_agent_mcp_accepts_canonical_household_dispatch_targets() -> None:
     assert map_build == [
         "just",
         "mcp::up",
-        "semantic-map-build",
+        "household-world.map-build",
         "127.0.0.1",
         "18788",
         "output/debug/map-build-mcp",
@@ -2056,6 +2057,53 @@ def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
     )
     assert "household_cleanup_server_argv" in codex_runner_text
     assert "semantic_map_build_server_argv" in agibot_runner_text
+
+
+def test_agent_server_cli_accepts_canonical_household_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from roboclaws.cli import agent_server
+
+    calls: list[tuple[str, list[str]]] = []
+
+    def fake_main(name: str):
+        def _main(args: list[str]) -> int:
+            calls.append((name, list(args)))
+            return 0
+
+        return _main
+
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.household_agent_server",
+        types.SimpleNamespace(main=fake_main("cleanup")),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.agibot_map_build_agent_server",
+        types.SimpleNamespace(main=fake_main("map-build")),
+    )
+
+    assert agent_server.main(["household-world.cleanup", "--host", "127.0.0.1"]) == 0
+    assert agent_server.main(["household-world.map-build", "--policy", "codex_agent"]) == 0
+
+    assert calls == [
+        ("cleanup", ["--host", "127.0.0.1"]),
+        ("map-build", ["--policy", "codex_agent"]),
+    ]
+
+
+def test_agent_server_cli_errors_use_canonical_targets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from roboclaws.cli import agent_server
+
+    assert agent_server.main(["semantic-map"]) == 2
+
+    stderr = capsys.readouterr().err
+    assert "household-world.cleanup|household-world.map-build" in stderr
+    assert "household-cleanup" not in stderr
+    assert "semantic-map-build" not in stderr
 
 
 def test_molmo_cleanup_recipe_passes_goal_contract_to_all_household_runners() -> None:

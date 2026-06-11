@@ -4,17 +4,29 @@ from __future__ import annotations
 
 import sys
 
-SUPPORTED_SERVERS = ("household-cleanup", "semantic-map-build")
+SUPPORTED_SERVER_TARGETS = ("household-world.cleanup", "household-world.map-build")
+LEGACY_SERVER_TARGETS = ("household-cleanup", "semantic-map-build")
+SUPPORTED_SERVERS = (*SUPPORTED_SERVER_TARGETS, *LEGACY_SERVER_TARGETS)
+SERVER_TARGET_ALIASES = {
+    "household-world.cleanup": "household-cleanup",
+    "cleanup": "household-cleanup",
+    "household-world.map-build": "semantic-map-build",
+    "map-build": "semantic-map-build",
+}
+
+
+def _expected_server_text() -> str:
+    return "|".join(SUPPORTED_SERVER_TARGETS)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        expected = "|".join(SUPPORTED_SERVERS)
-        print(f"error: missing server (expected {expected})", file=sys.stderr)
+        print(f"error: missing server (expected {_expected_server_text()})", file=sys.stderr)
         return 2
 
-    server = args.pop(0)
+    raw_server = args.pop(0)
+    server = SERVER_TARGET_ALIASES.get(raw_server, raw_server)
     if server == "household-cleanup":
         from roboclaws.cli.household_agent_server import main as household_main
 
@@ -24,8 +36,10 @@ def main(argv: list[str] | None = None) -> int:
 
         return semantic_map_main(args)
 
-    expected = "|".join(SUPPORTED_SERVERS)
-    print(f"error: unsupported server {server!r} (expected {expected})", file=sys.stderr)
+    print(
+        f"error: unsupported server {raw_server!r} (expected {_expected_server_text()})",
+        file=sys.stderr,
+    )
     return 2
 
 

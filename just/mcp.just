@@ -24,7 +24,7 @@ _wait_for_port host port:
     echo "error: MCP endpoint not ready at {{host}}:{{port}}" >&2
     exit 1
 
-up server="household-cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/roboclaws-mcp/run":
+up server="household-world.cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/roboclaws-mcp/run":
     #!/usr/bin/env bash
     set -euo pipefail
     server="{{server}}"
@@ -35,10 +35,20 @@ up server="household-cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/rob
     fi
 
     case "$server" in
-      household-cleanup|semantic-map-build)
+      household-world.cleanup|cleanup)
+        server="household-world.cleanup"
+        ;;
+      household-world.map-build|map-build)
+        server="household-world.map-build"
+        ;;
+      household-cleanup)
+        server="household-world.cleanup"
+        ;;
+      semantic-map-build)
+        server="household-world.map-build"
         ;;
       *)
-        echo "error: unsupported MCP server '$server' (expected household-cleanup|semantic-map-build)" >&2
+        echo "error: unsupported MCP server '$server' (expected household-world.cleanup|household-world.map-build)" >&2
         exit 1
         ;;
     esac
@@ -73,7 +83,7 @@ up server="household-cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/rob
     just mcp::_kickoff_banner "$mcp_url" "$server" >&2
     echo "$mcp_url"
 
-_kickoff_banner url server="household-cleanup":
+_kickoff_banner url server="household-world.cleanup":
     #!/usr/bin/env bash
     echo "==> roboclaws MCP ready at {{url}}"
     echo "==> Server: {{server}}"

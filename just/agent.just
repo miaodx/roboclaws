@@ -896,12 +896,16 @@ mcp action="up" server="household-world.cleanup" host="127.0.0.1" port="18788" o
         server="$2"
         case "$server" in
           household-world.cleanup|cleanup)
-            server="household-cleanup"
+            server="household-world.cleanup"
             ;;
           household-world.map-build|map-build)
-            server="semantic-map-build"
+            server="household-world.map-build"
             ;;
-          household-cleanup|semantic-map-build)
+          household-cleanup)
+            server="household-world.cleanup"
+            ;;
+          semantic-map-build)
+            server="household-world.map-build"
             ;;
           *)
             echo "error: unsupported MCP dispatch target '$server' (expected household-world.cleanup|household-world.map-build)" >&2

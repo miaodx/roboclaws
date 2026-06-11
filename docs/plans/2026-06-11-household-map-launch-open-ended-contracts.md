@@ -1131,6 +1131,57 @@ Remaining before this plan can be marked done:
 - finish Candidate 3 private-dispatch audit for server/internal ids that remain
   private implementation details rather than current public route guidance.
 
+### 2026-06-11 Canonical MCP Server Dispatch Targets
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 3 MCP-dispatch cleanup slice:
+
+- made `python -m roboclaws.cli.agent_server` accept canonical
+  `household-world.cleanup` and `household-world.map-build` targets while still
+  tolerating legacy private ids for internal callers;
+- changed `just agent::mcp` and `just mcp::up` to pass/display canonical
+  household-world targets and report canonical expected values on errors;
+- updated the current MolmoSpaces entrypoint matrix from
+  `agent_server household-cleanup` to `agent_server household-world.cleanup`;
+- added CLI-router coverage for canonical targets and canonical unsupported
+  target errors.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_mcp_accepts_canonical_household_dispatch_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_accepts_canonical_household_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_errors_use_canonical_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_agent_server_routes_use_cli_modules_not_examples
+ROBOCLAWS_JUST_TRACE=1 just agent::mcp up \
+  household-world.map-build 127.0.0.1 18788 output/debug/map-build-mcp
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/integration/coding_agent/test_code_mcp_binding_smoke.py::test_just_mcp_up_emits_clean_url \
+  tests/integration/coding_agent/test_code_mcp_binding_smoke.py::test_just_mcp_up_rejects_unknown_server_before_warm_path
+uv run ruff check \
+  roboclaws/cli/agent_server.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/integration/coding_agent/test_code_mcp_binding_smoke.py
+```
+
+Observed proof:
+
+- focused dev-tool route tests pass and trace `agent::mcp` to canonical
+  `mcp::up household-world.map-build`;
+- MCP binding integration warm-path tests were skipped on this host, so they
+  remain non-counted local evidence for this slice;
+- CLI-router unsupported-target errors mention only canonical
+  `household-world.*` targets.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish the final Candidate 3 audit by classifying any remaining
+  `household-cleanup` / `semantic-map-build` hits as private ids, artifacts,
+  historical docs, or current public guidance requiring another small patch.
+
 ### 2026-06-11 Candidate 1 Minimal-Only Contract Saturation
 
 Status remains `CONTINUE`.

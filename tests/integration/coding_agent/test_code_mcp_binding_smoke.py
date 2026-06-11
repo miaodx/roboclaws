@@ -103,7 +103,7 @@ def warm_path_pid():
 
 @pytest.mark.usefixtures("warm_path_pid")
 def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
-    """`just mcp::up household-cleanup H P` returns http://H:P/mcp — no `name=` leak."""
+    """`just mcp::up household-world.cleanup H P` returns http://H:P/mcp — no `name=` leak."""
     port = empty_mcp_url.rsplit(":", 1)[1].split("/", 1)[0]
     # The recipe uses bare `python`; ensure the venv's bin dir is on PATH so
     # subprocess inherits it even when pytest was launched via .venv/bin/python
@@ -112,7 +112,7 @@ def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
     venv_bin = str(Path(sys.executable).parent)
     env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
     result = subprocess.run(
-        ["just", "mcp::up", "household-cleanup", "127.0.0.1", port],
+        ["just", "mcp::up", "household-world.cleanup", "127.0.0.1", port],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -141,6 +141,7 @@ def test_just_mcp_up_rejects_unknown_server_before_warm_path(empty_mcp_url: str)
     )
     assert result.returncode != 0
     assert "unsupported MCP server 'unknown-server'" in result.stderr
+    assert "household-world.cleanup|household-world.map-build" in result.stderr
 
 
 @pytest.mark.skipif(not _have("docker"), reason="Docker required")
