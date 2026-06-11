@@ -217,7 +217,7 @@ run dispatch_target agent_engine mode="" *overrides:
         smoke|world-oracle-labels|world-public-labels|camera-raw-fpv|camera-grounded-labels)
           ;;
         *)
-          echo "error: unsupported household cleanup evidence_lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
+          echo "error: unsupported household-world evidence_lane '$profile' (expected smoke|world-oracle-labels|world-public-labels|camera-grounded-labels|camera-raw-fpv)" >&2
           exit 1
           ;;
       esac
@@ -303,7 +303,7 @@ run dispatch_target agent_engine mode="" *overrides:
             ;;
         esac
         if [[ "$task" == "semantic-map-build" && "$driver" != "direct" && "$driver" != "codex" ]]; then
-          echo "error: semantic-map-build currently supports direct or codex driver only" >&2
+          echo "error: household-world.map-build currently supports direct-runner or codex-cli only" >&2
           exit 1
         fi
 
@@ -413,7 +413,7 @@ run dispatch_target agent_engine mode="" *overrides:
             agibot_gdk|auto|molmospaces_subprocess|isaaclab_subprocess)
               ;;
             *)
-              echo "error: semantic-map-build codex unsupported backend '$backend' (expected molmospaces_subprocess|isaaclab_subprocess|agibot_gdk)" >&2
+              echo "error: household-world.map-build codex-cli unsupported backend '$backend' (expected molmospaces_subprocess|isaaclab_subprocess|agibot_gdk)" >&2
               exit 1
               ;;
           esac
@@ -514,12 +514,12 @@ run dispatch_target agent_engine mode="" *overrides:
           context_json="$(get context_json "")"
           if [[ "$task" == "semantic-map-build" && "$driver" == "codex" ]]; then
             if [[ -z "$context_json" ]]; then
-              echo "error: backend=agibot_gdk semantic-map-build Codex requires context_json=<agibot map context JSON>" >&2
+              echo "error: backend=agibot_gdk household-world.map-build codex-cli requires context_json=<agibot map context JSON>" >&2
               exit 1
             fi
             seed_count="$(wc -w <<<"$seeds" | tr -d ' ')"
             if [[ "$seed_count" != "1" ]]; then
-              echo "error: Agibot semantic-map-build Codex accepts exactly one seed per live run" >&2
+              echo "error: Agibot household-world.map-build codex-cli accepts exactly one seed per live run" >&2
               exit 1
             fi
             seed="$seeds"
@@ -601,7 +601,7 @@ run dispatch_target agent_engine mode="" *overrides:
             mkdir -p "$run_dir"
             source scripts/dev/coding_agent_env.sh
             roboclaws_load_dotenv .env
-            roboclaws_assert_codex_network_allowed "Codex Agibot semantic-map-build live report"
+            roboclaws_assert_codex_network_allowed "Codex Agibot household-world.map-build live report"
 
             codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"
             codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
@@ -691,7 +691,7 @@ run dispatch_target agent_engine mode="" *overrides:
                 fi
               done
               tmux new-session -d -s "$session_name" "${tmux_env_args[@]}" "bash $(printf '%q' "$runner")"
-              echo "==> launched detached Codex Agibot semantic-map-build"
+              echo "==> launched detached Codex Agibot household-world.map-build"
               echo "    tmux session : ${session_name}"
               echo "    run dir      : ${run_dir}"
               echo "    attach       : tmux attach -t ${session_name}"

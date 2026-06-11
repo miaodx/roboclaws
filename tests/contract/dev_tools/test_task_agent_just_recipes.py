@@ -892,10 +892,10 @@ def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> Non
         (("household-cleanup", "claude-live"), "unsupported agent_engine 'claude-live'"),
         (
             ("household-cleanup", "codex", "world-oracle-labels-perf"),
-            "unsupported household cleanup lane",
+            "unsupported household-world evidence_lane",
         ),
-        (("household-cleanup", "codex", "minimal"), "unsupported household cleanup lane"),
-        (("household-cleanup", "codex", "visual"), "unsupported household cleanup lane"),
+        (("household-cleanup", "codex", "minimal"), "unsupported household-world evidence_lane"),
+        (("household-cleanup", "codex", "visual"), "unsupported household-world evidence_lane"),
         (
             ("household-cleanup", "codex", "camera-raw-fpv", "cleanup_routine=mcp"),
             "unsupported cleanup_routine",
@@ -1507,7 +1507,7 @@ def test_agibot_codex_map_build_route_requires_context_json() -> None:
         "camera_labeler=grounding-dino",
     )
 
-    assert "backend=agibot_gdk semantic-map-build Codex requires context_json" in stderr
+    assert "backend=agibot_gdk household-world.map-build codex-cli requires context_json" in stderr
 
 
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:

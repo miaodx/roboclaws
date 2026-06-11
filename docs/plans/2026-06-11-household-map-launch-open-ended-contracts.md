@@ -1080,6 +1080,57 @@ Remaining before this plan can be marked done:
 - finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
   already collapsed to read-only history only.
 
+### 2026-06-11 Maintainer Dispatch Error Terminology
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 private-dispatch wording slice:
+
+- changed current `agent::run` validation errors from `semantic-map-build`
+  task-id language to `household-world.map-build` / `codex-cli` wording;
+- changed public launch catalog invalid-lane errors from
+  `household cleanup lane` to `household-world evidence_lane`;
+- changed Agibot map-build live run guard and launch status text to
+  `household-world.map-build` while leaving private lowerer ids and artifact
+  paths unchanged.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_task_router_rejects_removed_compatibility_aliases \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agibot_codex_map_build_route_requires_context_json
+rg -n -F \
+  -e 'unsupported household cleanup evidence_lane' \
+  -e 'unsupported household cleanup lane' \
+  -e 'semantic-map-build currently supports' \
+  -e 'semantic-map-build codex unsupported backend' \
+  -e 'backend=agibot_gdk semantic-map-build Codex requires context_json' \
+  -e 'Agibot semantic-map-build Codex accepts exactly one seed' \
+  -e 'Codex Agibot semantic-map-build live report' \
+  -e 'detached Codex Agibot semantic-map-build' -- \
+  just roboclaws tests scripts README.md ARCHITECTURE.md docs/human
+uv run ruff check \
+  roboclaws/launch/catalog.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+git diff --check -- \
+  just/agent.just roboclaws/launch/catalog.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
+```
+
+Observed proof:
+
+- focused route-error tests pass with canonical terminology;
+- grep finds no old active validation/log strings for the replaced
+  `household cleanup lane` or `semantic-map-build Codex` messages.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch audit for server/internal ids that remain
+  private implementation details rather than current public route guidance.
+
 ### 2026-06-11 Candidate 1 Minimal-Only Contract Saturation
 
 Status remains `CONTINUE`.

@@ -349,7 +349,7 @@ def _resolve_evidence_mode(
         profile = evidence_lane or surface.default_profile
         if profile not in surface.supported_profiles:
             raise LaunchError(
-                f"unsupported household cleanup lane '{raw_mode}'",
+                f"unsupported household-world evidence_lane '{raw_mode}'",
                 f"expected {'|'.join(cleanup_evidence_lane_names())}",
             )
         camera_labeler = _override_value(overrides, "camera_labeler")
