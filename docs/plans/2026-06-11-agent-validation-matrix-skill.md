@@ -431,6 +431,16 @@ Remaining gates before this plan can be marked fully implemented:
 - rerun the Agent SDK live row after syncing the updated `dev` extra and
   sourcing a supported provider profile.
 
+Parked follow-ups:
+
+- RAW-FPV live Codex recovery: keep the 4-chain done-readiness failure parked as
+  a known RAW-FPV performance/readiness limitation, not a validation-matrix
+  skill blocker. Source:
+  `output/agent-validation-matrix/0611_raw_fpv_serialized_codex/gates/codex-cleanup-camera-raw-fpv/run/0611_1347/seed-7`.
+  Unpark when RAW-FPV live-agent behavior is the target of a focused recovery
+  slice, or when the validation policy explicitly requires RAW-FPV live success
+  for matrix closeout.
+
 ## ADR Threshold
 
 No ADR is required for the first implementation. Create an ADR only if the repo
