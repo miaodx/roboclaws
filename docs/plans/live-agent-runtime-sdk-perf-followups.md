@@ -32,6 +32,14 @@ Responses profiles (`codex-env`, `mify`) and Chat-compatible profiles
 packets now carry `wire_api`; Chat rows remain compatibility evidence unless
 their own metrics justify a speed claim.
 
+2026-06-11 Candidate A update: the private SDK route now loads bounded
+`molmo-realworld-cleanup` `SKILL.md` context from the repo checkout and passes
+it to the OpenAI Agents SDK instructions. Artifacts record only
+`openai-agents-skill-context.json` metadata plus `live_timing.json`
+`agent_sdk_skill_context` summary fields: skill name, path, hash, byte counts,
+truncation state, and estimated tokens. They do not persist the skill body,
+raw prompts, tool payload bodies, credentials, or private evaluator truth.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -54,11 +62,15 @@ their own metrics justify a speed claim.
   compute time. Do not use Codex/Claude proxy rows as direct evidence for an
   OpenAI Agents SDK speed claim unless the candidate run itself records
   comparable SDK route metrics.
+- Candidate A deterministic skill-context proof is implemented for the private
+  SDK route. The route now records the exact canonical skill context by
+  metadata/hash and sends the bounded `SKILL.md` text to the SDK instructions
+  without changing public MCP/profile behavior.
 
 ## Not Done
 
 - Full live GPT/MiMo x evidence-lane matrix.
-- Follow-up optimization groups 1-5.
+- Follow-up optimization groups 1-5 beyond Candidate A.
 - Explicit Responses-native feature evaluation: server-managed continuation,
   conversation/session state, prompt-cache retention, and other SDK features
   that only apply when the provider really supports the Responses API.
@@ -136,7 +148,7 @@ Use this queue unless fresh evidence changes it:
 1. Re-run Group 0 dry-run/offline preflight only as a gate check.
 2. Generate or refresh shared report-performance packets for the relevant
    baseline/candidate rows before changing speed levers.
-3. Do A as deterministic skill-context proof.
+3. Candidate A is accepted; keep its metadata/privacy guard in future rows.
 4. Do G, with J folded into the same settings/cache evidence.
 5. Do AB for Responses-only levers when the row uses `wire_api=responses`.
 6. Do I, with Q/L measurement folded into the same analysis.
@@ -185,7 +197,7 @@ without changing default MCP/profile behavior.
 
 | ID | Queue | Do | Why | Success | Stop / next |
 | --- | --- | --- | --- | --- | --- |
-| A | keep, quality-first | Give the SDK route bounded, auditable access to canonical `molmo-realworld-cleanup` skill context. | Current SDK route names the skill but does not mount/read `SKILL.md` like Codex/Claude workspaces. | Artifacts show exact skill context received; deterministic proof passes without private leaks. | Live A/B only if context remains bounded; stop if skill packaging changes runtime topology without approval. |
+| A | accepted | Give the SDK route bounded, auditable access to canonical `molmo-realworld-cleanup` skill context. | Current SDK route names the skill but does not mount/read `SKILL.md` like Codex/Claude workspaces. | Implemented: the SDK instructions receive bounded canonical skill markdown, while artifacts persist only path/hash/size/truncation/token metadata. Focused unit and lint gates pass. | Live A/B remains optional and gated; keep the metadata/privacy guard in future rows. |
 | G | keep | Expose explicit SDK `ModelSettings` / `RunConfig` performance profiles. | Current runtime relies too much on provider defaults while turns/context remain high. | Timing records exact settings; A/B lowers turns, latency, output, or context with same-or-better quality. | Stop on checker regression, unsupported SDK option behavior, missing attribution, or context failure. |
 | J | merge into G/Q/AB | Record prompt-cache retention and stable-prefix evidence. | Cache behavior can explain or hide speed wins, and some cache levers are Responses-specific. | G/Q/AB output shows stable-prefix/cache settings and cached vs uncached input when available. | Do not claim cache speedup when usage is unavailable, provider is Chat-only, or prefix changes are untracked. |
 | H | bypass-for-now | Use SDK-native session/Responses continuation instead of prompt replay. | Prompt replay can grow context, but compact continuation already fixed the immediate replay issue. | Only reconsider if Q shows continuation replay remains a top context source. | Do not run as next pass; stop if continuation changes task state or hides failure state. |
@@ -284,6 +296,12 @@ Each candidate arm writes one decision row:
 - accepted, rejected, inconclusive, blocked, bypassed, superseded, or added;
 - queue decision reason and next recommended candidate/group;
 - artifact links and explicit waiver if accepting a faster-but-worse result.
+
+### Decision Rows
+
+| Candidate ids | Row | Feature flags / dependencies | Evidence | Decision | Queue decision reason | Next recommended group |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | `openai-agents-live`, provider/evidence lane agnostic deterministic proof | `agent_sdk_skill_context=canonical_skill_markdown`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `roboclaws/agents/live_runtime.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted | Deterministic proof shows the SDK route receives the canonical skill text, artifact discovery includes `openai-agents-skill-context.json`, and persisted timing/event/artifact summaries omit the skill body and raw prompt/tool payloads. No speed claim is made from this row. | G/J settings and cache attribution, then AB only for `wire_api=responses` rows. |
 
 ## Evidence Ladder
 

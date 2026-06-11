@@ -2,14 +2,16 @@
 
 Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 
-Current slice: Agent SDK performance optimization and Group 0 matrix
-foundation for the private `openai-agents-live` route.
+Current slice: Agent SDK performance optimization, Group 0 matrix foundation,
+and Candidate A skill-context parity for the private `openai-agents-live`
+route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
-no-provider matrix foundation completed on 2026-06-10. The full live
-provider/model x evidence-lane performance matrix is not done; it remains
-parked pending explicit live-run approval, credentials/backend availability,
-and budget acknowledgement. The follow-up execution plan is
+no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
+skill-context proof was accepted on 2026-06-11. The full live provider/model x
+evidence-lane performance matrix is not done; it remains parked pending explicit
+live-run approval, credentials/backend availability, and budget
+acknowledgement. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -60,6 +62,12 @@ Result:
 - Future OpenAI Agents SDK result summaries redact raw assistant output and SDK
   `last_agent` reprs from event/trace artifacts while keeping trace/session,
   usage, output length, and public agent-name metadata.
+- Candidate A now gives the private SDK route bounded, auditable access to the
+  canonical `molmo-realworld-cleanup` skill markdown. The SDK instructions
+  receive the `SKILL.md` text, while persisted artifacts keep only
+  `openai-agents-skill-context.json` metadata and `live_timing.json`
+  `agent_sdk_skill_context` summary fields such as path, hash, byte counts,
+  truncation state, and estimated tokens.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -119,6 +127,8 @@ Verification:
 - `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 
 No-touch scope preserved:
 
@@ -127,14 +137,15 @@ No-touch scope preserved:
 - Do not replace or remove existing `codex-live` / `claude-live` behavior.
 - Do not write credentials, raw full prompts, or private evaluator truth to
   observability artifacts.
+- Do not persist the SDK skill-context body in events, timing, status, or trace
+  artifacts; only metadata/hash/size summaries are allowed.
 
 Parked work:
 
 - Post-optimization perf follow-up batch captured in
   `docs/plans/live-agent-runtime-sdk-perf-followups.md`:
-  - OpenAI Agents SDK skill parity: the current plain SDK route names
-    `molmo-realworld-cleanup` but does not automatically mount/read the
-    `SKILL.md` the way Codex/Claude live workspaces do.
+  - Candidate A skill parity is accepted; keep its metadata/privacy guard and
+    optionally run live A/B only after live approval/budget/backend gates pass.
   - Full provider/model x evidence-lane matrix before new speed claims.
   - Optional per-model-call racing inside the SDK model interface, only with
     per-arm cache/cost telemetry and explicit live-run approval.

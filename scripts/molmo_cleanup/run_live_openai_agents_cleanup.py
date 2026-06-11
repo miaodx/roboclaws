@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -63,6 +64,8 @@ CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
+MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH = Path("skills/molmo-realworld-cleanup/SKILL.md")
+MAX_AGENT_SDK_SKILL_CONTEXT_BYTES = 24_000
 
 
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_PROMPT = """
@@ -213,6 +216,10 @@ class LiveOpenAIAgentsCleanupRunner:
         self.lock_file = None
         self.visual_slot: VisualBackendSlotLease | None = None
         self.agent_sdk_perf_profile = _resolve_agent_sdk_perf_profile(args)
+        self.skill_context = _load_agent_sdk_skill_context(
+            args.repo_root,
+            skill_name="molmo-realworld-cleanup",
+        )
         self.initial_kickoff_prompt = _profiled_kickoff_prompt(
             args,
             profile=self.agent_sdk_perf_profile,
@@ -243,6 +250,7 @@ class LiveOpenAIAgentsCleanupRunner:
             ),
             "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
             "prompt_profile_id": self.agent_sdk_perf_profile["profile_id"],
+            "agent_sdk_skill_context": _skill_context_timing_summary(self.skill_context),
         }
 
     def run(self) -> int:
@@ -494,6 +502,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "openai_agents_events": self.run_dir / "openai-agents-events.jsonl",
             "openai_agents_trace": self.run_dir / "openai-agents-trace.json",
             "openai_agents_spans": self.run_dir / "openai-agents-spans.jsonl",
+            "openai_agents_skill_context": self.run_dir / "openai-agents-skill-context.json",
         }
         if attempt_index:
             artifact_paths.update(
@@ -532,6 +541,7 @@ class LiveOpenAIAgentsCleanupRunner:
                     self.agent_sdk_perf_profile["model_service_retry_sleep_s"] or 0.0
                 ),
                 "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
+                "skill_context": self.skill_context,
                 "surface": "household-world",
                 "intent": _intent_for_task_name(getattr(self.args, "task_name", "")),
                 "task_name": getattr(self.args, "task_name", ""),
@@ -874,6 +884,62 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
     }
     _validate_context_limits(payload)
     return payload
+
+
+def _load_agent_sdk_skill_context(repo_root: Path, *, skill_name: str) -> dict[str, Any]:
+    source_path = Path(repo_root) / MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH
+    base_payload: dict[str, Any] = {
+        "schema": "agent_sdk_skill_context_v1",
+        "skill_name": skill_name,
+        "source_path": str(source_path),
+        "relative_path": str(MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH),
+        "policy": "canonical_skill_markdown",
+    }
+    try:
+        raw = source_path.read_bytes()
+    except OSError as exc:
+        return {
+            **base_payload,
+            "included": False,
+            "reason": "source_unavailable",
+            "error_type": exc.__class__.__name__,
+        }
+    truncated = raw[:MAX_AGENT_SDK_SKILL_CONTEXT_BYTES]
+    text = truncated.decode("utf-8", errors="replace")
+    return {
+        **base_payload,
+        "included": bool(text),
+        "reason": "included" if text else "empty",
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+        "included_bytes": len(truncated),
+        "truncated": len(raw) > len(truncated),
+        "estimated_tokens": _estimated_tokens_from_chars(len(text)),
+        "content": text,
+    }
+
+
+def _skill_context_timing_summary(skill_context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in skill_context.items()
+        if key
+        in {
+            "schema",
+            "skill_name",
+            "source_path",
+            "relative_path",
+            "policy",
+            "included",
+            "reason",
+            "sha256",
+            "bytes",
+            "included_bytes",
+            "truncated",
+            "estimated_tokens",
+            "error_type",
+        }
+    }
 
 
 def _profile_id_with_source(

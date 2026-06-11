@@ -31,6 +31,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _context_growth_metrics,
     _context_metrics,
     _live_timing_timeline,
+    _load_agent_sdk_skill_context,
     _mcp_control_plane_metrics,
     _model_service_fallback_metrics,
     _openai_agents_event_metrics,
@@ -480,6 +481,99 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert events[0]["wire_api"] == "responses"
 
 
+def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+    skill_text = "# Molmo Real-World Cleanup\n\nCall metric_map first."
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            pass
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={
+            "skill_context": {
+                "skill_name": "molmo-realworld-cleanup",
+                "included": True,
+                "reason": "included",
+                "relative_path": "skills/molmo-realworld-cleanup/SKILL.md",
+                "sha256": "abc123",
+                "bytes": len(skill_text),
+                "estimated_tokens": 12,
+                "policy": "canonical_skill_markdown",
+                "content": skill_text,
+            }
+        },
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.artifact_paths["openai_agents_skill_context"] == (
+        tmp_path / "run" / "openai-agents-skill-context.json"
+    )
+    instructions = str(captured["agent_kwargs"]["instructions"])
+    assert "Canonical skill context" in instructions
+    assert skill_text in instructions
+    assert instructions.endswith("clean the room")
+    artifact = json.loads(
+        (tmp_path / "run" / "openai-agents-skill-context.json").read_text(encoding="utf-8")
+    )
+    assert artifact == {
+        "schema": "openai_agents_skill_context_v1",
+        "skill_name": "molmo-realworld-cleanup",
+        "included": True,
+        "reason": "included",
+        "relative_path": "skills/molmo-realworld-cleanup/SKILL.md",
+        "sha256": "abc123",
+        "bytes": len(skill_text),
+        "estimated_tokens": 12,
+        "policy": "canonical_skill_markdown",
+    }
+    assert skill_text not in json.dumps(artifact)
+    events_text = (tmp_path / "run" / "openai-agents-events.jsonl").read_text(encoding="utf-8")
+    assert "abc123" in events_text
+    assert skill_text not in events_text
+
+
 def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -882,6 +976,162 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert "--expect-policy" in checker_command
     assert "openai_agents_agent" in checker_command
     assert "--require-clean-agent-run" in checker_command
+
+
+def test_openai_agents_cleanup_runner_loads_canonical_skill_context(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_dir = tmp_path / "run"
+    repo_root = tmp_path / "repo"
+    skill_path = repo_root / "skills/molmo-realworld-cleanup/SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_text = "# Molmo Real-World Cleanup\n\nCall metric_map first."
+    skill_path.write_text(skill_text, encoding="utf-8")
+    captured_contexts: list[dict[str, object]] = []
+
+    class FakeProcess:
+        pid = 4242
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            self._poll: int | None = None
+
+        def poll(self) -> int | None:
+            return self._poll
+
+        def wait(self, timeout: float | None = None) -> int:
+            self._poll = 0
+            return 0
+
+        def terminate(self) -> None:
+            self._poll = 0
+
+        def kill(self) -> None:
+            self._poll = 0
+
+    class FakeRuntime:
+        def run(self, request: LiveAgentRequest) -> LiveAgentResult:
+            captured_contexts.append(dict(request.metadata["skill_context"]))
+            (request.run_dir / "run_result.json").write_text(
+                json.dumps(
+                    {
+                        "task": "clean",
+                        "task_name": "household-cleanup",
+                        "backend": "molmospaces_subprocess",
+                        "policy": "openai_agents_agent",
+                        "cleanup_success": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (request.run_dir / "openai-agents-skill-context.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "openai_agents_skill_context_v1",
+                        "skill_name": "molmo-realworld-cleanup",
+                        "included": True,
+                        "sha256": request.metadata["skill_context"]["sha256"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return LiveAgentResult(
+                phase="finished",
+                exit_status=0,
+                run_result_present=True,
+                artifact_paths={
+                    "openai_agents_skill_context": request.artifact_path(
+                        "openai_agents_skill_context",
+                        "missing.json",
+                    )
+                },
+            )
+
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.subprocess.Popen",
+        FakeProcess,
+    )
+    port_checks = iter([False, True])
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._port_accepting",
+        lambda *_args, **_kwargs: next(port_checks),
+    )
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.OpenAIAgentsLiveRuntime",
+        lambda: FakeRuntime(),
+    )
+
+    def fake_run_and_tee(command, *, cwd, stdout_path, stderr_path, env):
+        stdout_path.write_text("checker ok\n", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._run_and_tee",
+        fake_run_and_tee,
+    )
+    args = Namespace(
+        run_dir=run_dir,
+        repo_root=repo_root,
+        status_path=run_dir / "live_status.json",
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "live.lock",
+        provider_profile="codex-env",
+        model="gpt-5.5",
+        max_turns=128,
+        incomplete_turn_continuation_attempts=2,
+        mcp_client_session_timeout_s=30.0,
+        agent_sdk_perf_profile="",
+        prompt_mode="",
+        continuation_mode="",
+        context_soft_limit_tokens=None,
+        context_hard_limit_tokens=None,
+        max_observe_per_waypoint=None,
+        raw_fpv_candidate_budget=None,
+        done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
+        server_startup_timeout_s=1.0,
+        kickoff_prompt="clean the room",
+        backend="molmospaces_subprocess",
+        task_name="household-cleanup",
+        task_intent_mode="default_cleanup",
+        policy="openai_agents_agent",
+        task="clean",
+        min_generated_mess_count="5",
+        profile="world-public-labels",
+        server_arg=[],
+        checker_visual_arg=[],
+    )
+
+    status = LiveOpenAIAgentsCleanupRunner(args).run()
+
+    assert status == 0
+    assert captured_contexts
+    skill_context = captured_contexts[0]
+    assert skill_context["included"] is True
+    assert skill_context["content"] == skill_text
+    assert skill_context["relative_path"] == "skills/molmo-realworld-cleanup/SKILL.md"
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert timing["agent_sdk_skill_context"]["included"] is True
+    assert timing["agent_sdk_skill_context"]["relative_path"] == (
+        "skills/molmo-realworld-cleanup/SKILL.md"
+    )
+    assert timing["agent_sdk_skill_context"]["bytes"] == len(skill_text.encode("utf-8"))
+    assert "content" not in timing["agent_sdk_skill_context"]
+    assert skill_text not in json.dumps(timing)
+
+
+def test_agent_sdk_skill_context_loader_reports_missing_source(tmp_path: Path) -> None:
+    context = _load_agent_sdk_skill_context(
+        tmp_path / "repo",
+        skill_name="molmo-realworld-cleanup",
+    )
+
+    assert context["included"] is False
+    assert context["reason"] == "source_unavailable"
+    assert context["relative_path"] == "skills/molmo-realworld-cleanup/SKILL.md"
+    assert "content" not in context
 
 
 def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(

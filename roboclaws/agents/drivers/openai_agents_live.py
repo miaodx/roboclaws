@@ -41,10 +41,19 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
         events_path = request.artifact_path("openai_agents_events", "openai-agents-events.jsonl")
         trace_path = request.artifact_path("openai_agents_trace", "openai-agents-trace.json")
         spans_path = request.artifact_path("openai_agents_spans", "openai-agents-spans.jsonl")
+        skill_context_path = request.artifact_path(
+            "openai_agents_skill_context",
+            "openai-agents-skill-context.json",
+        )
         status_path = request.artifact_path("live_status", "live_status.json")
 
         try:
-            result = _run_openai_agents(request, events_path=events_path, spans_path=spans_path)
+            result = _run_openai_agents(
+                request,
+                events_path=events_path,
+                spans_path=spans_path,
+                skill_context_path=skill_context_path,
+            )
         except ImportError:
             failure = LiveAgentFailure(
                 "provider_config_failure",
@@ -63,6 +72,7 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
                 artifact_paths={
                     "openai_agents_events": events_path,
                     "openai_agents_spans": spans_path,
+                    "openai_agents_skill_context": skill_context_path,
                     "live_status": status_path,
                 },
             )
@@ -79,6 +89,7 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
                 artifact_paths={
                     "openai_agents_events": events_path,
                     "openai_agents_spans": spans_path,
+                    "openai_agents_skill_context": skill_context_path,
                     "live_status": status_path,
                 },
             )
@@ -91,6 +102,7 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
             "openai_agents_events": events_path,
             "openai_agents_trace": trace_path,
             "openai_agents_spans": spans_path,
+            "openai_agents_skill_context": skill_context_path,
             "live_status": status_path,
         }
         if run_result_path.exists():
@@ -118,6 +130,7 @@ def _run_openai_agents(
     *,
     events_path: Path,
     spans_path: Path,
+    skill_context_path: Path,
 ) -> Any:
     try:
         from agents import Agent, Runner  # type: ignore[import-not-found]
@@ -147,9 +160,11 @@ def _run_openai_agents(
     server = MCPServerStreamableHttp(
         **server_kwargs,
     )
+    instructions, skill_context_summary = _instructions_with_skill_context(request)
+    _write_skill_context_summary(skill_context_path, skill_context_summary)
     agent_kwargs: dict[str, Any] = {
         "name": f"roboclaws-{request.task_name}",
-        "instructions": request.kickoff_prompt,
+        "instructions": instructions,
         "mcp_servers": [server],
         "mcp_config": {
             "failure_error_function": _recording_tool_error_function(
@@ -164,7 +179,15 @@ def _run_openai_agents(
     events_path.write_text("", encoding="utf-8")
     spans_path.parent.mkdir(parents=True, exist_ok=True)
     spans_path.write_text("", encoding="utf-8")
-    _append_event(events_path, {"event": "start", "ts_epoch": time.time(), **runtime_config})
+    _append_event(
+        events_path,
+        {
+            "event": "start",
+            "ts_epoch": time.time(),
+            **runtime_config,
+            "skill_context": skill_context_summary,
+        },
+    )
     span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=runtime_config)
     if add_trace_processor is None:
         _append_span_limitation(
@@ -235,6 +258,53 @@ def _run_with_async_mcp_server(
         return result
 
     return asyncio.run(_run())
+
+
+def _instructions_with_skill_context(request: LiveAgentRequest) -> tuple[str, dict[str, Any]]:
+    context = request.metadata.get("skill_context") if isinstance(request.metadata, dict) else None
+    if not isinstance(context, dict):
+        return request.kickoff_prompt, _skill_context_summary(
+            {
+                "skill_name": request.skill_name,
+                "included": False,
+                "reason": "not_configured",
+            }
+        )
+    content = str(context.get("content") or "")
+    summary = _skill_context_summary(
+        {
+            "skill_name": context.get("skill_name") or request.skill_name,
+            "included": bool(content),
+            "reason": context.get("reason") or ("included" if content else "empty"),
+            "source_path": context.get("source_path"),
+            "relative_path": context.get("relative_path"),
+            "sha256": context.get("sha256"),
+            "bytes": context.get("bytes"),
+            "estimated_tokens": context.get("estimated_tokens"),
+            "policy": context.get("policy"),
+        }
+    )
+    if not content:
+        return request.kickoff_prompt, summary
+    instructions = (
+        "Canonical skill context for this private OpenAI Agents SDK run:\n\n"
+        f"{content.rstrip()}\n\n"
+        "Run-specific kickoff instructions:\n\n"
+        f"{request.kickoff_prompt}"
+    )
+    return instructions, summary
+
+
+def _skill_context_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    return _drop_empty(_to_jsonable(payload))
+
+
+def _write_skill_context_summary(path: Path, summary: dict[str, Any]) -> None:
+    payload = {
+        "schema": "openai_agents_skill_context_v1",
+        **summary,
+    }
+    _write_json(path, _drop_empty(payload))
 
 
 def _max_turns(request: LiveAgentRequest) -> int:
