@@ -850,6 +850,70 @@ def test_model_input_compaction_summarizes_repeated_metric_map_outputs() -> None
     assert metrics["metric_map_bytes_reduced"] > 0
 
 
+def test_model_input_compaction_evicted_raw_fpv_images_keep_latest_frame() -> None:
+    items = [
+        {
+            "type": "function_call_output",
+            "call_id": "observe_raw_fpv_001",
+            "output": json.dumps(
+                {
+                    "schema": "raw_fpv_mcp_observe_state_v1",
+                    "raw_fpv_observation": {"observation_id": "raw_fpv_001"},
+                }
+            ),
+        },
+        {
+            "type": "image",
+            "_mime_type": "image/png",
+            "_format": "png",
+            "data": "raw_fpv_001:" + ("a" * 3_000),
+        },
+        {
+            "type": "function_call_output",
+            "call_id": "observe_raw_fpv_002",
+            "output": json.dumps(
+                {
+                    "schema": "raw_fpv_mcp_observe_state_v1",
+                    "raw_fpv_observation": {"observation_id": "raw_fpv_002"},
+                }
+            ),
+        },
+        {
+            "type": "image",
+            "_mime_type": "image/png",
+            "_format": "png",
+            "data": "raw_fpv_002:" + ("b" * 3_000),
+        },
+    ]
+
+    filtered, metrics = _compact_model_input_items(
+        items,
+        min_chars=999_999,
+        public_tool_output_summary=False,
+        repeated_metric_map_delta=False,
+        raw_fpv_image_memory={
+            "enabled": True,
+            "mode": "retain_latest_full_frame",
+            "retained_full_frame_limit": 1,
+        },
+    )
+
+    assert filtered[0] == items[0]
+    assert filtered[2] == items[2]
+    evicted = filtered[1]
+    assert evicted["schema"] == "raw_fpv_evicted_image_frame_summary_v1"
+    assert evicted["observation_id"] == "raw_fpv_001"
+    assert evicted["original_data_bytes"] > 0
+    assert "a" * 20 not in json.dumps(evicted)
+    assert filtered[3] == items[3]
+    assert metrics["raw_fpv_image_memory_enabled"] is True
+    assert metrics["raw_fpv_image_item_count"] == 2
+    assert metrics["raw_fpv_image_retained_count"] == 1
+    assert metrics["raw_fpv_image_evicted_count"] == 1
+    assert metrics["raw_fpv_image_bytes_after"] < metrics["raw_fpv_image_bytes_before"]
+    assert metrics["raw_fpv_image_bytes_reduced"] > 0
+
+
 def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -2285,7 +2349,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
     assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
-    assert gpt["model_input_compaction"]["candidate_ids"] == ["I", "N"]
+    assert gpt["model_input_compaction"]["candidate_ids"] == []
     assert gpt["model_input_compaction"]["repeated_metric_map_delta"] is False
     assert gpt["camera_grounded_composite_tools"]["candidate_ids"] == ["O"]
     assert gpt["camera_grounded_composite_tools"]["enabled"] is False
@@ -2331,6 +2395,18 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert raw["max_continuations"] == 1
     assert raw["raw_fpv_candidate_budget"] == 24
     assert raw["raw_fpv_repeated_failure_limit"] == 3
+    assert raw["model_input_compaction"]["enabled"] is True
+    assert raw["model_input_compaction"]["raw_fpv_image_memory"] == {
+        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+        "enabled": True,
+        "mode": "retain_latest_full_frame",
+        "retained_full_frame_limit": 1,
+        "candidate_ids": ["AA"],
+        "private_artifact_policy": (
+            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
+            "remain complete"
+        ),
+    }
     assert raw["done_retry_budget"] == 1
 
     custom = _resolve_agent_sdk_perf_profile(
@@ -2347,6 +2423,8 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
                 "max_observe_per_waypoint": 2,
                 "raw_fpv_candidate_budget": 3,
                 "raw_fpv_repeated_failure_limit": 2,
+                "raw_fpv_image_memory": True,
+                "raw_fpv_image_memory_retain": 2,
                 "done_retry_budget": 4,
             }
         )
@@ -2359,7 +2437,12 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert custom["context_hard_limit_tokens"] == 34
     assert custom["max_observe_per_waypoint"] == 2
     assert custom["raw_fpv_repeated_failure_limit"] == 2
-    assert custom["model_input_compaction"]["candidate_ids"] == ["I", "N"]
+    assert custom["model_input_compaction"]["candidate_ids"] == ["AA"]
+    assert custom["model_input_compaction"]["mode"] == "raw_fpv_image_memory_v1"
+    assert custom["model_input_compaction"]["enabled"] is True
+    assert (
+        custom["model_input_compaction"]["raw_fpv_image_memory"]["retained_full_frame_limit"] == 2
+    )
 
     compaction = _resolve_agent_sdk_perf_profile(
         Namespace(
@@ -2368,6 +2451,8 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
                 "agent_sdk_perf_profile": "custom",
                 "model_input_compaction": True,
                 "model_input_compaction_min_chars": 80,
+                "raw_fpv_image_memory": True,
+                "raw_fpv_image_memory_retain": 2,
                 "camera_grounded_composite_tools": True,
             }
         )
@@ -2375,11 +2460,24 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert compaction["model_input_compaction"] == {
         "schema": "agent_sdk_model_input_compaction_v1",
         "enabled": True,
-        "mode": "public_tool_result_summary_v1+repeated_metric_map_delta_v1",
+        "mode": (
+            "public_tool_result_summary_v1+repeated_metric_map_delta_v1+raw_fpv_image_memory_v1"
+        ),
         "min_chars": 80,
-        "candidate_ids": ["I", "N"],
+        "candidate_ids": ["I", "N", "AA"],
         "hook": "RunConfig.call_model_input_filter",
         "repeated_metric_map_delta": True,
+        "raw_fpv_image_memory": {
+            "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+            "enabled": True,
+            "mode": "retain_latest_full_frame",
+            "retained_full_frame_limit": 2,
+            "candidate_ids": ["AA"],
+            "private_artifact_policy": (
+                "model-facing raw-FPV image memory only; MCP traces, reports, and image "
+                "artifacts remain complete"
+            ),
+        },
         "private_artifact_policy": (
             "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
         ),
@@ -2730,6 +2828,14 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
                             "metric_map_bytes_before": 1400,
                             "metric_map_bytes_after": 500,
                             "metric_map_bytes_reduced": 900,
+                            "raw_fpv_image_memory_enabled": True,
+                            "raw_fpv_image_memory_mode": "retain_latest_full_frame",
+                            "raw_fpv_image_item_count": 2,
+                            "raw_fpv_image_retained_count": 1,
+                            "raw_fpv_image_evicted_count": 1,
+                            "raw_fpv_image_bytes_before": 1000,
+                            "raw_fpv_image_bytes_after": 350,
+                            "raw_fpv_image_bytes_reduced": 650,
                         },
                     }
                 ),
@@ -2787,6 +2893,15 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
     assert metrics["metric_map_bytes_after"] == 800
     assert metrics["metric_map_bytes_reduced"] == 900
     assert metrics["metric_map_byte_reduction_ratio"] == 0.529412
+    assert metrics["raw_fpv_image_memory_enabled"] is True
+    assert metrics["raw_fpv_image_memory_modes"] == ["retain_latest_full_frame"]
+    assert metrics["raw_fpv_image_item_count"] == 2
+    assert metrics["raw_fpv_image_retained_count"] == 1
+    assert metrics["raw_fpv_image_evicted_count"] == 1
+    assert metrics["raw_fpv_image_bytes_before"] == 1000
+    assert metrics["raw_fpv_image_bytes_after"] == 350
+    assert metrics["raw_fpv_image_bytes_reduced"] == 650
+    assert metrics["raw_fpv_image_byte_reduction_ratio"] == 0.65
     assert "Raw prompts" in metrics["privacy_note"]
     assert "tool payload bodies" in metrics["privacy_note"]
 
@@ -2875,6 +2990,15 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "metric_map_bytes_after": 800,
             "metric_map_bytes_reduced": 900,
             "metric_map_byte_reduction_ratio": 0.529412,
+            "raw_fpv_image_memory_enabled": True,
+            "raw_fpv_image_memory_modes": ["retain_latest_full_frame"],
+            "raw_fpv_image_item_count": 2,
+            "raw_fpv_image_retained_count": 1,
+            "raw_fpv_image_evicted_count": 1,
+            "raw_fpv_image_bytes_before": 1000,
+            "raw_fpv_image_bytes_after": 350,
+            "raw_fpv_image_bytes_reduced": 650,
+            "raw_fpv_image_byte_reduction_ratio": 0.65,
         },
         "context_metrics": {
             "available": True,
@@ -3000,6 +3124,15 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "metric_map_bytes_after": 800,
         "metric_map_bytes_reduced": 900,
         "metric_map_byte_reduction_ratio": 0.529412,
+        "raw_fpv_image_memory_enabled": True,
+        "raw_fpv_image_memory_modes": ["retain_latest_full_frame"],
+        "raw_fpv_image_item_count": 2,
+        "raw_fpv_image_retained_count": 1,
+        "raw_fpv_image_evicted_count": 1,
+        "raw_fpv_image_bytes_before": 1000,
+        "raw_fpv_image_bytes_after": 350,
+        "raw_fpv_image_bytes_reduced": 650,
+        "raw_fpv_image_byte_reduction_ratio": 0.65,
     }
     assert timeline["latency_attribution"]["context_metrics"] == {
         "available": True,

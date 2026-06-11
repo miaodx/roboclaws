@@ -1002,6 +1002,7 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert hasattr(image_block, "data")
     assert isinstance(image_block.data, bytes)
     assert len(image_block.data) > 0
+    assert getattr(image_block, "_mime_type", "") == "image/png"
 
 
 def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(

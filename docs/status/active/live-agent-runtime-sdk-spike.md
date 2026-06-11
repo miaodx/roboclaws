@@ -7,8 +7,8 @@ Candidate A skill-context parity, Candidate G/J deterministic settings
 attribution, Candidate I/AB deterministic prep, and Q/Y deterministic
 recommendation enrichment, Candidate N deterministic repeated-map prep,
 Candidate O deterministic camera-grounded composite prep, and Candidate P
-deterministic raw-FPV repeated-failure rails for the private
-`openai-agents-live` route.
+deterministic raw-FPV repeated-failure rails, and Candidate AA deterministic
+raw-FPV image-memory prep for the private `openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
@@ -17,10 +17,11 @@ were accepted on 2026-06-11. Candidate I/AB deterministic prep and Q/Y
 deterministic recommendation enrichment were accepted on 2026-06-12. Candidate
 N deterministic repeated-map prep and Candidate O deterministic
 camera-grounded composite prep were accepted on 2026-06-12. Candidate P
-deterministic raw-FPV repeated-failure rails were accepted on 2026-06-12. The
-full live provider/model x evidence-lane performance matrix is not done; it
-remains parked pending explicit live-run approval, credentials/backend
-availability, and budget acknowledgement. The follow-up execution plan is
+deterministic raw-FPV repeated-failure rails and Candidate AA deterministic
+raw-FPV image-memory prep were accepted on 2026-06-12. The full live
+provider/model x evidence-lane performance matrix is not done; it remains
+parked pending explicit live-run approval, credentials/backend availability,
+and budget acknowledgement. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -122,6 +123,14 @@ Result:
   detail stays compact and does not persist raw prompts, model text, image
   region payloads, full tool payload bodies, credentials, or private truth.
   This is raw-FPV stabilization prep, not a cleanup-pass or speed claim.
+- Candidate AA deterministic prep now adds raw-FPV image memory inside the
+  private SDK model-input filter. `raw_fpv_budgeted_v1` keeps the latest full
+  raw-FPV frame model-visible and summarizes older image blocks only when the
+  summary is smaller. Events and timing persist aggregate retained/evicted
+  counts, byte deltas, hashes, and policy metadata only. MCP traces, report
+  artifacts, and robot-view images remain complete; the raw-FPV MCP observe
+  boundary still returns compact state plus a full PNG image block. This is
+  model-facing prep, not a cleanup-pass or speed claim.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -251,6 +260,10 @@ Parked work:
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
     visual-candidate failure rail; cleanup-pass and live speed claims remain
     gated.
+  - Candidate AA deterministic prep is accepted as raw-FPV SDK model-facing
+    image memory; live cleanup-pass and speed claims remain gated, while
+    multiresolution thumbnail/crop policy stays parked until live evidence says
+    retained full-frame policy is insufficient.
   - Full provider/model x evidence-lane matrix before new speed claims.
   - Optional per-model-call racing inside the SDK model interface, only with
     per-arm cache/cost telemetry and explicit live-run approval.
@@ -263,12 +276,14 @@ Parked work:
     non-tool response turn-waste classification.
   - Trace-backed second-pass candidates: evidence-lane tool-surface pruning and
     a trace-derived irreducible-floor/waste classifier. Repeated `metric_map`
-    delta prep, the camera-grounded observe/label two-step collapse, and
-    raw-FPV visual-candidate failure rails have deterministic prep accepted.
+    delta prep, the camera-grounded observe/label two-step collapse, raw-FPV
+    visual-candidate failure rails, and raw-FPV image memory have deterministic
+    prep accepted.
   - Big-flow infrastructure follow-ups after the Group 0 foundation: live
     matrix execution approval, richer feature-flag attribution in live timing,
     variance/repeatability policy for publishable claims, cross-client
-    regression guard, and raw-FPV image-memory policy.
+    regression guard, and multiresolution raw-FPV thumbnail/crop policy if live
+    evidence shows it is needed.
   - Default MCP composite/merge tools remain out of scope; Candidate O is
     SDK-private and opt-in only.
 - Anthropic Claude Agent SDK spike.

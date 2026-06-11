@@ -7,6 +7,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ MODEL_SERVICE_RETRY_ATTEMPTS_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_
 MODEL_SERVICE_RETRY_SLEEP_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S"
 DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS = 1200
 MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
+RAW_FPV_OBSERVATION_ID_RE = re.compile(r"raw_fpv_\d+")
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -444,6 +446,22 @@ def _bool_setting(value: Any, *, default: bool) -> bool:
     return str(value).strip().lower() not in {"0", "false", "no", "off"}
 
 
+def _boolish(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(1, parsed)
+
+
 def _model_input_compaction_filter(
     events_path: Path,
     *,
@@ -459,6 +477,13 @@ def _model_input_compaction_filter(
         filtered_items, metrics = _compact_model_input_items(
             original_items,
             min_chars=int(config.get("min_chars") or DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS),
+            public_tool_output_summary="public_tool_result_summary_v1"
+            in str(config.get("mode") or ""),
+            repeated_metric_map_delta="repeated_metric_map_delta_v1"
+            in str(config.get("mode") or ""),
+            raw_fpv_image_memory=config.get("raw_fpv_image_memory")
+            if isinstance(config.get("raw_fpv_image_memory"), dict)
+            else None,
         )
         _append_model_input_filter_event(
             events_path,
@@ -496,7 +521,13 @@ def _compact_model_input_items(
     items: list[Any],
     *,
     min_chars: int,
+    public_tool_output_summary: bool = True,
+    repeated_metric_map_delta: bool = True,
+    raw_fpv_image_memory: dict[str, Any] | None = None,
 ) -> tuple[list[Any], dict[str, Any]]:
+    image_policy = _raw_fpv_image_memory_policy(raw_fpv_image_memory)
+    image_plan = _raw_fpv_image_memory_plan(items, image_policy)
+    image_metrics = _new_raw_fpv_image_memory_metrics(image_policy)
     filtered: list[Any] = []
     items_seen: dict[str, int] = {}
     metric_map_seen = False
@@ -508,14 +539,25 @@ def _compact_model_input_items(
     input_bytes_before = 0
     input_bytes_after = 0
     compacted_count = 0
-    for item in items:
+    for index, item in enumerate(items):
         item_bytes = _json_size_bytes(item)
         input_bytes_before += item_bytes
-        candidate, candidate_kind = _compaction_candidate(
-            item,
-            min_chars=min_chars,
-            metric_map_seen=metric_map_seen,
-        )
+        image_info = image_plan.get(index)
+        if image_info is not None:
+            candidate, candidate_kind = _raw_fpv_image_memory_candidate(
+                item,
+                image_info=image_info,
+                policy=image_policy,
+                metrics=image_metrics,
+            )
+        else:
+            candidate, candidate_kind = _compaction_candidate(
+                item,
+                min_chars=min_chars,
+                metric_map_seen=metric_map_seen,
+                public_tool_output_summary=public_tool_output_summary,
+                repeated_metric_map_delta=repeated_metric_map_delta,
+            )
         if _is_metric_map_tool_output(item):
             metric_map_output_count += 1
             metric_map_bytes_before += item_bytes
@@ -551,6 +593,7 @@ def _compact_model_input_items(
         "metric_map_bytes_before": metric_map_bytes_before,
         "metric_map_bytes_after": metric_map_bytes_after,
         "metric_map_bytes_reduced": max(0, metric_map_bytes_before - metric_map_bytes_after),
+        **image_metrics,
     }
 
 
@@ -559,6 +602,8 @@ def _compaction_candidate(
     *,
     min_chars: int,
     metric_map_seen: bool,
+    public_tool_output_summary: bool,
+    repeated_metric_map_delta: bool,
 ) -> tuple[Any | None, str]:
     payload = _to_jsonable(item)
     if not isinstance(payload, dict):
@@ -576,7 +621,7 @@ def _compaction_candidate(
         return None, ""
     output = payload.get(output_key)
     output_text = output if isinstance(output, str) else json.dumps(output, sort_keys=True)
-    if metric_map_seen and _is_metric_map_tool_output(payload):
+    if repeated_metric_map_delta and metric_map_seen and _is_metric_map_tool_output(payload):
         compacted = copy.deepcopy(payload)
         summary = json.dumps(
             _repeated_metric_map_delta_summary(output_text, item_type=item_type),
@@ -585,7 +630,7 @@ def _compaction_candidate(
         if len(summary) < len(output_text):
             compacted[output_key] = summary
             return compacted, "repeated_metric_map_delta"
-    if len(output_text) < min_chars:
+    if not public_tool_output_summary or len(output_text) < min_chars:
         return None, ""
     compacted = copy.deepcopy(payload)
     compacted[output_key] = json.dumps(
@@ -593,6 +638,144 @@ def _compaction_candidate(
         sort_keys=True,
     )
     return compacted, "generic_public_tool_output_summary"
+
+
+def _raw_fpv_image_memory_policy(config: dict[str, Any] | None) -> dict[str, Any]:
+    config = config if isinstance(config, dict) else {}
+    enabled = _boolish(config.get("enabled"), default=False)
+    retained = _positive_int(config.get("retained_full_frame_limit"), default=1)
+    if not enabled:
+        retained = 0
+    return {
+        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+        "enabled": enabled,
+        "mode": str(config.get("mode") or ("retain_latest_full_frame" if enabled else "off")),
+        "retained_full_frame_limit": retained,
+        "summary_kind": "raw_fpv_evicted_image_frame_summary_v1",
+        "candidate_ids": ["AA"] if enabled else [],
+        "private_artifact_policy": (
+            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
+            "remain complete"
+        ),
+    }
+
+
+def _new_raw_fpv_image_memory_metrics(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "raw_fpv_image_memory_enabled": bool(policy.get("enabled")),
+        "raw_fpv_image_memory_mode": str(policy.get("mode") or "off"),
+        "raw_fpv_image_retained_limit": int(policy.get("retained_full_frame_limit") or 0),
+        "raw_fpv_image_item_count": 0,
+        "raw_fpv_image_retained_count": 0,
+        "raw_fpv_image_evicted_count": 0,
+        "raw_fpv_image_bytes_before": 0,
+        "raw_fpv_image_bytes_after": 0,
+        "raw_fpv_image_bytes_reduced": 0,
+    }
+
+
+def _raw_fpv_image_memory_plan(
+    items: list[Any],
+    policy: dict[str, Any],
+) -> dict[int, dict[str, Any]]:
+    if not policy.get("enabled"):
+        return {}
+    candidates = []
+    last_observation_id = ""
+    for index, item in enumerate(items):
+        item_text = json.dumps(_to_jsonable(item), sort_keys=True)
+        matches = RAW_FPV_OBSERVATION_ID_RE.findall(item_text)
+        if matches:
+            last_observation_id = matches[-1]
+        info = _raw_fpv_image_info(item)
+        if info is not None:
+            if not info.get("observation_id"):
+                info["observation_id"] = last_observation_id
+            candidates.append((index, info))
+    retain_limit = int(policy.get("retained_full_frame_limit") or 0)
+    retained = {index for index, _info in candidates[-retain_limit:]} if retain_limit > 0 else set()
+    return {
+        index: {
+            **info,
+            "retain_full_frame": index in retained,
+        }
+        for index, info in candidates
+    }
+
+
+def _raw_fpv_image_info(item: Any) -> dict[str, Any] | None:
+    payload = _to_jsonable(item)
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get("data")
+    if isinstance(data, (bytes, bytearray)):
+        data_len = len(data)
+    else:
+        data_text = str(data or "")
+        data_len = len(data_text.encode("utf-8")) if data_text else 0
+    if data_len <= 0:
+        return None
+    mime = str(payload.get("_mime_type") or payload.get("mime_type") or payload.get("mime") or "")
+    fmt = str(payload.get("_format") or payload.get("format") or "")
+    if "image" not in mime and fmt.lower() not in {"png", "jpg", "jpeg", "webp"}:
+        return None
+    material = json.dumps(payload, sort_keys=True).encode("utf-8")
+    text = material.decode("utf-8", errors="ignore")
+    matches = RAW_FPV_OBSERVATION_ID_RE.findall(text)
+    observation_id = matches[-1] if matches else ""
+    return {
+        "observation_id": observation_id,
+        "mime_type": mime or (f"image/{fmt.lower()}" if fmt else "image/unknown"),
+        "format": fmt,
+        "data_bytes": data_len,
+        "item_bytes": len(material),
+        "sha256": hashlib.sha256(material).hexdigest(),
+    }
+
+
+def _raw_fpv_image_memory_candidate(
+    item: Any,
+    *,
+    image_info: dict[str, Any],
+    policy: dict[str, Any],
+    metrics: dict[str, Any],
+) -> tuple[Any | None, str]:
+    metrics["raw_fpv_image_item_count"] += 1
+    metrics["raw_fpv_image_bytes_before"] += _json_size_bytes(item)
+    if image_info.get("retain_full_frame"):
+        metrics["raw_fpv_image_retained_count"] += 1
+        metrics["raw_fpv_image_bytes_after"] += _json_size_bytes(item)
+        return None, ""
+    summary = {
+        "schema": "raw_fpv_evicted_image_frame_summary_v1",
+        "observation_id": image_info.get("observation_id") or "",
+        "mime_type": image_info.get("mime_type") or "",
+        "format": image_info.get("format") or "",
+        "original_data_bytes": image_info.get("data_bytes") or 0,
+        "original_item_bytes": image_info.get("item_bytes") or 0,
+        "original_sha256": image_info.get("sha256") or "",
+        "retention_policy": {
+            "mode": policy.get("mode"),
+            "retained_full_frame_limit": policy.get("retained_full_frame_limit"),
+        },
+        "summary": (
+            "Older raw-FPV image frame compacted before this SDK model call. "
+            "Use the latest retained frame and current raw-FPV MCP tools for visual work; "
+            "Roboclaws trace/report artifacts retain complete image evidence."
+        ),
+        "private_artifact_policy": policy.get("private_artifact_policy"),
+    }
+    if _json_size_bytes(summary) >= _json_size_bytes(item):
+        metrics["raw_fpv_image_retained_count"] += 1
+        metrics["raw_fpv_image_bytes_after"] += _json_size_bytes(item)
+        return None, ""
+    metrics["raw_fpv_image_evicted_count"] += 1
+    metrics["raw_fpv_image_bytes_after"] += _json_size_bytes(summary)
+    metrics["raw_fpv_image_bytes_reduced"] = max(
+        0,
+        metrics["raw_fpv_image_bytes_before"] - metrics["raw_fpv_image_bytes_after"],
+    )
+    return summary, "raw_fpv_image_memory"
 
 
 def _is_metric_map_tool_output(item: Any) -> bool:
