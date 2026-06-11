@@ -163,6 +163,9 @@ def build_alignment_manifest(
         "source_assets": {
             "scene_root": str(readiness.get("b1_root") or ""),
             "scene_usd": str(_nested(readiness, "b1_geometry", "local_geometry", "path") or ""),
+            "gaussian_scene_usd": str(
+                _nested(readiness, "b1_geometry", "gaussian_scene_usd", "path") or ""
+            ),
             "full_floor_usd": str(
                 _nested(readiness, "b1_geometry", "full_floor_usd", "path") or ""
             ),
@@ -173,7 +176,7 @@ def build_alignment_manifest(
         },
         "frames": {
             "map_frame": transform.get("source_frame") or "robot_map_12_map",
-            "scene_frame": transform.get("target_frame") or "b1_livingroom_usd_world_candidate",
+            "scene_frame": transform.get("target_frame") or "b1_rebuilt_scene_usd_world_candidate",
             "pose_source": readiness.get("semantic_source") or navigation.get("semantic_source"),
         },
         "transform": {
@@ -255,11 +258,7 @@ def _gaussian_assets(readiness: dict[str, Any], navigation: dict[str, Any]) -> d
         referenced_layers.extend(
             _nested(readiness, "b1_geometry", stage_key, "local_referenced_layers") or []
         )
-    gaussian_layers = [
-        str(path)
-        for path in referenced_layers
-        if "gauss" in str(path).lower() or "splat" in str(path).lower()
-    ]
+    gaussian_layers = _gaussian_layer_paths(readiness, referenced_layers)
     explicit_render_claim = bool(
         readiness.get("gaussian_rendered")
         or readiness.get("renderer_consumed_gaussian_asset")
@@ -267,7 +266,7 @@ def _gaussian_assets(readiness: dict[str, Any], navigation: dict[str, Any]) -> d
         or navigation.get("renderer_consumed_gaussian_asset")
     )
     render_status = "rendered" if explicit_render_claim else "not_claimed"
-    if point_clouds and not explicit_render_claim:
+    if (point_clouds or gaussian_layers) and not explicit_render_claim:
         render_status = "inventoried_only"
     return {
         "point_cloud_count": len(point_clouds) if isinstance(point_clouds, list) else 0,
@@ -285,6 +284,30 @@ def _gaussian_assets(readiness: dict[str, Any], navigation: dict[str, Any]) -> d
             else "Gaussian/splat assets are not claimed as rendered by this summary."
         ),
     }
+
+
+def _gaussian_layer_paths(readiness: dict[str, Any], referenced_layers: list[Any]) -> list[str]:
+    paths: list[str] = []
+    for path in referenced_layers:
+        if _looks_like_gaussian_layer(path):
+            paths.append(str(path))
+    for stage_key in ("local_geometry", "full_floor_usd", "full_floor_default_usd"):
+        path = _nested(readiness, "b1_geometry", stage_key, "path")
+        if _looks_like_gaussian_layer(path):
+            paths.append(str(path))
+    for item in _nested(readiness, "b1_geometry", "gaussian_layers") or []:
+        if isinstance(item, dict) and item.get("path"):
+            paths.append(str(item["path"]))
+    for item in _nested(readiness, "b1_geometry", "scene_partitions") or []:
+        path = _nested(item, "gaussian_layer", "path") if isinstance(item, dict) else None
+        if path:
+            paths.append(str(path))
+    return _dedupe(paths)
+
+
+def _looks_like_gaussian_layer(path: Any) -> bool:
+    raw = str(path or "").lower()
+    return bool(raw) and ("gauss" in raw or "splat" in raw or "scene_gs" in raw)
 
 
 def _blockers(readiness: dict[str, Any], navigation: dict[str, Any], tier: str) -> list[str]:

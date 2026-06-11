@@ -13,7 +13,7 @@ last_verified: 2026-06-10
 **Status:** DONE - accepted checklist complete and local navigation evidence passed
 **Created:** 2026-06-10
 **Source:** `intuitive-reduce-entropy` / `intuitive-preflight` audit after reviewing
-`data/robot-data-lab/scene-engine/data/B1_floor2_slow` against Agibot
+`data/robot-data-lab/scene-engine/data/2rd_floor_seperated` against Agibot
 `robot_map_12` and the current Isaac Lab backend gates.
 **Workflow:** Keep this as the canonical preflight contract for the B1 /
 Map 12 digital-twin navigation seam. Execute through `intuitive-flow` after
@@ -28,18 +28,20 @@ subproofs, not the final stopping point.
 
 Static evidence from the audit:
 
-- `usda/livingroom/livingroom_usdz_unpacked/livingroom.usda` opens with
-  `pxr.Usd`, loads 135 prims, and contains renderable mesh/payload geometry.
-- `usda/F2_all/F2_all.usda` and `usda/F2_all/default.usda` are mostly
-  NuRec/Gaussian volume layers plus a broad ground plane. They are suitable as
-  visual context, not as object/receptacle semantic truth.
+- `storey_1/scene_gs.usda` is the current default loaded scene layer for the
+  rebuilt second-floor asset. It references `storey_1/scene.usd` and records
+  Gaussian/scene overlay provenance.
+- `storey_1/scene.usd` and the room-level `*/scene.usd` files contain the
+  rebuilt mesh scene partitions. They are suitable as geometry/navigation
+  context, not as object/receptacle semantic truth.
 - The existing Isaac scene indexer can load a caller-supplied
   `--scene-usd-path`, but it currently recognizes object/receptacle candidates
   through MolmoSpaces `scene_metadata.json` or path conventions such as
   `/Objects` and `/Receptacles`.
 - The current B1 scene has coarse meshes and has not been object-level or
   fixture-level segmented yet. Therefore the current indexer returns zero
-  object candidates and zero receptacle candidates for `livingroom.usda`.
+  object candidates and zero receptacle candidates for the loaded scene unless
+  a separate segmentation/manifest exists.
 - Map 12 and B1 bounds overlap strongly enough to justify a transform/overlay
   probe, but not enough to claim a verified shared frame without anchor
   residuals.
@@ -87,7 +89,7 @@ blocked USD object/receptacle semantics.
 ### Scope
 
 - Add a static readiness script for
-  `data/robot-data-lab/scene-engine/data/B1_floor2_slow`.
+  `data/robot-data-lab/scene-engine/data/2rd_floor_seperated`.
 - Inventory B1 USD/OBJ/Gaussian geometry without launching Isaac Sim or
   `SimulationApp` as the deterministic precheck.
 - Read Map 12 Nav2 metadata and navigation-memory anchors.
@@ -124,7 +126,7 @@ contract has passed:
 {
   "schema": "b1_map12_digital_twin_readiness_v1",
   "b1_geometry_loaded": true,
-  "b1_geometry_source": "coarse_usd_or_obj",
+  "b1_geometry_source": "rebuilt_scene_engine_usd_meshes",
   "usd_object_index_ready": false,
   "usd_receptacle_index_ready": false,
   "reason": "B1 assets are currently coarse meshes without object-level segmentation",
@@ -157,8 +159,8 @@ final artifact or the navigation-smoke artifact may set
   without launching Isaac Sim / `SimulationApp`.
 - Record stage metadata: default prim, `metersPerUnit`, up axis, prim count,
   mesh count, local referenced layers, and world bounds where available.
-- Record full-floor Gaussian / OBJ bounds separately from local `livingroom`
-  geometry bounds.
+- Record rebuilt Gaussian scene layer and room/partition USD inventory
+  separately from mesh-scene geometry bounds.
 - Read Map 12 Nav2 metadata from
   `vendors/agibot_sdk/artifacts/maps/robot_map_12/agibot/nav2.yaml`.
 - Read Map 12 semantic anchors from
@@ -177,12 +179,12 @@ final artifact or the navigation-smoke artifact may set
 
 ```bash
 .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
-  --b1-root data/robot-data-lab/scene-engine/data/B1_floor2_slow \
+  --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 \
   --output output/b1-map12/readiness/readiness.json
 
 just harness::b1-map12-navigation-smoke \
-  b1_root=data/robot-data-lab/scene-engine/data/B1_floor2_slow \
+  b1_root=data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   map12_root=vendors/agibot_sdk/artifacts/maps/robot_map_12 \
   output_dir=output/b1-map12/navigation-smoke
 
@@ -248,8 +250,9 @@ Must not regress:
 
 - `vendors/agibot_sdk/artifacts/maps/robot_map_12` owns the Map 12 Nav2 map,
   occupancy grid, raw map snapshot, and navigation-memory anchors.
-- `data/robot-data-lab/scene-engine/data/B1_floor2_slow` owns the B1 Gaussian,
-  OBJ, USD, and local asset payloads.
+- `data/robot-data-lab/scene-engine/data/2rd_floor_seperated` owns the current
+  rebuilt B1 second-floor Gaussian, USD, room-partition, and local asset
+  payloads.
 - `roboclaws/household/isaac_lab_backend.py` passes optional
   `scene_usd_path` into the worker without importing Isaac in the core process.
 - `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` owns USD loading,
@@ -320,7 +323,7 @@ Integration gates:
 
 ```bash
 .venv-isaaclab/bin/python scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
-  --b1-root data/robot-data-lab/scene-engine/data/B1_floor2_slow \
+  --b1-root data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   --map12-root vendors/agibot_sdk/artifacts/maps/robot_map_12 \
   --output output/b1-map12/readiness/readiness.json
 ```
@@ -329,7 +332,7 @@ Product run gates:
 
 ```bash
 just harness::b1-map12-navigation-smoke \
-  b1_root=data/robot-data-lab/scene-engine/data/B1_floor2_slow \
+  b1_root=data/robot-data-lab/scene-engine/data/2rd_floor_seperated \
   map12_root=vendors/agibot_sdk/artifacts/maps/robot_map_12 \
   output_dir=output/b1-map12/navigation-smoke
 ```
@@ -365,6 +368,18 @@ Mark this plan done when:
 - tests reject any artifact that claims manipulation support.
 
 ## Execution Log
+
+### 2026-06-11 - Rebuilt Scene Asset Refresh
+
+Status: current default asset updated.
+
+- Replaced the old `B1_floor2_slow` default asset root with
+  `data/robot-data-lab/scene-engine/data/2rd_floor_seperated`.
+- The launch/default smoke scene now uses `storey_1/scene_gs.usda`, with
+  `storey_1/scene.usd` retained in readiness evidence as the mesh scene.
+- Readiness evidence now inventories the rebuilt scene-engine partitions and
+  room-level `scene_gs.usda` layers instead of assuming the old
+  `usda/livingroom` / `usda/F2_all` layout.
 
 ### 2026-06-10 - Implemented And Verified
 

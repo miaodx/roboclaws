@@ -11,6 +11,7 @@ from scripts.isaac_lab_cleanup.check_b1_map12_readiness import (
     READINESS_SCHEMA,
     SEMANTIC_SOURCE,
     SEMANTIC_USD_BLOCKED,
+    inspect_scene_engine_asset_layout,
     readiness_artifact_with_navigation,
     validate_navigation_smoke_artifact,
     validate_readiness_artifact,
@@ -22,7 +23,7 @@ def static_readiness_payload() -> dict[str, object]:
         "schema": READINESS_SCHEMA,
         "static_precheck_only": True,
         "b1_geometry_loaded": True,
-        "b1_geometry_source": "coarse_usd_or_obj",
+        "b1_geometry_source": "rebuilt_scene_engine_usd_meshes",
         "usd_object_index_ready": False,
         "usd_receptacle_index_ready": False,
         "map12_overlay_status": "candidate",
@@ -44,7 +45,7 @@ def navigation_payload(tmp_path: Path, *, same_pose: bool = False) -> dict[str, 
     Image.new("RGB", (12, 8), color=(10, 40, 90)).save(first)
     Image.new("RGB", (12, 8), color=(90, 40, 10)).save(second)
     pose_1 = {
-        "frame": "b1_livingroom_usd_world_candidate",
+        "frame": "b1_rebuilt_scene_usd_world_candidate",
         "x": -4.0,
         "y": -8.0,
         "z": 0.0,
@@ -78,6 +79,27 @@ def test_static_readiness_does_not_claim_navigation_or_manipulation() -> None:
     errors = validate_readiness_artifact(static_readiness_payload())
 
     assert errors == []
+
+
+def test_scene_engine_layout_inventory_counts_rebuilt_partitions(tmp_path: Path) -> None:
+    scene_root = tmp_path / "2rd_floor_seperated"
+    for room_name in ("meeting_room_a", "storey_1"):
+        room = scene_root / room_name
+        (room / "configuration" / "materials").mkdir(parents=True)
+        (room / "scene.usd").write_text("usd", encoding="utf-8")
+        (room / "scene_gs.usda").write_text("gs", encoding="utf-8")
+        (room / "config.yaml").write_text("config", encoding="utf-8")
+        (room / "configuration" / "materials" / "chair.png").write_bytes(b"png")
+
+    inventory = inspect_scene_engine_asset_layout(scene_root)
+
+    assert inventory["schema"] == "scene_engine_rebuilt_asset_inventory_v1"
+    assert inventory["partition_count"] == 2
+    assert inventory["usd_scene_count"] == 2
+    assert inventory["gaussian_layer_count"] == 2
+    assert inventory["primary_scene_usd"].endswith("storey_1/scene_gs.usda")
+    assert inventory["primary_mesh_scene_usd"].endswith("storey_1/scene.usd")
+    assert inventory["partitions"][0]["material_count"] == 1
 
 
 def test_static_readiness_rejects_robot_navigation_claim() -> None:
