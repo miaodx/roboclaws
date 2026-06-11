@@ -488,14 +488,9 @@ def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     assert payload["run_dir"] == str(run_dir.resolve())
 
 
-def test_operator_console_run_endpoint_passes_explicit_intent(tmp_path: Path) -> None:
-    launched: dict[str, object] = {}
-
-    def fake_start(root, request):  # noqa: ANN001, ANN202
-        launched["root"] = root
-        launched["request"] = request
-        return {"run_id": "started-run"}
-
+def test_operator_console_run_endpoint_rejects_legacy_route_id_launch(
+    tmp_path: Path,
+) -> None:
     handler = partial(ConsoleRequestHandler, root=tmp_path)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -514,19 +509,16 @@ def test_operator_console_run_endpoint_passes_explicit_intent(tmp_path: Path) ->
             ).encode("utf-8"),
             headers={"Content-Type": "application/json"},
         )
-        with patch("roboclaws.operator_console.server.start_console_run", fake_start):
-            with urllib.request.urlopen(request) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+        payload = json.loads(exc_info.value.read().decode("utf-8"))
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
 
-    assert payload["run_id"] == "started-run"
-    launch_request = launched["request"]
-    assert launch_request.route_id == "codex-mujoco-cleanup"
-    assert launch_request.intent_id == "open-ended"
-    assert launch_request.prompt == "收拾桌面上的杯子"
+    assert exc_info.value.code == 400
+    assert "codex-mujoco-cleanup" in payload["error"]
 
 
 def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) -> None:
@@ -599,7 +591,8 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert payload["status"] == "started"
     assert payload["started_run"]["run_id"] == "child-run"
     launch_request = launched["request"]
-    assert launch_request.route_id == route.id
+    assert launch_request.route_id == ""
+    assert launch_request.selection_id_override == route.selection.id
     assert launch_request.intent_id == "open-ended"
     assert launch_request.operator_session_id == "session-test"
     assert launch_request.parent_run_id == run_id

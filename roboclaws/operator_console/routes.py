@@ -228,6 +228,7 @@ class ConsoleRoute:
 
     def to_payload(self) -> dict[str, Any]:
         payload = self.selection.to_payload()
+        payload["selection_id"] = self.selection.id
         payload["legacy_route_id"] = self.id
         payload["id"] = self.id
         payload["label"] = self.label
@@ -428,9 +429,6 @@ def get_selection(selection_id: str) -> ConsoleLaunchSelection:
     for selection in list_console_combinations(include_disabled=True):
         if selection.id == selection_id:
             return selection
-    legacy = _LEGACY_ROUTE_BY_ID.get(selection_id)
-    if legacy:
-        return legacy.selection
     raise KeyError(selection_id)
 
 

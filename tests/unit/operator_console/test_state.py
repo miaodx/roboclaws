@@ -482,6 +482,31 @@ def test_state_splits_semantic_map_from_top_down_scene_view(
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
 
 
+def test_state_does_not_use_semantic_map_as_top_down_scene_view(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run",
+                "route": get_route("codex-mujoco-map-build").to_payload(),
+                "phase": "running",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    semantic_map = run_dir / "semantic_map.png"
+    semantic_map.write_bytes(b"semantic map")
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-map-build"))
+
+    assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
+    assert "topdown" not in state["latest_view_assets"]
+
+
 def test_state_uses_latest_grounding_overlay_as_fpv_when_available(
     tmp_path: Path,
 ) -> None:

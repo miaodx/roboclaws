@@ -429,10 +429,10 @@ def _run_context(root: Path, run_id: str) -> tuple[Path, ConsoleRoute | None]:
 def _state_selection_id(state: dict[str, Any]) -> str:
     payload = state.get("launch_selection")
     if isinstance(payload, dict):
-        return str(payload.get("id") or "")
+        return str(payload.get("selection_id") or payload.get("id") or "")
     route_payload = state.get("route")
     if isinstance(route_payload, dict):
-        return str(route_payload.get("id") or "")
+        return str(route_payload.get("selection_id") or route_payload.get("id") or "")
     return ""
 
 

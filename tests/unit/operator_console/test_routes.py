@@ -389,6 +389,11 @@ def test_legacy_route_lookup_is_display_only_wrapper() -> None:
     assert payload["agent_engine_id"] == "codex-cli"
 
 
+def test_legacy_route_ids_do_not_resolve_as_launch_selections() -> None:
+    with pytest.raises(KeyError):
+        get_selection("codex-mujoco-cleanup")
+
+
 def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
     selection = get_selection("molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels")
     argv = build_launch_argv(

@@ -524,7 +524,16 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
             "map_bundle/report_static_navigation_map.png",
             "map_bundle/preview.png",
         ),
-        "topdown": ("*map*.png", "*map*.jpg"),
+        "topdown": (
+            "*.map.png",
+            "*.map.jpg",
+            "*topdown*.png",
+            "*topdown*.jpg",
+            "*top-down*.png",
+            "*top-down*.jpg",
+            "*top_down*.png",
+            "*top_down*.jpg",
+        ),
         "grounding": (
             "visual_grounding/overlays/**/*.jpg",
             "visual_grounding/overlays/**/*.png",
