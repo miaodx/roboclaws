@@ -9,7 +9,8 @@ Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. The full live
 provider/model x evidence-lane performance matrix is not done; it remains
 parked pending explicit live-run approval, credentials/backend availability,
-and budget acknowledgement.
+and budget acknowledgement. The follow-up execution plan is
+`docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
 
@@ -129,8 +130,8 @@ No-touch scope preserved:
 
 Parked work:
 
-- Post-optimization reduce-entropy batch captured in
-  `docs/plans/live-agent-runtime-sdk-spike.md`:
+- Post-optimization perf follow-up batch captured in
+  `docs/plans/live-agent-runtime-sdk-perf-followups.md`:
   - OpenAI Agents SDK skill parity: the current plain SDK route names
     `molmo-realworld-cleanup` but does not automatically mount/read the
     `SKILL.md` the way Codex/Claude live workspaces do.
