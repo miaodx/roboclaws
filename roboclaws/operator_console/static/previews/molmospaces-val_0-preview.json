@@ -1,0 +1,141 @@
+{
+  "backend": "mujoco",
+  "generated_at": "2026-06-11T07:18:04Z",
+  "render_resolution": {
+    "height": 560,
+    "width": 900
+  },
+  "renderer": "molmospaces_subprocess_mujoco",
+  "scene_index": 0,
+  "scene_source": "procthor-10k-val",
+  "schema": "operator_console_scene_preview_v1",
+  "seed": 7,
+  "views": {
+    "fpv": {
+      "camera": "robot_0/head_camera",
+      "camera_diagnostics": {
+        "camera_id": 5,
+        "camera_name": "robot_0/head_camera",
+        "camera_type": "fixed",
+        "fovy_deg": 45.0,
+        "model_pos": [
+          0.05,
+          0.0,
+          0.05
+        ],
+        "model_quat_wxyz": [
+          0.5,
+          0.5,
+          -0.5,
+          -0.5
+        ],
+        "schema": "mujoco_fixed_camera_diagnostics_v1",
+        "status": "ready",
+        "world_position": [
+          6.408,
+          5.561016,
+          1.547075
+        ],
+        "world_xmat_rowmajor": [
+          1.0,
+          0.0,
+          -0.0,
+          -0.0,
+          0.247404,
+          -0.968912,
+          -0.0,
+          0.968912,
+          0.247404
+        ],
+        "zfar": 50.0,
+        "znear": 0.001
+      },
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            241
+          ],
+          [
+            0,
+            241
+          ],
+          [
+            0,
+            241
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 241.0,
+        "max_stddev": 66.956,
+        "mean_rgb": [
+          97.984,
+          56.296,
+          43.359
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "navigation_status": "ok",
+      "path": "molmospaces-val_0-fpv.png",
+      "provenance": "mujoco_robot_head_camera_first_public_waypoint",
+      "view": "raw_fpv",
+      "waypoint_id": "generated_exploration_001"
+    },
+    "topdown": {
+      "alignment_status": "mujoco_scene_rendered",
+      "camera_model": "canonical_eye_target_camera_v1",
+      "camera_pose": {
+        "eye": [
+          8.544,
+          6.4079999999999995,
+          21.36
+        ],
+        "target": [
+          8.544,
+          6.4079999999999995,
+          0.4
+        ],
+        "up": [
+          0.0,
+          1.0,
+          0.0
+        ]
+      },
+      "image_diagnostics": {
+        "channel_extrema_rgb": [
+          [
+            0,
+            241
+          ],
+          [
+            0,
+            241
+          ],
+          [
+            0,
+            241
+          ]
+        ],
+        "height": 560,
+        "max_channel_range": 241.0,
+        "max_stddev": 74.231,
+        "mean_rgb": [
+          144.891,
+          138.021,
+          131.214
+        ],
+        "schema": "operator_console_preview_image_diagnostics_v1",
+        "visual_status": "reviewable",
+        "width": 900
+      },
+      "path": "molmospaces-val_0-topdown.png",
+      "provenance": "mujoco_camera_control_canonical_eye_target",
+      "semantic_map_fallback": false,
+      "view": "topdown_scene_render",
+      "waypoint_id": "generated_exploration_001"
+    }
+  },
+  "world_id": "molmospaces/val_0"
+}

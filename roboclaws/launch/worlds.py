@@ -51,6 +51,7 @@ def _molmospaces_world_spec(scene_index: int) -> WorldSpec:
         preview_assets=(
             ("fpv", f"/previews/molmospaces-{scene_name}-fpv.png"),
             ("map", f"/previews/molmospaces-{scene_name}-map.png"),
+            ("topdown", f"/previews/molmospaces-{scene_name}-topdown.png"),
         ),
     )
 
@@ -69,6 +70,7 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         tags=("household", "physical-robot", "map-build"),
         default_backend="agibot-gdk",
         resource_kind="physical_robot",
+        preview_assets=(("map", "/asset-previews/maps/agibot-robot-map-12/preview.png"),),
     ),
     "b1-map12": WorldSpec(
         id="b1-map12",
@@ -86,6 +88,7 @@ WORLD_SPECS: dict[str, WorldSpec] = {
             "B1_floor2_slow/usda/livingroom/livingroom_usdz_unpacked/livingroom.usda",
             "robot_views=on",
         ),
+        preview_assets=(("map", "/asset-previews/maps/agibot-robot-map-12/preview.png"),),
     ),
     "ai2thor/FloorPlan201": WorldSpec(
         id="ai2thor/FloorPlan201",
@@ -118,6 +121,7 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         tags=("household", "planner-proof"),
         default_backend="mujoco",
         resource_kind="simulator",
+        preview_assets=(("map", "/previews/molmospaces-val_0-map.png"),),
     ),
 }
 

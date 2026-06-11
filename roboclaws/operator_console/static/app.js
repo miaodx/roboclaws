@@ -1584,7 +1584,7 @@ function renderSelectedScenePreview(route = state.selectedRoute) {
   const previews = route && route.preview_assets ? route.preview_assets : {};
   setImageSlot("fpv", previews.fpv, "No scene FPV preview is available.");
   setImageSlot("map", previews.map, "No semantic map preview is available.");
-  setImageSlot("topdown", null, "Top-down scene view will appear after a run starts.");
+  setImageSlot("topdown", previews.topdown, "No top-down scene preview is available.");
   setImageSlot("grounding", null, "Grounding will appear after a camera-grounded run starts.");
   const chaseEmptyText = routeHasOverviewChase(route)
     ? "Chase preview will appear after a run starts."

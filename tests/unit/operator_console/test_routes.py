@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS
@@ -35,9 +38,64 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
             "path": "/previews/molmospaces-val_9-map.png",
             "href": "/previews/molmospaces-val_9-map.png",
         },
+        "topdown": {
+            "path": "/previews/molmospaces-val_9-topdown.png",
+            "href": "/previews/molmospaces-val_9-topdown.png",
+        },
+    }
+    assert "topdown" not in worlds["agibot-g2/map-12"]["preview_assets"]
+    assert "topdown" not in worlds["b1-map12"]["preview_assets"]
+    assert worlds["agibot-g2/map-12"]["preview_assets"]["map"]["href"] == (
+        "/asset-previews/maps/agibot-robot-map-12/preview.png"
+    )
+    assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == (
+        "/asset-previews/maps/agibot-robot-map-12/preview.png"
+    )
+    assert worlds["ai2thor/FloorPlan201"]["preview_assets"] == {}
+    assert worlds["ai2thor-games/FloorPlan201"]["preview_assets"] == {}
+    assert worlds["planner-proof/default"]["preview_assets"] == {
+        "map": {
+            "path": "/previews/molmospaces-val_0-map.png",
+            "href": "/previews/molmospaces-val_0-map.png",
+        },
     }
     assert worlds["agibot-g2/map-12"]["available_backends"] == ["agibot-gdk"]
     assert worlds["b1-map12"]["default_backend"] == "isaaclab"
+
+
+def test_scene_preview_topdown_never_aliases_semantic_map() -> None:
+    worlds = {world["id"]: world for world in list_worlds()}
+
+    for world_id, world in worlds.items():
+        previews = world["preview_assets"]
+        if "topdown" not in previews:
+            continue
+        assert previews["topdown"]["href"] != previews.get("map", {}).get("href"), world_id
+        assert "-topdown." in previews["topdown"]["href"], world_id
+
+
+def test_molmospaces_scene_previews_have_render_provenance() -> None:
+    preview_root = (
+        Path(__file__).resolve().parents[3] / "roboclaws/operator_console/static/previews"
+    )
+
+    for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
+        scene_name = world_id.replace("/", "-")
+        metadata_path = preview_root / f"{scene_name}-preview.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        assert metadata["schema"] == "operator_console_scene_preview_v1"
+        assert metadata["world_id"] == world_id
+        assert metadata["backend"] == "mujoco"
+        assert metadata["views"]["fpv"]["view"] == "raw_fpv"
+        assert metadata["views"]["fpv"]["waypoint_id"]
+        assert metadata["views"]["fpv"]["provenance"] == (
+            "mujoco_robot_head_camera_first_public_waypoint"
+        )
+        assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
+        assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
+        assert metadata["views"]["topdown"]["provenance"] == (
+            "mujoco_camera_control_canonical_eye_target"
+        )
 
 
 def test_console_combinations_are_catalog_backed_axes() -> None:
