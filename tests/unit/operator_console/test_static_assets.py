@@ -78,9 +78,15 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert 'id="relocation-count-field"' in html
     assert 'id="relocation-count-input"' in html
     assert 'name="relocation_count"' in html
+    assert 'id="messup-button"' in html
+    assert 'id="messup-status"' in html
+    assert "Try Mess-up" in html
     assert "renderScenarioSetup" in app
     assert "defaultScenarioSetup" in app
     assert "selectedScenarioSetup" in app
+    assert "previewMessup" in app
+    assert "/api/messup-preview" in app
+    assert "Baseline remains available" in app
     assert "generated_mess_count" not in app
     assert 'data-operator-mode="ask_why"' in html
     assert 'data-operator-mode="steer"' in html

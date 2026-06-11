@@ -15,6 +15,7 @@ const state = {
   activeView: "overview",
   selectedIntent: "",
   setupSelectionKey: "",
+  messupStatusKey: "",
   syncAxesFromRoute: false,
 };
 
@@ -49,6 +50,8 @@ const els = {
   scenarioSetupInput: document.getElementById("scenario-setup-input"),
   relocationCountField: document.getElementById("relocation-count-field"),
   relocationCountInput: document.getElementById("relocation-count-input"),
+  messupButton: document.getElementById("messup-button"),
+  messupStatus: document.getElementById("messup-status"),
   portInput: document.getElementById("port-input"),
   selectedRouteSummary: document.getElementById("selected-route-summary"),
   commonFields: document.getElementById("common-fields"),
@@ -180,6 +183,7 @@ function bindEvents() {
     input.addEventListener("change", refreshSelectedRouteReadiness);
   });
   els.startButton.addEventListener("click", handleStartAction);
+  els.messupButton.addEventListener("click", previewMessup);
   els.latestResultButton.addEventListener("click", attachLatestResult);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
@@ -849,6 +853,7 @@ function renderScenarioSetup(route) {
   const relocation = selectedScenarioSetup() !== "baseline";
   els.relocationCountField.hidden = !relocation;
   els.relocationCountInput.disabled = !relocation;
+  renderMessupAction(route);
 }
 
 function defaultScenarioSetup(route, intent, defaults) {
@@ -856,6 +861,26 @@ function defaultScenarioSetup(route, intent, defaults) {
     return route.scenario_setup || defaults.scenario_setup || "relocate-cleanup-related-objects";
   }
   return "baseline";
+}
+
+function renderMessupAction(route) {
+  const supported = Boolean(
+    route &&
+      route.world_id &&
+      route.world_id.startsWith("molmospaces/") &&
+      route.backend_id === "mujoco"
+  );
+  const statusKey = route ? `${route.world_id}:${route.backend_id}` : "";
+  els.messupButton.disabled = !supported || Boolean(state.activeRunId);
+  els.messupButton.hidden = !supported;
+  els.messupStatus.hidden = !supported;
+  if (!supported) {
+    return;
+  }
+  if (state.messupStatusKey !== statusKey) {
+    state.messupStatusKey = statusKey;
+    els.messupStatus.textContent = "Mess-up check is optional and does not block baseline tests.";
+  }
 }
 
 function renderIntentSelector(route) {
@@ -1368,6 +1393,50 @@ function confirmAction({ title, cta, body, bodyHtml, onConfirm }) {
     },
     { once: true }
   );
+}
+
+async function previewMessup() {
+  const route = state.selectedRoute;
+  if (!route) {
+    return;
+  }
+  const requestedCount = els.relocationCountInput.value || "5";
+  els.messupButton.disabled = true;
+  els.messupStatus.textContent = "Checking mess-up target capacity...";
+  const result = await fetchJson("/api/messup-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      world_id: route.world_id,
+      backend_id: route.backend_id,
+      scenario_setup: "relocate-cleanup-related-objects",
+      relocation_count: requestedCount,
+      seed: els.seedInput.value || "7",
+    }),
+  });
+  els.messupButton.disabled = false;
+  if (result.error) {
+    els.scenarioSetupInput.value = "baseline";
+    els.messupStatus.textContent = `Mess-up check failed: ${result.error}. Baseline remains available.`;
+    renderSelection();
+    return;
+  }
+  if (result.ok) {
+    els.scenarioSetupInput.value = result.scenario_setup || "relocate-cleanup-related-objects";
+    els.relocationCountInput.value = String(result.requested_count || requestedCount);
+    state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
+    els.messupStatus.textContent =
+      `Mess-up ready: ${result.selected_count} / ${result.requested_count} targets. ` +
+      "Start Agent Run will use this relocation setup.";
+  } else {
+    els.scenarioSetupInput.value = "baseline";
+    state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
+    els.messupStatus.textContent =
+      `Mess-up unavailable: ${result.message || "not enough eligible targets"}. ` +
+      "Baseline remains available for follow-up tests.";
+  }
+  renderSelection();
+  scheduleReadinessRefresh();
 }
 
 async function launchRun() {

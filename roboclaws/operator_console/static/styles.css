@@ -429,6 +429,12 @@ pre,
   background: var(--panel);
 }
 
+.messup-actions {
+  display: grid;
+  gap: 6px;
+  margin: -4px 0 16px;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
