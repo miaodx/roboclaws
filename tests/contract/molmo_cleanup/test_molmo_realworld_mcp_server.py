@@ -30,9 +30,22 @@ from roboclaws.household.types import (
     CleanupScenario,
     PrivateScoringManifest,
 )
+from roboclaws.launch.catalog import SURFACE_SPECS
+from roboclaws.launch.goals import normalize_goal_contract
+from roboclaws.launch.intents import TASK_INTENT_SPECS
 from roboclaws.mcp.profiles import MOLMOSPACES_CLEANUP_PROFILE, contract_profile
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _open_ended_goal_contract(prompt: str):
+    return normalize_goal_contract(
+        surface=SURFACE_SPECS["household-world"],
+        intent=TASK_INTENT_SPECS["open-ended"],
+        raw_prompt=prompt,
+    )
+
+
 SMOKE_PATH = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_molmo_realworld_agent_mcp_smoke.py"
 PREBUILT_BUNDLE = REPO_ROOT / "assets" / "maps" / "molmo-cleanup-default-7"
 
@@ -137,7 +150,6 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
     )
     try:
         metric_map = server.call_tool("metric_map")
-        fixture_hints = server.call_tool("fixture_hints")
         observation = {}
         for waypoint in metric_map["inspection_waypoints"]:
             waypoint_id = waypoint["waypoint_id"]
@@ -155,9 +167,6 @@ def test_realworld_mcp_surface_uses_metric_map_and_visible_handles(tmp_path: Pat
     assert metric_map["map_bundle"]["environment_id"] == "molmo-cleanup-default-7"
     assert "static map/fixture coverage candidates" in metric_map["instruction"]
     assert "objects" not in metric_map
-    assert fixture_hints["fixture_hint_mode"] == "room_only"
-    assert fixture_hints["schema"] == "static_fixture_semantic_map_v1"
-    assert "Runtime movable objects come only from observe" in fixture_hints["instruction"]
     assert observation["visible_object_detections"]
     assert observation["visible_object_detections"][0]["object_id"].startswith("observed_")
     assert "target_receptacle_id" not in json.dumps(observation)
@@ -266,7 +275,6 @@ def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
     )
     try:
         metric_map = server.call_tool("metric_map")
-        fixture_hints = server.call_tool("fixture_hints")
         runtime_map = server._agent_view_payload()["runtime_metric_map"]
         for waypoint in metric_map["inspection_waypoints"]:
             server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
@@ -278,7 +286,6 @@ def test_realworld_mcp_defaults_to_minimal_map_mode(tmp_path: Path) -> None:
     assert metric_map["mode"] == MINIMAL_MAP_MODE
     assert metric_map["rooms"] == []
     assert metric_map["driveable_ways"] == []
-    assert fixture_hints["rooms"] == []
     assert runtime_map["map_mode"] == MINIMAL_MAP_MODE
     assert runtime_map["static_map"]["fixtures"] == []
     assert agent_view["runtime_metric_map"]["map_mode"] == MINIMAL_MAP_MODE
@@ -296,7 +303,6 @@ def test_realworld_mcp_minimal_map_exposes_actionable_runtime_anchors(
     )
     try:
         metric_map = server.call_tool("metric_map")
-        fixture_hints = server.call_tool("fixture_hints")
         observed = None
         for waypoint in metric_map["inspection_waypoints"]:
             server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
@@ -318,8 +324,6 @@ def test_realworld_mcp_minimal_map_exposes_actionable_runtime_anchors(
     finally:
         server.close()
 
-    assert fixture_hints["rooms"] == []
-    assert "runtime_metric_map.public_semantic_anchors" in fixture_hints["instruction"]
     assert target_anchor_id.startswith("anchor_fixture_")
     assert navigation["fixture_id"] == target_anchor_id
 
@@ -378,6 +382,24 @@ def test_realworld_mcp_rejects_removed_cleanup_composite(
         server.close()
 
 
+def test_realworld_mcp_rejects_removed_fixture_hints_tool(
+    tmp_path: Path,
+) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        cleanup_profile=WORLD_LABELS_PROFILE,
+    )
+    try:
+        assert "fixture_hints" not in _fastmcp_tool_names(server)
+        assert "fixture_hints" not in server._agent_view_payload()["public_tool_names"]
+        with pytest.raises(ValueError, match="fixture_hints"):
+            server.call_tool("fixture_hints")
+    finally:
+        server.close()
+
+
 def test_realworld_mcp_rejects_skipped_semantic_pick_with_public_guidance(
     tmp_path: Path,
 ) -> None:
@@ -428,7 +450,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert run_result["generated_mess_count"] == 5
     assert run_result["semantic_substeps"]
     assert run_result["tool_event_counts"]["metric_map:request"] == 1
-    assert run_result["tool_event_counts"]["fixture_hints:request"] == 1
+    assert "fixture_hints:request" not in run_result["tool_event_counts"]
     assert run_result["tool_event_counts"]["observe:request"] >= 1
     assert run_result["agent_diagnostics"]["premature_done"] is False
     assert run_result["agent_diagnostics"]["premature_done_source"] == "sweep_coverage_rate"
@@ -455,7 +477,6 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert "map_bundle/map.yaml" in report_text
     assert "report_only_simulation_view" in report_text
     assert "metric_map" in trace_text
-    assert "fixture_hints" in trace_text
     assert '"tool": "scene_objects"' not in trace_text
     assert "Agent View" in report_text
     assert "Private Evaluation" in report_text
@@ -764,23 +785,23 @@ def test_realworld_mcp_world_labels_requested_run_size_does_not_use_raw_fpv_chai
     assert run_result["agent_diagnostics"]["complete_semantic_substep_objects"] == 0
 
 
-def test_realworld_mcp_custom_task_mode_is_recorded_in_run_result(
+def test_realworld_mcp_open_ended_intent_is_recorded_in_run_result(
     tmp_path: Path,
 ) -> None:
+    prompt = "我渴了，帮我找些解渴的东西"
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         policy="codex_agent",
         agent_driven=True,
-        task_prompt="我渴了，帮我找些解渴的东西",
-        task_intent_mode="custom",
+        task_prompt=prompt,
+        goal_contract=_open_ended_goal_contract(prompt),
     )
     try:
         server.call_tool("metric_map")
-        server.call_tool("fixture_hints")
         server.call_tool("observe")
-        done = server.call_tool("done", reason="custom task complete")
+        done = server.call_tool("done", reason="open-ended task complete")
         run_result = json.loads(Path(done["run_result"]).read_text(encoding="utf-8"))
     finally:
         server.close()
@@ -788,9 +809,10 @@ def test_realworld_mcp_custom_task_mode_is_recorded_in_run_result(
     assert done["ok"] is True
     assert done["intent_status"] == "success"
     assert done["goal_status"] == "success"
-    assert run_result["task_prompt"] == "我渴了，帮我找些解渴的东西"
-    assert run_result["task_intent_mode"] == "custom"
+    assert run_result["task_prompt"] == prompt
+    assert "task_intent_mode" not in run_result
     assert run_result["task_intent"] == "open-ended"
+    assert run_result["goal_contract"]["intent"] == "open-ended"
     assert run_result["intent_status"] == "success"
     assert run_result["goal_status"] == "success"
     assert run_result["final_status"] == "success"

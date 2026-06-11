@@ -45,11 +45,12 @@ def raw_fpv_inline_candidate_instruction(observation_id: str | None = None) -> s
         "Call navigate_to_visual_candidate with source_observation_id, category, "
         "evidence_note, and image_region before pick. In minimal map mode, omit "
         "target_fixture_id and normally omit source_fixture_id; do not invent "
-        "fixture ids from empty fixture_hints or from guesses about the room. "
+        "fixture ids from stale map labels or guesses about the room. "
         "Use the candidate_fixture_id/recommended_tool returned by "
         "navigate_to_visual_candidate plus runtime_metric_map.public_semantic_anchors. "
-        "In explicit rich legacy/debug mode only, target_fixture_id may come from "
-        "non-empty fixture_hints. For any candidate you want to navigate to or pick, "
+        "When a destination is named or stale, resolve it through resolve_target_query "
+        "or public runtime_metric_map target candidates. For any candidate you want to "
+        "navigate to or pick, "
         "use image_region={type:bbox,value:[x,y,width,height]} from the same visible "
         "agent-facing FPV object. Verbal regions may clarify a bbox, but they do "
         "not count as an actionable cleanup chain without a reviewable bbox. If "
@@ -78,7 +79,7 @@ def raw_fpv_visual_candidate_recovery(
     }
     minimal_map = map_mode == "minimal"
     if not minimal_map:
-        example["target_fixture_id"] = "<fixture_id_from_non_empty_fixture_hints>"
+        example["target_fixture_id"] = "<public_anchor_or_resolved_fixture_id>"
     return {
         "schema": "raw_fpv_visual_candidate_recovery_v1",
         "required_tool": "navigate_to_visual_candidate",
@@ -86,7 +87,7 @@ def raw_fpv_visual_candidate_recovery(
         "declaration_strategy": RAW_FPV_DECLARATION_STRATEGY,
         "minimal_map_target_fixture_rule": "omit_target_fixture_id"
         if minimal_map
-        else "target_fixture_id_may_come_from_non_empty_fixture_hints",
+        else "target_fixture_id_may_come_from_public_runtime_map_anchor",
         "accepted_image_region_forms": [dict(item) for item in RAW_FPV_ACCEPTED_IMAGE_REGION_FORMS],
         "invalid_fields_to_avoid": list(RAW_FPV_INVALID_FIELDS_TO_AVOID),
         "valid_example": example,
@@ -102,7 +103,7 @@ def raw_fpv_visual_candidate_recovery_hint(
     target_rule = (
         "omit target_fixture_id in minimal map mode"
         if map_mode == "minimal"
-        else "use target_fixture_id only from non-empty fixture_hints"
+        else "use target_fixture_id only from public runtime-map anchors"
     )
     observation = source_observation_id or "<raw_fpv_observation_id>"
     return (

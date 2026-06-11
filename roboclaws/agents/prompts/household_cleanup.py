@@ -6,8 +6,12 @@ import argparse
 
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.task_intent import (
+    HOUSEHOLD_INTENT_OPEN_ENDED,
     TASK_INTENT_MODE_CUSTOM,
     TASK_INTENT_MODE_DEFAULT,
+    household_intent_from_goal_contract,
+    household_intent_is_open_ended,
+    normalize_household_intent,
     normalize_task_intent_mode,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_prompt_rule
@@ -28,9 +32,9 @@ CUSTOM_PREFIX = (
 )
 
 COMMON_WAYPOINT_RULES = (
-    "Call metric_map and fixture_hints first, build an exact waypoint checklist "
+    "Call metric_map first, build an exact waypoint checklist "
     "from metric_map.inspection_waypoints, treat the selected Nav2 map bundle only "
-    "through metric_map/fixture_hints and not raw occupancy images, sweep every "
+    "through metric_map and runtime_metric_map, not raw occupancy images, sweep every "
     "waypoint with navigate_to_waypoint then observe, mark a waypoint complete only "
     "after that waypoint_id has an observe response, "
     "and resolve named targets, stale fixture ids, destination categories, or "
@@ -50,10 +54,10 @@ COMMON_CLEANUP_RULES = (
     "is generated."
 )
 
-CUSTOM_TASK_RULES = (
+OPEN_ENDED_TASK_RULES = (
     "The operator task is the only goal. Do not start a room-cleanup routine, full "
     "waypoint sweep, visual-scan prerequisite, or pick/place chain unless the operator "
-    "task itself requires it. Use metric_map, fixture_hints, navigate_to_waypoint, "
+    "task itself requires it. Use metric_map, navigate_to_waypoint, "
     "resolve_target_query, observe, and adjust_camera only as needed to gather enough "
     "public evidence for the operator task. If the task names a target or stale label, "
     "resolve it through public target_candidates first; if no actionable match exists, "
@@ -67,14 +71,16 @@ CUSTOM_TASK_RULES = (
     "as part of the operator task. When the operator task is satisfied and you are not "
     "holding an object, call done so the report is generated."
 )
+CUSTOM_TASK_RULES = OPEN_ENDED_TASK_RULES
 
 HOUSEHOLD_CLEANUP_TASK_PREFIX = "This run is household-cleanup. User task: {task}. "
-CUSTOM_HOUSEHOLD_TASK_PREFIX = (
-    "This run is household-cleanup with a custom operator task. "
+OPEN_ENDED_HOUSEHOLD_TASK_PREFIX = (
+    "This run is surface=household-world intent=open-ended. "
     "The following operator task is authoritative and overrides the default cleanup "
     "task: {task}. When this wrapper and the operator task conflict, follow the "
     "operator task subject to public tool safety and error responses. "
 )
+CUSTOM_HOUSEHOLD_TASK_PREFIX = OPEN_ENDED_HOUSEHOLD_TASK_PREFIX
 
 DEFAULT_HOUSEHOLD_CLEANUP_TASK = "clean up this room"
 PROMPT_MODE_FULL = "full"
@@ -91,6 +97,7 @@ def _task_prefix(
     task: str,
     *,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    household_intent: str = "",
     goal_contract: GoalContract | None = None,
 ) -> str:
     normalized = _normalize_task(task)
@@ -101,8 +108,11 @@ def _task_prefix(
             f"Goal scope: {goal_contract.goal_scope}. Raw user goal: "
             f"{goal_contract.raw_prompt or normalized}. "
         )
-    if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
-        return CUSTOM_HOUSEHOLD_TASK_PREFIX.format(task=normalized)
+    if (
+        household_intent_is_open_ended(household_intent)
+        or task_intent_mode == TASK_INTENT_MODE_CUSTOM
+    ):
+        return OPEN_ENDED_HOUSEHOLD_TASK_PREFIX.format(task=normalized)
     return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
 
 
@@ -115,30 +125,45 @@ def _with_task(
     task: str,
     *,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    household_intent: str = "",
     goal_contract: GoalContract | None = None,
 ) -> str:
-    prefix = CUSTOM_PREFIX if task_intent_mode == TASK_INTENT_MODE_CUSTOM else COMMON_PREFIX
+    prefix = (
+        CUSTOM_PREFIX
+        if household_intent_is_open_ended(household_intent)
+        or task_intent_mode == TASK_INTENT_MODE_CUSTOM
+        else COMMON_PREFIX
+    )
     return (
         prefix
         + _task_prefix(
             task,
             task_intent_mode=task_intent_mode,
+            household_intent=household_intent,
             goal_contract=goal_contract,
         )
         + prompt
     )
 
 
-def _custom_scope_suffix() -> str:
+def _open_ended_scope_suffix() -> str:
     return (
-        " In custom operator task mode, do not infer additional cleanup goals from "
-        "the household-cleanup route name."
+        " In intent=open-ended mode, do not infer additional cleanup goals from "
+        "cleanup implementation details."
     )
 
 
-def _task_aware_prompt(prompt: str, *, task_intent_mode: str) -> str:
-    if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
-        return prompt + _custom_scope_suffix()
+def _task_aware_prompt(
+    prompt: str,
+    *,
+    task_intent_mode: str,
+    household_intent: str,
+) -> str:
+    if (
+        household_intent_is_open_ended(household_intent)
+        or task_intent_mode == TASK_INTENT_MODE_CUSTOM
+    ):
+        return prompt + _open_ended_scope_suffix()
     return prompt
 
 
@@ -162,7 +187,7 @@ _task_prefix_legacy = _legacy_task_prefix
 SEMANTIC_MAP_BUILD_RULES = (
     "This run is semantic-map-build, not household-cleanup. User task: {task}. "
     "Do not pick, place, place_inside, open_receptacle, close_receptacle, or clean any "
-    "object. Call metric_map first, then fixture_hints, build an exact waypoint "
+    "object. Call metric_map first, build an exact waypoint "
     "checklist from metric_map.inspection_waypoints, and sweep every inspection "
     "waypoint with navigate_to_waypoint then observe. Mark a waypoint complete only "
     "after that waypoint_id has an observe response; do not treat one empty observation "
@@ -201,7 +226,7 @@ WORLD_LABELS_SANITIZED_PROMPT = (
     "pending_cleanup_candidates, clean those listed handles using their "
     "candidate_fixture_id or destination_options and then call done again; if "
     "any tool returns required_tool, call that public tool next. Use metric_map, "
-    "fixture_hints, runtime_metric_map.public_semantic_anchors, "
+    "runtime_metric_map.public_semantic_anchors, resolve_target_query, "
     "destination_policy, destination_options, and tool recovery hints to choose "
     "where to place observed objects. " + COMMON_CLEANUP_RULES
 )
@@ -226,7 +251,7 @@ CAMERA_LABELS_PROMPT = (
 )
 
 WORLD_LABELS_COMPACT_PROMPT = (
-    "Compact action cadence for world-public-labels. Call metric_map then fixture_hints, "
+    "Compact action cadence for world-public-labels. Call metric_map, "
     "build the exact inspection_waypoints checklist, and for each unchecked waypoint call "
     "navigate_to_waypoint then observe. Treat visible_object_detections as public structured "
     "detections without destination oracle fields. Clean only public observed candidates whose "
@@ -245,7 +270,7 @@ WORLD_LABELS_COMPACT_PROMPT = (
 )
 
 CAMERA_LABELS_COMPACT_PROMPT = (
-    "Compact action cadence for camera-grounded-labels. Call metric_map then fixture_hints, "
+    "Compact action cadence for camera-grounded-labels. Call metric_map, "
     "build the exact inspection_waypoints checklist, and for each unchecked waypoint call "
     "navigate_to_waypoint then observe. For each raw FPV observation, call "
     "declare_visual_candidates with observation_id only and omit candidates so the configured "
@@ -266,9 +291,8 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     cleanup_count = max(1, int(target_cleanup_count))
     cleanup_count_text = str(cleanup_count)
     return (
-        "This is the trace-preserving camera-raw-fpv skill lane. Call metric_map and "
-        "fixture_hints first, build an exact waypoint "
-        "checklist from metric_map.inspection_waypoints, sweep every inspection "
+        "This is the trace-preserving camera-raw-fpv skill lane. Call metric_map first, build "
+        "an exact waypoint checklist from metric_map.inspection_waypoints, sweep every inspection "
         "waypoint with navigate_to_waypoint then observe, and mark a waypoint complete "
         "only after that waypoint_id has an observe response. Inspect each raw FPV "
         "image block returned by observe, do not expect structured labels, and choose "
@@ -312,7 +336,7 @@ def _camera_raw_compact_prompt(
     observe_budget = max(1, int(max_observe_per_waypoint))
     done_budget = max(0, int(done_retry_budget))
     return (
-        "Compact action cadence for camera-raw-fpv. Call metric_map then fixture_hints, build "
+        "Compact action cadence for camera-raw-fpv. Call metric_map, build "
         "the exact inspection_waypoints checklist, and sweep public waypoints with "
         "navigate_to_waypoint then observe. Inspect raw FPV image blocks directly; do not expect "
         "structured labels. At each waypoint, use at most "
@@ -354,9 +378,13 @@ def render_kickoff_prompt(
 ) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
-    if intent == "open-ended":
-        task_intent_mode = TASK_INTENT_MODE_CUSTOM
     intent_mode = _normalize_task_intent_mode(task_intent_mode)
+    household_intent = household_intent_from_goal_contract(goal_contract, fallback=intent)
+    if intent_mode == TASK_INTENT_MODE_CUSTOM:
+        household_intent = HOUSEHOLD_INTENT_OPEN_ENDED
+    else:
+        household_intent = normalize_household_intent(household_intent)
+    open_ended = household_intent_is_open_ended(household_intent)
     mode = _normalize_prompt_mode(prompt_mode)
     if profile == "camera-raw-fpv":
         prompt = _camera_raw_prompt(target_cleanup_count=target_cleanup_count)
@@ -369,11 +397,13 @@ def render_kickoff_prompt(
             )
         return _with_task(
             _task_aware_prompt(
-                CUSTOM_TASK_RULES if intent_mode == TASK_INTENT_MODE_CUSTOM else prompt,
+                OPEN_ENDED_TASK_RULES if open_ended else prompt,
                 task_intent_mode=intent_mode,
+                household_intent=household_intent,
             ),
             task,
             task_intent_mode=intent_mode,
+            household_intent=household_intent,
             goal_contract=goal_contract,
         )
     if profile == "camera-grounded-labels":
@@ -382,11 +412,13 @@ def render_kickoff_prompt(
         )
         return _with_task(
             _task_aware_prompt(
-                CUSTOM_TASK_RULES if intent_mode == TASK_INTENT_MODE_CUSTOM else prompt,
+                OPEN_ENDED_TASK_RULES if open_ended else prompt,
                 task_intent_mode=intent_mode,
+                household_intent=household_intent,
             ),
             task,
             task_intent_mode=intent_mode,
+            household_intent=household_intent,
             goal_contract=goal_contract,
         )
     if profile == "world-public-labels":
@@ -397,22 +429,24 @@ def render_kickoff_prompt(
         )
         return _with_task(
             _task_aware_prompt(
-                CUSTOM_TASK_RULES if intent_mode == TASK_INTENT_MODE_CUSTOM else prompt,
+                OPEN_ENDED_TASK_RULES if open_ended else prompt,
                 task_intent_mode=intent_mode,
+                household_intent=household_intent,
             ),
             task,
             task_intent_mode=intent_mode,
+            household_intent=household_intent,
             goal_contract=goal_contract,
         )
     return _with_task(
         _task_aware_prompt(
-            CUSTOM_TASK_RULES
-            if intent_mode == TASK_INTENT_MODE_CUSTOM
-            else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
+            OPEN_ENDED_TASK_RULES if open_ended else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
             task_intent_mode=intent_mode,
+            household_intent=household_intent,
         ),
         task,
         task_intent_mode=intent_mode,
+        household_intent=household_intent,
         goal_contract=goal_contract,
     )
 

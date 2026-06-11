@@ -31,6 +31,8 @@ from roboclaws.household.semantic_timeline import (
 from roboclaws.household.target_query import resolve_target_query
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
+    household_intent_is_open_ended,
+    normalize_household_intent,
     normalize_task_intent_mode,
     task_intent_is_custom,
 )
@@ -273,6 +275,9 @@ class RealWorldCleanupContract:
             str(cleanup_profile or "").strip().lower().replace("_", "-") if cleanup_profile else ""
         )
         self.public_acceptance_config = _public_acceptance_config(public_acceptance_config)
+        self.task_intent = normalize_household_intent(
+            self.public_acceptance_config.get("task_intent")
+        )
         self.task_intent_mode = normalize_task_intent_mode(
             self.public_acceptance_config.get("task_intent_mode")
         )
@@ -418,7 +423,6 @@ class RealWorldCleanupContract:
     def public_tool_names(self) -> list[str]:
         return [
             "metric_map",
-            "fixture_hints",
             "navigate_to_room",
             "navigate_to_waypoint",
             "observe",
@@ -1611,9 +1615,11 @@ class RealWorldCleanupContract:
         semantic_cleanup_evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         blockers: list[dict[str, Any]] = []
-        custom_task = self._custom_task_intent()
+        open_ended_task = self._open_ended_task_intent()
         pending = (
-            self._held_cleanup_candidates() if custom_task else self._pending_cleanup_candidates()
+            self._held_cleanup_candidates()
+            if open_ended_task
+            else self._pending_cleanup_candidates()
         )
         if pending:
             required_tool = str(pending[0].get("required_tool") or "navigate_to_object")
@@ -1640,7 +1646,7 @@ class RealWorldCleanupContract:
             )
 
         coverage = self._sweep_coverage()
-        if not custom_task and coverage["unvisited_waypoint_ids"]:
+        if not open_ended_task and coverage["unvisited_waypoint_ids"]:
             next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
             blockers.append(
                 {
@@ -1689,6 +1695,7 @@ class RealWorldCleanupContract:
             "status": "blocked" if blockers else "ready",
             "blockers": blockers,
             "policy_uses_private_truth": False,
+            "task_intent": self.task_intent,
             "task_intent_mode": self.task_intent_mode,
             "public_contract_note": (
                 "Done readiness is evaluated from public Agent View state, public tool "
@@ -1717,7 +1724,7 @@ class RealWorldCleanupContract:
         return self._error("done", error_reason, status="blocked", **payload)
 
     def _required_model_declared_observations(self) -> int:
-        if self._custom_task_intent():
+        if self._open_ended_task_intent():
             return 0
         configured = _positive_int(
             self.public_acceptance_config.get("required_model_declared_observations")
@@ -1764,7 +1771,7 @@ class RealWorldCleanupContract:
         return blocker
 
     def _grounded_cleanup_chain_requirement(self) -> tuple[int, str]:
-        if self._custom_task_intent():
+        if self._open_ended_task_intent():
             return 0, ""
         explicit_count = _positive_int(
             self.public_acceptance_config.get("required_grounded_cleanup_chains")
@@ -1821,6 +1828,9 @@ class RealWorldCleanupContract:
 
     def _custom_task_intent(self) -> bool:
         return task_intent_is_custom(self.task_intent_mode)
+
+    def _open_ended_task_intent(self) -> bool:
+        return household_intent_is_open_ended(self.task_intent) or self._custom_task_intent()
 
     def agent_view_payload(self) -> dict[str, Any]:
         observed_objects = [
@@ -6680,6 +6690,9 @@ def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
     policy = str(source.get("done_readiness_policy") or "").strip()
     if policy:
         accepted["done_readiness_policy"] = policy
+    task_intent = str(source.get("task_intent") or "").strip()
+    if task_intent:
+        accepted["task_intent"] = normalize_household_intent(task_intent)
     task_intent_mode = normalize_task_intent_mode(source.get("task_intent_mode"))
     if task_intent_mode != TASK_INTENT_MODE_DEFAULT:
         accepted["task_intent_mode"] = task_intent_mode

@@ -69,7 +69,10 @@ from roboclaws.household.semantic_timeline import (
 )
 from roboclaws.household.skill_scratchpad import read_or_create_skill_scratchpad
 from roboclaws.household.task_intent import (
+    HOUSEHOLD_INTENT_OPEN_ENDED,
     TASK_INTENT_MODE_DEFAULT,
+    household_intent_from_goal_contract,
+    normalize_household_intent,
     normalize_task_intent_mode,
 )
 from roboclaws.household.types import CleanupScenario
@@ -209,12 +212,20 @@ class RealWorldMolmoCleanupMCPServer:
         self.agent_driven = _default_agent_driven(policy) if agent_driven is None else agent_driven
         self.policy_uses_private_truth = False
         self.task_intent_mode = normalize_task_intent_mode(task_intent_mode)
+        self.goal_contract = goal_contract or _goal_contract_from_env()
+        self.task_intent = household_intent_from_goal_contract(
+            self.goal_contract,
+            fallback=HOUSEHOLD_INTENT_OPEN_ENDED
+            if self.task_intent_mode != TASK_INTENT_MODE_DEFAULT
+            else "",
+        )
         self.map_bundle_dir = Path(map_bundle_dir) if map_bundle_dir is not None else None
         self.runtime_map_prior_source = runtime_map_prior_source
         if contract is None:
             scenario = scenario or build_cleanup_scenario()
             base_contract = base_contract or CleanupBackendSession(scenario)
             acceptance_config = _public_acceptance_config_from_backend(base_contract)
+            acceptance_config["task_intent"] = self.task_intent
             if self.task_intent_mode != TASK_INTENT_MODE_DEFAULT:
                 acceptance_config["task_intent_mode"] = self.task_intent_mode
             contract = RealWorldCleanupContract(
@@ -242,9 +253,12 @@ class RealWorldMolmoCleanupMCPServer:
         self.backend_name = str(backend_name()) if callable(backend_name) else ""
         self.scenario = contract.scenario
         self.task_prompt = task_prompt
-        self.goal_contract = goal_contract or _goal_contract_from_env()
         self.task_intent_mode = normalize_task_intent_mode(
             getattr(contract, "task_intent_mode", self.task_intent_mode)
+        )
+        self.task_intent = normalize_household_intent(
+            getattr(contract, "task_intent", self.task_intent),
+            task_name=self.task_name,
         )
         self.fixture_hint_mode = fixture_hint_mode
         self.perception_mode = contract.perception_mode
@@ -286,6 +300,7 @@ class RealWorldMolmoCleanupMCPServer:
             contract=REALWORLD_CONTRACT,
             policy=policy,
             agent_driven=self.agent_driven,
+            task_intent=self.task_intent,
             task_intent_mode=self.task_intent_mode,
             goal_contract=self.goal_contract.to_payload() if self.goal_contract is not None else {},
             perception_mode=self.perception_mode,
@@ -491,8 +506,9 @@ class RealWorldMolmoCleanupMCPServer:
                 "cleanup_worklist remains authoritative."
             ),
         )
-        task_intent = goal_contract_payload.get("intent") or (
-            "open-ended" if self.task_intent_mode == "custom" else self.task_name
+        task_intent = normalize_household_intent(
+            goal_contract_payload.get("intent") or self.task_intent,
+            task_name=self.task_name,
         )
         terminal_status = (
             "success" if task_intent == "open-ended" else done_response["cleanup_status"]
@@ -505,7 +521,6 @@ class RealWorldMolmoCleanupMCPServer:
             "scenario_id": self.scenario.scenario_id,
             "seed": self.scenario.seed,
             "task_prompt": self.task_prompt,
-            "task_intent_mode": self.task_intent_mode,
             "task_surface": goal_contract_payload.get("surface", "household-world"),
             "task_intent": task_intent,
             "goal_contract": goal_contract_payload,

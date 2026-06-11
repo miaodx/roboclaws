@@ -66,7 +66,7 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         map_mode=RICH_MAP_MODE,
     )
     try:
-        fixture_hints = server.call_tool("fixture_hints")
+        fixture_hints = server.contract.fixture_hints()
         detection = _first_detection(server)
         cleaned = routine.run_cleanup_routine(
             server.call_tool,
@@ -114,7 +114,7 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hin
         map_mode=RICH_MAP_MODE,
     )
     try:
-        fixture_hints = server.call_tool("fixture_hints")
+        fixture_hints = server.contract.fixture_hints()
     finally:
         server.close()
 

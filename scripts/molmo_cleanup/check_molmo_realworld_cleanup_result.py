@@ -951,7 +951,6 @@ def _assert_clean_agent_run(
     counts = data.get("tool_event_counts") or {}
     for tool in (
         "metric_map",
-        "fixture_hints",
         "navigate_to_waypoint",
         "observe",
         *CANONICAL_SURFACE_CLEANUP_PHASES,

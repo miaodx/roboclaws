@@ -487,7 +487,9 @@ def test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract(tmp_path: Pa
 
     try:
         metric_map = server.call_tool("metric_map")
-        fixture_hints = server.call_tool("fixture_hints")
+        fixture_hints = contract.fixture_hints()
+        with pytest.raises(ValueError, match="fixture_hints"):
+            server.call_tool("fixture_hints")
         nav = server.call_tool("navigate_to_waypoint", waypoint_id="wp_sofa_front")
         observe = server.call_tool("observe")
         pick = server.call_tool("pick", object_id="observed_unknown")

@@ -727,7 +727,6 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_open_ended_scan_only(
         map_mode="minimal",
     )
     result["task_intent"] = "open-ended"
-    result["task_intent_mode"] = "custom"
     result["terminated_by"] = "agent_done"
     result["goal_contract"] = {
         "schema": "roboclaws_goal_contract_v1",
@@ -774,7 +773,6 @@ def test_checker_allows_open_ended_agent_view_with_no_visible_objects(
     result["generated_mess_count"] = 0
     result["requested_generated_mess_count"] = 0
     result["task_intent"] = "open-ended"
-    result["task_intent_mode"] = "custom"
     result["terminated_by"] = "agent_done"
     result["goal_contract"] = {
         "schema": "roboclaws_goal_contract_v1",

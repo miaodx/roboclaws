@@ -9,7 +9,6 @@
     "profiles": ["household_world_v1", "household_manipulation_v1", "household_episode_v1"],
     "required_tools": [
       "metric_map",
-      "fixture_hints",
       "navigate_to_waypoint",
       "observe",
       "adjust_camera",

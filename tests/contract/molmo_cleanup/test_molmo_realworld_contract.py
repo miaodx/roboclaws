@@ -1393,20 +1393,22 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
     _assert_no_forbidden_keys(done)
 
 
-def test_custom_task_done_ignores_unrelated_pending_public_candidates() -> None:
+def test_open_ended_done_ignores_unrelated_pending_public_candidates() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         task_prompt="我渴了，帮我找些解渴的东西",
-        public_acceptance_config={"task_intent_mode": "custom"},
+        public_acceptance_config={"task_intent": "open-ended"},
     )
     observation = _first_non_empty_observation(contract)
     assert observation["visible_object_detections"]
 
-    done = contract.done("custom operator task satisfied")
+    done = contract.done("open-ended operator task satisfied")
 
     assert done["ok"] is True
     assert done["tool"] == "done"
-    assert contract.evaluate_done_readiness()["task_intent_mode"] == "custom"
+    readiness = contract.evaluate_done_readiness()
+    assert readiness["task_intent"] == "open-ended"
+    assert readiness["task_intent_mode"] == "default_cleanup"
     _assert_no_forbidden_keys(done)
 
 
@@ -1439,11 +1441,11 @@ def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() 
     _assert_no_forbidden_keys(done)
 
 
-def test_custom_task_done_still_rejects_held_public_candidate() -> None:
+def test_open_ended_done_still_rejects_held_public_candidate() -> None:
     contract = _contract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
         task_prompt="我渴了，帮我找些解渴的东西",
-        public_acceptance_config={"task_intent_mode": "custom"},
+        public_acceptance_config={"task_intent": "open-ended"},
     )
     detection = _confirm_world_label_detection(
         contract,
@@ -1453,7 +1455,7 @@ def test_custom_task_done_still_rejects_held_public_candidate() -> None:
     assert contract.navigate_to_object(detection["object_id"])["ok"] is True
     assert contract.pick(detection["object_id"])["ok"] is True
 
-    done = contract.done("custom task finished while holding an object")
+    done = contract.done("open-ended task finished while holding an object")
 
     assert done["ok"] is False
     assert done["error_reason"] == "pending_cleanup_candidates"

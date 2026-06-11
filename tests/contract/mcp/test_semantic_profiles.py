@@ -79,7 +79,6 @@ def test_household_world_profile_is_task_neutral_and_world_only() -> None:
     public_names = {tool["name"] for tool in metadata["public_tools"]}
     assert public_names >= {
         "metric_map",
-        "fixture_hints",
         "observe",
         "adjust_camera",
         "declare_visual_candidates",
@@ -119,7 +118,6 @@ def test_legacy_molmo_profile_public_metadata_omits_private_evaluator_terms() ->
     assert "scene_objects" not in payload
     assert {tool["name"] for tool in metadata["public_tools"]} >= {
         "metric_map",
-        "fixture_hints",
         "observe",
         "pick",
         "place",
@@ -135,7 +133,6 @@ def test_real_robot_cleanup_profile_keeps_manipulation_blocked() -> None:
 
     assert {
         "metric_map",
-        "fixture_hints",
         "navigate_to_room",
         "navigate_to_waypoint",
         "observe",

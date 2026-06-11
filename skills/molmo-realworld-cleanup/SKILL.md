@@ -13,12 +13,12 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 
 ## Loop
 
-1. Call `roboclaws__metric_map()` and `roboclaws__fixture_hints()` first.
+1. Call `roboclaws__metric_map()` first.
 2. Treat `inspection_waypoints` as public coverage candidates, not mess hints.
    In the default minimal map mode, authored room and fixture labels are hidden:
-   `fixture_hints.rooms` may be empty, and the useful destination anchors come
-   from `cleanup_worklist.candidate_fixture_id`,
-   `runtime_metric_map.public_semantic_anchors`, and successful tool responses.
+   useful destination anchors come from `cleanup_worklist.candidate_fixture_id`,
+   `runtime_metric_map.public_semantic_anchors`, `resolve_target_query`, and
+   successful tool responses.
    For any named destination, stale fixture id, old label, or open-ended target
    request, call `roboclaws__resolve_target_query(query, operation=...)` or use
    the same public `runtime_metric_map.target_candidates` resolution logic
@@ -28,8 +28,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    answer is valid only when the returned `public_search_budget` shows the
    inspected viewpoints and remaining budget; otherwise continue the public
    waypoint/camera search.
-   In explicit rich legacy/debug runs, non-empty fixture hints may still provide
-   static public landmarks. Build an exact checklist from
+   Build an exact checklist from
    `metric_map.inspection_waypoints`, then for each useful waypoint or
    current-room area, call
    `roboclaws__navigate_to_waypoint(waypoint_id)`, then
@@ -47,9 +46,9 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
    evidence_note, image_region, ...)` only when you intend to act on a visual
    candidate. Omit `target_fixture_id` in minimal map mode until grounding
-   returns a public `candidate_fixture_id`; do not invent fixture ids from empty
-   fixture hints. In minimal map mode, normally omit `source_fixture_id` too; do
-   not guess it from room context or from empty fixture hints. Do not pre-register raw-FPV candidates with
+   returns a public `candidate_fixture_id`; do not invent fixture ids from stale
+   map labels. In minimal map mode, normally omit `source_fixture_id` too; do
+   not guess it from room context. Do not pre-register raw-FPV candidates with
    `roboclaws__declare_visual_candidates`; that producer-registration path is
    for `camera-grounded-labels`. Prefer the exact visual class when the image makes it
    clear (`plate`, `cup`, `potato`, `remotecontrol`, `book`, `pillow`); use

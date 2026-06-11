@@ -265,7 +265,11 @@ run dispatch_target agent_engine mode="" *overrides:
         ;;
     esac
     if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
-      report_rerun_parts+=("evidence_lane=$profile")
+      if [[ "$profile" == "smoke" ]]; then
+        report_rerun_parts+=("run_preset=smoke" "evidence_lane=world-oracle-labels")
+      else
+        report_rerun_parts+=("evidence_lane=$profile")
+      fi
     else
       report_rerun_parts+=("$report")
     fi
@@ -324,12 +328,6 @@ run dispatch_target agent_engine mode="" *overrides:
         fi
         task_intent_mode="$(get task_intent_mode "${ROBOCLAWS_TASK_INTENT_MODE:-}")"
         resolved_task_intent="$(get task_intent "${ROBOCLAWS_TASK_INTENT:-}")"
-        if [[ -z "$task_intent_mode" && "$resolved_task_intent" == "open-ended" ]]; then
-          task_intent_mode="custom"
-        fi
-        if [[ -z "$task_intent_mode" && "$task" == "household-cleanup" && ( "$driver" == "codex" || "$driver" == "claude" ) && -v "kv[prompt]" && -n "${kv[prompt]}" ]]; then
-          task_intent_mode="custom"
-        fi
         if [[ -z "$task_intent_mode" ]]; then
           task_intent_mode="default_cleanup"
         fi
@@ -747,11 +745,12 @@ run dispatch_target agent_engine mode="" *overrides:
           "$min_generated_mess_count" "$generated_mess_object_ids" "$task"
           "$operator_messages_path"
         )
-        if [[ "$task" == "household-cleanup" || "$task_intent_mode" == "custom" ]]; then
+        if [[ "$task" == "household-cleanup" || "$resolved_task_intent" == "open-ended" || "$task_intent_mode" == "custom" ]]; then
           molmo_args+=("$task_intent_mode")
         fi
         ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \
           ROBOCLAWS_GOAL_CONTRACT_PATH="$goal_contract_path" \
+          ROBOCLAWS_TASK_INTENT="$resolved_task_intent" \
           run_just molmo::cleanup "${molmo_args[@]}"
         ;;
 
