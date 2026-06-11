@@ -402,6 +402,24 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     assert "public_mujoco_state_report_aid" in html
     assert "target_facing_base_yaw" in html
     assert "target_framing_head_pitch" in html
+    assert "yaw_deg=257.0" in render_cleanup_report(
+        run_dir=tmp_path,
+        scenario=scenario,
+        run_result=run_result,
+        trace_events=[],
+        before_snapshot=before,
+        after_snapshot=after,
+        robot_view_steps=[
+            {
+                "action": "isaac waypoint",
+                "robot_pose": {"x": 0.0, "y": 0.39, "yaw_deg": 257.0},
+                "views": {
+                    "fpv": "robot_views/isaac.fpv.png",
+                    "map": "robot_views/isaac.map.png",
+                },
+            }
+        ],
+    ).read_text(encoding="utf-8")
     assert "FPV visibility" in html
     assert "same room" in html
     assert "object 24 px" in html

@@ -7337,7 +7337,10 @@ def _real_semantic_pose_robot_view_images(
     if not _has_required_robot_view_images(images):
         return {}
     semantic_pose_stage_application = _dict(capture.get("semantic_pose_stage_application"))
-    if semantic_pose_stage_application.get("rendered_to_usd") is not True:
+    robot_pose_stage_application = _dict(capture.get("robot_pose_stage_application"))
+    semantic_pose_rendered = semantic_pose_stage_application.get("rendered_to_usd") is True
+    robot_pose_rendered = robot_pose_stage_application.get("status") == "applied"
+    if not (semantic_pose_rendered or robot_pose_rendered):
         state.setdefault("mapping_gaps", []).append(
             {
                 "area": "semantic_pose_robot_view_rerender",
@@ -7349,6 +7352,7 @@ def _real_semantic_pose_robot_view_images(
                     "semantic-pose-synced robot-view evidence."
                 ),
                 "semantic_pose_stage_application": semantic_pose_stage_application,
+                "robot_pose_stage_application": robot_pose_stage_application,
             }
         )
         write_state_from_state_arg(state)
@@ -7372,7 +7376,7 @@ def _real_semantic_pose_robot_view_images(
         "head_camera_prim_path": ISAAC_RBY1M_HEAD_CAMERA_PRIM if mounted_head_camera else "",
         "robot_stage": _dict(capture.get("robot_stage")),
         "semantic_pose_stage_application": semantic_pose_stage_application,
-        "robot_pose_stage_application": _dict(capture.get("robot_pose_stage_application")),
+        "robot_pose_stage_application": robot_pose_stage_application,
         "camera_diagnostics": _dict(capture.get("camera_diagnostics")),
         "lighting_profile": _dict(capture.get("lighting_profile")),
         "lighting_diagnostics": _dict(capture.get("lighting_diagnostics")),
@@ -7413,6 +7417,8 @@ def _real_semantic_pose_robot_view_images(
     semantic_pose_state = _dict(state.get("semantic_pose_state"))
     semantic_pose_state["rendered_to_usd"] = True
     semantic_pose_state["semantic_pose_view_capture"] = dict(state["semantic_pose_view_capture"])
+    if robot_pose_rendered:
+        semantic_pose_state["robot_pose_rendered_to_usd"] = True
     semantic_pose_state["evidence_note"] = (
         "Semantic cleanup primitives still update backend JSON pose/articulation state "
         "and are not planner-backed manipulation proof. The current report robot-view "
