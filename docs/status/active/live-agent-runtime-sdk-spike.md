@@ -4,15 +4,16 @@ Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 
 Current slice: Agent SDK performance optimization, Group 0 matrix foundation,
 Candidate A skill-context parity, Candidate G/J deterministic settings
-attribution, and Candidate I/AB deterministic prep for the private
-`openai-agents-live` route.
+attribution, Candidate I/AB deterministic prep, and Q/Y deterministic
+recommendation enrichment for the private `openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
 skill-context proof and Candidate G/J deterministic settings/cache attribution
-were accepted on 2026-06-11. Candidate I/AB deterministic prep was accepted on
-2026-06-12. The full live provider/model x evidence-lane performance matrix is
-not done; it remains parked pending explicit live-run approval,
+were accepted on 2026-06-11. Candidate I/AB deterministic prep and Q/Y
+deterministic recommendation enrichment were accepted on 2026-06-12. The full
+live provider/model x evidence-lane performance matrix is not done; it remains
+parked pending explicit live-run approval,
 credentials/backend availability, and budget acknowledgement. The follow-up
 execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
@@ -88,6 +89,17 @@ Result:
   credentials, or private truth. `live_timing.json` and
   `timeline.latency_attribution` summarize the aggregate
   `model_input_filter_metrics`.
+- Q/Y deterministic recommendation enrichment now extends the Group 0 decision
+  packet with row-level latency buckets and aggregate candidate rankings.
+  `reducible_bucket_report` separates model/SDK between-tool gap, visual
+  capture, MCP/backend tool-handler time, residual/unattributed time,
+  failed/noop counts, and dominant bucket. `summary.recommendation_summary`
+  records candidate counts, candidate-group counts, dominant-bucket counts, top
+  candidate ids/groups, and per-row recommendation evidence. The refreshed
+  no-provider packet accepts 5 supported fixture rows, preserves 2 unsupported
+  rows, and ranks Group 2 lane-specific reductions first after the already
+  accepted Group 1 prep; this is diagnostic recommendation evidence, not a live
+  speed claim.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -133,8 +145,9 @@ Raw-FPV failure classification:
 - Group 0 matrix preflight has regression coverage for dry-run budgets,
   unsupported rows, forbidden artifact keys/secret markers, faster-but-worse
   quality rejection, accepted same-or-better rows, expected-terminal raw-FPV
-  diagnostic evidence, model-input-filter event privacy scanning, and
-  reducible-bucket recommendations.
+  diagnostic evidence, model-input-filter event privacy scanning, reducible
+  latency buckets, dominant-bucket classification, aggregate recommendation
+  summaries, and reducible-bucket recommendations.
 
 Verification:
 
@@ -153,6 +166,11 @@ Verification:
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/ruff format --check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
 - `.venv/bin/ruff format --check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
@@ -190,6 +208,10 @@ Parked work:
     server-managed continuation, and session-state A/B proof remains gated on
     explicit approval, credentials/backend availability, and budget
     acknowledgement.
+  - Q/Y deterministic recommendation enrichment is accepted for Group 0; the
+    current no-provider packet points to Group 2 N/O as the next deterministic
+    prep direction, while raw-FPV P/AA remains lane-specific and live speed
+    claims remain gated.
   - Full provider/model x evidence-lane matrix before new speed claims.
   - Optional per-model-call racing inside the SDK model interface, only with
     per-arm cache/cost telemetry and explicit live-run approval.

@@ -257,6 +257,7 @@ def _finalize_packet(packet: dict[str, Any]) -> None:
             row["row_id"] for row in packet["rows"] if row["status"] == "inconclusive"
         ],
         "unsupported": [row["row_id"] for row in packet["rows"] if row["status"] == "unsupported"],
+        "recommendation_summary": _recommendation_summary(packet["rows"]),
     }
 
 
@@ -369,7 +370,15 @@ def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str,
     elapsed = _float_or_none(summary.get("elapsed_s")) or 0.0
     between_gap = _float_or_none(summary.get("between_tool_gap_s")) or 0.0
     robot_view = _float_or_none(summary.get("robot_view_capture_s")) or 0.0
+    tool_handler = _float_or_none(summary.get("tool_handler_s")) or 0.0
+    failed_or_noop_tool_count = _int_or_none(summary.get("failed_or_noop_tool_count")) or 0
     tool_counts = _dict(summary.get("tool_counts"))
+    buckets = _latency_buckets(
+        elapsed_s=elapsed,
+        between_tool_gap_s=between_gap,
+        robot_view_capture_s=robot_view,
+        tool_handler_s=tool_handler,
+    )
     if between_gap > 60 or (elapsed and between_gap / elapsed >= 0.45):
         recommendations.append(
             {
@@ -394,7 +403,7 @@ def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str,
                 "reason": "metric_map is fetched repeatedly",
             }
         )
-    if lane == "camera-raw-fpv" and summary.get("failed_or_noop_tool_count", 0) > 0:
+    if lane == "camera-raw-fpv" and failed_or_noop_tool_count > 0:
         recommendations.append(
             {
                 "candidate_group": "group3_raw_fpv_stabilization",
@@ -415,8 +424,115 @@ def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str,
         "elapsed_s": elapsed,
         "between_tool_gap_s": between_gap,
         "robot_view_capture_s": robot_view,
+        "tool_handler_s": tool_handler,
+        "latency_buckets": buckets,
+        "dominant_bucket": _dominant_bucket(buckets),
         "tool_counts": tool_counts,
+        "failed_or_noop_tool_count": failed_or_noop_tool_count,
         "recommendations": recommendations,
+    }
+
+
+def _latency_buckets(
+    *,
+    elapsed_s: float,
+    between_tool_gap_s: float,
+    robot_view_capture_s: float,
+    tool_handler_s: float,
+) -> dict[str, dict[str, Any]]:
+    accounted = (
+        max(0.0, between_tool_gap_s)
+        + max(0.0, robot_view_capture_s)
+        + max(
+            0.0,
+            tool_handler_s,
+        )
+    )
+    residual = max(0.0, elapsed_s - accounted)
+    return {
+        "model_or_sdk_between_tool_gap": _bucket(between_tool_gap_s, elapsed_s, reducible=True),
+        "visual_capture": _bucket(robot_view_capture_s, elapsed_s, reducible=True),
+        "mcp_backend_tool_handler": _bucket(tool_handler_s, elapsed_s, reducible=False),
+        "residual_or_unattributed": _bucket(residual, elapsed_s, reducible=False),
+    }
+
+
+def _bucket(seconds: float, elapsed_s: float, *, reducible: bool) -> dict[str, Any]:
+    return {
+        "seconds": round(max(0.0, seconds), 3),
+        "share": _ratio(max(0.0, seconds), elapsed_s),
+        "reducible": reducible,
+    }
+
+
+def _dominant_bucket(buckets: dict[str, dict[str, Any]]) -> str:
+    if not buckets:
+        return ""
+    return max(buckets.items(), key=lambda item: float(item[1].get("seconds") or 0.0))[0]
+
+
+def _recommendation_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    candidate_counts: dict[str, int] = {}
+    group_counts: dict[str, int] = {}
+    dominant_bucket_counts: dict[str, int] = {}
+    row_recommendations: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("status") not in {"accepted", "inconclusive"}:
+            continue
+        report = row.get("reducible_bucket_report")
+        if not isinstance(report, dict) or not report.get("available"):
+            continue
+        dominant = str(report.get("dominant_bucket") or "")
+        if dominant:
+            dominant_bucket_counts[dominant] = dominant_bucket_counts.get(dominant, 0) + 1
+        recommendations = [
+            recommendation
+            for recommendation in report.get("recommendations") or []
+            if isinstance(recommendation, dict)
+        ]
+        if not recommendations:
+            continue
+        for recommendation in recommendations:
+            group = str(recommendation.get("candidate_group") or "")
+            if group:
+                group_counts[group] = group_counts.get(group, 0) + 1
+            for candidate_id in _str_list(recommendation.get("candidate_ids")):
+                candidate_counts[candidate_id] = candidate_counts.get(candidate_id, 0) + 1
+        row_recommendations.append(
+            {
+                "row_id": row.get("row_id"),
+                "evidence_lane": row.get("evidence_lane"),
+                "dominant_bucket": dominant,
+                "candidate_groups": sorted(
+                    {
+                        str(item.get("candidate_group") or "")
+                        for item in recommendations
+                        if str(item.get("candidate_group") or "")
+                    }
+                ),
+                "candidate_ids": sorted(
+                    {
+                        candidate_id
+                        for item in recommendations
+                        for candidate_id in _str_list(item.get("candidate_ids"))
+                    }
+                ),
+            }
+        )
+    return {
+        "source": "reducible_bucket_report",
+        "claim_scope": "no-provider diagnostic recommendation evidence",
+        "candidate_counts": dict(sorted(candidate_counts.items())),
+        "candidate_group_counts": dict(sorted(group_counts.items())),
+        "dominant_bucket_counts": dict(sorted(dominant_bucket_counts.items())),
+        "top_candidate_ids": [
+            item[0]
+            for item in sorted(candidate_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+        "top_candidate_groups": [
+            item[0] for item in sorted(group_counts.items(), key=lambda item: (-item[1], item[0]))
+        ],
+        "row_recommendations": row_recommendations,
     }
 
 
@@ -573,6 +689,12 @@ def _float_or_none(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _ratio(numerator: float, denominator: float) -> float | None:
+    if denominator <= 0:
+        return None
+    return round(numerator / denominator, 4)
 
 
 def _int_or_none(value: Any) -> int | None:

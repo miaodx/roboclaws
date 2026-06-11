@@ -61,6 +61,18 @@ raw prompts, model text, tool payload bodies, credentials, or private truth.
 compaction arm through `model_input_filter_metrics`. No provider-backed speed
 claim is made.
 
+2026-06-12 Q/Y deterministic enrichment update: the Group 0 decision packet now
+summarizes row-level reducible latency buckets and recommendations from shared
+performance packets. Each bucket report records model/SDK between-tool gap,
+visual capture, MCP/backend tool-handler time, residual/unattributed time,
+dominant bucket, failed/noop tool count, and recommendation candidates. The
+packet summary aggregates candidate counts, candidate-group counts, dominant
+bucket counts, top candidate ids/groups, and per-row recommendation evidence.
+The refreshed no-provider packet accepted 5 supported fixture rows, preserved 2
+unsupported rows, and ranked Group 2 lane-specific reductions first after the
+already-accepted deterministic Group 1 prep. This remains diagnostic
+recommendation evidence only, not a provider-backed speed claim.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -105,6 +117,11 @@ claim is made.
   `run_result.json` success gate to that lane. The privacy gate scans
   `openai-agents-events*.jsonl`, including model-input-filter events, for
   forbidden keys and markers.
+- Q/Y deterministic decision enrichment is implemented in the Group 0
+  preflight. `reducible_bucket_report` rows now expose latency buckets,
+  dominant buckets, failed/noop counts, and candidate recommendations, while the
+  decision packet summary aggregates candidate and candidate-group rankings
+  without adding provider calls or raw payload persistence.
 
 ## Not Done
 
@@ -191,11 +208,15 @@ Use this queue unless fresh evidence changes it:
 3. Candidate A is accepted; keep its metadata/privacy guard in future rows.
 4. Candidate G/J deterministic settings and cache attribution is accepted; live
    A/B for speed remains gated by approval and budget.
-5. Do AB for Responses-only levers when the row uses `wire_api=responses`.
-6. Do I, with Q/L measurement folded into the same analysis.
+5. Candidate I/AB deterministic prep is accepted; provider-backed Responses
+   compaction/session/continuation A/B remains gated by approval and budget.
+6. Q/Y deterministic recommendation enrichment is accepted for Group 0; refresh
+   it whenever new live rows or candidate arms change the packet.
 7. Run scoped B live baseline refresh before any strong speed claim, if live
    approval and budget are available.
-8. Use Q/Z/Y output to choose O/N or P/AA next.
+8. Use the current Q/Z/Y packet to prioritize Group 2 N/O deterministic prep
+   next; keep P/AA for the raw-FPV-specific row rather than the cross-lane next
+   slice.
 9. Defer C/D/K/E/F/M/W/X unless the dependency evidence below appears.
 
 Do not spend more time on standalone Group 0 unless a new candidate changes the
@@ -226,10 +247,10 @@ decision-ready. Expected direct speedup is none.
 | U | gate, mostly done | Run artifact privacy/schema gates. | More telemetry must not leak prompts, model text, tool bodies, secrets, or private truth. | Forbidden keys/content fail; allowed aggregate fields pass. | Block publication and live continuation on privacy failure. |
 | V | gate | Gate live cost, time, concurrency, context, and racing multiplier. | Matrices and racing can burn budget and backend time. | Dry-run prints max runs, wall-clock, turn/context caps, concurrency, and multiplier. | Refuse live execution without acknowledged caps. |
 | W | defer | Add repeatability policy for publishable claims. | One live run can be lucky. | Winner rows can be repeated or paired; single-run rows are labeled diagnostic. | Do not require repeats for first diagnostic pass; repeat only winners. |
-| Y | gate, mostly done | Generate decision packet/dashboard from shared performance packets. | Reviewers need one closeout artifact, but the metrics source should be canonical. | Packet records accepted/rejected/inconclusive/blocked/bypassed/superseded/added rows and links to `roboclaws_report_performance_metrics_v1` packets. | Missing decision data means inconclusive, not accepted. |
+| Y | accepted-deterministic-enrichment, live rows gated | Generate decision packet/dashboard from shared performance packets. | Reviewers need one closeout artifact, but the metrics source should be canonical. | Implemented for Group 0: packet records accepted/rejected/inconclusive/blocked/unsupported rows plus aggregate recommendation summary, top candidate ids/groups, dominant bucket counts, and artifact links. Live rows still need explicit approval and packet refresh. | Missing decision data means inconclusive, not accepted; extend only when new live rows, candidate arms, or dashboard outputs need it. |
 | B | keep | Refresh live provider/model x evidence-lane baseline matrix with `wire_api` as an axis. | GPT/MiMo, Responses/Chat routes, and evidence lanes differ materially; anecdotes are insufficient. | Responses rows cover `codex-env`/`mify`; Chat-compatible rows cover `mimo-openai-chat`/`kimi-openai-chat` only when supported; unsupported rows are labeled. | Live rows require approval/budget/backend; do not expand into Claude SDK integration. |
 | Z | gate, mostly done | Use shared report-performance comparison for quality and timing guardrails. | Faster can still mean worse cleanup. | Rows include shared quality fields plus wall, model/API, provider HTTP, context, call-count, and residual timing fields where available. | Reject faster-but-worse unless explicitly waived; missing telemetry is unavailable, not zero. |
-| Q | keep | Classify irreducible floor and remaining waste from shared performance packets. | Next work should target the largest reducible bucket. | Summary separates model/API timing, provider HTTP transport, MCP/backend, visual capture, between-tool gaps, context growth, and turn/tool waste. | Stop or bypass next arms when remaining gain is smaller than cost/risk. |
+| Q | accepted-deterministic-enrichment, refresh with live rows | Classify irreducible floor and remaining waste from shared performance packets. | Next work should target the largest reducible bucket. | Implemented for Group 0: bucket reports separate model/SDK between-tool gap, visual capture, MCP/backend tool-handler time, residual/unattributed time, failed/noop counts, and dominant bucket. Provider HTTP, model/API, context-growth, and turn-waste fields remain live-row dependent when telemetry exists. | Stop or bypass next arms when remaining gain is smaller than cost/risk; refresh Q after live B rows or new candidate arms. |
 
 ### Group 1: Private SDK Levers
 
@@ -345,6 +366,7 @@ Each candidate arm writes one decision row:
 | A | `openai-agents-live`, provider/evidence lane agnostic deterministic proof | `agent_sdk_skill_context=canonical_skill_markdown`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `roboclaws/agents/live_runtime.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted | Deterministic proof shows the SDK route receives the canonical skill text, artifact discovery includes `openai-agents-skill-context.json`, and persisted timing/event/artifact summaries omit the skill body and raw prompt/tool payloads. No speed claim is made from this row. | G/J settings and cache attribution, then AB only for `wire_api=responses` rows. |
 | G,J | `openai-agents-live`, provider/evidence lane agnostic deterministic settings attribution | `sdk_model_settings`, `sdk_run_config`, `prompt_cache_retention`, `stable_prefix_hash`; no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic, live A/B gated | Deterministic proof shows explicit SDK model/run settings are constructed and passed into Agent/Runner, sanitized runtime events expose those settings, cache summaries record retention and stable-prefix hash, and missing usage remains unavailable rather than zero. No speedup claim is made without live baseline/candidate rows. | AB/I deterministic prep, then provider-backed A/B only after approval/budget/backend gates pass. |
 | I,AB | `openai-agents-live`, provider/evidence lane agnostic deterministic compaction prep plus Responses feature audit | `model_input_compaction=public_tool_result_summary_v1` opt-in, `agent_sdk_responses_features`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic-prep, live A/B gated | Deterministic proof shows the SDK route can install `RunConfig.call_model_input_filter`, keep the feature off by default, compact oversized public tool outputs before model calls with aggregate byte-delta events, and record Responses continuation/session capability as gated metadata. Persisted events omit raw prompts, model text, tool payload bodies, credentials, and private truth. No speedup claim is made without live baseline/candidate rows. | B live baseline refresh and Responses/I A/B rows only after explicit live approval, credentials/backend availability, network guard, and budget acknowledgement. |
+| Q,Y | Group 0 no-provider deterministic recommendation packet | `reducible_bucket_report.latency_buckets`, `dominant_bucket`, `recommendation_summary`, no live provider call, no public MCP/profile change | `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`, `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `.venv/bin/ruff format --check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run` | accepted-deterministic-enrichment, live rows gated | Deterministic proof shows the packet can rank candidate ids/groups from shared performance summaries, preserve unsupported rows, classify dominant buckets, and keep the recommendation claim scoped to no-provider diagnostic evidence. The refreshed fixture packet accepted 5 supported rows, preserved 2 unsupported rows, and ranked Group 2 lane-specific reductions first after already-prepped Group 1 candidates. | Group 2 N/O deterministic prep next; B live baseline refresh and any speed claim remain gated by explicit live approval, credentials/backend availability, network guard, and budget acknowledgement. |
 
 ## Evidence Ladder
 

@@ -220,10 +220,40 @@ def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     assert packet["summary"]["unsupported"] == ["unsupported_provider"]
     report = row["reducible_bucket_report"]
     assert report["available"] is True
+    assert report["tool_handler_s"] == 5.0
+    assert report["failed_or_noop_tool_count"] == 0
+    assert report["dominant_bucket"] == "model_or_sdk_between_tool_gap"
+    assert report["latency_buckets"] == {
+        "model_or_sdk_between_tool_gap": {"seconds": 50.0, "share": 0.7143, "reducible": True},
+        "visual_capture": {"seconds": 20.0, "share": 0.2857, "reducible": True},
+        "mcp_backend_tool_handler": {"seconds": 5.0, "share": 0.0714, "reducible": False},
+        "residual_or_unattributed": {"seconds": 0.0, "share": 0.0, "reducible": False},
+    }
     candidate_ids = {
         candidate_id for item in report["recommendations"] for candidate_id in item["candidate_ids"]
     }
     assert {"O", "N"}.issubset(candidate_ids)
+    recommendation_summary = packet["summary"]["recommendation_summary"]
+    assert recommendation_summary["source"] == "reducible_bucket_report"
+    assert recommendation_summary["claim_scope"] == "no-provider diagnostic recommendation evidence"
+    assert recommendation_summary["candidate_counts"]["O"] == 1
+    assert recommendation_summary["candidate_counts"]["N"] == 1
+    assert recommendation_summary["candidate_group_counts"]["group2_lane_specific_reductions"] == 2
+    assert recommendation_summary["dominant_bucket_counts"] == {"model_or_sdk_between_tool_gap": 1}
+    assert {"O", "N"}.issubset(set(recommendation_summary["top_candidate_ids"]))
+    assert recommendation_summary["top_candidate_groups"][0] == "group2_lane_specific_reductions"
+    assert recommendation_summary["row_recommendations"] == [
+        {
+            "row_id": "gpt_world_public_group0",
+            "evidence_lane": "camera-grounded-labels",
+            "dominant_bucket": "model_or_sdk_between_tool_gap",
+            "candidate_groups": [
+                "group1_private_sdk_levers",
+                "group2_lane_specific_reductions",
+            ],
+            "candidate_ids": ["A", "G", "H", "I", "J", "L", "N", "O"],
+        }
+    ]
 
 
 def test_agent_sdk_perf_matrix_accepts_expected_raw_fpv_diagnostic_terminal(
