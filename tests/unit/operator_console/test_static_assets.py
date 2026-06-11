@@ -226,6 +226,9 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert ".mode-overview" in css
     assert '"fpv map"' in css
     assert '"chase topdown"' in css
+    assert "object-position: center center" in css
+    assert ".image-panel > .image-frame" in css
+    assert "aspect-ratio: auto" in css
     assert '.mode-overview [data-panel="chase"]' in css
     assert '.mode-overview [data-panel="blank-chase"]' in css
     assert ".blank-panel" in css

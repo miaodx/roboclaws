@@ -638,6 +638,7 @@ pre,
   width: 100%;
   height: 100%;
   object-fit: contain;
+  object-position: center center;
 }
 
 .image-preview-button {
@@ -676,6 +677,12 @@ pre,
 
 .ratio-1-1 {
   aspect-ratio: 1 / 1;
+}
+
+.image-panel > .image-frame {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
 }
 
 .outputs-panel {
@@ -924,6 +931,14 @@ dialog pre {
     grid-template-areas: none;
     height: auto;
     overflow: visible;
+  }
+
+  .image-panel {
+    min-height: 320px;
+  }
+
+  .image-panel > .image-frame {
+    min-height: 240px;
   }
 
   .mode-overview {
