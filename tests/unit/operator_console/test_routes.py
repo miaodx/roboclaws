@@ -53,7 +53,7 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
         "/asset-previews/maps/agibot-robot-map-12/preview.png"
     )
     assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == (
-        "/asset-previews/maps/agibot-robot-map-12/preview.png"
+        "/asset-previews/maps/b1-map12-room-semantics/preview.png"
     )
     assert "ai2thor/FloorPlan201" not in worlds
     assert "ai2thor-games/FloorPlan201" not in worlds
@@ -376,7 +376,7 @@ def test_payload_exposes_orthogonal_ui_metadata() -> None:
     assert "grounding" in agibot["view_modes"]
 
     assert b1["default_intent"] == "open-ended"
-    assert "map_bundle=agibot-robot-map-12" in b1["argv_preview"]
+    assert "map_bundle=b1-map12-room-semantics" in b1["argv_preview"]
     assert "robot_views=on" in b1["argv_preview"]
 
 
@@ -447,7 +447,7 @@ def test_b1_map12_open_ended_launch_uses_scene_and_map_bundle(tmp_path) -> None:
     assert "intent=open-ended" in argv
     assert "backend=isaaclab" in argv
     assert "scenario_setup=baseline" in argv
-    assert "map_bundle=agibot-robot-map-12" in argv
+    assert "map_bundle=b1-map12-room-semantics" in argv
     assert "robot_views=on" in argv
     assert any(item.startswith("isaac_scene_usd_path=data/robot-data-lab/") for item in argv)
     assert not any(item.startswith("relocation_count=") for item in argv)

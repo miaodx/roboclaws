@@ -1,0 +1,526 @@
+{
+  "producer": {
+    "method": "partition_and_object_name_heuristics",
+    "type": "scene_engine_asset_room_semantic_overlay",
+    "uses_rendered_review": false
+  },
+  "public_contract_note": "This overlay maps scene-engine asset partitions into public room semantic labels. Folder and USD prim names are evidence, not private evaluator truth.",
+  "review_queue": [
+    {
+      "asset_partition_id": "short_corridor_a",
+      "confidence": 0.68,
+      "proposed_category": "corridor",
+      "proposed_room_label": "Corridor",
+      "reason": "render_or_operator_review_recommended",
+      "render_hint": {
+        "asset_partition_id": "short_corridor_a",
+        "preferred_view": "room_overview"
+      },
+      "room_id": "short_corridor_a"
+    }
+  ],
+  "room_category_hints": [
+    {
+      "affordances": [
+        "navigate",
+        "observe"
+      ],
+      "aliases": [
+        "meeting_room_a",
+        "meeting room a",
+        "Meeting room A",
+        "meeting_room"
+      ],
+      "anchor_type": "room_area",
+      "category": "meeting_room",
+      "classification_status": "map_prior",
+      "confidence": 0.88,
+      "label": "Meeting room A",
+      "producer_type": "scene_room_semantic_overlay",
+      "review_status": "accepted",
+      "room_id": "meeting_room_a",
+      "room_label": "Meeting room A",
+      "waypoint_id": ""
+    },
+    {
+      "affordances": [
+        "navigate",
+        "observe"
+      ],
+      "aliases": [
+        "meeting_room_b",
+        "meeting room b",
+        "Open kitchen",
+        "kitchen"
+      ],
+      "anchor_type": "room_area",
+      "category": "kitchen",
+      "classification_status": "map_prior",
+      "confidence": 0.92,
+      "label": "Open kitchen",
+      "producer_type": "scene_room_semantic_overlay",
+      "review_status": "accepted",
+      "room_id": "meeting_room_b",
+      "room_label": "Open kitchen",
+      "waypoint_id": ""
+    },
+    {
+      "affordances": [
+        "navigate",
+        "observe"
+      ],
+      "aliases": [
+        "meeting_room_c",
+        "meeting room c",
+        "Meeting room B",
+        "meeting_room"
+      ],
+      "anchor_type": "room_area",
+      "category": "meeting_room",
+      "classification_status": "map_prior",
+      "confidence": 0.88,
+      "label": "Meeting room B",
+      "producer_type": "scene_room_semantic_overlay",
+      "review_status": "accepted",
+      "room_id": "meeting_room_c",
+      "room_label": "Meeting room B",
+      "waypoint_id": ""
+    },
+    {
+      "affordances": [
+        "navigate",
+        "observe"
+      ],
+      "aliases": [
+        "reception_area_a",
+        "reception area a",
+        "Main hall / living area",
+        "living_room"
+      ],
+      "anchor_type": "room_area",
+      "category": "living_room",
+      "classification_status": "map_prior",
+      "confidence": 0.9,
+      "label": "Main hall / living area",
+      "producer_type": "scene_room_semantic_overlay",
+      "review_status": "accepted",
+      "room_id": "reception_area_a",
+      "room_label": "Main hall / living area",
+      "waypoint_id": ""
+    },
+    {
+      "affordances": [
+        "navigate",
+        "observe"
+      ],
+      "aliases": [
+        "short_corridor_a",
+        "short corridor a",
+        "Corridor",
+        "corridor"
+      ],
+      "anchor_type": "room_area",
+      "category": "corridor",
+      "classification_status": "map_prior",
+      "confidence": 0.68,
+      "label": "Corridor",
+      "producer_type": "scene_room_semantic_overlay",
+      "review_status": "render_review_recommended",
+      "room_id": "short_corridor_a",
+      "room_label": "Corridor",
+      "waypoint_id": ""
+    },
+    {
+      "affordances": [
+        "navigate",
+        "observe"
+      ],
+      "aliases": [
+        "storage_room_a",
+        "storage room a",
+        "Storage room",
+        "storage_room"
+      ],
+      "anchor_type": "room_area",
+      "category": "storage_room",
+      "classification_status": "map_prior",
+      "confidence": 0.95,
+      "label": "Storage room",
+      "producer_type": "scene_room_semantic_overlay",
+      "review_status": "accepted",
+      "room_id": "storage_room_a",
+      "room_label": "Storage room",
+      "waypoint_id": ""
+    }
+  ],
+  "rooms": [
+    {
+      "aliases": [
+        "meeting_room_a",
+        "meeting room a",
+        "Meeting room A",
+        "meeting_room"
+      ],
+      "asset_partition_id": "meeting_room_a",
+      "category": "meeting_room",
+      "classification_status": "map_prior",
+      "confidence": 0.88,
+      "evidence": {
+        "artifacts": [
+          "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+        ],
+        "conflicting_evidence": [],
+        "matched_terms": [
+          "partition:meeting"
+        ],
+        "object_name_counts": {
+          "chair": 22,
+          "door": 2,
+          "door_1": 2,
+          "purifier": 2,
+          "table": 2,
+          "tv": 2
+        },
+        "partition_name": "meeting_room_a",
+        "weak_evidence": true
+      },
+      "map_center": {
+        "x": -7.1,
+        "y": 2.65
+      },
+      "navigation_area_id": "west_corridor",
+      "polygon": [
+        {
+          "x": -8.7,
+          "y": 0.5
+        },
+        {
+          "x": -5.5,
+          "y": 0.5
+        },
+        {
+          "x": -5.5,
+          "y": 4.8
+        },
+        {
+          "x": -8.7,
+          "y": 4.8
+        }
+      ],
+      "render_review_recommended": false,
+      "review_status": "accepted",
+      "room_id": "meeting_room_a",
+      "room_label": "Meeting room A",
+      "semantic_source": "operator_authored_room_overlay"
+    },
+    {
+      "aliases": [
+        "meeting_room_b",
+        "meeting room b",
+        "Open kitchen",
+        "kitchen"
+      ],
+      "asset_partition_id": "meeting_room_b",
+      "category": "kitchen",
+      "classification_status": "map_prior",
+      "confidence": 0.92,
+      "evidence": {
+        "artifacts": [
+          "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0003_observe.fpv.png"
+        ],
+        "conflicting_evidence": [],
+        "matched_terms": [
+          "partition:meeting"
+        ],
+        "object_name_counts": {
+          "bench": 2,
+          "bottle": 4,
+          "desk": 2,
+          "white_vacuum": 2
+        },
+        "partition_name": "meeting_room_b",
+        "weak_evidence": true
+      },
+      "map_center": {
+        "x": -1.1,
+        "y": 2.4
+      },
+      "navigation_area_id": "central_floor",
+      "polygon": [
+        {
+          "x": -4.0,
+          "y": -1.0
+        },
+        {
+          "x": 1.8,
+          "y": -1.0
+        },
+        {
+          "x": 1.8,
+          "y": 5.8
+        },
+        {
+          "x": -4.0,
+          "y": 5.8
+        }
+      ],
+      "render_review_recommended": false,
+      "review_status": "accepted",
+      "room_id": "meeting_room_b",
+      "room_label": "Open kitchen",
+      "semantic_source": "operator_authored_room_overlay"
+    },
+    {
+      "aliases": [
+        "meeting_room_c",
+        "meeting room c",
+        "Meeting room B",
+        "meeting_room"
+      ],
+      "asset_partition_id": "meeting_room_c",
+      "category": "meeting_room",
+      "classification_status": "map_prior",
+      "confidence": 0.88,
+      "evidence": {
+        "artifacts": [
+          "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0002_observe.fpv.png"
+        ],
+        "conflicting_evidence": [],
+        "matched_terms": [
+          "partition:meeting"
+        ],
+        "object_name_counts": {
+          "chair": 2,
+          "tripod": 2,
+          "vacuum_cleaner": 2
+        },
+        "partition_name": "meeting_room_c",
+        "weak_evidence": true
+      },
+      "map_center": {
+        "x": -2.0,
+        "y": 5.4
+      },
+      "navigation_area_id": "north_fixture_area",
+      "polygon": [
+        {
+          "x": -5.8,
+          "y": 3.0
+        },
+        {
+          "x": 1.8,
+          "y": 3.0
+        },
+        {
+          "x": 1.8,
+          "y": 7.8
+        },
+        {
+          "x": -5.8,
+          "y": 7.8
+        }
+      ],
+      "render_review_recommended": false,
+      "review_status": "accepted",
+      "room_id": "meeting_room_c",
+      "room_label": "Meeting room B",
+      "semantic_source": "operator_authored_room_overlay"
+    },
+    {
+      "aliases": [
+        "reception_area_a",
+        "reception area a",
+        "Main hall / living area",
+        "living_room"
+      ],
+      "asset_partition_id": "reception_area_a",
+      "category": "living_room",
+      "classification_status": "map_prior",
+      "confidence": 0.9,
+      "evidence": {
+        "artifacts": [
+          "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0001_observe.fpv.png",
+          "output/operator-console/runs/20260611-123236-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1232/seed-7/robot_views/0004_observe.fpv.png"
+        ],
+        "conflicting_evidence": [
+          "living_room:object:sofa,object:tv_closet,object:speaker,object:plant"
+        ],
+        "matched_terms": [
+          "partition:reception",
+          "object:sofa",
+          "object:desk",
+          "object:plant",
+          "object:fire_extinguisher",
+          "object:tv_closet",
+          "object:speaker"
+        ],
+        "object_name_counts": {
+          "chair": 12,
+          "closet": 2,
+          "closet_1": 4,
+          "desk": 2,
+          "fire_extinguisher": 4,
+          "plant": 8,
+          "purifier": 2,
+          "sofa": 4,
+          "speaker": 2,
+          "trash_bin": 2,
+          "tv_closet": 2,
+          "tv_closet_1": 6
+        },
+        "partition_name": "reception_area_a",
+        "weak_evidence": false
+      },
+      "map_center": {
+        "x": 0.7,
+        "y": -3.8
+      },
+      "navigation_area_id": "south_fixture_area",
+      "polygon": [
+        {
+          "x": -1.0,
+          "y": -4.8
+        },
+        {
+          "x": 2.4,
+          "y": -4.8
+        },
+        {
+          "x": 2.4,
+          "y": -2.8
+        },
+        {
+          "x": -1.0,
+          "y": -2.8
+        }
+      ],
+      "render_review_recommended": false,
+      "review_status": "accepted",
+      "room_id": "reception_area_a",
+      "room_label": "Main hall / living area",
+      "semantic_source": "operator_authored_room_overlay"
+    },
+    {
+      "aliases": [
+        "short_corridor_a",
+        "short corridor a",
+        "Corridor",
+        "corridor"
+      ],
+      "asset_partition_id": "short_corridor_a",
+      "category": "corridor",
+      "classification_status": "map_prior",
+      "confidence": 0.68,
+      "evidence": {
+        "artifacts": [],
+        "conflicting_evidence": [],
+        "matched_terms": [
+          "partition:corridor"
+        ],
+        "object_name_counts": {
+          "plant": 4,
+          "tv": 4
+        },
+        "partition_name": "short_corridor_a",
+        "weak_evidence": true
+      },
+      "map_center": {
+        "x": 0.7,
+        "y": -3.8
+      },
+      "navigation_area_id": "south_fixture_area",
+      "polygon": [
+        {
+          "x": -1.0,
+          "y": -4.8
+        },
+        {
+          "x": 2.4,
+          "y": -4.8
+        },
+        {
+          "x": 2.4,
+          "y": -2.8
+        },
+        {
+          "x": -1.0,
+          "y": -2.8
+        }
+      ],
+      "render_review_recommended": true,
+      "review_status": "render_review_recommended",
+      "room_id": "short_corridor_a",
+      "room_label": "Corridor",
+      "semantic_source": "scene_engine_asset_name_heuristic"
+    },
+    {
+      "aliases": [
+        "storage_room_a",
+        "storage room a",
+        "Storage room",
+        "storage_room"
+      ],
+      "asset_partition_id": "storage_room_a",
+      "category": "storage_room",
+      "classification_status": "map_prior",
+      "confidence": 0.95,
+      "evidence": {
+        "artifacts": [],
+        "conflicting_evidence": [],
+        "matched_terms": [
+          "partition:storage",
+          "object:black_machine",
+          "object:trash_bin"
+        ],
+        "object_name_counts": {
+          "black_machine": 2,
+          "trash_bin": 2
+        },
+        "partition_name": "storage_room_a",
+        "weak_evidence": false
+      },
+      "map_center": {
+        "x": 0.7,
+        "y": -3.8
+      },
+      "navigation_area_id": "south_fixture_area",
+      "polygon": [
+        {
+          "x": -1.0,
+          "y": -4.8
+        },
+        {
+          "x": 2.4,
+          "y": -4.8
+        },
+        {
+          "x": 2.4,
+          "y": -2.8
+        },
+        {
+          "x": -1.0,
+          "y": -2.8
+        }
+      ],
+      "render_review_recommended": false,
+      "review_status": "accepted",
+      "room_id": "storage_room_a",
+      "room_label": "Storage room",
+      "semantic_source": "scene_engine_asset_name_heuristic"
+    }
+  ],
+  "scene_root": "data/robot-data-lab/scene-engine/data/2rd_floor_seperated",
+  "schema": "scene_room_semantic_overlay_v1",
+  "source_bundle_dir": "assets/maps/agibot-robot-map-12",
+  "summary": {
+    "categories": {
+      "corridor": 1,
+      "kitchen": 1,
+      "living_room": 1,
+      "meeting_room": 2,
+      "storage_room": 1
+    },
+    "review_count": 1,
+    "room_count": 6
+  }
+}

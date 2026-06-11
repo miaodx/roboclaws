@@ -5834,7 +5834,7 @@ def _public_room_hint_payload(room: dict[str, Any]) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "room_id": room_id,
         "room_label": room_label,
-        "category": _room_category_from_label(room_label, room_id),
+        "category": str(room.get("category") or _room_category_from_label(room_label, room_id)),
         "polygon": polygon,
         "map_center": map_center,
         "public_room_source": "base_navigation_map",
@@ -5862,7 +5862,7 @@ def _room_category_hints_from_public_rooms(
             continue
         hint = {
             "anchor_type": "room_area",
-            "category": _room_category_from_label(room_label, room_id),
+            "category": str(room.get("category") or _room_category_from_label(room_label, room_id)),
             "label": room_label,
             "room_id": room_id,
             "room_label": room_label,
