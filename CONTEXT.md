@@ -168,6 +168,15 @@ skill, requires household world capabilities, and disables manipulation. In the
 minimal-map mainline, it turns sparse maps into cleanup-usable public evidence.
 _Avoid_: cleanup profile, private target discovery, source-map mutation, MCP tool
 
+**Open-Ended Intent Outcome**:
+The terminal intent-level result for `surface=household-world
+intent=open-ended`. It is satisfied by agent-declared goal completion plus the
+required public artifacts, goal contract, trace, report, and open-ended
+artifact checker. Cleanup scoring may remain advisory evidence on the artifact,
+but cleanup restoration fields must not be the authoritative terminal outcome
+for open-ended runs.
+_Avoid_: cleanup success, private scorer result, restored-object count
+
 **Cleanup Intent**:
 A first-class household-world intent that consumes household world evidence and
 combines it with manipulation capability requirements to tidy movable objects.

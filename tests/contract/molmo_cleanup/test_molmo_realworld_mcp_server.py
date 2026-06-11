@@ -752,8 +752,16 @@ def test_realworld_mcp_custom_task_mode_is_recorded_in_run_result(
         server.close()
 
     assert done["ok"] is True
+    assert done["intent_status"] == "success"
+    assert done["goal_status"] == "success"
     assert run_result["task_prompt"] == "我渴了，帮我找些解渴的东西"
     assert run_result["task_intent_mode"] == "custom"
+    assert run_result["task_intent"] == "open-ended"
+    assert run_result["intent_status"] == "success"
+    assert run_result["goal_status"] == "success"
+    assert run_result["final_status"] == "success"
+    assert run_result["cleanup_status_role"] == "advisory"
+    assert run_result["cleanup_status"] == "failed"
 
 
 def test_realworld_mcp_raw_fpv_camera_raw_done_allows_complete_live_chains(
