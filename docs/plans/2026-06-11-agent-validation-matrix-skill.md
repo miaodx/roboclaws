@@ -412,17 +412,24 @@ Shipped evidence generated during this slice:
   chains before `done`.
   Check it with
   `just molmo::status output/agent-validation-matrix/0611_raw_fpv_serialized_codex/gates/codex-cleanup-camera-raw-fpv/run/0611_1347/seed-7`.
+- Follow-up decision on 2026-06-11: leave RAW-FPV live Codex as a known
+  performance/readiness limitation for this plan instead of blocking the
+  validation-matrix skill closeout on a RAW-FPV behavior recovery slice.
+- Follow-up fix on 2026-06-11: move `openai-agents==0.17.4` into the `dev`
+  extra, while keeping the dedicated `openai-agents` extra, so the Agent SDK
+  validation row is available after normal `uv sync --extra dev`.
+- Follow-up fix on 2026-06-11: align the matrix DINO sidecar reachability
+  default with the documented visual-grounding service port
+  `http://127.0.0.1:18880`. The observed DINO block was connection refused
+  before model inference, not a Grounding DINO inference failure.
 
 Remaining gates before this plan can be marked fully implemented:
 
 - rerun a focused visual-grounding execute after starting the real
-  visual-grounding sidecar, or keep the DINO gate explicitly blocked in the
-  next local validation handoff;
-- install/enable the OpenAI Agents SDK optional runtime before claiming the
-  Agent SDK live gate passes;
-- decide whether RAW-FPV live Codex should remain a failing validation gate for
-  this plan, lower its closeout requirement, or get a separate RAW-FPV recovery
-  slice that can satisfy the 4-chain done-readiness policy.
+  visual-grounding sidecar on `VISUAL_GROUNDING_BASE_URL` or the default
+  `127.0.0.1:18880`;
+- rerun the Agent SDK live row after syncing the updated `dev` extra and
+  sourcing a supported provider profile.
 
 ## ADR Threshold
 

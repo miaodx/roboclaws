@@ -16,6 +16,7 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SELECTOR_PATH = SCRIPT_DIR / "select_validation_matrix.py"
+DEFAULT_VISUAL_GROUNDING_BASE_URL = "http://127.0.0.1:18880"
 
 spec = importlib.util.spec_from_file_location("agent_validation_selector", SELECTOR_PATH)
 if spec is None or spec.loader is None:
@@ -189,7 +190,7 @@ def _has_module(module_name: str) -> bool:
 
 
 def _dino_sidecar_available() -> bool:
-    base_url = os.environ.get("VISUAL_GROUNDING_BASE_URL", "http://127.0.0.1:18889")
+    base_url = os.environ.get("VISUAL_GROUNDING_BASE_URL", DEFAULT_VISUAL_GROUNDING_BASE_URL)
     parsed = urllib.parse.urlparse(base_url)
     host = parsed.hostname or "127.0.0.1"
     port = parsed.port or (443 if parsed.scheme == "https" else 80)

@@ -172,6 +172,27 @@ def test_execute_marks_live_gate_blocked_when_provider_is_missing(
     assert gates["codex-cleanup-world-oracle"]["blocker_category"] == "missing_provider_key"
 
 
+def test_dino_sidecar_default_matches_documented_service_port(monkeypatch: MonkeyPatch) -> None:
+    calls: list[tuple[tuple[str, int], float]] = []
+
+    class _Socket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    def fake_create_connection(address: tuple[str, int], timeout: float):
+        calls.append((address, timeout))
+        return _Socket()
+
+    monkeypatch.delenv("VISUAL_GROUNDING_BASE_URL", raising=False)
+    monkeypatch.setattr(runner.socket, "create_connection", fake_create_connection)
+
+    assert runner._dino_sidecar_available() is True
+    assert calls == [(("127.0.0.1", 18880), 0.35)]
+
+
 def test_recommendation_writes_json_markdown_and_html(tmp_path: Path) -> None:
     exit_code = runner.main(
         [
