@@ -503,6 +503,7 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert events[0]["agent_sdk_responses_features"]["available"] is True
     assert events[0]["agent_sdk_responses_features"]["server_managed_continuation_default"] is False
     assert events[0]["model_input_compaction"]["enabled"] is False
+    assert events[0]["model_input_compaction"]["mode"] == "off"
 
 
 def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
@@ -791,6 +792,62 @@ def test_model_input_compaction_reduces_oversized_public_tool_outputs() -> None:
     assert replacement["schema"] == "roboclaws_public_tool_output_summary_v1"
     assert replacement["original_chars"] == len(large_output)
     assert "wp_19" not in json.dumps(filtered)
+
+
+def test_model_input_compaction_summarizes_repeated_metric_map_outputs() -> None:
+    first_map = {
+        "ok": True,
+        "tool": "metric_map",
+        "map_id": "home",
+        "map_version": "v1",
+        "mode": "minimal",
+        "inspection_waypoints": [
+            {
+                "waypoint_id": f"wp_{idx}",
+                "room": "kitchen",
+                "navigation_note": "large public map waypoint payload",
+            }
+            for idx in range(80)
+        ],
+        "runtime_metric_map": {
+            "observed_objects": [{"object_id": "cup_1"}],
+            "target_candidates": [{"object_id": "cup_1"}],
+        },
+    }
+    second_map = {
+        **first_map,
+        "runtime_metric_map": {
+            "observed_objects": [{"object_id": "cup_1"}, {"object_id": "book_1"}],
+            "target_candidates": [{"object_id": "cup_1"}, {"object_id": "book_1"}],
+        },
+    }
+    items = [
+        {
+            "type": "function_call_output",
+            "call_id": "call_metric_map_first",
+            "output": json.dumps(first_map),
+        },
+        {
+            "type": "function_call_output",
+            "call_id": "call_metric_map_second",
+            "output": json.dumps(second_map),
+        },
+    ]
+
+    filtered, metrics = _compact_model_input_items(items, min_chars=999_999)
+
+    assert filtered[0] == items[0]
+    replacement = json.loads(filtered[1]["output"])
+    assert replacement["schema"] == "roboclaws_repeated_metric_map_delta_summary_v1"
+    assert replacement["map_id"] == "home"
+    assert replacement["inspection_waypoint_count"] == 80
+    assert replacement["runtime_observed_object_count"] == 2
+    assert "book_1" not in json.dumps(filtered[1])
+    assert metrics["metric_map_output_count"] == 2
+    assert metrics["repeated_metric_map_output_count"] == 1
+    assert metrics["metric_map_delta_compacted_count"] == 1
+    assert metrics["metric_map_bytes_after"] < metrics["metric_map_bytes_before"]
+    assert metrics["metric_map_bytes_reduced"] > 0
 
 
 def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
@@ -2036,6 +2093,8 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
     assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
+    assert gpt["model_input_compaction"]["candidate_ids"] == ["I", "N"]
+    assert gpt["model_input_compaction"]["repeated_metric_map_delta"] is False
 
     mimo_args = Namespace(
         **{
@@ -2103,6 +2162,30 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert custom["context_soft_limit_tokens"] == 12
     assert custom["context_hard_limit_tokens"] == 34
     assert custom["max_observe_per_waypoint"] == 2
+    assert custom["model_input_compaction"]["candidate_ids"] == ["I", "N"]
+
+    compaction = _resolve_agent_sdk_perf_profile(
+        Namespace(
+            **{
+                **vars(base_args),
+                "agent_sdk_perf_profile": "custom",
+                "model_input_compaction": True,
+                "model_input_compaction_min_chars": 80,
+            }
+        )
+    )
+    assert compaction["model_input_compaction"] == {
+        "schema": "agent_sdk_model_input_compaction_v1",
+        "enabled": True,
+        "mode": "public_tool_result_summary_v1+repeated_metric_map_delta_v1",
+        "min_chars": 80,
+        "candidate_ids": ["I", "N"],
+        "hook": "RunConfig.call_model_input_filter",
+        "repeated_metric_map_delta": True,
+        "private_artifact_policy": (
+            "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
+        ),
+    }
 
 
 def test_openai_agents_control_plane_metrics_parse_server_log(tmp_path: Path) -> None:
@@ -2432,6 +2515,12 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
                             "input_bytes_before": 2000,
                             "input_bytes_after": 800,
                             "input_bytes_reduced": 1200,
+                            "metric_map_output_count": 2,
+                            "repeated_metric_map_output_count": 1,
+                            "metric_map_delta_compacted_count": 1,
+                            "metric_map_bytes_before": 1400,
+                            "metric_map_bytes_after": 500,
+                            "metric_map_bytes_reduced": 900,
                         },
                     }
                 ),
@@ -2453,6 +2542,10 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
                             "input_bytes_before": 500,
                             "input_bytes_after": 500,
                             "input_bytes_reduced": 0,
+                            "metric_map_output_count": 1,
+                            "metric_map_bytes_before": 300,
+                            "metric_map_bytes_after": 300,
+                            "metric_map_bytes_reduced": 0,
                         },
                     }
                 ),
@@ -2478,6 +2571,13 @@ def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: P
     assert metrics["input_bytes_after"] == 1300
     assert metrics["input_bytes_reduced"] == 1200
     assert metrics["input_byte_reduction_ratio"] == 0.48
+    assert metrics["metric_map_output_count"] == 3
+    assert metrics["repeated_metric_map_output_count"] == 1
+    assert metrics["metric_map_delta_compacted_count"] == 1
+    assert metrics["metric_map_bytes_before"] == 1700
+    assert metrics["metric_map_bytes_after"] == 800
+    assert metrics["metric_map_bytes_reduced"] == 900
+    assert metrics["metric_map_byte_reduction_ratio"] == 0.529412
     assert "Raw prompts" in metrics["privacy_note"]
     assert "tool payload bodies" in metrics["privacy_note"]
 
@@ -2559,6 +2659,13 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "input_bytes_after": 1300,
             "input_bytes_reduced": 1200,
             "input_byte_reduction_ratio": 0.48,
+            "metric_map_output_count": 3,
+            "repeated_metric_map_output_count": 1,
+            "metric_map_delta_compacted_count": 1,
+            "metric_map_bytes_before": 1700,
+            "metric_map_bytes_after": 800,
+            "metric_map_bytes_reduced": 900,
+            "metric_map_byte_reduction_ratio": 0.529412,
         },
         "context_metrics": {
             "available": True,
@@ -2677,6 +2784,13 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "input_bytes_after": 1300,
         "input_bytes_reduced": 1200,
         "input_byte_reduction_ratio": 0.48,
+        "metric_map_output_count": 3,
+        "repeated_metric_map_output_count": 1,
+        "metric_map_delta_compacted_count": 1,
+        "metric_map_bytes_before": 1700,
+        "metric_map_bytes_after": 800,
+        "metric_map_bytes_reduced": 900,
+        "metric_map_byte_reduction_ratio": 0.529412,
     }
     assert timeline["latency_attribution"]["context_metrics"] == {
         "available": True,

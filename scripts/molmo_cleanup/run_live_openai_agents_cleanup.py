@@ -1109,10 +1109,11 @@ def _model_input_compaction_profile(
     return {
         "schema": "agent_sdk_model_input_compaction_v1",
         "enabled": enabled,
-        "mode": "public_tool_result_summary_v1" if enabled else "off",
+        "mode": "public_tool_result_summary_v1+repeated_metric_map_delta_v1" if enabled else "off",
         "min_chars": int(min_chars or 1200),
-        "candidate_id": "I",
+        "candidate_ids": ["I", "N"],
         "hook": "RunConfig.call_model_input_filter",
+        "repeated_metric_map_delta": enabled,
         "private_artifact_policy": (
             "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
         ),
@@ -2307,6 +2308,12 @@ def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
     compacted_item_count = 0
     unchanged_item_count = 0
     repeated_item_count = 0
+    metric_map_output_count = 0
+    repeated_metric_map_output_count = 0
+    metric_map_delta_compacted_count = 0
+    metric_map_bytes_before = 0
+    metric_map_bytes_after = 0
+    metric_map_bytes_reduced = 0
     max_input_bytes_before = 0
     max_input_bytes_after = 0
     max_input_bytes_reduced = 0
@@ -2337,6 +2344,16 @@ def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
         compacted_item_count += _int_or_none(metrics.get("compacted_item_count")) or 0
         unchanged_item_count += _int_or_none(metrics.get("unchanged_item_count")) or 0
         repeated_item_count += _int_or_none(metrics.get("repeated_item_count")) or 0
+        metric_map_output_count += _int_or_none(metrics.get("metric_map_output_count")) or 0
+        repeated_metric_map_output_count += (
+            _int_or_none(metrics.get("repeated_metric_map_output_count")) or 0
+        )
+        metric_map_delta_compacted_count += (
+            _int_or_none(metrics.get("metric_map_delta_compacted_count")) or 0
+        )
+        metric_map_bytes_before += _int_or_none(metrics.get("metric_map_bytes_before")) or 0
+        metric_map_bytes_after += _int_or_none(metrics.get("metric_map_bytes_after")) or 0
+        metric_map_bytes_reduced += _int_or_none(metrics.get("metric_map_bytes_reduced")) or 0
         max_input_bytes_before = max(max_input_bytes_before, before)
         max_input_bytes_after = max(max_input_bytes_after, after)
         max_input_bytes_reduced = max(max_input_bytes_reduced, reduced)
@@ -2354,6 +2371,16 @@ def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
         "compacted_item_count": compacted_item_count,
         "unchanged_item_count": unchanged_item_count,
         "repeated_item_count": repeated_item_count,
+        "metric_map_output_count": metric_map_output_count,
+        "repeated_metric_map_output_count": repeated_metric_map_output_count,
+        "metric_map_delta_compacted_count": metric_map_delta_compacted_count,
+        "metric_map_bytes_before": metric_map_bytes_before,
+        "metric_map_bytes_after": metric_map_bytes_after,
+        "metric_map_bytes_reduced": metric_map_bytes_reduced,
+        "metric_map_byte_reduction_ratio": _ratio(
+            metric_map_bytes_reduced,
+            metric_map_bytes_before,
+        ),
         "input_bytes_before": input_bytes_before,
         "input_bytes_after": input_bytes_after,
         "input_bytes_reduced": input_bytes_reduced,
@@ -2696,6 +2723,13 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "max_input_bytes_before",
         "max_input_bytes_after",
         "max_input_bytes_reduced",
+        "metric_map_output_count",
+        "repeated_metric_map_output_count",
+        "metric_map_delta_compacted_count",
+        "metric_map_bytes_before",
+        "metric_map_bytes_after",
+        "metric_map_bytes_reduced",
+        "metric_map_byte_reduction_ratio",
     )
     return {key: metrics.get(key) for key in keys if key in metrics}
 

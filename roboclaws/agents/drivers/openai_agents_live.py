@@ -499,13 +499,29 @@ def _compact_model_input_items(
 ) -> tuple[list[Any], dict[str, Any]]:
     filtered: list[Any] = []
     items_seen: dict[str, int] = {}
+    metric_map_seen = False
+    metric_map_output_count = 0
+    repeated_metric_map_output_count = 0
+    metric_map_delta_compacted_count = 0
+    metric_map_bytes_before = 0
+    metric_map_bytes_after = 0
     input_bytes_before = 0
     input_bytes_after = 0
     compacted_count = 0
     for item in items:
         item_bytes = _json_size_bytes(item)
         input_bytes_before += item_bytes
-        candidate = _compaction_candidate(item, min_chars=min_chars)
+        candidate, candidate_kind = _compaction_candidate(
+            item,
+            min_chars=min_chars,
+            metric_map_seen=metric_map_seen,
+        )
+        if _is_metric_map_tool_output(item):
+            metric_map_output_count += 1
+            metric_map_bytes_before += item_bytes
+            if metric_map_seen:
+                repeated_metric_map_output_count += 1
+            metric_map_seen = True
         item_hash = _stable_item_hash(item)
         items_seen[item_hash] = items_seen.get(item_hash, 0) + 1
         if candidate is None:
@@ -513,8 +529,13 @@ def _compact_model_input_items(
         else:
             filtered_item = candidate
             compacted_count += 1
+            if candidate_kind == "repeated_metric_map_delta":
+                metric_map_delta_compacted_count += 1
         filtered.append(filtered_item)
-        input_bytes_after += _json_size_bytes(filtered_item)
+        filtered_item_bytes = _json_size_bytes(filtered_item)
+        input_bytes_after += filtered_item_bytes
+        if _is_metric_map_tool_output(item):
+            metric_map_bytes_after += filtered_item_bytes
     return filtered, {
         "schema": "agent_sdk_model_input_compaction_metrics_v1",
         "input_item_count": len(items),
@@ -524,13 +545,24 @@ def _compact_model_input_items(
         "input_bytes_before": input_bytes_before,
         "input_bytes_after": input_bytes_after,
         "input_bytes_reduced": max(0, input_bytes_before - input_bytes_after),
+        "metric_map_output_count": metric_map_output_count,
+        "repeated_metric_map_output_count": repeated_metric_map_output_count,
+        "metric_map_delta_compacted_count": metric_map_delta_compacted_count,
+        "metric_map_bytes_before": metric_map_bytes_before,
+        "metric_map_bytes_after": metric_map_bytes_after,
+        "metric_map_bytes_reduced": max(0, metric_map_bytes_before - metric_map_bytes_after),
     }
 
 
-def _compaction_candidate(item: Any, *, min_chars: int) -> Any | None:
+def _compaction_candidate(
+    item: Any,
+    *,
+    min_chars: int,
+    metric_map_seen: bool,
+) -> tuple[Any | None, str]:
     payload = _to_jsonable(item)
     if not isinstance(payload, dict):
-        return None
+        return None, ""
     item_type = str(payload.get("type") or "")
     if item_type not in {
         "function_call_output",
@@ -538,20 +570,101 @@ def _compaction_candidate(item: Any, *, min_chars: int) -> Any | None:
         "mcp_call",
         "mcp_approval_response",
     }:
-        return None
+        return None, ""
     output_key = "output" if "output" in payload else "content" if "content" in payload else ""
     if not output_key:
-        return None
+        return None, ""
     output = payload.get(output_key)
     output_text = output if isinstance(output, str) else json.dumps(output, sort_keys=True)
+    if metric_map_seen and _is_metric_map_tool_output(payload):
+        compacted = copy.deepcopy(payload)
+        summary = json.dumps(
+            _repeated_metric_map_delta_summary(output_text, item_type=item_type),
+            sort_keys=True,
+        )
+        if len(summary) < len(output_text):
+            compacted[output_key] = summary
+            return compacted, "repeated_metric_map_delta"
     if len(output_text) < min_chars:
-        return None
+        return None, ""
     compacted = copy.deepcopy(payload)
     compacted[output_key] = json.dumps(
         _public_tool_output_summary(output_text, item_type=item_type),
         sort_keys=True,
     )
-    return compacted
+    return compacted, "generic_public_tool_output_summary"
+
+
+def _is_metric_map_tool_output(item: Any) -> bool:
+    payload = _to_jsonable(item)
+    if not isinstance(payload, dict):
+        return False
+    for key in ("name", "tool", "tool_name"):
+        if str(payload.get(key) or "") == "metric_map":
+            return True
+    call_id = str(payload.get("call_id") or "")
+    if "metric_map" in call_id:
+        return True
+    output = payload.get("output") if "output" in payload else payload.get("content")
+    decoded = _decode_tool_output_payload(output)
+    if isinstance(decoded, dict):
+        if decoded.get("tool") == "metric_map":
+            return True
+        nested = decoded.get("metric_map")
+        return isinstance(nested, dict) and nested.get("tool") == "metric_map"
+    return False
+
+
+def _decode_tool_output_payload(output: Any) -> Any:
+    if isinstance(output, str):
+        try:
+            decoded = json.loads(output)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(decoded, str):
+            try:
+                return json.loads(decoded)
+            except json.JSONDecodeError:
+                return decoded
+        return decoded
+    return output
+
+
+def _repeated_metric_map_delta_summary(output_text: str, *, item_type: str) -> dict[str, Any]:
+    decoded = _decode_tool_output_payload(output_text)
+    metric_map = decoded.get("metric_map") if isinstance(decoded, dict) else None
+    if not isinstance(metric_map, dict) and isinstance(decoded, dict):
+        metric_map = decoded
+    metric_map = metric_map if isinstance(metric_map, dict) else {}
+    runtime_map = (
+        metric_map.get("runtime_metric_map")
+        if isinstance(metric_map.get("runtime_metric_map"), dict)
+        else {}
+    )
+    return {
+        "schema": "roboclaws_repeated_metric_map_delta_summary_v1",
+        "item_type": item_type,
+        "original_chars": len(output_text),
+        "original_sha256": hashlib.sha256(output_text.encode("utf-8")).hexdigest(),
+        "map_id": str(metric_map.get("map_id") or ""),
+        "map_version": str(metric_map.get("map_version") or ""),
+        "mode": str(metric_map.get("mode") or ""),
+        "inspection_waypoint_count": len(metric_map.get("inspection_waypoints") or []),
+        "generated_target_candidate_count": len(
+            metric_map.get("generated_target_inspection_candidates") or []
+        ),
+        "runtime_observed_object_count": len(runtime_map.get("observed_objects") or []),
+        "runtime_target_candidate_count": len(runtime_map.get("target_candidates") or []),
+        "summary": (
+            "Repeated metric_map output compacted before this SDK model call. "
+            "Use the current metric_map tool again when full map fields are needed; "
+            "Roboclaws trace/report artifacts retain complete tool responses."
+        ),
+        "private_artifact_policy": (
+            "model-facing repeated-map delta only; raw map body is not persisted in "
+            "OpenAI Agents SDK events"
+        ),
+    }
 
 
 def _public_tool_output_summary(output_text: str, *, item_type: str) -> dict[str, Any]:
