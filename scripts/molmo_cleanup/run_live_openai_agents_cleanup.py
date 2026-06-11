@@ -61,6 +61,8 @@ PROMPT_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE"
 CONTINUATION_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE"
 CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
 CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
+MODEL_INPUT_COMPACTION_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION"
+MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
@@ -157,6 +159,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--prompt-mode", default="")
     parser.add_argument("--continuation-mode", default="")
+    parser.add_argument(
+        "--model-input-compaction",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to the SDK call_model_input_filter compaction arm. This is private "
+            "OpenAI Agents SDK candidate-I evidence and is disabled by default."
+        ),
+    )
+    parser.add_argument("--model-input-compaction-min-chars", type=int, default=None)
     parser.add_argument("--context-soft-limit-tokens", type=int, default=None)
     parser.add_argument("--context-hard-limit-tokens", type=int, default=None)
     parser.add_argument("--max-observe-per-waypoint", type=int, default=None)
@@ -876,6 +888,7 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=defaults["context_hard_limit_tokens"],
             allow_none=True,
         ),
+        "model_input_compaction": _model_input_compaction_profile(args, defaults),
         "model_service_retry_attempts": _int_setting(
             args,
             "model_service_retry_attempts",
@@ -1023,6 +1036,12 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
         "max_observe_per_waypoint": None,
         "context_soft_limit_tokens": None,
         "context_hard_limit_tokens": None,
+        "model_input_compaction": {
+            "schema": "agent_sdk_model_input_compaction_v1",
+            "enabled": False,
+            "mode": "off",
+            "min_chars": 1200,
+        },
     }
     if profile_id in {"baseline", "custom"}:
         return baseline
@@ -1062,6 +1081,41 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
             "context_hard_limit_tokens": 96_000,
         }
     raise ValueError(f"unsupported OpenAI Agents SDK performance profile '{profile_id}'")
+
+
+def _model_input_compaction_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    default_config = (
+        defaults.get("model_input_compaction")
+        if isinstance(defaults.get("model_input_compaction"), dict)
+        else {}
+    )
+    default_enabled = bool(default_config.get("enabled", False))
+    enabled = _bool_arg_setting(
+        args,
+        "model_input_compaction",
+        MODEL_INPUT_COMPACTION_ENV,
+        default=default_enabled,
+    )
+    min_chars = _int_setting(
+        args,
+        "model_input_compaction_min_chars",
+        MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
+        default=int(default_config.get("min_chars") or 1200),
+    )
+    return {
+        "schema": "agent_sdk_model_input_compaction_v1",
+        "enabled": enabled,
+        "mode": "public_tool_result_summary_v1" if enabled else "off",
+        "min_chars": int(min_chars or 1200),
+        "candidate_id": "I",
+        "hook": "RunConfig.call_model_input_filter",
+        "private_artifact_policy": (
+            "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
+        ),
+    }
 
 
 def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
@@ -1184,6 +1238,25 @@ def _float_setting(
     if value < 0:
         raise ValueError(f"{attr} must be non-negative")
     return _round_duration(value)
+
+
+def _bool_arg_setting(
+    args: argparse.Namespace,
+    attr: str,
+    env_name: str,
+    *,
+    default: bool,
+) -> bool:
+    raw = getattr(args, attr, None)
+    if raw is None:
+        env_raw = os.environ.get(env_name)
+        if env_raw not in {None, ""}:
+            raw = env_raw
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
 
 
 def _validate_context_limits(profile: dict[str, Any]) -> None:

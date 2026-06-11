@@ -3,16 +3,18 @@
 Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 
 Current slice: Agent SDK performance optimization, Group 0 matrix foundation,
-Candidate A skill-context parity, and Candidate G/J deterministic settings
-attribution for the private `openai-agents-live` route.
+Candidate A skill-context parity, Candidate G/J deterministic settings
+attribution, and Candidate I/AB deterministic prep for the private
+`openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
 skill-context proof and Candidate G/J deterministic settings/cache attribution
-were accepted on 2026-06-11. The full live provider/model x evidence-lane
-performance matrix is not done; it remains parked pending explicit live-run
-approval, credentials/backend availability, and budget acknowledgement. The
-follow-up execution plan is
+were accepted on 2026-06-11. Candidate I/AB deterministic prep was accepted on
+2026-06-12. The full live provider/model x evidence-lane performance matrix is
+not done; it remains parked pending explicit live-run approval,
+credentials/backend availability, and budget acknowledgement. The follow-up
+execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -74,6 +76,16 @@ Result:
   usage settings by wire API, prompt-cache retention policy where applicable,
   and stable-prefix hash attribution in timing/cache summaries. This is
   deterministic attribution only, not a live speedup claim.
+- Candidate I/AB deterministic prep now records the Responses-only continuation
+  and session capability surface for each `wire_api`, keeps server-managed
+  continuation disabled by default, and adds an opt-in
+  `RunConfig.call_model_input_filter` compaction arm through
+  `--model-input-compaction` / `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION`.
+  The compaction hook is model-facing only: oversized public tool outputs can be
+  replaced with hash/size summaries before model calls while MCP traces,
+  reports, and run artifacts remain complete. Events persist aggregate counts
+  and byte deltas only, not raw prompts, model text, tool payload bodies,
+  credentials, or private truth.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -138,6 +150,9 @@ Verification:
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 
 No-touch scope preserved:
 
@@ -150,6 +165,9 @@ No-touch scope preserved:
   artifacts; only metadata/hash/size summaries are allowed.
 - Do not claim a settings/cache speedup from Candidate G/J until provider-backed
   baseline and candidate rows exist under the live approval gate.
+- Do not claim model-input compaction or Responses continuation/session speedup
+  from Candidate I/AB deterministic prep until provider-backed baseline and
+  candidate rows exist under the live approval gate.
 
 Parked work:
 
@@ -160,6 +178,10 @@ Parked work:
   - Candidate G/J deterministic settings/cache attribution is accepted; live
     A/B speed proof remains gated on explicit approval, credentials/backend
     availability, and budget acknowledgement.
+  - Candidate I/AB deterministic prep is accepted; live model-input compaction,
+    server-managed continuation, and session-state A/B proof remains gated on
+    explicit approval, credentials/backend availability, and budget
+    acknowledgement.
   - Full provider/model x evidence-lane matrix before new speed claims.
   - Optional per-model-call racing inside the SDK model interface, only with
     per-arm cache/cost telemetry and explicit live-run approval.

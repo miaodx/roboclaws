@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import hashlib
 import json
 import os
 import time
@@ -23,6 +25,8 @@ DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS = 1
 DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S = 1.0
 MODEL_SERVICE_RETRY_ATTEMPTS_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS"
 MODEL_SERVICE_RETRY_SLEEP_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S"
+DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS = 1200
+MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -151,7 +155,7 @@ def _run_openai_agents(
         mcp_client_session_timeout_s=timeout_s,
     )
     model_settings_payload = _sdk_model_settings_payload(request)
-    run_config_payload = _sdk_run_config_payload(request)
+    run_config_payload = _sdk_run_config_payload(request, events_path=events_path)
     model_settings = ModelSettings(**model_settings_payload)
     run_config = RunConfig(model_settings=model_settings, **run_config_payload)
     server_kwargs: dict[str, Any] = {
@@ -343,7 +347,11 @@ def _sdk_model_settings_payload(request: LiveAgentRequest) -> dict[str, Any]:
     )
 
 
-def _sdk_run_config_payload(request: LiveAgentRequest) -> dict[str, Any]:
+def _sdk_run_config_payload(
+    request: LiveAgentRequest,
+    *,
+    events_path: Path | None = None,
+) -> dict[str, Any]:
     metadata = dict(request.metadata)
     profile = metadata.get("agent_sdk_perf_profile")
     configured = profile.get("sdk_run_config") if isinstance(profile, dict) else None
@@ -352,9 +360,23 @@ def _sdk_run_config_payload(request: LiveAgentRequest) -> dict[str, Any]:
     allowed = {"trace_include_sensitive_data", "workflow_name", "trace_metadata"}
     if not isinstance(configured, dict):
         configured = _default_sdk_run_config_payload()
-    return {
+    payload = {
         key: value for key, value in _drop_empty(_to_jsonable(configured)).items() if key in allowed
     }
+    filter_config = _input_compaction_config(request)
+    if filter_config.get("enabled") and events_path is not None:
+        payload["call_model_input_filter"] = _model_input_compaction_filter(
+            events_path,
+            runtime_config=_runtime_config(
+                request,
+                mcp_client_session_timeout_configured=_mcp_client_session_timeout_seconds(request)[
+                    0
+                ],
+                mcp_client_session_timeout_s=_mcp_client_session_timeout_seconds(request)[1],
+            ),
+            config=filter_config,
+        )
+    return payload
 
 
 def _default_sdk_model_settings_payload(
@@ -386,6 +408,194 @@ def _default_sdk_run_config_payload() -> dict[str, Any]:
         "trace_include_sensitive_data": False,
         "workflow_name": "roboclaws-openai-agents-live",
     }
+
+
+def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    config = profile.get("model_input_compaction") if isinstance(profile, dict) else None
+    if not isinstance(config, dict):
+        config = metadata.get("model_input_compaction")
+    if not isinstance(config, dict):
+        config = {}
+    enabled = _bool_setting(config.get("enabled"), default=False)
+    mode = str(config.get("mode") or ("public_tool_result_summary_v1" if enabled else "off"))
+    min_chars = _non_negative_int(
+        config.get("min_chars"),
+        env_name=MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
+        default=DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS,
+    )
+    return {
+        "schema": "agent_sdk_model_input_compaction_v1",
+        "enabled": enabled,
+        "mode": mode,
+        "min_chars": max(1, min_chars),
+        "private_artifact_policy": (
+            "filter is model-facing only; MCP traces, reports, and run artifacts remain complete"
+        ),
+    }
+
+
+def _bool_setting(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _model_input_compaction_filter(
+    events_path: Path,
+    *,
+    runtime_config: dict[str, Any],
+    config: dict[str, Any],
+) -> Any:
+    async def _filter(data: Any) -> Any:
+        model_data = getattr(data, "model_data", None)
+        original_items = getattr(model_data, "input", None)
+        instructions = getattr(model_data, "instructions", None)
+        if not isinstance(original_items, list):
+            return model_data
+        filtered_items, metrics = _compact_model_input_items(
+            original_items,
+            min_chars=int(config.get("min_chars") or DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS),
+        )
+        _append_model_input_filter_event(
+            events_path,
+            runtime_config=runtime_config,
+            config=config,
+            metrics=metrics,
+        )
+        return _model_input_data_like(
+            model_data,
+            input_items=filtered_items,
+            instructions=instructions,
+        )
+
+    return _filter
+
+
+def _model_input_data_like(model_data: Any, *, input_items: list[Any], instructions: Any) -> Any:
+    cls = model_data.__class__
+    try:
+        return cls(input=input_items, instructions=instructions)
+    except Exception:
+        try:
+            from agents.run_config import ModelInputData  # type: ignore[import-not-found]
+
+            return ModelInputData(input=input_items, instructions=instructions)
+        except Exception:
+            return type(
+                "_RoboclawsModelInputData",
+                (),
+                {"input": input_items, "instructions": instructions},
+            )()
+
+
+def _compact_model_input_items(
+    items: list[Any],
+    *,
+    min_chars: int,
+) -> tuple[list[Any], dict[str, Any]]:
+    filtered: list[Any] = []
+    items_seen: dict[str, int] = {}
+    input_bytes_before = 0
+    input_bytes_after = 0
+    compacted_count = 0
+    for item in items:
+        item_bytes = _json_size_bytes(item)
+        input_bytes_before += item_bytes
+        candidate = _compaction_candidate(item, min_chars=min_chars)
+        item_hash = _stable_item_hash(item)
+        items_seen[item_hash] = items_seen.get(item_hash, 0) + 1
+        if candidate is None:
+            filtered_item = item
+        else:
+            filtered_item = candidate
+            compacted_count += 1
+        filtered.append(filtered_item)
+        input_bytes_after += _json_size_bytes(filtered_item)
+    return filtered, {
+        "schema": "agent_sdk_model_input_compaction_metrics_v1",
+        "input_item_count": len(items),
+        "compacted_item_count": compacted_count,
+        "unchanged_item_count": len(items) - compacted_count,
+        "repeated_item_count": sum(count - 1 for count in items_seen.values() if count > 1),
+        "input_bytes_before": input_bytes_before,
+        "input_bytes_after": input_bytes_after,
+        "input_bytes_reduced": max(0, input_bytes_before - input_bytes_after),
+    }
+
+
+def _compaction_candidate(item: Any, *, min_chars: int) -> Any | None:
+    payload = _to_jsonable(item)
+    if not isinstance(payload, dict):
+        return None
+    item_type = str(payload.get("type") or "")
+    if item_type not in {
+        "function_call_output",
+        "computer_call_output",
+        "mcp_call",
+        "mcp_approval_response",
+    }:
+        return None
+    output_key = "output" if "output" in payload else "content" if "content" in payload else ""
+    if not output_key:
+        return None
+    output = payload.get(output_key)
+    output_text = output if isinstance(output, str) else json.dumps(output, sort_keys=True)
+    if len(output_text) < min_chars:
+        return None
+    compacted = copy.deepcopy(payload)
+    compacted[output_key] = json.dumps(
+        _public_tool_output_summary(output_text, item_type=item_type),
+        sort_keys=True,
+    )
+    return compacted
+
+
+def _public_tool_output_summary(output_text: str, *, item_type: str) -> dict[str, Any]:
+    return {
+        "schema": "roboclaws_public_tool_output_summary_v1",
+        "item_type": item_type,
+        "original_chars": len(output_text),
+        "original_sha256": hashlib.sha256(output_text.encode("utf-8")).hexdigest(),
+        "summary": (
+            "Oversized public tool output compacted before this SDK model call. "
+            "Use current MCP tools for fresh state; full tool responses remain in "
+            "Roboclaws trace/report artifacts."
+        ),
+    }
+
+
+def _append_model_input_filter_event(
+    events_path: Path,
+    *,
+    runtime_config: dict[str, Any],
+    config: dict[str, Any],
+    metrics: dict[str, Any],
+) -> None:
+    _append_event(
+        events_path,
+        _drop_empty(
+            {
+                "schema": "openai_agents_model_input_filter_v1",
+                "event": "model_input_filter",
+                "ts_epoch": time.time(),
+                "runtime": runtime_config.get("runtime"),
+                "provider_profile": runtime_config.get("provider_profile"),
+                "wire_api": runtime_config.get("wire_api"),
+                "model": runtime_config.get("model"),
+                "config": _drop_empty(_to_jsonable(config)),
+                "metrics": _drop_empty(_to_jsonable(metrics)),
+                "privacy_note": (
+                    "Only aggregate counts, byte sizes, hashes, and policy metadata are persisted. "
+                    "Raw prompts, model text, tool payload bodies, credentials, and private truth "
+                    "are not stored by this event."
+                ),
+            }
+        ),
+    )
 
 
 def _max_turns(request: LiveAgentRequest) -> int:
@@ -438,7 +648,9 @@ def _runtime_config(
     model_retry = _model_service_retry_config(request)
     model_settings = _safe_model_settings(request)
     sdk_model_settings = _sdk_model_settings_payload(request)
-    sdk_run_config = _sdk_run_config_payload(request)
+    sdk_run_config = _sdk_run_config_payload(request, events_path=None)
+    input_compaction = _input_compaction_config(request)
+    responses_feature_surface = _responses_feature_surface(model_settings)
     return {
         "runtime": "openai-agents-live",
         "provider_profile": model_settings.get("provider_profile") or request.provider_profile,
@@ -457,8 +669,35 @@ def _runtime_config(
         "model_service_retry_sleep_s": model_retry["retry_sleep_s"],
         "sdk_model_settings": sdk_model_settings,
         "sdk_run_config": sdk_run_config,
+        "agent_sdk_responses_features": responses_feature_surface,
+        "model_input_compaction": input_compaction,
         "prompt_cache_retention": sdk_model_settings.get("prompt_cache_retention") or "",
         "trace_include_sensitive_data": sdk_run_config.get("trace_include_sensitive_data"),
+    }
+
+
+def _responses_feature_surface(model_settings: dict[str, Any]) -> dict[str, Any]:
+    wire_api = str(model_settings.get("wire_api") or "")
+    enabled = wire_api == "responses"
+    return {
+        "schema": "agent_sdk_responses_feature_surface_v1",
+        "wire_api": wire_api,
+        "available": enabled,
+        "previous_response_id": enabled,
+        "auto_previous_response_id": enabled,
+        "conversation_id": enabled,
+        "session": enabled,
+        "server_managed_continuation_default": False,
+        "decision": (
+            "available_but_gated_for_live_ab"
+            if enabled
+            else "unavailable_for_chat_completions_wire_api"
+        ),
+        "privacy_note": (
+            "Responses continuation/session levers are recorded as capability surface only; "
+            "they are not enabled by default because task state and report completeness must "
+            "remain MCP-visible."
+        ),
     }
 
 
@@ -1323,6 +1562,15 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _round_duration(value: float) -> float:
     return round(max(0.0, value), 3)
+
+
+def _json_size_bytes(value: Any) -> int:
+    return len(json.dumps(_to_jsonable(value), sort_keys=True).encode("utf-8"))
+
+
+def _stable_item_hash(value: Any) -> str:
+    material = json.dumps(_to_jsonable(value), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
 
 
 def _to_jsonable(value: Any) -> Any:

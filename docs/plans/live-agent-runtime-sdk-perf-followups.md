@@ -5,7 +5,7 @@ source:
   - docs/plans/live-agent-runtime-sdk-spike.md
   - 2026-06-10 Agent SDK performance optimization pass
   - 2026-06-10 Group 0 speedup foundation preflight
-last_reviewed: 2026-06-11
+last_reviewed: 2026-06-12
 ---
 
 # Live Agent Runtime SDK Perf Follow-ups
@@ -47,6 +47,18 @@ trace privacy config, prompt-cache retention policy, and a stable-prefix hash.
 This is settings attribution only; provider-backed A/B speed claims still need
 the live approval gate.
 
+2026-06-12 Candidate I/AB deterministic prep update: the installed OpenAI
+Agents SDK exposes Responses continuation/session arguments and
+`RunConfig.call_model_input_filter`. The private SDK route now records the
+Responses-only feature surface as gated capability metadata and supports an
+opt-in model-input compaction arm through `--model-input-compaction` /
+`ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION`. The compaction hook is model-facing
+only: it can replace oversized public tool outputs with hash/size summaries
+before a model call, while MCP traces, reports, and run artifacts remain
+complete. Sanitized events record aggregate counts and byte deltas only, not
+raw prompts, model text, tool payload bodies, credentials, or private truth.
+No provider-backed speed claim is made.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -77,14 +89,24 @@ the live approval gate.
   route records explicit SDK model/run settings, disables sensitive trace data,
   tracks stable prompt-prefix hashes, and carries prompt-cache retention policy
   through `live_timing.json` / events without making a speed claim.
+- Candidate I deterministic prep is implemented as an opt-in SDK
+  `call_model_input_filter` arm. It records aggregate compaction evidence and
+  proves fake model-facing payload bytes can drop without changing persisted
+  trace/report artifacts. It is disabled by default and still needs live A/B
+  evidence before any speed claim.
+- Candidate AB deterministic audit is partially implemented: timing/events now
+  record whether Responses-only continuation/session levers are available for
+  the active `wire_api`, and keep server-managed continuation disabled by
+  default until a live A/B row proves task-state/report completeness.
 
 ## Not Done
 
 - Full live GPT/MiMo x evidence-lane matrix.
-- Follow-up optimization groups 1-5 beyond Candidate A.
-- Explicit Responses-native feature evaluation: server-managed continuation,
-  conversation/session state, prompt-cache retention, and other SDK features
-  that only apply when the provider really supports the Responses API.
+- Follow-up optimization groups 1-5 beyond Candidates A, G/J, and deterministic
+  I/AB prep.
+- Provider-backed Responses-native A/B evaluation for server-managed
+  continuation, conversation/session state, prompt-cache retention, and
+  model-input compaction.
 - OpenAI Agents SDK provider-backed matrix rows for Chat-compatible profiles
   such as `mimo-openai-chat` and `kimi-openai-chat`, when credentials and live
   approval are available. These rows prove compatibility unless their own
@@ -314,7 +336,8 @@ Each candidate arm writes one decision row:
 | Candidate ids | Row | Feature flags / dependencies | Evidence | Decision | Queue decision reason | Next recommended group |
 | --- | --- | --- | --- | --- | --- | --- |
 | A | `openai-agents-live`, provider/evidence lane agnostic deterministic proof | `agent_sdk_skill_context=canonical_skill_markdown`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `roboclaws/agents/live_runtime.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted | Deterministic proof shows the SDK route receives the canonical skill text, artifact discovery includes `openai-agents-skill-context.json`, and persisted timing/event/artifact summaries omit the skill body and raw prompt/tool payloads. No speed claim is made from this row. | G/J settings and cache attribution, then AB only for `wire_api=responses` rows. |
-| G,J | `openai-agents-live`, provider/evidence lane agnostic deterministic settings attribution | `sdk_model_settings`, `sdk_run_config`, `prompt_cache_retention`, `stable_prefix_hash`; no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic, live A/B gated | Deterministic proof shows explicit SDK model/run settings are constructed and passed into Agent/Runner, sanitized runtime events expose those settings, cache summaries record retention and stable-prefix hash, and missing usage remains unavailable rather than zero. No speedup claim is made without live baseline/candidate rows. | AB Responses-only feature audit or I input compaction prep; provider-backed A/B requires live approval. |
+| G,J | `openai-agents-live`, provider/evidence lane agnostic deterministic settings attribution | `sdk_model_settings`, `sdk_run_config`, `prompt_cache_retention`, `stable_prefix_hash`; no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic, live A/B gated | Deterministic proof shows explicit SDK model/run settings are constructed and passed into Agent/Runner, sanitized runtime events expose those settings, cache summaries record retention and stable-prefix hash, and missing usage remains unavailable rather than zero. No speedup claim is made without live baseline/candidate rows. | AB/I deterministic prep, then provider-backed A/B only after approval/budget/backend gates pass. |
+| I,AB | `openai-agents-live`, provider/evidence lane agnostic deterministic compaction prep plus Responses feature audit | `model_input_compaction=public_tool_result_summary_v1` opt-in, `agent_sdk_responses_features`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic-prep, live A/B gated | Deterministic proof shows the SDK route can install `RunConfig.call_model_input_filter`, keep the feature off by default, compact oversized public tool outputs before model calls with aggregate byte-delta events, and record Responses continuation/session capability as gated metadata. Persisted events omit raw prompts, model text, tool payload bodies, credentials, and private truth. No speedup claim is made without live baseline/candidate rows. | B live baseline refresh and Responses/I A/B rows only after explicit live approval, credentials/backend availability, network guard, and budget acknowledgement. |
 
 ## Evidence Ladder
 

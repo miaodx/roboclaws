@@ -11,6 +11,7 @@ import pytest
 
 from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
+    _compact_model_input_items,
     _failure_from_exception,
     _RetryingModel,
     _RoboclawsSpanRecorder,
@@ -498,6 +499,9 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert events[0]["wire_api"] == "responses"
     assert events[0]["sdk_model_settings"]["store"] is False
     assert events[0]["sdk_run_config"]["trace_include_sensitive_data"] is False
+    assert events[0]["agent_sdk_responses_features"]["available"] is True
+    assert events[0]["agent_sdk_responses_features"]["server_managed_continuation_default"] is False
+    assert events[0]["model_input_compaction"]["enabled"] is False
 
 
 def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
@@ -525,7 +529,11 @@ def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
         "agents",
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
-            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            Runner=SimpleNamespace(
+                run_sync=lambda *_args, **kwargs: (
+                    captured.setdefault("runner_kwargs", kwargs) or SimpleNamespace()
+                )
+            ),
             ModelSettings=FakeModelSettings,
             RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
@@ -667,6 +675,121 @@ def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
     assert events[0]["provider_profile"] == "mimo-openai-chat"
     assert events[0]["wire_api"] == "chat-completions"
     assert events[0]["sdk_model_settings"]["include_usage"] is True
+    assert events[0]["agent_sdk_responses_features"]["available"] is False
+
+
+def test_openai_agents_runtime_configures_model_input_compaction_filter(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            pass
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(
+                run_sync=lambda *_args, **kwargs: (
+                    captured.setdefault("runner_kwargs", kwargs) or SimpleNamespace()
+                )
+            ),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={
+            "agent_sdk_perf_profile": {
+                "profile_id": "custom",
+                "provider_profile": "codex-env",
+                "wire_api": "responses",
+                "model_input_compaction": {
+                    "enabled": True,
+                    "mode": "public_tool_result_summary_v1",
+                    "min_chars": 80,
+                },
+            }
+        },
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    run_config = captured["runner_kwargs"]["run_config"]
+    assert callable(run_config.call_model_input_filter)
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["model_input_compaction"]["enabled"] is True
+    assert events[0]["model_input_compaction"]["mode"] == "public_tool_result_summary_v1"
+    assert "call_model_input_filter" not in events[0]["sdk_run_config"]
+
+
+def test_model_input_compaction_reduces_oversized_public_tool_outputs() -> None:
+    large_output = json.dumps(
+        {
+            "metric_map": {
+                "inspection_waypoints": [
+                    {"waypoint_id": f"wp_{idx}", "room": "kitchen", "objects": ["cup", "plate"]}
+                    for idx in range(20)
+                ]
+            }
+        }
+    )
+    items = [
+        {"role": "user", "content": "clean the room"},
+        {
+            "type": "function_call_output",
+            "call_id": "call_metric_map",
+            "output": large_output,
+        },
+    ]
+
+    filtered, metrics = _compact_model_input_items(items, min_chars=80)
+
+    assert metrics["input_item_count"] == 2
+    assert metrics["compacted_item_count"] == 1
+    assert metrics["input_bytes_after"] < metrics["input_bytes_before"]
+    assert filtered[0] == items[0]
+    assert filtered[1]["call_id"] == "call_metric_map"
+    replacement = json.loads(filtered[1]["output"])
+    assert replacement["schema"] == "roboclaws_public_tool_output_summary_v1"
+    assert replacement["original_chars"] == len(large_output)
+    assert "wp_19" not in json.dumps(filtered)
 
 
 def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
