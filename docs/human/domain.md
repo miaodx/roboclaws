@@ -55,11 +55,12 @@ the source navigation map.
 _Avoid_: Private target map, source map rewrite
 
 **Actionable Semantic Map Snapshot**:
-The canonical downstream semantic-map artifact. Online `semantic-map-build`
-Runtime Metric Map output and offline Agibot `navigation_memory.json`
-conversion both produce this shape: source map reference, runtime map payload,
-public anchors, materialized inspection waypoints, materialized fixture or
-receptacle candidates, actionability status, and evidence.
+The canonical downstream semantic-map artifact. Online
+`surface=household-world intent=map-build` Runtime Metric Map output and
+offline Agibot `navigation_memory.json` conversion both produce this shape:
+source map reference, runtime map payload, public anchors, materialized
+inspection waypoints, materialized fixture or receptacle candidates,
+actionability status, and evidence.
 _Avoid_: Agibot-only cleanup input, private scoring artifact
 
 **Public Semantic Anchor**:

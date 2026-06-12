@@ -16,7 +16,7 @@ from roboclaws.operator_console.history import latest_run_payload
 from roboclaws.operator_console.interactions import (
     InteractionError,
     append_ask_why,
-    append_continue_request,
+    append_next_goal_request,
     append_steer_message,
     create_operator_session,
     get_operator_session,
@@ -149,13 +149,14 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             if parsed.path == "/api/runs":
                 request = LaunchRequest(
                     route_id=str(payload.get("route_id") or ""),
+                    intent=str(payload.get("intent") or ""),
                     prompt=str(payload.get("prompt") or ""),
                     overrides=dict(payload.get("overrides") or {}),
                     env_overrides=dict(payload.get("env_overrides") or {}),
                     gates=dict(payload.get("gates") or {}),
                     operator_session_id=str(payload.get("operator_session_id") or ""),
                     parent_run_id=str(payload.get("parent_run_id") or ""),
-                    continuation_packet=dict(payload.get("continuation_packet") or {}),
+                    next_goal_packet=dict(payload.get("next_goal_packet") or {}),
                 )
                 return self._json(start_console_run(self.repo_root, request), status=201)
             if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/ask-why"):
@@ -170,22 +171,24 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     append_steer_message(self.repo_root, run_id, str(payload.get("body") or "")),
                     status=201,
                 )
-            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/continue"):
-                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/continue")
-                follow_up = append_continue_request(
+            if parsed.path.startswith("/api/runs/") and parsed.path.endswith("/next-goal"):
+                run_id = parsed.path.removeprefix("/api/runs/").removesuffix("/next-goal")
+                follow_up = append_next_goal_request(
                     self.repo_root,
                     run_id,
                     str(payload.get("prompt") or payload.get("body") or ""),
+                    confirmed=bool(payload.get("confirmed")),
                 )
                 if follow_up.get("status") == "ready_to_start" and follow_up.get(
                     "auto_start_allowed"
                 ):
                     launch = LaunchRequest(
                         route_id=str(follow_up.get("route_id") or ""),
+                        intent=str(follow_up.get("intent") or ""),
                         prompt=str(follow_up.get("body") or ""),
                         operator_session_id=str(follow_up.get("operator_session_id") or ""),
                         parent_run_id=run_id,
-                        continuation_packet=dict(follow_up.get("continuation_packet") or {}),
+                        next_goal_packet=dict(follow_up.get("next_goal_packet") or {}),
                     )
                     try:
                         follow_up["started_run"] = start_console_run(self.repo_root, launch)

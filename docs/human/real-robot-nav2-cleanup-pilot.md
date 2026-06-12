@@ -21,8 +21,8 @@ while physical manipulation stays `blocked_capability`.
 uv run python scripts/maps/check_bundle.py assets/maps/<environment_id>
 ```
 
-For Molmo rehearsal profiles other than `smoke`, the public `just task::run
-household-cleanup ...` facade selects the checked-in
+For Molmo rehearsal lanes other than `smoke`, the public
+`just run::surface surface=household-world intent=cleanup ...` facade selects the checked-in
 `assets/maps/molmo-cleanup-default-7` bundle by default and fails before
 cleanup startup if it is missing or invalid. Override the selection with
 `map_bundle=<path-or-assets-id>` when testing another prepared environment.
@@ -99,7 +99,7 @@ deterministic client with an operator-approved ROS/Nav2 action client.
 Use the MolmoSpaces world-label report before hardware:
 
 ```bash
-just task::run household-cleanup direct evidence_lane=world-oracle-labels seed=7 generated_mess_count=10
+just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=world-oracle-labels seed=7 generated_mess_count=10
 ```
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
@@ -107,14 +107,14 @@ For a live Codex cleanup rehearsal with the supported local runtime, set
 `codex-env` route, then run:
 
 ```bash
-just task::run household-cleanup codex evidence_lane=world-oracle-labels seed=7 generated_mess_count=10
+just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels seed=7 generated_mess_count=10
 ```
 
 For a local Codex Nav2 acceptance rehearsal, write to a stable proof root and use
 the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
-just task::run household-cleanup codex evidence_lane=world-oracle-labels \
+just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \
   generated_mess_count=5 \

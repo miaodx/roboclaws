@@ -18,10 +18,14 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
-from roboclaws.agents.drivers.openai_agents_live import OpenAIAgentsLiveRuntime
+from roboclaws.agents.drivers.openai_agents_live import (
+    DEFAULT_OPENAI_AGENTS_MAX_TURNS,
+    MCP_CLIENT_SESSION_TIMEOUT_ENV,
+    OpenAIAgentsLiveRuntime,
+)
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
-from roboclaws.household.generated_mess import generated_mess_success_threshold
+from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
 from roboclaws.household.report import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_CUSTOM,
@@ -34,10 +38,24 @@ from roboclaws.household.visual_backend_slots import (
     VisualBackendSlotLease,
     acquire_visual_backend_slot,
 )
+from roboclaws.launch.evaluation import (
+    checker_flags_for_household_intent,
+    household_intent_id_for_checker,
+    merge_checker_flags,
+)
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS = 2
+DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S = 30.0
+AGENT_SDK_PERF_PROFILE_ENV = "ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE"
+PROMPT_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE"
+CONTINUATION_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE"
+CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
+CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
+MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
+RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
+DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
 
 
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_PROMPT = """
@@ -81,7 +99,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--max-turns",
         type=int,
-        default=int(os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS", "128")),
+        default=None,
         help=(
             "Maximum OpenAI Agents SDK agent turns inside one runner invocation. "
             "This is not runner-side continuation."
@@ -90,12 +108,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--incomplete-turn-continuation-attempts",
         type=int,
-        default=int(
-            os.environ.get(
-                "ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS",
-                str(DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS),
-            )
-        ),
+        default=None,
         help=(
             "Bounded continuation attempts after a successful SDK turn ends without "
             "MCP done/run_result.json. The runner still never infers cleanup success."
@@ -110,6 +123,35 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "The cleanup MCP tool catalog is static within one live run."
         ),
     )
+    parser.add_argument(
+        "--mcp-client-session-timeout-s",
+        type=float,
+        default=float(
+            os.environ.get(
+                MCP_CLIENT_SESSION_TIMEOUT_ENV,
+                str(DEFAULT_MCP_CLIENT_SESSION_TIMEOUT_S),
+            )
+        ),
+        help=(
+            "OpenAI Agents SDK MCP ClientSession read timeout. Visual cleanup lanes can "
+            "exceed the SDK's short default while robot-view artifacts are captured."
+        ),
+    )
+    parser.add_argument(
+        "--agent-sdk-perf-profile",
+        default="",
+        help=(
+            "Private OpenAI Agents SDK performance profile id. Known values: "
+            "baseline, gpt_compact_v1, mimo_compact_v1, raw_fpv_budgeted_v1, custom."
+        ),
+    )
+    parser.add_argument("--prompt-mode", default="")
+    parser.add_argument("--continuation-mode", default="")
+    parser.add_argument("--context-soft-limit-tokens", type=int, default=None)
+    parser.add_argument("--context-hard-limit-tokens", type=int, default=None)
+    parser.add_argument("--max-observe-per-waypoint", type=int, default=None)
+    parser.add_argument("--raw-fpv-candidate-budget", type=int, default=None)
+    parser.add_argument("--done-retry-budget", type=int, default=None)
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
@@ -148,9 +190,19 @@ class LiveOpenAIAgentsCleanupRunner:
         self.server_log_thread: threading.Thread | None = None
         self.lock_file = None
         self.visual_slot: VisualBackendSlotLease | None = None
+        self.agent_sdk_perf_profile = _resolve_agent_sdk_perf_profile(args)
+        self.initial_kickoff_prompt = _profiled_kickoff_prompt(
+            args,
+            profile=self.agent_sdk_perf_profile,
+        )
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
+            "surface": "household-world",
+            "intent": _intent_for_task_name(getattr(args, "task_name", "")),
+            "task_name": getattr(args, "task_name", ""),
+            "task_intent_mode": _task_intent_mode_for_timing(args),
+            "evidence_lane": getattr(args, "profile", ""),
             "profile": getattr(args, "profile", ""),
             "backend": getattr(args, "backend", ""),
             "policy": getattr(args, "policy", ""),
@@ -158,6 +210,16 @@ class LiveOpenAIAgentsCleanupRunner:
             "provider_profile": getattr(args, "provider_profile", ""),
             "model": getattr(args, "model", ""),
             "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
+            "kickoff_prompt_chars": len(self.initial_kickoff_prompt),
+            "kickoff_prompt_estimated_tokens": _estimated_tokens_from_chars(
+                len(self.initial_kickoff_prompt)
+            ),
+            "kickoff_prompt_source": _kickoff_prompt_source(args, self.agent_sdk_perf_profile),
+            "mcp_client_session_timeout_s": _round_duration(
+                max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
+            ),
+            "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
+            "prompt_profile_id": self.agent_sdk_perf_profile["profile_id"],
         }
 
     def run(self) -> int:
@@ -309,20 +371,26 @@ class LiveOpenAIAgentsCleanupRunner:
         self._write_status("running-openai-agents")
         self._mark_timing("openai_agents_start")
         recovery_policy = IncompleteTurnRecoveryPolicy(
-            max_attempts=int(
-                getattr(
-                    self.args,
-                    "incomplete_turn_continuation_attempts",
-                    DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
-                )
-            )
+            max_attempts=int(self.agent_sdk_perf_profile["max_continuations"])
         )
         runtime = OpenAIAgentsLiveRuntime()
-        prompt = self.args.kickoff_prompt
+        prompt = self.initial_kickoff_prompt
         attempt_index = 0
         result = None
         attempts: list[dict[str, Any]] = []
         while True:
+            preflight_failure = _budget_failure_from_run_state(
+                self.run_dir,
+                self.live_timing,
+                self.agent_sdk_perf_profile,
+            )
+            if preflight_failure is not None:
+                self.live_timing["agent_sdk_budget_terminal"] = preflight_failure.status_fields()
+                raise LiveAgentRunFailure(
+                    f"OpenAI Agents SDK budget guard stopped before attempt {attempt_index}: "
+                    f"{preflight_failure.reason}",
+                    preflight_failure,
+                )
             if attempt_index:
                 self._write_status("running-openai-agents-continuation")
             request = self._sdk_request(prompt=prompt, attempt_index=attempt_index)
@@ -334,16 +402,34 @@ class LiveOpenAIAgentsCleanupRunner:
                 break
             if (self.run_dir / "run_result.json").is_file():
                 break
+            budget_failure = _budget_failure_from_run_state(
+                self.run_dir,
+                self.live_timing,
+                self.agent_sdk_perf_profile,
+            )
+            if budget_failure is not None:
+                self.live_timing["agent_sdk_budget_terminal"] = budget_failure.status_fields()
+                raise LiveAgentRunFailure(
+                    f"OpenAI Agents SDK budget guard stopped after attempt {attempt_index}: "
+                    f"{budget_failure.reason}",
+                    budget_failure,
+                )
             continuation_prompt = recovery_policy.continuation_prompt(
-                original_prompt=self.args.kickoff_prompt,
+                original_prompt=self.initial_kickoff_prompt,
                 result=result,
                 run_dir=self.run_dir,
                 attempt_index=attempt_index,
+                profile=self.agent_sdk_perf_profile,
+                context_metrics=_context_metrics(self.run_dir, self.live_timing),
             )
             if continuation_prompt is None:
                 break
             attempt_summary["recovery_action"] = "continue"
             attempt_summary["recovery_reason"] = recovery_policy.reason
+            attempt_summary["continuation_prompt_chars"] = len(continuation_prompt)
+            attempt_summary["continuation_prompt_estimated_tokens"] = _estimated_tokens_from_chars(
+                len(continuation_prompt)
+            )
             attempt_index += 1
             prompt = continuation_prompt
 
@@ -361,13 +447,14 @@ class LiveOpenAIAgentsCleanupRunner:
             "provider_session_id": result.provider_session_id,
         }
         if result.exit_status not in {0, None}:
-            failure = LiveAgentFailure(
-                reason=result.reason or "agent_cli_failure",
-                retryable=bool(result.retryable),
-                provider_reason=result.provider_reason,
-                resume_available=bool(result.resume_available),
-                detail=result.detail,
+            failure = _failure_from_sdk_result(
+                result,
+                run_dir=self.run_dir,
+                timing=self.live_timing,
+                profile=self.agent_sdk_perf_profile,
             )
+            if result.reason == "agent_sdk_turn_budget_exceeded":
+                self.live_timing["agent_sdk_budget_terminal"] = failure.status_fields()
             raise LiveAgentRunFailure(
                 f"OpenAI Agents SDK runtime failed: {failure.reason}",
                 failure,
@@ -383,6 +470,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "live_status": self.status_path,
             "openai_agents_events": self.run_dir / "openai-agents-events.jsonl",
             "openai_agents_trace": self.run_dir / "openai-agents-trace.json",
+            "openai_agents_spans": self.run_dir / "openai-agents-spans.jsonl",
         }
         if attempt_index:
             artifact_paths.update(
@@ -391,6 +479,8 @@ class LiveOpenAIAgentsCleanupRunner:
                     / f"openai-agents-events.continuation-{attempt_index}.jsonl",
                     "openai_agents_trace": self.run_dir
                     / f"openai-agents-trace.continuation-{attempt_index}.json",
+                    "openai_agents_spans": self.run_dir
+                    / f"openai-agents-spans.continuation-{attempt_index}.jsonl",
                 }
             )
         return LiveAgentRequest(
@@ -401,14 +491,23 @@ class LiveOpenAIAgentsCleanupRunner:
             run_dir=self.run_dir,
             model=self.args.model,
             provider_profile=self.args.provider_profile,
-            max_turns=self.args.max_turns,
+            max_turns=int(self.agent_sdk_perf_profile["max_turns"]),
             one_turn=True,
             metadata={
                 "provider_profile": self.args.provider_profile,
-                "max_turns": self.args.max_turns,
+                "max_turns": int(self.agent_sdk_perf_profile["max_turns"]),
                 "attempt_index": attempt_index,
                 "attempt_role": "continuation" if attempt_index else "initial",
-                "cache_tools_list": bool(getattr(self.args, "cache_tools_list", True)),
+                "cache_tools_list": bool(self.agent_sdk_perf_profile["cache_tools_list"]),
+                "mcp_client_session_timeout_s": float(
+                    self.agent_sdk_perf_profile["mcp_client_session_timeout_s"] or 0.0
+                ),
+                "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
+                "surface": "household-world",
+                "intent": _intent_for_task_name(getattr(self.args, "task_name", "")),
+                "task_name": getattr(self.args, "task_name", ""),
+                "task_intent_mode": _task_intent_mode_for_timing(self.args),
+                "evidence_lane": getattr(self.args, "profile", ""),
             },
             artifact_paths=artifact_paths,
         )
@@ -429,6 +528,7 @@ class LiveOpenAIAgentsCleanupRunner:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
+        task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
         custom_task = (
             normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
             == TASK_INTENT_MODE_CUSTOM
@@ -436,6 +536,16 @@ class LiveOpenAIAgentsCleanupRunner:
         checker_visual_args = list(self.args.checker_visual_arg)
         if custom_task:
             checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
+        intent_id = household_intent_id_for_checker(
+            task_name=task_name,
+            task_intent=task_intent,
+            custom_task=custom_task,
+        )
+        checker_policy_args = checker_flags_for_household_intent(
+            intent_id=intent_id,
+            profile=self.args.profile,
+            min_generated_mess_count=self.args.min_generated_mess_count,
+        )
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -457,52 +567,8 @@ class LiveOpenAIAgentsCleanupRunner:
             "molmo_cleanup_realworld",
             "--min-generated-mess-count",
             self.args.min_generated_mess_count,
-            "--require-agent-driven",
-            "--require-advisory-scoring",
-            *checker_visual_args,
+            *merge_checker_flags(checker_policy_args, checker_visual_args),
         ]
-        if task_name == "household-cleanup" and self.args.profile in {
-            "smoke",
-            "world-oracle-labels",
-            "camera-grounded-labels",
-            "camera-raw-fpv",
-        }:
-            if custom_task:
-                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
-            else:
-                checker_args.append("--require-clean-agent-run")
-        if self.args.profile == "world-oracle-labels":
-            _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
-            _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
-            if task_name == "household-cleanup" and not custom_task:
-                _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
-            if not custom_task:
-                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
-        if self.args.profile == "camera-raw-fpv":
-            raw_fpv_required_cleanup_count = str(
-                generated_mess_success_threshold(int(self.args.min_generated_mess_count))
-            )
-            if not custom_task:
-                _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
-                _append_missing_checker_value(
-                    checker_args,
-                    "--min-model-declared-observations",
-                    raw_fpv_required_cleanup_count,
-                )
-                _append_missing_checker_value(
-                    checker_args,
-                    "--min-model-declared-actions",
-                    raw_fpv_required_cleanup_count,
-                )
-                if task_name == "household-cleanup":
-                    _append_missing_checker_value(
-                        checker_args,
-                        "--min-semantic-accepted-count",
-                        raw_fpv_required_cleanup_count,
-                    )
-                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
-            elif task_name == "household-cleanup":
-                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
         checker_args.append(str(run_result))
 
         try:
@@ -555,6 +621,13 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
         payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
         payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
+        payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
+        payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
+        payload["context_metrics"] = _context_metrics(self.run_dir, payload)
+        payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
+        payload["context_growth_metrics"] = _context_growth_metrics(self.run_dir, payload)
+        payload["model_or_sdk_unattributed_s"] = _model_or_sdk_unattributed_seconds(payload)
+        payload["timeline"] = _live_timing_timeline(payload)
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
     def _cleanup_server(self) -> None:
@@ -646,6 +719,8 @@ class IncompleteTurnRecoveryPolicy:
         result: Any,
         run_dir: Path,
         attempt_index: int,
+        profile: dict[str, Any] | None = None,
+        context_metrics: dict[str, Any] | None = None,
     ) -> str | None:
         if self.max_attempts <= 0:
             return None
@@ -657,7 +732,737 @@ class IncompleteTurnRecoveryPolicy:
             return None
         if getattr(result, "phase", "") != "agent-turn-complete":
             return None
+        profile = profile or {}
+        context_metrics = context_metrics or {}
+        continuation_mode = str(profile.get("continuation_mode") or "repeat_full_prompt")
+        total_input_tokens = _int_or_none(context_metrics.get("total_input_tokens"))
+        soft_limit = _int_or_none(profile.get("context_soft_limit_tokens"))
+        if continuation_mode == "state_summary_only" or (
+            soft_limit is not None
+            and total_input_tokens is not None
+            and total_input_tokens >= soft_limit
+        ):
+            return _compact_continuation_prompt(
+                run_dir,
+                profile=profile,
+                context_metrics=context_metrics,
+            )
         return f"{original_prompt.rstrip()}\n\n{self.continuation_suffix}\n"
+
+
+def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
+    provider_profile = _normal_provider_profile(str(getattr(args, "provider_profile", "") or ""))
+    model = str(getattr(args, "model", "") or "")
+    model_family = _model_family(provider_profile, model)
+    profile_id, profile_source = _profile_id_with_source(args, provider_profile, model_family)
+    defaults = _profile_defaults(profile_id)
+    payload = {
+        "schema": "agent_sdk_perf_profile_v1",
+        "profile_id": profile_id,
+        "source": profile_source,
+        "provider_profile": provider_profile,
+        "model_family": model_family,
+        "prompt_mode": _string_setting(
+            args,
+            "prompt_mode",
+            PROMPT_MODE_ENV,
+            default=defaults["prompt_mode"],
+            allowed={"full", "compact", "raw_fpv_compact"},
+        ),
+        "continuation_mode": _string_setting(
+            args,
+            "continuation_mode",
+            CONTINUATION_MODE_ENV,
+            default=defaults["continuation_mode"],
+            allowed={"repeat_full_prompt", "state_summary_only"},
+        ),
+        "max_turns": _positive_int_setting(
+            args,
+            "max_turns",
+            "ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS",
+            default=defaults["max_turns"],
+        ),
+        "max_continuations": _int_setting(
+            args,
+            "incomplete_turn_continuation_attempts",
+            "ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS",
+            default=defaults["max_continuations"],
+        ),
+        "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
+        "mcp_client_session_timeout_s": _round_duration(
+            max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
+        ),
+        "raw_fpv_candidate_budget": _int_setting(
+            args,
+            "raw_fpv_candidate_budget",
+            RAW_FPV_CANDIDATE_BUDGET_ENV,
+            default=defaults["raw_fpv_candidate_budget"],
+            allow_none=True,
+        ),
+        "done_retry_budget": _int_setting(
+            args,
+            "done_retry_budget",
+            DONE_RETRY_BUDGET_ENV,
+            default=defaults["done_retry_budget"],
+            allow_none=True,
+        ),
+        "max_observe_per_waypoint": _int_setting(
+            args,
+            "max_observe_per_waypoint",
+            MAX_OBSERVE_PER_WAYPOINT_ENV,
+            default=defaults["max_observe_per_waypoint"],
+            allow_none=True,
+        ),
+        "context_soft_limit_tokens": _int_setting(
+            args,
+            "context_soft_limit_tokens",
+            CONTEXT_SOFT_LIMIT_ENV,
+            default=defaults["context_soft_limit_tokens"],
+            allow_none=True,
+        ),
+        "context_hard_limit_tokens": _int_setting(
+            args,
+            "context_hard_limit_tokens",
+            CONTEXT_HARD_LIMIT_ENV,
+            default=defaults["context_hard_limit_tokens"],
+            allow_none=True,
+        ),
+    }
+    _validate_context_limits(payload)
+    return payload
+
+
+def _profile_id_with_source(
+    args: argparse.Namespace,
+    provider_profile: str,
+    model_family: str,
+) -> tuple[str, str]:
+    cli_value = str(getattr(args, "agent_sdk_perf_profile", "") or "").strip()
+    if cli_value:
+        return _validate_profile_id(cli_value), "cli"
+    env_value = os.environ.get(AGENT_SDK_PERF_PROFILE_ENV, "").strip()
+    if env_value:
+        return _validate_profile_id(env_value), "environment"
+    return _validate_profile_id(_default_profile_id(provider_profile, model_family)), "default"
+
+
+def _default_profile_id(_provider_profile: str, _model_family: str) -> str:
+    return "baseline"
+
+
+def _validate_profile_id(value: str) -> str:
+    profile_id = value.strip()
+    if profile_id not in {
+        "baseline",
+        "gpt_compact_v1",
+        "mimo_compact_v1",
+        "raw_fpv_budgeted_v1",
+        "custom",
+    }:
+        raise ValueError(f"unsupported OpenAI Agents SDK performance profile '{value}'")
+    return profile_id
+
+
+def _profile_defaults(profile_id: str) -> dict[str, Any]:
+    baseline = {
+        "prompt_mode": "full",
+        "continuation_mode": "repeat_full_prompt",
+        "max_turns": DEFAULT_OPENAI_AGENTS_MAX_TURNS,
+        "max_continuations": DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
+        "raw_fpv_candidate_budget": None,
+        "done_retry_budget": None,
+        "max_observe_per_waypoint": None,
+        "context_soft_limit_tokens": None,
+        "context_hard_limit_tokens": None,
+    }
+    if profile_id in {"baseline", "custom"}:
+        return baseline
+    if profile_id == "gpt_compact_v1":
+        return {
+            **baseline,
+            "prompt_mode": "compact",
+            "continuation_mode": "state_summary_only",
+            "max_continuations": 1,
+            "done_retry_budget": 2,
+            "max_observe_per_waypoint": 1,
+            "context_soft_limit_tokens": 96_000,
+            "context_hard_limit_tokens": 128_000,
+        }
+    if profile_id == "mimo_compact_v1":
+        return {
+            **baseline,
+            "prompt_mode": "compact",
+            "continuation_mode": "state_summary_only",
+            "max_continuations": 1,
+            "done_retry_budget": 2,
+            "max_observe_per_waypoint": 1,
+            "context_soft_limit_tokens": 64_000,
+            "context_hard_limit_tokens": 96_000,
+        }
+    if profile_id == "raw_fpv_budgeted_v1":
+        return {
+            **baseline,
+            "prompt_mode": "raw_fpv_compact",
+            "continuation_mode": "state_summary_only",
+            "max_turns": 40,
+            "max_continuations": 1,
+            "raw_fpv_candidate_budget": 24,
+            "done_retry_budget": 1,
+            "max_observe_per_waypoint": 1,
+            "context_soft_limit_tokens": 64_000,
+            "context_hard_limit_tokens": 96_000,
+        }
+    raise ValueError(f"unsupported OpenAI Agents SDK performance profile '{profile_id}'")
+
+
+def _normal_provider_profile(provider_profile: str) -> str:
+    if provider_profile in {"codex-mify", "mify"}:
+        return "mify"
+    return provider_profile or "codex-env"
+
+
+def _model_family(provider_profile: str, model: str) -> str:
+    lowered = f"{provider_profile} {model}".lower()
+    if "mimo" in lowered or "mify" in lowered:
+        return "mimo"
+    return "gpt"
+
+
+def _string_setting(
+    args: argparse.Namespace,
+    attr: str,
+    env_name: str,
+    *,
+    default: str,
+    allowed: set[str],
+) -> str:
+    value = str(getattr(args, attr, "") or os.environ.get(env_name, "") or default).strip()
+    if value not in allowed:
+        raise ValueError(f"unsupported OpenAI Agents SDK {attr.replace('_', '-')} '{value}'")
+    return value
+
+
+def _int_setting(
+    args: argparse.Namespace,
+    attr: str,
+    env_name: str,
+    *,
+    default: int | None,
+    allow_none: bool = False,
+) -> int | None:
+    raw = getattr(args, attr, None)
+    if raw is None:
+        env_raw = os.environ.get(env_name)
+        raw = env_raw if env_raw not in {None, ""} else default
+    if raw is None:
+        if allow_none:
+            return None
+        raise ValueError(f"{attr} is required")
+    value = int(raw)
+    if value < 0:
+        raise ValueError(f"{attr} must be non-negative")
+    return value
+
+
+def _positive_int_setting(
+    args: argparse.Namespace,
+    attr: str,
+    env_name: str,
+    *,
+    default: int,
+) -> int:
+    raw = getattr(args, attr, None)
+    if raw is None:
+        env_raw = os.environ.get(env_name)
+        raw = env_raw if env_raw not in {None, ""} else default
+    value = int(raw)
+    if value < 1:
+        raise ValueError(f"{attr} must be >= 1")
+    return value
+
+
+def _validate_context_limits(profile: dict[str, Any]) -> None:
+    soft = profile.get("context_soft_limit_tokens")
+    hard = profile.get("context_hard_limit_tokens")
+    if soft is not None and hard is not None and int(soft) > int(hard):
+        raise ValueError("context_soft_limit_tokens must be <= context_hard_limit_tokens")
+
+
+def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any]) -> str:
+    mode = str(profile.get("prompt_mode") or "full")
+    original = str(getattr(args, "kickoff_prompt", "") or "")
+    if _prompt_already_matches_profile(original, mode=mode):
+        return original
+    lane = str(getattr(args, "profile", "") or "")
+    task_name = str(getattr(args, "task_name", "") or "")
+    intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
+    can_render = (
+        task_name == "household-cleanup"
+        and mode in {"compact", "raw_fpv_compact"}
+        and lane in {"world-public-labels", "camera-grounded-labels", "camera-raw-fpv"}
+    )
+    if not can_render:
+        return original
+    target_cleanup_count = _target_cleanup_count_for_prompt(args, lane=lane)
+    try:
+        return render_kickoff_prompt(
+            lane,
+            task=str(getattr(args, "task", "") or ""),
+            target_cleanup_count=target_cleanup_count,
+            task_intent_mode=str(getattr(args, "task_intent_mode", "") or TASK_INTENT_MODE_DEFAULT),
+            intent=intent,
+            goal_contract=None,
+            prompt_mode=mode,
+            raw_fpv_candidate_budget=int(profile.get("raw_fpv_candidate_budget") or 24),
+            max_observe_per_waypoint=int(profile.get("max_observe_per_waypoint") or 1),
+            done_retry_budget=int(profile.get("done_retry_budget") or 1),
+        )
+    except ValueError:
+        return original
+
+
+def _target_cleanup_count_for_prompt(args: argparse.Namespace, *, lane: str) -> int:
+    raw_count = str(getattr(args, "min_generated_mess_count", "") or "")
+    try:
+        count = int(raw_count)
+    except ValueError:
+        count = 7
+    if lane == "camera-raw-fpv":
+        return max(1, (count * 7 + 9) // 10)
+    return max(1, count)
+
+
+def _kickoff_prompt_source(args: argparse.Namespace, profile: dict[str, Any]) -> str:
+    original = str(getattr(args, "kickoff_prompt", "") or "")
+    mode = str(profile.get("prompt_mode") or "full")
+    if _prompt_already_matches_profile(original, mode=mode):
+        return f"provided-profile-rendered-{mode}"
+    rendered = _profiled_kickoff_prompt(args, profile=profile)
+    if rendered == original:
+        return "just-rendered-full"
+    return f"profile-rendered-{profile.get('prompt_mode') or 'full'}"
+
+
+def _prompt_already_matches_profile(prompt: str, *, mode: str) -> bool:
+    if mode == "compact":
+        return (
+            "Compact action cadence for world-public-labels" in prompt
+            or "Compact action cadence for camera-grounded-labels" in prompt
+        )
+    if mode == "raw_fpv_compact":
+        return "Compact action cadence for camera-raw-fpv" in prompt
+    return False
+
+
+def _budget_failure_from_run_state(
+    run_dir: Path,
+    timing: dict[str, Any],
+    profile: dict[str, Any],
+) -> LiveAgentFailure | None:
+    context_failure = _context_budget_failure(run_dir, timing, profile)
+    if context_failure is not None:
+        return context_failure
+    return _raw_fpv_budget_failure(run_dir, timing, profile)
+
+
+def _failure_from_sdk_result(
+    result: Any,
+    *,
+    run_dir: Path,
+    timing: dict[str, Any],
+    profile: dict[str, Any],
+) -> LiveAgentFailure:
+    if (
+        str(getattr(result, "reason", "") or "") == "agent_sdk_turn_budget_exceeded"
+        and str(timing.get("evidence_lane") or timing.get("profile") or "") == "camera-raw-fpv"
+    ):
+        context_metrics = _context_metrics(run_dir, timing)
+        detail = json.dumps(
+            {
+                "schema": "agent_sdk_raw_fpv_budget_terminal_v1",
+                "profile_id": profile.get("profile_id") or "baseline",
+                "reason": "raw_fpv_sdk_turn_budget_exhausted",
+                "max_turns": profile.get("max_turns"),
+                "context_hard_limit_tokens": profile.get("context_hard_limit_tokens"),
+                "max_input_tokens": context_metrics.get("max_input_tokens"),
+                "total_input_tokens": context_metrics.get("total_input_tokens"),
+                "total_uncached_input_tokens": context_metrics.get("total_uncached_input_tokens"),
+                "response_span_count": context_metrics.get("response_span_count"),
+            },
+            sort_keys=True,
+        )
+        return LiveAgentFailure(
+            "raw_fpv_sdk_turn_budget_exhausted",
+            retryable=False,
+            resume_available=False,
+            detail=detail,
+        )
+    return LiveAgentFailure(
+        reason=getattr(result, "reason", "") or "agent_cli_failure",
+        retryable=bool(getattr(result, "retryable", False)),
+        provider_reason=getattr(result, "provider_reason", ""),
+        resume_available=bool(getattr(result, "resume_available", False)),
+        detail=getattr(result, "detail", ""),
+    )
+
+
+def _context_budget_failure(
+    run_dir: Path,
+    timing: dict[str, Any],
+    profile: dict[str, Any],
+) -> LiveAgentFailure | None:
+    hard_limit = _int_or_none(profile.get("context_hard_limit_tokens"))
+    if hard_limit is None:
+        return None
+    context_metrics = _context_metrics(run_dir, timing)
+    current_input = _int_or_none(context_metrics.get("max_input_tokens"))
+    if current_input is None or current_input < hard_limit:
+        return None
+    detail = json.dumps(
+        {
+            "schema": "agent_sdk_context_budget_terminal_v1",
+            "profile_id": profile.get("profile_id") or "baseline",
+            "context_hard_limit_tokens": hard_limit,
+            "current_input_tokens": current_input,
+            "max_input_tokens": current_input,
+            "total_input_tokens": context_metrics.get("total_input_tokens"),
+            "total_uncached_input_tokens": context_metrics.get("total_uncached_input_tokens"),
+            "response_span_count": context_metrics.get("response_span_count"),
+            "evidence_source": context_metrics.get("source") or "unavailable",
+        },
+        sort_keys=True,
+    )
+    return LiveAgentFailure(
+        "provider_context_budget_exceeded",
+        retryable=False,
+        resume_available=False,
+        detail=detail,
+    )
+
+
+def _raw_fpv_budget_failure(
+    run_dir: Path,
+    timing: dict[str, Any],
+    profile: dict[str, Any],
+) -> LiveAgentFailure | None:
+    if str(timing.get("evidence_lane") or timing.get("profile") or "") != "camera-raw-fpv":
+        return None
+    candidate_budget = _int_or_none(profile.get("raw_fpv_candidate_budget"))
+    observe_budget = _int_or_none(profile.get("max_observe_per_waypoint"))
+    if candidate_budget is None and observe_budget is None:
+        return None
+    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
+    if not trace_events:
+        return None
+    metrics = _raw_fpv_budget_metrics(trace_events)
+    reasons: list[str] = []
+    if candidate_budget is not None and metrics["candidate_attempt_count"] >= candidate_budget:
+        reasons.append("raw_fpv_candidate_budget_exhausted")
+    if observe_budget is not None:
+        over_budget = {
+            waypoint_id: count
+            for waypoint_id, count in metrics["observe_count_by_waypoint"].items()
+            if waypoint_id and count > observe_budget
+        }
+        if over_budget:
+            metrics["observe_over_budget_by_waypoint"] = dict(sorted(over_budget.items()))
+            reasons.append("raw_fpv_observe_budget_exhausted")
+    if not reasons:
+        return None
+    reason = "raw_fpv_candidate_budget_exhausted"
+    if "raw_fpv_candidate_budget_exhausted" not in reasons:
+        reason = "raw_fpv_observe_budget_exhausted"
+    detail = json.dumps(
+        {
+            "schema": "agent_sdk_raw_fpv_budget_terminal_v1",
+            "profile_id": profile.get("profile_id") or "baseline",
+            "reasons": reasons,
+            "raw_fpv_candidate_budget": candidate_budget,
+            "max_observe_per_waypoint": observe_budget,
+            **metrics,
+        },
+        sort_keys=True,
+    )
+    return LiveAgentFailure(
+        reason,
+        retryable=False,
+        resume_available=False,
+        detail=detail,
+    )
+
+
+def _raw_fpv_budget_metrics(trace_events: list[dict[str, Any]]) -> dict[str, Any]:
+    candidate_attempts: list[dict[str, str]] = []
+    observe_count_by_waypoint: dict[str, int] = {}
+    failure_fingerprints: dict[str, int] = {}
+    for event in trace_events:
+        tool = str(event.get("tool") or "")
+        event_type = str(event.get("event") or "")
+        if tool == "observe" and event_type == "response":
+            response = event.get("response") if isinstance(event.get("response"), dict) else {}
+            waypoint_id = _waypoint_from_response(response)
+            observe_count_by_waypoint[waypoint_id] = (
+                observe_count_by_waypoint.get(waypoint_id, 0) + 1
+            )
+            continue
+        if tool not in {"navigate_to_visual_candidate", "declare_visual_candidates"}:
+            continue
+        request = event.get("request") if isinstance(event.get("request"), dict) else {}
+        response = event.get("response") if isinstance(event.get("response"), dict) else {}
+        source_id = str(
+            request.get("source_observation_id")
+            or request.get("observation_id")
+            or response.get("observation_id")
+            or response.get("source_observation_id")
+            or ""
+        )
+        if not source_id and "raw_fpv" not in json.dumps(event, sort_keys=True, ensure_ascii=True):
+            continue
+        category = str(request.get("category") or response.get("category") or "")
+        region = _region_fingerprint(request.get("image_region"))
+        candidate_id = str(response.get("candidate_id") or response.get("object_id") or "")
+        failure_reason = str(
+            response.get("error_reason")
+            or response.get("failure_reason")
+            or response.get("status")
+            or ""
+        )
+        if event_type == "request":
+            candidate_attempts.append(
+                {
+                    "source_observation_id": source_id,
+                    "category": category,
+                    "region": region,
+                    "candidate_id": candidate_id,
+                }
+            )
+        if event_type == "response" and failure_reason:
+            fingerprint = "|".join((source_id, category, region, candidate_id, failure_reason))
+            failure_fingerprints[fingerprint] = failure_fingerprints.get(fingerprint, 0) + 1
+    repeated_failures = [
+        {"fingerprint": key, "count": count}
+        for key, count in sorted(failure_fingerprints.items())
+        if count > 1
+    ][:12]
+    return {
+        "candidate_attempt_count": len(candidate_attempts),
+        "candidate_attempts_sample": candidate_attempts[-12:],
+        "observe_count_by_waypoint": dict(sorted(observe_count_by_waypoint.items())),
+        "repeated_failure_fingerprints": repeated_failures,
+    }
+
+
+def _waypoint_from_response(response: dict[str, Any]) -> str:
+    waypoint_id = str(response.get("waypoint_id") or "")
+    if waypoint_id:
+        return waypoint_id
+    raw_payload = response.get("raw_fpv_observation")
+    raw = raw_payload if isinstance(raw_payload, dict) else {}
+    return str(raw.get("waypoint_id") or "unknown")
+
+
+def _region_fingerprint(value: Any) -> str:
+    if isinstance(value, dict):
+        region_type = str(value.get("type") or "")
+        region_value = value.get("value")
+        if isinstance(region_value, list):
+            compact = ",".join(str(item) for item in region_value[:4])
+        else:
+            compact = str(region_value or "")
+        return f"{region_type}:{compact}"[:120]
+    return str(value or "")[:120]
+
+
+def _compact_continuation_prompt(
+    run_dir: Path,
+    *,
+    profile: dict[str, Any],
+    context_metrics: dict[str, Any],
+) -> str:
+    state = _compact_continuation_state(
+        run_dir,
+        profile=profile,
+        context_metrics=context_metrics,
+    )
+    return (
+        "Continuation recovery for the same live household cleanup run.\n\n"
+        "Use this compact public state packet instead of replaying the original "
+        "kickoff prompt. Do not summarize progress as a final answer. Inspect "
+        "current public MCP state if needed, continue only missing cleanup work, "
+        "and call done only after MCP-visible public state satisfies the task. "
+        "The runner will count success only when MCP done produces run_result.json.\n\n"
+        f"compact_continuation_state:\n{json.dumps(state, ensure_ascii=False, sort_keys=True)}\n"
+    )
+
+
+def _compact_continuation_state(
+    run_dir: Path,
+    *,
+    profile: dict[str, Any],
+    context_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
+    goal_contract = _goal_contract_summary(trace_events)
+    completed_waypoints = _completed_waypoints(trace_events)
+    handled_objects = _handled_object_handles(trace_events)
+    public_pending = _public_pending_object_handles(trace_events)
+    blocked_candidates = _blocked_candidates(trace_events)
+    recent_failures = _recent_tool_failures(trace_events)
+    return {
+        "schema": "compact_agent_state_v1",
+        "surface": goal_contract.get("surface") or "household-world",
+        "intent": goal_contract.get("intent") or "cleanup",
+        "evidence_lane": _trace_field(trace_events, "cleanup_profile"),
+        "goal_summary": goal_contract.get("normalized_goal") or "",
+        "agent_sdk_perf_profile_id": profile.get("profile_id") or "baseline",
+        "completed_waypoints": completed_waypoints[-32:],
+        "handled_object_handles": handled_objects[-32:],
+        "public_pending_object_handles": public_pending[-32:],
+        "blocked_candidates": blocked_candidates[-12:],
+        "recent_tool_failures": recent_failures[-8:],
+        "remaining_public_gates": _remaining_public_gates(completed_waypoints, public_pending),
+        "next_requested_action": _next_requested_action(completed_waypoints, public_pending),
+        "context_metrics": _compact_metric_group(context_metrics),
+    }
+
+
+def _goal_contract_summary(trace_events: list[dict[str, Any]]) -> dict[str, Any]:
+    for event in trace_events:
+        goal_contract = event.get("goal_contract")
+        if isinstance(goal_contract, dict):
+            return {
+                "surface": goal_contract.get("surface"),
+                "intent": goal_contract.get("intent"),
+                "normalized_goal": goal_contract.get("normalized_goal"),
+                "goal_scope": goal_contract.get("goal_scope"),
+            }
+    return {}
+
+
+def _trace_field(trace_events: list[dict[str, Any]], field: str) -> str:
+    for event in trace_events:
+        value = event.get(field)
+        if value:
+            return str(value)
+    return ""
+
+
+def _completed_waypoints(trace_events: list[dict[str, Any]]) -> list[str]:
+    completed: list[str] = []
+    for event in trace_events:
+        if event.get("event") != "response" or event.get("tool") != "observe":
+            continue
+        response = event.get("response") if isinstance(event.get("response"), dict) else {}
+        waypoint_id = str(response.get("waypoint_id") or "")
+        if waypoint_id and waypoint_id not in completed:
+            completed.append(waypoint_id)
+    return completed
+
+
+def _handled_object_handles(trace_events: list[dict[str, Any]]) -> list[str]:
+    handled: list[str] = []
+    for event in trace_events:
+        if event.get("event") != "response" or event.get("tool") not in {"place", "place_inside"}:
+            continue
+        response = event.get("response") if isinstance(event.get("response"), dict) else {}
+        for key in ("object_id", "held_object_id", "source_object_id", "target_object_id"):
+            value = str(response.get(key) or "")
+            if value and value not in handled:
+                handled.append(value)
+    return handled
+
+
+def _public_pending_object_handles(trace_events: list[dict[str, Any]]) -> list[str]:
+    pending: list[str] = []
+    for event in trace_events:
+        if event.get("event") != "response":
+            continue
+        response = event.get("response") if isinstance(event.get("response"), dict) else {}
+        pending_candidates = response.get("pending_cleanup_candidates")
+        if not isinstance(pending_candidates, list):
+            continue
+        for item in pending_candidates:
+            if not isinstance(item, dict):
+                continue
+            public_id = str(
+                item.get("object_id") or item.get("public_id") or item.get("handle") or ""
+            )
+            if public_id and public_id not in pending:
+                pending.append(public_id)
+    return pending
+
+
+def _blocked_candidates(trace_events: list[dict[str, Any]]) -> list[dict[str, str]]:
+    blocked: list[dict[str, str]] = []
+    for event in trace_events:
+        if event.get("event") != "response":
+            continue
+        tool = str(event.get("tool") or "")
+        response = event.get("response") if isinstance(event.get("response"), dict) else {}
+        status = str(response.get("status") or "")
+        ok = response.get("ok")
+        if ok is not False and status not in {"blocked", "failed", "error"}:
+            continue
+        public_id = str(
+            response.get("object_id")
+            or response.get("candidate_id")
+            or response.get("public_id")
+            or response.get("source_observation_id")
+            or ""
+        )
+        reason = str(response.get("reason") or response.get("error") or status or "tool_failed")
+        item = {
+            "public_id": public_id,
+            "reason": reason[:160],
+            "last_failure_tool": tool,
+        }
+        if item not in blocked:
+            blocked.append(item)
+    return blocked
+
+
+def _recent_tool_failures(trace_events: list[dict[str, Any]]) -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = []
+    for event in trace_events:
+        if event.get("event") != "response":
+            continue
+        response = event.get("response") if isinstance(event.get("response"), dict) else {}
+        ok = response.get("ok")
+        status = str(response.get("status") or "")
+        if ok is not False and status not in {"blocked", "failed", "error"}:
+            continue
+        failures.append(
+            {
+                "tool": str(event.get("tool") or ""),
+                "public_error_class": status or "tool_failed",
+                "public_target": str(
+                    response.get("object_id")
+                    or response.get("candidate_id")
+                    or response.get("waypoint_id")
+                    or response.get("source_observation_id")
+                    or ""
+                ),
+            }
+        )
+    return failures
+
+
+def _remaining_public_gates(completed_waypoints: list[str], pending: list[str]) -> list[str]:
+    gates: list[str] = []
+    if not completed_waypoints:
+        gates.append("inspect public waypoint checklist with metric_map and observe waypoints")
+    if pending:
+        gates.append("clean public pending handles returned by done")
+    gates.append("call done only after public cleanup gates are satisfied")
+    return gates
+
+
+def _next_requested_action(completed_waypoints: list[str], pending: list[str]) -> str:
+    if pending:
+        return "clean the public pending handles before broad re-sweep"
+    if not completed_waypoints:
+        return "call metric_map, fixture_hints, navigate_to_waypoint, then observe"
+    return "inspect public MCP state, finish missing objects or waypoints, then call done"
 
 
 def _sdk_attempt_summary(result: Any, *, attempt_index: int) -> dict[str, Any]:
@@ -776,7 +1581,225 @@ def _runner_timing_breakdown(timing: dict[str, Any], finished_at: float) -> dict
     if total is not None:
         breakdown["accounted_elapsed_s"] = _round_duration(accounted)
         breakdown["unaccounted_elapsed_s"] = _round_duration(max(0.0, total - accounted))
+        breakdown["accounting_note"] = (
+            "The partitioned runner buckets sum to total wall time. MCP trace timing "
+            "runs inside openai_agents_elapsed_s and is reported separately to avoid "
+            "double counting concurrent server work."
+        )
     return breakdown
+
+
+def _intent_for_task_name(task_name: str) -> str:
+    if task_name == "semantic-map-build":
+        return "map-build"
+    return "cleanup"
+
+
+def _task_intent_mode_for_timing(args: Any) -> str:
+    return normalize_task_intent_mode(
+        getattr(args, "task_intent_mode", "") or TASK_INTENT_MODE_DEFAULT
+    )
+
+
+def _live_timing_timeline(timing: dict[str, Any]) -> dict[str, Any]:
+    """Build a normalized timeline for cross-run latency comparisons."""
+
+    finished_at = _float_or_none(timing.get("finished_at_epoch"))
+    started_at = _float_or_none(timing.get("started_at_epoch"))
+    runner_segments = _runner_timeline_segments(timing, finished_at)
+    attempt_segments = _attempt_timeline_segments(timing)
+    attribution = _latency_attribution(timing)
+    return {
+        "schema": "live_agent_timeline_v1",
+        "surface": timing.get("surface", ""),
+        "intent": timing.get("intent", ""),
+        "task_name": timing.get("task_name", ""),
+        "task_intent_mode": timing.get("task_intent_mode", ""),
+        "runtime": timing.get("runtime", ""),
+        "provider_profile": timing.get("provider_profile", ""),
+        "model": timing.get("model", ""),
+        "evidence_lane": timing.get("evidence_lane") or timing.get("profile", ""),
+        "started_at_epoch": started_at,
+        "finished_at_epoch": finished_at,
+        "total_elapsed_s": (timing.get("runner_timing") or {}).get("total_elapsed_s"),
+        "runner_segments": runner_segments,
+        "openai_agents_attempt_segments": attempt_segments,
+        "latency_attribution": attribution,
+        "notes": [
+            "runner_segments partition end-to-end wall clock.",
+            (
+                "latency_attribution nests MCP trace attribution inside the SDK agent window; "
+                "do not add it to runner_segments as extra wall time."
+            ),
+            (
+                "between_tool_gap_s is the response-to-next-request window and includes model "
+                "reasoning, SDK orchestration, transport, and other agent-side delay."
+            ),
+        ],
+    }
+
+
+def _runner_timeline_segments(
+    timing: dict[str, Any],
+    finished_at: float | None,
+) -> list[dict[str, Any]]:
+    started_at = _float_or_none(timing.get("started_at_epoch"))
+    sdk_start = _float_or_none(timing.get("openai_agents_start_epoch"))
+    sdk_end = _float_or_none(timing.get("openai_agents_end_epoch"))
+    server_finished = _float_or_none(timing.get("server_finished_epoch"))
+    checker_start = _float_or_none(timing.get("checker_start_epoch"))
+    checker_end = _float_or_none(timing.get("checker_end_epoch"))
+    segments = [
+        _timeline_segment(
+            "pre_agent_setup",
+            "runner",
+            started_at,
+            sdk_start,
+            "Launcher setup, lock acquisition, MCP server startup, and readiness wait.",
+        ),
+        _timeline_segment(
+            "openai_agents_runtime",
+            "sdk_agent",
+            sdk_start,
+            sdk_end,
+            "OpenAI Agents SDK execution window including model calls and MCP tool use.",
+        ),
+        _timeline_segment(
+            "post_agent_server_wait",
+            "runner",
+            sdk_end,
+            server_finished,
+            "Wait for the cleanup MCP server to flush artifacts and exit after done.",
+        ),
+        _timeline_segment(
+            "checker",
+            "verification",
+            checker_start,
+            checker_end,
+            "Cleanup artifact checker.",
+        ),
+        _timeline_segment(
+            "final_overhead",
+            "runner",
+            checker_end,
+            finished_at,
+            "Final timing/status write.",
+        ),
+    ]
+    return [segment for segment in segments if segment is not None]
+
+
+def _attempt_timeline_segments(timing: dict[str, Any]) -> list[dict[str, Any]]:
+    segments: list[dict[str, Any]] = []
+    attempts = timing.get("openai_agents_attempts")
+    if not isinstance(attempts, list):
+        return segments
+    for attempt in attempts:
+        if not isinstance(attempt, dict):
+            continue
+        attempt_index = _int_or_none(attempt.get("attempt_index"))
+        label = "sdk_attempt"
+        if attempt_index is not None:
+            label = f"sdk_attempt_{attempt_index}"
+        segment = _timeline_segment(
+            label,
+            "sdk_agent_attempt",
+            _float_or_none(attempt.get("started_at_epoch")),
+            _float_or_none(attempt.get("finished_at_epoch")),
+            str(attempt.get("attempt_role") or ""),
+            extra={
+                "attempt_index": attempt_index,
+                "attempt_role": attempt.get("attempt_role"),
+                "phase": attempt.get("phase"),
+                "run_result_present": bool(attempt.get("run_result_present")),
+                "recovery_action": attempt.get("recovery_action", ""),
+                "recovery_reason": attempt.get("recovery_reason", ""),
+            },
+        )
+        if segment is not None:
+            segments.append(segment)
+    return segments
+
+
+def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
+    mcp_timing = (
+        timing.get("mcp_trace_timing") if isinstance(timing.get("mcp_trace_timing"), dict) else {}
+    )
+    runner_timing = (
+        timing.get("runner_timing") if isinstance(timing.get("runner_timing"), dict) else {}
+    )
+    event_metrics = (
+        timing.get("openai_agents_event_metrics")
+        if isinstance(timing.get("openai_agents_event_metrics"), dict)
+        else {}
+    )
+    span_metrics = (
+        timing.get("openai_agents_span_metrics")
+        if isinstance(timing.get("openai_agents_span_metrics"), dict)
+        else {}
+    )
+    context_metrics = (
+        timing.get("context_metrics") if isinstance(timing.get("context_metrics"), dict) else {}
+    )
+    cache_metrics = (
+        timing.get("cache_metrics") if isinstance(timing.get("cache_metrics"), dict) else {}
+    )
+    context_growth_metrics = (
+        timing.get("context_growth_metrics")
+        if isinstance(timing.get("context_growth_metrics"), dict)
+        else {}
+    )
+    sdk_elapsed = _float_or_none(runner_timing.get("openai_agents_elapsed_s"))
+    mcp_elapsed = _float_or_none(mcp_timing.get("total_elapsed_s"))
+    model_or_sdk_unattributed_s = _model_or_sdk_unattributed_seconds(timing)
+    return {
+        "openai_agents_elapsed_s": sdk_elapsed,
+        "mcp_trace_elapsed_s": mcp_elapsed,
+        "model_or_sdk_unattributed_s": model_or_sdk_unattributed_s,
+        "mcp_between_tool_gap_s": mcp_timing.get("between_tool_gap_s"),
+        "mcp_robot_view_capture_s": mcp_timing.get("robot_view_capture_s"),
+        "mcp_tool_handler_s": mcp_timing.get("tool_handler_s"),
+        "mcp_other_overhead_s": mcp_timing.get("other_mcp_overhead_s"),
+        "mcp_tool_call_count": mcp_timing.get("tool_call_count"),
+        "mcp_list_tools_request_count": (timing.get("mcp_control_plane_metrics") or {}).get(
+            "list_tools_request_count"
+        ),
+        "openai_agents_tool_error_count": event_metrics.get("tool_error_count"),
+        "openai_agents_tool_error_classifications": event_metrics.get("tool_error_classifications"),
+        "openai_agents_span_artifact_available": span_metrics.get("available"),
+        "openai_agents_span_count": span_metrics.get("span_end_count"),
+        "openai_agents_span_type_counts": span_metrics.get("span_type_counts"),
+        "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
+        "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
+        "context_metrics": _compact_metric_group(context_metrics),
+        "cache_metrics": _compact_metric_group(cache_metrics),
+        "context_growth_metrics": _compact_metric_group(context_growth_metrics),
+    }
+
+
+def _timeline_segment(
+    name: str,
+    category: str,
+    started_at: float | None,
+    finished_at: float | None,
+    detail: str,
+    *,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if started_at is None or finished_at is None:
+        return None
+    duration = _round_duration(finished_at - started_at)
+    payload: dict[str, Any] = {
+        "name": name,
+        "category": category,
+        "started_at_epoch": started_at,
+        "finished_at_epoch": finished_at,
+        "duration_s": duration,
+        "detail": detail,
+    }
+    if extra:
+        payload.update({key: value for key, value in extra.items() if value not in {None, ""}})
+    return payload
 
 
 def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
@@ -850,6 +1873,369 @@ def _mcp_control_plane_metrics(run_dir: Path) -> dict[str, Any]:
     }
 
 
+def _openai_agents_event_metrics(run_dir: Path) -> dict[str, Any]:
+    event_paths = sorted(run_dir.glob("openai-agents-events*.jsonl"))
+    if not event_paths:
+        return {
+            "available": False,
+            "reason": "openai-agents event files not present",
+        }
+
+    event_counts: dict[str, int] = {}
+    tool_error_classifications: dict[str, int] = {}
+    tool_error_messages: list[str] = []
+    result_count = 0
+    for path in event_paths:
+        for event in _read_jsonl_path(path):
+            event_type = str(event.get("event") or "")
+            if event_type:
+                event_counts[event_type] = event_counts.get(event_type, 0) + 1
+            if event_type == "result":
+                result_count += 1
+            if event_type != "tool_error":
+                continue
+            classification = str(event.get("classification") or "tool_error")
+            tool_error_classifications[classification] = (
+                tool_error_classifications.get(classification, 0) + 1
+            )
+            message = str(event.get("message") or "")
+            if message and len(tool_error_messages) < 8:
+                tool_error_messages.append(message)
+
+    return {
+        "available": True,
+        "event_files": [path.name for path in event_paths],
+        "event_counts": dict(sorted(event_counts.items())),
+        "result_count": result_count,
+        "tool_error_count": sum(tool_error_classifications.values()),
+        "tool_error_classifications": dict(sorted(tool_error_classifications.items())),
+        "tool_error_messages_sample": tool_error_messages,
+    }
+
+
+def _openai_agents_span_metrics(run_dir: Path) -> dict[str, Any]:
+    span_paths = sorted(run_dir.glob("openai-agents-spans*.jsonl"))
+    if not span_paths:
+        return {
+            "available": False,
+            "reason": "openai-agents span files not present",
+        }
+
+    event_counts: dict[str, int] = {}
+    span_type_counts: dict[str, int] = {}
+    limitations: list[dict[str, Any]] = []
+    span_end_count = 0
+    for path in span_paths:
+        for event in _read_jsonl_path(path):
+            event_type = str(event.get("event") or "")
+            if event_type:
+                event_counts[event_type] = event_counts.get(event_type, 0) + 1
+            if event_type == "span_capture_unavailable":
+                limitations.append(
+                    {
+                        "reason": event.get("reason", ""),
+                        "error_type": event.get("error_type", ""),
+                        "message": event.get("message", ""),
+                    }
+                )
+            if event_type != "span_end":
+                continue
+            span_end_count += 1
+            span_type = str(event.get("span_type") or "unknown")
+            span_type_counts[span_type] = span_type_counts.get(span_type, 0) + 1
+
+    return {
+        "available": True,
+        "span_files": [path.name for path in span_paths],
+        "event_counts": dict(sorted(event_counts.items())),
+        "span_end_count": span_end_count,
+        "span_type_counts": dict(sorted(span_type_counts.items())),
+        "limitations": limitations,
+        "sanitization_note": (
+            "Span artifacts retain IDs, timing, span types, model/usage, MCP tool metadata, "
+            "and errors. Raw prompts, model text, function inputs, and function outputs are "
+            "not persisted."
+        ),
+    }
+
+
+def _context_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
+    response_spans = _response_span_end_events(run_dir)
+    kickoff_prompt_chars = _int_or_none(timing.get("kickoff_prompt_chars")) or 0
+    attempts = timing.get("openai_agents_attempts")
+    if not isinstance(attempts, list):
+        attempts = []
+    continuation_prompt_chars = sum(
+        _int_or_none(attempt.get("continuation_prompt_chars")) or 0
+        for attempt in attempts
+        if isinstance(attempt, dict)
+    )
+    base_payload: dict[str, Any] = {
+        "kickoff_prompt_chars": kickoff_prompt_chars,
+        "kickoff_prompt_estimated_tokens": _estimated_tokens_from_chars(kickoff_prompt_chars),
+        "continuation_prompt_chars": continuation_prompt_chars,
+        "continuation_prompt_estimated_tokens": _estimated_tokens_from_chars(
+            continuation_prompt_chars
+        ),
+        "context_window_failure_detected": _context_window_failure_detected(timing, run_dir),
+    }
+    if not response_spans:
+        return {
+            "available": False,
+            "source": "unavailable",
+            "limitations": ["span_usage_missing"],
+            **base_payload,
+        }
+
+    usage_rows: list[dict[str, int | float | None]] = []
+    limitations: list[str] = []
+    for event in response_spans:
+        usage = event.get("usage") if isinstance(event.get("usage"), dict) else {}
+        if not usage:
+            limitations.append("response_span_usage_missing")
+            continue
+        input_tokens = _int_or_none(usage.get("input_tokens"))
+        if input_tokens is None:
+            limitations.append("response_span_input_tokens_missing")
+            continue
+        cached_tokens = _cached_input_tokens(usage)
+        output_tokens = _int_or_none(usage.get("output_tokens")) or 0
+        reasoning_tokens = _reasoning_tokens(usage) or 0
+        usage_rows.append(
+            {
+                "input_tokens": input_tokens,
+                "cached_tokens": min(max(cached_tokens, 0), input_tokens),
+                "output_tokens": output_tokens,
+                "reasoning_tokens": reasoning_tokens,
+                "duration_s": _float_or_none(event.get("duration_s")),
+            }
+        )
+
+    if not usage_rows:
+        return {
+            "available": False,
+            "source": "openai_agents_span_usage",
+            "limitations": sorted(set(limitations or ["span_usage_missing"])),
+            "response_span_count": len(response_spans),
+            **base_payload,
+        }
+
+    input_values = [int(row["input_tokens"] or 0) for row in usage_rows]
+    total_input = sum(input_values)
+    total_cached = sum(int(row["cached_tokens"] or 0) for row in usage_rows)
+    total_uncached = max(0, total_input - total_cached)
+    total_output = sum(int(row["output_tokens"] or 0) for row in usage_rows)
+    total_reasoning = sum(int(row["reasoning_tokens"] or 0) for row in usage_rows)
+    durations = [
+        float(row["duration_s"])
+        for row in usage_rows
+        if _float_or_none(row.get("duration_s")) is not None
+    ]
+    return {
+        "available": True,
+        "source": "openai_agents_span_usage",
+        "limitations": sorted(set(limitations)),
+        "response_span_count": len(usage_rows),
+        "total_input_tokens": total_input,
+        "total_cached_input_tokens": total_cached,
+        "total_uncached_input_tokens": total_uncached,
+        "cache_hit_ratio": _ratio(total_cached, total_input),
+        "max_input_tokens": max(input_values),
+        "p50_input_tokens": _nearest_rank_percentile(input_values, 0.50),
+        "p95_input_tokens": _nearest_rank_percentile(input_values, 0.95),
+        "total_output_tokens": total_output,
+        "total_reasoning_tokens": total_reasoning,
+        "max_reasoning_tokens": max(int(row["reasoning_tokens"] or 0) for row in usage_rows),
+        "first_response_cached_tokens": int(usage_rows[0]["cached_tokens"] or 0),
+        "response_span_duration_s": _round_duration(sum(durations)) if durations else None,
+        **base_payload,
+    }
+
+
+def _cache_metrics(context_metrics: dict[str, Any], timing: dict[str, Any]) -> dict[str, Any]:
+    if not context_metrics.get("available"):
+        return {
+            "available": False,
+            "source": context_metrics.get("source") or "unavailable",
+            "limitations": context_metrics.get("limitations") or ["span_usage_missing"],
+            "cache_tools_list": bool(timing.get("cache_tools_list")),
+            "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
+        }
+    total_input = _int_or_none(context_metrics.get("total_input_tokens")) or 0
+    total_cached = _int_or_none(context_metrics.get("total_cached_input_tokens")) or 0
+    return {
+        "available": True,
+        "source": "openai_agents_span_usage",
+        "limitations": list(context_metrics.get("limitations") or []),
+        "cache_tools_list": bool(timing.get("cache_tools_list")),
+        "provider_prompt_cache_observed": total_cached > 0,
+        "cached_input_token_ratio": _ratio(total_cached, total_input),
+        "first_response_cached_tokens": context_metrics.get("first_response_cached_tokens"),
+        "stable_prefix_hash": "",
+        "prompt_profile_id": str(timing.get("prompt_profile_id") or "baseline"),
+        "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
+    }
+
+
+def _context_growth_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
+    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
+    if not trace_events:
+        return {
+            "available": False,
+            "source": "unavailable",
+            "limitations": ["trace_missing"],
+            "continuation_attempt_count": _continuation_attempt_count(timing),
+        }
+
+    response_events = [event for event in trace_events if event.get("event") == "response"]
+    observe_events = [event for event in response_events if event.get("tool") == "observe"]
+    raw_fpv_events = [
+        event
+        for event in response_events
+        if "raw_fpv" in json.dumps(event, sort_keys=True, ensure_ascii=True)
+    ]
+    response_sizes = [len(json.dumps(event, sort_keys=True)) for event in response_events]
+    return {
+        "available": True,
+        "source": "live_timing_and_trace",
+        "limitations": [],
+        "trace_event_count": len(trace_events),
+        "observe_response_count": len(observe_events),
+        "raw_fpv_observation_count": len(raw_fpv_events),
+        "tool_response_bytes_total": sum(response_sizes),
+        "largest_tool_response_bytes": max(response_sizes) if response_sizes else 0,
+        "agent_visible_state_bytes_p95": _nearest_rank_percentile(response_sizes, 0.95)
+        if response_sizes
+        else 0,
+        "continuation_attempt_count": _continuation_attempt_count(timing),
+    }
+
+
+def _response_span_end_events(run_dir: Path) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for path in sorted(run_dir.glob("openai-agents-spans*.jsonl")):
+        for event in _read_jsonl_path(path):
+            if event.get("event") == "span_end" and event.get("span_type") == "response":
+                events.append(event)
+    return events
+
+
+def _cached_input_tokens(usage: dict[str, Any]) -> int:
+    details = usage.get("input_tokens_details")
+    if isinstance(details, dict):
+        nested = _int_or_none(details.get("cached_tokens"))
+        if nested is not None:
+            return nested
+    return _int_or_none(usage.get("cached_input_tokens")) or 0
+
+
+def _reasoning_tokens(usage: dict[str, Any]) -> int | None:
+    details = usage.get("output_tokens_details")
+    if isinstance(details, dict):
+        return _int_or_none(details.get("reasoning_tokens"))
+    return _int_or_none(usage.get("reasoning_tokens"))
+
+
+def _context_window_failure_detected(timing: dict[str, Any], run_dir: Path) -> bool:
+    haystack_parts = [
+        str(timing.get("reason") or ""),
+        str(timing.get("provider_reason") or ""),
+        str(timing.get("detail") or ""),
+    ]
+    for path in sorted(run_dir.glob("openai-agents-*.jsonl")):
+        text = path.read_text(encoding="utf-8", errors="replace")[:200_000].lower()
+        haystack_parts.append(text)
+    haystack = " ".join(haystack_parts).lower()
+    return any(
+        marker in haystack
+        for marker in (
+            "context window",
+            "context length",
+            "context_length",
+            "maximum context",
+            "input exceeds the context",
+            "context-budget",
+            "provider_context_failure",
+        )
+    )
+
+
+def _model_or_sdk_unattributed_seconds(timing: dict[str, Any]) -> float | None:
+    runner_timing = (
+        timing.get("runner_timing") if isinstance(timing.get("runner_timing"), dict) else {}
+    )
+    mcp_timing = (
+        timing.get("mcp_trace_timing") if isinstance(timing.get("mcp_trace_timing"), dict) else {}
+    )
+    context_metrics = (
+        timing.get("context_metrics") if isinstance(timing.get("context_metrics"), dict) else {}
+    )
+    sdk_elapsed = _float_or_none(runner_timing.get("openai_agents_elapsed_s"))
+    if sdk_elapsed is None:
+        return None
+    residual = sdk_elapsed
+    mcp_elapsed = _float_or_none(mcp_timing.get("total_elapsed_s"))
+    if mcp_elapsed is not None:
+        residual -= mcp_elapsed
+    if context_metrics.get("available"):
+        span_duration = _float_or_none(context_metrics.get("response_span_duration_s"))
+        if span_duration is not None:
+            residual -= span_duration
+    return _round_duration(residual)
+
+
+def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "available",
+        "source",
+        "limitations",
+        "total_input_tokens",
+        "total_cached_input_tokens",
+        "total_uncached_input_tokens",
+        "cache_hit_ratio",
+        "cached_input_token_ratio",
+        "provider_prompt_cache_observed",
+        "trace_event_count",
+        "observe_response_count",
+        "raw_fpv_observation_count",
+        "tool_response_bytes_total",
+        "largest_tool_response_bytes",
+        "continuation_attempt_count",
+    )
+    return {key: metrics.get(key) for key in keys if key in metrics}
+
+
+def _nearest_rank_percentile(values: list[int], percentile: float) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, int(len(ordered) * percentile + 0.999999) - 1))
+    return ordered[index]
+
+
+def _ratio(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return round(numerator / denominator, 6)
+
+
+def _estimated_tokens_from_chars(char_count: int) -> int:
+    if char_count <= 0:
+        return 0
+    return max(1, round(char_count / 4))
+
+
+def _continuation_attempt_count(timing: dict[str, Any]) -> int:
+    attempts = timing.get("openai_agents_attempts")
+    if not isinstance(attempts, list):
+        return 0
+    return sum(
+        1
+        for attempt in attempts
+        if isinstance(attempt, dict) and int(attempt.get("attempt_index") or 0) > 0
+    )
+
+
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
@@ -869,6 +2255,13 @@ def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
 def _float_or_none(value: Any) -> float | None:
     try:
         return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _int_or_none(value: Any) -> int | None:
+    try:
+        return int(value)
     except (TypeError, ValueError):
         return None
 

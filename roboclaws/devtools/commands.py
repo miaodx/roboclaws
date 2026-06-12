@@ -10,25 +10,34 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from roboclaws.cli.main import main
-from roboclaws.cli.task_run import task_run_main
+from roboclaws.cli.task_run import surface_run_main, task_run_main
 from roboclaws.launch.catalog import (
     CANONICAL_DRIVERS,
+    CANONICAL_INTENTS,
+    CANONICAL_SURFACES,
     CANONICAL_TASKS,
     LEGACY_TASK_ALIASES,
     SUPPORTED_ROUTES,
+    SUPPORTED_SURFACE_ROUTES,
     LaunchError,
+    resolve_surface_launch,
     resolve_task_launch,
 )
 
 __all__ = [
     "CANONICAL_DRIVERS",
+    "CANONICAL_INTENTS",
+    "CANONICAL_SURFACES",
     "CANONICAL_TASKS",
     "LEGACY_TASK_ALIASES",
+    "SUPPORTED_SURFACE_ROUTES",
     "SUPPORTED_ROUTES",
     "CommandError",
     "ResolvedCommand",
     "main",
+    "resolve_surface_run",
     "resolve_task_run",
+    "surface_run_main",
     "task_run_main",
 ]
 
@@ -53,6 +62,22 @@ def resolve_task_run(args: list[str] | tuple[str, ...]) -> ResolvedCommand:
 
     try:
         plan = resolve_task_launch(args)
+    except LaunchError as exc:
+        raise CommandError(str(exc), exc.hint) from exc
+    return ResolvedCommand(
+        argv=plan.argv,
+        task=plan.task,
+        driver=plan.driver,
+        mode=plan.mode,
+        overrides=plan.overrides,
+    )
+
+
+def resolve_surface_run(args: list[str] | tuple[str, ...]) -> ResolvedCommand:
+    """Resolve `just run::surface ...` arguments to the next Just command."""
+
+    try:
+        plan = resolve_surface_launch(args)
     except LaunchError as exc:
         raise CommandError(str(exc), exc.hint) from exc
     return ResolvedCommand(

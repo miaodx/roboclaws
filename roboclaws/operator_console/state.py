@@ -96,6 +96,7 @@ def derive_operator_state(
         "run_id": run_id,
         "display_run_id": _display_run_id(run_dir, display_run_dir),
         "route": status.get("route") or (route.to_payload() if route else None),
+        "selected_intent": status.get("selected_intent") or (route.intent if route else ""),
         "run_dir": str(run_dir),
         "display_run_dir": str(display_run_dir),
         "phase": phase,
@@ -120,7 +121,7 @@ def derive_operator_state(
         "operator_messages": interaction_state,
         "controls": {
             "ask_why_available": True,
-            "continue_available": True,
+            "next_goal_available": controls_terminal,
             "steer_available": bool(route.supports_operator_steer)
             if route and not controls_terminal
             else False,

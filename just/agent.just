@@ -84,7 +84,7 @@ run task driver mode="" *overrides:
         photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
-        operator_messages_path|task_intent_mode|\
+        operator_messages_path|task_intent|task_intent_mode|task_surface|goal_contract_json|goal_contract_path|\
         scene|scene_index|scene_source|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
         isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
@@ -307,12 +307,25 @@ run task driver mode="" *overrides:
         else
           prompt="$(cleanup_prompt)"
         fi
-        task_intent_mode="$(get task_intent_mode "")"
+        task_intent_mode="$(get task_intent_mode "${ROBOCLAWS_TASK_INTENT_MODE:-}")"
+        resolved_task_intent="$(get task_intent "${ROBOCLAWS_TASK_INTENT:-}")"
+        if [[ -z "$task_intent_mode" && "$resolved_task_intent" == "open-ended" ]]; then
+          task_intent_mode="custom"
+        fi
         if [[ -z "$task_intent_mode" && "$task" == "household-cleanup" && ( "$driver" == "codex" || "$driver" == "claude" ) && -v "kv[prompt]" && -n "${kv[prompt]}" ]]; then
           task_intent_mode="custom"
         fi
         if [[ -z "$task_intent_mode" ]]; then
           task_intent_mode="default_cleanup"
+        fi
+        goal_contract_json="$(get goal_contract_json "${ROBOCLAWS_GOAL_CONTRACT_JSON:-}")"
+        goal_contract_path="$(get goal_contract_path "${ROBOCLAWS_GOAL_CONTRACT_PATH:-}")"
+        goal_contract_args=()
+        if [[ -n "$goal_contract_json" ]]; then
+          goal_contract_args+=(--goal-contract-json "$goal_contract_json")
+        fi
+        if [[ -n "$goal_contract_path" ]]; then
+          goal_contract_args+=(--goal-contract "$goal_contract_path")
         fi
         generated_mess_count="$(get generated_mess_count 10)"
         host="$(get host 127.0.0.1)"
@@ -719,10 +732,12 @@ run task driver mode="" *overrides:
           "$min_generated_mess_count" "$generated_mess_object_ids" "$task"
           "$operator_messages_path"
         )
-        if [[ "$task" == "household-cleanup" ]]; then
+        if [[ "$task" == "household-cleanup" || "$task_intent_mode" == "custom" ]]; then
           molmo_args+=("$task_intent_mode")
         fi
-        run_just molmo::cleanup "${molmo_args[@]}"
+        ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \
+          ROBOCLAWS_GOAL_CONTRACT_PATH="$goal_contract_path" \
+          run_just molmo::cleanup "${molmo_args[@]}"
         ;;
 
       molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)

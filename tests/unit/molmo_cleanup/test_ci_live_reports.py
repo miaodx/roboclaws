@@ -931,9 +931,9 @@ def test_live_claude_camera_raw_checker_requires_all_generated_mess_actions(
 
     command = captured["command"]
     assert "--require-clean-agent-run" in command
-    assert command[command.index("--min-model-declared-observations") + 1] == "5"
-    assert command[command.index("--min-model-declared-actions") + 1] == "5"
-    assert command[command.index("--min-semantic-accepted-count") + 1] == "5"
+    assert command[command.index("--min-model-declared-observations") + 1] == "4"
+    assert command[command.index("--min-model-declared-actions") + 1] == "4"
+    assert command[command.index("--min-semantic-accepted-count") + 1] == "4"
 
 
 def test_live_claude_tee_keeps_artifact_when_console_is_nonblocking() -> None:

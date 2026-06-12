@@ -11,6 +11,7 @@ from roboclaws.household.task_intent import (
     normalize_task_intent_mode,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_prompt_rule
+from roboclaws.launch.goals import GoalContract, goal_contract_from_json
 
 TOOL_PROTOCOL_PREFIX = (
     "Use the cleanup MCP tool entries exactly as exposed by Codex; in text, "
@@ -69,14 +70,30 @@ CUSTOM_HOUSEHOLD_TASK_PREFIX = (
 )
 
 DEFAULT_HOUSEHOLD_CLEANUP_TASK = "clean up this room"
+PROMPT_MODE_FULL = "full"
+PROMPT_MODE_COMPACT = "compact"
+PROMPT_MODE_RAW_FPV_COMPACT = "raw_fpv_compact"
+PROMPT_MODES = {PROMPT_MODE_FULL, PROMPT_MODE_COMPACT, PROMPT_MODE_RAW_FPV_COMPACT}
 
 
 def _normalize_task(task: str) -> str:
     return " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
 
 
-def _task_prefix(task: str, *, task_intent_mode: str = TASK_INTENT_MODE_DEFAULT) -> str:
+def _task_prefix(
+    task: str,
+    *,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    goal_contract: GoalContract | None = None,
+) -> str:
     normalized = _normalize_task(task)
+    if goal_contract is not None:
+        return (
+            f"This run is surface={goal_contract.surface} intent={goal_contract.intent}. "
+            f"Normalized goal: {goal_contract.normalized_goal}. "
+            f"Goal scope: {goal_contract.goal_scope}. Raw user goal: "
+            f"{goal_contract.raw_prompt or normalized}. "
+        )
     if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
         return CUSTOM_HOUSEHOLD_TASK_PREFIX.format(task=normalized)
     return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
@@ -91,9 +108,18 @@ def _with_task(
     task: str,
     *,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    goal_contract: GoalContract | None = None,
 ) -> str:
     prefix = CUSTOM_PREFIX if task_intent_mode == TASK_INTENT_MODE_CUSTOM else COMMON_PREFIX
-    return prefix + _task_prefix(task, task_intent_mode=task_intent_mode) + prompt
+    return (
+        prefix
+        + _task_prefix(
+            task,
+            task_intent_mode=task_intent_mode,
+            goal_contract=goal_contract,
+        )
+        + prompt
+    )
 
 
 def _custom_scope_suffix() -> str:
@@ -107,6 +133,13 @@ def _task_aware_prompt(prompt: str, *, task_intent_mode: str) -> str:
     if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
         return prompt + _custom_scope_suffix()
     return prompt
+
+
+def _normalize_prompt_mode(prompt_mode: str) -> str:
+    mode = str(prompt_mode or PROMPT_MODE_FULL).strip() or PROMPT_MODE_FULL
+    if mode not in PROMPT_MODES:
+        raise ValueError(f"unsupported household cleanup prompt mode: {prompt_mode}")
+    return mode
 
 
 def _legacy_task_prefix(task: str) -> str:
@@ -175,6 +208,40 @@ CAMERA_LABELS_PROMPT = (
     "has been observed so the report is generated."
 )
 
+WORLD_LABELS_COMPACT_PROMPT = (
+    "Compact action cadence for world-public-labels. Call metric_map then fixture_hints, "
+    "build the exact inspection_waypoints checklist, and for each unchecked waypoint call "
+    "navigate_to_waypoint then observe. Treat visible_object_detections as public structured "
+    "detections without destination oracle fields. Clean only public observed candidates whose "
+    "candidate_state or tool response authorizes navigation. Use destination_policy, "
+    "destination_options, runtime_metric_map.public_semantic_anchors, required_tool, and public "
+    "recovery hints to choose placement. Prefer one short chain at a time: "
+    "observe -> candidate decision -> navigate_to_object -> pick -> navigate_to_receptacle -> "
+    "open? -> place/place_inside -> observe. Use place_inside for shelf/bookshelf/bookcase/"
+    "shelving/fridge targets. If done reports pending_cleanup_candidates, clean only those "
+    "public handles before another broad sweep. Call done when every public waypoint has an "
+    "observe response and public pending candidates are resolved. Do not call scene_objects, "
+    "read private scoring artifacts, invent fixture ids, or treat SDK turn completion as task "
+    "success; only MCP done producing run_result.json counts."
+)
+
+CAMERA_LABELS_COMPACT_PROMPT = (
+    "Compact action cadence for camera-grounded-labels. Call metric_map then fixture_hints, "
+    "build the exact inspection_waypoints checklist, and for each unchecked waypoint call "
+    "navigate_to_waypoint then observe. For each raw FPV observation, call "
+    "declare_visual_candidates with observation_id only and omit candidates so the configured "
+    "camera labeler produces labels; do not ask for service URLs, credentials, image paths, or "
+    "model hosts. Clean only returned public camera candidates whose candidate_state is "
+    "navigation_authorized. Prefer one short chain at a time: observe -> declare labels -> "
+    "candidate decision -> navigate_to_object -> pick -> navigate_to_receptacle -> open? -> "
+    "place/place_inside -> observe. Use place_inside for shelf/bookshelf/bookcase/shelving/"
+    "fridge targets. If done reports pending_cleanup_candidates, clean only those public "
+    "handles before another broad sweep. Call done when every public waypoint has an observe "
+    "response and public pending candidates are resolved. Do not call scene_objects, read "
+    "private scoring artifacts, or treat SDK turn completion as task success; only MCP done "
+    "producing run_result.json counts."
+)
+
 
 def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     cleanup_count = max(1, int(target_cleanup_count))
@@ -214,48 +281,109 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     )
 
 
+def _camera_raw_compact_prompt(
+    *,
+    target_cleanup_count: int = 7,
+    raw_fpv_candidate_budget: int = 24,
+    max_observe_per_waypoint: int = 1,
+    done_retry_budget: int = 1,
+) -> str:
+    cleanup_count = max(1, int(target_cleanup_count))
+    candidate_budget = max(1, int(raw_fpv_candidate_budget))
+    observe_budget = max(1, int(max_observe_per_waypoint))
+    done_budget = max(0, int(done_retry_budget))
+    return (
+        "Compact action cadence for camera-raw-fpv. Call metric_map then fixture_hints, build "
+        "the exact inspection_waypoints checklist, and sweep public waypoints with "
+        "navigate_to_waypoint then observe. Inspect raw FPV image blocks directly; do not expect "
+        "structured labels. At each waypoint, use at most "
+        f"{observe_budget} observe response(s) before moving on unless a public tool error asks "
+        "for a bounded camera adjustment. Choose at most one fresh high-confidence cleanup "
+        "candidate per raw FPV observation and stay within the run budget of "
+        f"{candidate_budget} raw-FPV candidate attempts. Never retry the same "
+        "source_observation_id/category/region or visual-candidate id after a public failure. "
+        + raw_fpv_inline_candidate_instruction()
+        + " Omit source_fixture_id in minimal map mode. Use "
+        "navigate_to_visual_candidate -> pick -> navigate_to_receptacle -> open? -> "
+        "place/place_inside when grounding succeeds, then observe once before choosing another "
+        "candidate. Use place_inside for shelf/bookshelf/bookcase/shelving/fridge targets. If "
+        "grounding is unresolved, record the public failure, move to another waypoint, or stop "
+        "after the budget is exhausted; do not loop until provider context failure. Do not "
+        "pre-register raw-FPV candidates with declare_visual_candidates. "
+        f"Clean up to {cleanup_count} grounded visual candidates when possible. Call done only "
+        "after every public waypoint has an observe response and successful cleanup chains meet "
+        "the public gate, or after the bounded raw-FPV profile has no safe public candidate "
+        f"remaining. If done reports blockers, retry done at most {done_budget} time(s) after "
+        "resolving public blockers. Do not call scene_objects, read private scoring artifacts, "
+        "persist raw image payloads, or treat SDK turn completion as task success; only MCP done "
+        "producing run_result.json counts."
+    )
+
+
 def render_kickoff_prompt(
     profile: str,
     *,
     task: str = "",
     target_cleanup_count: int = 7,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    intent: str = "",
+    goal_contract: GoalContract | None = None,
+    prompt_mode: str = PROMPT_MODE_FULL,
+    raw_fpv_candidate_budget: int = 24,
+    max_observe_per_waypoint: int = 1,
+    done_retry_budget: int = 1,
 ) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
+    if intent == "open-ended":
+        task_intent_mode = TASK_INTENT_MODE_CUSTOM
     intent_mode = _normalize_task_intent_mode(task_intent_mode)
+    mode = _normalize_prompt_mode(prompt_mode)
     if profile == "camera-raw-fpv":
+        prompt = _camera_raw_prompt(target_cleanup_count=target_cleanup_count)
+        if mode == PROMPT_MODE_RAW_FPV_COMPACT:
+            prompt = _camera_raw_compact_prompt(
+                target_cleanup_count=target_cleanup_count,
+                raw_fpv_candidate_budget=raw_fpv_candidate_budget,
+                max_observe_per_waypoint=max_observe_per_waypoint,
+                done_retry_budget=done_retry_budget,
+            )
         return _with_task(
             _task_aware_prompt(
-                CUSTOM_TASK_RULES
-                if intent_mode == TASK_INTENT_MODE_CUSTOM
-                else _camera_raw_prompt(target_cleanup_count=target_cleanup_count),
+                CUSTOM_TASK_RULES if intent_mode == TASK_INTENT_MODE_CUSTOM else prompt,
                 task_intent_mode=intent_mode,
             ),
             task,
             task_intent_mode=intent_mode,
+            goal_contract=goal_contract,
         )
     if profile == "camera-grounded-labels":
+        prompt = (
+            CAMERA_LABELS_COMPACT_PROMPT if mode == PROMPT_MODE_COMPACT else CAMERA_LABELS_PROMPT
+        )
         return _with_task(
             _task_aware_prompt(
-                CUSTOM_TASK_RULES
-                if intent_mode == TASK_INTENT_MODE_CUSTOM
-                else CAMERA_LABELS_PROMPT,
+                CUSTOM_TASK_RULES if intent_mode == TASK_INTENT_MODE_CUSTOM else prompt,
                 task_intent_mode=intent_mode,
             ),
             task,
             task_intent_mode=intent_mode,
+            goal_contract=goal_contract,
         )
     if profile == "world-public-labels":
+        prompt = (
+            WORLD_LABELS_COMPACT_PROMPT
+            if mode == PROMPT_MODE_COMPACT
+            else WORLD_LABELS_SANITIZED_PROMPT
+        )
         return _with_task(
             _task_aware_prompt(
-                CUSTOM_TASK_RULES
-                if intent_mode == TASK_INTENT_MODE_CUSTOM
-                else WORLD_LABELS_SANITIZED_PROMPT,
+                CUSTOM_TASK_RULES if intent_mode == TASK_INTENT_MODE_CUSTOM else prompt,
                 task_intent_mode=intent_mode,
             ),
             task,
             task_intent_mode=intent_mode,
+            goal_contract=goal_contract,
         )
     return _with_task(
         _task_aware_prompt(
@@ -266,6 +394,7 @@ def render_kickoff_prompt(
         ),
         task,
         task_intent_mode=intent_mode,
+        goal_contract=goal_contract,
     )
 
 
@@ -298,8 +427,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default="")
     parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
+    parser.add_argument("--intent", default="")
+    parser.add_argument("--goal-contract-json", default="")
     parser.add_argument("--target-cleanup-count", type=int, default=7)
+    parser.add_argument("--prompt-mode", default=PROMPT_MODE_FULL)
+    parser.add_argument("--raw-fpv-candidate-budget", type=int, default=24)
+    parser.add_argument("--max-observe-per-waypoint", type=int, default=1)
+    parser.add_argument("--done-retry-budget", type=int, default=1)
     args = parser.parse_args(argv)
+    goal_contract = goal_contract_from_json(args.goal_contract_json)
     if args.task_name == "semantic-map-build":
         task = args.task or "build a semantic map of this room"
         print(render_semantic_map_build_prompt(args.profile, task))
@@ -310,6 +446,12 @@ def main(argv: list[str] | None = None) -> int:
                 task=args.task,
                 target_cleanup_count=args.target_cleanup_count,
                 task_intent_mode=args.task_intent_mode,
+                intent=args.intent,
+                goal_contract=goal_contract,
+                prompt_mode=args.prompt_mode,
+                raw_fpv_candidate_budget=args.raw_fpv_candidate_budget,
+                max_observe_per_waypoint=args.max_observe_per_waypoint,
+                done_retry_budget=args.done_retry_budget,
             )
         )
     return 0

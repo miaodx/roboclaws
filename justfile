@@ -1,7 +1,7 @@
 # Roboclaws command runner.
 #
 # Public surface:
-# - just task::run <task> <driver> [report|profile] [key=value ...]
+# - just run::surface surface=<surface> driver=<driver> [intent=<intent>] [key=value ...]
 # - just agent::<dispatcher> ...
 #
 # Implementation modules stay private so completion shows the composable facade,
@@ -32,6 +32,8 @@ mod verify    'just/verify.just'
 [private]
 mod molmo     'just/molmo.just'
 mod agent     'just/agent.just'
+mod run       'just/run.just'
+[private]
 mod task      'just/task.just'
 mod console   'just/console.just'
 

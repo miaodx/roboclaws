@@ -35,10 +35,10 @@ just dev::network-status
 If the command reports `network: work`, do not run the OpenClaw Gateway path
 from that network.
 
-Start the navigation demo through the public task grammar:
+Start the navigation demo through the public surface/intent grammar:
 
 ```bash
-just task::run ai2thor-nav openclaw visual
+just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual
 ```
 
 The run writes a reviewable report under `output/openclaw/` and prints the

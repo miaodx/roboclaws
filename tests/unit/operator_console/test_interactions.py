@@ -8,7 +8,7 @@ import pytest
 from roboclaws.operator_console.interactions import (
     InteractionError,
     append_ask_why,
-    append_continue_request,
+    append_next_goal_request,
     append_steer_message,
     attach_run_to_session,
     check_operator_messages_for_mcp,
@@ -84,41 +84,59 @@ def test_ask_why_uses_public_artifacts_without_private_terms(tmp_path: Path) -> 
     assert "generated_mess_set" not in json.dumps(answer)
 
 
-def test_steer_rejects_terminal_run_and_offers_continue(tmp_path: Path) -> None:
+def test_steer_rejects_terminal_run_and_offers_next_goal(tmp_path: Path) -> None:
     _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
 
-    with pytest.raises(InteractionError, match="use Continue After Run"):
+    with pytest.raises(InteractionError, match="use Next Goal"):
         append_steer_message(tmp_path, "run-a", "Do not move the cup")
 
 
-def test_continue_queues_active_run_without_touching_steer_inbox(tmp_path: Path) -> None:
+def test_next_goal_rejects_active_run_without_touching_steer_inbox(tmp_path: Path) -> None:
     run_dir = _write_run(tmp_path, phase="running-codex")
 
-    request = append_continue_request(tmp_path, "run-a", "Now build the semantic map")
+    with pytest.raises(InteractionError, match="Use Steer or Ask Why"):
+        append_next_goal_request(tmp_path, "run-a", "Now build the semantic map")
     messages = list_operator_messages(tmp_path, "run-a")
 
-    assert request["command_type"] == "continue"
-    assert request["status"] == "queued"
-    assert request["queue_reason"] == "waiting_for_parent_terminal_state"
-    assert request["parent_run_id"] == "run-a"
-    assert request["continuation_packet"]["parent_run_id"] == "run-a"
     assert not any(item["command_type"] == "steer" for item in messages["messages"])
-    assert (run_dir / "continue_queue.jsonl").is_file()
+    assert not (run_dir / "next_goal_queue.jsonl").exists()
+    assert not (run_dir / "continue_queue.jsonl").exists()
 
 
-def test_terminal_simulator_continue_is_ready_with_public_packet(tmp_path: Path) -> None:
+def test_terminal_simulator_next_goal_is_ready_with_public_packet(tmp_path: Path) -> None:
     _write_run(tmp_path, phase="finished", run_result={"cleanup_success": True})
 
-    request = append_continue_request(tmp_path, "run-a", "Run the next sweep")
+    request = append_next_goal_request(tmp_path, "run-a", "Run the next sweep")
 
+    assert request["command_type"] == "next_goal"
     assert request["status"] == "ready_to_start"
     assert request["auto_start_allowed"] is True
     assert request["queue_reason"] == "parent_terminal_and_result_available"
     assert request["operator_session_id"].startswith("session-")
     assert request["route_id"] == "codex-mujoco-cleanup"
-    assert request["continuation_packet"]["instruction"].startswith(
+    assert request["next_goal_packet"]["instruction"].startswith(
         "This is a linked follow-up Robot Run"
     )
+
+
+def test_failed_parent_next_goal_requires_confirmation(tmp_path: Path) -> None:
+    _write_run(tmp_path, phase="failed", run_result={"cleanup_success": False})
+
+    request = append_next_goal_request(tmp_path, "run-a", "Try the next goal")
+    confirmed = append_next_goal_request(
+        tmp_path,
+        "run-a",
+        "Try the next goal",
+        confirmed=True,
+    )
+
+    assert request["command_type"] == "next_goal"
+    assert request["status"] == "confirmation_required"
+    assert request["auto_start_allowed"] is False
+    assert request["confirmation_required"] is True
+    assert request["queue_reason"] == "operator_confirmation_required_after_parent_terminal_status"
+    assert confirmed["status"] == "ready_to_start"
+    assert confirmed["confirmed"] is True
 
 
 def test_active_steer_is_seen_only_by_check_operator_messages(tmp_path: Path) -> None:

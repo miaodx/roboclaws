@@ -1,7 +1,7 @@
 # Agent and Task Command Taxonomy Plan
 
-Status: implemented as `just/task.just`, `just/agent.just`, and
-[`just/README.md`](../../just/README.md).
+Status: historical. The implemented `task::run` taxonomy was superseded by the
+surface/intent model in `just/run.just` and [`just/README.md`](../../just/README.md).
 
 This plan defines the human-facing command layers for robot/agent demos while
 keeping the existing implementation modules available for lower-level debugging.

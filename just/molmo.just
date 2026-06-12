@@ -41,7 +41,7 @@ default:
 # Explicit cleanup evidence-lane runner. The recipe parameter remains named
 # `profile` for positional Just compatibility; public callers should pass the
 # new evidence lane names.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" goal_contract_json="" goal_contract_path="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -71,6 +71,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_name="{{task_name}}"
     operator_messages_path="{{operator_messages_path}}"
     task_intent_mode="{{task_intent_mode}}"
+    goal_contract_json="{{goal_contract_json}}"
+    goal_contract_path="{{goal_contract_path}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -110,6 +112,31 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_intent_mode="${task_intent_mode#task_intent_mode=}"
     task_intent_mode="${task_intent_mode#task-intent-mode=}"
     task_intent_mode="${task_intent_mode:-default_cleanup}"
+    goal_contract_json="${goal_contract_json#goal_contract_json=}"
+    goal_contract_json="${goal_contract_json#goal-contract-json=}"
+    goal_contract_path="${goal_contract_path#goal_contract_path=}"
+    goal_contract_path="${goal_contract_path#goal-contract-path=}"
+    goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"
+    goal_contract_path="${goal_contract_path:-${ROBOCLAWS_GOAL_CONTRACT_PATH:-}}"
+    task_intent="${ROBOCLAWS_TASK_INTENT:-}"
+    if [[ -z "$task_intent" ]]; then
+      case "$task_name" in
+        semantic-map-build) task_intent="map-build" ;;
+        *) task_intent="cleanup" ;;
+      esac
+    fi
+    if [[ -z "$goal_contract_json" && -z "$goal_contract_path" ]]; then
+      goal_contract_json="$(
+        ROBOCLAWS_TASK_INTENT="$task_intent" ROBOCLAWS_TASK_PROMPT="$task" .venv/bin/python -c 'import os; from roboclaws.launch.catalog import SURFACE_SPECS; from roboclaws.launch.goals import normalize_goal_contract; from roboclaws.launch.intents import TASK_INTENT_SPECS; print(normalize_goal_contract(surface=SURFACE_SPECS["household-world"], intent=TASK_INTENT_SPECS[os.environ["ROBOCLAWS_TASK_INTENT"]], raw_prompt=os.environ.get("ROBOCLAWS_TASK_PROMPT", "")).to_json())'
+      )"
+    fi
+    goal_contract_args=()
+    if [[ -n "$goal_contract_json" ]]; then
+      goal_contract_args+=(--goal-contract-json "$goal_contract_json")
+    fi
+    if [[ -n "$goal_contract_path" ]]; then
+      goal_contract_args+=(--goal-contract "$goal_contract_path")
+    fi
     generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))
 
     if [[ "$camera_labeler" == visual_grounding=* ]]; then
@@ -546,7 +573,38 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         if [[ "$profile" == "camera-raw-fpv" ]]; then
           prompt_cleanup_count="$generated_mess_success_threshold"
         fi
-        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count" --task-intent-mode "$task_intent_mode")"
+        prompt_mode="${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-full}"
+        prompt_raw_fpv_candidate_budget="${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET:-24}"
+        prompt_max_observe_per_waypoint="${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT:-1}"
+        prompt_done_retry_budget="${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET:-1}"
+        if [[ "$driver" != "openai-agents-live" ]]; then
+          prompt_mode="full"
+        elif [[ -z "${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-}" ]]; then
+          case "${ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE:-}" in
+            gpt_compact_v1|mimo_compact_v1)
+              prompt_mode="compact"
+              ;;
+            raw_fpv_budgeted_v1)
+              prompt_mode="raw_fpv_compact"
+              ;;
+          esac
+        fi
+        prompt_args=(
+          --profile "$profile"
+          --task-name "$task_name"
+          --task "$task"
+          --target-cleanup-count "$prompt_cleanup_count"
+          --task-intent-mode "$task_intent_mode"
+          --prompt-mode "$prompt_mode"
+          --raw-fpv-candidate-budget "$prompt_raw_fpv_candidate_budget"
+          --max-observe-per-waypoint "$prompt_max_observe_per_waypoint"
+          --done-retry-budget "$prompt_done_retry_budget"
+        )
+        if [[ -n "$task_intent" ]]; then
+          prompt_args+=(--intent "$task_intent")
+        fi
+        prompt_args+=("${goal_contract_args[@]}")
+        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup "${prompt_args[@]}")"
 
         server_args=(
           --host "$server_host"
@@ -570,6 +628,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           "${runtime_map_prior_args[@]}"
           --map-mode "$map_mode"
         )
+        server_args+=("${goal_contract_args[@]}")
         if [[ -n "$isaac_scene_usd_path" ]]; then
           server_args+=(--isaac-scene-usd-path "$isaac_scene_usd_path")
         fi
@@ -768,8 +827,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --lock-path output/molmo/.live-openai-agents.lock
             --provider-profile "$openai_agents_profile"
             --model "$openai_agents_model"
-            --max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-128}"
-            --incomplete-turn-continuation-attempts "${ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS:-2}"
+            --mcp-client-session-timeout-s "${ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S:-30}"
+            --agent-sdk-perf-profile "${ROBOCLAWS_OPENAI_AGENTS_PERF_PROFILE:-}"
+            --prompt-mode "${ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE:-}"
+            --continuation-mode "${ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE:-}"
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
@@ -780,6 +841,27 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
           )
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-}" ]]; then
+            runner_args+=(--max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS:-}" ]]; then
+            runner_args+=(--incomplete-turn-continuation-attempts "${ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS:-}" ]]; then
+            runner_args+=(--context-soft-limit-tokens "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS:-}" ]]; then
+            runner_args+=(--context-hard-limit-tokens "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT:-}" ]]; then
+            runner_args+=(--max-observe-per-waypoint "${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET:-}" ]]; then
+            runner_args+=(--raw-fpv-candidate-budget "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET:-}" ]]; then
+            runner_args+=(--done-retry-budget "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET}")
+          fi
           if [[ "${ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST:-true}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
             runner_args+=(--no-cache-tools-list)
           else
@@ -912,6 +994,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             "${runtime_map_prior_args[@]}" \
             "${semantic_sweep_args[@]}" \
             "${isaac_scene_args[@]}" \
+            "${goal_contract_args[@]}" \
             --output-dir "$run_dir"
           ;;
         mcp-smoke|openclaw-smoke)
@@ -924,6 +1007,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --backend "$backend" \
             --task "$task" \
             --task-intent-mode "$task_intent_mode" \
+            "${goal_contract_args[@]}" \
             --policy "$policy" \
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \
