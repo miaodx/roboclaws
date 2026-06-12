@@ -96,6 +96,12 @@ from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_client_from_env,
 )
+from roboclaws.launch.goals import (
+    completion_claim_from_done_reason,
+    goal_contract_from_file,
+    goal_contract_from_json,
+    write_goal_contract,
+)
 from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
 
 SYNTHETIC_BACKEND = "api_semantic_synthetic"
@@ -115,6 +121,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
+    parser.add_argument("--goal-contract", type=Path)
+    parser.add_argument("--goal-contract-json")
     parser.add_argument(
         "--backend",
         choices=(SYNTHETIC_BACKEND, MOLMOSPACES_SUBPROCESS_BACKEND, ISAACLAB_SUBPROCESS_BACKEND),
@@ -289,6 +297,8 @@ def run_realworld_cleanup(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    goal_contract_json: str | None = None,
+    goal_contract_path: str | Path | None = None,
     run_metadata_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -317,6 +327,9 @@ def run_realworld_cleanup(
             "use_planner_proof_for_cleanup_primitives requires planner_proof_run_result"
         )
     runtime_map_prior = _load_runtime_map_prior(runtime_map_prior_path)
+    goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
+        goal_contract_path
+    )
 
     backend_instance: Any | None = None
     if backend == MOLMOSPACES_SUBPROCESS_BACKEND:
@@ -596,6 +609,16 @@ def run_realworld_cleanup(
     advisory_evaluation_path.write_text(
         json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
     )
+    goal_contract_path_out = output_dir / "goal_contract.json"
+    goal_contract_payload: dict[str, Any] = {}
+    agent_completion_claim: dict[str, Any] = {}
+    if goal_contract is not None:
+        write_goal_contract(goal_contract_path_out, goal_contract)
+        goal_contract_payload = goal_contract.to_payload()
+        agent_completion_claim = completion_claim_from_done_reason(
+            str(done.get("reason") or f"{policy_name} complete"),
+            goal_contract=goal_contract,
+        )
     agent_scratchpad_path = output_dir / "agent_scratchpad.json"
     agent_scratchpad_path.write_text(json.dumps(agent_scratchpad, indent=2, sort_keys=True) + "\n")
     substeps = semantic_substeps(trace_events, contract.public_receptacles_by_id())
@@ -652,6 +675,13 @@ def run_realworld_cleanup(
         "scenario_id": scenario.scenario_id,
         "seed": seed,
         "task_prompt": task_prompt,
+        "task_surface": goal_contract_payload.get("surface", "household-world"),
+        "task_intent": goal_contract_payload.get(
+            "intent",
+            "map-build" if semantic_sweep else "cleanup",
+        ),
+        "goal_contract": goal_contract_payload,
+        "agent_completion_claim": agent_completion_claim,
         "contract": REALWORLD_CONTRACT,
         "adr_0003_satisfied": True,
         "final_status": done["cleanup_status"],
@@ -732,6 +762,8 @@ def run_realworld_cleanup(
             "after_snapshot": str(after_snapshot),
         },
     }
+    if goal_contract is not None:
+        run_result["artifacts"]["goal_contract"] = str(goal_contract_path_out)
     if profile_metadata is not None:
         run_result["evidence_lane"] = profile_metadata["evidence_lane"]
         run_result["cleanup_profile"] = profile_metadata["evidence_lane"]
@@ -1402,6 +1434,8 @@ def main(argv: list[str] | None = None) -> int:
         visual_grounding=args.visual_grounding,
         visual_grounding_base_url=args.visual_grounding_base_url,
         visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+        goal_contract_json=args.goal_contract_json,
+        goal_contract_path=args.goal_contract,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

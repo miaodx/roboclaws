@@ -1060,12 +1060,21 @@ def _load_live_timing(run_dir: Path) -> dict[str, Any]:
 
 def _runner_timing_timeline(runner_timing: dict[str, Any]) -> str:
     total = runner_timing.get("total_elapsed_s")
+    agent_label = "Agent run"
+    agent_elapsed = runner_timing.get("codex_exec_elapsed_s")
+    setup_elapsed = runner_timing.get("pre_codex_setup_s")
+    server_wait_elapsed = runner_timing.get("post_codex_server_wait_s")
+    if agent_elapsed is None and runner_timing.get("openai_agents_elapsed_s") is not None:
+        agent_label = "OpenAI Agents SDK run"
+        agent_elapsed = runner_timing.get("openai_agents_elapsed_s")
+        setup_elapsed = runner_timing.get("pre_agent_setup_s")
+        server_wait_elapsed = runner_timing.get("post_agent_server_wait_s")
     segments = [
-        ("Setup", runner_timing.get("pre_codex_setup_s"), "launcher and server prep", "#536d7a"),
-        ("Codex run", runner_timing.get("codex_exec_elapsed_s"), "agent execution", "#2f766f"),
+        ("Setup", setup_elapsed, "launcher and server prep", "#536d7a"),
+        (agent_label, agent_elapsed, "agent execution", "#2f766f"),
         (
             "Server wait",
-            runner_timing.get("post_codex_server_wait_s"),
+            server_wait_elapsed,
             "cleanup server finalization",
             "#8a6f39",
         ),

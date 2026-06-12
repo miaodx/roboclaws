@@ -151,6 +151,9 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
             tmp_path,
             LaunchRequest(
                 route_id=route.id,
+                intent="open-ended",
+                prompt="收拾桌面上的杯子",
+                next_goal_packet={"schema": "operator_console_next_goal_packet_v1"},
                 env_overrides={
                     "ROBOCLAWS_CODEX_PROVIDER": "mify",
                 },
@@ -164,6 +167,11 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert state["env_overrides"] == {
         "ROBOCLAWS_CODEX_PROVIDER": "mify",
     }
+    assert state["selected_intent"] == "open-ended"
+    assert state["next_goal_packet"] == {"schema": "operator_console_next_goal_packet_v1"}
+    assert "continuation_packet" not in state
+    assert "intent=open-ended" in state["argv"]
+    assert "prompt=收拾桌面上的杯子" in state["argv"]
     assert state["operator_session_id"].startswith("session-")
     assert any(item.startswith("operator_messages_path=") for item in state["argv"])
     history_path = console_output_root(tmp_path) / "runs.jsonl"
@@ -634,5 +642,7 @@ def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
     route = get_route("claude-mujoco-cleanup")
     argv = build_launch_argv(route, root=tmp_path, run_id="run-1")
 
-    assert argv[:4] == ["just", "task::run", "household-cleanup", "claude"]
+    assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=claude"]
+    assert "intent=cleanup" in argv
+    assert "evidence_lane=world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv

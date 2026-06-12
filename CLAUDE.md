@@ -72,8 +72,8 @@ python examples/games/coverage_game.py --agents 3
 Common `just` recipes use the small public facade:
 
 ```bash
-just task::run ai2thor-nav openclaw              # normal OpenClaw navigation
-just task::run household-cleanup codex smoke      # cheap synthetic cleanup iteration
+just run::surface surface=ai2thor-world driver=openclaw intent=navigate
+just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke
 just agent::verify mock                          # maintainer confidence gate
 ```
 

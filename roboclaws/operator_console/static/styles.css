@@ -475,6 +475,11 @@ pre,
   margin: 0;
 }
 
+.state-list.compact {
+  gap: 2px 12px;
+  font-size: 12px;
+}
+
 .state-list dt {
   color: var(--muted);
   font-weight: 500;
@@ -483,6 +488,14 @@ pre,
 .state-list dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.intent-preview {
+  margin: -8px 0 16px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
 }
 
 .command-preview {
@@ -710,11 +723,6 @@ pre,
 .operator-mode.active {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-#operator-message-button {
-  width: 100%;
-  margin-top: 8px;
 }
 
 .tool-json {

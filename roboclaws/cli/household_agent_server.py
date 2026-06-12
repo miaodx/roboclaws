@@ -50,6 +50,7 @@ from roboclaws.household.task_intent import (
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
+from roboclaws.launch.goals import goal_contract_from_file, goal_contract_from_json
 from roboclaws.maps.actionable_snapshot import runtime_metric_map_from_prior_artifact
 
 log = logging.getLogger("molmo-realworld-cleanup-agent-server")
@@ -70,6 +71,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
     parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
+    parser.add_argument("--goal-contract", type=Path)
+    parser.add_argument("--goal-contract-json")
     parser.add_argument(
         "--backend",
         choices=(
@@ -285,6 +288,8 @@ def run_molmo_realworld_cleanup_agent_server(
     agibot_map_artifact_dir: str | Path | None = None,
     real_movement_enabled: bool = False,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    goal_contract_json: str | None = None,
+    goal_contract_path: str | Path | None = None,
     rerun_command: str | None = None,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
@@ -363,6 +368,9 @@ def run_molmo_realworld_cleanup_agent_server(
     terminated_by = "unknown"
     error: str | None = None
     url = mcp_url(host, port)
+    goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
+        goal_contract_path
+    )
 
     try:
         server = make_molmo_realworld_cleanup_mcp(
@@ -387,6 +395,7 @@ def run_molmo_realworld_cleanup_agent_server(
             visual_grounding_base_url=visual_grounding_base_url,
             visual_grounding_timeout_s=visual_grounding_timeout_s,
             task_intent_mode=task_intent_mode,
+            goal_contract=goal_contract,
             operator_messages_path=operator_messages_path,
             rerun_command=rerun_command,
         )
@@ -471,6 +480,8 @@ def main(argv: list[str] | None = None) -> int:
             agibot_map_artifact_dir=args.agibot_map_artifact_dir,
             real_movement_enabled=args.real_movement_enabled,
             task_intent_mode=args.task_intent_mode,
+            goal_contract_json=args.goal_contract_json,
+            goal_contract_path=args.goal_contract,
             rerun_command=args.rerun_command,
         )
     except Exception as exc:

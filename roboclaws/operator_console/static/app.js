@@ -5,10 +5,11 @@ const state = {
   activeRunId: null,
   activeRouteId: "",
   activeState: null,
-  operatorMode: "ask_why",
+  operatorMode: "goal",
   pollTimer: null,
   readinessTimer: null,
   activeView: "overview",
+  selectedIntent: "",
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -26,8 +27,12 @@ const els = {
   appShell: document.querySelector(".app-shell"),
   routeList: document.getElementById("route-list"),
   taskPrompt: document.getElementById("prompt-input"),
+  promptLabel: document.getElementById("prompt-label"),
   promptHelp: document.getElementById("prompt-copy"),
   promptCount: document.getElementById("char-count"),
+  intentFields: document.getElementById("intent-fields"),
+  intentInput: document.getElementById("intent-input"),
+  intentPreview: document.getElementById("intent-preview"),
   seedInput: document.getElementById("seed-input"),
   messInput: document.getElementById("mess-count-input"),
   portInput: document.getElementById("port-input"),
@@ -65,9 +70,6 @@ const els = {
   decisionPanel: document.getElementById("decision-state"),
   toolPanel: document.getElementById("tool-state"),
   proofPanel: document.getElementById("proof-state"),
-  operatorMessageInput: document.getElementById("operator-message-input"),
-  operatorMessageButton: document.getElementById("operator-message-button"),
-  operatorMessageStatus: document.getElementById("operator-message-status"),
   artifactList: document.getElementById("artifact-list"),
   eventList: document.getElementById("event-log"),
   rawEvidence: document.getElementById("raw-evidence"),
@@ -98,6 +100,11 @@ async function boot() {
 function bindEvents() {
   els.taskPrompt.addEventListener("input", () => {
     els.promptCount.textContent = `${els.taskPrompt.value.length} / 2000`;
+    renderSelection();
+  });
+  els.intentInput.addEventListener("change", () => {
+    state.selectedIntent = selectedIntent();
+    renderSelection();
   });
   [
     els.contextInput,
@@ -140,10 +147,9 @@ function bindEvents() {
   document.querySelectorAll(".operator-mode").forEach((button) => {
     button.addEventListener("click", () => {
       state.operatorMode = button.dataset.operatorMode || "ask_why";
-      renderOperatorMode();
+      renderSelection();
     });
   });
-  els.operatorMessageButton.addEventListener("click", sendOperatorMessage);
   els.toggleRawButton.addEventListener("click", toggleRawEvidence);
   bindStateRailResize();
   bindEvidenceStripResize();
@@ -401,6 +407,7 @@ function renderRoutes() {
     `;
     button.addEventListener("click", () => {
       state.selectedRoute = route;
+      state.selectedIntent = route.default_intent || route.intent || "";
       renderRoutes();
       renderSelection();
       refreshSelectedRouteReadiness();
@@ -419,12 +426,8 @@ function renderSelection() {
   renderSelectedRouteSummary(route, readiness);
   ensureActiveViewAvailable(route);
   renderViewModes(route);
-  els.taskPrompt.disabled = !route.supports_prompt;
-  els.taskPrompt.placeholder = route.task_prompt_default || route.default_prompt || "";
-  els.promptHelp.textContent = route.supports_prompt
-    ? "Empty prompt uses the route default. Prompt text is never interpreted as shell."
-    : route.prompt_disabled_reason ||
-      "This route cannot accept a custom prompt safely. Use the default task prompt.";
+  renderIntentSelector(route);
+  renderOperatorInput(route);
 
   const gates = readiness.gates || route.gates || [];
   els.gateList.innerHTML = "";
@@ -451,6 +454,42 @@ function renderSelection() {
 
   els.commandPreview.textContent = commandPreview(route);
   renderStartAction(route, readiness);
+}
+
+function renderOperatorInput(route) {
+  const mode = state.operatorMode;
+  const hasRun = Boolean(state.activeRunId);
+  if (mode === "goal") {
+    els.promptLabel.textContent = hasRun ? "Next Goal" : "Goal";
+    els.taskPrompt.disabled = !route.supports_prompt || (hasRun && !isRunTerminal());
+    els.taskPrompt.placeholder = route.task_prompt_default || route.default_prompt || "";
+    els.promptHelp.textContent = operatorGoalHelp(route);
+    return;
+  }
+  if (mode === "steer") {
+    els.promptLabel.textContent = "Steer Current Run";
+    els.taskPrompt.disabled = false;
+    els.taskPrompt.placeholder = "Tell the active agent what to prioritize, avoid, or check next.";
+    els.promptHelp.textContent = "Steer writes an auditable active-run message for supported routes.";
+    return;
+  }
+  els.promptLabel.textContent = "Ask Why";
+  els.taskPrompt.disabled = false;
+  els.taskPrompt.placeholder = "Ask about public evidence, actions, or terminal status for the attached run.";
+  els.promptHelp.textContent = "Ask Why reads public run artifacts only and cannot change robot state.";
+}
+
+function operatorGoalHelp(route) {
+  if (!state.activeRunId) {
+    return route.supports_prompt
+      ? "Empty goal uses the route default. Prompt text is never interpreted as shell."
+      : route.prompt_disabled_reason ||
+          "This route cannot accept a custom prompt safely. Use the default task prompt.";
+  }
+  if (isRunTerminal()) {
+    return "Starts a linked Next Goal run using public parent context.";
+  }
+  return "Goal starts a run or terminal-parent Next Goal. Use Steer or Ask Why while this run is active.";
 }
 
 function routeStatusDisplay(route, readiness) {
@@ -494,6 +533,7 @@ function gateBadgeDisplay(gate) {
 
 function renderSelectedRouteSummary(route, readiness) {
   const status = routeStatusDisplay(route, readiness);
+  const interpretation = launchInterpretation(route);
   els.selectedRouteSummary.innerHTML = `
     <div class="route-card-title">
       <span>${escapeHtml(route.label)}</span>
@@ -501,6 +541,9 @@ function renderSelectedRouteSummary(route, readiness) {
     </div>
     <div class="meta-label">${escapeHtml(route.driver_label)} / ${escapeHtml(route.profile)}</div>
     <div class="field-help">${escapeHtml(route.backend)}</div>
+    <div class="field-help">${escapeHtml(interpretation.intentLabel)} / ${escapeHtml(
+      interpretation.goalScope
+    )}</div>
   `;
 }
 
@@ -515,12 +558,115 @@ function renderRouteFields(route) {
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
 }
 
+function renderIntentSelector(route) {
+  const options = intentOptions(route);
+  state.selectedIntent = selectedIntentForRoute(route);
+  els.intentInput.innerHTML = "";
+  for (const option of options) {
+    const node = document.createElement("option");
+    node.value = option.id;
+    node.textContent = option.label;
+    node.selected = option.id === state.selectedIntent;
+    els.intentInput.appendChild(node);
+  }
+  els.intentFields.hidden = !route.enabled || options.length === 0;
+  els.intentInput.disabled = options.length <= 1;
+  const interpretation = launchInterpretation(route);
+  els.intentPreview.innerHTML = `
+    <dl class="state-list compact">
+      <dt>Goal scope</dt><dd>${escapeHtml(interpretation.goalScope)}</dd>
+      <dt>Checker</dt><dd>${escapeHtml(interpretation.checker)}</dd>
+      <dt>Evaluation</dt><dd>${escapeHtml(interpretation.evaluation)}</dd>
+    </dl>
+  `;
+}
+
 function commandPreview(route) {
-  const parts = route.argv_preview || route.command_preview || [];
+  const selected = selectedIntentForRoute(route);
+  const parts = [...(route.argv_preview || route.command_preview || [])];
   if (!parts.length) {
     return "Route unavailable.";
   }
+  const intentIndex = parts.findIndex((part) => String(part).startsWith("intent="));
+  if (intentIndex >= 0) {
+    parts[intentIndex] = `intent=${selected}`;
+  } else {
+    const driverIndex = parts.findIndex((part) => String(part).startsWith("driver="));
+    parts.splice(driverIndex >= 0 ? driverIndex + 1 : 2, 0, `intent=${selected}`);
+  }
+  const prompt = launchPromptText();
+  if (route.supports_prompt && prompt) {
+    parts.push(`prompt=${prompt}`);
+  }
   return parts.join(" ");
+}
+
+function launchPromptText() {
+  if (state.operatorMode !== "goal" || state.activeRunId) {
+    return "";
+  }
+  return els.taskPrompt.value.trim();
+}
+
+function selectedIntent() {
+  const route = state.selectedRoute;
+  if (!route) {
+    return "";
+  }
+  const value = els.intentInput.value || state.selectedIntent || route.default_intent || route.intent;
+  return selectedIntentForRoute(route, value);
+}
+
+function selectedIntentForRoute(route, requestedIntent = "") {
+  const options = intentOptions(route);
+  const fallback = route.default_intent || route.intent || (options[0] && options[0].id) || "";
+  const candidate = requestedIntent || state.selectedIntent || fallback;
+  return options.some((option) => option.id === candidate) ? candidate : fallback;
+}
+
+function intentOptions(route) {
+  const options = route.intent_options || [];
+  if (options.length) {
+    return options;
+  }
+  return (route.supported_intents || [route.intent]).map((intent) => ({
+    id: intent,
+    label: intentLabel(intent),
+    checker_id: route.checker_id || "",
+    goal_scope: intent === "map-build" ? "whole-room" : "agent-declared",
+    evaluation_policy: intent.replace("-", "_"),
+  }));
+}
+
+function launchInterpretation(route) {
+  const intent = selectedIntentForRoute(route);
+  const option = intentOptions(route).find((item) => item.id === intent) || {};
+  return {
+    intent,
+    intentLabel: option.label || intentLabel(intent),
+    goalScope: goalScopeForIntent(intent, option.goal_scope || ""),
+    checker: option.checker_id || route.checker_id || "",
+    evaluation: option.evaluation_policy || intent.replace("-", "_"),
+  };
+}
+
+function goalScopeForIntent(intent, defaultScope) {
+  if (intent === "cleanup") {
+    return launchPromptText() ? "prompt-scoped" : "whole-room";
+  }
+  if (intent === "map-build") {
+    return "whole-room";
+  }
+  return defaultScope || "agent-declared";
+}
+
+function intentLabel(intent) {
+  const labels = {
+    cleanup: "Cleanup",
+    "open-ended": "Open-ended",
+    "map-build": "Map build",
+  };
+  return labels[intent] || intent;
 }
 
 function effectiveReadiness(route) {
@@ -588,26 +734,97 @@ function gateBlocksStart(gate) {
   return Boolean(gate.blocks_start || gate.required);
 }
 
+function isRunTerminal(payload = state.activeState || {}) {
+  if (!state.activeRunId) {
+    return false;
+  }
+  const controls = payload.controls || {};
+  if (controls.next_goal_available === true) {
+    return true;
+  }
+  const statusValues = [
+    payload.status,
+    payload.phase,
+    payload.terminal_reason,
+    payload.checker_status && payload.checker_status.status,
+  ].map((value) => String(value || "").toLowerCase());
+  return statusValues.some((value) =>
+    [
+      "done",
+      "finished",
+      "passed",
+      "stopped_by_operator",
+      "human_takeover_stop",
+      "emergency_stopped",
+      "failed",
+    ].includes(value)
+  );
+}
+
 function isRealMovementGate(gate) {
   return ["localization_ready", "run_enabled", "estop_ready"].includes(gate.id);
 }
 
 function renderStartAction(route, readiness) {
+  const mode = state.operatorMode;
+  if (mode === "ask_why") {
+    els.startButton.textContent = "Ask Why";
+    els.startButton.disabled = !state.activeRunId;
+    els.startHelp.textContent = state.activeRunId
+      ? "Ask Why will read public artifacts for the attached run."
+      : "Attach a run before asking why.";
+    return;
+  }
+  if (mode === "steer") {
+    const controls = (state.activeState && state.activeState.controls) || {};
+    const enabled = Boolean(state.activeRunId && controls.steer_available);
+    els.startButton.textContent = "Steer Run";
+    els.startButton.disabled = !enabled;
+    els.startHelp.textContent = steerHelp(controls);
+    return;
+  }
   if (state.activeRunId) {
-    els.startButton.textContent = "Run Attached";
-    els.startButton.disabled = true;
-    els.startHelp.textContent = `Watching run ${state.activeRunId}.`;
+    const terminal = isRunTerminal();
+    els.startButton.textContent = terminal ? "Start Next Goal" : "Run Attached";
+    els.startButton.disabled = !terminal || !route.supports_prompt;
+    els.startHelp.textContent = terminal
+      ? "Start a linked Next Goal from this terminal parent run."
+      : `Watching active run ${state.activeRunId}. Use Steer or Ask Why.`;
     return;
   }
   const attachableRun = readiness.attachable_run || null;
   els.startButton.textContent = attachableRun ? "Attach Existing Run" : "Start Agent Run";
   els.startButton.disabled = !route.enabled || (readiness.can_start === false && !attachableRun);
   els.startHelp.textContent = attachableRun
-    ? `Existing run ${attachableRun.run_id} is using this backend. Attach to continue watching it.`
+    ? `Existing run ${attachableRun.run_id} is using this backend. Attach to watch it.`
     : readiness.blocker || route.disabled_reason || "";
 }
 
+function steerHelp(controls) {
+  if (!state.activeRunId) {
+    return "Attach a run before steering.";
+  }
+  if (controls.steer_available) {
+    return "Message will be written to operator_messages.jsonl for the active run.";
+  }
+  return controls.supports_operator_steer
+    ? "Steer is unavailable after this run is terminal. Use Goal for Next Goal."
+    : "This route does not expose active-run steering.";
+}
+
 function handleStartAction() {
+  if (state.operatorMode === "ask_why" || state.operatorMode === "steer") {
+    sendOperatorMessage();
+    return;
+  }
+  if (state.activeRunId && isRunTerminal()) {
+    confirmNextGoal();
+    return;
+  }
+  if (state.activeRunId) {
+    els.startHelp.textContent = "Use Steer or Ask Why while this run is active.";
+    return;
+  }
   const readiness = effectiveReadiness(state.selectedRoute);
   if (readiness.attachable_run) {
     attachExistingRun(readiness.attachable_run);
@@ -688,7 +905,8 @@ async function refreshSelectedRouteReadiness() {
 
 function confirmLaunch() {
   const route = state.selectedRoute;
-  const promptSource = els.taskPrompt.value.trim() ? "custom" : "default";
+  const promptSource = launchPromptText() ? "custom" : "default";
+  const interpretation = launchInterpretation(route);
   const providerRows =
     route.driver === "codex"
       ? `<dt>Provider</dt><dd>${escapeHtml(selectedCodexProvider())}</dd>`
@@ -706,6 +924,10 @@ function confirmLaunch() {
       <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver)}</dd>
       <dt>Backend</dt><dd>${escapeHtml(route.backend)}</dd>
       <dt>Profile</dt><dd>${escapeHtml(route.profile)}</dd>
+      <dt>Intent</dt><dd>${escapeHtml(interpretation.intentLabel)}</dd>
+      <dt>Goal scope</dt><dd>${escapeHtml(interpretation.goalScope)}</dd>
+      <dt>Checker</dt><dd>${escapeHtml(interpretation.checker)}</dd>
+      <dt>Evaluation</dt><dd>${escapeHtml(interpretation.evaluation)}</dd>
       ${providerRows}
       <dt>Lock</dt><dd>${escapeHtml(route.lock_name)}</dd>
       ${movementRows}
@@ -719,6 +941,87 @@ function confirmLaunch() {
     bodyHtml: summary,
     onConfirm: launchRun,
   });
+}
+
+function confirmNextGoal() {
+  const prompt = els.taskPrompt.value.trim();
+  if (!prompt) {
+    els.startHelp.textContent = "Enter a Next Goal before starting a linked run.";
+    return;
+  }
+  const route = state.activeState && state.activeState.route ? state.activeState.route : state.selectedRoute;
+  const summary = `
+    <dl class="state-list">
+      <dt>Parent Run</dt><dd>${escapeHtml(state.activeRunId || "")}</dd>
+      <dt>Route</dt><dd>${escapeHtml(route.label || state.selectedRoute.label)}</dd>
+      <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver || "")}</dd>
+      <dt>Backend</dt><dd>${escapeHtml(route.backend || "")}</dd>
+      <dt>Next Goal</dt><dd>custom</dd>
+      <dt>Context</dt><dd>public parent artifacts only</dd>
+    </dl>
+  `;
+  confirmAction({
+    title: "Start Next Goal",
+    cta: "Start Next Goal",
+    bodyHtml: summary,
+    onConfirm: () => sendNextGoal({ confirmed: false }),
+  });
+}
+
+async function sendNextGoal({ confirmed = false } = {}) {
+  if (!state.activeRunId) {
+    return;
+  }
+  const prompt = els.taskPrompt.value.trim();
+  if (!prompt) {
+    els.startHelp.textContent = "Enter a Next Goal before starting a linked run.";
+    return;
+  }
+  const result = await fetchJson(
+    `/api/runs/${encodeURIComponent(state.activeRunId)}/next-goal`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, confirmed }),
+    }
+  );
+  if (result.error) {
+    els.startHelp.textContent = result.error;
+    return;
+  }
+  if (result.status === "confirmation_required" && !confirmed) {
+    confirmAction({
+      title: "Confirm Next Goal",
+      cta: "Confirm Next Goal",
+      body: nextGoalConfirmationText(result),
+      onConfirm: () => sendNextGoal({ confirmed: true }),
+    });
+    return;
+  }
+  if (result.started_run && result.started_run.run_id) {
+    state.activeRunId = result.started_run.run_id;
+    state.activeRouteId = result.started_run.route
+      ? result.started_run.route.id
+      : state.activeRouteId || state.selectedRoute.id;
+    state.activeState = result.started_run;
+    els.taskPrompt.value = "";
+    els.promptCount.textContent = "0 / 2000";
+    els.startHelp.textContent = `Started Next Goal ${state.activeRunId}.`;
+    startPolling();
+    renderSelection();
+    return;
+  }
+  els.startHelp.textContent = operatorMessageResultText(result);
+  pollState();
+}
+
+function nextGoalConfirmationText(result) {
+  const reason = result.queue_reason || "operator_confirmation_required";
+  return (
+    "This parent run needs explicit confirmation before a linked Next Goal starts.\n\n" +
+    `Reason: ${reason}\n\n` +
+    "Confirm only if the parent artifacts are sufficient and any required movement gates are accepted."
+  );
 }
 
 // Shared confirmation modal. Pass `body` for plain text or `bodyHtml` for
@@ -747,7 +1050,8 @@ function confirmAction({ title, cta, body, bodyHtml, onConfirm }) {
 async function launchRun() {
   const body = {
     route_id: state.selectedRoute.id,
-    prompt: els.taskPrompt.value,
+    intent: selectedIntent(),
+    prompt: launchPromptText(),
     overrides: {
       seed: els.seedInput.value || "7",
       host: "127.0.0.1",
@@ -816,6 +1120,9 @@ async function pollState() {
     return;
   }
   state.activeState = payload;
+  if (payload.route && payload.route.id) {
+    state.activeRouteId = payload.route.id;
+  }
   renderRunState(payload);
   if (!els.rawEvidence.hidden) {
     refreshRawEvidence();
@@ -858,6 +1165,8 @@ function renderRunState(payload) {
   renderViews(payload.latest_view_assets || {}, route);
   renderEvents(payload);
   renderControls(payload);
+  renderOperatorInput(state.selectedRoute);
+  renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   renderOperatorMode(payload);
 }
 
@@ -891,65 +1200,40 @@ function renderOperatorMode(payload = state.activeState || {}) {
   document.querySelectorAll(".operator-mode").forEach((button) => {
     button.classList.toggle("active", button.dataset.operatorMode === state.operatorMode);
   });
-  const controls = payload.controls || {};
-  const hasRun = Boolean(state.activeRunId);
-  const mode = state.operatorMode;
-  let enabled = hasRun;
-  let label = "Send";
-  let help = hasRun ? "Message will be written as an auditable operator artifact." : "Attach a run to send messages.";
-  if (mode === "ask_why") {
-    label = "Ask Why";
-    enabled = hasRun && controls.ask_why_available !== false;
-  } else if (mode === "steer") {
-    label = "Steer Run";
-    enabled = hasRun && Boolean(controls.steer_available);
-    if (!enabled && hasRun) {
-      help = controls.supports_operator_steer
-        ? "Steer is unavailable after this run is terminal. Use Continue instead."
-        : "This route does not expose active-run steering.";
-    }
-  } else if (mode === "continue") {
-    label = "Queue Continue";
-    enabled = hasRun && controls.continue_available !== false;
-  }
   const messages = payload.operator_messages || {};
   if (messages.operator_message_pending) {
-    help = `${messages.pending_steer_count || 1} steer message(s) waiting for agent checkpoint.`;
+    els.startHelp.textContent = `${
+      messages.pending_steer_count || 1
+    } steer message(s) waiting for agent checkpoint.`;
   }
-  els.operatorMessageButton.textContent = label;
-  els.operatorMessageButton.disabled = !enabled;
-  els.operatorMessageStatus.textContent = help;
 }
 
 async function sendOperatorMessage() {
   if (!state.activeRunId) {
     return;
   }
-  const text = els.operatorMessageInput.value.trim();
+  const text = els.taskPrompt.value.trim();
   if (!text) {
-    els.operatorMessageStatus.textContent = "Enter operator text before sending.";
+    els.startHelp.textContent = "Enter operator text before sending.";
     return;
   }
   const encodedRun = encodeURIComponent(state.activeRunId);
   const mode = state.operatorMode;
   const endpoint =
-    mode === "ask_why"
-      ? `/api/runs/${encodedRun}/ask-why`
-      : mode === "continue"
-        ? `/api/runs/${encodedRun}/continue`
-        : `/api/runs/${encodedRun}/messages`;
-  const key = mode === "ask_why" ? "question" : mode === "continue" ? "prompt" : "body";
+    mode === "ask_why" ? `/api/runs/${encodedRun}/ask-why` : `/api/runs/${encodedRun}/messages`;
+  const key = mode === "ask_why" ? "question" : "body";
   const result = await fetchJson(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ [key]: text }),
   });
   if (result.error) {
-    els.operatorMessageStatus.textContent = result.error;
+    els.startHelp.textContent = result.error;
     return;
   }
-  els.operatorMessageInput.value = "";
-  els.operatorMessageStatus.textContent = operatorMessageResultText(result);
+  els.taskPrompt.value = "";
+  els.promptCount.textContent = "0 / 2000";
+  els.startHelp.textContent = operatorMessageResultText(result);
   pollState();
 }
 
@@ -958,8 +1242,8 @@ function operatorMessageResultText(result) {
     const summary = result.answer && result.answer.summary ? `: ${result.answer.summary}` : "";
     return `Ask Why answered${summary}`;
   }
-  if (result.command_type === "continue") {
-    return `Continue ${result.status || "queued"} (${result.queue_reason || "queued"}).`;
+  if (result.command_type === "next_goal") {
+    return `Next Goal ${result.status || "queued"} (${result.queue_reason || "queued"}).`;
   }
   if (result.command_type === "steer") {
     return `Steer message ${result.status || "queued"}; waiting for check_operator_messages.`;

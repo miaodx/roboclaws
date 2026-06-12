@@ -6,6 +6,7 @@ import shutil
 import socket
 import subprocess
 import threading
+import urllib.error
 import urllib.request
 from functools import partial
 from http.server import ThreadingHTTPServer
@@ -113,12 +114,22 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         overrides={"seed": "8", "generated_mess_count": "2"},
     )
 
-    assert argv[:4] == ["just", "task::run", "household-cleanup", "codex"]
-    assert "world-oracle-labels" in argv
+    assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=codex"]
+    assert "intent=cleanup" in argv
+    assert "evidence_lane=world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv
-    assert "task_intent_mode=custom" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
+
+    open_ended = build_launch_argv(
+        route,
+        root=tmp_path,
+        run_id="run-1-open-ended",
+        intent="open-ended",
+        prompt="pick up the mug; rm -rf /",
+    )
+    assert "intent=open-ended" in open_ended
+    assert "intent=cleanup" not in open_ended
 
     disabled = get_route("agibot-g2-cleanup")
     with pytest.raises(ConsoleLaunchError, match="cannot accept a custom prompt"):
@@ -299,7 +310,48 @@ def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     assert payload["run_dir"] == str(run_dir.resolve())
 
 
-def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> None:
+def test_operator_console_run_endpoint_passes_explicit_intent(tmp_path: Path) -> None:
+    launched: dict[str, object] = {}
+
+    def fake_start(root, request):  # noqa: ANN001, ANN202
+        launched["root"] = root
+        launched["request"] = request
+        return {"run_id": "started-run"}
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs",
+            method="POST",
+            data=json.dumps(
+                {
+                    "route_id": "codex-mujoco-cleanup",
+                    "intent": "open-ended",
+                    "prompt": "收拾桌面上的杯子",
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with patch("roboclaws.operator_console.server.start_console_run", fake_start):
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["run_id"] == "started-run"
+    launch_request = launched["request"]
+    assert launch_request.route_id == "codex-mujoco-cleanup"
+    assert launch_request.intent == "open-ended"
+    assert launch_request.prompt == "收拾桌面上的杯子"
+
+
+def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) -> None:
     route = get_route("codex-mujoco-cleanup")
     run_id = "parent-run"
     run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
@@ -309,6 +361,7 @@ def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> 
             {
                 "run_id": run_id,
                 "operator_session_id": "session-test",
+                "selected_intent": "open-ended",
                 "route": route.to_payload(),
                 "phase": "finished",
                 "backend_lock": route.lock_name,
@@ -352,7 +405,7 @@ def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> 
     try:
         host, port = server.server_address
         request = urllib.request.Request(
-            f"http://{host}:{port}/api/runs/{run_id}/continue",
+            f"http://{host}:{port}/api/runs/{run_id}/next-goal",
             method="POST",
             data=json.dumps({"prompt": "Run the next sweep"}).encode("utf-8"),
             headers={"Content-Type": "application/json"},
@@ -369,5 +422,29 @@ def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> 
     assert payload["started_run"]["run_id"] == "child-run"
     launch_request = launched["request"]
     assert launch_request.route_id == route.id
+    assert launch_request.intent == "open-ended"
     assert launch_request.operator_session_id == "session-test"
     assert launch_request.parent_run_id == run_id
+
+
+def test_operator_console_continue_endpoint_is_not_public(tmp_path: Path) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/parent-run/continue",
+            method="POST",
+            data=json.dumps({"prompt": "Run the next sweep"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert exc_info.value.code == 404

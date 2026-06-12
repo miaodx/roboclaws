@@ -549,6 +549,80 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_scan_only_sweep(
     )
 
 
+def test_checker_allows_minimal_map_waypoint_honesty_for_open_ended_scan_only(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    result["task_intent"] = "open-ended"
+    result["task_intent_mode"] = "custom"
+    result["terminated_by"] = "agent_done"
+    result["goal_contract"] = {
+        "schema": "roboclaws_goal_contract_v1",
+        "surface": "household-world",
+        "intent": "open-ended",
+        "normalized_goal": "我渴了，帮我找些解渴的东西",
+        "goal_scope": "agent-declared",
+    }
+    trace = result["cleanup_policy_trace"]
+    trace["loop_style"] = "scan_only"
+    trace["cleanup_action_count"] = 0
+    trace["placed_object_count"] = 0
+    trace["post_place_observe_count"] = 0
+    trace["events"] = [
+        {"tool": "metric_map", "role": "setup_or_completion"},
+        {"tool": "observe", "role": "coverage_scan_observe"},
+        {"tool": "done", "role": "setup_or_completion"},
+    ]
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        allow_partial_cleanup=True,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_waypoint_honesty=True,
+    )
+
+
+def test_checker_rejects_minimal_map_waypoint_honesty_for_cleanup_scan_only(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    trace = result["cleanup_policy_trace"]
+    trace["loop_style"] = "scan_only"
+    trace["cleanup_action_count"] = 0
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            allow_partial_cleanup=True,
+            require_runtime_metric_map=True,
+            require_minimal_map=True,
+            require_waypoint_honesty=True,
+        )
+
+
 def test_checker_allows_minimal_map_waypoint_honesty_for_survey_first_cleanup(
     tmp_path: Path,
 ) -> None:
