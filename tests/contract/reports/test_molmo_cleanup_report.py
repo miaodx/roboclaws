@@ -368,6 +368,7 @@ def test_cleanup_report_renders_robot_visual_timeline(tmp_path: Path) -> None:
     )
     assert '<details class="robot-timeline-details" open>' in html
     assert "captured robot-view" in html
+    assert "Top-down Scene View" in html
     assert "Semantic Substeps" in html
     assert "Pick/place visual checks" in html
     assert '<details class="comparison-item" open>' in html
@@ -897,12 +898,13 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     )
 
     html = report_path.read_text(encoding="utf-8")
-    assert "Nav2 Map Bundle <span>Agibot-shaped static map contract</span>" in html
+    assert "Semantic Map <span>Nav2 Map Bundle / Agibot-shaped static map contract</span>" in html
     assert "What it proves" in html
     assert "What it does not prove" in html
     assert "Agibot-shaped semantic map view" in html
     assert "molmospaces_public_semantic_map" in html
     assert "not a real Agibot GDK map" in html
+    assert 'src="semantic_map.png"' in html
     assert "report_static_navigation_map.png" in html
     assert "Green dots" in html
     assert "Blue dot" in html
@@ -910,6 +912,12 @@ def test_cleanup_report_explains_nav2_map_bundle_contract(tmp_path: Path) -> Non
     assert "Map files, hashes, and known gaps" in html
     assert "tf_timing_not_simulated" in html
     assert (tmp_path / "map_bundle" / "report_static_navigation_map.png").exists()
+    assert (tmp_path / "semantic_map.png").exists()
+    assert (tmp_path / "map_overlay.json").exists()
+    overlay = json.loads((tmp_path / "map_overlay.json").read_text(encoding="utf-8"))
+    assert overlay["schema"] == "roboclaws_map_overlay_v1"
+    assert overlay["semantic_map"]["private_truth_included"] is False
+    assert overlay["waypoints"][0]["waypoint_id"] == "room_1_scan_1"
 
 
 def test_cleanup_report_uses_schematic_preview_when_occupancy_frame_is_degenerate(

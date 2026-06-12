@@ -12,6 +12,11 @@ from typing import Any
 from roboclaws.agents.live_runtime import LiveAgentRequest, LiveAgentResult, LiveAgentRuntime
 from roboclaws.agents.live_status import LiveAgentFailure
 
+try:
+    from agents.models.interface import Model as _AgentsModel  # type: ignore[import-not-found]
+except ImportError:
+    _AgentsModel = object
+
 DEFAULT_OPENAI_AGENTS_MAX_TURNS = 128
 MCP_CLIENT_SESSION_TIMEOUT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S"
 DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS = 1
@@ -616,7 +621,7 @@ def _model_service_retry_config(request: LiveAgentRequest) -> dict[str, int | fl
     return {"retry_attempts": attempts, "retry_sleep_s": sleep_s}
 
 
-class _RetryingModel:
+class _RetryingModel(_AgentsModel):
     """Retry transient provider failures at the SDK model request boundary."""
 
     def __init__(

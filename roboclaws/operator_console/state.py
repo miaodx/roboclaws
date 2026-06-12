@@ -519,13 +519,27 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
     patterns = {
         "fpv": ("*.fpv*.png", "*.fpv*.jpg", "*fpv*.png", "*fpv*.jpg"),
         "chase": ("*.chase*.png", "*.chase*.jpg", "*chase*.png", "*chase*.jpg"),
-        "map": ("*map*.png", "*map*.jpg"),
-        "grounding": ("*grounding*.png", "*bbox*.png", "*detection*.png"),
+        "map": (
+            "semantic_map.png",
+            "map_bundle/report_static_navigation_map.png",
+            "map_bundle/preview.png",
+        ),
+        "topdown": ("*map*.png", "*map*.jpg"),
+        "grounding": (
+            "visual_grounding/overlays/**/*.jpg",
+            "visual_grounding/overlays/**/*.png",
+            "*grounding*.png",
+            "*grounding*.jpg",
+            "*bbox*.png",
+            "*bbox*.jpg",
+            "*detection*.png",
+            "*detection*.jpg",
+        ),
     }
     preferred_dirs = {
         "fpv": ("robot_views",),
         "chase": ("robot_views",),
-        "map": ("robot_views",),
+        "topdown": ("robot_views",),
     }
     output: dict[str, dict[str, str]] = {}
     for key, globs in patterns.items():
@@ -546,6 +560,11 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
             "path": str(path),
             "href": _artifact_href(root, path),
             "mtime": str(path.stat().st_mtime),
+        }
+    if "grounding" in output:
+        output["fpv"] = {
+            **output["grounding"],
+            "display_source": "visual_grounding_overlay",
         }
     return output
 

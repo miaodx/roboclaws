@@ -47,6 +47,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
 
     def __init__(self, *args: object, root: Path, **kwargs: object) -> None:
         self.repo_root = root.resolve()
+        self.project_root = Path(__file__).resolve().parents[2]
         static_root = Path(__file__).resolve().parent / "static"
         self.static_root = static_root.resolve()
         super().__init__(*args, directory=str(static_root), **kwargs)
@@ -60,6 +61,15 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             path = (self.static_root / "previews" / rel).resolve()
             preview_root = (self.static_root / "previews").resolve()
             if not _is_relative_to(path, preview_root) or not path.exists():
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            return self._file(path)
+        if parsed.path.startswith("/asset-previews/maps/"):
+            rel = Path(unquote(parsed.path.removeprefix("/asset-previews/maps/")))
+            preview_root = (self.project_root / "assets" / "maps").resolve()
+            path = (preview_root / rel).resolve()
+            if not _is_relative_to(path, preview_root) or path.name != "preview.png":
+                return self.send_error(HTTPStatus.NOT_FOUND)
+            if not path.exists():
                 return self.send_error(HTTPStatus.NOT_FOUND)
             return self._file(path)
         if parsed.path == "/api/routes":

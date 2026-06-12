@@ -342,6 +342,29 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
     assert metrics["attempted_provider_profiles"] == ["mify"]
 
 
+def test_openai_agents_retrying_model_satisfies_sdk_model_contract(tmp_path: Path) -> None:
+    pytest.importorskip("agents")
+    from agents.models.interface import Model
+
+    class FakeModel:
+        async def get_response(self, *_args, **_kwargs):
+            return SimpleNamespace(output="ok")
+
+        def stream_response(self, *_args, **_kwargs):
+            raise AssertionError("not used")
+
+    model = _RetryingModel(
+        FakeModel(),
+        retry_attempts=0,
+        retry_sleep_s=0,
+        events_path=tmp_path / "openai-agents-events.jsonl",
+        spans_path=tmp_path / "openai-agents-spans.jsonl",
+        runtime_config={"runtime": "openai-agents-live"},
+    )
+
+    assert isinstance(model, Model)
+
+
 def test_openai_agents_runtime_turn_completion_does_not_infer_cleanup_success(
     tmp_path: Path, monkeypatch
 ) -> None:

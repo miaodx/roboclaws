@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -126,16 +127,34 @@ def test_static_app_renders_scene_preview_assets() -> None:
     assert "renderSelectedScenePreview" in app
     assert "renderSelectedScenePreview(route);" in app
     assert "route.preview_assets" in app
+    assert 'setImageSlot("topdown", previews.topdown' in app
+    assert "No top-down scene preview is available." in app
     assert "state.activeRunId" in app
     assert "Grounding will appear after a camera-grounded run starts." in app
 
     preview_files = sorted(path.name for path in preview_dir.glob("molmospaces-val_*-*.png"))
-    assert len(preview_files) == 20
-    for scene_index in range(10):
-        for view_name in ("fpv", "map"):
+    assert len(preview_files) == 36
+    for scene_index in (0, 1, 2, 3, 4, 5, 7, 9):
+        for view_name in ("fpv", "map", "chase", "topdown"):
             path = preview_dir / f"molmospaces-val_{scene_index}-{view_name}.png"
             assert path.is_file()
             assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+        metadata_path = preview_dir / f"molmospaces-val_{scene_index}-preview.json"
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        assert metadata["views"]["fpv"]["view"] == "raw_fpv"
+        assert metadata["views"]["map"]["view"] == "semantic_map_aligned_preview"
+        assert metadata["views"]["chase"]["view"] == "chase_camera"
+        assert metadata["views"]["chase"]["image_diagnostics"]["visual_status"] == "reviewable"
+        assert metadata["views"]["topdown"]["view"] == "topdown_scene_render"
+        assert metadata["views"]["topdown"]["semantic_map_fallback"] is False
+        assert (
+            metadata["views"]["map"]["scene_alignment"]
+            == metadata["views"]["topdown"]["scene_alignment"]
+        )
+        assert metadata["views"]["fpv"]["path"] != metadata["views"]["topdown"]["path"]
+        assert metadata["views"]["chase"]["path"] != metadata["views"]["fpv"]["path"]
+        assert metadata["views"]["chase"]["path"] != metadata["views"]["topdown"]["path"]
+    assert not (preview_dir / "ai2thor-floorplan201-topdown.png").exists()
 
 
 def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> None:
@@ -176,17 +195,23 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert 'data-panel="blank-chase"' in html
     assert ">Outputs<" in html
     assert "Artifacts" not in html
+    assert ">Semantic Map<" in html
+    assert ">Top-down<" in html
+    assert "topdown-frame" in html
+    assert "Top-down Scene View" in app
     assert 'activeView: "overview"' in app
     assert "visiblePanelsForView" in app
     assert "routeViewModes" in app
     assert "routeHasOverviewChase" in app
     assert 'resource_kind !== "physical_robot"' in app
+    assert 'panels.add("chase")' in app
     assert 'panels.add("blank-chase")' in app
     assert "No chase frame yet" in app
     assert "decision-proof-20260608" in html
     assert ".mode-overview" in css
     assert '"fpv map"' in css
-    assert '"chase map"' in css
+    assert '"chase topdown"' in css
+    assert '.mode-overview [data-panel="chase"]' in css
     assert '.mode-overview [data-panel="blank-chase"]' in css
     assert ".blank-panel" in css
     assert "[hidden]" in css
