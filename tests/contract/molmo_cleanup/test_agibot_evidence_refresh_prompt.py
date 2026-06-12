@@ -46,8 +46,8 @@ def test_agibot_molmospaces_sim_route_passes_open_evidence_refresh_prompt() -> N
     prompt = "基于已有语义地图做开放巡检"
 
     route = _trace_agent_run(
-        "semantic-map-build",
-        "direct",
+        "household-world.map-build",
+        "direct-runner",
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "runtime=fixture",

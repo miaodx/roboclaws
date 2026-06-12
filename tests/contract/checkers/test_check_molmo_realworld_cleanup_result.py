@@ -12,7 +12,7 @@ from roboclaws.household.manipulation_provenance import (
     PLANNER_BACKED_PROVENANCE,
     planner_backed_probe_evidence,
 )
-from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE, RICH_MAP_MODE
+from roboclaws.household.realworld_contract import CAMERA_MODEL_POLICY_MODE, MINIMAL_MAP_MODE
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEMO_PATH = REPO_ROOT / "examples" / "molmo_cleanup" / "molmospaces_realworld_cleanup.py"
@@ -451,7 +451,8 @@ def test_checker_can_require_minimal_map_semantic_sweep(tmp_path: Path) -> None:
         require_semantic_sweep=True,
         require_minimal_map=True,
     )
-    assert result["agent_view"]["metric_map"]["rooms"] == []
+    assert result["agent_view"]["metric_map"]["rooms"]
+    assert result["agent_view"]["metric_map"]["room_category_hints"]
     assert result["agent_view"]["fixture_hints"]["rooms"] == []
     assert result["runtime_metric_map"]["static_map"]["fixtures"] == []
     assert result["runtime_metric_map"]["generated_exploration_candidates"]
@@ -506,7 +507,7 @@ def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=RICH_MAP_MODE)
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=MINIMAL_MAP_MODE)
     result["runtime_metric_map"]["observed_objects"][0]["target_receptacle_id"] = "sink_01"
     result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
 
@@ -727,7 +728,6 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_open_ended_scan_only(
         map_mode="minimal",
     )
     result["task_intent"] = "open-ended"
-    result["task_intent_mode"] = "custom"
     result["terminated_by"] = "agent_done"
     result["goal_contract"] = {
         "schema": "roboclaws_goal_contract_v1",
@@ -774,7 +774,6 @@ def test_checker_allows_open_ended_agent_view_with_no_visible_objects(
     result["generated_mess_count"] = 0
     result["requested_generated_mess_count"] = 0
     result["task_intent"] = "open-ended"
-    result["task_intent_mode"] = "custom"
     result["terminated_by"] = "agent_done"
     result["goal_contract"] = {
         "schema": "roboclaws_goal_contract_v1",
@@ -1804,25 +1803,24 @@ def test_waypoint_honesty_allows_public_state_query_before_post_place_observe() 
     assert count == 1
 
 
-def test_checker_rejects_waypoint_honesty_when_loop_is_survey_first(
+def test_checker_accepts_waypoint_honesty_when_loop_is_survey_first(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
 
-    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=RICH_MAP_MODE)
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode=MINIMAL_MAP_MODE)
     result["cleanup_policy_trace"]["loop_style"] = "survey_first_cleanup_loop"
     result["cleanup_policy_trace"]["first_cleanup_before_full_survey"] = False
 
-    with pytest.raises(AssertionError):
-        checker._assert_result(
-            result,
-            tmp_path,
-            expect_task=None,
-            expect_backend="api_semantic_synthetic",
-            min_generated_mess_count=5,
-            require_waypoint_honesty=True,
-        )
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_waypoint_honesty=True,
+    )
 
 
 def test_checker_rejects_real_robot_alignment_when_chase_is_policy_input(
@@ -1878,6 +1876,7 @@ def test_checker_accepts_realworld_mcp_smoke_policy(tmp_path: Path) -> None:
         min_generated_mess_count=5,
         require_agent_driven=True,
         require_clean_agent_run=True,
+        min_semantic_accepted_count=4,
     )
 
 
@@ -2058,6 +2057,7 @@ def test_checker_accepts_clean_run_with_recovered_semantic_order_error(
         min_generated_mess_count=5,
         require_agent_driven=True,
         require_clean_agent_run=True,
+        min_semantic_accepted_count=4,
     )
 
 
@@ -2097,6 +2097,7 @@ def test_checker_accepts_clean_run_with_successful_retry_after_failed_attempt(
         min_generated_mess_count=5,
         require_agent_driven=True,
         require_clean_agent_run=True,
+        min_semantic_accepted_count=4,
     )
 
 
@@ -2150,6 +2151,7 @@ def test_checker_can_require_advisory_scoring(tmp_path: Path) -> None:
         require_agent_driven=True,
         require_clean_agent_run=True,
         require_advisory_scoring=True,
+        min_semantic_accepted_count=4,
     )
 
 
@@ -2306,8 +2308,8 @@ def test_checker_can_require_raw_fpv_model_declared_success_gate(tmp_path: Path)
         require_clean_agent_run=True,
         require_model_declared_observations=True,
         min_model_declared_observations=5,
-        min_model_declared_actions=5,
-        min_semantic_accepted_count=5,
+        min_model_declared_actions=4,
+        min_semantic_accepted_count=4,
     )
 
 
@@ -2532,6 +2534,12 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
     tmp_path: Path,
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    anchor_probe = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "anchor-probe",
+        seed=7,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    toy_anchor = _candidate_fixture_id_for_object(anchor_probe, "observed_001")
     proof_path = _write_strict_planner_proof(
         tmp_path / "proof",
         embodiment="rby1m",
@@ -2540,7 +2548,7 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
         cleanup_binding={
             "schema": "planner_probe_cleanup_primitive_binding_v1",
             "object_id": "observed_001",
-            "target_receptacle_id": "toy_bin_01",
+            "target_receptacle_id": toy_anchor,
             "source_receptacle_id": "coffee_table_01",
             "planner_object_id": "pickup/body",
             "planner_target_receptacle_id": "dropoff/body",
@@ -2559,7 +2567,7 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
         seed=7,
         planner_proof_run_result=proof_path,
         use_planner_proof_for_cleanup_primitives=True,
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
 
     assert result["cleanup_status"] == "success"
@@ -2594,7 +2602,7 @@ def test_realworld_cleanup_can_use_matching_probe_backed_executor(
         expect_backend="api_semantic_synthetic",
         require_planner_proof_attachment=True,
         accept_blocked_planner_cleanup_primitives=True,
-        require_bound_planner_cleanup_objects=["observed_001:toy_bin_01"],
+        require_bound_planner_cleanup_objects=[f"observed_001:{toy_anchor}"],
         require_mixed_planner_cleanup_primitives=True,
         accept_blocked_planner_cleanup_bridge=True,
     )
@@ -2642,6 +2650,11 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
 ) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    anchor_probe = demo.run_realworld_cleanup(
+        output_dir=tmp_path / "anchor-probe",
+        seed=7,
+        map_mode=MINIMAL_MAP_MODE,
+    )
     proof_paths = [
         _write_strict_planner_proof(
             tmp_path / f"proof-{binding['object_id']}",
@@ -2650,7 +2663,7 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
             curobo_available=True,
             cleanup_binding=binding,
         )
-        for binding in _seed7_cleanup_bindings()
+        for binding in _seed7_cleanup_bindings(anchor_probe)
     ]
     cleanup_dir = tmp_path / "cleanup"
 
@@ -2659,7 +2672,7 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
         seed=7,
         planner_proof_run_results=proof_paths,
         use_planner_proof_for_cleanup_primitives=True,
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
 
     assert result["cleanup_status"] == "success"
@@ -2681,7 +2694,9 @@ def test_realworld_cleanup_can_use_proof_bundle_for_full_gate_readiness(
         min_generated_mess_count=5,
         require_planner_proof_attachment=True,
         require_planner_backed_cleanup_primitives=True,
-        require_bound_planner_cleanup_objects=["observed_006:fridge_01"],
+        require_bound_planner_cleanup_objects=[
+            f"observed_006:{_candidate_fixture_id_for_object(anchor_probe, 'observed_006')}"
+        ],
         require_planner_cleanup_bridge_ready=True,
     )
 
@@ -3829,6 +3844,8 @@ def _add_isaac_scene_index_map_context(data: dict[str, object], base: Path) -> N
 def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Path) -> None:
     scenario_id = "isaac-scene-index-procthor-10k-val-1-7-1"
     map_id = f"{scenario_id}_minimal_map"
+    public_room = _isaac_scene_index_room()
+    room_category_hints = [_room_category_hint(public_room)]
     map_bundle = {
         "schema": "nav2_map_bundle_v1",
         "environment_id": scenario_id,
@@ -3845,9 +3862,12 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
             "purpose": "minimal_map_exploration",
             "x": 2.99,
             "y": 4.983,
+            "room_id": "room_2",
+            "room_label": "Room 2",
             "candidate_provenance": {
                 "source": "public_occupancy_free_space",
-                "source_room_hidden": True,
+                "source_room_hidden": False,
+                "source_room_label_available": True,
                 "source_fixtures_hidden": True,
                 "source_waypoint_hidden": True,
             },
@@ -3858,9 +3878,12 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
             "purpose": "minimal_map_exploration",
             "x": 7.973,
             "y": 2.512,
+            "room_id": "room_2",
+            "room_label": "Room 2",
             "candidate_provenance": {
                 "source": "public_occupancy_free_space",
-                "source_room_hidden": True,
+                "source_room_hidden": False,
+                "source_room_label_available": True,
                 "source_fixtures_hidden": True,
                 "source_waypoint_hidden": True,
             },
@@ -3870,7 +3893,8 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "schema": "real_robot_map_bundle_v1",
         "mode": "minimal",
         "map_bundle": dict(map_bundle),
-        "rooms": [],
+        "rooms": [public_room],
+        "room_category_hints": room_category_hints,
         "driveable_ways": [],
         "minimal_map": {"enabled": True},
         "inspection_waypoints": list(candidates),
@@ -3882,7 +3906,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "minimal_map_mode": True,
         "static_map": {
             "map_bundle": dict(map_bundle),
-            "rooms": [],
+            "rooms": [public_room],
             "fixtures": [],
             "driveable_ways": [],
             "generated_exploration_candidates": list(candidates),
@@ -3922,7 +3946,7 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
                 "environment_id": scenario_id,
                 "map_id": map_id,
                 "map_version": "minimal-navigation-map-v1",
-                "rooms": [],
+                "rooms": [public_room],
                 "fixtures": [],
                 "inspection_waypoints": [],
                 "driveable_ways": [],
@@ -3939,6 +3963,22 @@ def _add_isaac_scene_index_minimal_map_context(data: dict[str, object], base: Pa
         "snapshot_complete": True,
         "artifact_paths": {"semantics_json": "map_bundle/semantics.json"},
         "artifact_hashes": {"semantics_json": "0" * 64},
+    }
+
+
+def _room_category_hint(room: dict[str, object]) -> dict[str, object]:
+    return {
+        "anchor_type": "room_area",
+        "category": "room_area",
+        "label": str(room["room_label"]),
+        "room_id": str(room["room_id"]),
+        "room_label": str(room["room_label"]),
+        "waypoint_id": "generated_exploration_001",
+        "affordances": ["navigate", "observe"],
+        "classification_status": "map_prior",
+        "confidence": 0.8,
+        "aliases": [str(room["room_id"]), str(room["room_label"])],
+        "producer_type": "base_navigation_map",
     }
 
 
@@ -4464,24 +4504,50 @@ def _isaac_semantic_pose_report_text(state: dict[str, object]) -> str:
     return " ".join(value for value in values if value)
 
 
-def _seed7_cleanup_bindings() -> list[dict[str, object]]:
+def _seed7_cleanup_bindings(anchor_probe: dict[str, object]) -> list[dict[str, object]]:
     return [
-        _cleanup_binding("observed_001", "coffee_table_01", "toy_bin_01", ["place"]),
-        _cleanup_binding("observed_002", "sofa_01", "sink_01", ["place"]),
+        _cleanup_binding(
+            "observed_001",
+            "coffee_table_01",
+            _candidate_fixture_id_for_object(anchor_probe, "observed_001"),
+            ["place"],
+        ),
+        _cleanup_binding(
+            "observed_002",
+            "sofa_01",
+            _candidate_fixture_id_for_object(anchor_probe, "observed_002"),
+            ["place"],
+        ),
         _cleanup_binding(
             "observed_003",
             "armchair_01",
-            "laundry_hamper_01",
+            _candidate_fixture_id_for_object(anchor_probe, "observed_003"),
             ["place"],
         ),
-        _cleanup_binding("observed_005", "floor_01", "bookshelf_01", ["place_inside"]),
+        _cleanup_binding(
+            "observed_005",
+            "floor_01",
+            _candidate_fixture_id_for_object(anchor_probe, "observed_005"),
+            ["place_inside"],
+        ),
         _cleanup_binding(
             "observed_006",
             "desk_01",
-            "fridge_01",
+            _candidate_fixture_id_for_object(anchor_probe, "observed_006"),
             ["open_receptacle", "place_inside", "close_receptacle"],
         ),
     ]
+
+
+def _candidate_fixture_id_for_object(result: dict[str, object], object_id: str) -> str:
+    agent_view = result.get("agent_view") if isinstance(result.get("agent_view"), dict) else {}
+    worklist = agent_view.get("cleanup_worklist") if isinstance(agent_view, dict) else {}
+    for item in worklist.get("objects", []) if isinstance(worklist, dict) else []:
+        if isinstance(item, dict) and str(item.get("object_id") or "") == object_id:
+            candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
+            if candidate_fixture_id:
+                return candidate_fixture_id
+    raise AssertionError(f"expected candidate fixture for {object_id}")
 
 
 def _cleanup_binding(

@@ -32,7 +32,6 @@ from roboclaws.operator_console.launcher import (
 from roboclaws.operator_console.messup import preview_messup
 from roboclaws.operator_console.paths import OUTPUT_ROOT_ENV, console_output_root
 from roboclaws.operator_console.routes import (
-    get_route,
     get_selection,
     list_console_combinations,
     list_evidence_lanes,
@@ -167,8 +166,8 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     return self._json(list_operator_messages(self.repo_root, run_id))
                 except InteractionError as exc:
                     return self._json({"error": str(exc)}, status=404)
-            route_id = parse_qs(parsed.query).get("route", [""])[0]
-            route = get_route(route_id) if route_id else None
+            selection_id = parse_qs(parsed.query).get("selection_id", [""])[0]
+            route = get_selection(selection_id) if selection_id else None
             run_dir = console_output_root(self.repo_root) / "runs" / run_id
             return self._json(derive_operator_state(self.repo_root, run_dir, route))
         if parsed.path.startswith("/api/raw/"):
@@ -225,6 +224,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     parent_run_id=str(payload.get("parent_run_id") or ""),
                     next_goal_packet=dict(payload.get("next_goal_packet") or {}),
                     route_id=str(payload.get("route_id") or ""),
+                    selection_id_override=str(payload.get("selection_id") or ""),
                 )
                 return self._json(start_console_run(self.repo_root, request), status=201)
             run_action = _parse_run_action_path(parsed.path)
@@ -251,25 +251,31 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 if follow_up.get("status") == "ready_to_start" and follow_up.get(
                     "auto_start_allowed"
                 ):
+                    selection_id = str(follow_up.get("selection_id") or "")
+                    launch_parts: dict[str, str] = {}
+                    if selection_id:
+                        parts = selection_id.split("::")
+                        if len(parts) == 5:
+                            launch_parts = {
+                                "world_id": parts[0],
+                                "backend_id": parts[1],
+                                "intent_id": parts[2],
+                                "agent_engine_id": parts[3],
+                                "evidence_lane": parts[4],
+                            }
                     launch = LaunchRequest(
-                        route_id=str(follow_up.get("route_id") or ""),
-                        intent_id=str(follow_up.get("intent") or ""),
+                        selection_id_override=selection_id,
+                        intent_id=str(follow_up.get("intent") or "")
+                        or launch_parts.get("intent_id", ""),
                         prompt=str(follow_up.get("body") or ""),
                         operator_session_id=str(follow_up.get("operator_session_id") or ""),
                         parent_run_id=run_id,
                         next_goal_packet=dict(follow_up.get("next_goal_packet") or {}),
+                        world_id=launch_parts.get("world_id", ""),
+                        backend_id=launch_parts.get("backend_id", ""),
+                        agent_engine_id=launch_parts.get("agent_engine_id", ""),
+                        evidence_lane=launch_parts.get("evidence_lane", ""),
                     )
-                    selection_id = str(follow_up.get("selection_id") or "")
-                    if selection_id:
-                        parts = selection_id.split("::")
-                        if len(parts) == 5:
-                            (
-                                launch.world_id,
-                                launch.backend_id,
-                                launch.intent_id,
-                                launch.agent_engine_id,
-                                launch.evidence_lane,
-                            ) = parts
                     try:
                         follow_up["started_run"] = start_console_run(self.repo_root, launch)
                         follow_up["status"] = "started"

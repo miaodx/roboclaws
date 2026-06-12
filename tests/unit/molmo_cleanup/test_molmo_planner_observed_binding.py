@@ -6,7 +6,7 @@ from roboclaws.household.planner_observed_binding import (
     backend_planner_task_binding_from_state,
 )
 from roboclaws.household.realworld_contract import (
-    RICH_MAP_MODE,
+    MINIMAL_MAP_MODE,
     RealWorldCleanupContract,
     infer_target_fixture_for_detection,
 )
@@ -16,11 +16,10 @@ from roboclaws.household.scenario import build_cleanup_scenario
 def test_realworld_observed_handle_planner_binding_stays_private() -> None:
     contract = RealWorldCleanupContract(
         CleanupBackendSession(build_cleanup_scenario(seed=7)),
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
-    fixture_hints = contract.fixture_hints()
     detection = _first_detection_by_category(contract, "dish")
-    target_fixture = infer_target_fixture_for_detection(detection, fixture_hints)
+    target_fixture = infer_target_fixture_for_detection(detection, contract.fixture_hints())
     assert target_fixture is not None
 
     binding = contract.planner_observed_handle_binding(

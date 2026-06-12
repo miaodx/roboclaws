@@ -1,7 +1,7 @@
 {
   "schema": "roboclaws_skill_manifest_v1",
   "name": "actionable-semantic-map-conversion",
-  "summary": "Convert offline robot semantic memory into the canonical Actionable Semantic Map Snapshot contract.",
+  "summary": "Convert offline robot semantic memory and scene-engine room partitions into public actionable semantic map artifacts.",
   "abstraction_level": "agent_skill",
   "role": "map_artifact_conversion",
   "status": "active",
@@ -10,7 +10,7 @@
     "required_tools": [],
     "optional_tools": [],
     "privileged_tools": [],
-    "boundary_notes": "This skill operates at the map-artifact boundary. It parses public navigation memory and Nav2 map files, records classification/actionability status, and must not read private cleanup scoring truth."
+    "boundary_notes": "This skill operates at the map-artifact boundary. It parses public navigation memory, Nav2 map files, and scene-engine asset partitions, records classification/actionability/review status, and must not read private cleanup scoring truth."
   },
   "capability_requirements": {
     "profiles": ["household_world_v1"],
@@ -22,16 +22,24 @@
       "path": "scripts/convert_navigation_memory.py",
       "kind": "converter",
       "summary": "Skill-owned wrapper around scripts/maps/convert_agibot_navigation_memory.py; deterministically parses navigation_memory.json, Nav2 YAML, occupancy grid, and source metadata into actionable_semantic_map_snapshot_v1."
+    },
+    {
+      "path": "scripts/generate_scene_room_overlay.py",
+      "kind": "room_semantic_overlay",
+      "summary": "Generates scene_room_semantic_overlay_v1 from scene-engine/Gaussian asset partitions and can apply it to a public Nav2 map bundle for Base Navigation Map room labels."
     }
   ],
   "evidence_outputs": [
     "actionable_semantic_map_snapshot.json",
-    "materialized_targets.json"
+    "materialized_targets.json",
+    "room_semantic_overlay.json",
+    "map_bundle/semantics.json"
   ],
   "lifecycle": {
     "refactor_signals": [
       "multiple offline map formats need conversion into the same snapshot contract",
-      "agent semantic classification overrides need review UI or batch tooling"
+      "agent semantic classification overrides need review UI or batch tooling",
+      "scene room labels increasingly depend on rendered visual evidence rather than partition/object-name heuristics"
     ],
     "promote_to_mcp_when": [
       "several skills need online conversion through a stable robot capability surface",

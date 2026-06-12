@@ -271,18 +271,6 @@ _HOUSEHOLD_WORLD_TOOLS = (
         ),
     ),
     _tool(
-        "fixture_hints",
-        "mapping.fixture_hints",
-        FAMILY_MAPPING,
-        CLASSIFICATION_CANONICAL,
-        (
-            PROVENANCE_API_SEMANTIC,
-            PROVENANCE_NAV2_ACTION,
-            PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
-        ),
-        "Return public fixture identities, affordances, and preferred waypoints.",
-    ),
-    _tool(
         "navigate_to_room",
         "navigation.navigate_to_room",
         FAMILY_NAVIGATION,
@@ -585,14 +573,6 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             CLASSIFICATION_CANONICAL,
             (PROVENANCE_NAV2_ACTION, PROVENANCE_AGIBOT_GDK_MAP_CONTEXT),
             "Return a backend-neutral real-robot map plus public fixture semantics.",
-        ),
-        _tool(
-            "fixture_hints",
-            "mapping.fixture_hints",
-            FAMILY_MAPPING,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_NAV2_ACTION, PROVENANCE_AGIBOT_GDK_MAP_CONTEXT),
-            "Return public fixture identities, affordances, and preferred waypoints.",
         ),
         _tool(
             "navigate_to_room",

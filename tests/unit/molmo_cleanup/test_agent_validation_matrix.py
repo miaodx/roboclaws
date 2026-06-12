@@ -117,6 +117,31 @@ def test_map_build_change_selects_map_build_and_cleanup_consumer_prior(
     assert gates["direct-cleanup-runtime-prior-consumer"]["axes"]["runtime_map_prior"] == "required"
 
 
+def test_open_ended_changed_file_selects_first_class_open_ended_gate(tmp_path: Path) -> None:
+    matrix = selector.build_validation_matrix(
+        budget="focused",
+        changed_files=["docs/plans/2026-06-11-open-ended-proof-status.md"],
+        output_dir=tmp_path / "matrix",
+    )
+
+    gates = _selected_gates(matrix)
+    gate = gates["open-ended-household-contract-tests"]
+    assert gate["axes"]["intent"] == "open-ended"
+    assert gate["expense"] == "deterministic"
+    assert any("test_surface_prompt_omitted_intent" in item for item in gate["command"])
+
+
+def test_explicit_open_ended_intent_selects_open_ended_gate(tmp_path: Path) -> None:
+    matrix = selector.build_validation_matrix(
+        budget="focused",
+        intent=["open-ended"],
+        output_dir=tmp_path,
+    )
+
+    gates = _selected_gates(matrix)
+    assert gates["open-ended-household-contract-tests"]["axes"]["intent"] == "open-ended"
+
+
 def test_runtime_prior_placeholder_resolves_to_map_build_artifact(tmp_path: Path) -> None:
     matrix = selector.build_validation_matrix(
         budget="focused",
@@ -187,6 +212,101 @@ def test_execute_marks_live_gate_blocked_when_provider_is_missing(
     gates = _selected_gates(matrix)
     assert gates["codex-cleanup-world-oracle"]["status"] == "required_blocked"
     assert gates["codex-cleanup-world-oracle"]["blocker_category"] == "missing_provider_key"
+
+
+def test_execute_defaults_provider_timing_proxy_for_live_codex_gate(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: list[dict[str, str]] = []
+    monkeypatch.delenv("ROBOCLAWS_PROVIDER_TIMING_PROXY", raising=False)
+    monkeypatch.setattr(runner, "_gate_blockers", lambda gate, matrix: [])
+
+    def fake_run(command, **kwargs):
+        if "agent_engine=codex-cli" in command:
+            env = kwargs.get("env")
+            assert isinstance(env, dict)
+            captured.append(env)
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    matrix = selector.build_validation_matrix(
+        mode="execute",
+        budget="focused",
+        changed_files=["skills/molmo-realworld-cleanup/SKILL.md"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_matrix(matrix)
+
+    assert captured
+    assert captured[0]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "1"
+    gates = _selected_gates(matrix)
+    assert gates["codex-cleanup-world-oracle"]["defaulted_provider_timing_proxy"] is True
+
+
+def test_execute_preserves_provider_timing_proxy_escape_hatch(
+    tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+) -> None:
+    captured: list[dict[str, str]] = []
+    monkeypatch.setenv("ROBOCLAWS_PROVIDER_TIMING_PROXY", "0")
+    monkeypatch.setattr(runner, "_gate_blockers", lambda gate, matrix: [])
+
+    def fake_run(command, **kwargs):
+        if "agent_engine=codex-cli" in command:
+            env = kwargs.get("env")
+            assert isinstance(env, dict)
+            captured.append(env)
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    matrix = selector.build_validation_matrix(
+        mode="execute",
+        budget="focused",
+        changed_files=["skills/molmo-realworld-cleanup/SKILL.md"],
+        output_dir=tmp_path,
+    )
+
+    runner._execute_matrix(matrix)
+
+    assert captured
+    assert captured[0]["ROBOCLAWS_PROVIDER_TIMING_PROXY"] == "0"
+    gates = _selected_gates(matrix)
+    assert "defaulted_provider_timing_proxy" not in gates["codex-cleanup-world-oracle"]
+
+
+def test_failed_live_gate_with_busy_mcp_port_is_classified_as_blocked() -> None:
+    for stderr in (
+        (
+            "error: requested MCP port 127.0.0.1:18788 is already accepting connections\n"
+            "refusing to choose another port"
+        ),
+        "error: no MolmoSpaces visual backend slot is available under output/molmo/slots",
+    ):
+        gate = {"exit_code": 1}
+
+        runner._classify_failed_gate(
+            gate,
+            stderr=stderr,
+            stdout="",
+        )
+
+        assert gate["status"] == "required_blocked"
+        assert gate["outcome"] == "blocked"
+        assert gate["blocker_category"] == "live_session_active"
 
 
 def test_dino_sidecar_default_matches_documented_service_port(monkeypatch: MonkeyPatch) -> None:

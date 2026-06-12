@@ -3610,6 +3610,7 @@ anthropic = [
     { name = "instructor" },
 ]
 dev = [
+    { name = "aiohttp" },
     { name = "anthropic" },
     { name = "imageio" },
     { name = "instructor" },
@@ -3661,6 +3662,7 @@ visual-grounding-yoloe = [
 [package.metadata]
 requires-dist = [
     { name = "accelerate", marker = "extra == 'visual-grounding-qwen3vl'", specifier = ">=1.0" },
+    { name = "aiohttp", marker = "extra == 'dev'", specifier = ">=3.13" },
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.40" },
     { name = "anthropic", marker = "extra == 'dev'", specifier = ">=0.40" },
     { name = "clip", marker = "extra == 'visual-grounding-yoloe'", git = "https://github.com/ultralytics/CLIP.git" },

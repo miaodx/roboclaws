@@ -35,9 +35,9 @@ from roboclaws.household.subprocess_backend import (  # noqa: E402
     MolmoSpacesSubprocessBackend,
 )
 from roboclaws.household.task_intent import (  # noqa: E402
-    TASK_INTENT_MODE_CUSTOM,
+    HOUSEHOLD_INTENT_OPEN_ENDED,
     TASK_INTENT_MODE_DEFAULT,
-    normalize_task_intent_mode,
+    household_intent_from_goal_contract,
 )
 from roboclaws.household.types import CleanupScenario, PrivateScoringManifest  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
@@ -157,6 +157,10 @@ def run_smoke(
             scenario = _scenario_without_private_targets(scenario)
         base_contract = CleanupBackendSession(scenario)
 
+    goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
+        goal_contract_path
+    )
+    task_intent = household_intent_from_goal_contract(goal_contract)
     server = make_molmo_realworld_cleanup_mcp(
         run_dir=output_dir,
         scenario=scenario,
@@ -176,11 +180,10 @@ def run_smoke(
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
         task_intent_mode=task_intent_mode,
-        goal_contract=goal_contract_from_json(goal_contract_json)
-        or goal_contract_from_file(goal_contract_path),
+        goal_contract=goal_contract,
     )
     try:
-        if normalize_task_intent_mode(task_intent_mode) == TASK_INTENT_MODE_CUSTOM:
+        if task_intent == HOUSEHOLD_INTENT_OPEN_ENDED:
             _drive_open_ended_probe(server)
             done = server.call_tool("done", reason=f"{policy} open-ended smoke task complete")
         else:
@@ -203,7 +206,6 @@ def _drive_public_sweep(
     server: Any,
 ) -> None:
     metric_map = server.call_tool("metric_map")
-    server.call_tool("fixture_hints")
     handled_handles: set[str] = set()
     for waypoint in metric_map["inspection_waypoints"]:
         waypoint_id = str(waypoint["waypoint_id"])
@@ -235,7 +237,6 @@ def _drive_public_sweep(
 
 def _drive_open_ended_probe(server: Any) -> None:
     metric_map = server.call_tool("metric_map")
-    server.call_tool("fixture_hints")
     waypoints = metric_map.get("inspection_waypoints") or []
     if not waypoints:
         server.call_tool("observe")

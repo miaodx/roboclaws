@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import fcntl
 import json
 import os
@@ -20,12 +21,16 @@ from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
-from roboclaws.household.report import runtime_timing_from_trace
-from roboclaws.household.task_intent import (
-    TASK_INTENT_MODE_CUSTOM,
-    TASK_INTENT_MODE_DEFAULT,
-    normalize_task_intent_mode,
+from roboclaws.agents.provider_timing_proxy import (
+    PROVIDER_TIMING_PROXY_UPSTREAM_ENV,
+    ProviderTimingProxyHandle,
+    provider_timing_proxy_enabled,
+    replace_base_url_origin,
+    start_provider_timing_proxy,
+    stop_provider_timing_proxy,
 )
+from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT
 from roboclaws.household.visual_backend_slots import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     VisualBackendSlotError,
@@ -75,13 +80,16 @@ CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION = (
 CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION = (
     "Cleanup tool-order rule: after navigate_to_receptacle, use place_inside for "
     "fridge, refrigerator, shelf, bookshelf, bookcase, or shelving targets. Open a "
-    "receptacle first only for fridge/refrigerator targets. Use place only for "
-    "surface targets such as table, sofa, bed, desk, sink, counter, or stand. If a "
-    "tool returns error_reason=semantic_order with required_tool, call that exact "
+    "receptacle first only for fridge/refrigerator targets, then after "
+    "place_inside succeeds on that same fridge/refrigerator target, immediately "
+    "call close_receptacle with the same fixture_id before done, metric_map, "
+    "observe, or another navigate call. Use place only for surface targets such "
+    "as table, sofa, bed, desk, sink, counter, or stand. If a tool returns "
+    "error_reason=semantic_order with required_tool, call that exact "
     "required_tool next instead of substituting another cleanup tool. After "
     "open_receptacle succeeds while you are holding an object, the next cleanup "
-    "tool must be place_inside with that same fixture_id before done, metric_map, "
-    "observe, or another navigate call."
+    "tool must be place_inside with that same fixture_id before any other "
+    "cleanup tool."
 )
 
 
@@ -147,6 +155,7 @@ class LiveCodexCleanupRunner:
         self.timing_path = self.run_dir / "live_timing.json"
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
+        self.provider_timing_proxy: ProviderTimingProxyHandle | None = None
         self.lock_file = None
         self.visual_slot: VisualBackendSlotLease | None = None
         self.live_timing: dict[str, Any] = {
@@ -170,6 +179,7 @@ class LiveCodexCleanupRunner:
         except KeyboardInterrupt:
             self._write_status("failed", 130)
             self._write_live_timing("failed", 130, reason="keyboard_interrupt")
+            self._cleanup_provider_timing_proxy()
             self._cleanup_server()
             self._release_visual_slot()
             return 130
@@ -177,6 +187,7 @@ class LiveCodexCleanupRunner:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, **exc.failure.status_fields())
             self._write_live_timing("failed", 1, **exc.failure.status_fields())
+            self._cleanup_provider_timing_proxy()
             self._cleanup_server()
             self._release_visual_slot()
             return 1
@@ -184,12 +195,14 @@ class LiveCodexCleanupRunner:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
             self._write_live_timing("failed", 1, reason=str(exc))
+            self._cleanup_provider_timing_proxy()
             self._cleanup_server()
             self._release_visual_slot()
             return 1
 
         self._write_live_timing("finished", 0)
         self._write_status("finished", 0)
+        self._cleanup_provider_timing_proxy()
         self._release_visual_slot()
         return 0
 
@@ -300,6 +313,7 @@ class LiveCodexCleanupRunner:
         self._mark_timing("codex_exec_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
         env = os.environ.copy()
+        self._configure_provider_timing_proxy(env)
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
         env.setdefault(
             "ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE",
@@ -403,6 +417,58 @@ class LiveCodexCleanupRunner:
         ):
             raise RuntimeError("Codex exec ended without done after one live-agent turn")
 
+    def _configure_provider_timing_proxy(self, env: dict[str, str]) -> None:
+        if not provider_timing_proxy_enabled(env):
+            self.live_timing["provider_timing_proxy"] = {"enabled": False}
+            return
+        upstream_base_url = env.get(
+            PROVIDER_TIMING_PROXY_UPSTREAM_ENV
+        ) or _base_url_from_codex_args(self.args.codex_model_arg)
+        if not upstream_base_url:
+            raise RuntimeError(
+                "ROBOCLAWS_PROVIDER_TIMING_PROXY=1 requires a Codex provider base URL"
+            )
+        provider_profile = _provider_profile_from_codex_args(self.args.codex_model_arg)
+        if not provider_profile:
+            provider_profile = _first_provider_summary_token(self.args.codex_provider_summary)
+        handle = asyncio.run(
+            start_provider_timing_proxy(
+                repo_root=self.args.repo_root,
+                run_dir=self.run_dir,
+                upstream_base_url=upstream_base_url,
+                agent_engine="codex-cli",
+                provider_profile=provider_profile,
+                model=getattr(self.args, "codex_model", ""),
+            )
+        )
+        proxy_base_url = replace_base_url_origin(upstream_base_url, bind_url=handle.bind_url)
+        self.args.codex_model_arg = _replace_codex_base_url_arg(
+            list(self.args.codex_model_arg),
+            proxy_base_url,
+        )
+        env[PROVIDER_TIMING_PROXY_UPSTREAM_ENV] = upstream_base_url
+        env["ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS"] = env.get(
+            "ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS",
+            "1",
+        )
+        self.provider_timing_proxy = handle
+        self.live_timing["provider_timing_proxy"] = {
+            "enabled": True,
+            "agent_engine": "codex-cli",
+            "provider_profile": provider_profile,
+            "upstream_base_url": upstream_base_url,
+            "bind_url": handle.bind_url,
+            "client_base_url": proxy_base_url,
+            "metrics_path": str(handle.metrics_path),
+            "responses_websockets_disabled": (
+                env.get("ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS") in {"1", "true", "yes"}
+            ),
+            "transport_note": (
+                "Codex proxy mode keeps wire_api=responses and disables Responses "
+                "WebSocket transport so provider requests are observable as HTTP."
+            ),
+        }
+
     def _wait_for_server_finish(self) -> None:
         assert self.server_proc is not None
         self._write_status("waiting-for-server-finish")
@@ -419,17 +485,14 @@ class LiveCodexCleanupRunner:
         self._mark_timing("checker_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
         task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
-        custom_task = (
-            normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
-            == TASK_INTENT_MODE_CUSTOM
-        )
+        open_ended_task = task_intent == "open-ended"
         checker_visual_args = list(self.args.checker_visual_arg)
-        if custom_task:
+        if open_ended_task:
             checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
         intent_id = household_intent_id_for_checker(
             task_name=task_name,
             task_intent=task_intent,
-            custom_task=custom_task,
+            open_ended_task=open_ended_task,
         )
         checker_policy_args = checker_flags_for_household_intent(
             intent_id=intent_id,
@@ -541,6 +604,14 @@ class LiveCodexCleanupRunner:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
+
+    def _cleanup_provider_timing_proxy(self) -> None:
+        if self.provider_timing_proxy is None:
+            return
+        try:
+            asyncio.run(stop_provider_timing_proxy(self.provider_timing_proxy.process))
+        finally:
+            self.provider_timing_proxy = None
 
     def _write_status(
         self,
@@ -865,6 +936,58 @@ def _codex_turn_idle_timeout_s(configured: float | None) -> float | None:
         except ValueError:
             return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
     return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
+
+
+def _base_url_from_codex_args(args: list[str]) -> str:
+    prefix = "model_providers."
+    suffix = ".base_url="
+    for item in args:
+        if not item.startswith(prefix) or suffix not in item:
+            continue
+        return _toml_string_value(item.split(suffix, 1)[1])
+    return ""
+
+
+def _provider_profile_from_codex_args(args: list[str]) -> str:
+    for index, item in enumerate(args):
+        if item == "-c" and index + 1 < len(args):
+            value = args[index + 1]
+        else:
+            value = item
+        if value.startswith("model_provider="):
+            return _toml_string_value(value.split("=", 1)[1])
+    return ""
+
+
+def _replace_codex_base_url_arg(args: list[str], base_url: str) -> list[str]:
+    result: list[str] = []
+    suffix = ".base_url="
+    replacement_done = False
+    for item in args:
+        if suffix in item:
+            left, _right = item.split(suffix, 1)
+            result.append(f"{left}{suffix}{_toml_quote(base_url)}")
+            replacement_done = True
+        else:
+            result.append(item)
+    if not replacement_done:
+        raise RuntimeError("Codex provider args did not include model provider base_url")
+    return result
+
+
+def _toml_string_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == '"' and value[-1] == '"':
+        return value[1:-1].replace('\\"', '"').replace("\\\\", "\\")
+    return value
+
+
+def _toml_quote(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _first_provider_summary_token(summary: str) -> str:
+    return summary.split(" ", 1)[0] if summary and summary != "system defaults" else ""
 
 
 def _model_api_durations_from_event(event: dict[str, Any]) -> list[float]:

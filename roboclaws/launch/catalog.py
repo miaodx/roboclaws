@@ -14,7 +14,7 @@ task ids.
 from __future__ import annotations
 
 from roboclaws.household.profiles import (
-    cleanup_profile_names,
+    cleanup_evidence_lane_names,
     validate_evidence_lane_camera_labeler,
 )
 from roboclaws.household.tasks import HOUSEHOLD_TASK_SPECS
@@ -221,6 +221,12 @@ def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
             "driver= is no longer a public run::surface argument",
             "use agent_engine=codex-cli|claude-code|openai-agents-sdk|direct-runner",
         )
+    if _override_value(overrides, "map_mode"):
+        raise LaunchError(
+            "map_mode= is no longer a public run::surface argument",
+            "Base Navigation Map is the start-of-run map contract; "
+            "use runtime_map_prior=<path> to supply Runtime Metric Map evidence",
+        )
     if _override_value(overrides, "environment_setup"):
         raise LaunchError(
             "environment_setup= is no longer a public run::surface argument",
@@ -323,28 +329,45 @@ def _resolve_evidence_mode(
     overrides: tuple[str, ...],
 ) -> tuple[str, str | None, str | None, tuple[str, ...]]:
     if surface.supported_profiles:
-        profile = raw_mode or _override_value(overrides, "evidence_lane")
-        profile = profile or _override_value(overrides, "profile") or surface.default_profile
+        if _override_value(overrides, "profile") is not None:
+            raise LaunchError(
+                "profile= is no longer a public run::surface argument",
+                "use evidence_lane=world-oracle-labels|world-public-labels|"
+                "camera-grounded-labels|camera-raw-fpv",
+            )
+        run_preset = _override_value(overrides, "run_preset") or _override_value(
+            overrides, "preset"
+        )
+        if run_preset and run_preset != "smoke":
+            raise LaunchError("unsupported run_preset", "expected smoke")
+        evidence_lane = raw_mode or _override_value(overrides, "evidence_lane")
+        if evidence_lane == "smoke":
+            raise LaunchError(
+                "smoke is not an evidence lane",
+                "use run_preset=smoke with evidence_lane=world-oracle-labels",
+            )
+        profile = evidence_lane or surface.default_profile
         if profile not in surface.supported_profiles:
             raise LaunchError(
-                f"unsupported household cleanup lane '{raw_mode}'",
-                f"expected {'|'.join(cleanup_profile_names())}",
+                f"unsupported household-world evidence_lane '{raw_mode}'",
+                f"expected {'|'.join(cleanup_evidence_lane_names())}",
             )
         camera_labeler = _override_value(overrides, "camera_labeler")
         visual_grounding = _override_value(overrides, "visual_grounding")
-        if visual_grounding and not camera_labeler:
+        if visual_grounding:
             raise LaunchError(
                 "visual_grounding is no longer a public task axis",
                 "use camera_labeler=<labeler> with evidence_lane=camera-grounded-labels",
             )
-        if profile != "smoke":
-            try:
-                validate_evidence_lane_camera_labeler(
-                    evidence_lane=profile,
-                    camera_labeler=camera_labeler,
-                )
-            except ValueError as exc:
-                raise LaunchError(str(exc)) from exc
+        try:
+            validate_evidence_lane_camera_labeler(
+                evidence_lane=profile,
+                camera_labeler=camera_labeler,
+            )
+        except ValueError as exc:
+            raise LaunchError(str(exc)) from exc
+        if run_preset == "smoke":
+            return "smoke", "smoke", None, overrides
         return profile, profile, None, overrides
 
     report = raw_mode or _override_value(overrides, "report") or surface.default_report
@@ -379,8 +402,10 @@ def _dispatch_runner_for_selection(
     overrides: tuple[str, ...],
 ) -> str:
     if agent_engine.id == "direct-runner":
-        profile = raw_mode or _override_value(overrides, "evidence_lane") or ""
-        if profile == "smoke" and intent.intent_id in {"cleanup", "open-ended"}:
+        run_preset = _override_value(overrides, "run_preset") or _override_value(
+            overrides, "preset"
+        )
+        if run_preset == "smoke" and intent.intent_id in {"cleanup", "open-ended"}:
             return "mcp-smoke"
     return agent_engine.dispatch_runner
 
@@ -516,6 +541,8 @@ def _without_launch_only_overrides(overrides: tuple[str, ...]) -> tuple[str, ...
         "evidence_lane",
         "profile",
         "report",
+        "run_preset",
+        "preset",
         "scenario_setup",
         "relocation_count",
     ):

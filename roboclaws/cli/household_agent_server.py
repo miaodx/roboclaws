@@ -43,9 +43,9 @@ from roboclaws.household.subprocess_backend import (
     MolmoSpacesSubprocessBackend,
 )
 from roboclaws.household.task_intent import (
-    TASK_INTENT_MODE_CUSTOM,
     TASK_INTENT_MODE_DEFAULT,
-    normalize_task_intent_mode,
+    household_intent_from_goal_contract,
+    household_intent_is_open_ended,
 )
 from roboclaws.household.types import CleanupScenario, PrivateScoringManifest
 from roboclaws.household.visual_grounding import (
@@ -125,9 +125,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=tuple(sorted(REALWORLD_MAP_MODES)),
         default=DEFAULT_MAP_MODE,
         help=(
-            "Agent-facing map projection. Default minimal exposes occupancy geometry and "
-            "generated exploration candidates; rich is an explicit legacy/debug projection "
-            "with authored public semantics."
+            "Agent-facing Base Navigation Map projection: occupancy geometry, "
+            "generated exploration candidates, and public room hints when available."
         ),
     )
     parser.add_argument("--include-robot", action="store_true")
@@ -190,6 +189,7 @@ def print_setup(
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+    task_intent: str = "",
 ) -> None:
     commands = client_setup_commands(url)
     print("\nMolmo real-world cleanup MCP server is ready.")
@@ -214,14 +214,14 @@ def print_setup(
         )
     print(f"  {commands['OpenClaw']}")
     print("\nThen start the agent and use this kickoff:")
-    custom_task = normalize_task_intent_mode(task_intent_mode) == TASK_INTENT_MODE_CUSTOM
-    if custom_task:
+    open_ended_task = household_intent_is_open_ended(task_intent)
+    if open_ended_task:
         print("  Treat the operator task as the authoritative goal scope.")
-        print("  Call roboclaws__metric_map and roboclaws__fixture_hints first.")
-        print("  Observe only as needed for the custom task; stop when the task is satisfied.")
+        print("  Call roboclaws__metric_map first.")
+        print("  Observe only as needed for the open-ended task; stop when the task is satisfied.")
     else:
         print("  Read skills/molmo-realworld-cleanup/SKILL.md.")
-        print("  Call roboclaws__metric_map and roboclaws__fixture_hints first.")
+        print("  Call roboclaws__metric_map first.")
         print("  Sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe.")
     if perception_mode == RAW_FPV_ONLY_MODE:
         print("  Raw FPV mode returns camera observations, not observed_* detections.")
@@ -231,7 +231,7 @@ def print_setup(
         print("  Candidates come from the configured server-side camera labeler.")
         print("  Clean plausible observed_* camera candidates with the semantic cleanup loop.")
     else:
-        if custom_task:
+        if open_ended_task:
             print("  Act only on task-relevant observed_* objects.")
         else:
             print(
@@ -374,6 +374,7 @@ def run_molmo_realworld_cleanup_agent_server(
     goal_contract = goal_contract_from_json(goal_contract_json) or goal_contract_from_file(
         goal_contract_path
     )
+    task_intent = household_intent_from_goal_contract(goal_contract)
 
     try:
         server = make_molmo_realworld_cleanup_mcp(
@@ -414,6 +415,7 @@ def run_molmo_realworld_cleanup_agent_server(
                 record_robot_views=record_robot_views,
                 cleanup_profile=cleanup_profile,
                 task_intent_mode=task_intent_mode,
+                task_intent=task_intent,
             )
         while not server.done_event.wait(poll_interval_s):
             pass

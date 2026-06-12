@@ -102,7 +102,12 @@ def _candidate_payload(root: Path, run_id: str, row: dict[str, Any]) -> dict[str
     )
     if not route_payload:
         route_payload = state.get("route") if isinstance(state.get("route"), dict) else {}
-    selection_id = str(row.get("selection_id") or route_payload.get("id") or "")
+    selection_id = str(
+        row.get("selection_id")
+        or route_payload.get("selection_id")
+        or route_payload.get("id")
+        or ""
+    )
     launch_label = str(row.get("launch_label") or route_payload.get("label") or "Agent run")
     activity_epoch = _run_activity_epoch(display_run_dir, run_dir, row)
     payload = {

@@ -18,7 +18,6 @@ from roboclaws.household.realworld_contract import (
 
 SEMANTIC_CLEANUP_TOOL_NAMES = (
     "metric_map",
-    "fixture_hints",
     "navigate_to_room",
     "navigate_to_waypoint",
     "observe",
@@ -37,11 +36,6 @@ def register_semantic_cleanup_tools(server: Any) -> None:
     def metric_map() -> dict:
         """Return public room topology and inspection waypoints."""
         return server.call_tool("metric_map")
-
-    @server._mcp.tool()
-    def fixture_hints() -> dict:
-        """Return room-level public fixture identities and affordances."""
-        return server.call_tool("fixture_hints")
 
     @server._mcp.tool()
     def navigate_to_room(room_id: str) -> dict:
@@ -131,7 +125,6 @@ def semantic_cleanup_handlers(
 ) -> dict[str, Callable[[], dict[str, Any]]]:
     return {
         "metric_map": server.contract.metric_map,
-        "fixture_hints": server.contract.fixture_hints,
         "navigate_to_room": lambda: server.contract.navigate_to_room(
             str(kwargs.get("room_id", ""))
         ),

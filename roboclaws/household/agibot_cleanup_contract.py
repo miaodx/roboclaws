@@ -205,7 +205,7 @@ class AgibotCleanupMCPContract:
             "declare_visual_candidates",
             "agibot_cleanup_mcp_camera_labels_blocked",
             (
-                "Use semantic-map-build camera-grounded-labels for Agibot G2 visual grounding; "
+                "Use intent=map-build camera-grounded-labels for Agibot G2 visual grounding; "
                 "the shared cleanup MCP path keeps manipulation and cleanup labels blocked."
             ),
             extra={"observation_id": observation_id or ""},

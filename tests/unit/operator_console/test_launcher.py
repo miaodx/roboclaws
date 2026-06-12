@@ -211,7 +211,7 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
         state = start_console_run(
             tmp_path,
             LaunchRequest(
-                route_id=route.id,
+                selection_id_override=route.selection.id,
                 intent_id="open-ended",
                 prompt="收拾桌面上的杯子",
                 next_goal_packet={"schema": "operator_console_next_goal_packet_v1"},
@@ -253,6 +253,15 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert persisted["lock"]["owner_run_id"] == state["run_id"]
 
 
+def test_launcher_rejects_legacy_route_id_as_launch_identity(tmp_path: Path) -> None:
+    with pytest.raises(ConsoleLaunchError, match="display-only"):
+        start_console_run(
+            tmp_path,
+            LaunchRequest(route_id="codex-mujoco-cleanup", overrides={"port": _free_port()}),
+            env=CODEX_ENV,
+        )
+
+
 def test_readiness_exposes_attachable_run_for_held_backend_lock(tmp_path: Path) -> None:
     route = get_route("codex-mujoco-cleanup")
     run_id = "existing-run"
@@ -281,6 +290,7 @@ def test_readiness_exposes_attachable_run_for_held_backend_lock(tmp_path: Path) 
     assert "Attach to the existing run" in readiness["blocker"]
     assert readiness["attachable_run"] == {
         "run_id": run_id,
+        "selection_id": route.selection.id,
         "route_id": route.id,
         "route_label": route.label,
         "phase": "running",

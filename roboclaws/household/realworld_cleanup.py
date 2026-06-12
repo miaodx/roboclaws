@@ -177,9 +177,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=tuple(sorted(REALWORLD_MAP_MODES)),
         default=DEFAULT_MAP_MODE,
         help=(
-            "Agent-facing map projection. Default minimal exposes occupancy geometry and "
-            "generated exploration candidates; rich is an explicit legacy/debug projection "
-            "with authored public semantics."
+            "Agent-facing Base Navigation Map projection: occupancy geometry, "
+            "generated exploration candidates, and public room hints when available."
         ),
     )
     parser.add_argument(
@@ -1197,11 +1196,22 @@ def _maybe_clean_visible_object(
         return view_index
     target_fixture_id = str(target_fixture["fixture_id"])
     support = detection.get("support_estimate") or {}
-    if support.get("fixture_id") == target_fixture_id:
-        agent_scratchpad["notes"].append(
-            {"object_id": handle, "reason": "already_on_inferred_fixture"}
+    if (
+        support.get("fixture_id") == target_fixture_id
+        and str(detection.get("candidate_state") or "") != "visual_scan_required"
+    ):
+        refreshed_target = _current_worklist_target_fixture(
+            contract=contract,
+            object_id=handle,
+            source_fixture_id=str(support.get("fixture_id") or ""),
         )
-        return view_index
+        if refreshed_target is None:
+            agent_scratchpad["notes"].append(
+                {"object_id": handle, "reason": "already_on_inferred_fixture"}
+            )
+            return view_index
+        target_fixture = refreshed_target
+        target_fixture_id = str(target_fixture["fixture_id"])
     if str(detection.get("candidate_state") or "") == "visual_scan_required":
         source_waypoint_id = str(
             detection.get("waypoint_id")
@@ -1255,6 +1265,27 @@ def _maybe_clean_visible_object(
             )
             return view_index
         detection = dict(confirmed)
+        target_fixture = contract.target_fixture_for_detection(detection, fixture_hints)
+        if target_fixture is None:
+            agent_scratchpad["failed_attempts"].append(
+                {"object_id": handle, "reason": "no_public_fixture_match_after_visual_scan"}
+            )
+            return view_index
+        target_fixture_id = str(target_fixture["fixture_id"])
+        support = detection.get("support_estimate") or {}
+        if support.get("fixture_id") == target_fixture_id:
+            refreshed_target = _current_worklist_target_fixture(
+                contract=contract,
+                object_id=handle,
+                source_fixture_id=str(support.get("fixture_id") or ""),
+            )
+            if refreshed_target is None:
+                agent_scratchpad["notes"].append(
+                    {"object_id": handle, "reason": "already_on_inferred_fixture"}
+                )
+                return view_index
+            target_fixture = refreshed_target
+            target_fixture_id = str(target_fixture["fixture_id"])
     next_view_index = _clean_visible_object(
         trace_events=trace_events,
         started_at=started_at,
@@ -1283,6 +1314,24 @@ def _maybe_clean_visible_object(
         }
     )
     return next_view_index
+
+
+def _current_worklist_target_fixture(
+    *,
+    contract: RealWorldCleanupContract,
+    object_id: str,
+    source_fixture_id: str,
+) -> dict[str, Any] | None:
+    worklist = contract.cleanup_worklist_payload(fixture_hints=contract.fixture_hints())
+    for item in worklist.get("objects", []):
+        if str(item.get("object_id") or "") != object_id:
+            continue
+        candidate_fixture_id = str(item.get("candidate_fixture_id") or "")
+        if not candidate_fixture_id or candidate_fixture_id == source_fixture_id:
+            return None
+        target = contract.public_receptacles_by_id().get(candidate_fixture_id)
+        return dict(target) if target else None
+    return None
 
 
 def _write_snapshot(

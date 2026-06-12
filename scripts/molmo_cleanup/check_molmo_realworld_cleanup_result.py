@@ -951,7 +951,6 @@ def _assert_clean_agent_run(
     counts = data.get("tool_event_counts") or {}
     for tool in (
         "metric_map",
-        "fixture_hints",
         "navigate_to_waypoint",
         "observe",
         *CANONICAL_SURFACE_CLEANUP_PHASES,
@@ -1298,12 +1297,26 @@ def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> Non
     assert fixture_hints.get("mode") == "minimal", fixture_hints
     assert runtime_map.get("map_mode") == "minimal", runtime_map
     assert runtime_map.get("minimal_map_mode") is True, runtime_map
-    assert metric_map.get("rooms") == [], metric_map
-    assert metric_map.get("driveable_ways") == [], metric_map
+    rooms = metric_map.get("rooms") or []
+    driveable_ways = metric_map.get("driveable_ways") or []
+    room_category_hints = metric_map.get("room_category_hints") or []
+    assert isinstance(rooms, list), metric_map
+    assert all(isinstance(room, dict) and room.get("room_label") for room in rooms), rooms
+    assert isinstance(driveable_ways, list), metric_map
+    assert isinstance(room_category_hints, list), metric_map
+    assert all(
+        isinstance(hint, dict) and hint.get("anchor_type") == "room_area"
+        for hint in room_category_hints
+    ), room_category_hints
     assert fixture_hints.get("rooms") == [], fixture_hints
-    assert static_map.get("rooms") == [], static_map
+    static_rooms = static_map.get("rooms") or []
+    static_driveable_ways = static_map.get("driveable_ways") or []
+    assert isinstance(static_rooms, list), static_map
+    assert all(isinstance(room, dict) and room.get("room_label") for room in static_rooms), (
+        static_rooms
+    )
     assert static_map.get("fixtures") == [], static_map
-    assert static_map.get("driveable_ways") == [], static_map
+    assert isinstance(static_driveable_ways, list), static_map
     waypoints = metric_map.get("inspection_waypoints") or []
     assert waypoints, metric_map
     generated = runtime_map.get("generated_exploration_candidates") or []
@@ -1329,7 +1342,10 @@ def _assert_minimal_map(data: dict[str, Any], agent_view: dict[str, Any]) -> Non
         assert waypoint.get("purpose") == "minimal_map_exploration", waypoint
         provenance = waypoint.get("candidate_provenance") or {}
         assert provenance.get("source") == "public_occupancy_free_space", waypoint
-        assert provenance.get("source_room_hidden") is True, waypoint
+        assert provenance.get("source_room_hidden") is False, waypoint
+        assert provenance.get("source_room_label_available") is bool(waypoint.get("room_label")), (
+            waypoint
+        )
         assert provenance.get("source_fixtures_hidden") is True, waypoint
         assert provenance.get("source_waypoint_hidden") is True, waypoint
         assert "source_waypoint_id" not in provenance, waypoint

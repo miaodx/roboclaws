@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from roboclaws.household.profiles import cleanup_profile_names
+from roboclaws.household.profiles import cleanup_evidence_lane_names
 from roboclaws.launch.task_specs import TaskSurfaceSpec
 
-HOUSEHOLD_PROFILES: tuple[str, ...] = cleanup_profile_names()
+HOUSEHOLD_EVIDENCE_LANES: tuple[str, ...] = cleanup_evidence_lane_names()
 
 HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
     "household-world": TaskSurfaceSpec(
@@ -24,7 +24,7 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
         supported_reports=(),
         default_report=None,
         default_profile="world-oracle-labels",
-        supported_profiles=HOUSEHOLD_PROFILES,
+        supported_profiles=HOUSEHOLD_EVIDENCE_LANES,
         default_backend="molmospaces_subprocess",
         mcp_server_id="molmo_cleanup_realworld",
         checker_base="household_world",
