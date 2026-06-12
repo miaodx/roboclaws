@@ -1087,11 +1087,42 @@ def _decode_tool_output_payload(output: Any) -> Any:
             return None
         if isinstance(decoded, str):
             try:
-                return json.loads(decoded)
+                return _unwrap_mcp_text_content_payload(json.loads(decoded))
+            except json.JSONDecodeError:
+                return decoded
+        return _unwrap_mcp_text_content_payload(decoded)
+    return _unwrap_mcp_text_content_payload(output)
+
+
+def _unwrap_mcp_text_content_payload(decoded: Any) -> Any:
+    if isinstance(decoded, dict):
+        content = decoded.get("content")
+        if isinstance(content, list):
+            unwrapped = _unwrap_mcp_text_content_payload(content)
+            if unwrapped is not content:
+                return unwrapped
+        text = decoded.get("text")
+        if isinstance(text, str) and str(decoded.get("type") or "") in {"", "text"}:
+            try:
+                return _unwrap_mcp_text_content_payload(json.loads(text))
             except json.JSONDecodeError:
                 return decoded
         return decoded
-    return output
+    if isinstance(decoded, list):
+        for item in decoded:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("type") or "") not in {"", "text"}:
+                continue
+            text = item.get("text")
+            if not isinstance(text, str):
+                continue
+            try:
+                return _unwrap_mcp_text_content_payload(json.loads(text))
+            except json.JSONDecodeError:
+                continue
+        return decoded
+    return decoded
 
 
 def _repeated_metric_map_delta_summary(output_text: str, *, item_type: str) -> dict[str, Any]:
