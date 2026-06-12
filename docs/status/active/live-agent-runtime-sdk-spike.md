@@ -62,10 +62,10 @@ evidence, not a wall-clock speed win. The first raw-FPV P/AA live gate attempt
 is now blocked: `openai-agents-sdk+mify` is rejected by the image-transport
 guard, and two `openai-agents-sdk+codex-env` raw-FPV attempts failed with
 classified `provider_transient_failure` / `upstream_unavailable` before task
-work. The O+AC fixed4 row is now the strongest paired diagnostic wall-clock
-result; repeated/calibrated O+AC evidence, a later raw-FPV retry after provider
-or image-transport availability changes, and broader B baseline coverage remain
-valid next arms.
+work. The O+AC fixed4 row is the cleanest paired diagnostic wall-clock result,
+and the O+AC repeat row now strengthens the same direction; calibrated
+normalized evidence, a later raw-FPV retry after provider or image-transport
+availability changes, and broader B baseline coverage remain valid next arms.
 Token deltas are telemetry only; cost is not a deciding objective for this
 plan. Candidate AC now provides the first deterministic slice of the
 behavior-preserving redesign: an opt-in private SDK
@@ -76,9 +76,13 @@ prep, and the O+AC fixed4 provider-backed paired row now completed at
 `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/`.
 The row preserved `done`, `run_result.json`, and same-or-better report-quality
 evidence while reducing observed wall/model API time by `-659.477s` /
-`-653.563s`. Treat this as an accepted paired diagnostic row, not a normalized
-or publishable speed claim. The full live provider/model x evidence-lane
-performance matrix is still not done. The follow-up execution plan is
+`-653.563s`. A repeat row at
+`output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-repeat-mify/0612_1909/seed-7/`
+also preserved `done`, `run_result.json`, and same-or-better report quality
+while reducing observed wall/model API time by `-630.633s` / `-619.022s`.
+Treat these as accepted paired diagnostic rows, not normalized or publishable
+speed claims. The full live provider/model x evidence-lane performance matrix
+is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -278,6 +282,20 @@ Result:
   camera-grounded history items, reducing camera-grounded history bytes by
   `5255583`. Normalized/publishable claims still need repeated or calibrated
   evidence.
+- The Candidate O+AC repeat live row completed under
+  `docs/status/active/agent-sdk-o-ac-camera-grounded-repeat-live-caps.json`:
+  candidate
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-repeat-mify/0612_1909/seed-7/`,
+  comparison
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-repeat-mify-comparison.json`.
+  The row is accepted as repeat paired diagnostic evidence: recorded quality
+  stayed at `completion_status=success`, `restored_count=4/5`,
+  `semantic_accepted_count=5/5`, `disturbance_count=0`, and
+  `failed_or_noop_tool_count=0`, while observed wall time improved by
+  `-630.633s`, observed model API time by `-619.022s`, and model/SDK
+  between-tool gap by `-612.38s`. The repeat exercised 13 composite calls,
+  compacted 192 of 364 camera-grounded history items, and reduced
+  camera-grounded history bytes by `3483115`.
 - Candidate D deterministic racing-observability prep is implemented. The
   private SDK model request boundary now emits sanitized single-arm
   `model_racing_arm_start` / finish / failure events with stable call/arm ids,
@@ -477,10 +495,10 @@ Parked work:
     paired wall/model latency.
   - Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
     now been refreshed with the completed `mify` world-public pair, the
-    Candidate O promptfix2 mechanism row, the O+AC fixed4 paired row, and the
+    Candidate O promptfix2 mechanism row, the O+AC fixed4 and repeat paired rows, and the
     expected-rejected F, I/N, C, and O continuation-tightening rows. The current
-    wall-clock priority is repeated/calibrated O+AC proof, then scoped B
-    baseline coverage, with raw-FPV retry only after provider/image-transport
+    wall-clock priority is calibration/normalized timing for O+AC, then scoped
+    B baseline coverage, with raw-FPV retry only after provider/image-transport
     availability changes.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
@@ -511,8 +529,8 @@ Parked work:
     current two-arm policy is rejected as faster-but-worse; do not rerun it
     unchanged.
   - Candidate AC camera-grounded history compaction is implemented as
-    SDK-private/off-by-default prep and now has an accepted O+AC fixed4 paired
-    diagnostic row with `done`, `run_result.json`, same-or-better cleanup
+    SDK-private/off-by-default prep and now has accepted O+AC fixed4 and repeat
+    paired diagnostic rows with `done`, `run_result.json`, same-or-better cleanup
     quality, and lower paired-comparable wall/model latency.
   - Agent-visible state delta/compaction and selective visual artifact capture
     remain possible later speed levers only after behavior-preserving changes;
