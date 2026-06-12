@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE, RealWorldCleanupContract
 from roboclaws.household.scenario import build_cleanup_scenario
@@ -37,6 +39,8 @@ OVERRIDES_PATH = (
 
 
 def test_scene_room_overlay_labels_gaussian_partitions_as_public_room_semantics() -> None:
+    _require_scene_root()
+
     overlay = build_scene_room_semantic_overlay(SCENE_ROOT, source_bundle_dir=MAP12_BUNDLE)
     rooms = {item["asset_partition_id"]: item for item in overlay["rooms"]}
 
@@ -60,6 +64,8 @@ def test_scene_room_overlay_labels_gaussian_partitions_as_public_room_semantics(
 
 
 def test_scene_room_overlay_accepts_operator_overrides_for_open_kitchen_and_living_room() -> None:
+    _require_scene_root()
+
     overlay = build_scene_room_semantic_overlay(
         SCENE_ROOT,
         source_bundle_dir=MAP12_BUNDLE,
@@ -113,6 +119,8 @@ def test_scene_room_overlay_accepts_operator_overrides_for_open_kitchen_and_livi
 
 
 def test_scene_room_overlay_can_materialize_b1_baseline_map_bundle(tmp_path: Path) -> None:
+    _require_scene_root()
+
     overlay = build_scene_room_semantic_overlay(
         SCENE_ROOT,
         source_bundle_dir=MAP12_BUNDLE,
@@ -153,6 +161,8 @@ def test_scene_room_overlay_can_materialize_b1_baseline_map_bundle(tmp_path: Pat
 def test_scene_room_overlay_skill_script_writes_overlay_and_bundle(
     tmp_path: Path,
 ) -> None:
+    _require_scene_root()
+
     generator = _load_module(GENERATOR_PATH, "generate_scene_room_overlay")
     output = tmp_path / "room_semantic_overlay.json"
     bundle_dir = tmp_path / "bundle"
@@ -209,6 +219,11 @@ def test_solidified_b1_map12_room_semantic_bundle_contains_public_room_labels() 
     assert semantics["provenance"]["contains_private_scoring_truth"] is False
     assert (B1_MAP12_ROOM_SEMANTICS_BUNDLE / "room_semantic_topdown.png").is_file()
     assert (B1_MAP12_ROOM_SEMANTICS_BUNDLE / "preview.png").is_file()
+
+
+def _require_scene_root() -> None:
+    if not SCENE_ROOT.is_dir():
+        pytest.skip("robot-data-lab scene-engine data is unavailable in this checkout")
 
 
 def _load_module(path: Path, name: str):
