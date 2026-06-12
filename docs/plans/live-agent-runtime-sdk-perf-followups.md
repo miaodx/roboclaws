@@ -144,6 +144,26 @@ does not create a false quality-regression gate when a candidate still reaches
 full required coverage. No public/default route, MCP contract, checker
 semantics, or artifact privacy boundary changed.
 
+2026-06-12 Q/Y live-refresh update: a zero-provider refresh manifest
+(`docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`) now points at
+the completed `mify` Responses `world-public-labels` baseline/candidate pair
+and writes `output/agent-sdk-perf-followups/live-refresh-decision.json`. The
+refresh accepted the row as diagnostic recommendation evidence with no provider
+calls planned and no privacy/schema failure. It kept model/SDK between-tool gap
+as the dominant bucket (`205.026s`, 63.34% of observed wall), recorded material
+visual capture (`93.256s`, 28.81%), and recommended Group 2 lane-specific work
+(`N` for repeated `metric_map`, `F` for visual capture) plus already-accepted
+Group 1 SDK levers. External compatibility evidence from the completed
+`mimo-openai-chat` camera-grounded DINO run
+(`output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`)
+shows 14 `declare_visual_candidates` calls and a large camera-grounded
+between-tool/visual bucket, which supports Candidate O as the next
+camera-grounded A/B target. That external row is Chat-compatible diagnostic
+evidence, not a Responses speed claim. A separate user-owned
+`camera-grounded-labels` sim-labels run currently holds the only visual backend
+slot on port `18788`; do not launch another live row until it releases the
+slot.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -193,6 +213,12 @@ semantics, or artifact privacy boundary changed.
   dominant buckets, failed/noop counts, and candidate recommendations, while the
   decision packet summary aggregates candidate and candidate-group rankings
   without adding provider calls or raw payload persistence.
+- Q/Y has also been refreshed against the first completed live Responses pair
+  through `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`.
+  This is an offline/no-provider packet over existing run artifacts, not a new
+  live row. It accepted the completed `mify` world-public diagnostic comparison
+  and points the next live arm toward lane-specific camera/visual reductions
+  after the current backend slot is free.
 - Candidate N deterministic prep is implemented inside the existing opt-in SDK
   model-input compaction arm. Repeated `metric_map` outputs are summarized only
   in model-facing SDK input, only when smaller than the original, and only with
@@ -290,8 +316,9 @@ Use this queue unless fresh evidence changes it:
 5. Candidate I/AB deterministic prep is accepted; provider-backed Responses
    compaction/session/continuation A/B is authorized and should run when
    credentials/backend access and recorded caps are available.
-6. Q/Y deterministic recommendation enrichment is accepted for Group 0; refresh
-   it whenever new live rows or candidate arms change the packet.
+6. Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
+   been refreshed from the first completed `mify` live Responses pair. Refresh
+   again whenever new live rows or candidate arms change the packet.
 7. Candidate N deterministic prep is accepted inside the opt-in model-input
    compaction arm; live A/B is authorized and should run when credentials/backend
    access and recorded caps are available.
@@ -299,7 +326,8 @@ Use this queue unless fresh evidence changes it:
    credentials/backend access and recorded caps are available.
 9. Candidate O deterministic prep is accepted as an SDK-private opt-in MCP
    composite-tool flag for `camera-grounded-labels`; live A/B is authorized
-   under the same recorded run caps.
+   under the same recorded run caps and is the next preferred provider-backed
+   arm once the current user-owned visual backend run releases port `18788`.
 10. Candidate P deterministic prep is accepted as a raw-FPV repeated visual
     candidate failure rail; live raw-FPV tests are authorized, while cleanup-pass
     and speed claims still require report-quality evidence.
@@ -462,7 +490,7 @@ Each candidate arm writes one decision row:
 | P | `openai-agents-live`, `camera-raw-fpv` deterministic repeated-failure rail prep | `raw_fpv_repeated_failure_limit=3` in `raw_fpv_budgeted_v1`, optional `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT` override, no public MCP/profile change | `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `just/molmo.just`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic-prep, raw-FPV live tests authorized | Deterministic proof shows repeated unresolved `navigate_to_visual_candidate` failures produce `raw_fpv_repeated_candidate_failure` before context-window failure, with compact fingerprint fields and aggregate terminal counts in `agent_sdk_budget_terminal` / latency attribution. Persisted detail excludes raw prompts, model text, full image-region payloads, full tool payload bodies, credentials, and private truth. | Candidate AA deterministic prep is now accepted. Any cleanup-pass or speed claim still needs credentials/backend availability, network guard, recorded run caps, and report-quality evidence. |
 | AA | `openai-agents-live`, `camera-raw-fpv` deterministic image-memory prep | `raw_fpv_image_memory_v1` in the SDK model-input filter, default enabled only by `raw_fpv_budgeted_v1`, optional `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY` and retain-count override, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `just/molmo.just`, `tests/unit/agents/test_live_runtime.py`, `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py` | accepted-deterministic-prep, raw-FPV live tests authorized | Deterministic proof shows older raw-FPV image blocks can be summarized before SDK model calls while the latest full image remains model-visible, summaries store only observation id, sizes, hashes, and retention policy, and `model_input_filter_metrics` / timeline attribution aggregate retained/evicted counts and byte deltas. The MCP raw-FPV observe contract still returns compact state plus a full PNG image block, and report artifacts remain complete. | B live baseline refresh and any raw-FPV cleanup-pass or speed claim are authorized once credentials/backend availability, network guard, recorded run caps, and report-quality evidence exist. Multiresolution thumbnail/crop policy is parked until live evidence shows retained full-frame policy is insufficient. |
 | B,I/AB | `openai-agents-live`, `mify` Responses `world-public-labels` live baseline vs `mimo_compact_v1` candidate | Baseline profile versus `mimo_compact_v1`; same provider profile, wire API, model, evidence lane, seed, map bundle, backend, and run caps. No public MCP/profile change. | `output/agent-sdk-perf-followups/mify-world-public-baseline/0612_0814/seed-7/`; `output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`; `output/agent-sdk-perf-followups/mify-world-public-comparison-diagnostic.json`; `output/agent-sdk-perf-followups/mify-world-public-comparison.json`; `.venv/bin/python scripts/reports/extract_live_report_metrics.py --write-model-call-metrics <run-dir>` for both rows; `.venv/bin/python scripts/reports/compare_live_report_metrics.py --baseline-run-dir output/agent-sdk-perf-followups/mify-world-public-baseline/0612_0814/seed-7 --candidate-run-dir output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7 --diagnostic --output output/agent-sdk-perf-followups/mify-world-public-comparison-diagnostic.json`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/reports/test_live_performance.py`; `.venv/bin/ruff check roboclaws/reports/live_performance.py tests/unit/reports/test_live_performance.py` | diagnostic, no speed win | Both live rows finished and produced reports. Candidate quality was not worse after capping sweep over-coverage at required full coverage, and candidate reduced model/MCP calls by 2 each, but it was slower: +5.746s observed wall, +8.749s observed model API, and +7033 uncached input tokens. Treat this as evidence against claiming a `mimo_compact_v1` world-public speedup on this single row; it does not reject the deterministic prep. | Refresh Q/Y with this live packet before choosing the next arm. Prefer camera-grounded Candidate O live A/B or raw-FPV diagnostic rows if Q/Y still rank Group 2/3; retry GPT `codex-env` only after the transient 502 gate clears. |
-| Q,Y | Group 0 no-provider deterministic recommendation packet | `reducible_bucket_report.latency_buckets`, `dominant_bucket`, `recommendation_summary`, no live provider call, no public MCP/profile change | `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`, `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `.venv/bin/ruff format --check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run` | accepted-deterministic-enrichment, live rows authorized | Deterministic proof shows the packet can rank candidate ids/groups from shared performance summaries, preserve unsupported rows, classify dominant buckets, and keep the recommendation claim scoped to no-provider diagnostic evidence. The refreshed fixture packet accepted 5 supported rows, preserved 2 unsupported rows, and ranked Group 2 lane-specific reductions first after already-prepped Group 1 candidates. | B live baseline refresh and any speed claim are authorized once credentials/backend availability, network guard, recorded run caps, and report-quality evidence exist. |
+| Q,Y | Group 0 deterministic recommendation packet plus completed-live refresh | `reducible_bucket_report.latency_buckets`, `dominant_bucket`, `recommendation_summary`, no live provider call, no public MCP/profile change | `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`, `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `docs/status/active/agent-sdk-speedup-foundation-matrix.json`; `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`; `output/agent-sdk-speedup-foundation/decision.json`; `output/agent-sdk-perf-followups/live-refresh-decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-live-refresh-matrix.json --offline-preflight --decision-packet output/agent-sdk-perf-followups/live-refresh-decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-live-refresh-matrix.json --dry-run` | accepted-deterministic-enrichment, refreshed-with-live-packet, live rows authorized | Deterministic proof shows the packet can rank candidate ids/groups from shared performance summaries, preserve unsupported rows, classify dominant buckets, and keep the recommendation claim scoped to diagnostic evidence. The refreshed fixture packet accepted 5 supported rows and ranked Group 2 lane-specific reductions first after already-prepped Group 1 candidates. The live-refresh packet accepted the completed `mify` Responses world-public pair with no provider calls planned; the candidate was same-or-better quality but slower, with `model_or_sdk_between_tool_gap` still dominant (`205.026s`, 63.34%) and material visual capture (`93.256s`, 28.81%). External `mimo-openai-chat` camera-grounded DINO evidence shows 14 `declare_visual_candidates` calls, supporting Candidate O as the next camera-grounded A/B target without making a Responses speed claim. | Run Candidate O camera-grounded live A/B next once the current user-owned visual backend run releases port `18788`; use raw-FPV P/AA only after O or if camera-grounded remains blocked; retry GPT `codex-env` only after the transient 502 gate clears. |
 
 ## Evidence Ladder
 

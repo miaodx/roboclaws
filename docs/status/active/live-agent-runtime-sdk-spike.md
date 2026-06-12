@@ -151,6 +151,25 @@ Result:
   `output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`,
   and
   `output/agent-sdk-perf-followups/mify-world-public-comparison-diagnostic.json`.
+- Q/Y was refreshed from that completed live Responses pair without launching a
+  new provider run. The refresh manifest is
+  `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`, and the
+  packet is `output/agent-sdk-perf-followups/live-refresh-decision.json`. It
+  accepted the completed row as diagnostic recommendation evidence, kept
+  model/SDK between-tool gap dominant (`205.026s`, 63.34%), recorded visual
+  capture as material (`93.256s`, 28.81%), and pointed the next live arm toward
+  Group 2 lane-specific work after already-accepted Group 1 prep.
+- Completed external camera-grounded Chat-compatible evidence at
+  `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
+  shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14
+  `declare_visual_candidates` calls and a large between-tool/visual bucket. Use
+  it as compatibility/diagnostic support for Candidate O, not as a Responses
+  speed claim.
+- A separate user-owned `camera-grounded-labels` sim-labels run currently owns
+  the MolmoSpaces/MuJoCo visual backend slot on port `18788`:
+  `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-sim-labels/0612_0958/seed-7/`.
+  Do not terminate it or launch another live visual row until that slot is
+  free.
 - The shared report-performance quality comparator now caps sweep
   over-coverage at 1.0 for same-or-better comparison, so extra baseline
   inspection waypoints do not create a false regression when the candidate
@@ -276,7 +295,10 @@ Parked work:
     row is diagnostic only, not a speed win.
   - Q/Y deterministic recommendation enrichment is accepted for Group 0; the
     current no-provider packet pointed to Group 2 N/O after already-accepted
-    Group 1 prep. Refresh Q/Y with live packets before the next arm choice.
+    Group 1 prep. Q/Y has now been refreshed with the completed `mify`
+    world-public live packet; it points to Group 2 lane-specific reductions,
+    with Candidate O camera-grounded A/B as the next preferred live arm once
+    the current visual backend slot is free.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
