@@ -506,6 +506,7 @@ def _model_input_compaction_filter(
             runtime_config=runtime_config,
             config=config,
             metrics=metrics,
+            input_items=original_items,
         )
         return _model_input_data_like(
             model_data,
@@ -1185,6 +1186,7 @@ def _append_model_input_filter_event(
     runtime_config: dict[str, Any],
     config: dict[str, Any],
     metrics: dict[str, Any],
+    input_items: list[Any] | None = None,
 ) -> None:
     _append_event(
         events_path,
@@ -1199,6 +1201,7 @@ def _append_model_input_filter_event(
                 "model": runtime_config.get("model"),
                 "config": _drop_empty(_to_jsonable(config)),
                 "metrics": _drop_empty(_to_jsonable(metrics)),
+                "input_shape_summary": _model_input_shape_summary(input_items or []),
                 "privacy_note": (
                     "Only aggregate counts, byte sizes, hashes, and policy metadata are persisted. "
                     "Raw prompts, model text, tool payload bodies, credentials, and private truth "
@@ -1207,6 +1210,46 @@ def _append_model_input_filter_event(
             }
         ),
     )
+
+
+def _model_input_shape_summary(items: list[Any]) -> dict[str, Any]:
+    type_counts: dict[str, int] = {}
+    key_set_counts: dict[str, int] = {}
+    tool_field_counts: dict[str, int] = {}
+    output_field_counts: dict[str, int] = {}
+    role_counts: dict[str, int] = {}
+    for item in items:
+        payload = _to_jsonable(item)
+        if not isinstance(payload, dict):
+            item_type = type(payload).__name__
+            type_counts[item_type] = type_counts.get(item_type, 0) + 1
+            continue
+        item_type = str(payload.get("type") or "<missing>")
+        type_counts[item_type] = type_counts.get(item_type, 0) + 1
+        key_set = ",".join(sorted(str(key) for key in payload.keys()))
+        key_set_counts[key_set] = key_set_counts.get(key_set, 0) + 1
+        role = str(payload.get("role") or "")
+        if role:
+            role_counts[role] = role_counts.get(role, 0) + 1
+        for key in ("name", "tool", "tool_name", "call_id", "id"):
+            if key in payload:
+                tool_field_counts[key] = tool_field_counts.get(key, 0) + 1
+        for key in ("output", "content", "result", "error"):
+            if key in payload:
+                output_field_counts[key] = output_field_counts.get(key, 0) + 1
+    return {
+        "schema": "openai_agents_model_input_shape_summary_v1",
+        "input_item_count": len(items),
+        "type_counts": dict(sorted(type_counts.items())),
+        "key_set_counts": dict(sorted(key_set_counts.items())),
+        "tool_field_counts": dict(sorted(tool_field_counts.items())),
+        "output_field_counts": dict(sorted(output_field_counts.items())),
+        "role_counts": dict(sorted(role_counts.items())),
+        "privacy_note": (
+            "Aggregate model-input item shape only. Values, prompts, model text, tool output "
+            "bodies, credentials, and private truth are not persisted."
+        ),
+    }
 
 
 def _max_turns(request: LiveAgentRequest) -> int:

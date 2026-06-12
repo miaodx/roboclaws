@@ -13,6 +13,7 @@ from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
     _compact_model_input_items,
     _failure_from_exception,
+    _model_input_shape_summary,
     _RetryingModel,
     _RoboclawsSpanRecorder,
     _should_retry_model_service_failure,
@@ -1165,6 +1166,47 @@ def test_model_input_compaction_reduces_oversized_public_tool_outputs() -> None:
     assert replacement["schema"] == "roboclaws_public_tool_output_summary_v1"
     assert replacement["original_chars"] == len(large_output)
     assert "wp_19" not in json.dumps(filtered)
+
+
+def test_model_input_shape_summary_is_aggregate_only() -> None:
+    summary = _model_input_shape_summary(
+        [
+            {"role": "user", "content": "secret prompt body"},
+            {
+                "type": "mcp_call",
+                "id": "mcp_secret",
+                "name": "roboclaws__observe_camera_grounded_candidates",
+                "server_label": "roboclaws",
+                "arguments": '{"secret": true}',
+                "output": "large private tool output body",
+                "status": "completed",
+            },
+            {
+                "type": "function_call_output",
+                "call_id": "call_metric_map",
+                "output": "metric map body",
+            },
+        ]
+    )
+
+    assert summary["schema"] == "openai_agents_model_input_shape_summary_v1"
+    assert summary["input_item_count"] == 3
+    assert summary["type_counts"] == {
+        "<missing>": 1,
+        "function_call_output": 1,
+        "mcp_call": 1,
+    }
+    assert summary["tool_field_counts"] == {
+        "call_id": 1,
+        "id": 1,
+        "name": 1,
+    }
+    assert summary["output_field_counts"] == {"content": 1, "output": 2}
+    encoded = json.dumps(summary)
+    assert "secret prompt body" not in encoded
+    assert "large private tool output body" not in encoded
+    assert "roboclaws__observe_camera_grounded_candidates" not in encoded
+    assert "metric map body" not in encoded
 
 
 def test_model_input_compaction_summarizes_repeated_metric_map_outputs() -> None:
