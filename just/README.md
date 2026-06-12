@@ -52,12 +52,11 @@ Agent engines:
 - `openai-agents-sdk`
 - `direct-runner`
 - `openclaw-gateway`
-- `script-runner`
 
 Provider profiles are selected only for agent engines that need a model/key
 route. Examples include `codex-env`, `mify`, `kimi-anthropic`,
 `mimo-anthropic`, and `mify-anthropic`. Deterministic engines such as
-`direct-runner` and `script-runner` do not accept `provider_profile`.
+`direct-runner` do not accept `provider_profile`.
 
 Reports for non-Molmo tasks:
 

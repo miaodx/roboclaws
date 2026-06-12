@@ -5,7 +5,7 @@ at project inception).
 
 ## Status
 
-Superseded by [ADR-0137](0137-retire-ai2thor-and-direct-vlm-public-surfaces.md).
+Superseded by [ADR-0137](../../0137-retire-ai2thor-and-direct-vlm-public-surfaces.md).
 
 ## Context
 
@@ -70,6 +70,6 @@ Specific constraints adopted with the platform:
   and per-agent budgeting.
 - Long-term locomotion realism (G1 humanoid, dynamic balance, contact
   physics) needs Isaac Lab eventually — see
-  [ADR-0002](0002-defer-isaac-lab-to-phase-3.md).
+  [ADR-0002](../historical/0002-defer-isaac-lab-to-phase-3.md).
 - AI2-THOR ships a ~1GB Unity build; first run on a fresh machine is
   slow.

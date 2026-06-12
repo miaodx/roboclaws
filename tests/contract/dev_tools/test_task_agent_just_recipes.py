@@ -254,7 +254,6 @@ def surface_args_from_legacy_task_args(*args: str) -> tuple[str, ...]:
         "direct": "agent_engine=direct-runner",
         "mcp-smoke": "agent_engine=direct-runner",
         "openclaw": "agent_engine=openclaw-gateway",
-        "script": "agent_engine=script-runner",
     }
     normalized_overrides: list[str] = []
     for override in overrides:
@@ -1022,8 +1021,7 @@ def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
         )
 
     assert exc.value.hint == (
-        "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|"
-        "openclaw-gateway|script-runner"
+        "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|openclaw-gateway"
     )
 
 

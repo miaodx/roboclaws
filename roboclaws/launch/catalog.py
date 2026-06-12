@@ -292,8 +292,7 @@ def _normalize_agent_engine(value: str) -> AgentEngineSpec:
     if spec is None:
         raise LaunchError(
             f"unsupported agent_engine '{agent_engine}'",
-            "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|"
-            "openclaw-gateway|script-runner",
+            "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|openclaw-gateway",
         )
     return spec
 

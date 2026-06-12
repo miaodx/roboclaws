@@ -699,18 +699,10 @@ just harness::molmo-planner-proof-bundle-execute-rerun
 
 - [ADR-0003](../adr/0003-separate-cleanup-agent-view-from-private-evaluation.md):
   public Agent View vs private evaluation.
-- [ADR-0009](../adr/0009-use-shared-molmo-cleanup-report-underlay.md):
-  shared Molmo cleanup report underlay.
-- [ADR-0010](../adr/0010-require-real-visual-openclaw-evidence-for-adr-0003-cleanup.md):
-  real visual OpenClaw evidence requirements.
-- [ADR-0013](../adr/0013-add-raw-fpv-observation-mode-for-adr-0003-cleanup.md):
-  raw FPV-only perception mode.
-- [ADR-0020](../adr/0020-add-camera-model-policy-mode-for-adr-0003-cleanup.md):
-  camera-model policy mode.
 - [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
   model-declared observations bridge camera evidence to cleanup handles.
-- [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
-  implementation and harness plan for raw-FPV cleanup.
-- [ADR-0028](../adr/archive/execution-log/0028-add-planner-cleanup-bridge-readiness-evidence.md):
-  planner cleanup bridge readiness.
+- [ADR-0136](../adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md):
+  current launch, map, intent, and evidence-lane contract.
+- [ADR-0138](../adr/0138-use-detector-only-visual-grounding-sidecar.md):
+  current detector-only visual-grounding sidecar boundary.
 - [`domain.md`](domain.md): domain vocabulary and shipped-history notes.

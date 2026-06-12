@@ -101,8 +101,8 @@ Context package:
     `docs/human/**`, `skills/**`
   - `git status --short` before edits
 - Useful evidence:
-  - `docs/adr/0001-use-ai2thor-for-phase-1.md`
-  - `docs/adr/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md`
+  - `docs/adr/archive/superseded/0001-use-ai2thor-for-phase-1.md`
+  - `docs/adr/archive/superseded/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md`
   - `docs/human/mcp-skills-and-semantic-profiles.md`
 - Do not read unless needed:
   - `.planning/**`, `docs/retrospectives/**`, `output/**`, `tmp/**`, old
@@ -472,8 +472,9 @@ Minimum confidence level:
   AI2-THOR artifact locations.
 - [x] `docs/human/agent-task-command-taxonomy.md`: remove legacy task ids and
   AI2-THOR route examples.
-- [x] `docs/adr/0001-use-ai2thor-for-phase-1.md`: mark Superseded.
-- [x] `docs/adr/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md`:
+- [x] `docs/adr/archive/superseded/0001-use-ai2thor-for-phase-1.md`:
+  mark Superseded.
+- [x] `docs/adr/archive/superseded/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md`:
   mark Superseded.
 - [x] `docs/adr/README.md`: update ADR statuses.
 - [x] Add a new ADR for this retirement decision, or put the durable decision in

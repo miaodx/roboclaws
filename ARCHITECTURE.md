@@ -41,7 +41,7 @@ Open-ended goal
   and trace-preserving routines such as `navigate -> pick -> place`.
 - **Agent Engines And Provider Profiles** distinguish the product runtime
   (`agent_engine=codex-cli`, `claude-code`, `openai-agents-sdk`,
-  `direct-runner`, `openclaw-gateway`, or `script-runner`) from
+  `direct-runner`, or `openclaw-gateway`) from
   the model/key route (`provider_profile=codex-env`, `mify`,
   `mimo-anthropic`, and related profiles).
 - **Capability Profiles** define reusable capability environments. Skills

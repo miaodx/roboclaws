@@ -48,5 +48,5 @@ same launch catalog and report contract.
 
 ## Supersedes
 
-- [ADR-0001](0001-use-ai2thor-for-phase-1.md)
-- [ADR-0004](0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md)
+- [ADR-0001](archive/superseded/0001-use-ai2thor-for-phase-1.md)
+- [ADR-0004](archive/superseded/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md)

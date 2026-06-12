@@ -4,7 +4,7 @@ Date: 2026-05-25
 
 ## Status
 
-Accepted
+Superseded by [ADR-0138](../../0138-use-detector-only-visual-grounding-sidecar.md).
 
 ## Context
 
