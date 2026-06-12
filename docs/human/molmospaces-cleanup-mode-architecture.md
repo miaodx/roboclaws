@@ -42,10 +42,10 @@ exercise raw image input, and which runs use simulated camera-derived labels.
 
 ## Design Direction
 
-Expose one public concept: `profile`.
+Expose one public cleanup evidence concept: `evidence_lane`.
 
-Keep `driver` as the second public concept because it is already clear enough:
-`direct`, `mcp-smoke`, `codex`, `claude`, `openclaw`.
+Keep runtime selection orthogonal: public runs select `world`, `backend`,
+`intent`, `agent_engine`, and optional `provider_profile` separately.
 
 Do not expose `agent_input`, `report`, `world_backend`, `perception_provenance`,
 or `verifier` as first-class public knobs by default. Those remain profile
@@ -54,15 +54,15 @@ metadata and report metadata.
 Current canonical command shape:
 
 ```bash
-just run::surface surface=household-world driver=<driver> intent=cleanup evidence_lane=<lane> [camera_labeler=<labeler>]
+just run::surface surface=household-world world=<world> backend=<backend> intent=cleanup agent_engine=<engine> [provider_profile=<profile>] evidence_lane=<lane> [camera_labeler=<labeler>]
 ```
 
 Examples:
 
 ```bash
-just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=world-oracle-labels
-just run::surface surface=household-world driver=claude intent=cleanup evidence_lane=camera-raw-fpv
-just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=camera-raw-fpv
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
 ```
 
 No backward compatibility is required for this refactor. The new names can
@@ -432,8 +432,8 @@ profile=camera-raw must fail if structured object labels leak into agent input.
 
 ## Implementation Result
 
-Implemented in the command facade, Molmo cleanup runners, artifact metadata,
-report summary, checker, and focused tests:
+Historical implementation result, superseded by
+`docs/plans/operator-console-orthogonal-launch-refactor.md`:
 
 1. `just task::run household-cleanup <driver> <profile>` treats the third
    positional argument as the cleanup profile.

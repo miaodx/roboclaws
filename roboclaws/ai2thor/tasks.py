@@ -8,7 +8,7 @@ AI2THOR_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
     "ai2thor-world": TaskSurfaceSpec(
         surface_id="ai2thor-world",
         domain="ai2thor",
-        supported_drivers=("openclaw", "codex", "claude"),
+        supported_dispatch_runners=("openclaw", "codex", "claude"),
         supported_intents=("navigate", "photo-capture"),
         default_intent="navigate",
         supported_reports=("visual", "minimal"),

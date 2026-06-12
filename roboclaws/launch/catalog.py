@@ -1,9 +1,14 @@
 """Public surface launch catalog.
 
-This module is the Python source of truth for surface/intent/driver/evidence
-resolution. It deliberately stays shallow: declarations live in domain facades,
-while execution still delegates to the existing lower dispatcher in this
-migration checkpoint.
+The public launch catalog resolves orthogonal launch axes:
+
+``surface`` + ``world`` + ``backend`` + ``intent`` + ``agent_engine`` +
+``provider_profile`` + evidence/report mode + ``scenario_setup``.
+
+The current implementation still lowers to the private ``agent::run``
+dispatcher. That dispatcher may call older implementation recipes, but the
+catalog emits launch-shaped private dispatch targets rather than legacy public
+task ids.
 """
 
 from __future__ import annotations
@@ -11,12 +16,12 @@ from __future__ import annotations
 from roboclaws.ai2thor.tasks import AI2THOR_TASK_SPECS
 from roboclaws.games.tasks import GAME_TASK_SPECS
 from roboclaws.household.profiles import (
-    CAMERA_GROUNDED_LABELS_LANE,
-    SIM_PROJECTED_LABELS_CAMERA_LABELER,
     cleanup_profile_names,
     validate_evidence_lane_camera_labeler,
 )
 from roboclaws.household.tasks import HOUSEHOLD_TASK_SPECS
+from roboclaws.launch.agent_engines import AGENT_ENGINE_SPECS, AgentEngineSpec
+from roboclaws.launch.backends import BACKEND_SPECS, BackendSpec
 from roboclaws.launch.environment_setup import (
     ENVIRONMENT_SETUP_BASELINE,
     ENVIRONMENT_SETUP_OPTIONS,
@@ -29,6 +34,7 @@ from roboclaws.launch.intents import TASK_INTENT_SPECS, TaskIntentSpec
 from roboclaws.launch.plans import LaunchPlan
 from roboclaws.launch.runners import build_agent_run_argv
 from roboclaws.launch.task_specs import TaskSurfaceSpec
+from roboclaws.launch.worlds import DEFAULT_WORLD_BY_SURFACE, WORLD_SPECS, WorldSpec
 
 CANONICAL_SURFACES: set[str] = {
     "ai2thor-world",
@@ -38,16 +44,7 @@ CANONICAL_SURFACES: set[str] = {
 }
 
 CANONICAL_INTENTS: set[str] = set(TASK_INTENT_SPECS)
-
-CANONICAL_DRIVERS: set[str] = {
-    "openclaw",
-    "vlm",
-    "codex",
-    "claude",
-    "script",
-    "direct",
-    "mcp-smoke",
-}
+CANONICAL_AGENT_ENGINES: set[str] = set(AGENT_ENGINE_SPECS)
 
 SURFACE_SPECS: dict[str, TaskSurfaceSpec] = {
     **AI2THOR_TASK_SPECS,
@@ -56,43 +53,11 @@ SURFACE_SPECS: dict[str, TaskSurfaceSpec] = {
 }
 
 SUPPORTED_SURFACE_ROUTES: set[tuple[str, str, str]] = {
-    (surface_id, intent_id, driver)
+    (surface_id, intent_id, dispatch_runner)
     for surface_id, spec in SURFACE_SPECS.items()
     for intent_id in spec.supported_intents
-    for driver in spec.supported_drivers
-    if driver in TASK_INTENT_SPECS[intent_id].supported_drivers
-}
-
-# Compatibility constants for old lower dispatcher callers/tests.
-CANONICAL_TASKS: set[str] = {
-    "ai2thor-nav",
-    "territory",
-    "coverage",
-    "photo-chairs",
-    "semantic-map-build",
-    "household-cleanup",
-    "molmo-planner-proof",
-}
-
-LEGACY_TASK_ALIASES: dict[str, str] = {
-    "molmo-cleanup": "household-cleanup",
-}
-
-LEGACY_TASK_TO_SURFACE_INTENT: dict[str, tuple[str, str]] = {
-    "ai2thor-nav": ("ai2thor-world", "navigate"),
-    "photo-chairs": ("ai2thor-world", "photo-capture"),
-    "territory": ("ai2thor-games", "territory"),
-    "coverage": ("ai2thor-games", "coverage"),
-    "semantic-map-build": ("household-world", "map-build"),
-    "household-cleanup": ("household-world", "cleanup"),
-    "molmo-planner-proof": ("planner-proof", "planner-proof"),
-}
-
-SUPPORTED_ROUTES: set[tuple[str, str]] = {
-    (legacy_task, driver)
-    for legacy_task, (surface_id, intent_id) in LEGACY_TASK_TO_SURFACE_INTENT.items()
-    for driver in SURFACE_SPECS[surface_id].supported_drivers
-    if driver in TASK_INTENT_SPECS[intent_id].supported_drivers
+    for dispatch_runner in spec.supported_dispatch_runners
+    if dispatch_runner in TASK_INTENT_SPECS[intent_id].supported_dispatch_runners
 }
 
 
@@ -104,21 +69,176 @@ class LaunchError(ValueError):
         self.hint = hint
 
 
+def resolve_surface_launch(args: list[str] | tuple[str, ...]) -> LaunchPlan:
+    """Resolve ``just run::surface`` named arguments into a launch plan."""
+
+    overrides = tuple(args)
+    _reject_removed_public_axes(overrides)
+
+    surface_value = _override_value(overrides, "surface")
+    agent_engine_value = _override_value(overrides, "agent_engine")
+    if not surface_value or not agent_engine_value:
+        raise LaunchError(
+            "run::surface requires named surface= and agent_engine=",
+            "usage: just run::surface surface=<surface> agent_engine=<agent-engine> "
+            "[world=<world>] [backend=<backend>] [intent=<intent>] "
+            "[report=<report>|evidence_lane=<lane>] [key=value ...]",
+        )
+
+    surface_id = _normalize_surface(surface_value)
+    surface = SURFACE_SPECS[surface_id]
+    world = _normalize_world(_override_value(overrides, "world"), surface_id=surface_id)
+    backend = _normalize_backend(_override_value(overrides, "backend"), world=world)
+    agent_engine = _normalize_agent_engine(agent_engine_value)
+    provider_profile = _override_value(overrides, "provider_profile")
+    prompt = _override_value(overrides, "prompt") or ""
+    intent = TASK_INTENT_SPECS[
+        _normalize_intent(_override_value(overrides, "intent"), surface=surface, prompt=prompt)
+    ]
+
+    stripped_overrides = overrides
+    for key in (
+        "surface",
+        "world",
+        "backend",
+        "agent_engine",
+        "provider_profile",
+        "intent",
+    ):
+        stripped_overrides = _without_override(stripped_overrides, key)
+
+    return _resolve_launch(
+        surface=surface,
+        intent=intent,
+        world=world,
+        backend=backend,
+        agent_engine=agent_engine,
+        provider_profile=provider_profile,
+        raw_mode="",
+        overrides=stripped_overrides,
+        prompt=prompt,
+    )
+
+
+def _resolve_launch(
+    *,
+    surface: TaskSurfaceSpec,
+    intent: TaskIntentSpec,
+    world: WorldSpec,
+    backend: BackendSpec,
+    agent_engine: AgentEngineSpec,
+    provider_profile: str | None,
+    raw_mode: str,
+    overrides: tuple[str, ...],
+    prompt: str,
+) -> LaunchPlan:
+    if surface.surface_id not in intent.surface_ids:
+        raise LaunchError(
+            f"intent '{intent.intent_id}' cannot run on surface '{surface.surface_id}'"
+        )
+
+    dispatch_runner = _dispatch_runner_for_selection(
+        agent_engine=agent_engine,
+        intent=intent,
+        raw_mode=raw_mode,
+        overrides=overrides,
+    )
+    if (surface.surface_id, intent.intent_id, dispatch_runner) not in SUPPORTED_SURFACE_ROUTES:
+        raise LaunchError(
+            f"agent_engine '{agent_engine.id}' cannot run surface '{surface.surface_id}' "
+            f"intent '{intent.intent_id}'"
+        )
+
+    resolved_provider_profile = _resolve_provider_profile(
+        agent_engine=agent_engine,
+        provider_profile=provider_profile,
+    )
+    evidence_mode, profile, report, overrides = _resolve_evidence_mode(surface, raw_mode, overrides)
+    overrides = _merge_default_overrides(overrides, world.default_overrides)
+    overrides = _merge_default_overrides(overrides, backend.default_overrides)
+    overrides, dispatch_setup_overrides = _normalize_scenario_setup_overrides(
+        overrides,
+        surface=surface,
+        intent=intent,
+    )
+    goal_contract = normalize_goal_contract(surface=surface, intent=intent, raw_prompt=prompt)
+    plan_overrides = _overrides_with_surface_context(
+        overrides,
+        surface_id=surface.surface_id,
+        intent_id=intent.intent_id,
+        world_id=world.id,
+        backend_id=backend.id,
+        agent_engine_id=agent_engine.id,
+        provider_profile=resolved_provider_profile,
+        goal_contract_json=goal_contract.to_json(),
+    )
+    dispatch_overrides = (
+        *_without_launch_only_overrides(plan_overrides),
+        f"backend={backend.implementation_backend}",
+        *dispatch_setup_overrides,
+    )
+    argv = build_agent_run_argv(
+        dispatch_target=intent.dispatch_target,
+        agent_engine=agent_engine.id,
+        mode=evidence_mode,
+        overrides=dispatch_overrides,
+    )
+    evaluation = evaluation_spec_for_intent(intent)
+    return LaunchPlan(
+        argv=argv,
+        surface=surface.surface_id,
+        intent=intent.intent_id,
+        world=world.id,
+        backend=backend.id,
+        implementation_backend=backend.implementation_backend,
+        agent_engine=agent_engine.id,
+        provider_profile=resolved_provider_profile,
+        internal_runner_class=_internal_runner_class(
+            agent_engine=agent_engine,
+            dispatch_runner=dispatch_runner,
+            evidence_mode=evidence_mode,
+        ),
+        dispatch_runner=dispatch_runner,
+        dispatch_target=intent.dispatch_target,
+        evidence_mode=evidence_mode,
+        profile=profile,
+        report=report,
+        prompt_id=intent.prompt_id,
+        checker_id=intent.checker_id,
+        mcp_server_id=surface.mcp_server_id,
+        required_capabilities=tuple(
+            dict.fromkeys((*surface.required_capabilities, *intent.required_capabilities))
+        ),
+        required_artifacts=intent.required_artifacts,
+        goal_contract=goal_contract,
+        evaluation_id=evaluation.evaluation_id,
+        evaluation_hard_gates=evaluation.hard_gates,
+        evaluation_intent_gates=evaluation.intent_gates,
+        completion_claim_required=evaluation.completion_claim_required,
+        supported_reports=surface.supported_reports,
+        supported_profiles=surface.supported_profiles,
+        overrides=plan_overrides,
+    )
+
+
+def _reject_removed_public_axes(overrides: tuple[str, ...]) -> None:
+    if _override_value(overrides, "driver"):
+        raise LaunchError(
+            "driver= is no longer a public run::surface argument",
+            "use agent_engine=codex-cli|claude-code|openai-agents-sdk|direct-runner",
+        )
+    if _override_value(overrides, "environment_setup"):
+        raise LaunchError(
+            "environment_setup= is no longer a public run::surface argument",
+            "use scenario_setup=baseline|relocate-loose-objects|relocate-cleanup-related-objects",
+        )
+
+
 def _strip_named(value: str, name: str) -> str:
     prefix = f"{name}="
     if value.startswith(prefix):
         return value[len(prefix) :]
     return value
-
-
-def _normalize_driver(value: str) -> str:
-    driver = _strip_named(value, "driver")
-    if driver not in CANONICAL_DRIVERS:
-        raise LaunchError(
-            f"unsupported driver '{driver}'",
-            "expected openclaw|vlm|codex|claude|script|direct|mcp-smoke",
-        )
-    return driver
 
 
 def _normalize_surface(value: str) -> str:
@@ -129,6 +249,44 @@ def _normalize_surface(value: str) -> str:
             "expected ai2thor-world|ai2thor-games|household-world|planner-proof",
         )
     return surface
+
+
+def _normalize_world(value: str | None, *, surface_id: str) -> WorldSpec:
+    world_id = _strip_named(value, "world") if value else DEFAULT_WORLD_BY_SURFACE[surface_id]
+    spec = WORLD_SPECS.get(world_id)
+    if spec is None:
+        raise LaunchError(f"unsupported world '{world_id}'")
+    if spec.surface_id != surface_id:
+        raise LaunchError(
+            f"world '{world_id}' cannot run surface '{surface_id}'",
+            f"world '{world_id}' belongs to surface '{spec.surface_id}'",
+        )
+    return spec
+
+
+def _normalize_backend(value: str | None, *, world: WorldSpec) -> BackendSpec:
+    backend_id = _strip_named(value, "backend") if value else world.default_backend
+    spec = BACKEND_SPECS.get(backend_id)
+    if spec is None:
+        raise LaunchError(f"unsupported backend '{backend_id}'")
+    if backend_id not in world.available_backends:
+        raise LaunchError(
+            f"backend '{backend_id}' cannot run world '{world.id}'",
+            f"expected {'|'.join(world.available_backends)}",
+        )
+    return spec
+
+
+def _normalize_agent_engine(value: str) -> AgentEngineSpec:
+    agent_engine = _strip_named(value, "agent_engine")
+    spec = AGENT_ENGINE_SPECS.get(agent_engine)
+    if spec is None:
+        raise LaunchError(
+            f"unsupported agent_engine '{agent_engine}'",
+            "expected codex-cli|claude-code|openai-agents-sdk|direct-runner|"
+            "openclaw-gateway|vlm-policy|script-runner",
+        )
+    return spec
 
 
 def _normalize_intent(value: str | None, *, surface: TaskSurfaceSpec, prompt: str) -> str:
@@ -145,37 +303,6 @@ def _normalize_intent(value: str | None, *, surface: TaskSurfaceSpec, prompt: st
     if intent_id not in TASK_INTENT_SPECS:
         raise LaunchError(f"unsupported intent '{intent_id}'")
     return intent_id
-
-
-def _normalize_task(value: str) -> str:
-    task = _strip_named(value, "task")
-    task = LEGACY_TASK_ALIASES.get(task, task)
-    if task not in CANONICAL_TASKS:
-        raise LaunchError(
-            f"unsupported task '{task}'",
-            "expected ai2thor-nav|territory|coverage|photo-chairs|"
-            "semantic-map-build|household-cleanup|molmo-planner-proof",
-        )
-    return task
-
-
-def _split_mode_and_overrides(
-    raw_mode: str, raw_overrides: list[str]
-) -> tuple[str, tuple[str, ...]]:
-    mode = raw_mode
-    overrides = list(raw_overrides)
-
-    if mode.startswith("report="):
-        mode = mode.removeprefix("report=")
-    elif mode.startswith("profile="):
-        mode = mode.removeprefix("profile=")
-    elif mode.startswith("evidence_lane="):
-        mode = mode.removeprefix("evidence_lane=")
-    elif "=" in mode:
-        overrides.insert(0, mode)
-        mode = ""
-
-    return mode, tuple(overrides)
 
 
 def _override_value(overrides: tuple[str, ...], key: str) -> str | None:
@@ -210,14 +337,6 @@ def _resolve_evidence_mode(
                 f"expected {'|'.join(cleanup_profile_names())}",
             )
         camera_labeler = _override_value(overrides, "camera_labeler")
-        backend = _override_value(overrides, "backend") or surface.default_backend
-        if (
-            profile == CAMERA_GROUNDED_LABELS_LANE
-            and not camera_labeler
-            and backend == "agibot_molmospaces_sim"
-        ):
-            camera_labeler = SIM_PROJECTED_LABELS_CAMERA_LABELER
-            overrides = (*overrides, f"camera_labeler={camera_labeler}")
         visual_grounding = _override_value(overrides, "visual_grounding")
         if visual_grounding and not camera_labeler:
             raise LaunchError(
@@ -240,181 +359,62 @@ def _resolve_evidence_mode(
     return report, None, report, overrides
 
 
-def resolve_surface_launch(args: list[str] | tuple[str, ...]) -> LaunchPlan:
-    """Resolve ``just run::surface`` named arguments into a launch plan."""
-
-    overrides = tuple(args)
-    surface_value = _override_value(overrides, "surface")
-    driver_value = _override_value(overrides, "driver")
-    if not surface_value or not driver_value:
-        raise LaunchError(
-            "run::surface requires named surface= and driver=",
-            "usage: just run::surface surface=<surface> driver=<driver> [intent=<intent>] "
-            "[report=<report>|evidence_lane=<lane>] [key=value ...]",
-        )
-    surface_id = _normalize_surface(surface_value)
-    driver = _normalize_driver(driver_value)
-    surface = SURFACE_SPECS[surface_id]
-    prompt = _override_value(overrides, "prompt") or ""
-    intent_id = _normalize_intent(
-        _override_value(overrides, "intent"),
-        surface=surface,
-        prompt=prompt,
-    )
-    stripped_overrides = _without_override(
-        _without_override(_without_override(overrides, "surface"), "driver"),
-        "intent",
-    )
-    return _resolve_launch(
-        surface=surface,
-        intent=TASK_INTENT_SPECS[intent_id],
-        driver=driver,
-        raw_mode="",
-        overrides=stripped_overrides,
-        prompt=prompt,
-    )
-
-
-def resolve_task_launch(args: list[str] | tuple[str, ...]) -> LaunchPlan:
-    """Resolve legacy ``just task::run`` arguments through the surface model."""
-
-    if len(args) < 2:
-        raise LaunchError(
-            "task::run requires a task and driver",
-            "usage: just task::run <task> <driver> [mode] [key=value ...]",
-        )
-
-    task = _normalize_task(args[0])
-    driver = _normalize_driver(args[1])
-    raw_mode = args[2] if len(args) >= 3 else ""
-    mode, overrides = _split_mode_and_overrides(raw_mode, list(args[3:]))
-    surface_id, intent_id = LEGACY_TASK_TO_SURFACE_INTENT[task]
-    prompt = _override_value(overrides, "prompt") or ""
-    if (
-        task == "household-cleanup"
-        and prompt
-        and driver in {"codex", "claude"}
-        and not _override_value(overrides, "task_intent_mode")
-    ):
-        intent_id = "open-ended"
-    return _resolve_launch(
-        surface=SURFACE_SPECS[surface_id],
-        intent=TASK_INTENT_SPECS[intent_id],
-        driver=driver,
-        raw_mode=mode,
-        overrides=overrides,
-        prompt=prompt,
-    )
-
-
-def _resolve_launch(
+def _resolve_provider_profile(
     *,
-    surface: TaskSurfaceSpec,
+    agent_engine: AgentEngineSpec,
+    provider_profile: str | None,
+) -> str | None:
+    if not agent_engine.supported_provider_profiles:
+        if provider_profile:
+            raise LaunchError(f"agent_engine '{agent_engine.id}' does not accept provider_profile")
+        return None
+    selected = provider_profile or agent_engine.default_provider_profile
+    if selected not in agent_engine.supported_provider_profiles:
+        raise LaunchError(
+            f"provider_profile '{selected}' is unsupported for agent_engine '{agent_engine.id}'",
+            f"expected {'|'.join(agent_engine.supported_provider_profiles)}",
+        )
+    return selected
+
+
+def _dispatch_runner_for_selection(
+    *,
+    agent_engine: AgentEngineSpec,
     intent: TaskIntentSpec,
-    driver: str,
     raw_mode: str,
     overrides: tuple[str, ...],
-    prompt: str,
-) -> LaunchPlan:
-    if surface.surface_id not in intent.surface_ids:
-        raise LaunchError(
-            f"intent '{intent.intent_id}' cannot run on surface '{surface.surface_id}'"
-        )
-    if (surface.surface_id, intent.intent_id, driver) not in SUPPORTED_SURFACE_ROUTES:
-        raise LaunchError(
-            f"driver '{driver}' cannot run surface '{surface.surface_id}' "
-            f"intent '{intent.intent_id}'"
-        )
-    evidence_mode, profile, report, overrides = _resolve_evidence_mode(surface, raw_mode, overrides)
-    backend = _override_value(overrides, "backend") or surface.default_backend
-    overrides, dispatch_setup_overrides = _normalize_environment_setup_overrides(
-        overrides,
-        surface=surface,
-        intent=intent,
-    )
-    goal_contract = normalize_goal_contract(surface=surface, intent=intent, raw_prompt=prompt)
-    plan_overrides = _overrides_with_surface_context(
-        overrides,
-        surface_id=surface.surface_id,
-        intent_id=intent.intent_id,
-        goal_contract_json=goal_contract.to_json(),
-    )
-    dispatch_overrides = _without_launch_only_overrides(
-        (*plan_overrides, *dispatch_setup_overrides)
-    )
-    argv = build_agent_run_argv(
-        task=intent.lower_task,
-        driver=driver,
-        mode=evidence_mode,
-        overrides=dispatch_overrides,
-    )
-    evaluation = evaluation_spec_for_intent(intent)
-    return LaunchPlan(
-        argv=argv,
-        surface=surface.surface_id,
-        intent=intent.intent_id,
-        lower_task=intent.lower_task,
-        driver=driver,
-        evidence_mode=evidence_mode,
-        profile=profile,
-        report=report,
-        backend=backend,
-        prompt_id=intent.prompt_id,
-        checker_id=intent.checker_id,
-        mcp_server_id=surface.mcp_server_id,
-        required_capabilities=tuple(
-            dict.fromkeys((*surface.required_capabilities, *intent.required_capabilities))
-        ),
-        required_artifacts=intent.required_artifacts,
-        goal_contract=goal_contract,
-        evaluation_id=evaluation.evaluation_id,
-        evaluation_hard_gates=evaluation.hard_gates,
-        evaluation_intent_gates=evaluation.intent_gates,
-        completion_claim_required=evaluation.completion_claim_required,
-        supported_reports=surface.supported_reports,
-        supported_profiles=surface.supported_profiles,
-        overrides=plan_overrides,
-    )
+) -> str:
+    if agent_engine.id == "direct-runner":
+        profile = raw_mode or _override_value(overrides, "evidence_lane") or ""
+        if profile == "smoke" and intent.intent_id in {"cleanup", "open-ended"}:
+            return "mcp-smoke"
+    return agent_engine.dispatch_runner
 
 
-def _overrides_with_surface_context(
-    overrides: tuple[str, ...],
+def _internal_runner_class(
     *,
-    surface_id: str,
-    intent_id: str,
-    goal_contract_json: str,
+    agent_engine: AgentEngineSpec,
+    dispatch_runner: str,
+    evidence_mode: str,
+) -> str:
+    if dispatch_runner == "mcp-smoke" or evidence_mode == "smoke":
+        return "smoke"
+    return agent_engine.internal_runner_class
+
+
+def _merge_default_overrides(
+    overrides: tuple[str, ...],
+    defaults: tuple[str, ...],
 ) -> tuple[str, ...]:
-    merged = _without_override(
-        _without_override(_without_override(overrides, "surface"), "intent"),
-        "goal_contract_json",
-    )
-    if _override_value(merged, "task_surface") is None:
-        merged = (*merged, f"task_surface={surface_id}")
-    if _override_value(merged, "task_intent") is None:
-        merged = (*merged, f"task_intent={intent_id}")
-    if _override_value(merged, "goal_contract_json") is None:
-        merged = (*merged, f"goal_contract_json={goal_contract_json}")
+    merged = overrides
+    for item in defaults:
+        key = _override_key(item)
+        if key and _override_value(merged, key) is None:
+            merged = (*merged, item)
     return merged
 
 
-def _without_launch_only_overrides(overrides: tuple[str, ...]) -> tuple[str, ...]:
-    result = overrides
-    for key in (
-        "task_surface",
-        "task_intent",
-        "goal_contract_json",
-        "goal_contract_path",
-        "evidence_lane",
-        "profile",
-        "report",
-        "environment_setup",
-        "relocation_count",
-    ):
-        result = _without_override(result, key)
-    return result
-
-
-def _normalize_environment_setup_overrides(
+def _normalize_scenario_setup_overrides(
     overrides: tuple[str, ...],
     *,
     surface: TaskSurfaceSpec,
@@ -422,10 +422,15 @@ def _normalize_environment_setup_overrides(
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if surface.surface_id != "household-world":
         return overrides, ()
+    if _override_value(overrides, "environment_setup") is not None:
+        raise LaunchError(
+            "environment_setup= is no longer a public run::surface argument",
+            "use scenario_setup=baseline|relocate-loose-objects|relocate-cleanup-related-objects",
+        )
     if _override_value(overrides, "generated_mess_count") is not None:
         raise LaunchError(
             "generated_mess_count is no longer a public run::surface argument",
-            "use environment_setup=baseline|relocate-loose-objects|"
+            "use scenario_setup=baseline|relocate-loose-objects|"
             "relocate-cleanup-related-objects and relocation_count=<N>",
         )
     default_setup = (
@@ -433,10 +438,10 @@ def _normalize_environment_setup_overrides(
         if intent.intent_id == "cleanup"
         else ENVIRONMENT_SETUP_BASELINE
     )
-    setup = _override_value(overrides, "environment_setup") or default_setup
+    setup = _override_value(overrides, "scenario_setup") or default_setup
     if setup not in ENVIRONMENT_SETUP_OPTIONS:
         raise LaunchError(
-            f"unsupported environment_setup '{setup}'",
+            f"unsupported scenario_setup '{setup}'",
             f"expected {'|'.join(ENVIRONMENT_SETUP_OPTIONS)}",
         )
     relocation_count = _override_value(overrides, "relocation_count")
@@ -447,21 +452,81 @@ def _normalize_environment_setup_overrides(
         private_count = relocation_count
     elif relocation_count not in {None, "", "0"}:
         raise LaunchError(
-            "relocation_count is only valid when environment_setup relocates objects",
-            "use environment_setup=relocate-loose-objects or "
-            "environment_setup=relocate-cleanup-related-objects",
+            "relocation_count is only valid when scenario_setup relocates objects",
+            "use scenario_setup=relocate-loose-objects or "
+            "scenario_setup=relocate-cleanup-related-objects",
         )
     merged = _without_override(
         _without_override(
-            _without_override(overrides, "environment_setup"),
+            _without_override(overrides, "scenario_setup"),
             "relocation_count",
         ),
         "generated_mess_count",
     )
-    merged = (*merged, f"environment_setup={setup}")
+    merged = (*merged, f"scenario_setup={setup}")
     if setup in RELOCATION_SETUP_OPTIONS:
         merged = (*merged, f"relocation_count={relocation_count}")
     return merged, (f"generated_mess_count={private_count}",)
+
+
+def _overrides_with_surface_context(
+    overrides: tuple[str, ...],
+    *,
+    surface_id: str,
+    intent_id: str,
+    world_id: str,
+    backend_id: str,
+    agent_engine_id: str,
+    provider_profile: str | None,
+    goal_contract_json: str,
+) -> tuple[str, ...]:
+    merged = overrides
+    for key in (
+        "surface",
+        "intent",
+        "world",
+        "backend",
+        "agent_engine",
+        "provider_profile",
+        "goal_contract_json",
+    ):
+        merged = _without_override(merged, key)
+    if _override_value(merged, "task_surface") is None:
+        merged = (*merged, f"task_surface={surface_id}")
+    if _override_value(merged, "task_intent") is None:
+        merged = (*merged, f"task_intent={intent_id}")
+    if _override_value(merged, "world") is None:
+        merged = (*merged, f"world={world_id}")
+    if _override_value(merged, "backend") is None:
+        merged = (*merged, f"backend={backend_id}")
+    if _override_value(merged, "agent_engine") is None:
+        merged = (*merged, f"agent_engine={agent_engine_id}")
+    if provider_profile and _override_value(merged, "provider_profile") is None:
+        merged = (*merged, f"provider_profile={provider_profile}")
+    if _override_value(merged, "goal_contract_json") is None:
+        merged = (*merged, f"goal_contract_json={goal_contract_json}")
+    return merged
+
+
+def _without_launch_only_overrides(overrides: tuple[str, ...]) -> tuple[str, ...]:
+    result = overrides
+    for key in (
+        "task_surface",
+        "task_intent",
+        "world",
+        "backend",
+        "agent_engine",
+        "provider_profile",
+        "goal_contract_json",
+        "goal_contract_path",
+        "evidence_lane",
+        "profile",
+        "report",
+        "scenario_setup",
+        "relocation_count",
+    ):
+        result = _without_override(result, key)
+    return result
 
 
 def _parse_nonnegative_int(raw: str, *, key: str) -> int:
@@ -472,3 +537,9 @@ def _parse_nonnegative_int(raw: str, *, key: str) -> int:
     if value < 0:
         raise LaunchError(f"{key} must be >= 0")
     return value
+
+
+def _override_key(item: str) -> str:
+    if "=" not in item:
+        return ""
+    return item.split("=", 1)[0].removeprefix("--").replace("-", "_")

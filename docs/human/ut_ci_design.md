@@ -109,11 +109,11 @@ gate when it requires any of the following:
 | CI Job | Current Level | Local Equivalent |
 | --- | --- | --- |
 | `lint-and-mock` | required PR gate | `just agent::verify ci-required` |
-| `real-model-smoke` | required main gate today; review if provider flakiness grows | `just run::surface surface=ai2thor-games driver=vlm intent=territory report=visual ...` and `just run::surface surface=ai2thor-games driver=vlm intent=coverage report=visual ...` |
-| `openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual ...` |
-| `territory-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games driver=openclaw intent=territory report=visual ...` |
-| `coverage-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games driver=openclaw intent=coverage report=visual ...` |
-| `photo-task-smoke` | opt-in expensive gate | `just run::surface surface=ai2thor-world driver=openclaw intent=photo-capture report=visual ...` |
+| `real-model-smoke` | required main gate today; review if provider flakiness grows | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=territory agent_engine=vlm-policy report=visual ...` and `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=coverage agent_engine=vlm-policy report=visual ...` |
+| `openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual ...` |
+| `territory-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=territory agent_engine=openclaw-gateway report=visual ...` |
+| `coverage-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=coverage agent_engine=openclaw-gateway report=visual ...` |
+| `photo-task-smoke` | opt-in expensive gate | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=photo-capture agent_engine=openclaw-gateway report=visual ...` |
 | `molmo-live-cleanup` | opt-in expensive gate | `just molmo::ci-rehearsal ...` or the live matrix script |
 | `publish-pages` | required main gate | no single facade today; keep focused tests for Pages assembly constraints |
 

@@ -147,14 +147,18 @@ def test_cleanup_report_prefers_recorded_rerun_command(
     )
     prior = "output/household/semantic-map-build/anchor/seed-7/runtime_metric_map.json"
     command = (
-        "just task::run household-cleanup codex evidence_lane=world-oracle-labels seed=7 "
-        "generated_mess_count=5 map_mode=minimal robot_views=on "
+        "just run::surface surface=household-world world=molmospaces/val_0 "
+        "backend=mujoco intent=cleanup agent_engine=codex-cli "
+        "provider_profile=codex-env evidence_lane=world-oracle-labels seed=7 "
+        "scenario_setup=relocate-cleanup-related-objects relocation_count=5 "
+        "map_mode=minimal robot_views=on "
         f"runtime_map_prior={prior} "
         "output_dir=output/household/cleanup/codex-from-semantic-map-with-views"
     )
     monkeypatch.setenv(
         "ROBOCLAWS_REPORT_RERUN_COMMAND",
-        "just task::run household-cleanup direct evidence_lane=world-oracle-labels seed=7",
+        "just run::surface surface=household-world agent_engine=direct-runner "
+        "intent=cleanup evidence_lane=world-oracle-labels seed=7",
     )
     run_result = {
         "cleanup_status": score.status,

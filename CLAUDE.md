@@ -72,8 +72,8 @@ python examples/games/coverage_game.py --agents 3
 Common `just` recipes use the small public facade:
 
 ```bash
-just run::surface surface=ai2thor-world driver=openclaw intent=navigate
-just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=smoke
+just run::surface surface=ai2thor-world agent_engine=openclaw-gateway intent=navigate
+just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=smoke
 just agent::verify mock                          # maintainer confidence gate
 ```
 
@@ -99,7 +99,7 @@ explicitly asks for a system-CLI debugging run.
 
 See [`docs/human/contributing.md`](docs/human/contributing.md#dev-tooling-uv-and-just)
 for the one-line `just` install + tab completion. See [`just/README.md`](just/README.md)
-for the task/driver/report grammar and prompt mappings.
+for the launch-axis grammar and prompt mappings.
 
 ## Code style
 

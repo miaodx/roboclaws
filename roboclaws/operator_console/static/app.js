@@ -1,6 +1,10 @@
 const state = {
+  worlds: [],
   routes: [],
+  combinations: [],
+  evidenceLanes: [],
   readiness: {},
+  selectedWorld: null,
   selectedRoute: null,
   activeRunId: null,
   activeRouteId: "",
@@ -27,6 +31,12 @@ const MAIN_CONTENT_MIN_HEIGHT = 360;
 const els = {
   appShell: document.querySelector(".app-shell"),
   routeList: document.getElementById("route-list"),
+  backendInput: document.getElementById("backend-input"),
+  agentEngineInput: document.getElementById("agent-engine-input"),
+  evidenceLaneInput: document.getElementById("evidence-lane-input"),
+  providerProfileFields: document.getElementById("provider-profile-fields"),
+  providerProfileInput: document.getElementById("provider-profile-input"),
+  providerProfileHelp: document.getElementById("provider-profile-help"),
   taskPrompt: document.getElementById("prompt-input"),
   promptLabel: document.getElementById("prompt-label"),
   promptHelp: document.getElementById("prompt-copy"),
@@ -35,7 +45,7 @@ const els = {
   intentInput: document.getElementById("intent-input"),
   intentPreview: document.getElementById("intent-preview"),
   seedInput: document.getElementById("seed-input"),
-  environmentSetupInput: document.getElementById("environment-setup-input"),
+  scenarioSetupInput: document.getElementById("scenario-setup-input"),
   relocationCountField: document.getElementById("relocation-count-field"),
   relocationCountInput: document.getElementById("relocation-count-input"),
   portInput: document.getElementById("port-input"),
@@ -91,9 +101,20 @@ const els = {
 
 async function boot() {
   const payload = await fetchJson("/api/routes");
-  state.routes = payload.routes || [];
+  state.worlds = payload.worlds || [];
+  state.evidenceLanes = payload.evidence_lanes || [];
+  state.combinations = payload.combinations || payload.routes || [];
+  state.routes = state.combinations;
   state.readiness = payload.readiness || {};
-  state.selectedRoute = state.routes.find((route) => route.enabled) || state.routes[0];
+  state.selectedWorld = state.worlds[0] || null;
+  state.selectedRoute =
+    combinationsForWorld(state.selectedWorld && state.selectedWorld.id).find((route) => route.enabled) ||
+    state.combinations.find((route) => route.enabled) ||
+    state.combinations[0];
+  if (state.selectedRoute) {
+    state.selectedWorld =
+      state.worlds.find((world) => world.id === state.selectedRoute.world_id) || state.selectedWorld;
+  }
   renderRoutes();
   renderSelection();
   bindEvents();
@@ -111,11 +132,15 @@ function bindEvents() {
   });
   [
     els.contextInput,
-    els.environmentSetupInput,
+    els.scenarioSetupInput,
     els.relocationCountInput,
     els.codexProviderInput,
     els.claudeProviderInput,
     els.portInput,
+    els.backendInput,
+    els.agentEngineInput,
+    els.evidenceLaneInput,
+    els.providerProfileInput,
     els.localizationGate,
     els.enablementGate,
     els.estopGate,
@@ -388,31 +413,34 @@ function persistStateRailWidth(width) {
 
 function renderRoutes() {
   els.routeList.innerHTML = "";
-  for (const route of state.routes) {
+  for (const world of state.worlds) {
+    const worldCombinations = combinationsForWorld(world.id);
+    const enabledCount = worldCombinations.filter((item) => item.enabled).length;
     const button = document.createElement("button");
-    const readiness = effectiveReadiness(route);
-    const selectable = Boolean(route.enabled);
-    const display = routeStatusDisplay(route, readiness);
+    const selectable = enabledCount > 0;
+    const active = state.selectedWorld && world.id === state.selectedWorld.id;
+    const display = selectable
+      ? { label: world.availability === "experimental" ? "EXPERIMENTAL" : "READY", className: world.availability === "experimental" ? "warning" : "ready" }
+      : { label: "UNAVAILABLE", className: "blocked" };
     button.type = "button";
-    button.className = `route-card${route.id === state.selectedRoute.id ? " active" : ""}`;
-    button.dataset.routeId = route.id;
+    button.className = `route-card${active ? " active" : ""}`;
+    button.dataset.worldId = world.id;
     button.disabled = !selectable;
     button.innerHTML = `
       <div class="route-card-title">
-        <span>${escapeHtml(route.label)}</span>
+        <span>${escapeHtml(world.label)}</span>
         <span class="badge ${display.className}">${display.label}</span>
       </div>
-      <div class="meta-label">${escapeHtml(route.driver_label)} / ${escapeHtml(route.profile)}</div>
-      <div>${escapeHtml(route.backend)}</div>
-      ${
-        route.disabled_reason
-          ? `<div class="field-help">${escapeHtml(route.disabled_reason)}</div>`
-          : ""
-      }
+      <div class="meta-label">${escapeHtml((world.tags || []).join(" / "))}</div>
+      <div>${escapeHtml((world.available_backends || []).join(", "))}</div>
+      <div class="field-help">${enabledCount} launch option${enabledCount === 1 ? "" : "s"}</div>
     `;
     button.addEventListener("click", () => {
-      state.selectedRoute = route;
-      state.selectedIntent = route.default_intent || route.intent || "";
+      state.selectedWorld = world;
+      state.selectedRoute =
+        combinationsForWorld(world.id).find((item) => item.enabled) ||
+        combinationsForWorld(world.id)[0];
+      state.selectedIntent = state.selectedRoute ? state.selectedRoute.intent_id : "";
       renderRoutes();
       renderSelection();
       refreshSelectedRouteReadiness();
@@ -421,8 +449,43 @@ function renderRoutes() {
   }
 }
 
+function combinationsForWorld(worldId) {
+  return state.combinations.filter((item) => item.world_id === worldId);
+}
+
+function selectedCombinationFromAxes() {
+  const worldId = state.selectedWorld && state.selectedWorld.id;
+  const backendId = els.backendInput.value;
+  const intentId = els.intentInput.value || state.selectedIntent;
+  const agentEngineId = els.agentEngineInput.value;
+  const evidenceLane = els.evidenceLaneInput.value || "world-oracle-labels";
+  const axisCandidates = combinationsForWorld(worldId).filter(
+    (item) =>
+      item.backend_id === backendId &&
+      item.intent_id === intentId &&
+      item.agent_engine_id === agentEngineId
+  );
+  const candidates = axisCandidates.filter((item) => item.evidence_lane === evidenceLane);
+  const providerProfile = els.providerProfileInput.value;
+  return (
+    candidates.find(
+      (item) => item.enabled && (!item.provider_profile || item.provider_profile === providerProfile)
+    ) ||
+    candidates.find((item) => item.enabled) ||
+    axisCandidates.find(
+      (item) => item.enabled && (!item.provider_profile || item.provider_profile === providerProfile)
+    ) ||
+    axisCandidates.find((item) => item.enabled) ||
+    candidates[0] ||
+    axisCandidates[0] ||
+    state.selectedRoute
+  );
+}
+
 function renderSelection() {
-  const route = state.selectedRoute;
+  renderAxisSelectors();
+  const route = selectedCombinationFromAxes();
+  state.selectedRoute = route;
   if (!route) {
     return;
   }
@@ -432,7 +495,7 @@ function renderSelection() {
   ensureActiveViewAvailable(route);
   renderViewModes(route);
   renderIntentSelector(route);
-  renderEnvironmentSetup(route);
+  renderScenarioSetup(route);
   renderOperatorInput(route);
 
   const gates = readiness.gates || route.gates || [];
@@ -460,6 +523,120 @@ function renderSelection() {
 
   els.commandPreview.textContent = commandPreview(route);
   renderStartAction(route, readiness);
+}
+
+function renderAxisSelectors() {
+  const worldId = state.selectedWorld && state.selectedWorld.id;
+  const combos = combinationsForWorld(worldId);
+  renderSelectOptions(
+    els.backendInput,
+    uniqueOptions(combos, "backend_id", "backend_label"),
+    state.selectedRoute && state.selectedRoute.backend_id
+  );
+  renderSelectOptions(
+    els.intentInput,
+    uniqueOptions(combos, "intent_id", "intent_id", intentLabel),
+    state.selectedIntent || (state.selectedRoute && state.selectedRoute.intent_id)
+  );
+  renderSelectOptions(
+    els.agentEngineInput,
+    uniqueOptions(combos, "agent_engine_id", "agent_engine_label"),
+    state.selectedRoute && state.selectedRoute.agent_engine_id
+  );
+  renderSelectOptions(
+    els.evidenceLaneInput,
+    evidenceLaneOptions(combos),
+    state.selectedRoute && state.selectedRoute.evidence_lane
+  );
+  const selected = selectedCombinationFromAxes();
+  renderProviderProfileOptions(selected);
+}
+
+function uniqueOptions(items, valueKey, labelKey, labelFn) {
+  const seen = new Map();
+  for (const item of items) {
+    const value = item[valueKey] || "";
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    const rawLabel = item[labelKey] || value;
+    seen.set(value, {
+      value,
+      label: labelFn ? labelFn(rawLabel) : rawLabel,
+      disabled: false,
+    });
+  }
+  return [...seen.values()];
+}
+
+function evidenceLaneOptions(combos) {
+  const backendId = els.backendInput.value;
+  const intentId = els.intentInput.value || state.selectedIntent;
+  const agentEngineId = els.agentEngineInput.value;
+  const laneRows = state.evidenceLanes.length
+    ? state.evidenceLanes
+    : uniqueOptions(combos, "evidence_lane", "evidence_lane");
+  return laneRows.map((lane) => {
+    const value = lane.id || lane.value;
+    const matching = combos.filter(
+      (item) =>
+        item.backend_id === backendId &&
+        item.intent_id === intentId &&
+        item.agent_engine_id === agentEngineId &&
+        item.evidence_lane === value
+    );
+    const enabledMatch = matching.find((item) => item.enabled);
+    const disabledMatch = matching.find((item) => !item.enabled);
+    const reason = disabledMatch
+      ? disabledMatch.unsupported_reason || disabledMatch.disabled_reason || "Unavailable for this route."
+      : "Unavailable for this route.";
+    return {
+      value,
+      label: lane.label || value,
+      disabled: !enabledMatch,
+      title: enabledMatch ? "" : reason,
+    };
+  });
+}
+
+function renderSelectOptions(select, options, selectedValue) {
+  const previous = selectedValue || select.value || "";
+  const fallback = options.find((option) => !option.disabled) || options[0];
+  select.innerHTML = "";
+  for (const option of options) {
+    const node = document.createElement("option");
+    node.value = option.value;
+    node.textContent = option.label;
+    node.disabled = Boolean(option.disabled);
+    if (option.title) {
+      node.title = option.title;
+    }
+    node.selected = option.value === previous;
+    select.appendChild(node);
+  }
+  if ((!select.value || (select.selectedOptions[0] && select.selectedOptions[0].disabled)) && fallback) {
+    select.value = fallback.value;
+  }
+}
+
+function renderProviderProfileOptions(route) {
+  if (!route || !route.provider_profile) {
+    els.providerProfileFields.hidden = true;
+    els.providerProfileInput.innerHTML = "";
+    return;
+  }
+  els.providerProfileFields.hidden = false;
+  const profiles = [...new Set(
+    combinationsForWorld(route.world_id)
+      .filter((item) => item.agent_engine_id === route.agent_engine_id)
+      .map((item) => item.provider_profile)
+      .filter(Boolean)
+  )];
+  renderSelectOptions(
+    els.providerProfileInput,
+    profiles.map((profile) => ({ value: profile, label: profile })),
+    route.provider_profile
+  );
 }
 
 function renderOperatorInput(route) {
@@ -545,8 +722,8 @@ function renderSelectedRouteSummary(route, readiness) {
       <span>${escapeHtml(route.label)}</span>
       <span class="badge ${status.className}">${status.label}</span>
     </div>
-    <div class="meta-label">${escapeHtml(route.driver_label)} / ${escapeHtml(route.profile)}</div>
-    <div class="field-help">${escapeHtml(route.backend)}</div>
+    <div class="meta-label">${escapeHtml(route.agent_engine_label || route.agent_engine_id)} / ${escapeHtml(route.evidence_lane)}</div>
+    <div class="field-help">${escapeHtml(route.world_label || route.world_id)} / ${escapeHtml(route.backend_label || route.backend_id)}</div>
     <div class="field-help">${escapeHtml(interpretation.intentLabel)} / ${escapeHtml(
       interpretation.goalScope
     )}</div>
@@ -557,51 +734,42 @@ function renderRouteFields(route) {
   const fieldGroups = new Set(route.field_groups || ["common"]);
 
   els.commonFields.hidden = !route.enabled || !fieldGroups.has("common");
-  els.codexFields.hidden = !route.enabled || route.driver !== "codex";
-  els.claudeFields.hidden = !route.enabled || route.driver !== "claude";
+  els.codexFields.hidden = true;
+  els.claudeFields.hidden = true;
   els.isaacFields.hidden = !fieldGroups.has("isaac");
   els.agibotFields.hidden = !fieldGroups.has("agibot");
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
 }
 
-function renderEnvironmentSetup(route) {
+function renderScenarioSetup(route) {
   const defaults = routeDefaultOverrides(route);
   const intent = selectedIntentForRoute(route);
   const selectionKey = `${route.id}:${intent}`;
-  const defaultSetup = defaultEnvironmentSetup(route, intent, defaults);
+  const defaultSetup = defaultScenarioSetup(route, intent, defaults);
   if (state.setupSelectionKey !== selectionKey) {
-    els.environmentSetupInput.value = defaultSetup;
+    els.scenarioSetupInput.value = defaultSetup;
     els.relocationCountInput.value = defaults.relocation_count || "5";
     state.setupSelectionKey = selectionKey;
   }
   if (!els.relocationCountInput.value && defaults.relocation_count) {
     els.relocationCountInput.value = defaults.relocation_count;
   }
-  const relocation = selectedEnvironmentSetup() !== "baseline";
+  const relocation = selectedScenarioSetup() !== "baseline";
   els.relocationCountField.hidden = !relocation;
   els.relocationCountInput.disabled = !relocation;
 }
 
-function defaultEnvironmentSetup(route, intent, defaults) {
+function defaultScenarioSetup(route, intent, defaults) {
   if (intent === "cleanup") {
-    return defaults.environment_setup || "relocate-cleanup-related-objects";
+    return route.scenario_setup || defaults.scenario_setup || "relocate-cleanup-related-objects";
   }
   return "baseline";
 }
 
 function renderIntentSelector(route) {
-  const options = intentOptions(route);
   state.selectedIntent = selectedIntentForRoute(route);
-  els.intentInput.innerHTML = "";
-  for (const option of options) {
-    const node = document.createElement("option");
-    node.value = option.id;
-    node.textContent = option.label;
-    node.selected = option.id === state.selectedIntent;
-    els.intentInput.appendChild(node);
-  }
-  els.intentFields.hidden = !route.enabled || options.length === 0;
-  els.intentInput.disabled = options.length <= 1;
+  els.intentFields.hidden = !route.enabled;
+  els.intentInput.disabled = false;
   const interpretation = launchInterpretation(route);
   els.intentPreview.innerHTML = `
     <dl class="state-list compact">
@@ -621,9 +789,6 @@ function commandPreview(route) {
   const intentIndex = parts.findIndex((part) => String(part).startsWith("intent="));
   if (intentIndex >= 0) {
     parts[intentIndex] = `intent=${selected}`;
-  } else {
-    const driverIndex = parts.findIndex((part) => String(part).startsWith("driver="));
-    parts.splice(driverIndex >= 0 ? driverIndex + 1 : 2, 0, `intent=${selected}`);
   }
   const prompt = launchPromptText();
   if (route.supports_prompt && prompt) {
@@ -633,9 +798,9 @@ function commandPreview(route) {
 }
 
 function commandPartsWithSetup(parts) {
-  const setup = selectedEnvironmentSetup();
-  const next = withoutKeys(parts, ["environment_setup", "relocation_count"]);
-  next.push(`environment_setup=${setup}`);
+  const setup = selectedScenarioSetup();
+  const next = withoutKeys(parts, ["scenario_setup", "relocation_count"]);
+  next.push(`scenario_setup=${setup}`);
   if (setup !== "baseline") {
     next.push(`relocation_count=${els.relocationCountInput.value || "5"}`);
   }
@@ -649,8 +814,8 @@ function withoutKeys(parts, keys) {
   });
 }
 
-function selectedEnvironmentSetup() {
-  return els.environmentSetupInput.value || "baseline";
+function selectedScenarioSetup() {
+  return els.scenarioSetupInput.value || "baseline";
 }
 
 function routeDefaultOverrides(route) {
@@ -899,7 +1064,7 @@ function handleStartAction() {
 
 function attachExistingRun(run) {
   state.activeRunId = run.run_id;
-  state.activeRouteId = run.route_id || state.selectedRoute.id;
+  state.activeRouteId = run.selection_id || run.route_id || state.selectedRoute.id;
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   startPolling();
 }
@@ -910,14 +1075,16 @@ async function attachLatestResult() {
     els.eventList.textContent = result.error;
     return;
   }
-  const route = state.routes.find((item) => item.id === result.route_id);
+  const route = state.routes.find(
+    (item) => item.id === (result.selection_id || result.route_id)
+  );
   if (route) {
     state.selectedRoute = route;
     renderRoutes();
     renderSelection();
   }
   state.activeRunId = result.run_id;
-  state.activeRouteId = result.route_id || (route ? route.id : state.selectedRoute.id);
+  state.activeRouteId = result.selection_id || result.route_id || (route ? route.id : state.selectedRoute.id);
   els.eventList.textContent = `Attached latest result ${result.run_id}${
     result.display_run_id ? ` / ${result.display_run_id}` : ""
   }.`;
@@ -933,15 +1100,20 @@ function scheduleReadinessRefresh() {
 }
 
 async function refreshSelectedRouteReadiness() {
+  state.selectedRoute = selectedCombinationFromAxes();
   const route = state.selectedRoute;
   if (!route || !route.enabled) {
     return;
   }
   const params = new URLSearchParams({
-    route_id: route.id,
+    selection_id: route.id,
     host: "127.0.0.1",
     port: els.portInput.value || "18788",
+    scenario_setup: selectedScenarioSetup(),
   });
+  if (selectedProviderProfile()) {
+    params.set("provider_profile", selectedProviderProfile());
+  }
   if (els.contextInput.value) {
     params.set("context_json", els.contextInput.value);
   }
@@ -950,12 +1122,6 @@ async function refreshSelectedRouteReadiness() {
     params.set("localization_ready", els.localizationGate.checked ? "true" : "false");
     params.set("run_enabled", els.enablementGate.checked ? "true" : "false");
     params.set("estop_ready", els.estopGate.checked ? "true" : "false");
-  }
-  if (route.driver === "codex") {
-    params.set("codex_provider", selectedCodexProvider());
-  }
-  if (route.driver === "claude") {
-    params.set("claude_provider", selectedClaudeProvider());
   }
   const readiness = await fetchJson(`/api/readiness?${params.toString()}`);
   if (readiness.error) {
@@ -971,12 +1137,9 @@ function confirmLaunch() {
   const route = state.selectedRoute;
   const promptSource = launchPromptText() ? "custom" : "default";
   const interpretation = launchInterpretation(route);
-  const providerRows =
-    route.driver === "codex"
-      ? `<dt>Provider</dt><dd>${escapeHtml(selectedCodexProvider())}</dd>`
-      : route.driver === "claude"
-        ? `<dt>Provider</dt><dd>${escapeHtml(selectedClaudeProviderLabel())}</dd>`
-        : "";
+  const providerRows = route.provider_profile
+    ? `<dt>Provider</dt><dd>${escapeHtml(selectedProviderProfile())}</dd>`
+    : "";
   const movementRows = isAgibotRoute(route)
     ? `<dt>Movement</dt><dd>${escapeHtml(
         els.realMovementGate.checked ? "enabled" : "dry-run"
@@ -984,10 +1147,10 @@ function confirmLaunch() {
     : "";
   const summary = `
     <dl class="state-list">
-      <dt>Route</dt><dd>${escapeHtml(route.label)}</dd>
-      <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver)}</dd>
-      <dt>Backend</dt><dd>${escapeHtml(route.backend)}</dd>
-      <dt>Profile</dt><dd>${escapeHtml(route.profile)}</dd>
+      <dt>World</dt><dd>${escapeHtml(route.world_label || route.world_id)}</dd>
+      <dt>Backend</dt><dd>${escapeHtml(route.backend_label || route.backend_id)}</dd>
+      <dt>Agent</dt><dd>${escapeHtml(route.agent_engine_label || route.agent_engine_id)}</dd>
+      <dt>Evidence</dt><dd>${escapeHtml(route.evidence_lane)}</dd>
       <dt>Intent</dt><dd>${escapeHtml(interpretation.intentLabel)}</dd>
       <dt>Goal scope</dt><dd>${escapeHtml(interpretation.goalScope)}</dd>
       <dt>Checker</dt><dd>${escapeHtml(interpretation.checker)}</dd>
@@ -1017,9 +1180,9 @@ function confirmNextGoal() {
   const summary = `
     <dl class="state-list">
       <dt>Parent Run</dt><dd>${escapeHtml(state.activeRunId || "")}</dd>
-      <dt>Route</dt><dd>${escapeHtml(route.label || state.selectedRoute.label)}</dd>
-      <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver || "")}</dd>
-      <dt>Backend</dt><dd>${escapeHtml(route.backend || "")}</dd>
+      <dt>Launch</dt><dd>${escapeHtml(route.label || state.selectedRoute.label)}</dd>
+      <dt>World</dt><dd>${escapeHtml(route.world_label || route.world_id || "")}</dd>
+      <dt>Backend</dt><dd>${escapeHtml(route.backend_label || route.backend_id || "")}</dd>
       <dt>Next Goal</dt><dd>custom</dd>
       <dt>Context</dt><dd>public parent artifacts only</dd>
     </dl>
@@ -1064,7 +1227,9 @@ async function sendNextGoal({ confirmed = false } = {}) {
   }
   if (result.started_run && result.started_run.run_id) {
     state.activeRunId = result.started_run.run_id;
-    state.activeRouteId = result.started_run.route
+    state.activeRouteId = result.started_run.launch_selection
+      ? result.started_run.launch_selection.id
+      : result.started_run.route
       ? result.started_run.route.id
       : state.activeRouteId || state.selectedRoute.id;
     state.activeState = result.started_run;
@@ -1112,9 +1277,15 @@ function confirmAction({ title, cta, body, bodyHtml, onConfirm }) {
 }
 
 async function launchRun() {
+  const route = state.selectedRoute;
   const body = {
-    route_id: state.selectedRoute.id,
-    intent: selectedIntent(),
+    world_id: route.world_id,
+    backend_id: route.backend_id,
+    intent_id: selectedIntent(),
+    agent_engine_id: route.agent_engine_id,
+    provider_profile: selectedProviderProfile(),
+    evidence_lane: route.evidence_lane,
+    scenario_setup: selectedScenarioSetup(),
     prompt: launchPromptText(),
     overrides: {
       seed: els.seedInput.value || "7",
@@ -1127,8 +1298,7 @@ async function launchRun() {
       estop_ready: els.estopGate.checked,
     },
   };
-  body.overrides.environment_setup = selectedEnvironmentSetup();
-  if (body.overrides.environment_setup !== "baseline" && els.relocationCountInput.value) {
+  if (body.scenario_setup !== "baseline" && els.relocationCountInput.value) {
     body.overrides.relocation_count = els.relocationCountInput.value;
   }
   if (els.contextInput.value) {
@@ -1140,13 +1310,13 @@ async function launchRun() {
   if (els.isaacSceneInput.value) {
     body.overrides.isaac_scene_usd_path = els.isaacSceneInput.value;
   }
-  if (state.selectedRoute.driver === "codex") {
+  if (route.agent_engine_id === "codex-cli" || route.agent_engine_id === "openai-agents-sdk") {
     body.env_overrides = {
-      ROBOCLAWS_CODEX_PROVIDER: selectedCodexProvider(),
+      ROBOCLAWS_CODEX_PROVIDER: selectedProviderProfile(),
     };
-  } else if (state.selectedRoute.driver === "claude") {
+  } else if (route.agent_engine_id === "claude-code") {
     body.env_overrides = {
-      ROBOCLAWS_CLAUDE_PROVIDER: selectedClaudeProvider(),
+      ROBOCLAWS_CLAUDE_PROVIDER: selectedProviderProfile(),
     };
   }
 
@@ -1160,7 +1330,7 @@ async function launchRun() {
     return;
   }
   state.activeRunId = result.run_id;
-  state.activeRouteId = state.selectedRoute.id;
+  state.activeRouteId = route.id;
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   startPolling();
 }
@@ -1185,7 +1355,9 @@ async function pollState() {
     return;
   }
   state.activeState = payload;
-  if (payload.route && payload.route.id) {
+  if (payload.launch_selection && payload.launch_selection.id) {
+    state.activeRouteId = payload.launch_selection.id;
+  } else if (payload.route && payload.route.id) {
     state.activeRouteId = payload.route.id;
   }
   renderRunState(payload);
@@ -1195,7 +1367,7 @@ async function pollState() {
 }
 
 function renderRunState(payload) {
-  const route = payload.route || state.selectedRoute || {};
+  const route = payload.launch_selection || payload.route || state.selectedRoute || {};
   const attemptLabel = payload.display_run_id && payload.display_run_id !== payload.run_id
     ? ` / ${payload.display_run_id}`
     : "";
@@ -1221,9 +1393,10 @@ function renderRunState(payload) {
     ${decision.blocked_reason ? `<p class="field-help">${escapeHtml(decision.blocked_reason)}</p>` : ""}
   `;
   renderToolPanel(payload);
-  els.proofPanel.textContent = `${payload.checker_status.status || "pending"}: ${
-    payload.checker_status.message ||
-    payload.checker_status.checker_log ||
+  const checkerStatus = payload.checker_status || {};
+  els.proofPanel.textContent = `${checkerStatus.status || "pending"}: ${
+    checkerStatus.message ||
+    checkerStatus.checker_log ||
     "Checker has not run yet."
   }`;
   renderArtifacts(payload.artifact_paths || []);
@@ -1398,11 +1571,12 @@ function openImageDialog({ src, title, path }) {
 }
 
 function renderEvents(payload) {
+  const checkerStatus = payload.checker_status || {};
   const bits = [
     `phase=${payload.phase}`,
     payload.terminal_reason ? `reason=${payload.terminal_reason}` : "",
     `action=${payload.latest_action || "none"}`,
-    `checker=${payload.checker_status.status || "pending"}`,
+    `checker=${checkerStatus.status || "pending"}`,
     `outputs=${payload.display_run_dir || payload.run_dir}`,
   ].filter(Boolean);
   els.eventList.textContent = bits.join("  ");
@@ -1452,15 +1626,19 @@ function routeHasOverviewChase(route, modes = routeViewModes(route)) {
 
 function isAgibotRoute(route) {
   const groups = new Set((route && route.field_groups) || []);
-  return Boolean(route && (route.backend === "agibot_gdk" || groups.has("agibot_gates")));
+  return Boolean(route && (route.backend_id === "agibot-gdk" || groups.has("agibot_gates")));
 }
 
 function selectedCodexProvider() {
-  return els.codexProviderInput.value || "codex-env";
+  return selectedProviderProfile() || els.codexProviderInput.value || "codex-env";
 }
 
 function selectedClaudeProvider() {
-  return els.claudeProviderInput.value || "mimo-anthropic";
+  return selectedProviderProfile() || els.claudeProviderInput.value || "mimo-anthropic";
+}
+
+function selectedProviderProfile() {
+  return (els.providerProfileInput && els.providerProfileInput.value) || "";
 }
 
 function selectedClaudeProviderLabel() {
@@ -1516,9 +1694,10 @@ function detachRunAfterStop(result) {
     clearInterval(state.pollTimer);
     state.pollTimer = null;
   }
+  state.activeState = result;
+  renderRunState(result);
   state.activeRunId = null;
   state.activeRouteId = "";
-  state.activeState = null;
   els.eventList.textContent =
     result.terminal_reason || result.phase || "Run stopped; backend lock released.";
   renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));

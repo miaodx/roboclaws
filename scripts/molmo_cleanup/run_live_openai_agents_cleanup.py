@@ -19,8 +19,12 @@ from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
 from roboclaws.agents.drivers.openai_agents_live import (
+    DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
+    DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
     DEFAULT_OPENAI_AGENTS_MAX_TURNS,
     MCP_CLIENT_SESSION_TIMEOUT_ENV,
+    MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
+    MODEL_SERVICE_RETRY_SLEEP_ENV,
     OpenAIAgentsLiveRuntime,
 )
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
@@ -152,6 +156,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-observe-per-waypoint", type=int, default=None)
     parser.add_argument("--raw-fpv-candidate-budget", type=int, default=None)
     parser.add_argument("--done-retry-budget", type=int, default=None)
+    parser.add_argument(
+        "--model-service-retry-attempts",
+        type=int,
+        default=None,
+        help=(
+            "Bounded same-provider Agent SDK model-request retries for classified "
+            "transient provider/model service failures. Set 0 to disable."
+        ),
+    )
+    parser.add_argument(
+        "--model-service-retry-sleep-s",
+        type=float,
+        default=None,
+        help="Delay between Agent SDK model-service retry attempts.",
+    )
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
@@ -502,6 +521,12 @@ class LiveOpenAIAgentsCleanupRunner:
                 "mcp_client_session_timeout_s": float(
                     self.agent_sdk_perf_profile["mcp_client_session_timeout_s"] or 0.0
                 ),
+                "model_service_retry_attempts": int(
+                    self.agent_sdk_perf_profile["model_service_retry_attempts"] or 0
+                ),
+                "model_service_retry_sleep_s": float(
+                    self.agent_sdk_perf_profile["model_service_retry_sleep_s"] or 0.0
+                ),
                 "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
                 "surface": "household-world",
                 "intent": _intent_for_task_name(getattr(self.args, "task_name", "")),
@@ -623,6 +648,7 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
         payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
         payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
+        payload["model_service_fallback_metrics"] = _model_service_fallback_metrics(self.run_dir)
         payload["context_metrics"] = _context_metrics(self.run_dir, payload)
         payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
         payload["context_growth_metrics"] = _context_growth_metrics(self.run_dir, payload)
@@ -827,6 +853,18 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=defaults["context_hard_limit_tokens"],
             allow_none=True,
         ),
+        "model_service_retry_attempts": _int_setting(
+            args,
+            "model_service_retry_attempts",
+            MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
+            default=DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
+        ),
+        "model_service_retry_sleep_s": _float_setting(
+            args,
+            "model_service_retry_sleep_s",
+            MODEL_SERVICE_RETRY_SLEEP_ENV,
+            default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
+        ),
     }
     _validate_context_limits(payload)
     return payload
@@ -979,6 +1017,23 @@ def _positive_int_setting(
     if value < 1:
         raise ValueError(f"{attr} must be >= 1")
     return value
+
+
+def _float_setting(
+    args: argparse.Namespace,
+    attr: str,
+    env_name: str,
+    *,
+    default: float,
+) -> float:
+    raw = getattr(args, attr, None)
+    if raw is None:
+        env_raw = os.environ.get(env_name)
+        raw = env_raw if env_raw not in {None, ""} else default
+    value = float(raw)
+    if value < 0:
+        raise ValueError(f"{attr} must be non-negative")
+    return _round_duration(value)
 
 
 def _validate_context_limits(profile: dict[str, Any]) -> None:
@@ -1738,6 +1793,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         if isinstance(timing.get("openai_agents_span_metrics"), dict)
         else {}
     )
+    fallback_metrics = (
+        timing.get("model_service_fallback_metrics")
+        if isinstance(timing.get("model_service_fallback_metrics"), dict)
+        else {}
+    )
     context_metrics = (
         timing.get("context_metrics") if isinstance(timing.get("context_metrics"), dict) else {}
     )
@@ -1770,6 +1830,7 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         "openai_agents_span_count": span_metrics.get("span_end_count"),
         "openai_agents_span_type_counts": span_metrics.get("span_type_counts"),
         "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
+        "model_service_fallback_metrics": _compact_metric_group(fallback_metrics),
         "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
         "context_metrics": _compact_metric_group(context_metrics),
         "cache_metrics": _compact_metric_group(cache_metrics),
@@ -1910,6 +1971,80 @@ def _openai_agents_event_metrics(run_dir: Path) -> dict[str, Any]:
         "tool_error_count": sum(tool_error_classifications.values()),
         "tool_error_classifications": dict(sorted(tool_error_classifications.items())),
         "tool_error_messages_sample": tool_error_messages,
+    }
+
+
+def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
+    events = [
+        event
+        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
+        for event in _read_jsonl_path(path)
+        if event.get("schema") == "openai_agents_model_service_fallback_v1"
+    ]
+    if not events:
+        return {
+            "available": False,
+            "source": "openai_agents_model_service_fallback_events",
+            "limitations": ["model_service_fallback_events_missing"],
+        }
+
+    event_counts: dict[str, int] = {}
+    failure_classes: dict[str, int] = {}
+    provider_reasons: dict[str, int] = {}
+    attempted_models: set[str] = set()
+    attempted_provider_profiles: set[str] = set()
+    retry_delay_s_total = 0.0
+    retry_delay_count = 0
+    retry_exhausted = False
+    final_outcomes: dict[str, int] = {}
+    for event in events:
+        event_type = str(event.get("event") or "")
+        if event_type:
+            event_counts[event_type] = event_counts.get(event_type, 0) + 1
+        model = str(event.get("model") or "")
+        if model:
+            attempted_models.add(model)
+        provider_profile = str(event.get("provider_profile") or "")
+        if provider_profile:
+            attempted_provider_profiles.add(provider_profile)
+        if event_type == "model_service_failure":
+            failure_class = str(event.get("failure_class") or "")
+            if failure_class:
+                failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
+            provider_reason = str(event.get("provider_reason") or "")
+            if provider_reason:
+                provider_reasons[provider_reason] = provider_reasons.get(provider_reason, 0) + 1
+        delay = _float_or_none(event.get("retry_delay_s"))
+        if delay is not None:
+            retry_delay_s_total += delay
+            retry_delay_count += 1
+        if event.get("retry_exhausted") is True:
+            retry_exhausted = True
+        final_outcome = str(event.get("final_outcome") or "")
+        if final_outcome:
+            final_outcomes[final_outcome] = final_outcomes.get(final_outcome, 0) + 1
+
+    return {
+        "available": True,
+        "source": "openai_agents_model_service_fallback_events",
+        "limitations": [],
+        "attempt_event_count": event_counts.get("model_service_attempt", 0),
+        "retry_scheduled_count": event_counts.get("model_service_retry_scheduled", 0),
+        "failure_event_count": event_counts.get("model_service_failure", 0),
+        "success_event_count": event_counts.get("model_service_success", 0),
+        "failure_classes": dict(sorted(failure_classes.items())),
+        "provider_reasons": dict(sorted(provider_reasons.items())),
+        "attempted_models": sorted(attempted_models),
+        "attempted_provider_profiles": sorted(attempted_provider_profiles),
+        "retry_delay_s_total": _round_duration(retry_delay_s_total),
+        "retry_delay_count": retry_delay_count,
+        "retry_exhausted": retry_exhausted,
+        "final_outcomes": dict(sorted(final_outcomes.items())),
+        "privacy_note": (
+            "Fallback metrics retain attempt counts, provider/model ids, failure classes, "
+            "retry delays, and outcomes only. Raw prompts, model text, credentials, and "
+            "tool payload bodies are not persisted."
+        ),
     }
 
 
@@ -2201,6 +2336,18 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "tool_response_bytes_total",
         "largest_tool_response_bytes",
         "continuation_attempt_count",
+        "attempt_event_count",
+        "retry_scheduled_count",
+        "failure_event_count",
+        "success_event_count",
+        "failure_classes",
+        "provider_reasons",
+        "attempted_models",
+        "attempted_provider_profiles",
+        "retry_delay_s_total",
+        "retry_delay_count",
+        "retry_exhausted",
+        "final_outcomes",
     )
     return {key: metrics.get(key) for key in keys if key in metrics}
 

@@ -49,13 +49,17 @@ def test_apple2apple_grid_axes_cover_requested_comparison(tmp_path: Path) -> Non
     assert len(grid["rows"]) == 12
 
     setup_command = grid["setup_rows"][0]["command"]
-    assert setup_command[:5] == [
+    assert setup_command[:8] == [
         "just",
-        "task::run",
-        "semantic-map-build",
-        "direct",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=map-build",
+        "agent_engine=direct-runner",
         "evidence_lane=world-oracle-labels",
     ]
+    assert "scenario_setup=baseline" in setup_command
     assert "map_bundle=assets/maps/molmospaces-procthor-val-0-7" in setup_command
 
 
@@ -66,11 +70,15 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
     codex_dino = rows["online-codex-api-router-camera-grounded-labels-grounding-dino"]
     assert codex_dino["env"] == {"ROBOCLAWS_CODEX_PROVIDER": "codex-env"}
     assert codex_dino["required_env"] == ["CODEX_BASE_URL", "CODEX_API_KEY"]
-    assert codex_dino["command"][:5] == [
+    assert codex_dino["command"][:9] == [
         "just",
-        "task::run",
-        "household-cleanup",
-        "codex",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=codex-cli",
+        "provider_profile=codex-env",
         "evidence_lane=camera-grounded-labels",
     ]
     assert "camera_labeler=grounding-dino" in codex_dino["command"]
@@ -81,11 +89,15 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
         "ROBOCLAWS_CLAUDE_PROVIDER": "mimo-anthropic",
         "ROBOCLAWS_CLAUDE_MODEL": "mimo-v2.5",
     }
-    assert offline_raw["command"][:5] == [
+    assert offline_raw["command"][:9] == [
         "just",
-        "task::run",
-        "household-cleanup",
-        "claude",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=claude-code",
+        "provider_profile=mimo-anthropic",
         "evidence_lane=camera-raw-fpv",
     ]
     assert not any(item.startswith("camera_labeler=") for item in offline_raw["command"])
@@ -99,7 +111,9 @@ def test_apple2apple_grid_pins_provider_routes_and_perception(tmp_path: Path) ->
     assert row_rerun_command(claude_kimi).startswith(
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
-        "just task::run household-cleanup claude evidence_lane=camera-raw-fpv"
+        "just run::surface surface=household-world world=molmospaces/val_0 "
+        "backend=mujoco intent=cleanup agent_engine=claude-code "
+        "provider_profile=kimi-anthropic evidence_lane=camera-raw-fpv"
     )
 
 

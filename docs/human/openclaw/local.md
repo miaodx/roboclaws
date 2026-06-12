@@ -38,7 +38,7 @@ from that network.
 Start the navigation demo through the public surface/intent grammar:
 
 ```bash
-just run::surface surface=ai2thor-world driver=openclaw intent=navigate report=visual
+just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual
 ```
 
 The run writes a reviewable report under `output/openclaw/` and prints the

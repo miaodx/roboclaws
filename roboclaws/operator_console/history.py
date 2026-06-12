@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.operator_console.paths import console_output_root
-from roboclaws.operator_console.routes import ConsoleRoute
+from roboclaws.operator_console.routes import ConsoleLaunchSelection, ConsoleRoute
 from roboclaws.operator_console.state import LIVE_RUN_MARKERS, resolve_display_run_dir
 
 HISTORY_FILENAME = "runs.jsonl"
@@ -17,7 +17,7 @@ def append_run_history(
     root: Path,
     *,
     run_id: str,
-    route: ConsoleRoute,
+    selection: ConsoleLaunchSelection | ConsoleRoute,
     run_dir: Path,
     started_at_epoch: float,
     started_at: str,
@@ -26,14 +26,20 @@ def append_run_history(
 
     history_path = _history_path(root)
     history_path.parent.mkdir(parents=True, exist_ok=True)
+    launch = selection.selection if isinstance(selection, ConsoleRoute) else selection
     payload = {
         "schema": "operator_console_run_history_v1",
         "run_id": run_id,
-        "route_id": route.id,
-        "route_label": route.label,
-        "driver": route.driver,
-        "backend": route.backend,
-        "lock_name": route.lock_name,
+        "selection_id": launch.id,
+        "launch_label": launch.label,
+        "world_id": launch.world_id,
+        "backend_id": launch.backend_id,
+        "intent_id": launch.intent_id,
+        "agent_engine_id": launch.agent_engine_id,
+        "provider_profile": launch.provider_profile or "",
+        "evidence_lane": launch.evidence_lane,
+        "scenario_setup": launch.scenario_setup,
+        "lock_name": launch.lock_name,
         "run_dir": str(run_dir),
         "started_at_epoch": started_at_epoch,
         "started_at": started_at,
@@ -91,14 +97,20 @@ def _candidate_payload(root: Path, run_id: str, row: dict[str, Any]) -> dict[str
     if not _has_attachable_artifact(display_run_dir):
         return {}
     state = _read_json(run_dir / "operator_state.json")
-    route_payload = state.get("route") if isinstance(state.get("route"), dict) else {}
-    route_id = str(row.get("route_id") or route_payload.get("id") or "")
-    route_label = str(row.get("route_label") or route_payload.get("label") or "Agent run")
+    route_payload = (
+        state.get("launch_selection") if isinstance(state.get("launch_selection"), dict) else {}
+    )
+    if not route_payload:
+        route_payload = state.get("route") if isinstance(state.get("route"), dict) else {}
+    selection_id = str(row.get("selection_id") or route_payload.get("id") or "")
+    launch_label = str(row.get("launch_label") or route_payload.get("label") or "Agent run")
     activity_epoch = _run_activity_epoch(display_run_dir, run_dir, row)
     payload = {
         "run_id": run_id,
-        "route_id": route_id,
-        "route_label": route_label,
+        "selection_id": selection_id,
+        "launch_label": launch_label,
+        "route_id": str(row.get("route_id") or route_payload.get("legacy_route_id") or ""),
+        "route_label": str(row.get("route_label") or ""),
         "run_dir": str(run_dir),
         "display_run_dir": str(display_run_dir),
         "display_run_id": _display_run_id(run_dir, display_run_dir),

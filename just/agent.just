@@ -10,19 +10,95 @@ set positional-arguments
 default:
     @just --list agent
 
-# Run a normalized task/driver/report-or-evidence-lane tuple.
-run task driver mode="" *overrides:
+# Run a normalized private dispatch target / agent-engine tuple.
+run dispatch_target agent_engine mode="" *overrides:
     #!/usr/bin/env bash
     set -euo pipefail
 
     args=("$@")
-    task="${args[0]}"
-    driver="${args[1]}"
+    dispatch_target="${args[0]}"
+    agent_engine="${args[1]}"
     mode="${args[2]}"
     raw_overrides=("${args[@]:3}")
 
-    task="${task#task=}"
-    driver="${driver#driver=}"
+    dispatch_target="${dispatch_target#dispatch_target=}"
+    dispatch_target="${dispatch_target#task=}"
+    agent_engine="${agent_engine#agent_engine=}"
+    agent_engine="${agent_engine#driver=}"
+
+    has_raw_override_key() {
+      local wanted="$1"
+      local override
+      for override in "${raw_overrides[@]}"; do
+        if [[ "$override" == "$wanted="* || "$override" == "--$wanted="* ]]; then
+          return 0
+        fi
+      done
+      return 1
+    }
+
+    dispatch_intent="${dispatch_target##*.}"
+    case "$dispatch_target" in
+      household-world.cleanup)
+        task="household-cleanup"
+        ;;
+      household-world.map-build)
+        task="semantic-map-build"
+        ;;
+      household-world.open-ended)
+        task="household-cleanup"
+        if ! has_raw_override_key task_intent; then
+          raw_overrides+=("task_intent=open-ended")
+        fi
+        ;;
+      ai2thor-world.navigate)
+        task="ai2thor-nav"
+        ;;
+      ai2thor-world.photo-capture)
+        task="photo-chairs"
+        ;;
+      ai2thor-games.territory)
+        task="territory"
+        ;;
+      ai2thor-games.coverage)
+        task="coverage"
+        ;;
+      planner-proof.planner-proof)
+        task="molmo-planner-proof"
+        ;;
+      *)
+        task="$dispatch_target"
+        ;;
+    esac
+    case "$agent_engine" in
+      codex-cli)
+        driver="codex"
+        ;;
+      claude-code)
+        driver="claude"
+        ;;
+      openai-agents-sdk)
+        driver="openai-agents-live"
+        ;;
+      direct-runner)
+        driver="direct"
+        if [[ "$mode" == "smoke" && ( "$dispatch_intent" == "cleanup" || "$dispatch_intent" == "open-ended" ) ]]; then
+          driver="mcp-smoke"
+        fi
+        ;;
+      openclaw-gateway)
+        driver="openclaw"
+        ;;
+      vlm-policy)
+        driver="vlm"
+        ;;
+      script-runner)
+        driver="script"
+        ;;
+      *)
+        driver="$agent_engine"
+        ;;
+    esac
     case "$mode" in
       report=*)
         mode="${mode#report=}"
@@ -169,7 +245,53 @@ run task driver mode="" *overrides:
       esac
     fi
 
-    report_rerun_parts=("just" "task::run" "$task" "$driver")
+    report_rerun_parts=("just" "run::surface")
+    case "$task" in
+      ai2thor-nav)
+        report_rerun_parts+=("surface=ai2thor-world" "intent=navigate")
+        ;;
+      photo-chairs)
+        report_rerun_parts+=("surface=ai2thor-world" "intent=photo-capture")
+        ;;
+      territory|coverage)
+        report_rerun_parts+=("surface=ai2thor-games" "intent=$task")
+        ;;
+      semantic-map-build)
+        report_rerun_parts+=("surface=household-world" "intent=map-build")
+        ;;
+      household-cleanup)
+        report_rerun_parts+=("surface=household-world" "intent=${kv[task_intent]:-cleanup}")
+        ;;
+      molmo-planner-proof)
+        report_rerun_parts+=("surface=planner-proof" "intent=planner-proof")
+        ;;
+    esac
+    case "$driver" in
+      codex)
+        report_rerun_parts+=("agent_engine=codex-cli")
+        ;;
+      claude)
+        report_rerun_parts+=("agent_engine=claude-code")
+        ;;
+      openai-agents-live)
+        report_rerun_parts+=("agent_engine=openai-agents-sdk")
+        ;;
+      direct)
+        report_rerun_parts+=("agent_engine=direct-runner")
+        ;;
+      mcp-smoke)
+        report_rerun_parts+=("agent_engine=direct-runner")
+        ;;
+      openclaw)
+        report_rerun_parts+=("agent_engine=openclaw-gateway")
+        ;;
+      vlm)
+        report_rerun_parts+=("agent_engine=vlm-policy")
+        ;;
+      script)
+        report_rerun_parts+=("agent_engine=script-runner")
+        ;;
+    esac
     if [[ "$task" == "household-cleanup" || "$task" == "semantic-map-build" ]]; then
       report_rerun_parts+=("evidence_lane=$profile")
     else
@@ -264,7 +386,7 @@ run task driver mode="" *overrides:
         ;;
 
       semantic-map-build:direct|semantic-map-build:codex|household-cleanup:direct|household-cleanup:mcp-smoke|\
-      household-cleanup:codex|household-cleanup:claude|household-cleanup:openclaw)
+      household-cleanup:codex|household-cleanup:claude|household-cleanup:openai-agents-live|household-cleanup:openclaw)
         case "$driver" in
           direct|mcp-smoke)
             impl_driver="$driver"
@@ -274,6 +396,9 @@ run task driver mode="" *overrides:
             ;;
           claude)
             impl_driver="claude-live"
+            ;;
+          openai-agents-live)
+            impl_driver="openai-agents-live"
             ;;
           openclaw)
             impl_driver="openclaw-live"

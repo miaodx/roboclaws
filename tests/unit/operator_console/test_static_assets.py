@@ -66,18 +66,20 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Operator Input" in setup_html
     assert "Operator Input" not in state_rail_html
     assert 'id="prompt-label"' in html
+    assert "Scenario seed for reproducible runs" in html
+    assert "Baseline does not relocate objects" in html
     assert "Generated mess count" not in html
     assert 'id="mess-count-input"' not in html
-    assert 'id="environment-setup-input"' in html
-    assert 'name="environment_setup"' in html
+    assert 'id="scenario-setup-input"' in html
+    assert 'name="scenario_setup"' in html
     assert "Relocate loose objects" in html
     assert "Relocate cleanup-related objects" in html
     assert 'id="relocation-count-field"' in html
     assert 'id="relocation-count-input"' in html
     assert 'name="relocation_count"' in html
-    assert "renderEnvironmentSetup" in app
-    assert "defaultEnvironmentSetup" in app
-    assert "selectedEnvironmentSetup" in app
+    assert "renderScenarioSetup" in app
+    assert "defaultScenarioSetup" in app
+    assert "selectedScenarioSetup" in app
     assert "generated_mess_count" not in app
     assert 'data-operator-mode="ask_why"' in html
     assert 'data-operator-mode="steer"' in html
@@ -101,7 +103,12 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Use Steer or Ask Why" in app
     assert "/api/readiness" in app
     assert "refreshSelectedRouteReadiness" in app
-    assert "checker_status.message" in app
+    assert "checkerStatus.message" in app
+    assert "state.evidenceLanes" in app
+    assert "payload.evidence_lanes" in app
+    assert "evidenceLaneOptions" in app
+    assert "node.disabled = Boolean(option.disabled)" in app
+    assert "node.title = option.title" in app
 
 
 def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> None:
@@ -115,7 +122,11 @@ def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> Non
     assert "selectedIntentForRoute" in app
     assert "launchInterpretation" in app
     assert "route.intent_options" in app
-    assert "intent: selectedIntent()" in app
+    assert "intent_id: selectedIntent()" in app
+    assert "world_id: route.world_id" in app
+    assert "backend_id: route.backend_id" in app
+    assert "agent_engine_id: route.agent_engine_id" in app
+    assert "scenario_setup: selectedScenarioSetup()" in app
     assert "intent=${selected}" in app
     assert '"open-ended": "Open-ended"' in app
     assert "Goal scope" in app
@@ -163,6 +174,21 @@ def test_static_app_announces_run_state_via_live_region() -> None:
     assert 'id="event-log"' in html
     assert 'role="status"' in html
     assert 'aria-live="polite"' in html
+
+
+def test_static_app_renders_stop_result_before_detaching_run() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    detach_body = app.split("function detachRunAfterStop(result) {", 1)[1].split(
+        "\n}\n\nasync function toggleRawEvidence",
+        1,
+    )[0]
+
+    assert "state.activeState = result;" in detach_body
+    assert "renderRunState(result);" in detach_body
+    assert detach_body.index("renderRunState(result);") < detach_body.index(
+        "state.activeRunId = null;"
+    )
+    assert app.count("const checkerStatus = payload.checker_status || {};") >= 2
 
 
 def test_static_app_has_resizable_run_evidence_panel() -> None:

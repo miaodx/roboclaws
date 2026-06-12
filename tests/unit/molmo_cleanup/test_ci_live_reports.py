@@ -100,17 +100,23 @@ def test_dry_run_matrix_writes_status_and_manifest(tmp_path: Path) -> None:
     }
     assert payload["profile"] == "world-oracle-labels"
     assert payload["generated_mess_count"] == 5
-    assert payload["command"][:5] == [
+    assert payload["command"][:9] == [
         "just",
-        "task::run",
-        "household-cleanup",
-        "claude",
-        "world-oracle-labels",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=claude-code",
+        "provider_profile=kimi-anthropic",
+        "evidence_lane=world-oracle-labels",
     ]
     assert payload["rerun_command"].startswith(
         "ROBOCLAWS_CLAUDE_PROVIDER=kimi-anthropic "
         "ROBOCLAWS_CLAUDE_MODEL=kimi-k2.6 "
-        "just task::run household-cleanup claude world-oracle-labels"
+        "just run::surface surface=household-world world=molmospaces/val_0 "
+        "backend=mujoco intent=cleanup agent_engine=claude-code "
+        "provider_profile=kimi-anthropic evidence_lane=world-oracle-labels"
     )
     manifest = json.loads(
         (tmp_path / "site" / "molmo" / "live" / "live-report-manifest.json").read_text(
@@ -147,16 +153,20 @@ def test_dry_run_camera_raw_entry_uses_entry_profile(tmp_path: Path) -> None:
     assert payload["model"] == "kimi-k2.6"
     assert payload["profile"] == "camera-raw-fpv"
     assert payload["generated_mess_count"] == 10
-    assert payload["command"][:5] == [
+    assert payload["command"][:9] == [
         "just",
-        "task::run",
-        "household-cleanup",
-        "claude",
-        "camera-raw-fpv",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=claude-code",
+        "provider_profile=kimi-anthropic",
+        "evidence_lane=camera-raw-fpv",
     ]
-    assert "generated_mess_count=10" in payload["command"]
-    assert "generated_mess_count=10" in payload["rerun_command"]
-    assert "just task::run household-cleanup claude camera-raw-fpv" in payload["rerun_command"]
+    assert "relocation_count=10" in payload["command"]
+    assert "relocation_count=10" in payload["rerun_command"]
+    assert "just run::surface surface=household-world" in payload["rerun_command"]
 
 
 def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> None:
@@ -183,7 +193,7 @@ def test_dry_run_camera_raw_generated_mess_count_override(tmp_path: Path) -> Non
     status_path = tmp_path / "site" / "molmo" / "live" / "mimo-v2.5-camera-raw-fpv" / "status.json"
     payload = json.loads(status_path.read_text(encoding="utf-8"))
     assert payload["generated_mess_count"] == 12
-    assert "generated_mess_count=12" in payload["command"]
+    assert "relocation_count=12" in payload["command"]
 
 
 def test_failed_live_entry_publishes_partial_seed_diagnostics(tmp_path: Path, monkeypatch) -> None:

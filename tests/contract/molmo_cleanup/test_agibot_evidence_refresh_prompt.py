@@ -26,13 +26,13 @@ def _just_bin() -> str:
     pytest.skip("just binary is not available")
 
 
-def _trace_task_run(*args: str) -> list[str]:
+def _trace_agent_run(*args: str) -> list[str]:
     binary = _just_bin()
     env = os.environ.copy()
     env["ROBOCLAWS_JUST_TRACE"] = "1"
     env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
     result = subprocess.run(
-        [binary, "task::run", *args],
+        [binary, "agent::run", *args],
         cwd=REPO_ROOT,
         env=env,
         check=True,
@@ -45,12 +45,13 @@ def _trace_task_run(*args: str) -> list[str]:
 def test_agibot_molmospaces_sim_route_passes_open_evidence_refresh_prompt() -> None:
     prompt = "基于已有语义地图做开放巡检"
 
-    route = _trace_task_run(
+    route = _trace_agent_run(
         "semantic-map-build",
         "direct",
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "runtime=fixture",
+        "camera_labeler=sim-projected-labels",
         f"prompt={prompt}",
     )
 
