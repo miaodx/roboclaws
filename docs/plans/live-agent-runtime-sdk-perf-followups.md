@@ -1,6 +1,6 @@
 ---
 plan_scope: live-agent-runtime-sdk-perf-followups
-status: CONTINUE
+status: PARK
 source:
   - docs/plans/live-agent-runtime-sdk-spike.md
   - 2026-06-10 Agent SDK performance optimization pass
@@ -12,7 +12,15 @@ last_reviewed: 2026-06-12
 
 ## Status
 
-CONTINUE.
+PARK.
+
+The 2026-06-12 direction audit has checked the current candidate queue far
+enough to stop the active pass. The machine-readable live-refresh decision
+packet covers all 23 candidate IDs, has no unresolved no-row candidates, and
+classifies every direction as accepted, accepted-deterministic, rejected,
+blocked, mixed evidence, bypassed, merged, deferred, or conditional. The current
+accepted latency result is O+AC paired wall-clock improvement; broader
+normalized or publishable claims remain future/conditional work.
 
 This is the execution gate for the unfinished `openai-agents-live` performance
 work. The completed SDK runtime spike remains in
