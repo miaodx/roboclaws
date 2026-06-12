@@ -181,6 +181,7 @@ class ConsoleLaunchSelection:
             "intent": self.intent_id,
             "agent_engine_id": self.agent_engine_id,
             "agent_engine_label": engine.label,
+            "agent_engine_availability": engine.availability,
             "provider_profile": self.provider_profile or "",
             "supported_provider_profiles": list(engine.supported_provider_profiles),
             "provider_routes": [

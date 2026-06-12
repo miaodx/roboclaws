@@ -57,6 +57,7 @@ aid, not a source of truth for current priority.
 - [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
 - [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
 - [Open-Ended Proof Status Contract](2026-06-11-open-ended-proof-status.md)
+- [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)
 - [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
@@ -109,6 +110,7 @@ aid, not a source of truth for current priority.
 - [MolmoSpaces Filament Renderer Comparison](molmospaces-filament-renderer-comparison.md)
 - [MolmoSpaces HTTP Visual Grounding Service](molmospaces-http-visual-grounding-service.md)
 - [Visual Grounding GPU Sidecar Benchmark](visual-grounding-gpu-sidecar-benchmark.md)
+- [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)
 
 ### Launch, Console, And Agent Runtime
 
@@ -124,6 +126,7 @@ aid, not a source of truth for current priority.
 - [Standalone Operator Console UI Design Contract](standalone-codex-operator-console-UI-SPEC.md)
 - [Operator Console UI Review](standalone-codex-operator-console-UI-REVIEW.md)
 - [Live Agent Runner Boundary](refactor-live-agent-runner-boundary.md)
+- [VLM Direct Sidecar And OpenClaw Status Cleanup](2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md)
 - [Codex Harness Sidecar Lifecycle](refactor-codex-harness-sidecar-lifecycle.md)
 - [Molmo Cleanup Codex Harness Speedup](molmo-cleanup-codex-harness-speedup.md)
 - [MiMo v2.5 Migration](refactor-mimo-v25-migration.md)

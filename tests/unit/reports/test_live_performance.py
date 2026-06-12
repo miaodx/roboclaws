@@ -164,6 +164,145 @@ def test_calibrate_model_latency_writes_error_statistics(tmp_path: Path) -> None
     assert packet["fit"]["error_stats"]["rmse_s"] >= 0
     assert packet["coefficient_sets"][0]["provider_profile"] == "codex-env"
     assert packet["coefficient_sets"][0]["model"] == "gpt-5.5"
+    assert packet["validation"]["available"] is False
+    assert "holdout_validation_not_requested" in packet["validation"]["limitations"]
+    assert "diagnostic_same_dataset_fit_not_holdout_validated" in packet["limitations"]
+
+
+def test_calibrate_model_latency_reports_holdout_validation(tmp_path: Path) -> None:
+    calibrator = _load_calibrator()
+    training_path = tmp_path / "train.jsonl"
+    validation_path = tmp_path / "validation.jsonl"
+    training_rows = [
+        _model_call_metric_row(
+            uncached_input_tokens=50 + index,
+            cached_input_tokens=0,
+            output_tokens=5 + ((index * 7) % 11),
+            reasoning_tokens=0,
+            duration_s=2.0 + ((50 + index) * 0.02) + ((5 + ((index * 7) % 11)) * 0.4),
+        )
+        for index in range(24)
+    ]
+    validation_rows = [
+        _model_call_metric_row(
+            uncached_input_tokens=80 + (index * 3),
+            cached_input_tokens=0,
+            output_tokens=6 + ((index * 5) % 7),
+            reasoning_tokens=0,
+            duration_s=2.0 + ((80 + (index * 3)) * 0.02) + ((6 + ((index * 5) % 7)) * 0.4),
+        )
+        for index in range(8)
+    ]
+    training_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in training_rows),
+        encoding="utf-8",
+    )
+    validation_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in validation_rows),
+        encoding="utf-8",
+    )
+
+    packet = calibrator.build_calibration_packet(
+        [training_path],
+        dataset_name="holdout-unit-test",
+        min_samples=20,
+        min_group_samples=20,
+        validation_paths=[validation_path],
+        min_validation_samples=5,
+        min_group_validation_samples=5,
+    )
+
+    assert packet["available"] is True
+    assert packet["validation"]["available"] is True
+    assert packet["validation"]["sample_count"] == 8
+    assert packet["validation"]["error_stats"]["sample_count"] == 8
+    assert packet["coefficient_sets"][0]["validation"]["available"] is True
+    assert packet["coefficient_sets"][0]["validation"]["error_stats"]["sample_count"] == 8
+    assert "diagnostic_same_dataset_fit_not_holdout_validated" not in packet["limitations"]
+    assert packet["limitations"] == ["not_repo_default_calibration"]
+
+
+def test_calibrate_model_latency_flags_weak_holdout_explanatory_power(
+    tmp_path: Path,
+) -> None:
+    calibrator = _load_calibrator()
+    training_path = tmp_path / "train.jsonl"
+    validation_path = tmp_path / "validation.jsonl"
+    training_path.write_text(
+        "".join(
+            json.dumps(
+                _model_call_metric_row(
+                    uncached_input_tokens=100 + index,
+                    output_tokens=10,
+                    duration_s=1.0 + ((100 + index) * 0.01),
+                ),
+                sort_keys=True,
+            )
+            + "\n"
+            for index in range(24)
+        ),
+        encoding="utf-8",
+    )
+    validation_path.write_text(
+        "".join(
+            json.dumps(
+                _model_call_metric_row(
+                    uncached_input_tokens=100 + index,
+                    output_tokens=10,
+                    duration_s=10.0 if index % 2 else 1.0,
+                ),
+                sort_keys=True,
+            )
+            + "\n"
+            for index in range(8)
+        ),
+        encoding="utf-8",
+    )
+
+    packet = calibrator.build_calibration_packet(
+        [training_path],
+        dataset_name="weak-holdout",
+        min_samples=20,
+        validation_paths=[validation_path],
+        min_validation_samples=5,
+    )
+
+    assert packet["validation"]["available"] is True
+    assert packet["validation"]["error_stats"]["r2"] < 0.2
+    assert "diagnostic_same_dataset_fit_not_holdout_validated" not in packet["limitations"]
+    assert "holdout_validation_low_explanatory_power" in packet["limitations"]
+
+
+def test_calibrate_model_latency_keeps_same_dataset_limit_when_holdout_too_small(
+    tmp_path: Path,
+) -> None:
+    calibrator = _load_calibrator()
+    training_path = tmp_path / "train.jsonl"
+    validation_path = tmp_path / "validation.jsonl"
+    training_path.write_text(
+        "".join(
+            json.dumps(_model_call_metric_row(uncached_input_tokens=100 + index, duration_s=2.0))
+            + "\n"
+            for index in range(24)
+        ),
+        encoding="utf-8",
+    )
+    validation_path.write_text(
+        json.dumps(_model_call_metric_row(uncached_input_tokens=1, duration_s=1.0)) + "\n",
+        encoding="utf-8",
+    )
+
+    packet = calibrator.build_calibration_packet(
+        [training_path],
+        dataset_name="small-holdout",
+        min_samples=20,
+        validation_paths=[validation_path],
+        min_validation_samples=5,
+    )
+
+    assert packet["available"] is True
+    assert packet["validation"]["available"] is False
+    assert "insufficient_holdout_validation_samples" in packet["validation"]["limitations"]
     assert "diagnostic_same_dataset_fit_not_holdout_validated" in packet["limitations"]
 
 

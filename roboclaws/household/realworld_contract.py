@@ -3787,10 +3787,6 @@ class RealWorldCleanupContract:
                 "producer_id": str(getattr(client_config, "proposer_id", "") or ""),
                 "model_id": str(getattr(client_config, "proposer_model_id", "") or ""),
             },
-            refiner={
-                "producer_id": str(getattr(client_config, "refiner_id", "") or ""),
-                "model_id": str(getattr(client_config, "refiner_model_id", "") or ""),
-            },
         )
         try:
             response = self.visual_grounding_client.request_candidates(request)

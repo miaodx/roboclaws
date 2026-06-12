@@ -657,7 +657,7 @@ producer mode is a later comparison.
 ## Source References
 
 - ADR-0133:
-  `docs/adr/0133-use-http-visual-grounding-service-for-real-camera-labels.md`
+  `docs/adr/archive/superseded/0133-use-http-visual-grounding-service-for-real-camera-labels.md`
 - Current settings:
   `docs/human/molmospaces-settings.md`
 - Current camera profile architecture:

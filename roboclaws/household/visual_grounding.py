@@ -35,8 +35,6 @@ class VisualGroundingClientConfig:
     api_key: str = ""
     proposer_id: str = ""
     proposer_model_id: str = ""
-    refiner_id: str = ""
-    refiner_model_id: str = ""
 
     @property
     def auth_mode(self) -> str:
@@ -164,8 +162,6 @@ def visual_grounding_client_from_env(
             api_key=os.environ.get("VISUAL_GROUNDING_API_KEY", ""),
             proposer_id=os.environ.get("VISUAL_GROUNDING_PROPOSER_ID", ""),
             proposer_model_id=os.environ.get("VISUAL_GROUNDING_PROPOSER_MODEL_ID", ""),
-            refiner_id=os.environ.get("VISUAL_GROUNDING_REFINER_ID", ""),
-            refiner_model_id=os.environ.get("VISUAL_GROUNDING_REFINER_MODEL_ID", ""),
         )
     )
 
@@ -179,7 +175,6 @@ def visual_grounding_request(
     pipeline_id: str,
     image: dict[str, Any],
     proposer: dict[str, Any] | None = None,
-    refiner: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     request = {
         "schema": VISUAL_GROUNDING_REQUEST_SCHEMA,
@@ -197,7 +192,6 @@ def visual_grounding_request(
         "pipeline_request": {
             "pipeline_id": pipeline_id,
             "proposer": proposer or {},
-            "refiner": refiner or {},
         },
     }
     validate_visual_grounding_request(request)

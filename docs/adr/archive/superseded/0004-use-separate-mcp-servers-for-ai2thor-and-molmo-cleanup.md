@@ -2,7 +2,7 @@
 
 ## Status
 
-Superseded by [ADR-0137](0137-retire-ai2thor-and-direct-vlm-public-surfaces.md).
+Superseded by [ADR-0137](../../0137-retire-ai2thor-and-direct-vlm-public-surfaces.md).
 
 Roboclaws will use separate FastMCP server classes for AI2-THOR navigation and
 MolmoSpaces cleanup. The existing AI2-THOR `RoboclawsMCPServer` is coupled to

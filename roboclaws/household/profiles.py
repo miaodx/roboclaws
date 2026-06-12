@@ -39,11 +39,6 @@ CAMERA_LABELERS: tuple[str, ...] = (
     "yolo-world",
     "fake-http",
     "contract-fake",
-    "grounding-dino+mimo-v2.5",
-    "yoloe+mimo-v2.5",
-    "grounding-dino+qwen3-vl",
-    "mimo-v2.5-direct",
-    "qwen3-vl-direct",
 )
 
 _CAMERA_LABELER_TO_VISUAL_GROUNDING_PIPELINE = {

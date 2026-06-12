@@ -25,10 +25,11 @@ or `done` input.
 
 Roboclaws will remove the `clean_observed_object` promoted MCP candidate and the
 `cleanup_routine=mcp|mcp-promoted` route. The 2026-05-20 timing evidence in
-ADR-0130 remains useful history: the promoted candidate reduced MCP round trips
-and improved one performance lane, but it introduced a second cleanup sequence
-and a cleanup-specific MCP branch. Architecture clarity, one behavior path, and
-the skill-first boundary now take priority over that optimization.
+[ADR-0130](archive/superseded/0130-default-composition-to-trace-preserving-skill-routines.md)
+remains useful history: the promoted candidate reduced MCP round trips and
+improved one performance lane, but it introduced a second cleanup sequence and
+a cleanup-specific MCP branch. Architecture clarity, one behavior path, and the
+skill-first boundary now take priority over that optimization.
 
 Molmo cleanup should instead use one canonical routine engine for a single
 already-selected object transport chain:

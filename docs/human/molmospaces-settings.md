@@ -108,22 +108,22 @@ as report provenance.
 | `yoloe` | YOLO-family promptable/open-vocabulary proposer over RAW_FPV images. | Proposer speed/latency comparison target. |
 | `yolo-world` | YOLO-World open-vocabulary proposer over RAW_FPV images. | YOLO-family comparison target. |
 | `omdet-turbo` | Transformers OmDet-Turbo open-vocabulary proposer over RAW_FPV images. | First-wave non-YOLO comparison target; current supported checkpoint is `omlab/omdet-turbo-swin-tiny-hf`. |
-| `grounding-dino+mimo-v2.5` | Grounding DINO proposals refined by hosted MiMo v2.5 reasoning. | Refiner comparison target. |
-| `yoloe+mimo-v2.5` | YOLOE proposals refined by hosted MiMo v2.5 reasoning. | Refiner comparison target. |
-| `grounding-dino+qwen3-vl` | Grounding DINO proposals refined by Qwen3-VL. | Design target; optional until local access is proven. |
-| `mimo-v2.5-direct` | Hosted VLM proposes candidates without a detector proposer. | Experimental direct-producer comparison. |
-| `qwen3-vl-direct` | Qwen3-VL proposes candidates without a detector proposer. | Experimental and optional. |
 
-Recommended command shape for the future pipeline comparison:
+Hosted VLM refiner and direct-producer labelers such as
+`grounding-dino+mimo-v2.5`, `yoloe+mimo-v2.5`,
+`grounding-dino+qwen3-vl`, `mimo-v2.5-direct`, and `qwen3-vl-direct` are retired
+from the active camera-labeler axis. ADR-0138 keeps the HTTP sidecar boundary
+detector-only; old Gemini/MiMo/Qwen results are historical/parked evidence only.
+
+Recommended command shape for current pipeline comparison:
 
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=fake-http
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yoloe
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yolo-world
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=omdet-turbo
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino+mimo-v2.5
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=yoloe+mimo-v2.5
 ```
 
 `yolo-custom` is not an active pipeline. Without a planned cleanup-ontology
@@ -153,10 +153,10 @@ a bearer token and redact it from reports.
 
 Keep model-heavy grounding code in sidecar service dependencies, not in the core
 cleanup runtime. The repo may host the sidecar service code and fake pipeline,
-but real Grounding DINO, YOLOE, Qwen3-VL, and hosted MiMo probes should be
-explicit local/dev setup steps. Do not implicitly download model weights in
-normal cleanup, benchmark, or CI recipes. Treat YOLOE/YOLO-family adapters as
-optional probes until licensing and redistribution boundaries are reviewed.
+but real Grounding DINO, YOLOE, YOLO-World, and OmDet probes should be explicit
+local/dev setup steps. Do not implicitly download model weights in normal
+cleanup, benchmark, or CI recipes. Treat YOLOE/YOLO-family adapters as optional
+probes until licensing and redistribution boundaries are reviewed.
 
 The first implementation slice covers fake HTTP plumbing, shared client
 injection, report/checker metadata, and direct/MCP-smoke evidence. Full real
@@ -166,12 +166,11 @@ install model dependencies and weights deliberately in the sidecar environment
 before using it. Live Codex is a useful best-effort confidence check for that
 slice, but direct and MCP-smoke fake HTTP runs are the hard gates.
 
-Qwen3-VL and MiMo v2.5 should first be treated as refiners over detector
-proposals. They can also be tested as direct producer replacements, but that is
-a comparison mode rather than the first recommended path. Qwen3-VL should not
-be a core cleanup dependency. A local Transformers/vLLM/SGLang probe is
-acceptable when model access and memory are available, but Qwen3-VL should not
-block the fake HTTP, proposer, or benchmark phases.
+Qwen3-VL, MiMo, Gemini, and similar hosted VLM routes are not active visual
+grounding sidecar dependencies. Reintroduce any VLM refiner or direct-producer
+route only through a fresh plan with a bounded offline/on-demand labeling use
+case; do not make those providers part of normal cleanup, benchmark, or CI
+recipes.
 
 Before promoting a real pipeline to the end-to-end cleanup matrix, run a
 perception-isolated visual-grounding benchmark over fixed RAW_FPV observations.
@@ -179,7 +178,7 @@ Benchmark command shape:
 
 ```bash
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
-just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
+just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,omdet-turbo
 just agent::harness molmo-visual-grounding-benchmark \
   matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json \
   corpus=harness/visual_grounding/local_raw_fpv_corpus.json \
@@ -187,7 +186,7 @@ just agent::harness molmo-visual-grounding-benchmark \
   timeout_s=60
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino
 just agent::harness molmo-visual-grounding-benchmark pipeline=yoloe
-just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino+mimo-v2.5
+just agent::harness molmo-visual-grounding-benchmark pipeline=omdet-turbo
 ```
 
 That benchmark should compare candidate recall, false positives, duplicate
@@ -198,11 +197,11 @@ Cost and memory fields are explicit telemetry slots: they show reported totals
 when a sidecar stage provides token/cost or memory metadata, and otherwise say
 that the service did not report that data.
 The benchmark result also emits a capped end-to-end probe recommendation:
-always include the `sim` control, then at most one proposer-only pipeline, one
-proposer-plus-refiner pipeline, and one direct VLM pipeline. Treat fake-contract
-recommendations as artifact-shape evidence only until real stage provenance is
-present for every selected non-sim pipeline; a mixed fake/real recommendation
-still requires real reruns before promotion.
+always include the `sim` control, then at most one detector-only proposer
+pipeline. Treat fake-contract recommendations as artifact-shape evidence only
+until real detector sidecar provenance is present for every selected non-sim
+pipeline; a mixed fake/real recommendation still requires real reruns before
+promotion.
 The benchmark checker treats zero candidates as a valid poor-recall result when
 `--require-success` is used; add `--require-candidates` only for deterministic
 fake smoke tests that are expected to emit at least one candidate.
@@ -327,29 +326,11 @@ built-in `OmDetTurboProcessor` and `OmDetTurboForObjectDetection`; the
 previously listed base checkpoint is not a valid public model id, so the
 first-wave matrix sweeps the tiny checkpoint with threshold variants instead.
 
-Hosted VLM refiner and direct-producer probes use an OpenAI-compatible
-chat-completions endpoint from the sidecar. MiMo uses the existing hosted route
-when `MIMO_TP_KEY` is present. Qwen3-VL should be configured explicitly through
-a local or remote serving endpoint:
-
-```bash
-MIMO_TP_KEY=... \
-  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline grounding-dino+mimo-v2.5 --adapter-mode real
-
-VISUAL_GROUNDING_QWEN_BASE_URL=http://127.0.0.1:8000/v1 \
-VISUAL_GROUNDING_QWEN_API_KEY=... \
-  .venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py \
-    --pipeline qwen3-vl-direct --adapter-mode real
-```
-
-For unauthenticated local test servers only, set
-`VISUAL_GROUNDING_VLM_ALLOW_NO_API_KEY=true`. Do not use that setting for a
-hosted provider.
-Hosted VLM success artifacts should report `auth_mode=bearer_configured`,
-provider/model/stage provenance, latency, and token or cost telemetry when the
-provider returns it, while never writing bearer tokens or raw API keys to
-benchmark results, predictions, traces, or reports.
+The active sidecar contract is detector-only. Hosted VLM refiner and
+direct-producer probes that previously used OpenAI-compatible chat-completions
+endpoints are parked historical routes, not current setup steps. Generic model
+provider keys may still be used by Codex, Claude Code, OpenAI Agents SDK, and
+OpenClaw text routes; they are not visual-grounding camera labelers.
 
 List the sidecar adapter slots without starting the server:
 
@@ -360,24 +341,19 @@ List the sidecar adapter slots without starting the server:
 The adapter catalog includes a redacted `runtime` readiness block for each
 adapter. For local proposer adapters it reports importable dependencies such as
 `torch`, `transformers`, and `ultralytics`; model weights remain unverified
-until a real adapter run loads them. For hosted MiMo/Qwen routes it reports only
-whether the endpoint/auth configuration is present and the resulting auth mode,
-not raw keys or bearer tokens.
+until a real adapter run loads them.
 
 Real proposer pipeline ids such as `grounding-dino` and `yoloe` report visible
 `adapter_unavailable`, `missing_dependency`, or adapter-error failures unless
 the service is started with `--adapter-mode contract-fake` for contract tests or
 `--adapter-mode real` with installed sidecar dependencies and model weights.
-Hosted refiner and direct-producer ids such as `grounding-dino+mimo-v2.5`,
-`mimo-v2.5-direct`, and `qwen3-vl-direct` report visible `missing_config`
-failures until their endpoint and key/no-key local policy are configured. The
-adapter catalog names the optional sidecar extra or provider configuration slot
-for each target producer/refiner. The older `serve_fake_visual_grounding.py`
+Retired hosted VLM ids such as `grounding-dino+mimo-v2.5`,
+`mimo-v2.5-direct`, and `qwen3-vl-direct` are not active adapter slots. The
+adapter catalog names the optional sidecar extra and current redacted runtime
+readiness for each target adapter. The older `serve_fake_visual_grounding.py`
 script remains a compatibility entry point for deterministic fake-only tests.
-Fake outputs are pipeline-aware for contract tests only: they can emit proposer,
-refiner, direct-producer, rejected-proposal, and overlay evidence for named
-pipeline ids without claiming that real Grounding DINO, YOLOE, MiMo, or Qwen
-weights were loaded.
+Fake outputs are pipeline-aware for contract tests only and should not claim
+that real Grounding DINO, YOLOE, MiMo, or Qwen weights were loaded.
 
 For real-robot deployment, extend the same benchmark with a fixed head-camera
 seed set and edge latency measurements before selecting a proposer. Route
@@ -699,18 +675,10 @@ just harness::molmo-planner-proof-bundle-execute-rerun
 
 - [ADR-0003](../adr/0003-separate-cleanup-agent-view-from-private-evaluation.md):
   public Agent View vs private evaluation.
-- [ADR-0009](../adr/0009-use-shared-molmo-cleanup-report-underlay.md):
-  shared Molmo cleanup report underlay.
-- [ADR-0010](../adr/0010-require-real-visual-openclaw-evidence-for-adr-0003-cleanup.md):
-  real visual OpenClaw evidence requirements.
-- [ADR-0013](../adr/0013-add-raw-fpv-observation-mode-for-adr-0003-cleanup.md):
-  raw FPV-only perception mode.
-- [ADR-0020](../adr/0020-add-camera-model-policy-mode-for-adr-0003-cleanup.md):
-  camera-model policy mode.
 - [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
   model-declared observations bridge camera evidence to cleanup handles.
-- [ADR-0126](../adr/0126-bridge-camera-evidence-to-cleanup-handles-with-model-declared-observations.md):
-  implementation and harness plan for raw-FPV cleanup.
-- [ADR-0028](../adr/archive/execution-log/0028-add-planner-cleanup-bridge-readiness-evidence.md):
-  planner cleanup bridge readiness.
+- [ADR-0136](../adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md):
+  current launch, map, intent, and evidence-lane contract.
+- [ADR-0138](../adr/0138-use-detector-only-visual-grounding-sidecar.md):
+  current detector-only visual-grounding sidecar boundary.
 - [`domain.md`](domain.md): domain vocabulary and shipped-history notes.

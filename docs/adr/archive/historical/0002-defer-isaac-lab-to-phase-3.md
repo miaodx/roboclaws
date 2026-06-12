@@ -30,7 +30,7 @@ when locomotion realism becomes the next interesting thing.
 ## Decision
 
 Defer Isaac Lab integration until Phase 3 (Week 2+). Phases 1-2 use
-AI2-THOR (see [ADR-0001](0001-use-ai2thor-for-phase-1.md)) exclusively.
+AI2-THOR (see [ADR-0001](../superseded/0001-use-ai2thor-for-phase-1.md)) exclusively.
 
 When Phase 3 starts, the integration shape is two-level:
 

@@ -14,6 +14,7 @@ from typing import Any
 from roboclaws.reports.live_performance import MODEL_CALL_METRIC_SCHEMA
 
 CALIBRATION_SCHEMA = "roboclaws_model_latency_calibration_v1"
+MIN_HOLDOUT_R2_FOR_STRONG_NORMALIZED_CLAIM = 0.20
 FEATURES = (
     ("intercept_s", "intercept"),
     ("uncached_input_s_per_token", "uncached_input_tokens"),
@@ -37,6 +38,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--dataset-name", default="model-call-metrics")
     parser.add_argument("--min-samples", type=int, default=20)
     parser.add_argument("--min-group-samples", type=int, default=20)
+    parser.add_argument(
+        "--validation-path",
+        "--holdout-path",
+        dest="validation_paths",
+        type=Path,
+        nargs="+",
+        action="extend",
+        default=[],
+        help=(
+            "Optional independent model_call_metrics.jsonl files or run dirs used only for "
+            "holdout/cross-run validation statistics."
+        ),
+    )
+    parser.add_argument("--min-validation-samples", type=int, default=5)
+    parser.add_argument("--min-group-validation-samples", type=int, default=5)
     return parser.parse_args(argv)
 
 
@@ -47,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
         dataset_name=args.dataset_name,
         min_samples=args.min_samples,
         min_group_samples=args.min_group_samples,
+        validation_paths=args.validation_paths,
+        min_validation_samples=args.min_validation_samples,
+        min_group_validation_samples=args.min_group_validation_samples,
     )
     payload = json.dumps(packet, indent=2, sort_keys=True) + "\n"
     if args.output:
@@ -64,15 +83,27 @@ def build_calibration_packet(
     dataset_name: str,
     min_samples: int = 20,
     min_group_samples: int = 20,
+    validation_paths: list[Path] | None = None,
+    min_validation_samples: int = 5,
+    min_group_validation_samples: int = 5,
 ) -> dict[str, Any]:
     sources = [_metrics_path(path) for path in paths]
     raw_rows = [row for source in sources for row in _read_jsonl(source)]
     rows = [_model_row(row, source="") for row in raw_rows]
     valid_rows = [row for row in rows if row is not None]
-    limitations = {
-        "diagnostic_same_dataset_fit_not_holdout_validated",
-        "not_repo_default_calibration",
-    }
+    validation_sources = [_metrics_path(path) for path in validation_paths or []]
+    raw_validation_rows = [row for source in validation_sources for row in _read_jsonl(source)]
+    validation_rows = [_model_row(row, source="") for row in raw_validation_rows]
+    valid_validation_rows = [row for row in validation_rows if row is not None]
+    validation_summary = _validation_summary(
+        valid_validation_rows,
+        coefficients=None,
+        min_samples=min_validation_samples,
+        sources=validation_sources,
+        total_row_count=len(raw_validation_rows),
+        rejected_row_count=len(raw_validation_rows) - len(valid_validation_rows),
+    )
+    limitations = _packet_limitations(validation_summary)
     if len(valid_rows) < min_samples:
         limitations.add("insufficient_calibration_samples")
         return {
@@ -85,21 +116,42 @@ def build_calibration_packet(
             "rejected_row_count": len(raw_rows) - len(valid_rows),
             "limitations": sorted(limitations),
             "sources": [str(source) for source in sources],
+            "validation": validation_summary,
+            "validation_sources": [str(source) for source in validation_sources],
         }
 
     fit = _fit_rows(valid_rows)
+    validation_summary = _validation_summary(
+        valid_validation_rows,
+        coefficients=fit["coefficients"],
+        min_samples=min_validation_samples,
+        sources=validation_sources,
+        total_row_count=len(raw_validation_rows),
+        rejected_row_count=len(raw_validation_rows) - len(valid_validation_rows),
+    )
+    limitations = _packet_limitations(validation_summary)
+    validation_groups = _group_rows(valid_validation_rows)
     coefficient_sets = []
     for identity, group_rows in sorted(_group_rows(valid_rows).items()):
         if len(group_rows) < min_group_samples:
             continue
         group_fit = _fit_rows(group_rows)
+        group_validation = _validation_summary(
+            validation_groups.get(identity, []),
+            coefficients=group_fit["coefficients"],
+            min_samples=min_group_validation_samples,
+            sources=validation_sources,
+            total_row_count=len(raw_validation_rows),
+            rejected_row_count=len(raw_validation_rows) - len(valid_validation_rows),
+        )
         coefficient_sets.append(
             {
                 **dict(identity),
                 "sample_count": len(group_rows),
                 "coefficients": group_fit["coefficients"],
                 "fit": group_fit["fit"],
-                "limitations": sorted(limitations),
+                "validation": group_validation,
+                "limitations": sorted(_packet_limitations(group_validation)),
             }
         )
 
@@ -116,6 +168,8 @@ def build_calibration_packet(
         "coefficient_sets": coefficient_sets,
         "fit": fit["fit"],
         "sources": [str(source) for source in sources],
+        "validation": validation_summary,
+        "validation_sources": [str(source) for source in validation_sources],
     }
 
 
@@ -202,6 +256,64 @@ def _fit_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "coefficients": {key: _round(value, digits=9) for key, value in coefficients.items()},
         "fit": fit,
     }
+
+
+def _validation_summary(
+    rows: list[dict[str, Any]],
+    *,
+    coefficients: dict[str, float] | None,
+    min_samples: int,
+    sources: list[Path],
+    total_row_count: int,
+    rejected_row_count: int,
+) -> dict[str, Any]:
+    base = {
+        "mode": "holdout_paths" if sources else "not_requested",
+        "available": False,
+        "sample_count": len(rows),
+        "total_row_count": total_row_count,
+        "rejected_row_count": rejected_row_count,
+        "min_samples": min_samples,
+        "sources": [str(source) for source in sources],
+    }
+    if not sources:
+        return {
+            **base,
+            "limitations": ["holdout_validation_not_requested"],
+        }
+    if len(rows) < min_samples:
+        return {
+            **base,
+            "limitations": ["insufficient_holdout_validation_samples"],
+        }
+    if not coefficients:
+        return {
+            **base,
+            "limitations": ["calibration_coefficients_unavailable"],
+        }
+    predictions = [_predict(row, coefficients) for row in rows]
+    actuals = [float(row["duration_s"]) for row in rows]
+    return {
+        **base,
+        "available": True,
+        "error_stats": _error_stats(actuals, predictions),
+        "limitations": [],
+    }
+
+
+def _packet_limitations(validation_summary: dict[str, Any]) -> set[str]:
+    limitations = {"not_repo_default_calibration"}
+    if validation_summary.get("available") is not True:
+        limitations.add("diagnostic_same_dataset_fit_not_holdout_validated")
+        limitations.update(
+            str(item) for item in validation_summary.get("limitations") or [] if str(item)
+        )
+        return limitations
+    error_stats = validation_summary.get("error_stats")
+    validation_r2 = _float_or_none(error_stats.get("r2") if isinstance(error_stats, dict) else None)
+    if validation_r2 is None or validation_r2 < MIN_HOLDOUT_R2_FOR_STRONG_NORMALIZED_CLAIM:
+        limitations.add("holdout_validation_low_explanatory_power")
+    return limitations
 
 
 def _has_signal(rows: list[dict[str, Any]], coefficient_name: str) -> bool:

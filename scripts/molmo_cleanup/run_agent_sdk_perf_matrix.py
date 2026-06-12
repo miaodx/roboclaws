@@ -14,6 +14,7 @@ from roboclaws.reports.live_performance import (
     extract_report_performance_metrics,
     privacy_findings_for_packet,
     privacy_findings_for_run_dir,
+    read_model_latency_calibration,
 )
 
 
@@ -138,6 +139,7 @@ def _decision_packet(manifest: dict[str, Any], *, dry_run: dict[str, Any]) -> di
         "budget_caps": dry_run["budget_caps"],
         "provider_calls_planned": dry_run["provider_calls_planned"],
         "candidate_groups": manifest.get("candidate_groups") or [],
+        "candidate_queue": _candidate_queue(manifest),
         "rows": [_decision_row(row) for row in _rows(manifest)],
         "summary": {},
     }
@@ -158,6 +160,7 @@ def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
         "baseline_role": str(row.get("baseline_role") or ""),
         "baseline_run_dir": str(row.get("baseline_run_dir") or ""),
         "candidate_run_dir": str(row.get("candidate_run_dir") or ""),
+        "calibration_path": str(row.get("calibration_path") or ""),
         "quality_policy": str(row.get("quality_policy") or "same_or_better"),
         "quality_waiver": str(row.get("quality_waiver") or ""),
         "expected_terminal": str(row.get("expected_terminal") or ""),
@@ -248,6 +251,7 @@ def _finalize_packet(packet: dict[str, Any]) -> None:
     for row in packet["rows"]:
         row.pop("_baseline_summary", None)
         row.pop("_candidate_summary", None)
+        row.pop("_calibration", None)
     counts: dict[str, int] = {}
     for row in packet["rows"]:
         status = str(row.get("status") or "unknown")
@@ -262,6 +266,7 @@ def _finalize_packet(packet: dict[str, Any]) -> None:
         ],
         "unsupported": [row["row_id"] for row in packet["rows"] if row["status"] == "unsupported"],
         "recommendation_summary": _recommendation_summary(packet["rows"]),
+        "candidate_coverage": _candidate_coverage(packet),
     }
 
 
@@ -277,18 +282,35 @@ def _load_row_runs(row: dict[str, Any]) -> None:
     if not candidate_dir.exists():
         _block(row, f"candidate run dir missing: {candidate_dir}")
         return
-    row["_baseline_summary"] = _run_summary(baseline_dir)
-    row["_candidate_summary"] = _run_summary(candidate_dir)
+    calibration = _row_calibration(row)
+    if row["calibration_path"] and calibration is None:
+        return
+    row["_calibration"] = calibration
+    row["_baseline_summary"] = _run_summary(baseline_dir, calibration=calibration)
+    row["_candidate_summary"] = _run_summary(candidate_dir, calibration=calibration)
     row["artifact_links"] = {
         "baseline_run_dir": str(baseline_dir),
         "candidate_run_dir": str(candidate_dir),
         "candidate_report": str(candidate_dir / "report.html"),
         "candidate_live_timing": str(candidate_dir / "live_timing.json"),
     }
+    if row["calibration_path"]:
+        row["artifact_links"]["calibration"] = row["calibration_path"]
 
 
-def _run_summary(run_dir: Path) -> dict[str, Any]:
-    metrics = extract_report_performance_metrics(run_dir)
+def _row_calibration(row: dict[str, Any]) -> dict[str, Any] | None:
+    path = row.get("calibration_path")
+    if not path:
+        return None
+    calibration_path = Path(str(path))
+    if not calibration_path.exists():
+        _block(row, f"calibration_path missing: {calibration_path}")
+        return None
+    return read_model_latency_calibration(calibration_path)
+
+
+def _run_summary(run_dir: Path, *, calibration: dict[str, Any] | None = None) -> dict[str, Any]:
+    metrics = extract_report_performance_metrics(run_dir, calibration=calibration)
     quality = _dict(metrics.get("quality"))
     timing = _dict(metrics.get("timing"))
     call_counts = _dict(metrics.get("call_counts"))
@@ -323,6 +345,15 @@ def _speed_comparison(baseline: dict[str, Any], candidate: dict[str, Any]) -> di
     return {
         "elapsed_delta_s": timing.get("observed_wall_delta_s"),
         "between_tool_gap_delta_s": timing.get("mcp_between_tool_gap_delta_s"),
+        "observed_model_api_delta_s": timing.get("observed_model_api_delta_s"),
+        "estimated_model_work_delta_s": timing.get("estimated_model_work_delta_s"),
+        "model_latency_residual_delta_s": timing.get("model_latency_residual_delta_s"),
+        "baseline_estimated_model_work_s": _dict(timing.get("baseline")).get(
+            "estimated_model_work_s"
+        ),
+        "candidate_estimated_model_work_s": _dict(timing.get("candidate")).get(
+            "estimated_model_work_s"
+        ),
     }
 
 
@@ -569,6 +600,182 @@ def _recommendation_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _candidate_coverage(packet: dict[str, Any]) -> dict[str, Any]:
+    groups_by_candidate: dict[str, set[str]] = {}
+    queue_by_candidate = _candidate_queue_by_id(packet)
+    for group in packet.get("candidate_groups") or []:
+        if not isinstance(group, dict):
+            continue
+        group_id = str(group.get("group_id") or "")
+        for candidate_id in _str_list(group.get("candidate_ids")):
+            groups_by_candidate.setdefault(candidate_id, set())
+            if group_id:
+                groups_by_candidate[candidate_id].add(group_id)
+    for candidate_id in queue_by_candidate:
+        groups_by_candidate.setdefault(candidate_id, set())
+
+    rows_by_candidate: dict[str, list[dict[str, Any]]] = {}
+    for row in packet.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        candidate_ids = set(_str_list(row.get("candidate_ids")))
+        candidate_ids.update(_str_list(row.get("dependency_candidate_ids")))
+        for candidate_id in candidate_ids:
+            rows_by_candidate.setdefault(candidate_id, []).append(row)
+            groups_by_candidate.setdefault(candidate_id, set())
+
+    items: list[dict[str, Any]] = []
+    state_counts: dict[str, int] = {}
+    coverage_state_counts: dict[str, int] = {}
+    for candidate_id in sorted(groups_by_candidate):
+        rows = rows_by_candidate.get(candidate_id, [])
+        statuses = _status_counts(rows)
+        state = _candidate_evidence_state(statuses)
+        queue = queue_by_candidate.get(candidate_id, {})
+        coverage_state = _candidate_coverage_state(state, queue)
+        state_counts[state] = state_counts.get(state, 0) + 1
+        coverage_state_counts[coverage_state] = coverage_state_counts.get(coverage_state, 0) + 1
+        items.append(
+            {
+                "candidate_id": candidate_id,
+                "group_ids": sorted(groups_by_candidate.get(candidate_id) or []),
+                "queue": str(queue.get("queue") or ""),
+                "row_policy": str(queue.get("row_policy") or ""),
+                "row_ids": [str(row.get("row_id") or "") for row in rows],
+                "status_counts": statuses,
+                "evidence_state": state,
+                "coverage_state": coverage_state,
+                "next_action": _candidate_next_action(coverage_state, queue=queue),
+            }
+        )
+
+    return {
+        "source": "candidate_groups_and_decision_rows",
+        "candidate_count": len(items),
+        "state_counts": dict(sorted(state_counts.items())),
+        "coverage_state_counts": dict(sorted(coverage_state_counts.items())),
+        "covered_candidate_ids": [
+            item["candidate_id"] for item in items if item["evidence_state"] != "no_decision_row"
+        ],
+        "no_decision_row_candidate_ids": [
+            item["candidate_id"] for item in items if item["evidence_state"] == "no_decision_row"
+        ],
+        "unresolved_no_row_candidate_ids": [
+            item["candidate_id"]
+            for item in items
+            if item["evidence_state"] == "no_decision_row"
+            and item["coverage_state"] == "no_decision_row"
+        ],
+        "items": items,
+    }
+
+
+def _candidate_queue(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = manifest.get("candidate_queue")
+    if not isinstance(rows, list):
+        return []
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate_id = str(row.get("candidate_id") or "")
+        if not candidate_id:
+            continue
+        candidates.append(
+            {
+                "candidate_id": candidate_id,
+                "queue": str(row.get("queue") or ""),
+                "row_policy": str(row.get("row_policy") or ""),
+                "coverage_state_when_no_row": str(row.get("coverage_state_when_no_row") or ""),
+                "next_action": str(row.get("next_action") or ""),
+            }
+        )
+    return candidates
+
+
+def _candidate_queue_by_id(packet: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows = packet.get("candidate_queue")
+    if not isinstance(rows, list):
+        return {}
+    by_id: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate_id = str(row.get("candidate_id") or "")
+        if candidate_id:
+            by_id[candidate_id] = row
+    return by_id
+
+
+def _status_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = str(row.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _candidate_evidence_state(status_counts: dict[str, int]) -> str:
+    if not status_counts:
+        return "no_decision_row"
+    accepted = status_counts.get("accepted", 0)
+    rejected = status_counts.get("rejected", 0)
+    blocked = status_counts.get("blocked", 0)
+    inconclusive = status_counts.get("inconclusive", 0)
+    unsupported = status_counts.get("unsupported", 0)
+    if accepted and not (rejected or blocked or inconclusive or unsupported):
+        return "accepted_only"
+    if rejected and not (accepted or blocked or inconclusive or unsupported):
+        return "rejected_only"
+    if blocked and not (accepted or rejected or inconclusive or unsupported):
+        return "blocked_only"
+    if unsupported and not (accepted or rejected or blocked or inconclusive):
+        return "unsupported_only"
+    if inconclusive and not (accepted or rejected or blocked or unsupported):
+        return "inconclusive_only"
+    return "mixed_evidence"
+
+
+def _candidate_coverage_state(evidence_state: str, queue: dict[str, Any]) -> str:
+    if evidence_state != "no_decision_row":
+        return evidence_state
+    return str(queue.get("coverage_state_when_no_row") or evidence_state)
+
+
+def _candidate_next_action(state: str, *, queue: dict[str, Any] | None = None) -> str:
+    if queue and queue.get("next_action"):
+        return str(queue["next_action"])
+    return {
+        "accepted_only": (
+            "maintain accepted evidence; rerun only for repeat, calibration, or broader coverage"
+        ),
+        "rejected_only": (
+            "do not rerun unchanged; require a changed mechanism or behavior-preserving gate"
+        ),
+        "blocked_only": "retry only after the recorded provider/backend/capability blocker changes",
+        "unsupported_only": "do not run until the route is supported",
+        "inconclusive_only": "add stronger baseline/candidate evidence before claiming speedup",
+        "mixed_evidence": (
+            "inspect row variants before choosing the next arm; avoid treating one row as "
+            "the whole candidate"
+        ),
+        "no_decision_row": (
+            "no decision-row evidence yet; run only if refreshed Q/Y or plan gates justify it"
+        ),
+        "accepted_deterministic_no_live_refresh_row": (
+            "deterministic proof exists; add live row only if the plan needs provider-backed speed "
+            "evidence"
+        ),
+        "bypassed_no_live_refresh_row": "bypassed by current evidence; revisit only if Q/Y changes",
+        "deferred_no_live_refresh_row": "deferred until the named dependency evidence appears",
+        "merged_no_live_refresh_row": "covered by another candidate or summary path",
+        "conditional_gate_no_live_refresh_row": "run only before promotion or contract change",
+        "gate_no_live_refresh_row": (
+            "guardrail candidate; maintain the gate rather than a speed row"
+        ),
+    }.get(state, "inspect candidate state before continuing")
+
+
 def _privacy_findings(packet: dict[str, Any]) -> list[dict[str, Any]]:
     findings = privacy_findings_for_packet(packet)
     for row in packet["rows"]:
@@ -599,6 +806,7 @@ def _dry_run_row(row: dict[str, Any]) -> dict[str, Any]:
         "unsupported_reason": str(row.get("unsupported_reason") or ""),
         "provider_calls": bool(row.get("provider_calls")),
         "expected_decision_status": str(row.get("expected_decision_status") or ""),
+        "calibration_path": str(row.get("calibration_path") or ""),
     }
 
 
