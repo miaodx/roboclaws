@@ -119,6 +119,38 @@
         "provider_calls_planned",
         "unexpected_decision_status"
       ]
+    },
+    {
+      "baseline_role": "completed_live_responses_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/mify-world-public-mimo-compact-input-compaction/0612_1327/seed-7",
+      "dependency_candidate_ids": ["I", "N", "AB"],
+      "evidence_lane": "world-public-labels",
+      "expected_decision_status": "rejected",
+      "expected_terminal": "OpenAI Agents SDK turn ended without done after 2 OpenAI Agents SDK invocation(s)",
+      "feature_flags": {
+        "expected_rejected_evidence": true,
+        "model_input_compaction": "public_tool_result_summary_v1+repeated_metric_map_delta_v1",
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true
+      },
+      "model": "mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mify",
+      "quality_policy": "same_or_better",
+      "row_id": "mify_world_public_input_compaction_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
     }
   ]
 }

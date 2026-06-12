@@ -36,13 +36,16 @@ promptfix2 has 5 composite calls, 5 composite-internal declarations, and 11
 standalone declarations. F now has an opt-in `action_timeline` prep arm, so the
 F live A/B has now been tried. It reduced visual capture time but regressed
 cleanup quality and wall/model time, so it is expected-rejected evidence rather
-than a speed win. The next normalized-latency priorities are N/I/AB live A/B for
-the dominant model/SDK between-tool gap and repeated map/state payloads, then D
-per-arm racing observability before any C racing experiment if that gap remains,
-then O paired repeats or prompt/tool tightening for the remaining standalone
-declarations. Token deltas are telemetry only; cost is not a deciding objective
-for this plan. The full live provider/model x evidence-lane performance matrix
-is still not done. The follow-up execution plan is
+than a speed win. I/N/AB input-compaction live A/B has also now been tried. It
+reduced model-facing input bytes and uncached tokens substantially, but failed
+before `done` and got slower, so it is expected-rejected evidence rather than a
+wall-clock win. The next normalized-latency priority is D per-arm racing
+observability before any C racing experiment, unless the next slice first
+redesigns compaction/session semantics to preserve cleanup behavior. O paired
+repeats/tightening and raw-FPV P/AA remain valid lower-priority arms. Token
+deltas are telemetry only; cost is not a deciding objective for this plan. The
+full live provider/model x evidence-lane performance matrix is still not done.
+The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -205,6 +208,17 @@ Result:
   expected-rejected evidence row in
   `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`; it is not a
   reason to rerun F as the next standalone arm.
+- The Candidate I/N input-compaction live row completed at
+  `output/agent-sdk-perf-followups/mify-world-public-mimo-compact-input-compaction/0612_1327/seed-7/`.
+  The mechanism worked locally: `model_input_filter_metrics` reports
+  `input_byte_reduction_ratio=0.939364`, `input_bytes_before=71186480`,
+  `input_bytes_after=4316462`, `metric_map_output_count=292`, and
+  `repeated_metric_map_output_count=208`; uncached input tokens dropped from
+  `197838` to `63045`. The row is still rejected because it failed before
+  `done` after two SDK invocations, produced no `run_result.json`, raised
+  failed/noop calls to `31`, increased observed wall time by `+62.627s`, and
+  increased observed model API time by `+102.956s`. It proves compaction
+  mechanics, not a wall-clock win.
 - Completed external camera-grounded Chat-compatible evidence at
   `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
   shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14
