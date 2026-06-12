@@ -73,6 +73,8 @@ CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
 CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
 MODEL_INPUT_COMPACTION_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION"
 MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
+MODEL_RACING_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING"
+MODEL_RACING_ARM_COUNT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT"
 RAW_FPV_IMAGE_MEMORY_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY"
 RAW_FPV_IMAGE_MEMORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN"
 CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
@@ -184,6 +186,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--model-input-compaction-min-chars", type=int, default=None)
+    parser.add_argument(
+        "--model-racing",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to private Agent SDK Candidate-C get_response model-call racing. "
+            "stream_response remains single-arm."
+        ),
+    )
+    parser.add_argument("--model-racing-arm-count", type=int, default=None)
     parser.add_argument(
         "--raw-fpv-image-memory",
         action=argparse.BooleanOptionalAction,
@@ -970,7 +982,7 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             defaults,
         ),
         "robot_view_capture_policy": _robot_view_capture_policy_profile(args, defaults),
-        "model_racing_observability": _model_racing_observability_profile(defaults),
+        "model_racing_observability": _model_racing_observability_profile(args, defaults),
         "model_service_retry_attempts": _int_setting(
             args,
             "model_service_retry_attempts",
@@ -1281,24 +1293,64 @@ def _model_input_compaction_profile(
     }
 
 
-def _model_racing_observability_profile(defaults: dict[str, Any]) -> dict[str, Any]:
+def _model_racing_observability_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
     config = (
         defaults.get("model_racing_observability")
         if isinstance(defaults.get("model_racing_observability"), dict)
         else {}
     )
+    enabled = _bool_arg_setting(
+        args,
+        "model_racing",
+        MODEL_RACING_ENV,
+        default=bool(config.get("enabled", False)),
+    )
+    default_arm_count = int(config.get("arm_count") or 1)
+    if enabled and default_arm_count < 2:
+        default_arm_count = 2
+    arm_count = _int_setting(
+        args,
+        "model_racing_arm_count",
+        MODEL_RACING_ARM_COUNT_ENV,
+        default=default_arm_count,
+    )
+    arm_count = max(1, int(arm_count or 1))
+    if not enabled:
+        arm_count = 1
+    else:
+        arm_count = max(2, arm_count)
+    candidate_ids = (
+        ["D", "C"] if enabled else [str(item) for item in config.get("candidate_ids", ["D"])]
+    )
     return {
         "schema": "agent_sdk_model_racing_observability_v1",
-        "enabled": bool(config.get("enabled", False)),
-        "mode": str(config.get("mode") or "per_arm_observability_v1"),
-        "candidate_ids": [str(item) for item in config.get("candidate_ids", ["D"])],
-        "arm_count": int(config.get("arm_count") or 1),
-        "racing_multiplier": float(config.get("racing_multiplier") or 1.0),
-        "winner_selection": str(config.get("winner_selection") or "single_arm_no_racing"),
-        "loser_cancellation": str(
-            config.get("loser_cancellation") or "not_applicable_until_racing_enabled"
+        "enabled": enabled,
+        "mode": (
+            "get_response_racing_v1"
+            if enabled
+            else str(config.get("mode") or "per_arm_observability_v1")
         ),
-        "unknown_loser_billing": bool(config.get("unknown_loser_billing", False)),
+        "candidate_ids": candidate_ids,
+        "arm_count": arm_count,
+        "racing_multiplier": float(
+            arm_count if enabled else config.get("racing_multiplier") or 1.0
+        ),
+        "winner_selection": (
+            "first_successful_sdk_response"
+            if enabled
+            else str(config.get("winner_selection") or "single_arm_no_racing")
+        ),
+        "loser_cancellation": str(
+            "cancel_pending_losers"
+            if enabled
+            else config.get("loser_cancellation") or "not_applicable_until_racing_enabled"
+        ),
+        "unknown_loser_billing": True
+        if enabled
+        else bool(config.get("unknown_loser_billing", False)),
         "hook": str(config.get("hook") or "OpenAI Agents SDK model request boundary"),
         "private_artifact_policy": (
             "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "

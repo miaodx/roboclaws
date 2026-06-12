@@ -8,8 +8,9 @@ attribution, Candidate I/AB deterministic prep, and Q/Y deterministic
 recommendation enrichment, Candidate N deterministic repeated-map prep,
 Candidate O deterministic camera-grounded composite prep, and Candidate P
 deterministic raw-FPV repeated-failure rails, and Candidate AA deterministic
-raw-FPV image-memory prep, and Candidate F deterministic robot-view capture
-policy prep for the private `openai-agents-live` route.
+raw-FPV image-memory prep, Candidate F deterministic robot-view capture policy
+prep, and Candidate C deterministic get-response racing prep for the private
+`openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
@@ -20,7 +21,8 @@ N deterministic repeated-map prep and Candidate O deterministic
 camera-grounded composite prep were accepted on 2026-06-12. Candidate P
 deterministic raw-FPV repeated-failure rails and Candidate AA deterministic
 raw-FPV image-memory prep were accepted on 2026-06-12. Candidate F deterministic
-robot-view capture policy prep was accepted on 2026-06-12. The first resumed
+robot-view capture policy prep was accepted on 2026-06-12. Candidate C
+deterministic get-response racing prep was accepted on 2026-06-12. The first resumed
 provider-backed pass on 2026-06-12 produced one `mify` Responses
 `world-public-labels` baseline/candidate comparison and one blocked
 `codex-env` GPT baseline attempt. The first Candidate O `mify` Responses
@@ -40,12 +42,14 @@ than a speed win. I/N/AB input-compaction live A/B has also now been tried. It
 reduced model-facing input bytes and uncached tokens substantially, but failed
 before `done` and got slower, so it is expected-rejected evidence rather than a
 wall-clock win. D per-arm racing observability is now implemented as
-single-arm/no-racing deterministic prep, so the next normalized-latency
-priority can be a scoped C racing experiment if Q still shows model/SDK gap
-dominant and live caps cover the racing multiplier. A behavior-preserving
-compaction/session redesign, O paired repeats/tightening, and raw-FPV P/AA
-remain valid alternate lower-priority arms. Token deltas are telemetry only;
-cost is not a deciding objective for this plan. The full live provider/model x
+single-arm/no-racing deterministic prep. C get-response racing deterministic
+prep is now implemented behind explicit opt-in flags, with winner/loser/cancel
+telemetry and `stream_response` kept single-arm. The next normalized-latency
+priority can be a scoped C live A/B if Q still shows model/SDK gap dominant and
+live caps cover the racing multiplier. A behavior-preserving compaction/session
+redesign, O paired repeats/tightening, and raw-FPV P/AA remain valid alternate
+lower-priority arms. Token deltas are telemetry only; cost is not a deciding
+objective for this plan. The full live provider/model x
 evidence-lane performance matrix is still not done. The follow-up execution
 plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
@@ -229,6 +233,13 @@ Result:
   aggregates these under `model_racing_observability_metrics` in timeline
   latency attribution. Current mode is `racing_enabled=false`,
   `racing_multiplier=1.0`; no C racing run or speed claim is made yet.
+- Candidate C deterministic get-response racing prep is implemented. The
+  private SDK route accepts `--model-racing` /
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING` plus arm-count cap controls, defaults
+  to no racing, races only SDK `get_response`, returns the first successful SDK
+  model response, cancels pending losers, records sanitized D telemetry, and
+  keeps `stream_response` single-arm. No provider-backed C row or wall-clock
+  speed claim is made yet.
 - Completed external camera-grounded Chat-compatible evidence at
   `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
   shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14

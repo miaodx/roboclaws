@@ -872,6 +872,16 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS:-}" ]]; then
             runner_args+=(--context-hard-limit-tokens "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS}")
           fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING:-}" ]]; then
+            if [[ "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
+              runner_args+=(--no-model-racing)
+            else
+              runner_args+=(--model-racing)
+            fi
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT:-}" ]]; then
+            runner_args+=(--model-racing-arm-count "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT}")
+          fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT:-}" ]]; then
             runner_args+=(--max-observe-per-waypoint "${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT}")
           fi

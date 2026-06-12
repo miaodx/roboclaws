@@ -483,6 +483,258 @@ def test_openai_agents_retrying_model_zero_retry_still_records_observability(
     assert metrics["final_outcomes"] == {"failure": 1}
 
 
+def test_openai_agents_retrying_model_races_get_response_and_cancels_loser(
+    tmp_path: Path,
+) -> None:
+    class FakeModel:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.cancelled = 0
+
+        async def get_response(self, *_args, **_kwargs):
+            self.calls += 1
+            call_index = self.calls
+            try:
+                if call_index == 1:
+                    await asyncio.sleep(0.01)
+                    return SimpleNamespace(output="winner", usage={"input_tokens": 10})
+                await asyncio.sleep(10)
+                return SimpleNamespace(output="loser")
+            except asyncio.CancelledError:
+                self.cancelled += 1
+                raise
+
+        def stream_response(self, *_args, **_kwargs):
+            raise AssertionError("not used")
+
+    fake_model = FakeModel()
+    events_path = tmp_path / "openai-agents-events.jsonl"
+    spans_path = tmp_path / "openai-agents-spans.jsonl"
+    model = _RetryingModel(
+        fake_model,
+        retry_attempts=0,
+        retry_sleep_s=0,
+        events_path=events_path,
+        spans_path=spans_path,
+        runtime_config={
+            "runtime": "openai-agents-live",
+            "provider_profile": "mify",
+            "wire_api": "responses",
+            "model": "xiaomi/mimo-v2.5",
+            "model_racing_observability": {
+                "schema": "agent_sdk_model_racing_observability_v1",
+                "enabled": True,
+                "mode": "get_response_racing_v1",
+                "candidate_ids": ["D", "C"],
+                "arm_count": 2,
+                "racing_multiplier": 2.0,
+                "winner_selection": "first_successful_sdk_response",
+                "loser_cancellation": "cancel_pending_losers",
+                "unknown_loser_billing": True,
+            },
+        },
+    )
+
+    result = asyncio.run(
+        model.get_response(
+            None,
+            "clean the room SECRET_PROMPT",
+            object(),
+            [],
+            None,
+            [],
+            object(),
+            previous_response_id=None,
+            conversation_id=None,
+            prompt=None,
+        )
+    )
+
+    assert result.output == "winner"
+    assert fake_model.calls == 2
+    assert fake_model.cancelled == 1
+    events_text = events_path.read_text(encoding="utf-8")
+    assert "SECRET_PROMPT" not in events_text
+    events = [json.loads(line) for line in events_text.splitlines()]
+    racing_events = [
+        event
+        for event in events
+        if event.get("schema") == "openai_agents_model_racing_observability_v1"
+    ]
+    assert [event["event"] for event in racing_events] == [
+        "model_racing_arm_start",
+        "model_racing_arm_start",
+        "model_racing_arm_finish",
+        "model_racing_arm_cancelled",
+    ]
+    assert {event["arm_id"] for event in racing_events[:2]} == {
+        "call-0-attempt-0-arm-0",
+        "call-0-attempt-0-arm-1",
+    }
+    finish = next(event for event in racing_events if event["event"] == "model_racing_arm_finish")
+    assert finish["winner"] is True
+    assert finish["arm_role"] == "winner"
+    assert finish["racing_enabled"] is True
+    assert finish["racing_multiplier"] == 2.0
+    assert finish["winner_selection"] == "first_successful_sdk_response"
+    assert finish["usage_summary"] == {
+        "usage_available": True,
+        "input_tokens": 10,
+    }
+    cancelled = next(
+        event for event in racing_events if event["event"] == "model_racing_arm_cancelled"
+    )
+    assert cancelled["cancelled"] is True
+    assert cancelled["cancellation_observed"] is True
+    assert cancelled["loser_billing_unknown"] is True
+    metrics = _model_racing_observability_metrics(tmp_path)
+    assert metrics["racing_enabled"] is True
+    assert metrics["racing_multiplier"] == 2.0
+    assert metrics["call_count"] == 1
+    assert metrics["arm_count"] == 2
+    assert metrics["max_arm_count_per_call"] == 2
+    assert metrics["winner_count"] == 1
+    assert metrics["cancelled_count"] == 1
+    assert metrics["cancellation_observed_count"] == 1
+    assert metrics["loser_billing_unknown_count"] == 1
+    assert metrics["methods"] == ["get_response"]
+    assert metrics["racing_modes"] == ["get_response_racing_v1"]
+
+
+def test_openai_agents_retrying_model_racing_reports_all_arm_failures(
+    tmp_path: Path,
+) -> None:
+    class FakeModel:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def get_response(self, *_args, **_kwargs):
+            self.calls += 1
+            raise RuntimeError(f"model unavailable {self.calls}")
+
+        def stream_response(self, *_args, **_kwargs):
+            raise AssertionError("not used")
+
+    fake_model = FakeModel()
+    model = _RetryingModel(
+        fake_model,
+        retry_attempts=0,
+        retry_sleep_s=0,
+        events_path=tmp_path / "openai-agents-events.jsonl",
+        spans_path=tmp_path / "openai-agents-spans.jsonl",
+        runtime_config={
+            "runtime": "openai-agents-live",
+            "provider_profile": "mify",
+            "wire_api": "responses",
+            "model": "xiaomi/mimo-v2.5",
+            "model_racing_observability": {
+                "enabled": True,
+                "mode": "get_response_racing_v1",
+                "arm_count": 2,
+                "racing_multiplier": 2.0,
+                "winner_selection": "first_successful_sdk_response",
+                "loser_cancellation": "cancel_pending_losers",
+                "unknown_loser_billing": True,
+            },
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        asyncio.run(
+            model.get_response(
+                None,
+                "clean the room",
+                object(),
+                [],
+                None,
+                [],
+                object(),
+                previous_response_id=None,
+                conversation_id=None,
+                prompt=None,
+            )
+        )
+
+    assert fake_model.calls == 2
+    metrics = _model_racing_observability_metrics(tmp_path)
+    assert metrics["available"] is True
+    assert metrics["event_counts"] == {
+        "model_racing_arm_failure": 2,
+        "model_racing_arm_start": 2,
+    }
+    assert metrics["winner_count"] == 0
+    assert metrics["failure_classes"] == {"provider_transient_failure": 2}
+    assert metrics["final_outcomes"] == {"failure": 2}
+
+
+def test_openai_agents_retrying_model_does_not_race_stream_response(
+    tmp_path: Path,
+) -> None:
+    class FakeModel:
+        def __init__(self) -> None:
+            self.stream_calls = 0
+
+        async def get_response(self, *_args, **_kwargs):
+            raise AssertionError("not used")
+
+        async def stream_response(self, *_args, **_kwargs):
+            self.stream_calls += 1
+            yield SimpleNamespace(output="streamed")
+
+    async def collect_stream(model: _RetryingModel) -> list[object]:
+        events = []
+        async for event in model.stream_response(
+            None,
+            "clean the room",
+            object(),
+            [],
+            None,
+            [],
+            object(),
+            previous_response_id=None,
+            conversation_id=None,
+            prompt=None,
+        ):
+            events.append(event)
+        return events
+
+    fake_model = FakeModel()
+    model = _RetryingModel(
+        fake_model,
+        retry_attempts=0,
+        retry_sleep_s=0,
+        events_path=tmp_path / "openai-agents-events.jsonl",
+        spans_path=tmp_path / "openai-agents-spans.jsonl",
+        runtime_config={
+            "runtime": "openai-agents-live",
+            "provider_profile": "mify",
+            "wire_api": "responses",
+            "model": "xiaomi/mimo-v2.5",
+            "model_racing_observability": {
+                "enabled": True,
+                "mode": "get_response_racing_v1",
+                "arm_count": 2,
+                "racing_multiplier": 2.0,
+                "winner_selection": "first_successful_sdk_response",
+                "loser_cancellation": "cancel_pending_losers",
+                "unknown_loser_billing": True,
+            },
+        },
+    )
+
+    events = asyncio.run(collect_stream(model))
+
+    assert [event.output for event in events] == ["streamed"]
+    assert fake_model.stream_calls == 1
+    metrics = _model_racing_observability_metrics(tmp_path)
+    assert metrics["racing_enabled"] is False
+    assert metrics["racing_multiplier"] == 1.0
+    assert metrics["arm_count"] == 1
+    assert metrics["max_arm_count_per_call"] == 1
+    assert metrics["methods"] == ["stream_response"]
+    assert metrics["racing_modes"] == ["stream_response_single_arm_no_racing"]
+
+
 def test_openai_agents_runtime_turn_completion_does_not_infer_cleanup_success(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -2758,6 +3010,32 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert gpt["max_turns"] == 128
     assert gpt["max_continuations"] == 1
     assert gpt["context_soft_limit_tokens"] == 96_000
+
+    racing_args = Namespace(
+        **{
+            **vars(base_args),
+            "model_racing": True,
+            "model_racing_arm_count": None,
+        }
+    )
+    racing = _resolve_agent_sdk_perf_profile(racing_args)
+    assert racing["model_racing_observability"] == {
+        "schema": "agent_sdk_model_racing_observability_v1",
+        "enabled": True,
+        "mode": "get_response_racing_v1",
+        "candidate_ids": ["D", "C"],
+        "arm_count": 2,
+        "racing_multiplier": 2.0,
+        "winner_selection": "first_successful_sdk_response",
+        "loser_cancellation": "cancel_pending_losers",
+        "unknown_loser_billing": True,
+        "hook": "OpenAI Agents SDK model request boundary",
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
+            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted"
+        ),
+    }
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
     assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
