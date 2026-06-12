@@ -739,6 +739,9 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
         payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
         payload["model_service_fallback_metrics"] = _model_service_fallback_metrics(self.run_dir)
+        payload["model_racing_observability_metrics"] = _model_racing_observability_metrics(
+            self.run_dir
+        )
         payload["model_input_filter_metrics"] = _model_input_filter_metrics(self.run_dir)
         payload["context_metrics"] = _context_metrics(self.run_dir, payload)
         payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
@@ -967,6 +970,7 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             defaults,
         ),
         "robot_view_capture_policy": _robot_view_capture_policy_profile(args, defaults),
+        "model_racing_observability": _model_racing_observability_profile(defaults),
         "model_service_retry_attempts": _int_setting(
             args,
             "model_service_retry_attempts",
@@ -1151,6 +1155,23 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
                 "full report robot-view capture; default public route behavior unchanged"
             ),
         },
+        "model_racing_observability": {
+            "schema": "agent_sdk_model_racing_observability_v1",
+            "enabled": False,
+            "mode": "per_arm_observability_v1",
+            "candidate_ids": ["D"],
+            "arm_count": 1,
+            "racing_multiplier": 1.0,
+            "winner_selection": "single_arm_no_racing",
+            "loser_cancellation": "not_applicable_until_racing_enabled",
+            "unknown_loser_billing": False,
+            "hook": "OpenAI Agents SDK model request boundary",
+            "private_artifact_policy": (
+                "records model-call arm lifecycle, winner/cancel fields, timing, "
+                "provider/model ids, and usage availability only; raw prompts, model text, "
+                "tool payload bodies, credentials, and private truth are not persisted"
+            ),
+        },
     }
     if profile_id in {"baseline", "custom"}:
         return baseline
@@ -1256,6 +1277,33 @@ def _model_input_compaction_profile(
         "raw_fpv_image_memory": raw_fpv_image_memory,
         "private_artifact_policy": (
             "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
+        ),
+    }
+
+
+def _model_racing_observability_profile(defaults: dict[str, Any]) -> dict[str, Any]:
+    config = (
+        defaults.get("model_racing_observability")
+        if isinstance(defaults.get("model_racing_observability"), dict)
+        else {}
+    )
+    return {
+        "schema": "agent_sdk_model_racing_observability_v1",
+        "enabled": bool(config.get("enabled", False)),
+        "mode": str(config.get("mode") or "per_arm_observability_v1"),
+        "candidate_ids": [str(item) for item in config.get("candidate_ids", ["D"])],
+        "arm_count": int(config.get("arm_count") or 1),
+        "racing_multiplier": float(config.get("racing_multiplier") or 1.0),
+        "winner_selection": str(config.get("winner_selection") or "single_arm_no_racing"),
+        "loser_cancellation": str(
+            config.get("loser_cancellation") or "not_applicable_until_racing_enabled"
+        ),
+        "unknown_loser_billing": bool(config.get("unknown_loser_billing", False)),
+        "hook": str(config.get("hook") or "OpenAI Agents SDK model request boundary"),
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
+            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted"
         ),
     }
 
@@ -2360,6 +2408,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         "openai_agents_span_type_counts": span_metrics.get("span_type_counts"),
         "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
         "model_service_fallback_metrics": _compact_metric_group(fallback_metrics),
+        "model_racing_observability_metrics": _compact_metric_group(
+            timing.get("model_racing_observability_metrics")
+            if isinstance(timing.get("model_racing_observability_metrics"), dict)
+            else {}
+        ),
         "model_input_filter_metrics": _compact_metric_group(model_input_filter_metrics),
         "agent_sdk_budget_terminal": _compact_metric_group(budget_terminal),
         "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
@@ -2580,6 +2633,151 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
             "Fallback metrics retain attempt counts, provider/model ids, failure classes, "
             "retry delays, and outcomes only. Raw prompts, model text, credentials, and "
             "tool payload bodies are not persisted."
+        ),
+    }
+
+
+def _model_racing_observability_metrics(run_dir: Path) -> dict[str, Any]:
+    events = [
+        event
+        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
+        for event in _read_jsonl_path(path)
+        if event.get("schema") == "openai_agents_model_racing_observability_v1"
+    ]
+    if not events:
+        return {
+            "available": False,
+            "source": "openai_agents_model_racing_observability_events",
+            "limitations": ["model_racing_observability_events_missing"],
+        }
+
+    event_counts: dict[str, int] = {}
+    attempted_models: set[str] = set()
+    attempted_provider_profiles: set[str] = set()
+    attempted_wire_apis: set[str] = set()
+    methods: set[str] = set()
+    racing_modes: set[str] = set()
+    arm_ids: set[str] = set()
+    call_indexes: set[int] = set()
+    final_outcomes: dict[str, int] = {}
+    failure_classes: dict[str, int] = {}
+    provider_reasons: dict[str, int] = {}
+    elapsed_s_total = 0.0
+    max_elapsed_s = 0.0
+    winner_count = 0
+    cancelled_count = 0
+    cancellation_observed_count = 0
+    loser_billing_unknown_count = 0
+    racing_enabled = False
+    racing_multiplier = 1.0
+    max_arm_count = 1
+    usage_available_count = 0
+    usage_missing_count = 0
+    total_input_tokens = 0
+    total_cached_input_tokens = 0
+    total_uncached_input_tokens = 0
+    total_output_tokens = 0
+    total_reasoning_tokens = 0
+    for event in events:
+        event_type = str(event.get("event") or "")
+        if event_type:
+            event_counts[event_type] = event_counts.get(event_type, 0) + 1
+        model = str(event.get("model") or "")
+        if model:
+            attempted_models.add(model)
+        provider_profile = str(event.get("provider_profile") or "")
+        if provider_profile:
+            attempted_provider_profiles.add(provider_profile)
+        wire_api = str(event.get("wire_api") or "")
+        if wire_api:
+            attempted_wire_apis.add(wire_api)
+        method = str(event.get("method") or "")
+        if method:
+            methods.add(method)
+        racing_mode = str(event.get("racing_mode") or "")
+        if racing_mode:
+            racing_modes.add(racing_mode)
+        arm_id = str(event.get("arm_id") or "")
+        if arm_id:
+            arm_ids.add(arm_id)
+        call_index = _int_or_none(event.get("call_index"))
+        if call_index is not None:
+            call_indexes.add(call_index)
+        final_outcome = str(event.get("final_outcome") or "")
+        if final_outcome:
+            final_outcomes[final_outcome] = final_outcomes.get(final_outcome, 0) + 1
+        failure_class = str(event.get("failure_class") or "")
+        if failure_class:
+            failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
+        provider_reason = str(event.get("provider_reason") or "")
+        if provider_reason:
+            provider_reasons[provider_reason] = provider_reasons.get(provider_reason, 0) + 1
+        elapsed = _float_or_none(event.get("elapsed_s"))
+        if elapsed is not None:
+            elapsed_s_total += elapsed
+            max_elapsed_s = max(max_elapsed_s, elapsed)
+        if event.get("winner") is True:
+            winner_count += 1
+        if event.get("cancelled") is True:
+            cancelled_count += 1
+        if event.get("cancellation_observed") is True:
+            cancellation_observed_count += 1
+        if event.get("loser_billing_unknown") is True:
+            loser_billing_unknown_count += 1
+        usage = event.get("usage_summary") if isinstance(event.get("usage_summary"), dict) else {}
+        if usage:
+            if usage.get("usage_available") is True:
+                usage_available_count += 1
+                total_input_tokens += _int_or_none(usage.get("input_tokens")) or 0
+                total_cached_input_tokens += _int_or_none(usage.get("cached_input_tokens")) or 0
+                total_uncached_input_tokens += _int_or_none(usage.get("uncached_input_tokens")) or 0
+                total_output_tokens += _int_or_none(usage.get("output_tokens")) or 0
+                total_reasoning_tokens += _int_or_none(usage.get("reasoning_tokens")) or 0
+            else:
+                usage_missing_count += 1
+        racing_enabled = racing_enabled or bool(event.get("racing_enabled"))
+        racing_multiplier = max(
+            racing_multiplier,
+            _float_or_none(event.get("racing_multiplier")) or 1.0,
+        )
+        max_arm_count = max(max_arm_count, _int_or_none(event.get("arm_count")) or 1)
+
+    return {
+        "available": True,
+        "source": "openai_agents_model_racing_observability_events",
+        "limitations": [],
+        "event_count": len(events),
+        "event_counts": dict(sorted(event_counts.items())),
+        "call_count": len(call_indexes),
+        "arm_count": len(arm_ids),
+        "max_arm_count_per_call": max_arm_count,
+        "racing_enabled": racing_enabled,
+        "racing_multiplier": racing_multiplier,
+        "winner_count": winner_count,
+        "cancelled_count": cancelled_count,
+        "cancellation_observed_count": cancellation_observed_count,
+        "loser_billing_unknown_count": loser_billing_unknown_count,
+        "elapsed_s_total": _round_duration(elapsed_s_total),
+        "max_elapsed_s": _round_duration(max_elapsed_s),
+        "usage_available_count": usage_available_count,
+        "usage_missing_count": usage_missing_count,
+        "total_input_tokens": total_input_tokens,
+        "total_cached_input_tokens": total_cached_input_tokens,
+        "total_uncached_input_tokens": total_uncached_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "total_reasoning_tokens": total_reasoning_tokens,
+        "methods": sorted(methods),
+        "racing_modes": sorted(racing_modes),
+        "final_outcomes": dict(sorted(final_outcomes.items())),
+        "failure_classes": dict(sorted(failure_classes.items())),
+        "provider_reasons": dict(sorted(provider_reasons.items())),
+        "attempted_models": sorted(attempted_models),
+        "attempted_provider_profiles": sorted(attempted_provider_profiles),
+        "attempted_wire_apis": sorted(attempted_wire_apis),
+        "privacy_note": (
+            "Racing observability metrics retain arm lifecycle counts, timing, provider/model "
+            "ids, cancellation/winner flags, and usage-availability fields only. Raw prompts, "
+            "model text, tool payload bodies, credentials, and private truth are not persisted."
         ),
     }
 
@@ -3021,6 +3219,8 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "total_input_tokens",
         "total_cached_input_tokens",
         "total_uncached_input_tokens",
+        "total_output_tokens",
+        "total_reasoning_tokens",
         "cache_hit_ratio",
         "cached_input_token_ratio",
         "provider_prompt_cache_observed",
@@ -3044,6 +3244,22 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "retry_exhausted",
         "final_outcomes",
         "event_count",
+        "event_counts",
+        "call_count",
+        "arm_count",
+        "max_arm_count_per_call",
+        "racing_enabled",
+        "racing_multiplier",
+        "winner_count",
+        "cancelled_count",
+        "cancellation_observed_count",
+        "loser_billing_unknown_count",
+        "elapsed_s_total",
+        "max_elapsed_s",
+        "usage_available_count",
+        "usage_missing_count",
+        "methods",
+        "racing_modes",
         "enabled",
         "modes",
         "compacted_item_count",

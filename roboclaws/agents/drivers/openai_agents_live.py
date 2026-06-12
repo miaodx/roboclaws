@@ -34,6 +34,8 @@ MODEL_SERVICE_RETRY_SLEEP_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLE
 DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS = 1200
 MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
 RAW_FPV_OBSERVATION_ID_RE = re.compile(r"raw_fpv_\d+")
+MODEL_RACING_OBSERVABILITY_SCHEMA = "agent_sdk_model_racing_observability_v1"
+MODEL_RACING_EVENT_SCHEMA = "openai_agents_model_racing_observability_v1"
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -951,6 +953,7 @@ def _runtime_config(
     sdk_model_settings = _sdk_model_settings_payload(request)
     sdk_run_config = _sdk_run_config_payload(request, events_path=None)
     input_compaction = _input_compaction_config(request)
+    racing_observability = _model_racing_observability_config(request)
     responses_feature_surface = _responses_feature_surface(model_settings)
     return {
         "runtime": "openai-agents-live",
@@ -972,6 +975,7 @@ def _runtime_config(
         "sdk_run_config": sdk_run_config,
         "agent_sdk_responses_features": responses_feature_surface,
         "model_input_compaction": input_compaction,
+        "model_racing_observability": racing_observability,
         "prompt_cache_retention": sdk_model_settings.get("prompt_cache_retention") or "",
         "trace_include_sensitive_data": sdk_run_config.get("trace_include_sensitive_data"),
     }
@@ -998,6 +1002,37 @@ def _responses_feature_surface(model_settings: dict[str, Any]) -> dict[str, Any]
             "Responses continuation/session levers are recorded as capability surface only; "
             "they are not enabled by default because task state and report completeness must "
             "remain MCP-visible."
+        ),
+    }
+
+
+def _model_racing_observability_config(request: LiveAgentRequest) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    config = profile.get("model_racing_observability") if isinstance(profile, dict) else None
+    if not isinstance(config, dict):
+        config = metadata.get("model_racing_observability")
+    if not isinstance(config, dict):
+        config = {}
+    enabled = _bool_setting(config.get("enabled"), default=False)
+    racing_mode = str(config.get("mode") or ("per_arm_observability_v1" if enabled else "off"))
+    candidate_ids = (
+        config.get("candidate_ids") if isinstance(config.get("candidate_ids"), list) else []
+    )
+    return {
+        "schema": MODEL_RACING_OBSERVABILITY_SCHEMA,
+        "enabled": enabled,
+        "mode": racing_mode,
+        "candidate_ids": [str(item) for item in candidate_ids],
+        "arm_count": 1,
+        "racing_multiplier": 1.0,
+        "winner_selection": "single_arm_no_racing",
+        "loser_cancellation": "not_applicable_until_racing_enabled",
+        "unknown_loser_billing": False,
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model ids, "
+            "and usage availability only; raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted"
         ),
     }
 
@@ -1297,8 +1332,6 @@ def _model_for_request(request: LiveAgentRequest) -> Any:
     else:  # pragma: no cover - guarded by _model_settings.
         raise RuntimeError(f"unsupported OpenAI Agents wire API: {settings['wire_api']}")
     retry_config = _model_service_retry_config(request)
-    if retry_config["retry_attempts"] <= 0:
-        return base_model
     return _RetryingModel(
         base_model,
         retry_attempts=int(retry_config["retry_attempts"]),
@@ -1354,6 +1387,7 @@ class _RetryingModel(_AgentsModel):
         self.events_path = events_path
         self.spans_path = spans_path
         self.runtime_config = dict(runtime_config)
+        self._model_call_index = 0
 
     async def close(self) -> None:
         close = getattr(self.base_model, "close", None)
@@ -1387,6 +1421,19 @@ class _RetryingModel(_AgentsModel):
         attempt_index = 0
         while True:
             started = time.time()
+            call_index = self._next_model_call_index()
+            arm_id = _model_racing_arm_id(call_index=call_index, attempt_index=attempt_index)
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_start",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                method="get_response",
+                arm_role="single",
+            )
             _append_model_service_event(
                 self.events_path,
                 self.spans_path,
@@ -1428,6 +1475,27 @@ class _RetryingModel(_AgentsModel):
                     retry_delay_s=self.retry_sleep_s if should_retry else None,
                     safe_to_replay=True,
                 )
+                _append_model_racing_event(
+                    self.events_path,
+                    self.spans_path,
+                    "model_racing_arm_failure",
+                    runtime_config=self.runtime_config,
+                    call_index=call_index,
+                    attempt_index=attempt_index,
+                    arm_id=arm_id,
+                    method="get_response",
+                    arm_role="single",
+                    elapsed_s=_round_duration(time.time() - started),
+                    final_outcome="retry_scheduled" if should_retry else "failure",
+                    failure_class=failure.reason,
+                    provider_reason=failure.provider_reason,
+                    retryable=failure.retryable,
+                    winner=False,
+                    cancelled=False,
+                    cancellation_observed=False,
+                    loser_billing_unknown=False,
+                    safe_to_replay=True,
+                )
                 if not should_retry:
                     raise
                 if self.retry_sleep_s:
@@ -1444,6 +1512,24 @@ class _RetryingModel(_AgentsModel):
                 method="get_response",
                 elapsed_s=_round_duration(time.time() - started),
                 final_outcome="success",
+            )
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_finish",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                method="get_response",
+                arm_role="single",
+                elapsed_s=_round_duration(time.time() - started),
+                final_outcome="success",
+                winner=True,
+                cancelled=False,
+                cancellation_observed=False,
+                loser_billing_unknown=False,
+                usage_summary=_usage_summary(result),
             )
             return result
 
@@ -1465,6 +1551,19 @@ class _RetryingModel(_AgentsModel):
         while True:
             started = time.time()
             yielded_event = False
+            call_index = self._next_model_call_index()
+            arm_id = _model_racing_arm_id(call_index=call_index, attempt_index=attempt_index)
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_start",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                method="stream_response",
+                arm_role="single",
+            )
             _append_model_service_event(
                 self.events_path,
                 self.spans_path,
@@ -1511,6 +1610,27 @@ class _RetryingModel(_AgentsModel):
                     retry_delay_s=self.retry_sleep_s if should_retry else None,
                     safe_to_replay=safe_to_replay,
                 )
+                _append_model_racing_event(
+                    self.events_path,
+                    self.spans_path,
+                    "model_racing_arm_failure",
+                    runtime_config=self.runtime_config,
+                    call_index=call_index,
+                    attempt_index=attempt_index,
+                    arm_id=arm_id,
+                    method="stream_response",
+                    arm_role="single",
+                    elapsed_s=_round_duration(time.time() - started),
+                    final_outcome="retry_scheduled" if should_retry else "failure",
+                    failure_class=failure.reason,
+                    provider_reason=failure.provider_reason,
+                    retryable=failure.retryable,
+                    winner=False,
+                    cancelled=False,
+                    cancellation_observed=False,
+                    loser_billing_unknown=False,
+                    safe_to_replay=safe_to_replay,
+                )
                 if not should_retry:
                     raise
                 if self.retry_sleep_s:
@@ -1528,7 +1648,29 @@ class _RetryingModel(_AgentsModel):
                 elapsed_s=_round_duration(time.time() - started),
                 final_outcome="success",
             )
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_finish",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                method="stream_response",
+                arm_role="single",
+                elapsed_s=_round_duration(time.time() - started),
+                final_outcome="success",
+                winner=True,
+                cancelled=False,
+                cancellation_observed=False,
+                loser_billing_unknown=False,
+            )
             return
+
+    def _next_model_call_index(self) -> int:
+        value = self._model_call_index
+        self._model_call_index += 1
+        return value
 
 
 def _should_retry_model_service_failure(
@@ -1635,6 +1777,110 @@ def _append_model_service_event(
         "span_type": "model_service_fallback",
     }
     _append_event(spans_path, span_payload)
+
+
+def _model_racing_arm_id(*, call_index: int, attempt_index: int) -> str:
+    return f"call-{call_index}-attempt-{attempt_index}-arm-0"
+
+
+def _append_model_racing_event(
+    events_path: Path,
+    spans_path: Path,
+    event: str,
+    *,
+    runtime_config: dict[str, Any],
+    call_index: int,
+    attempt_index: int,
+    arm_id: str,
+    method: str,
+    arm_role: str,
+    **extra: Any,
+) -> None:
+    config = (
+        runtime_config.get("model_racing_observability")
+        if isinstance(runtime_config.get("model_racing_observability"), dict)
+        else {}
+    )
+    payload = _drop_empty(
+        {
+            "schema": MODEL_RACING_EVENT_SCHEMA,
+            "event": event,
+            "ts_epoch": time.time(),
+            "runtime": runtime_config.get("runtime"),
+            "provider_profile": runtime_config.get("provider_profile"),
+            "wire_api": runtime_config.get("wire_api"),
+            "model": runtime_config.get("model"),
+            "call_index": call_index,
+            "attempt_index": attempt_index,
+            "arm_id": arm_id,
+            "arm_index": 0,
+            "arm_count": config.get("arm_count", 1),
+            "arm_role": arm_role,
+            "method": method,
+            "racing_enabled": bool(config.get("enabled")),
+            "racing_mode": config.get("mode") or "off",
+            "racing_multiplier": config.get("racing_multiplier", 1.0),
+            "winner_selection": config.get("winner_selection") or "single_arm_no_racing",
+            "loser_cancellation": config.get("loser_cancellation")
+            or "not_applicable_until_racing_enabled",
+            **extra,
+        }
+    )
+    _append_event(events_path, payload)
+    span_payload = {
+        **payload,
+        "schema": "openai_agents_sanitized_span_v1",
+        "span_type": "model_racing_observability",
+    }
+    _append_event(spans_path, span_payload)
+
+
+def _usage_summary(result: Any) -> dict[str, Any]:
+    raw_usage = getattr(result, "usage", None)
+    usage = _to_jsonable(raw_usage) if raw_usage is not None else {}
+    if not isinstance(usage, dict) or not usage:
+        return {"usage_available": False}
+    input_tokens = _int_from_any(usage.get("input_tokens"))
+    cached_tokens = _cached_input_tokens_from_usage(usage)
+    output_tokens = _int_from_any(usage.get("output_tokens"))
+    reasoning_tokens = _reasoning_tokens_from_usage(usage)
+    payload: dict[str, Any] = {
+        "usage_available": True,
+        "input_tokens": input_tokens,
+        "cached_input_tokens": cached_tokens,
+        "output_tokens": output_tokens,
+        "reasoning_tokens": reasoning_tokens,
+    }
+    if input_tokens is not None and cached_tokens is not None:
+        payload["uncached_input_tokens"] = max(0, input_tokens - cached_tokens)
+    return _drop_empty(payload)
+
+
+def _cached_input_tokens_from_usage(usage: dict[str, Any]) -> int | None:
+    details = usage.get("input_tokens_details")
+    if isinstance(details, dict):
+        cached = _int_from_any(details.get("cached_tokens"))
+        if cached is not None:
+            return cached
+    return _int_from_any(usage.get("cached_input_tokens"))
+
+
+def _reasoning_tokens_from_usage(usage: dict[str, Any]) -> int | None:
+    details = usage.get("output_tokens_details")
+    if isinstance(details, dict):
+        reasoning = _int_from_any(details.get("reasoning_tokens"))
+        if reasoning is not None:
+            return reasoning
+    return _int_from_any(usage.get("reasoning_tokens"))
+
+
+def _int_from_any(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _model_settings(request: LiveAgentRequest) -> dict[str, str]:

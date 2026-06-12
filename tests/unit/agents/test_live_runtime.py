@@ -37,6 +37,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _load_agent_sdk_skill_context,
     _mcp_control_plane_metrics,
     _model_input_filter_metrics,
+    _model_racing_observability_metrics,
     _model_service_fallback_metrics,
     _openai_agents_event_metrics,
     _openai_agents_span_metrics,
@@ -254,7 +255,15 @@ def test_openai_agents_retrying_model_retries_transient_once(tmp_path: Path) -> 
             self.calls += 1
             if self.calls == 1:
                 raise RuntimeError("Error code: 503 - service unavailable")
-            return SimpleNamespace(output="ok")
+            return SimpleNamespace(
+                output="ok",
+                usage={
+                    "input_tokens": 100,
+                    "input_tokens_details": {"cached_tokens": 25},
+                    "output_tokens": 10,
+                    "output_tokens_details": {"reasoning_tokens": 3},
+                },
+            )
 
         async def close(self) -> None:
             return None
@@ -295,17 +304,47 @@ def test_openai_agents_retrying_model_retries_transient_once(tmp_path: Path) -> 
 
     assert result.output == "ok"
     events = [json.loads(line) for line in events_path.read_text(encoding="utf-8").splitlines()]
-    assert [event["event"] for event in events] == [
+    model_service_events = [
+        event["event"]
+        for event in events
+        if str(event.get("event", "")).startswith("model_service_")
+    ]
+    assert model_service_events == [
         "model_service_attempt",
         "model_service_failure",
         "model_service_retry_scheduled",
         "model_service_attempt",
         "model_service_success",
     ]
-    assert events[1]["failure_class"] == "provider_transient_failure"
+    failures = [event for event in events if event.get("event") == "model_service_failure"]
+    assert failures[0]["failure_class"] == "provider_transient_failure"
     assert "clean the room" not in events_path.read_text(encoding="utf-8")
+    racing_events = [
+        event
+        for event in events
+        if event.get("schema") == "openai_agents_model_racing_observability_v1"
+    ]
+    assert [event["event"] for event in racing_events] == [
+        "model_racing_arm_start",
+        "model_racing_arm_failure",
+        "model_racing_arm_start",
+        "model_racing_arm_finish",
+    ]
+    assert racing_events[0]["call_index"] == 0
+    assert racing_events[0]["arm_id"] == "call-0-attempt-0-arm-0"
+    assert racing_events[-1]["winner"] is True
+    assert racing_events[-1]["cancelled"] is False
+    assert racing_events[-1]["usage_summary"] == {
+        "usage_available": True,
+        "input_tokens": 100,
+        "cached_input_tokens": 25,
+        "uncached_input_tokens": 75,
+        "output_tokens": 10,
+        "reasoning_tokens": 3,
+    }
     span_events = [json.loads(line) for line in spans_path.read_text(encoding="utf-8").splitlines()]
-    assert all(event["span_type"] == "model_service_fallback" for event in span_events)
+    assert any(event["span_type"] == "model_service_fallback" for event in span_events)
+    assert any(event["span_type"] == "model_racing_observability" for event in span_events)
 
 
 def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -> None:
@@ -359,6 +398,12 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
     assert metrics["attempted_models"] == ["xiaomi/mimo-v2.5"]
     assert metrics["attempted_provider_profiles"] == ["mify"]
     assert metrics["attempted_wire_apis"] == ["responses"]
+    racing_metrics = _model_racing_observability_metrics(tmp_path)
+    assert racing_metrics["available"] is True
+    assert racing_metrics["call_count"] == 2
+    assert racing_metrics["arm_count"] == 2
+    assert racing_metrics["winner_count"] == 0
+    assert racing_metrics["final_outcomes"] == {"failure": 1, "retry_scheduled": 1}
 
 
 def test_openai_agents_retrying_model_satisfies_sdk_model_contract(tmp_path: Path) -> None:
@@ -382,6 +427,60 @@ def test_openai_agents_retrying_model_satisfies_sdk_model_contract(tmp_path: Pat
     )
 
     assert isinstance(model, Model)
+
+
+def test_openai_agents_retrying_model_zero_retry_still_records_observability(
+    tmp_path: Path,
+) -> None:
+    class FakeModel:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def get_response(self, *_args, **_kwargs):
+            self.calls += 1
+            raise RuntimeError("model unavailable")
+
+        def stream_response(self, *_args, **_kwargs):
+            raise AssertionError("not used")
+
+    fake_model = FakeModel()
+    model = _RetryingModel(
+        fake_model,
+        retry_attempts=0,
+        retry_sleep_s=0,
+        events_path=tmp_path / "openai-agents-events.jsonl",
+        spans_path=tmp_path / "openai-agents-spans.jsonl",
+        runtime_config={
+            "runtime": "openai-agents-live",
+            "provider_profile": "mify",
+            "wire_api": "responses",
+            "model": "xiaomi/mimo-v2.5",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="model unavailable"):
+        asyncio.run(
+            model.get_response(
+                None,
+                "clean the room",
+                object(),
+                [],
+                None,
+                [],
+                object(),
+                previous_response_id=None,
+                conversation_id=None,
+                prompt=None,
+            )
+        )
+
+    assert fake_model.calls == 1
+    metrics = _model_racing_observability_metrics(tmp_path)
+    assert metrics["available"] is True
+    assert metrics["call_count"] == 1
+    assert metrics["arm_count"] == 1
+    assert metrics["winner_count"] == 0
+    assert metrics["final_outcomes"] == {"failure": 1}
 
 
 def test_openai_agents_runtime_turn_completion_does_not_infer_cleanup_success(
@@ -507,6 +606,8 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert events[0]["agent_sdk_responses_features"]["server_managed_continuation_default"] is False
     assert events[0]["model_input_compaction"]["enabled"] is False
     assert events[0]["model_input_compaction"]["mode"] == "off"
+    assert events[0]["model_racing_observability"]["enabled"] is False
+    assert events[0]["model_racing_observability"]["winner_selection"] == "single_arm_no_racing"
 
 
 def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
@@ -1233,6 +1334,23 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert timing["agent_sdk_perf_profile"]["max_turns"] == 128
     assert timing["agent_sdk_perf_profile"]["model_service_retry_attempts"] == 1
     assert timing["agent_sdk_perf_profile"]["model_service_retry_sleep_s"] == 1.0
+    assert timing["agent_sdk_perf_profile"]["model_racing_observability"] == {
+        "schema": "agent_sdk_model_racing_observability_v1",
+        "enabled": False,
+        "mode": "per_arm_observability_v1",
+        "candidate_ids": ["D"],
+        "arm_count": 1,
+        "racing_multiplier": 1.0,
+        "winner_selection": "single_arm_no_racing",
+        "loser_cancellation": "not_applicable_until_racing_enabled",
+        "unknown_loser_billing": False,
+        "hook": "OpenAI Agents SDK model request boundary",
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, "
+            "provider/model ids, and usage availability only; raw prompts, model text, "
+            "tool payload bodies, credentials, and private truth are not persisted"
+        ),
+    }
     assert timing["agent_sdk_perf_profile"]["sdk_model_settings"] == {
         "parallel_tool_calls": False,
         "store": False,
@@ -2604,6 +2722,23 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
             "full report robot-view capture; default public route behavior unchanged"
         ),
     }
+    assert baseline["model_racing_observability"] == {
+        "schema": "agent_sdk_model_racing_observability_v1",
+        "enabled": False,
+        "mode": "per_arm_observability_v1",
+        "candidate_ids": ["D"],
+        "arm_count": 1,
+        "racing_multiplier": 1.0,
+        "winner_selection": "single_arm_no_racing",
+        "loser_cancellation": "not_applicable_until_racing_enabled",
+        "unknown_loser_billing": False,
+        "hook": "OpenAI Agents SDK model request boundary",
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
+            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted"
+        ),
+    }
     assert baseline["sdk_model_settings"] == {
         "tool_choice": "auto",
         "parallel_tool_calls": False,
@@ -2847,6 +2982,102 @@ def test_openai_agents_event_metrics_parse_tool_errors(tmp_path: Path) -> None:
     assert metrics["tool_error_count"] == 1
     assert metrics["tool_error_classifications"] == {"mcp_client_request_timeout": 1}
     assert "Waited 5.0 seconds" in metrics["tool_error_messages_sample"][0]
+
+
+def test_openai_agents_model_racing_observability_metrics_are_aggregate_only(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-events.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "schema": "openai_agents_model_racing_observability_v1",
+                        "event": "model_racing_arm_start",
+                        "provider_profile": "mify",
+                        "wire_api": "responses",
+                        "model": "xiaomi/mimo-v2.5",
+                        "call_index": 0,
+                        "arm_id": "call-0-attempt-0-arm-0",
+                        "arm_count": 1,
+                        "method": "get_response",
+                        "racing_enabled": False,
+                        "racing_mode": "per_arm_observability_v1",
+                        "racing_multiplier": 1.0,
+                    }
+                ),
+                json.dumps(
+                    {
+                        "schema": "openai_agents_model_racing_observability_v1",
+                        "event": "model_racing_arm_finish",
+                        "provider_profile": "mify",
+                        "wire_api": "responses",
+                        "model": "xiaomi/mimo-v2.5",
+                        "call_index": 0,
+                        "arm_id": "call-0-attempt-0-arm-0",
+                        "arm_count": 1,
+                        "method": "get_response",
+                        "racing_enabled": False,
+                        "racing_mode": "per_arm_observability_v1",
+                        "racing_multiplier": 1.0,
+                        "elapsed_s": 2.5,
+                        "winner": True,
+                        "cancelled": False,
+                        "cancellation_observed": False,
+                        "loser_billing_unknown": False,
+                        "final_outcome": "success",
+                        "usage_summary": {
+                            "usage_available": True,
+                            "input_tokens": 120,
+                            "cached_input_tokens": 20,
+                            "uncached_input_tokens": 100,
+                            "output_tokens": 30,
+                            "reasoning_tokens": 5,
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = _model_racing_observability_metrics(run_dir)
+
+    assert metrics["available"] is True
+    assert metrics["source"] == "openai_agents_model_racing_observability_events"
+    assert metrics["event_count"] == 2
+    assert metrics["event_counts"] == {
+        "model_racing_arm_finish": 1,
+        "model_racing_arm_start": 1,
+    }
+    assert metrics["call_count"] == 1
+    assert metrics["arm_count"] == 1
+    assert metrics["max_arm_count_per_call"] == 1
+    assert metrics["racing_enabled"] is False
+    assert metrics["racing_multiplier"] == 1.0
+    assert metrics["winner_count"] == 1
+    assert metrics["cancelled_count"] == 0
+    assert metrics["cancellation_observed_count"] == 0
+    assert metrics["loser_billing_unknown_count"] == 0
+    assert metrics["elapsed_s_total"] == 2.5
+    assert metrics["max_elapsed_s"] == 2.5
+    assert metrics["usage_available_count"] == 1
+    assert metrics["usage_missing_count"] == 0
+    assert metrics["total_input_tokens"] == 120
+    assert metrics["total_cached_input_tokens"] == 20
+    assert metrics["total_uncached_input_tokens"] == 100
+    assert metrics["total_output_tokens"] == 30
+    assert metrics["total_reasoning_tokens"] == 5
+    assert metrics["methods"] == ["get_response"]
+    assert metrics["racing_modes"] == ["per_arm_observability_v1"]
+    assert metrics["final_outcomes"] == {"success": 1}
+    assert metrics["attempted_models"] == ["xiaomi/mimo-v2.5"]
+    assert metrics["attempted_provider_profiles"] == ["mify"]
+    assert metrics["attempted_wire_apis"] == ["responses"]
+    assert "Raw prompts" in metrics["privacy_note"]
 
 
 def test_openai_agents_span_recorder_writes_sanitized_span_events(tmp_path: Path) -> None:
@@ -3280,6 +3511,33 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "raw_fpv_image_bytes_reduced": 650,
             "raw_fpv_image_byte_reduction_ratio": 0.65,
         },
+        "model_racing_observability_metrics": {
+            "available": True,
+            "source": "openai_agents_model_racing_observability_events",
+            "limitations": [],
+            "event_count": 2,
+            "call_count": 1,
+            "arm_count": 1,
+            "max_arm_count_per_call": 1,
+            "racing_enabled": False,
+            "racing_multiplier": 1.0,
+            "winner_count": 1,
+            "cancelled_count": 0,
+            "cancellation_observed_count": 0,
+            "loser_billing_unknown_count": 0,
+            "elapsed_s_total": 2.5,
+            "max_elapsed_s": 2.5,
+            "usage_available_count": 1,
+            "usage_missing_count": 0,
+            "total_input_tokens": 120,
+            "total_cached_input_tokens": 20,
+            "total_uncached_input_tokens": 100,
+            "total_output_tokens": 30,
+            "total_reasoning_tokens": 5,
+            "methods": ["get_response"],
+            "racing_modes": ["per_arm_observability_v1"],
+            "final_outcomes": {"success": 1},
+        },
         "context_metrics": {
             "available": True,
             "source": "openai_agents_span_usage",
@@ -3413,6 +3671,33 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "raw_fpv_image_bytes_after": 350,
         "raw_fpv_image_bytes_reduced": 650,
         "raw_fpv_image_byte_reduction_ratio": 0.65,
+    }
+    assert timeline["latency_attribution"]["model_racing_observability_metrics"] == {
+        "available": True,
+        "source": "openai_agents_model_racing_observability_events",
+        "limitations": [],
+        "event_count": 2,
+        "call_count": 1,
+        "arm_count": 1,
+        "max_arm_count_per_call": 1,
+        "racing_enabled": False,
+        "racing_multiplier": 1.0,
+        "winner_count": 1,
+        "cancelled_count": 0,
+        "cancellation_observed_count": 0,
+        "loser_billing_unknown_count": 0,
+        "elapsed_s_total": 2.5,
+        "max_elapsed_s": 2.5,
+        "usage_available_count": 1,
+        "usage_missing_count": 0,
+        "total_input_tokens": 120,
+        "total_cached_input_tokens": 20,
+        "total_uncached_input_tokens": 100,
+        "total_output_tokens": 30,
+        "total_reasoning_tokens": 5,
+        "methods": ["get_response"],
+        "racing_modes": ["per_arm_observability_v1"],
+        "final_outcomes": {"success": 1},
     }
     assert timeline["latency_attribution"]["context_metrics"] == {
         "available": True,

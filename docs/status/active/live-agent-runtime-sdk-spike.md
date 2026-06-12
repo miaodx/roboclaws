@@ -39,13 +39,15 @@ cleanup quality and wall/model time, so it is expected-rejected evidence rather
 than a speed win. I/N/AB input-compaction live A/B has also now been tried. It
 reduced model-facing input bytes and uncached tokens substantially, but failed
 before `done` and got slower, so it is expected-rejected evidence rather than a
-wall-clock win. The next normalized-latency priority is D per-arm racing
-observability before any C racing experiment, unless the next slice first
-redesigns compaction/session semantics to preserve cleanup behavior. O paired
-repeats/tightening and raw-FPV P/AA remain valid lower-priority arms. Token
-deltas are telemetry only; cost is not a deciding objective for this plan. The
-full live provider/model x evidence-lane performance matrix is still not done.
-The follow-up execution plan is
+wall-clock win. D per-arm racing observability is now implemented as
+single-arm/no-racing deterministic prep, so the next normalized-latency
+priority can be a scoped C racing experiment if Q still shows model/SDK gap
+dominant and live caps cover the racing multiplier. A behavior-preserving
+compaction/session redesign, O paired repeats/tightening, and raw-FPV P/AA
+remain valid alternate lower-priority arms. Token deltas are telemetry only;
+cost is not a deciding objective for this plan. The full live provider/model x
+evidence-lane performance matrix is still not done. The follow-up execution
+plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -219,6 +221,14 @@ Result:
   failed/noop calls to `31`, increased observed wall time by `+62.627s`, and
   increased observed model API time by `+102.956s`. It proves compaction
   mechanics, not a wall-clock win.
+- Candidate D deterministic racing-observability prep is implemented. The
+  private SDK model request boundary now emits sanitized single-arm
+  `model_racing_arm_start` / finish / failure events with stable call/arm ids,
+  elapsed time, winner/cancel flags, provider/model/wire axes, failure class,
+  token usage availability, and loser-billing-unknown fields. `live_timing.json`
+  aggregates these under `model_racing_observability_metrics` in timeline
+  latency attribution. Current mode is `racing_enabled=false`,
+  `racing_multiplier=1.0`; no C racing run or speed claim is made yet.
 - Completed external camera-grounded Chat-compatible evidence at
   `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
   shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14
