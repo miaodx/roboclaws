@@ -276,13 +276,18 @@ _PROVIDER_ROUTE_SPECS: tuple[ProviderRouteSpec, ...] = (
         wire_source=WIRE_SOURCE_NATIVE,
         aliases=("mm",),
         per_engine_status={
-            "codex-cli": ROUTE_EXPERIMENTAL,
-            "openai-agents-sdk": ROUTE_EXPERIMENTAL,
+            "codex-cli": ROUTE_BLOCKED,
+            "openai-agents-sdk": ROUTE_HEALTHY,
         },
         route_capabilities={
             "image_transport": ROUTE_CAP_UNKNOWN,
             "tool_call_transport": ROUTE_CAP_SUPPORTED,
         },
+        status_note=(
+            "OpenAI Agents SDK structured cleanup works. Codex CLI is blocked by "
+            "MiniMax Responses MCP tool-name shape; Codex rejects flattened names "
+            "such as mcp__cleanup__metric_map or cleanup__ping_tool as unsupported calls."
+        ),
     ),
     ProviderRouteSpec(
         route_id="mimo-openai-chat",

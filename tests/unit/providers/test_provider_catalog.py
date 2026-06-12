@@ -3,8 +3,10 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from roboclaws.agents.provider_registry import (
+    ROUTE_BLOCKED,
     ROUTE_CAP_UNKNOWN,
     ROUTE_DEGRADED,
+    ROUTE_HEALTHY,
     model_aliases,
     model_supports_images,
     openclaw_model_id,
@@ -84,9 +86,12 @@ def test_registry_keeps_raw_fpv_transport_separate_from_model_modality() -> None
     model = resolve_model("MiniMax-M3")
 
     assert model.supports_image_input is True
+    assert route.status_for_engine("codex-cli") == ROUTE_BLOCKED
+    assert route.status_for_engine("openai-agents-sdk") == ROUTE_HEALTHY
     assert route_capabilities_for_engine(route, "codex-cli")["image_transport"] == (
         ROUTE_CAP_UNKNOWN
     )
+    assert "unsupported calls" in route.status_note
 
 
 def test_provider_readiness_reports_status_and_missing_env() -> None:

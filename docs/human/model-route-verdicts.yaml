@@ -30,13 +30,24 @@ verdicts:
     provider_route: minimax
     provider_profile: minimax
     model_id: MiniMax-M3
-    route_status: experimental
+    route_status: blocked
     lane_verdicts:
-      structured_labels: experimental
-      camera_grounded_labels: experimental
+      structured_labels: blocked
+      camera_grounded_labels: blocked
       camera_raw_fpv: blocked
-    evidence: provider route wired; Codex cleanup runs still need review
-    notes: Raw FPV is blocked until runtime image transport is verified.
+    evidence: local Codex 0.130.0 cleanup run and Codex 0.139.0 MCP smoke probes
+    notes: MiniMax Responses auth/transport connects, but Codex's MCP router rejects MiniMax-emitted tool names such as mcp__cleanup__metric_map and cleanup__ping_tool as unsupported calls.
+  - agent_engine: codex-cli
+    provider_route: minimax
+    provider_profile: minimax
+    model_id: MiniMax-M2.7-highspeed
+    route_status: blocked
+    lane_verdicts:
+      structured_labels: blocked
+      camera_grounded_labels: blocked
+      camera_raw_fpv: blocked
+    evidence: local Codex 0.130.0 cleanup run and Codex 0.139.0 MCP smoke probes
+    notes: Same MCP tool-name routing failure as MiniMax-M3; keep only as an explicit re-review route until Codex or MiniMax changes the Responses MCP tool-call shape.
   - agent_engine: openai-agents-sdk
     provider_route: codex-env
     provider_profile: codex-env
@@ -74,13 +85,24 @@ verdicts:
     provider_route: minimax
     provider_profile: minimax
     model_id: MiniMax-M3
-    route_status: experimental
+    route_status: healthy
     lane_verdicts:
-      structured_labels: experimental
+      structured_labels: healthy
       camera_grounded_labels: experimental
       camera_raw_fpv: blocked
-    evidence: provider route wired; SDK cleanup verdict pending
-    notes: Raw FPV is blocked until runtime image transport is verified.
+    evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
+    notes: Structured cleanup works through the SDK Responses path; raw FPV remains blocked until runtime image transport is verified.
+  - agent_engine: openai-agents-sdk
+    provider_route: minimax
+    provider_profile: minimax
+    model_id: MiniMax-M2.7-highspeed
+    route_status: healthy
+    lane_verdicts:
+      structured_labels: healthy
+      camera_grounded_labels: experimental
+      camera_raw_fpv: blocked
+    evidence: local OpenAI Agents SDK cleanup run completed with score.status=success
+    notes: Text-only fast-agent route works for structured cleanup, but the single paired run did not show a speed advantage over MiniMax-M3.
   - agent_engine: claude-code
     provider_route: mimo-anthropic
     provider_profile: mimo-anthropic
