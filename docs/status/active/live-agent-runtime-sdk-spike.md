@@ -21,7 +21,12 @@ deterministic raw-FPV repeated-failure rails and Candidate AA deterministic
 raw-FPV image-memory prep were accepted on 2026-06-12. The first resumed
 provider-backed pass on 2026-06-12 produced one `mify` Responses
 `world-public-labels` baseline/candidate comparison and one blocked
-`codex-env` GPT baseline attempt; the full live provider/model x evidence-lane
+`codex-env` GPT baseline attempt. The first Candidate O `mify` Responses
+`camera-grounded-labels` pair completed but is diagnostic/inconclusive for O
+because the composite shortcut was enabled but never called. Prompt/tool
+selection has been repaired so the private compact O prompt now names the
+shortcut when enabled; the remaining O gate is a tightly scoped live retry that
+actually calls the shortcut. The full live provider/model x evidence-lane
 performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
@@ -165,11 +170,25 @@ Result:
   `declare_visual_candidates` calls and a large between-tool/visual bucket. Use
   it as compatibility/diagnostic support for Candidate O, not as a Responses
   speed claim.
-- A separate user-owned `camera-grounded-labels` sim-labels run currently owns
-  the MolmoSpaces/MuJoCo visual backend slot on port `18788`:
-  `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-sim-labels/0612_0958/seed-7/`.
-  Do not terminate it or launch another live visual row until that slot is
-  free.
+- The `mify` Responses Candidate O baseline/composite pair completed:
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7/`
+  and
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite/0612_1032/seed-7/`.
+  Metrics are
+  `output/agent-sdk-perf-followups/mify-camera-grounded-baseline-metrics.json`,
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-metrics.json`,
+  and
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-comparison.json`.
+  The comparison helper marks same-or-better quality and faster wall time
+  (`-37.851s`), but the candidate trace still has 19 `observe` requests and 19
+  `declare_visual_candidates` requests with zero
+  `observe_camera_grounded_candidates` requests. Treat the row as diagnostic
+  runtime/provider evidence, not a valid Candidate O speed win.
+- Candidate O prompt/tool selection is repaired: the compact private
+  `camera-grounded-labels` prompt now uses
+  `observe_camera_grounded_candidates` when
+  `camera_grounded_composite_tools.enabled=true`, while the default
+  camera-grounded prompt still uses the public two-step path.
 - The shared report-performance quality comparator now caps sweep
   over-coverage at 1.0 for same-or-better comparison, so extra baseline
   inspection waypoints do not create a false regression when the candidate
@@ -297,16 +316,16 @@ Parked work:
     current no-provider packet pointed to Group 2 N/O after already-accepted
     Group 1 prep. Q/Y has now been refreshed with the completed `mify`
     world-public live packet; it points to Group 2 lane-specific reductions,
-    with Candidate O camera-grounded A/B as the next preferred live arm once
-    the current visual backend slot is free.
+    but the first Candidate O live pair did not exercise the shortcut and does
+    not prove a composite-tool speed win.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
     `observe_camera_grounded_candidates` MCP shortcut for
     `camera-grounded-labels`; default public MCP/profile tools remain
-    unchanged, while raw-FPV lane work remains lane-specific and live speed
-    claims remain gated. Camera-grounded live A/B remains a likely next arm
-    after Q/Y refresh.
+    unchanged. Live proof remains inconclusive until a provider-backed row
+    actually calls the shortcut; next work is a tightly scoped O retry before
+    claiming speed.
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
     visual-candidate failure rail; cleanup-pass and live speed claims remain
     gated.

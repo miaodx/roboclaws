@@ -2023,6 +2023,19 @@ def test_molmo_compact_label_prompts_keep_public_done_boundary() -> None:
     assert "only MCP done producing run_result.json counts" in camera_prompt
 
 
+def test_molmo_compact_camera_prompt_can_prefer_composite_observe_tool() -> None:
+    prompt = render_kickoff_prompt(
+        "camera-grounded-labels",
+        prompt_mode="compact",
+        camera_grounded_composite_tools=True,
+    )
+
+    assert "observe_camera_grounded_candidates instead of a separate observe" in prompt
+    assert "response declaration as the camera-labeler candidate output" in prompt
+    assert "do not call declare_visual_candidates again for the same" in prompt
+    assert "only MCP done producing run_result.json counts" in prompt
+
+
 def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
     prompt = render_kickoff_prompt(
         "camera-raw-fpv",

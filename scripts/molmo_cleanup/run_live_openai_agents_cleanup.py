@@ -1471,6 +1471,10 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
             raw_fpv_candidate_budget=int(profile.get("raw_fpv_candidate_budget") or 24),
             max_observe_per_waypoint=int(profile.get("max_observe_per_waypoint") or 1),
             done_retry_budget=int(profile.get("done_retry_budget") or 1),
+            camera_grounded_composite_tools=_camera_grounded_composite_tools_enabled_for_run(
+                profile,
+                evidence_lane=lane,
+            ),
         )
     except ValueError:
         return original

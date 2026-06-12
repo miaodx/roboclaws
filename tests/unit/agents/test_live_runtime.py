@@ -1277,6 +1277,7 @@ def test_openai_agents_camera_grounded_composite_profile_adds_private_server_fla
 ) -> None:
     run_dir = tmp_path / "run"
     server_commands: list[list[str]] = []
+    prompts: list[str] = []
 
     class FakeProcess:
         pid = 4242
@@ -1300,6 +1301,7 @@ def test_openai_agents_camera_grounded_composite_profile_adds_private_server_fla
 
     class FakeRuntime:
         def run(self, request: LiveAgentRequest) -> LiveAgentResult:
+            prompts.append(request.kickoff_prompt)
             assert (
                 request.metadata["agent_sdk_perf_profile"]["camera_grounded_composite_tools"][
                     "enabled"
@@ -1354,7 +1356,7 @@ def test_openai_agents_camera_grounded_composite_profile_adds_private_server_fla
         model="gpt-5.5",
         max_turns=128,
         mcp_client_session_timeout_s=30.0,
-        agent_sdk_perf_profile="custom",
+        agent_sdk_perf_profile="mimo_compact_v1",
         prompt_mode="",
         continuation_mode="",
         model_input_compaction=None,
@@ -1383,6 +1385,9 @@ def test_openai_agents_camera_grounded_composite_profile_adds_private_server_fla
 
     assert status == 0
     assert server_commands
+    assert prompts
+    assert "observe_camera_grounded_candidates instead of a separate observe" in prompts[0]
+    assert "do not call declare_visual_candidates again for the same" in prompts[0]
     assert "--agent-sdk-camera-grounded-composite-tools" in server_commands[0]
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
     composite = timing["agent_sdk_perf_profile"]["camera_grounded_composite_tools"]
