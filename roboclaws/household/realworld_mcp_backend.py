@@ -11,7 +11,10 @@ from roboclaws.household.realworld_mcp_atomic_tools import (
     register_atomic_cleanup_tools,
 )
 from roboclaws.household.realworld_mcp_semantic_tools import (
+    AGENT_SDK_CAMERA_GROUNDED_COMPOSITE_TOOL_NAMES,
     SEMANTIC_CLEANUP_TOOL_NAMES,
+    agent_sdk_camera_grounded_composite_handlers,
+    register_agent_sdk_camera_grounded_composite_tools,
     register_semantic_cleanup_tools,
     semantic_cleanup_handlers,
 )
@@ -23,6 +26,8 @@ def register_realworld_mcp_tools(server: Any) -> None:
     register_semantic_cleanup_tools(server)
     register_atomic_cleanup_tools(server)
     register_lifecycle_tools(server)
+    if _agent_sdk_camera_grounded_composite_enabled(server):
+        register_agent_sdk_camera_grounded_composite_tools(server)
 
 
 def register_lifecycle_tools(server: Any) -> None:
@@ -53,6 +58,8 @@ def dispatch_realworld_mcp_tool(
 def validate_realworld_mcp_tool_call(server: Any, name: str) -> None:
     if name == "scene_objects":
         raise ValueError("scene_objects is not part of the ADR-0003 real-world MCP contract")
+    if name in _extra_tool_names_for_server(server):
+        return
     if name not in public_tool_names_for_profile(server.cleanup_profile):
         raise ValueError(f"unknown Molmo real-world cleanup MCP tool {name!r}")
 
@@ -86,10 +93,21 @@ def tool_handlers_for_call(
     return {
         **semantic_cleanup_handlers(server, kwargs),
         **atomic_cleanup_handlers(server, kwargs),
+        **agent_sdk_camera_grounded_composite_handlers(server, kwargs),
         "check_operator_messages": check_operator_messages,
         "done": done,
     }
 
 
 def agent_view_public_tool_names(server: Any, base_tool_names: list[str]) -> list[str]:
-    return list(base_tool_names)
+    return [*base_tool_names, *_extra_tool_names_for_server(server)]
+
+
+def _extra_tool_names_for_server(server: Any) -> tuple[str, ...]:
+    if _agent_sdk_camera_grounded_composite_enabled(server):
+        return AGENT_SDK_CAMERA_GROUNDED_COMPOSITE_TOOL_NAMES
+    return ()
+
+
+def _agent_sdk_camera_grounded_composite_enabled(server: Any) -> bool:
+    return bool(getattr(server, "agent_sdk_camera_grounded_composite_tools", False))

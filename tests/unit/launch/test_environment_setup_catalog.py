@@ -88,6 +88,38 @@ def test_surface_rejects_old_public_generated_mess_count() -> None:
         )
 
 
+def test_openai_agents_sdk_accepts_chat_provider_profiles() -> None:
+    plan = resolve_surface_launch(
+        [
+            "surface=household-world",
+            "world=molmospaces/val_0",
+            "backend=mujoco",
+            "intent=cleanup",
+            "agent_engine=openai-agents-sdk",
+            "provider_profile=mimo-openai-chat",
+            "evidence_lane=world-oracle-labels",
+        ]
+    )
+
+    assert plan.provider_profile == "mimo-openai-chat"
+    assert "provider_profile=mimo-openai-chat" in plan.overrides
+
+
+def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
+    with pytest.raises(LaunchError, match="provider_profile 'mimo-openai-chat' is unsupported"):
+        resolve_surface_launch(
+            [
+                "surface=household-world",
+                "world=molmospaces/val_0",
+                "backend=mujoco",
+                "intent=cleanup",
+                "agent_engine=codex-cli",
+                "provider_profile=mimo-openai-chat",
+                "evidence_lane=world-oracle-labels",
+            ]
+        )
+
+
 def test_surface_rejects_old_public_driver_and_environment_setup() -> None:
     with pytest.raises(LaunchError, match="driver= is no longer"):
         resolve_surface_launch(

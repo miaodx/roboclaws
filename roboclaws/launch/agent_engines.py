@@ -44,7 +44,12 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
         label="OpenAI Agents SDK",
         dispatch_runner="openai-agents-live",
         internal_runner_class="live-agent",
-        supported_provider_profiles=("codex-env", "mify"),
+        supported_provider_profiles=(
+            "codex-env",
+            "mify",
+            "mimo-openai-chat",
+            "kimi-openai-chat",
+        ),
         default_provider_profile="codex-env",
         provider_env_key="ROBOCLAWS_CODEX_PROVIDER",
         availability="experimental",

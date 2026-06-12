@@ -629,6 +629,33 @@ def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path)
     assert readiness["provider"]["provider"] == "mify"
 
 
+def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> None:
+    route = get_route("molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels")
+
+    mimo = route_readiness(
+        tmp_path,
+        route,
+        env={"MIMO_TP_KEY": "key"},
+        overrides={"port": _free_port()},
+        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "mimo-openai-chat"},
+    )
+    assert mimo["can_start"] is True
+    assert mimo["provider"]["provider"] == "mimo-openai-chat"
+    assert mimo["provider"]["driver"] == "openai-agents-sdk"
+    assert mimo["provider"]["model"] == "mimo-v2.5"
+
+    kimi = route_readiness(
+        tmp_path,
+        route,
+        env={"KIMI_API_KEY": "key"},
+        overrides={"port": _free_port()},
+        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "kimi-openai-chat"},
+    )
+    assert kimi["can_start"] is True
+    assert kimi["provider"]["provider"] == "kimi-openai-chat"
+    assert kimi["provider"]["model"] == "kimi-k2.6"
+
+
 def test_provider_gate_uses_selected_claude_provider(tmp_path: Path) -> None:
     route = get_route("claude-mujoco-cleanup")
 

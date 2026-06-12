@@ -79,6 +79,70 @@ def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: P
         server.close()
 
 
+def test_agent_sdk_camera_grounded_composite_tool_is_opt_in(tmp_path: Path) -> None:
+    default_server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "default",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+    )
+    try:
+        assert "observe_camera_grounded_candidates" not in _fastmcp_tool_names(default_server)
+        assert (
+            "observe_camera_grounded_candidates"
+            not in default_server._agent_view_payload()["public_tool_names"]
+        )
+        with pytest.raises(ValueError, match="unknown Molmo real-world cleanup MCP tool"):
+            default_server.call_tool("observe_camera_grounded_candidates")
+    finally:
+        default_server.close()
+
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path / "opt-in",
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        agent_sdk_camera_grounded_composite_tools=True,
+    )
+    try:
+        assert "observe_camera_grounded_candidates" in _fastmcp_tool_names(server)
+        assert (
+            "observe_camera_grounded_candidates"
+            in server._agent_view_payload()["public_tool_names"]
+        )
+        metric_map = server.call_tool("metric_map")
+        server.call_tool(
+            "navigate_to_waypoint",
+            waypoint_id=metric_map["inspection_waypoints"][0]["waypoint_id"],
+        )
+        response = server.call_tool("observe_camera_grounded_candidates")
+        trace_lines = (tmp_path / "opt-in" / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+        trace_events = [json.loads(line) for line in trace_lines if line]
+    finally:
+        server.close()
+
+    assert response["ok"] is True
+    assert response["tool"] == "observe_camera_grounded_candidates"
+    assert response["observation"]["tool"] == "observe"
+    assert response["declaration"]["tool"] == "declare_visual_candidates"
+    assert response["observation_id"].startswith("raw_fpv_")
+    assert response["candidate_count"] == len(response["model_declared_observations"])
+    assert response["private_target_truth_included"] is False
+    assert "model_declared_observation_evidence" not in response["declaration"]
+    assert "target_receptacle_id" not in json.dumps(response)
+    assert any(
+        item.get("tool") == "observe_camera_grounded_candidates" and item.get("event") == "response"
+        for item in trace_events
+    )
+    assert any(
+        item.get("tool") == "observe" and item.get("event") == "response" for item in trace_events
+    )
+    assert any(
+        item.get("tool") == "declare_visual_candidates" and item.get("event") == "response"
+        for item in trace_events
+    )
+
+
 def test_realworld_mcp_tool_files_are_layered_by_capability(tmp_path: Path) -> None:
     semantic = set(SEMANTIC_CLEANUP_TOOL_NAMES)
     atomic = set(ATOMIC_CLEANUP_TOOL_NAMES)
@@ -938,6 +1002,7 @@ def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) ->
     assert hasattr(image_block, "data")
     assert isinstance(image_block.data, bytes)
     assert len(image_block.data) > 0
+    assert getattr(image_block, "_mime_type", "") == "image/png"
 
 
 def test_realworld_mcp_raw_fpv_compact_state_includes_public_handled_handles(

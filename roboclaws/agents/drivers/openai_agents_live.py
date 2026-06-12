@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -23,6 +26,9 @@ DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS = 1
 DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S = 1.0
 MODEL_SERVICE_RETRY_ATTEMPTS_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS"
 MODEL_SERVICE_RETRY_SLEEP_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S"
+DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS = 1200
+MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
+RAW_FPV_OBSERVATION_ID_RE = re.compile(r"raw_fpv_\d+")
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -41,10 +47,19 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
         events_path = request.artifact_path("openai_agents_events", "openai-agents-events.jsonl")
         trace_path = request.artifact_path("openai_agents_trace", "openai-agents-trace.json")
         spans_path = request.artifact_path("openai_agents_spans", "openai-agents-spans.jsonl")
+        skill_context_path = request.artifact_path(
+            "openai_agents_skill_context",
+            "openai-agents-skill-context.json",
+        )
         status_path = request.artifact_path("live_status", "live_status.json")
 
         try:
-            result = _run_openai_agents(request, events_path=events_path, spans_path=spans_path)
+            result = _run_openai_agents(
+                request,
+                events_path=events_path,
+                spans_path=spans_path,
+                skill_context_path=skill_context_path,
+            )
         except ImportError:
             failure = LiveAgentFailure(
                 "provider_config_failure",
@@ -63,6 +78,7 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
                 artifact_paths={
                     "openai_agents_events": events_path,
                     "openai_agents_spans": spans_path,
+                    "openai_agents_skill_context": skill_context_path,
                     "live_status": status_path,
                 },
             )
@@ -79,6 +95,7 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
                 artifact_paths={
                     "openai_agents_events": events_path,
                     "openai_agents_spans": spans_path,
+                    "openai_agents_skill_context": skill_context_path,
                     "live_status": status_path,
                 },
             )
@@ -91,6 +108,7 @@ class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
             "openai_agents_events": events_path,
             "openai_agents_trace": trace_path,
             "openai_agents_spans": spans_path,
+            "openai_agents_skill_context": skill_context_path,
             "live_status": status_path,
         }
         if run_result_path.exists():
@@ -118,9 +136,10 @@ def _run_openai_agents(
     *,
     events_path: Path,
     spans_path: Path,
+    skill_context_path: Path,
 ) -> Any:
     try:
-        from agents import Agent, Runner  # type: ignore[import-not-found]
+        from agents import Agent, ModelSettings, RunConfig, Runner  # type: ignore[import-not-found]
         from agents.mcp import MCPServerStreamableHttp  # type: ignore[import-not-found]
     except ImportError:
         raise
@@ -130,13 +149,17 @@ def _run_openai_agents(
         add_trace_processor = None
         flush_traces = None
 
-    model = _responses_model(request)
+    model = _model_for_request(request)
     timeout_configured, timeout_s = _mcp_client_session_timeout_seconds(request)
     runtime_config = _runtime_config(
         request,
         mcp_client_session_timeout_configured=timeout_configured,
         mcp_client_session_timeout_s=timeout_s,
     )
+    model_settings_payload = _sdk_model_settings_payload(request)
+    run_config_payload = _sdk_run_config_payload(request, events_path=events_path)
+    model_settings = ModelSettings(**model_settings_payload)
+    run_config = RunConfig(model_settings=model_settings, **run_config_payload)
     server_kwargs: dict[str, Any] = {
         "name": request.mcp_server.name,
         "params": {"url": request.mcp_server.url},
@@ -147,9 +170,11 @@ def _run_openai_agents(
     server = MCPServerStreamableHttp(
         **server_kwargs,
     )
+    instructions, skill_context_summary = _instructions_with_skill_context(request)
+    _write_skill_context_summary(skill_context_path, skill_context_summary)
     agent_kwargs: dict[str, Any] = {
         "name": f"roboclaws-{request.task_name}",
-        "instructions": request.kickoff_prompt,
+        "instructions": instructions,
         "mcp_servers": [server],
         "mcp_config": {
             "failure_error_function": _recording_tool_error_function(
@@ -158,13 +183,22 @@ def _run_openai_agents(
             )
         },
         "model": model,
+        "model_settings": model_settings,
     }
     agent = Agent(**agent_kwargs)
     events_path.parent.mkdir(parents=True, exist_ok=True)
     events_path.write_text("", encoding="utf-8")
     spans_path.parent.mkdir(parents=True, exist_ok=True)
     spans_path.write_text("", encoding="utf-8")
-    _append_event(events_path, {"event": "start", "ts_epoch": time.time(), **runtime_config})
+    _append_event(
+        events_path,
+        {
+            "event": "start",
+            "ts_epoch": time.time(),
+            **runtime_config,
+            "skill_context": skill_context_summary,
+        },
+    )
     span_processor = _RoboclawsSpanRecorder(spans_path, runtime_config=runtime_config)
     if add_trace_processor is None:
         _append_span_limitation(
@@ -187,8 +221,15 @@ def _run_openai_agents(
 
     try:
         if hasattr(server, "__aenter__"):
-            return _run_with_async_mcp_server(server, agent, request, events_path)
+            return _run_with_async_mcp_server(
+                server,
+                agent,
+                request,
+                events_path,
+                run_config=run_config,
+            )
         runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
+        runner_kwargs["run_config"] = run_config
         result = Runner.run_sync(agent, request.kickoff_prompt, **runner_kwargs)
         _append_event(
             events_path,
@@ -219,6 +260,8 @@ def _run_with_async_mcp_server(
     agent: Any,
     request: LiveAgentRequest,
     events_path: Path,
+    *,
+    run_config: Any,
 ) -> Any:
     import asyncio
 
@@ -226,7 +269,10 @@ def _run_with_async_mcp_server(
         from agents import Runner  # type: ignore[import-not-found]
 
         async with server:
-            runner_kwargs: dict[str, Any] = {"max_turns": _max_turns(request)}
+            runner_kwargs: dict[str, Any] = {
+                "max_turns": _max_turns(request),
+                "run_config": run_config,
+            }
             result = await Runner.run(agent, request.kickoff_prompt, **runner_kwargs)
         _append_event(
             events_path,
@@ -235,6 +281,617 @@ def _run_with_async_mcp_server(
         return result
 
     return asyncio.run(_run())
+
+
+def _instructions_with_skill_context(request: LiveAgentRequest) -> tuple[str, dict[str, Any]]:
+    context = request.metadata.get("skill_context") if isinstance(request.metadata, dict) else None
+    if not isinstance(context, dict):
+        return request.kickoff_prompt, _skill_context_summary(
+            {
+                "skill_name": request.skill_name,
+                "included": False,
+                "reason": "not_configured",
+            }
+        )
+    content = str(context.get("content") or "")
+    summary = _skill_context_summary(
+        {
+            "skill_name": context.get("skill_name") or request.skill_name,
+            "included": bool(content),
+            "reason": context.get("reason") or ("included" if content else "empty"),
+            "source_path": context.get("source_path"),
+            "relative_path": context.get("relative_path"),
+            "sha256": context.get("sha256"),
+            "bytes": context.get("bytes"),
+            "estimated_tokens": context.get("estimated_tokens"),
+            "policy": context.get("policy"),
+        }
+    )
+    if not content:
+        return request.kickoff_prompt, summary
+    instructions = (
+        "Canonical skill context for this private OpenAI Agents SDK run:\n\n"
+        f"{content.rstrip()}\n\n"
+        "Run-specific kickoff instructions:\n\n"
+        f"{request.kickoff_prompt}"
+    )
+    return instructions, summary
+
+
+def _skill_context_summary(payload: dict[str, Any]) -> dict[str, Any]:
+    return _drop_empty(_to_jsonable(payload))
+
+
+def _write_skill_context_summary(path: Path, summary: dict[str, Any]) -> None:
+    payload = {
+        "schema": "openai_agents_skill_context_v1",
+        **summary,
+    }
+    _write_json(path, _drop_empty(payload))
+
+
+def _sdk_model_settings_payload(request: LiveAgentRequest) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    configured = profile.get("sdk_model_settings") if isinstance(profile, dict) else None
+    if not isinstance(configured, dict):
+        configured = metadata.get("sdk_model_settings")
+    if isinstance(configured, dict):
+        return _drop_empty(_to_jsonable(configured))
+    settings = _safe_model_settings(request)
+    provider_profile = str(settings.get("provider_profile") or request.provider_profile or "")
+    wire_api = str(settings.get("wire_api") or "")
+    profile_id = str(profile.get("profile_id") if isinstance(profile, dict) else "baseline")
+    return _default_sdk_model_settings_payload(
+        provider_profile=provider_profile,
+        wire_api=wire_api,
+        profile_id=profile_id,
+    )
+
+
+def _sdk_run_config_payload(
+    request: LiveAgentRequest,
+    *,
+    events_path: Path | None = None,
+) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    configured = profile.get("sdk_run_config") if isinstance(profile, dict) else None
+    if not isinstance(configured, dict):
+        configured = metadata.get("sdk_run_config")
+    allowed = {"trace_include_sensitive_data", "workflow_name", "trace_metadata"}
+    if not isinstance(configured, dict):
+        configured = _default_sdk_run_config_payload()
+    payload = {
+        key: value for key, value in _drop_empty(_to_jsonable(configured)).items() if key in allowed
+    }
+    filter_config = _input_compaction_config(request)
+    if filter_config.get("enabled") and events_path is not None:
+        payload["call_model_input_filter"] = _model_input_compaction_filter(
+            events_path,
+            runtime_config=_runtime_config(
+                request,
+                mcp_client_session_timeout_configured=_mcp_client_session_timeout_seconds(request)[
+                    0
+                ],
+                mcp_client_session_timeout_s=_mcp_client_session_timeout_seconds(request)[1],
+            ),
+            config=filter_config,
+        )
+    return payload
+
+
+def _default_sdk_model_settings_payload(
+    *,
+    provider_profile: str,
+    wire_api: str,
+    profile_id: str,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+    }
+    if wire_api == "chat-completions":
+        payload["include_usage"] = True
+    else:
+        payload.update(
+            {
+                "truncation": "auto",
+                "store": False,
+            }
+        )
+        if provider_profile == "codex-env" and profile_id != "baseline":
+            payload["prompt_cache_retention"] = "in_memory"
+    return payload
+
+
+def _default_sdk_run_config_payload() -> dict[str, Any]:
+    return {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
+
+
+def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    config = profile.get("model_input_compaction") if isinstance(profile, dict) else None
+    if not isinstance(config, dict):
+        config = metadata.get("model_input_compaction")
+    if not isinstance(config, dict):
+        config = {}
+    enabled = _bool_setting(config.get("enabled"), default=False)
+    mode = str(config.get("mode") or ("public_tool_result_summary_v1" if enabled else "off"))
+    min_chars = _non_negative_int(
+        config.get("min_chars"),
+        env_name=MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
+        default=DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS,
+    )
+    return {
+        "schema": "agent_sdk_model_input_compaction_v1",
+        "enabled": enabled,
+        "mode": mode,
+        "min_chars": max(1, min_chars),
+        "private_artifact_policy": (
+            "filter is model-facing only; MCP traces, reports, and run artifacts remain complete"
+        ),
+    }
+
+
+def _bool_setting(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _boolish(value: Any, *, default: bool) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() not in {"0", "false", "no", "off", ""}
+
+
+def _positive_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(1, parsed)
+
+
+def _model_input_compaction_filter(
+    events_path: Path,
+    *,
+    runtime_config: dict[str, Any],
+    config: dict[str, Any],
+) -> Any:
+    async def _filter(data: Any) -> Any:
+        model_data = getattr(data, "model_data", None)
+        original_items = getattr(model_data, "input", None)
+        instructions = getattr(model_data, "instructions", None)
+        if not isinstance(original_items, list):
+            return model_data
+        filtered_items, metrics = _compact_model_input_items(
+            original_items,
+            min_chars=int(config.get("min_chars") or DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS),
+            public_tool_output_summary="public_tool_result_summary_v1"
+            in str(config.get("mode") or ""),
+            repeated_metric_map_delta="repeated_metric_map_delta_v1"
+            in str(config.get("mode") or ""),
+            raw_fpv_image_memory=config.get("raw_fpv_image_memory")
+            if isinstance(config.get("raw_fpv_image_memory"), dict)
+            else None,
+        )
+        _append_model_input_filter_event(
+            events_path,
+            runtime_config=runtime_config,
+            config=config,
+            metrics=metrics,
+        )
+        return _model_input_data_like(
+            model_data,
+            input_items=filtered_items,
+            instructions=instructions,
+        )
+
+    return _filter
+
+
+def _model_input_data_like(model_data: Any, *, input_items: list[Any], instructions: Any) -> Any:
+    cls = model_data.__class__
+    try:
+        return cls(input=input_items, instructions=instructions)
+    except Exception:
+        try:
+            from agents.run_config import ModelInputData  # type: ignore[import-not-found]
+
+            return ModelInputData(input=input_items, instructions=instructions)
+        except Exception:
+            return type(
+                "_RoboclawsModelInputData",
+                (),
+                {"input": input_items, "instructions": instructions},
+            )()
+
+
+def _compact_model_input_items(
+    items: list[Any],
+    *,
+    min_chars: int,
+    public_tool_output_summary: bool = True,
+    repeated_metric_map_delta: bool = True,
+    raw_fpv_image_memory: dict[str, Any] | None = None,
+) -> tuple[list[Any], dict[str, Any]]:
+    image_policy = _raw_fpv_image_memory_policy(raw_fpv_image_memory)
+    image_plan = _raw_fpv_image_memory_plan(items, image_policy)
+    image_metrics = _new_raw_fpv_image_memory_metrics(image_policy)
+    filtered: list[Any] = []
+    items_seen: dict[str, int] = {}
+    metric_map_seen = False
+    metric_map_output_count = 0
+    repeated_metric_map_output_count = 0
+    metric_map_delta_compacted_count = 0
+    metric_map_bytes_before = 0
+    metric_map_bytes_after = 0
+    input_bytes_before = 0
+    input_bytes_after = 0
+    compacted_count = 0
+    for index, item in enumerate(items):
+        item_bytes = _json_size_bytes(item)
+        input_bytes_before += item_bytes
+        image_info = image_plan.get(index)
+        if image_info is not None:
+            candidate, candidate_kind = _raw_fpv_image_memory_candidate(
+                item,
+                image_info=image_info,
+                policy=image_policy,
+                metrics=image_metrics,
+            )
+        else:
+            candidate, candidate_kind = _compaction_candidate(
+                item,
+                min_chars=min_chars,
+                metric_map_seen=metric_map_seen,
+                public_tool_output_summary=public_tool_output_summary,
+                repeated_metric_map_delta=repeated_metric_map_delta,
+            )
+        if _is_metric_map_tool_output(item):
+            metric_map_output_count += 1
+            metric_map_bytes_before += item_bytes
+            if metric_map_seen:
+                repeated_metric_map_output_count += 1
+            metric_map_seen = True
+        item_hash = _stable_item_hash(item)
+        items_seen[item_hash] = items_seen.get(item_hash, 0) + 1
+        if candidate is None:
+            filtered_item = item
+        else:
+            filtered_item = candidate
+            compacted_count += 1
+            if candidate_kind == "repeated_metric_map_delta":
+                metric_map_delta_compacted_count += 1
+        filtered.append(filtered_item)
+        filtered_item_bytes = _json_size_bytes(filtered_item)
+        input_bytes_after += filtered_item_bytes
+        if _is_metric_map_tool_output(item):
+            metric_map_bytes_after += filtered_item_bytes
+    return filtered, {
+        "schema": "agent_sdk_model_input_compaction_metrics_v1",
+        "input_item_count": len(items),
+        "compacted_item_count": compacted_count,
+        "unchanged_item_count": len(items) - compacted_count,
+        "repeated_item_count": sum(count - 1 for count in items_seen.values() if count > 1),
+        "input_bytes_before": input_bytes_before,
+        "input_bytes_after": input_bytes_after,
+        "input_bytes_reduced": max(0, input_bytes_before - input_bytes_after),
+        "metric_map_output_count": metric_map_output_count,
+        "repeated_metric_map_output_count": repeated_metric_map_output_count,
+        "metric_map_delta_compacted_count": metric_map_delta_compacted_count,
+        "metric_map_bytes_before": metric_map_bytes_before,
+        "metric_map_bytes_after": metric_map_bytes_after,
+        "metric_map_bytes_reduced": max(0, metric_map_bytes_before - metric_map_bytes_after),
+        **image_metrics,
+    }
+
+
+def _compaction_candidate(
+    item: Any,
+    *,
+    min_chars: int,
+    metric_map_seen: bool,
+    public_tool_output_summary: bool,
+    repeated_metric_map_delta: bool,
+) -> tuple[Any | None, str]:
+    payload = _to_jsonable(item)
+    if not isinstance(payload, dict):
+        return None, ""
+    item_type = str(payload.get("type") or "")
+    if item_type not in {
+        "function_call_output",
+        "computer_call_output",
+        "mcp_call",
+        "mcp_approval_response",
+    }:
+        return None, ""
+    output_key = "output" if "output" in payload else "content" if "content" in payload else ""
+    if not output_key:
+        return None, ""
+    output = payload.get(output_key)
+    output_text = output if isinstance(output, str) else json.dumps(output, sort_keys=True)
+    if repeated_metric_map_delta and metric_map_seen and _is_metric_map_tool_output(payload):
+        compacted = copy.deepcopy(payload)
+        summary = json.dumps(
+            _repeated_metric_map_delta_summary(output_text, item_type=item_type),
+            sort_keys=True,
+        )
+        if len(summary) < len(output_text):
+            compacted[output_key] = summary
+            return compacted, "repeated_metric_map_delta"
+    if not public_tool_output_summary or len(output_text) < min_chars:
+        return None, ""
+    compacted = copy.deepcopy(payload)
+    compacted[output_key] = json.dumps(
+        _public_tool_output_summary(output_text, item_type=item_type),
+        sort_keys=True,
+    )
+    return compacted, "generic_public_tool_output_summary"
+
+
+def _raw_fpv_image_memory_policy(config: dict[str, Any] | None) -> dict[str, Any]:
+    config = config if isinstance(config, dict) else {}
+    enabled = _boolish(config.get("enabled"), default=False)
+    retained = _positive_int(config.get("retained_full_frame_limit"), default=1)
+    if not enabled:
+        retained = 0
+    return {
+        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+        "enabled": enabled,
+        "mode": str(config.get("mode") or ("retain_latest_full_frame" if enabled else "off")),
+        "retained_full_frame_limit": retained,
+        "summary_kind": "raw_fpv_evicted_image_frame_summary_v1",
+        "candidate_ids": ["AA"] if enabled else [],
+        "private_artifact_policy": (
+            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
+            "remain complete"
+        ),
+    }
+
+
+def _new_raw_fpv_image_memory_metrics(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "raw_fpv_image_memory_enabled": bool(policy.get("enabled")),
+        "raw_fpv_image_memory_mode": str(policy.get("mode") or "off"),
+        "raw_fpv_image_retained_limit": int(policy.get("retained_full_frame_limit") or 0),
+        "raw_fpv_image_item_count": 0,
+        "raw_fpv_image_retained_count": 0,
+        "raw_fpv_image_evicted_count": 0,
+        "raw_fpv_image_bytes_before": 0,
+        "raw_fpv_image_bytes_after": 0,
+        "raw_fpv_image_bytes_reduced": 0,
+    }
+
+
+def _raw_fpv_image_memory_plan(
+    items: list[Any],
+    policy: dict[str, Any],
+) -> dict[int, dict[str, Any]]:
+    if not policy.get("enabled"):
+        return {}
+    candidates = []
+    last_observation_id = ""
+    for index, item in enumerate(items):
+        item_text = json.dumps(_to_jsonable(item), sort_keys=True)
+        matches = RAW_FPV_OBSERVATION_ID_RE.findall(item_text)
+        if matches:
+            last_observation_id = matches[-1]
+        info = _raw_fpv_image_info(item)
+        if info is not None:
+            if not info.get("observation_id"):
+                info["observation_id"] = last_observation_id
+            candidates.append((index, info))
+    retain_limit = int(policy.get("retained_full_frame_limit") or 0)
+    retained = {index for index, _info in candidates[-retain_limit:]} if retain_limit > 0 else set()
+    return {
+        index: {
+            **info,
+            "retain_full_frame": index in retained,
+        }
+        for index, info in candidates
+    }
+
+
+def _raw_fpv_image_info(item: Any) -> dict[str, Any] | None:
+    payload = _to_jsonable(item)
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get("data")
+    if isinstance(data, (bytes, bytearray)):
+        data_len = len(data)
+    else:
+        data_text = str(data or "")
+        data_len = len(data_text.encode("utf-8")) if data_text else 0
+    if data_len <= 0:
+        return None
+    mime = str(payload.get("_mime_type") or payload.get("mime_type") or payload.get("mime") or "")
+    fmt = str(payload.get("_format") or payload.get("format") or "")
+    if "image" not in mime and fmt.lower() not in {"png", "jpg", "jpeg", "webp"}:
+        return None
+    material = json.dumps(payload, sort_keys=True).encode("utf-8")
+    text = material.decode("utf-8", errors="ignore")
+    matches = RAW_FPV_OBSERVATION_ID_RE.findall(text)
+    observation_id = matches[-1] if matches else ""
+    return {
+        "observation_id": observation_id,
+        "mime_type": mime or (f"image/{fmt.lower()}" if fmt else "image/unknown"),
+        "format": fmt,
+        "data_bytes": data_len,
+        "item_bytes": len(material),
+        "sha256": hashlib.sha256(material).hexdigest(),
+    }
+
+
+def _raw_fpv_image_memory_candidate(
+    item: Any,
+    *,
+    image_info: dict[str, Any],
+    policy: dict[str, Any],
+    metrics: dict[str, Any],
+) -> tuple[Any | None, str]:
+    metrics["raw_fpv_image_item_count"] += 1
+    metrics["raw_fpv_image_bytes_before"] += _json_size_bytes(item)
+    if image_info.get("retain_full_frame"):
+        metrics["raw_fpv_image_retained_count"] += 1
+        metrics["raw_fpv_image_bytes_after"] += _json_size_bytes(item)
+        return None, ""
+    summary = {
+        "schema": "raw_fpv_evicted_image_frame_summary_v1",
+        "observation_id": image_info.get("observation_id") or "",
+        "mime_type": image_info.get("mime_type") or "",
+        "format": image_info.get("format") or "",
+        "original_data_bytes": image_info.get("data_bytes") or 0,
+        "original_item_bytes": image_info.get("item_bytes") or 0,
+        "original_sha256": image_info.get("sha256") or "",
+        "retention_policy": {
+            "mode": policy.get("mode"),
+            "retained_full_frame_limit": policy.get("retained_full_frame_limit"),
+        },
+        "summary": (
+            "Older raw-FPV image frame compacted before this SDK model call. "
+            "Use the latest retained frame and current raw-FPV MCP tools for visual work; "
+            "Roboclaws trace/report artifacts retain complete image evidence."
+        ),
+        "private_artifact_policy": policy.get("private_artifact_policy"),
+    }
+    if _json_size_bytes(summary) >= _json_size_bytes(item):
+        metrics["raw_fpv_image_retained_count"] += 1
+        metrics["raw_fpv_image_bytes_after"] += _json_size_bytes(item)
+        return None, ""
+    metrics["raw_fpv_image_evicted_count"] += 1
+    metrics["raw_fpv_image_bytes_after"] += _json_size_bytes(summary)
+    metrics["raw_fpv_image_bytes_reduced"] = max(
+        0,
+        metrics["raw_fpv_image_bytes_before"] - metrics["raw_fpv_image_bytes_after"],
+    )
+    return summary, "raw_fpv_image_memory"
+
+
+def _is_metric_map_tool_output(item: Any) -> bool:
+    payload = _to_jsonable(item)
+    if not isinstance(payload, dict):
+        return False
+    for key in ("name", "tool", "tool_name"):
+        if str(payload.get(key) or "") == "metric_map":
+            return True
+    call_id = str(payload.get("call_id") or "")
+    if "metric_map" in call_id:
+        return True
+    output = payload.get("output") if "output" in payload else payload.get("content")
+    decoded = _decode_tool_output_payload(output)
+    if isinstance(decoded, dict):
+        if decoded.get("tool") == "metric_map":
+            return True
+        nested = decoded.get("metric_map")
+        return isinstance(nested, dict) and nested.get("tool") == "metric_map"
+    return False
+
+
+def _decode_tool_output_payload(output: Any) -> Any:
+    if isinstance(output, str):
+        try:
+            decoded = json.loads(output)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(decoded, str):
+            try:
+                return json.loads(decoded)
+            except json.JSONDecodeError:
+                return decoded
+        return decoded
+    return output
+
+
+def _repeated_metric_map_delta_summary(output_text: str, *, item_type: str) -> dict[str, Any]:
+    decoded = _decode_tool_output_payload(output_text)
+    metric_map = decoded.get("metric_map") if isinstance(decoded, dict) else None
+    if not isinstance(metric_map, dict) and isinstance(decoded, dict):
+        metric_map = decoded
+    metric_map = metric_map if isinstance(metric_map, dict) else {}
+    runtime_map = (
+        metric_map.get("runtime_metric_map")
+        if isinstance(metric_map.get("runtime_metric_map"), dict)
+        else {}
+    )
+    return {
+        "schema": "roboclaws_repeated_metric_map_delta_summary_v1",
+        "item_type": item_type,
+        "original_chars": len(output_text),
+        "original_sha256": hashlib.sha256(output_text.encode("utf-8")).hexdigest(),
+        "map_id": str(metric_map.get("map_id") or ""),
+        "map_version": str(metric_map.get("map_version") or ""),
+        "mode": str(metric_map.get("mode") or ""),
+        "inspection_waypoint_count": len(metric_map.get("inspection_waypoints") or []),
+        "generated_target_candidate_count": len(
+            metric_map.get("generated_target_inspection_candidates") or []
+        ),
+        "runtime_observed_object_count": len(runtime_map.get("observed_objects") or []),
+        "runtime_target_candidate_count": len(runtime_map.get("target_candidates") or []),
+        "summary": (
+            "Repeated metric_map output compacted before this SDK model call. "
+            "Use the current metric_map tool again when full map fields are needed; "
+            "Roboclaws trace/report artifacts retain complete tool responses."
+        ),
+        "private_artifact_policy": (
+            "model-facing repeated-map delta only; raw map body is not persisted in "
+            "OpenAI Agents SDK events"
+        ),
+    }
+
+
+def _public_tool_output_summary(output_text: str, *, item_type: str) -> dict[str, Any]:
+    return {
+        "schema": "roboclaws_public_tool_output_summary_v1",
+        "item_type": item_type,
+        "original_chars": len(output_text),
+        "original_sha256": hashlib.sha256(output_text.encode("utf-8")).hexdigest(),
+        "summary": (
+            "Oversized public tool output compacted before this SDK model call. "
+            "Use current MCP tools for fresh state; full tool responses remain in "
+            "Roboclaws trace/report artifacts."
+        ),
+    }
+
+
+def _append_model_input_filter_event(
+    events_path: Path,
+    *,
+    runtime_config: dict[str, Any],
+    config: dict[str, Any],
+    metrics: dict[str, Any],
+) -> None:
+    _append_event(
+        events_path,
+        _drop_empty(
+            {
+                "schema": "openai_agents_model_input_filter_v1",
+                "event": "model_input_filter",
+                "ts_epoch": time.time(),
+                "runtime": runtime_config.get("runtime"),
+                "provider_profile": runtime_config.get("provider_profile"),
+                "wire_api": runtime_config.get("wire_api"),
+                "model": runtime_config.get("model"),
+                "config": _drop_empty(_to_jsonable(config)),
+                "metrics": _drop_empty(_to_jsonable(metrics)),
+                "privacy_note": (
+                    "Only aggregate counts, byte sizes, hashes, and policy metadata are persisted. "
+                    "Raw prompts, model text, tool payload bodies, credentials, and private truth "
+                    "are not stored by this event."
+                ),
+            }
+        ),
+    )
 
 
 def _max_turns(request: LiveAgentRequest) -> int:
@@ -285,10 +942,16 @@ def _runtime_config(
     mcp_client_session_timeout_s: float | None,
 ) -> dict[str, Any]:
     model_retry = _model_service_retry_config(request)
+    model_settings = _safe_model_settings(request)
+    sdk_model_settings = _sdk_model_settings_payload(request)
+    sdk_run_config = _sdk_run_config_payload(request, events_path=None)
+    input_compaction = _input_compaction_config(request)
+    responses_feature_surface = _responses_feature_surface(model_settings)
     return {
         "runtime": "openai-agents-live",
-        "provider_profile": request.provider_profile,
-        "model": request.model,
+        "provider_profile": model_settings.get("provider_profile") or request.provider_profile,
+        "model": model_settings.get("model") or request.model,
+        "wire_api": model_settings.get("wire_api") or "",
         "max_turns": _max_turns(request),
         "cache_tools_list": _cache_tools_list(request),
         "mcp_server": {
@@ -300,6 +963,37 @@ def _runtime_config(
         "mcp_client_session_timeout_s": mcp_client_session_timeout_s,
         "model_service_retry_attempts": model_retry["retry_attempts"],
         "model_service_retry_sleep_s": model_retry["retry_sleep_s"],
+        "sdk_model_settings": sdk_model_settings,
+        "sdk_run_config": sdk_run_config,
+        "agent_sdk_responses_features": responses_feature_surface,
+        "model_input_compaction": input_compaction,
+        "prompt_cache_retention": sdk_model_settings.get("prompt_cache_retention") or "",
+        "trace_include_sensitive_data": sdk_run_config.get("trace_include_sensitive_data"),
+    }
+
+
+def _responses_feature_surface(model_settings: dict[str, Any]) -> dict[str, Any]:
+    wire_api = str(model_settings.get("wire_api") or "")
+    enabled = wire_api == "responses"
+    return {
+        "schema": "agent_sdk_responses_feature_surface_v1",
+        "wire_api": wire_api,
+        "available": enabled,
+        "previous_response_id": enabled,
+        "auto_previous_response_id": enabled,
+        "conversation_id": enabled,
+        "session": enabled,
+        "server_managed_continuation_default": False,
+        "decision": (
+            "available_but_gated_for_live_ab"
+            if enabled
+            else "unavailable_for_chat_completions_wire_api"
+        ),
+        "privacy_note": (
+            "Responses continuation/session levers are recorded as capability surface only; "
+            "they are not enabled by default because task state and report completeness must "
+            "remain MCP-visible."
+        ),
     }
 
 
@@ -579,16 +1273,24 @@ def _is_empty_json_value(value: Any) -> bool:
     return False
 
 
-def _responses_model(request: LiveAgentRequest) -> Any:
-    from agents import OpenAIResponsesModel  # type: ignore[import-not-found]
+def _model_for_request(request: LiveAgentRequest) -> Any:
     from openai import AsyncOpenAI  # type: ignore[import-not-found]
 
-    settings = _responses_model_settings(request)
+    settings = _model_settings(request)
     client = AsyncOpenAI(
         api_key=settings["api_key"],
         base_url=settings["base_url"],
     )
-    base_model = OpenAIResponsesModel(settings["model"], openai_client=client)
+    if settings["wire_api"] == "responses":
+        from agents import OpenAIResponsesModel  # type: ignore[import-not-found]
+
+        base_model = OpenAIResponsesModel(settings["model"], openai_client=client)
+    elif settings["wire_api"] == "chat-completions":
+        from agents import OpenAIChatCompletionsModel  # type: ignore[import-not-found]
+
+        base_model = OpenAIChatCompletionsModel(settings["model"], openai_client=client)
+    else:  # pragma: no cover - guarded by _model_settings.
+        raise RuntimeError(f"unsupported OpenAI Agents wire API: {settings['wire_api']}")
     retry_config = _model_service_retry_config(request)
     if retry_config["retry_attempts"] <= 0:
         return base_model
@@ -619,6 +1321,13 @@ def _model_service_retry_config(request: LiveAgentRequest) -> dict[str, int | fl
         default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
     )
     return {"retry_attempts": attempts, "retry_sleep_s": sleep_s}
+
+
+def _safe_model_settings(request: LiveAgentRequest) -> dict[str, str]:
+    try:
+        return _model_settings(request)
+    except Exception:
+        return {}
 
 
 class _RetryingModel(_AgentsModel):
@@ -906,6 +1615,7 @@ def _append_model_service_event(
             "ts_epoch": time.time(),
             "runtime": runtime_config.get("runtime"),
             "provider_profile": runtime_config.get("provider_profile"),
+            "wire_api": runtime_config.get("wire_api"),
             "model": runtime_config.get("model"),
             "attempt_index": attempt_index,
             "retry_budget": retry_budget,
@@ -922,7 +1632,7 @@ def _append_model_service_event(
     _append_event(spans_path, span_payload)
 
 
-def _responses_model_settings(request: LiveAgentRequest) -> dict[str, str]:
+def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
     metadata = dict(request.metadata)
     provider = str(
         metadata.get("provider_profile")
@@ -949,13 +1659,61 @@ def _responses_model_settings(request: LiveAgentRequest) -> dict[str, str]:
         _require_setting("mify", "XM_LLM_API_KEY", api_key)
         return {
             "provider_profile": "mify",
+            "wire_api": "responses",
+            "base_url": base_url,
+            "api_key": api_key,
+            "model": model,
+        }
+    if provider in {"mimo-openai-chat", "mimo-chat"}:
+        base_url = str(
+            metadata.get("base_url")
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
+            or os.environ.get("MIMO_OPENAI_BASE_URL")
+            or "https://token-plan-cn.xiaomimimo.com/v1"
+        )
+        api_key = str(metadata.get("api_key") or os.environ.get("MIMO_TP_KEY") or "")
+        model = str(
+            metadata.get("model")
+            or request.model
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
+            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
+            or "mimo-v2.5"
+        )
+        _require_setting("mimo-openai-chat", "MIMO_TP_KEY", api_key)
+        return {
+            "provider_profile": "mimo-openai-chat",
+            "wire_api": "chat-completions",
+            "base_url": base_url,
+            "api_key": api_key,
+            "model": model,
+        }
+    if provider in {"kimi-openai-chat", "kimi-chat"}:
+        base_url = str(
+            metadata.get("base_url")
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
+            or os.environ.get("KIMI_OPENAI_BASE_URL")
+            or "https://api.kimi.com/coding/v1"
+        )
+        api_key = str(metadata.get("api_key") or os.environ.get("KIMI_API_KEY") or "")
+        model = str(
+            metadata.get("model")
+            or request.model
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
+            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
+            or "kimi-k2.6"
+        )
+        _require_setting("kimi-openai-chat", "KIMI_API_KEY", api_key)
+        return {
+            "provider_profile": "kimi-openai-chat",
+            "wire_api": "chat-completions",
             "base_url": base_url,
             "api_key": api_key,
             "model": model,
         }
     if provider != "codex-env":
         raise RuntimeError(
-            "openai-agents-live supports Responses provider profiles codex-env and mify only"
+            "openai-agents-live supports provider profiles codex-env, mify, "
+            "mimo-openai-chat, and kimi-openai-chat"
         )
 
     base_url = str(metadata.get("base_url") or os.environ.get("CODEX_BASE_URL") or "")
@@ -971,6 +1729,7 @@ def _responses_model_settings(request: LiveAgentRequest) -> dict[str, str]:
     _require_setting("codex-env", "CODEX_API_KEY", api_key)
     return {
         "provider_profile": "codex-env",
+        "wire_api": "responses",
         "base_url": base_url,
         "api_key": api_key,
         "model": model,
@@ -1099,6 +1858,15 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _round_duration(value: float) -> float:
     return round(max(0.0, value), 3)
+
+
+def _json_size_bytes(value: Any) -> int:
+    return len(json.dumps(_to_jsonable(value), sort_keys=True).encode("utf-8"))
+
+
+def _stable_item_hash(value: Any) -> str:
+    material = json.dumps(_to_jsonable(value), sort_keys=True).encode("utf-8")
+    return hashlib.sha256(material).hexdigest()
 
 
 def _to_jsonable(value: Any) -> Any:

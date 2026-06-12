@@ -31,7 +31,7 @@ def test_b1_map12_navigation_report_renders_reviewable_artifact(tmp_path: Path) 
             Image.new("RGB", (12, 8), color=(20 * index, 30, 40)).save(path)
             views[view_name] = str(path)
     navigation["b1_scene_usd"] = (
-        "data/robot-data-lab/scene-engine/data/B1_floor2_slow/usda/livingroom/livingroom_usdz_unpacked/livingroom.usda"
+        "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
     )
     navigation["validation"] = {"status": "passed", "errors": []}
     readiness = readiness_artifact_with_navigation(

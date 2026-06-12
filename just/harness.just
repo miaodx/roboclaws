@@ -811,7 +811,7 @@ b1-map12-navigation-smoke *overrides:
     set -euo pipefail
     args=("$@")
     runtime_python=".venv-isaaclab/bin/python"
-    b1_root="data/robot-data-lab/scene-engine/data/B1_floor2_slow"
+    b1_root="data/robot-data-lab/scene-engine/data/2rd_floor_seperated"
     map12_root="vendors/agibot_sdk/artifacts/maps/robot_map_12"
     output_dir="output/b1-map12/navigation-smoke"
     readiness_output=""

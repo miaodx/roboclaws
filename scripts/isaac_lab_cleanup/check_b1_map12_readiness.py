@@ -21,9 +21,9 @@ NAVIGATION_SMOKE_SCHEMA = "b1_map12_navigation_smoke_v1"
 SEMANTIC_SOURCE = "robot_map_12_navigation_memory_overlay"
 SEMANTIC_USD_BLOCKED = "blocked_until_segmentation_or_manifest"
 NAVIGATION_PROVENANCE = "isaac_b1_map12_navigation_smoke"
-DEFAULT_B1_LIVINGROOM_USD = Path("usda/livingroom/livingroom_usdz_unpacked/livingroom.usda")
-DEFAULT_B1_FULL_FLOOR_USD = Path("usda/F2_all/F2_all.usda")
-DEFAULT_B1_FULL_FLOOR_DEFAULT_USD = Path("usda/F2_all/default.usda")
+DEFAULT_B1_SCENE_USD = Path("storey_1/scene_gs.usda")
+DEFAULT_B1_MESH_SCENE_USD = Path("storey_1/scene.usd")
+DEFAULT_B1_SCENE_BASE_USD = Path("storey_1/configuration/scene_base.usd")
 DEFAULT_MAP12_NAV2 = Path("agibot/nav2.yaml")
 DEFAULT_MAP12_OCCUPANCY = Path("agibot/occupancy.pgm")
 DEFAULT_MAP12_MEMORY = Path("navigation_memory.json")
@@ -99,25 +99,28 @@ def main(argv: list[str] | None = None) -> int:
 def build_readiness_artifact(b1_root: Path, map12_root: Path) -> dict[str, Any]:
     b1_root = Path(b1_root)
     map12_root = Path(map12_root)
-    livingroom = inspect_usd_stage(b1_root / DEFAULT_B1_LIVINGROOM_USD)
-    full_floor = inspect_usd_stage(b1_root / DEFAULT_B1_FULL_FLOOR_USD)
-    full_floor_default = inspect_usd_stage(b1_root / DEFAULT_B1_FULL_FLOOR_DEFAULT_USD)
+    scene_layout = inspect_scene_engine_asset_layout(b1_root)
+    primary_scene = inspect_usd_stage(b1_root / DEFAULT_B1_SCENE_USD)
+    mesh_scene = inspect_usd_stage(b1_root / DEFAULT_B1_MESH_SCENE_USD)
+    scene_base = inspect_usd_stage(b1_root / DEFAULT_B1_SCENE_BASE_USD)
     obj_meshes = [inspect_obj_mesh(path) for path in sorted((b1_root / "mesh-files").glob("*.obj"))]
     gaussian_plys = [
         inspect_ply_header(path)
         for path in sorted((b1_root / "point_cloud" / "iteration_100").glob("*.ply"))
     ]
+    gaussian_layers = [_file_inventory(path) for path in sorted(b1_root.glob("*/scene_gs.usda"))]
+    usd_scene_files = [_file_inventory(path) for path in sorted(b1_root.glob("*/scene.usd"))]
     map12 = inspect_map12(map12_root)
     overlay = build_overlay_report(
-        livingroom_bounds=_dict(livingroom.get("world_bounds")),
+        scene_bounds=_dict(primary_scene.get("world_bounds")),
         map12=map12,
     )
-    b1_geometry_loaded = bool(livingroom.get("opened")) and bool(
-        _dict(livingroom.get("world_bounds")).get("valid")
+    b1_geometry_loaded = bool(primary_scene.get("opened")) and bool(
+        _dict(primary_scene.get("world_bounds")).get("valid")
     )
     blockers = []
     if not b1_geometry_loaded:
-        blockers.append("B1 livingroom USD did not open with finite world bounds.")
+        blockers.append("B1 rebuilt scene USD did not open with finite world bounds.")
     if overlay["status"] == "blocked":
         blockers.append(str(overlay.get("reason") or "Map 12 overlay could not be derived."))
     return {
@@ -129,13 +132,19 @@ def build_readiness_artifact(b1_root: Path, map12_root: Path) -> dict[str, Any]:
         "b1_root": str(b1_root),
         "map12_root": str(map12_root),
         "b1_geometry_loaded": b1_geometry_loaded,
-        "b1_geometry_source": "coarse_usd_or_obj",
+        "b1_geometry_source": "rebuilt_scene_engine_usd_meshes",
+        "b1_asset_layout": scene_layout,
         "b1_geometry": {
-            "local_geometry": livingroom,
-            "full_floor_usd": full_floor,
-            "full_floor_default_usd": full_floor_default,
+            "local_geometry": primary_scene,
+            "gaussian_scene_usd": primary_scene,
+            "full_floor_usd": mesh_scene,
+            "full_floor_default_usd": scene_base,
+            "scene_engine_layout": scene_layout,
+            "scene_partitions": scene_layout["partitions"],
+            "usd_scene_files": usd_scene_files,
             "obj_meshes": obj_meshes,
             "gaussian_point_clouds": gaussian_plys,
+            "gaussian_layers": gaussian_layers,
         },
         "usd_object_index_ready": False,
         "usd_receptacle_index_ready": False,
@@ -164,6 +173,49 @@ def build_readiness_artifact(b1_root: Path, map12_root: Path) -> dict[str, Any]:
             "planner_backed_nav2_parity",
         ],
         "blockers": blockers,
+    }
+
+
+def inspect_scene_engine_asset_layout(scene_root: Path) -> dict[str, Any]:
+    scene_root = Path(scene_root)
+    partitions = []
+    if scene_root.is_dir():
+        for partition_root in sorted(path for path in scene_root.iterdir() if path.is_dir()):
+            scene_usd = partition_root / "scene.usd"
+            gaussian_layer = partition_root / "scene_gs.usda"
+            if not scene_usd.exists() and not gaussian_layer.exists():
+                continue
+            partitions.append(
+                {
+                    "name": partition_root.name,
+                    "scene_usd": _file_inventory(scene_usd),
+                    "gaussian_layer": _file_inventory(gaussian_layer),
+                    "config_yaml": _file_inventory(partition_root / "config.yaml"),
+                    "usdz": _file_inventory(partition_root / "xm_large_scene.usdz"),
+                    "material_count": len(
+                        list((partition_root / "configuration" / "materials").glob("*"))
+                    ),
+                }
+            )
+    return {
+        "schema": "scene_engine_rebuilt_asset_inventory_v1",
+        "root": str(scene_root),
+        "primary_scene_usd": str(scene_root / DEFAULT_B1_SCENE_USD),
+        "primary_mesh_scene_usd": str(scene_root / DEFAULT_B1_MESH_SCENE_USD),
+        "primary_gaussian_layer": str(scene_root / DEFAULT_B1_SCENE_USD),
+        "partition_count": len(partitions),
+        "usd_scene_count": sum(1 for item in partitions if item["scene_usd"]["exists"]),
+        "gaussian_layer_count": sum(1 for item in partitions if item["gaussian_layer"]["exists"]),
+        "partitions": partitions,
+    }
+
+
+def _file_inventory(path: Path) -> dict[str, Any]:
+    path = Path(path)
+    return {
+        "path": str(path),
+        "exists": path.is_file(),
+        "size_bytes": path.stat().st_size if path.is_file() else 0,
     }
 
 
@@ -395,14 +447,14 @@ def inspect_map12(map12_root: Path) -> dict[str, Any]:
 
 def build_overlay_report(
     *,
-    livingroom_bounds: dict[str, Any],
+    scene_bounds: dict[str, Any],
     map12: dict[str, Any],
 ) -> dict[str, Any]:
-    if livingroom_bounds.get("valid") is not True:
+    if scene_bounds.get("valid") is not True:
         return {
             "status": "blocked",
             "transform_status": "blocked",
-            "reason": "B1 livingroom USD bounds are unavailable.",
+            "reason": "B1 rebuilt scene USD bounds are unavailable.",
             "candidate_waypoints": [],
         }
     source_bounds = _dict(map12.get("nav_goal_bounds"))
@@ -413,8 +465,8 @@ def build_overlay_report(
             "reason": "Map 12 navigation-memory nav_goal bounds are unavailable.",
             "candidate_waypoints": [],
         }
-    b1_min = livingroom_bounds["min"]
-    b1_max = livingroom_bounds["max"]
+    b1_min = scene_bounds["min"]
+    b1_max = scene_bounds["max"]
     source_min = source_bounds["min"]
     source_max = source_bounds["max"]
     source_width = max(float(source_max[0]) - float(source_min[0]), 1e-6)
@@ -422,13 +474,13 @@ def build_overlay_report(
     b1_width = max(float(b1_max[0]) - float(b1_min[0]), 1e-6)
     b1_depth = max(float(b1_max[1]) - float(b1_min[1]), 1e-6)
     transform = {
-        "method": "bbox_fit_navigation_memory_nav_goals_to_livingroom_usd_bounds",
+        "method": "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds",
         "scale_x": b1_width / source_width,
         "scale_y": b1_depth / source_depth,
         "translate_x": float(b1_min[0]) - float(source_min[0]) * (b1_width / source_width),
         "translate_y": float(b1_min[1]) - float(source_min[1]) * (b1_depth / source_depth),
         "source_frame": "robot_map_12_map",
-        "target_frame": "b1_livingroom_usd_world_candidate",
+        "target_frame": "b1_rebuilt_scene_usd_world_candidate",
     }
     anchors = [
         anchor
@@ -445,7 +497,7 @@ def build_overlay_report(
         "transform_status": "unverified",
         "semantic_source": SEMANTIC_SOURCE,
         "source_bounds": source_bounds,
-        "target_bounds": livingroom_bounds,
+        "target_bounds": scene_bounds,
         "transform": {key: _round_float(value) for key, value in transform.items()},
         "candidate_waypoints": candidate_waypoints,
         "candidate_waypoint_count": len(candidate_waypoints),
@@ -458,7 +510,7 @@ def build_overlay_report(
             ),
         },
         "reason": (
-            "Map 12 navigation-memory anchors were projected into the B1 livingroom USD "
+            "Map 12 navigation-memory anchors were projected into the B1 rebuilt scene USD "
             "bounds by a candidate bbox fit. At least three matched anchors with residuals "
             "are required before this can become verified."
         ),
@@ -637,7 +689,7 @@ def _candidate_waypoint_from_anchor(
         "semantic_source": SEMANTIC_SOURCE,
         "map12_nav_goal": nav_goal,
         "b1_pose": {
-            "frame": "b1_livingroom_usd_world_candidate",
+            "frame": str(transform.get("target_frame") or "b1_rebuilt_scene_usd_world_candidate"),
             "x": round(b1_x, 6),
             "y": round(b1_y, 6),
             "z": round(float(floor_z), 6),

@@ -33,6 +33,7 @@ def test_extract_report_performance_metrics_covers_quality_model_work_and_timing
     packet = extract_report_performance_metrics(run_dir, write_model_call_metrics=True)
 
     assert packet["schema"] == REPORT_PERFORMANCE_SCHEMA
+    assert packet["run_identity"]["wire_api"] == "responses"
     assert packet["quality"]["restored_count"] == 5
     assert packet["quality"]["failed_or_noop_tool_count"] == 0
     assert packet["call_counts"]["model_call_count"] == 1
@@ -50,6 +51,7 @@ def test_extract_report_performance_metrics_covers_quality_model_work_and_timing
     ]
     assert rows[0]["schema"] == MODEL_CALL_METRIC_SCHEMA
     assert rows[0]["source"] == "openai_agents_span"
+    assert rows[0]["wire_api"] == "responses"
 
 
 def test_model_call_metrics_reports_unavailable_without_zeroing_missing_telemetry(
@@ -70,6 +72,7 @@ def test_model_call_metrics_reports_unavailable_without_zeroing_missing_telemetr
             "schema": MODEL_CALL_METRIC_SCHEMA,
             "agent_engine": "claude-code",
             "provider_profile": "mimo-anthropic",
+            "wire_api": "",
             "model": "",
             "attempt_index": 0,
             "call_index": 0,
@@ -100,6 +103,38 @@ def test_compare_rejects_faster_but_worse_candidate(tmp_path: Path) -> None:
     assert "candidate is faster but worse" in comparison["reasons"]
     assert comparison["quality_comparison"]["regressed"] is True
     assert comparison["timing_comparison"]["observed_wall_delta_s"] == -50
+
+
+def test_compare_caps_sweep_overcoverage_for_quality_gate(tmp_path: Path) -> None:
+    baseline = _write_run(tmp_path / "baseline", restored=3, elapsed_s=100, gap_s=50)
+    candidate = _write_run(tmp_path / "candidate", restored=4, elapsed_s=50, gap_s=25)
+    run_result = json.loads((baseline / "run_result.json").read_text(encoding="utf-8"))
+    run_result["sweep_coverage_rate"] = 1.071429
+    (baseline / "run_result.json").write_text(json.dumps(run_result), encoding="utf-8")
+
+    comparison = compare_run_dirs(baseline_dir=baseline, candidate_dir=candidate)
+
+    assert comparison["quality_comparison"]["checks"]["sweep_coverage_rate"] is True
+    assert comparison["quality_comparison"]["regressed"] is False
+    assert comparison["status"] == "accepted"
+
+
+def test_compare_treats_different_wire_api_as_different_identity(tmp_path: Path) -> None:
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100, gap_s=50)
+    candidate = _write_run(
+        tmp_path / "candidate",
+        restored=5,
+        elapsed_s=100,
+        gap_s=50,
+        provider_profile="mimo-openai-chat",
+        model="mimo-v2.5",
+        wire_api="chat-completions",
+    )
+
+    comparison = compare_run_dirs(baseline_dir=baseline, candidate_dir=candidate)
+
+    assert comparison["identity_comparison"]["apples_to_oranges"] is True
+    assert "wire_api" in comparison["identity_comparison"]["mismatched_fields"]
 
 
 def test_privacy_gate_scans_model_call_metrics(tmp_path: Path) -> None:
@@ -226,6 +261,9 @@ def _write_run(
     output_tokens: int = 10,
     reasoning_tokens: int = 0,
     duration_s: float = 5.0,
+    provider_profile: str = "codex-env",
+    model: str = "gpt-5.5",
+    wire_api: str = "responses",
 ) -> Path:
     run_dir.mkdir()
     (run_dir / "live_timing.json").write_text(
@@ -235,8 +273,9 @@ def _write_run(
                 "surface": "household-world",
                 "intent": "cleanup",
                 "task_name": "household-cleanup",
-                "provider_profile": "codex-env",
-                "model": "gpt-5.5",
+                "provider_profile": provider_profile,
+                "wire_api": wire_api,
+                "model": model,
                 "evidence_lane": "world-public-labels",
                 "runner_timing": {"total_elapsed_s": elapsed_s},
                 "mcp_trace_timing": {"between_tool_gap_s": gap_s, "tool_handler_s": 5.0},
@@ -283,8 +322,9 @@ def _write_run(
                 "span_type": "response",
                 "ts_epoch": 1.0,
                 "duration_s": duration_s,
-                "provider_profile": "codex-env",
-                "model": "gpt-5.5",
+                "provider_profile": provider_profile,
+                "wire_api": wire_api,
+                "model": model,
                 "usage": {
                     "input_tokens": input_tokens,
                     "input_tokens_details": {"cached_tokens": cached_tokens},

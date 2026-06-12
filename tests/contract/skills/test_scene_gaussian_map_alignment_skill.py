@@ -16,6 +16,9 @@ ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = (
     ROOT / "skills" / "scene-gaussian-map-alignment" / "scripts" / "summarize_alignment_evidence.py"
 )
+REBUILT_SCENE_GAUSSIAN = (
+    "data/robot-data-lab/scene-engine/data/2rd_floor_seperated/storey_1/scene_gs.usda"
+)
 
 
 def _load_script() -> ModuleType:
@@ -40,6 +43,15 @@ def _readiness_with_gaussian_inventory() -> dict[str, object]:
         "local_geometry": {
             "local_referenced_layers": ["data/B1/usda/livingroom/gauss.usda"],
         },
+        "scene_partitions": [
+            {
+                "name": "storey_1",
+                "gaussian_layer": {
+                    "path": REBUILT_SCENE_GAUSSIAN,
+                    "exists": True,
+                },
+            }
+        ],
     }
     return readiness
 
@@ -125,13 +137,13 @@ def test_alignment_manifest_records_lightweight_contract_without_fusion_claim(
         "source_bounds": {"valid": True, "min": [0, 0, 0], "max": [2, 4, 0]},
         "target_bounds": {"valid": True, "min": [-4, -8, 0], "max": [-2, -6, 0]},
         "transform": {
-            "method": "bbox_fit_navigation_memory_nav_goals_to_livingroom_usd_bounds",
+            "method": "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds",
             "scale_x": 0.5,
             "scale_y": 0.5,
             "translate_x": -4.0,
             "translate_y": -8.0,
             "source_frame": "robot_map_12_map",
-            "target_frame": "b1_livingroom_usd_world_candidate",
+            "target_frame": "b1_rebuilt_scene_usd_world_candidate",
         },
         "residual_evidence": {"status": "not_available", "matched_anchor_count": 0},
         "candidate_waypoints": [
@@ -142,7 +154,7 @@ def test_alignment_manifest_records_lightweight_contract_without_fusion_claim(
                 "semantic_source": "robot_map_12_navigation_memory_overlay",
                 "map12_nav_goal": {"x": 2.0, "y": 1.0, "yaw": 0.0, "z": 0.0},
                 "b1_pose": {
-                    "frame": "b1_livingroom_usd_world_candidate",
+                    "frame": "b1_rebuilt_scene_usd_world_candidate",
                     "x": -3.0,
                     "y": -7.5,
                     "z": 0.0,
@@ -169,7 +181,7 @@ def test_alignment_manifest_records_lightweight_contract_without_fusion_claim(
     assert "not a fused USD/Gaussian scene" in manifest["contract_note"]
     assert manifest["source_assets"]["map_bundle"] == "assets/maps/agibot-robot-map-12"
     assert manifest["frames"]["map_frame"] == "robot_map_12_map"
-    assert manifest["frames"]["scene_frame"] == "b1_livingroom_usd_world_candidate"
+    assert manifest["frames"]["scene_frame"] == "b1_rebuilt_scene_usd_world_candidate"
     assert manifest["transform"]["status"] == "unverified"
     assert manifest["transform"]["parameters"] == {
         "scale_x": 0.5,
@@ -194,13 +206,13 @@ def test_alignment_manifest_cli_writes_json(tmp_path: Path) -> None:
         "status": "candidate",
         "transform_status": "unverified",
         "transform": {
-            "method": "bbox_fit_navigation_memory_nav_goals_to_livingroom_usd_bounds",
+            "method": "bbox_fit_navigation_memory_nav_goals_to_scene_usd_bounds",
             "scale_x": 0.5,
             "scale_y": 0.5,
             "translate_x": -4.0,
             "translate_y": -8.0,
             "source_frame": "robot_map_12_map",
-            "target_frame": "b1_livingroom_usd_world_candidate",
+            "target_frame": "b1_rebuilt_scene_usd_world_candidate",
         },
         "candidate_waypoints": [],
     }

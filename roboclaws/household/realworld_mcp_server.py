@@ -138,6 +138,7 @@ def make_molmo_realworld_cleanup_mcp(
     task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     goal_contract: GoalContract | None = None,
     operator_messages_path: str | Path | None = None,
+    agent_sdk_camera_grounded_composite_tools: bool = False,
     rerun_command: str | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
@@ -166,6 +167,7 @@ def make_molmo_realworld_cleanup_mcp(
         task_intent_mode=task_intent_mode,
         goal_contract=goal_contract,
         operator_messages_path=operator_messages_path,
+        agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
         rerun_command=rerun_command,
     )
 
@@ -201,6 +203,7 @@ class RealWorldMolmoCleanupMCPServer:
         task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
         goal_contract: GoalContract | None = None,
         operator_messages_path: str | Path | None = None,
+        agent_sdk_camera_grounded_composite_tools: bool = False,
         rerun_command: str | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
@@ -268,6 +271,9 @@ class RealWorldMolmoCleanupMCPServer:
         self.operator_messages_path = (
             Path(operator_messages_path) if operator_messages_path is not None else None
         )
+        self.agent_sdk_camera_grounded_composite_tools = bool(
+            agent_sdk_camera_grounded_composite_tools
+        )
         self.rerun_command = (
             str(rerun_command or "").strip() or os.environ.get(REPORT_RERUN_COMMAND_ENV, "").strip()
         )
@@ -306,6 +312,9 @@ class RealWorldMolmoCleanupMCPServer:
             perception_mode=self.perception_mode,
             cleanup_profile=self.cleanup_profile,
             visual_grounding_pipeline_id=contract.visual_grounding_pipeline_id,
+            agent_sdk_camera_grounded_composite_tools=(
+                self.agent_sdk_camera_grounded_composite_tools
+            ),
         )
 
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:
@@ -336,6 +345,67 @@ class RealWorldMolmoCleanupMCPServer:
         path = self.operator_messages_path
         run_dir = path.parent if path is not None else self.run_dir
         return check_operator_messages_for_mcp(run_dir, max_messages=max(1, max_messages))
+
+    def observe_camera_grounded_candidates(self) -> dict[str, Any]:
+        if self.perception_mode != CAMERA_MODEL_POLICY_MODE:
+            return {
+                "ok": False,
+                "tool": "observe_camera_grounded_candidates",
+                "status": "error",
+                "error_reason": "unsupported_perception_mode",
+                "perception_mode": self.perception_mode,
+                "supported_perception_mode": CAMERA_MODEL_POLICY_MODE,
+            }
+        observation = self.call_tool("observe")
+        if not observation.get("ok"):
+            return {
+                "ok": False,
+                "tool": "observe_camera_grounded_candidates",
+                "status": "error",
+                "error_reason": "observe_failed",
+                "observation": observation,
+                "private_target_truth_included": False,
+            }
+        raw = observation.get("raw_fpv_observation")
+        raw = raw if isinstance(raw, dict) else {}
+        observation_id = str(raw.get("observation_id") or "")
+        if not observation_id:
+            return {
+                "ok": False,
+                "tool": "observe_camera_grounded_candidates",
+                "status": "error",
+                "error_reason": "missing_raw_fpv_observation",
+                "observation": observation,
+                "private_target_truth_included": False,
+            }
+        declaration = self.call_tool("declare_visual_candidates", observation_id=observation_id)
+        return {
+            "ok": bool(declaration.get("ok")),
+            "tool": "observe_camera_grounded_candidates",
+            "status": declaration.get("status", "ok" if declaration.get("ok") else "error"),
+            "contract": REALWORLD_CONTRACT,
+            "perception_mode": self.perception_mode,
+            "observation_id": observation_id,
+            "waypoint_id": observation.get("waypoint_id", raw.get("waypoint_id", "")),
+            "room_id": observation.get("current_room_id", raw.get("room_id", "")),
+            "observation": observation,
+            "declaration": declaration,
+            "candidate_count": declaration.get("candidate_count", 0),
+            "registered_observed_handles": list(
+                declaration.get("registered_observed_handles") or []
+            ),
+            "camera_model_candidates": list(declaration.get("camera_model_candidates") or []),
+            "model_declared_observations": list(
+                declaration.get("model_declared_observations") or []
+            ),
+            "visual_grounding_pipeline": declaration.get("visual_grounding_pipeline") or {},
+            "private_target_truth_included": False,
+            "trace_review_note": (
+                "Composite shortcut for private Agent SDK Candidate O. It preserves the "
+                "underlying observe and declare_visual_candidates trace events."
+            ),
+            "instruction": declaration.get("instruction", ""),
+        }
 
     def done_readiness_evidence(self) -> dict[str, Any]:
         trace_events = self._read_trace_events()
