@@ -27,8 +27,16 @@ because the composite shortcut was enabled but never called. Prompt/tool
 selection has been repaired, and the promptfix2 retry now exercises the
 shortcut and passes direct checker reruns after a narrow camera-grounded public
 provenance checker repair. Treat it as an accepted O mechanism/diagnostic speed
-row, not a normalized or publishable speed claim. The full live provider/model x
-evidence-lane performance matrix is still not done. The follow-up execution plan is
+row, not a normalized or publishable speed claim. Q/Y has now been refreshed
+over the promptfix2 artifact with a camera-grounded breakdown that separates
+composite-internal declaration substeps from standalone two-step declarations:
+promptfix2 has 5 composite calls, 5 composite-internal declarations, and 11
+standalone declarations. The next normalized-latency priorities are direct
+wall-clock visual capture reduction F, N/I/AB live A/B for model/SDK
+between-tool gap and repeated map/state payloads, then O paired repeats or
+prompt/tool tightening for the remaining standalone declarations. Token deltas
+are diagnostic context only. The full live provider/model x evidence-lane
+performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -165,6 +173,13 @@ Result:
   model/SDK between-tool gap dominant (`205.026s`, 63.34%), recorded visual
   capture as material (`93.256s`, 28.81%), and pointed the next live arm toward
   Group 2 lane-specific work after already-accepted Group 1 prep.
+- Q/Y was refreshed again with the O promptfix2 artifact. The packet now
+  includes `camera_grounded_tool_breakdown` so composite-internal
+  `declare_visual_candidates` requests do not create a false O recommendation.
+  The promptfix2 row still recommends O because it has 11 standalone
+  declarations beyond 5 composite-internal declarations. It also keeps
+  model/SDK between-tool gap dominant (`663.611s`, 77.68%) and visual capture
+  material (`156.962s`, 18.37%).
 - Completed external camera-grounded Chat-compatible evidence at
   `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
   shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14

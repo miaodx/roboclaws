@@ -214,6 +214,21 @@ same recorded quality (`completion_status=success`, `restored_count=4/5`,
 this as a valid Candidate O mechanism/diagnostic speed row, not a normalized
 or publishable speed claim.
 
+2026-06-12 Q/Y promptfix2 refresh update: the zero-provider live-refresh
+manifest now includes the O promptfix2 retry and the decision packet classifies
+camera-grounded declaration work into composite-internal versus standalone
+requests. This avoids treating trace-preserving composite substeps as leftover
+two-step agent work. The refreshed packet accepts both completed live rows and
+records promptfix2 as 5 `observe_camera_grounded_candidates` requests, 16 total
+`declare_visual_candidates` requests, 5 composite-internal declarations, and 11
+standalone declarations. Because standalone declarations remain, Q/Y still
+recommends residual O work for camera-grounded, but the stronger normalized
+latency priority is now: (1) direct wall-clock visual capture reduction F,
+(2) N/I/AB live A/B for model/SDK between-tool gap and repeated map/state
+payloads, and (3) O paired repeats or prompt/tool tightening for the remaining
+standalone two-step calls. Token deltas are diagnostic context only and are not
+a deciding cost metric for this plan.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -263,12 +278,14 @@ or publishable speed claim.
   dominant buckets, failed/noop counts, and candidate recommendations, while the
   decision packet summary aggregates candidate and candidate-group rankings
   without adding provider calls or raw payload persistence.
-- Q/Y has also been refreshed against the first completed live Responses pair
-  through `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`.
-  This is an offline/no-provider packet over existing run artifacts, not a new
-  live row. It accepted the completed `mify` world-public diagnostic comparison
-  and points the next live arm toward lane-specific camera/visual reductions
-  after the current backend slot is free.
+- Q/Y has also been refreshed against completed live Responses pairs through
+  `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`. This is an
+  offline/no-provider packet over existing run artifacts, not a new live row.
+  It accepted the completed `mify` world-public diagnostic comparison plus the
+  camera-grounded O promptfix2 mechanism row, records composite-internal versus
+  standalone camera declarations, and points the next work toward wall-clock
+  visual capture reduction, N/I/AB model-facing compaction A/B, and residual O
+  tightening/repeats rather than token-cost-only work.
 - Candidate N deterministic prep is implemented inside the existing opt-in SDK
   model-input compaction arm. Repeated `metric_map` outputs are summarized only
   in model-facing SDK input, only when smaller than the original, and only with
@@ -367,8 +384,9 @@ Use this queue unless fresh evidence changes it:
    compaction/session/continuation A/B is authorized and should run when
    credentials/backend access and recorded caps are available.
 6. Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
-   been refreshed from the first completed `mify` live Responses pair. Refresh
-   again whenever new live rows or candidate arms change the packet.
+   been refreshed from the completed `mify` world-public pair and O promptfix2
+   camera-grounded mechanism row. Refresh again whenever new live rows or
+   candidate arms change the packet.
 7. Candidate N deterministic prep is accepted inside the opt-in model-input
    compaction arm; live A/B is authorized and should run when credentials/backend
    access and recorded caps are available.
@@ -381,6 +399,8 @@ Use this queue unless fresh evidence changes it:
    retry does exercise the shortcut and passes the checker after the narrow
    camera-grounded provenance allowlist repair; classify it as a valid
    mechanism/diagnostic speed row, not a normalized or publishable speed claim.
+   The refreshed Q/Y packet shows O is not exhausted: 11 standalone camera
+   declarations still remain after the 5 composite calls.
 10. Candidate P deterministic prep is accepted as a raw-FPV repeated visual
     candidate failure rail; live raw-FPV tests are authorized, while cleanup-pass
     and speed claims still require report-quality evidence.
