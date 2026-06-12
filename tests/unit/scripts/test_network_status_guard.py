@@ -36,9 +36,7 @@ def test_network_status_reports_work_when_probe_returns_http(tmp_path: Path) -> 
     assert "api-router.evad.mioffice.cn" in result.stdout
     assert "OpenClaw and system-provider Claude Code" in result.stdout
     assert "mify-anthropic" in result.stdout
-    assert (
-        "Codex defaults to codex-env; mify requires an explicit provider override" in result.stdout
-    )
+    assert "Codex defaults to codex-env; mify/minimax require explicit" in result.stdout
     assert "system-provider Codex just recipes are blocked" not in result.stdout
 
 
@@ -197,6 +195,58 @@ def test_codex_provider_guard_allows_mify_profile_on_work_network(tmp_path: Path
     )
 
     assert "repo-local Codex provider (mify)" in result.stderr
+
+
+def test_codex_provider_guard_allows_minimax_profile_on_work_network(tmp_path: Path) -> None:
+    env = _fake_curl(tmp_path, "204")
+    env["ROBOCLAWS_CODEX_PROVIDER"] = "minimax"
+    env["MM_API_KEY"] = "fake-mm-key"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_assert_codex_network_allowed "Codex"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "repo-local Codex provider (minimax)" in result.stderr
+
+
+def test_openai_agents_provider_guard_allows_minimax_profile_on_work_network(
+    tmp_path: Path,
+) -> None:
+    env = _fake_curl(tmp_path, "204")
+    env["ROBOCLAWS_CODEX_PROVIDER"] = "minimax"
+    env["MM_API_KEY"] = "fake-mm-key"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_assert_openai_agents_network_allowed "OpenAI Agents SDK"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "repo-local OpenAI Agents SDK provider (minimax)" in result.stderr
 
 
 def test_openai_agents_provider_guard_allows_chat_profile_on_work_network(tmp_path: Path) -> None:

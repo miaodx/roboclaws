@@ -139,6 +139,8 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert expected_workdir in docker_script_text
     assert "ANTHROPIC_BASE_URL" in docker_script_text
     assert "MIMO_TP_KEY" in docker_script_text
+    assert "MM_API_KEY" in docker_script_text
+    assert "MM_BASE_URL" in docker_script_text
 
     assert "Build pinned coding-agent CLI image" in ci_text
     assert "scripts/dev/coding_agent_docker.sh build" in ci_text

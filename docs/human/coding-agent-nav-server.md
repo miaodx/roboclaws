@@ -36,7 +36,13 @@ recipes run.
 Copy `.env.example` to `.env`, then fill the keys you have. Codex defaults to
 `codex-env` and requires `CODEX_BASE_URL` plus `CODEX_API_KEY`. To use mify for
 Codex, set `ROBOCLAWS_CODEX_PROVIDER=mify` explicitly with `XM_LLM_API_KEY`.
-Claude Code uses repo-local MiMo, Kimi, or mify Anthropic routes when present.
+To use MiniMax's Responses-compatible route, set
+`ROBOCLAWS_CODEX_PROVIDER=minimax` with `MM_API_KEY`; it defaults to
+`MiniMax-M3`, and `ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed` selects the
+faster text-only model. The highspeed model still emits reasoning tokens on
+the Responses route, so tiny output-token budgets can stop before assistant
+text is produced. Claude Code uses repo-local MiMo, Kimi, or mify Anthropic
+routes when present.
 
 Before long Codex runs, verify the selected endpoint:
 

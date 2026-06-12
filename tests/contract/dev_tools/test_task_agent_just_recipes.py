@@ -64,6 +64,8 @@ CODE_AGENT_ENV_VARS = (
     "CODEX_API_KEY",
     "XM_LLM_BASE_URL",
     "XM_LLM_API_KEY",
+    "MM_BASE_URL",
+    "MM_API_KEY",
 )
 
 
@@ -2411,6 +2413,78 @@ def test_coding_agent_codex_explicit_mify_profile_uses_xm_key() -> None:
     ]
 
 
+def test_coding_agent_codex_explicit_minimax_profile_uses_mm_key() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=minimax
+            MM_API_KEY=fake-mm-key
+            MM_BASE_URL=https://api.minimaxi.com/v1
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "minimax",
+        "-c",
+        'model="MiniMax-M3"',
+        "-c",
+        'model_provider="minimax"',
+        "-c",
+        'model_providers.minimax.name="minimax"',
+        "-c",
+        'model_providers.minimax.base_url="https://api.minimaxi.com/v1"',
+        "-c",
+        'model_providers.minimax.env_key="MM_API_KEY"',
+        "-c",
+        'model_providers.minimax.wire_api="responses"',
+    ]
+
+
+def test_coding_agent_minimax_model_can_select_highspeed_variant() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=minimax
+            ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed
+            MM_API_KEY=fake-mm-key
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert 'model="MiniMax-M2.7-highspeed"' in result.stdout.splitlines()
+    assert 'model_providers.minimax.wire_api="responses"' in result.stdout.splitlines()
+
+
 def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
@@ -2787,6 +2861,7 @@ def test_coding_agent_claude_simple_mode_can_be_overridden() -> None:
 def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
     helper_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
     docker_text = CODING_AGENT_DOCKER.read_text(encoding="utf-8")
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
@@ -2809,6 +2884,12 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "XM_LLM_BASE_URL" in molmo_text
     assert "XM_LLM_API_KEY" in docker_text
     assert "XM_LLM_BASE_URL" in docker_text
+    assert "MM_API_KEY" in molmo_text
+    assert "MM_BASE_URL" in molmo_text
+    assert "MM_API_KEY" in agent_text
+    assert "MM_BASE_URL" in agent_text
+    assert "MM_API_KEY" in docker_text
+    assert "MM_BASE_URL" in docker_text
     assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in docker_text
     assert "ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL" in docker_text
     assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in molmo_text
@@ -2827,6 +2908,7 @@ def test_codex_provider_smoke_requires_repo_local_endpoint() -> None:
     assert re.search(r"^codex-provider-smoke ", code_text, re.MULTILINE)
     assert "codex-env is the default" in code_text
     assert "ROBOCLAWS_CODEX_PROVIDER=mify" in code_text
+    assert "minimax with MM_API_KEY" in code_text
     assert "--sandbox read-only" in code_text
     assert "--ephemeral" in code_text
     assert "--ignore-user-config" in code_text

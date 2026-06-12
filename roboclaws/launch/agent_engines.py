@@ -26,7 +26,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
         label="Codex CLI",
         dispatch_runner="codex",
         internal_runner_class="live-agent",
-        supported_provider_profiles=("codex-env", "mify"),
+        supported_provider_profiles=("codex-env", "mify", "minimax"),
         default_provider_profile="codex-env",
         provider_env_key="ROBOCLAWS_CODEX_PROVIDER",
     ),
@@ -47,6 +47,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
         supported_provider_profiles=(
             "codex-env",
             "mify",
+            "minimax",
             "mimo-openai-chat",
             "kimi-openai-chat",
         ),

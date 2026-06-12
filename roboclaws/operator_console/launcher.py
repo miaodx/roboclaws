@@ -37,10 +37,12 @@ CODEX_PROVIDER_DEFAULT = "codex-env"
 CODEX_PROVIDER_DEFAULT_MODELS = {
     "codex-env": "gpt-5.5",
     "mify": "xiaomi/mimo-v2.5",
+    "minimax": "MiniMax-M3",
 }
 CODEX_PROVIDER_REQUIRED_ENV = {
     "codex-env": ("CODEX_BASE_URL", "CODEX_API_KEY"),
     "mify": ("XM_LLM_API_KEY",),
+    "minimax": ("MM_API_KEY",),
 }
 OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS = {
     **CODEX_PROVIDER_DEFAULT_MODELS,
@@ -586,10 +588,10 @@ def _validate_env_overrides(
         if key == "ROBOCLAWS_CODEX_PROVIDER":
             if selection.agent_engine_id == "openai-agents-sdk":
                 allowed = OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS
-                expected = "codex-env, mify, mimo-openai-chat, or kimi-openai-chat"
+                expected = "codex-env, mify, minimax, mimo-openai-chat, or kimi-openai-chat"
             else:
                 allowed = CODEX_PROVIDER_DEFAULT_MODELS
-                expected = "codex-env or mify"
+                expected = "codex-env, mify, or minimax"
             if value not in allowed:
                 raise ConsoleLaunchError(
                     f"unsupported Codex provider override: {value}; expected {expected}"
@@ -698,7 +700,9 @@ def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
             "required_env": [],
             "missing_env": [],
             "ok": False,
-            "message": f"Unsupported Codex provider {provider!r}; choose codex-env or mify.",
+            "message": (
+                f"Unsupported Codex provider {provider!r}; choose codex-env, mify, or minimax."
+            ),
         }
     model = model or CODEX_PROVIDER_DEFAULT_MODELS[provider]
     required_env = list(CODEX_PROVIDER_REQUIRED_ENV[provider])
@@ -707,8 +711,11 @@ def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
         if provider == "codex-env":
             message = (
                 "Codex provider codex-env requires CODEX_BASE_URL and CODEX_API_KEY "
-                "in repo .env. Choose mify explicitly only when using XM_LLM_API_KEY."
+                "in repo .env. Choose mify explicitly only when using XM_LLM_API_KEY, "
+                "or minimax when using MM_API_KEY."
             )
+        elif provider == "minimax":
+            message = "Codex provider minimax requires MM_API_KEY in repo .env."
         else:
             message = "Codex provider mify requires XM_LLM_API_KEY in repo .env."
     else:
@@ -741,7 +748,7 @@ def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
             "ok": False,
             "message": (
                 f"Unsupported OpenAI Agents SDK provider {provider!r}; choose "
-                "codex-env, mify, MiMo OpenAI Chat, or Kimi OpenAI Chat."
+                "codex-env, mify, MiniMax, MiMo OpenAI Chat, or Kimi OpenAI Chat."
             ),
         }
     model = model or OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS[provider]

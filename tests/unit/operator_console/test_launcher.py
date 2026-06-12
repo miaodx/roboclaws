@@ -629,8 +629,34 @@ def test_provider_gate_allows_explicit_mify_override_with_xm_key(tmp_path: Path)
     assert readiness["provider"]["provider"] == "mify"
 
 
+def test_provider_gate_allows_explicit_minimax_override_with_mm_key(tmp_path: Path) -> None:
+    readiness = route_readiness(
+        tmp_path,
+        get_route("codex-mujoco-cleanup"),
+        env={"MM_API_KEY": "key"},
+        overrides={"port": _free_port()},
+        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "minimax"},
+    )
+
+    assert readiness["can_start"] is True
+    assert readiness["provider"]["provider"] == "minimax"
+    assert readiness["provider"]["model"] == "MiniMax-M3"
+
+
 def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> None:
     route = get_route("molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels")
+
+    minimax = route_readiness(
+        tmp_path,
+        route,
+        env={"MM_API_KEY": "key"},
+        overrides={"port": _free_port()},
+        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "minimax"},
+    )
+    assert minimax["can_start"] is True
+    assert minimax["provider"]["provider"] == "minimax"
+    assert minimax["provider"]["driver"] == "openai-agents-sdk"
+    assert minimax["provider"]["model"] == "MiniMax-M3"
 
     mimo = route_readiness(
         tmp_path,

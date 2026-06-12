@@ -105,6 +105,24 @@ def test_openai_agents_sdk_accepts_chat_provider_profiles() -> None:
     assert "provider_profile=mimo-openai-chat" in plan.overrides
 
 
+@pytest.mark.parametrize("agent_engine", ["codex-cli", "openai-agents-sdk"])
+def test_responses_agent_engines_accept_minimax_provider_profile(agent_engine: str) -> None:
+    plan = resolve_surface_launch(
+        [
+            "surface=household-world",
+            "world=molmospaces/val_0",
+            "backend=mujoco",
+            "intent=cleanup",
+            f"agent_engine={agent_engine}",
+            "provider_profile=minimax",
+            "evidence_lane=world-oracle-labels",
+        ]
+    )
+
+    assert plan.provider_profile == "minimax"
+    assert "provider_profile=minimax" in plan.overrides
+
+
 def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
     with pytest.raises(LaunchError, match="provider_profile 'mimo-openai-chat' is unsupported"):
         resolve_surface_launch(

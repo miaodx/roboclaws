@@ -1664,6 +1664,28 @@ def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
             "api_key": api_key,
             "model": model,
         }
+    if provider in {"minimax", "mm"}:
+        base_url = str(
+            metadata.get("base_url")
+            or os.environ.get("MM_BASE_URL")
+            or "https://api.minimaxi.com/v1"
+        )
+        api_key = str(metadata.get("api_key") or os.environ.get("MM_API_KEY") or "")
+        model = str(
+            metadata.get("model")
+            or request.model
+            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
+            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
+            or "MiniMax-M3"
+        )
+        _require_setting("minimax", "MM_API_KEY", api_key)
+        return {
+            "provider_profile": "minimax",
+            "wire_api": "responses",
+            "base_url": base_url,
+            "api_key": api_key,
+            "model": model,
+        }
     if provider in {"mimo-openai-chat", "mimo-chat"}:
         base_url = str(
             metadata.get("base_url")
@@ -1713,7 +1735,7 @@ def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
     if provider != "codex-env":
         raise RuntimeError(
             "openai-agents-live supports provider profiles codex-env, mify, "
-            "mimo-openai-chat, and kimi-openai-chat"
+            "minimax, mimo-openai-chat, and kimi-openai-chat"
         )
 
     base_url = str(metadata.get("base_url") or os.environ.get("CODEX_BASE_URL") or "")
@@ -1775,7 +1797,14 @@ def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
     lowered = detail.lower()
     if any(item in lowered for item in ("requires codex_base_url", "requires codex_api_key")):
         return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
-    if any(item in lowered for item in ("requires xm_llm_api_key", "supports responses provider")):
+    if any(
+        item in lowered
+        for item in (
+            "requires xm_llm_api_key",
+            "requires mm_api_key",
+            "supports responses provider",
+        )
+    ):
         return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
     if any(
         item in lowered for item in ("authentication", "unauthorized", "invalid api key", "401")

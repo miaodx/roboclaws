@@ -138,6 +138,7 @@ cp .env.example .env
 # Fill CODEX_BASE_URL and CODEX_API_KEY for the default Codex codex-env route.
 # Fill MIMO_TP_KEY, KIMI_API_KEY, or XM_LLM_API_KEY for Claude Code routes.
 # Optional: set ROBOCLAWS_CODEX_PROVIDER=mify explicitly to use XM_LLM_API_KEY for Codex.
+# Optional: set ROBOCLAWS_CODEX_PROVIDER=minimax explicitly to use MM_API_KEY for Codex.
 ```
 
 Detached live Codex sessions inherit selected API keys and proxy variables
@@ -150,8 +151,14 @@ Docker-backed Codex CLI. Codex defaults to `codex-env` (`CODEX_BASE_URL` plus
 `CODEX_API_KEY`, Responses API, default model `gpt-5.5`). To use the internal
 multi-model aggregator, set `ROBOCLAWS_CODEX_PROVIDER=mify` explicitly with
 `XM_LLM_API_KEY`; that profile uses `xiaomi/mimo-v2.5` and disables web search
-because the gateway phase does not support Codex's web search tool. Hosted CI
-does not run Codex or Codex provider smoke.
+because the gateway phase does not support Codex's web search tool. To use
+MiniMax's Responses-compatible token-plan route, set
+`ROBOCLAWS_CODEX_PROVIDER=minimax` with `MM_API_KEY`; the default model is
+`MiniMax-M3`, and `ROBOCLAWS_CODEX_MODEL=MiniMax-M2.7-highspeed` selects the
+faster text-only route for agent latency tests. The highspeed model still emits
+reasoning tokens on the Responses route, so tiny output-token budgets can stop
+before assistant text is produced. Hosted CI does not run Codex or Codex
+provider smoke.
 
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 

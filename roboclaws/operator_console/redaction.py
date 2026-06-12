@@ -16,6 +16,8 @@ SECRET_ENV_KEYS = (
     "XM_LLM_API_KEY",
     "XM_LLM_BASE_URL",
     "XM_LLM_ANTHROPIC_BASE_URL",
+    "MM_API_KEY",
+    "MM_BASE_URL",
     "CODEX_BASE_URL",
 )
 

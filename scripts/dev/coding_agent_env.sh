@@ -60,6 +60,9 @@ roboclaws_code_agent_profile_default_model() {
     mify)
       printf 'xiaomi/mimo-v2.5\n'
       ;;
+    minimax)
+      printf 'MiniMax-M3\n'
+      ;;
     mimo-openai-chat|mimo-chat)
       printf 'mimo-v2.5\n'
       ;;
@@ -118,6 +121,9 @@ roboclaws_code_agent_profile_base_url() {
     mify)
       printf '%s\n' "${XM_LLM_BASE_URL:-https://api.llm.mioffice.cn/v1}"
       ;;
+    minimax)
+      printf '%s\n' "${MM_BASE_URL:-https://api.minimaxi.com/v1}"
+      ;;
     mimo-openai-chat|mimo-chat)
       printf '%s\n' "${MIMO_OPENAI_BASE_URL:-https://token-plan-cn.xiaomimimo.com/v1}"
       ;;
@@ -152,6 +158,9 @@ roboclaws_code_agent_profile_key_env() {
     mify)
       printf 'XM_LLM_API_KEY\n'
       ;;
+    minimax)
+      printf 'MM_API_KEY\n'
+      ;;
     mimo-openai-chat|mimo-chat)
       printf 'MIMO_TP_KEY\n'
       ;;
@@ -180,7 +189,7 @@ roboclaws_code_agent_profile_key_env() {
 roboclaws_code_agent_profile_wire_api() {
   local provider="$1"
   case "$provider" in
-    codex-env|mify)
+    codex-env|mify|minimax)
       printf 'responses\n'
       ;;
     mimo-openai-chat|mimo-chat|kimi-openai-chat|kimi-chat)
@@ -268,14 +277,14 @@ roboclaws_codex_provider_args() {
   out_args=()
   provider="$(roboclaws_code_agent_provider "$provider_var")" || return
   case "$provider" in
-    codex-env|mify)
+    codex-env|mify|minimax)
       ;;
     system)
-      echo "error: Codex repo workflows default to codex-env and require CODEX_BASE_URL and CODEX_API_KEY; set ROBOCLAWS_CODEX_PROVIDER=mify explicitly to use XM_LLM_API_KEY" >&2
+      echo "error: Codex repo workflows default to codex-env and require CODEX_BASE_URL and CODEX_API_KEY; set ROBOCLAWS_CODEX_PROVIDER=mify explicitly to use XM_LLM_API_KEY or minimax to use MM_API_KEY" >&2
       return 2
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected mify or codex-env" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env, mify, or minimax" >&2
       return 2
       ;;
   esac
@@ -398,10 +407,10 @@ roboclaws_assert_codex_network_allowed() {
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
   case "$provider" in
-    codex-env|mify)
+    codex-env|mify|minimax)
       ;;
     *)
-      echo "error: unsupported Codex provider '${provider}'; expected mify or codex-env" >&2
+      echo "error: unsupported Codex provider '${provider}'; expected codex-env, mify, or minimax" >&2
       return 2
       ;;
   esac
@@ -432,10 +441,10 @@ roboclaws_assert_openai_agents_network_allowed() {
   local provider
   provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)" || return
   case "$provider" in
-    codex-env|mify|mimo-openai-chat|mimo-chat|kimi-openai-chat|kimi-chat)
+    codex-env|mify|minimax|mimo-openai-chat|mimo-chat|kimi-openai-chat|kimi-chat)
       ;;
     *)
-      echo "error: unsupported OpenAI Agents SDK provider '${provider}'; expected codex-env, mify, mimo-openai-chat, or kimi-openai-chat" >&2
+      echo "error: unsupported OpenAI Agents SDK provider '${provider}'; expected codex-env, mify, minimax, mimo-openai-chat, or kimi-openai-chat" >&2
       return 2
       ;;
   esac

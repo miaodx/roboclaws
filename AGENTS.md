@@ -93,8 +93,9 @@ system-provider Claude Code workflows on the
 work network. Claude Code recipes may run there only when the repo-local `.env`
 contains a supported MiMo, Kimi, or mify Anthropic key route. Codex recipes
 default to `codex-env` and may run there when `CODEX_BASE_URL` and
-`CODEX_API_KEY` are configured; mify is available only as an explicit
-`ROBOCLAWS_CODEX_PROVIDER=mify` override with `XM_LLM_API_KEY`.
+`CODEX_API_KEY` are configured; mify and MiniMax are available only as explicit
+`ROBOCLAWS_CODEX_PROVIDER=mify|minimax` overrides with `XM_LLM_API_KEY` or
+`MM_API_KEY`.
 Model-only overrides do not bypass the guard. Guarded coding-agent recipes
 should fail before launching when the work-network probe is reachable and no
 allowed repo-local key route is available.
@@ -160,12 +161,14 @@ set -a && source .env && set +a
 #   XM_LLM_ANTHROPIC_BASE_URL — optional Claude mify override; defaults to
 #                               https://api.llm.mioffice.cn/anthropic
 #   CODEX_BASE_URL / CODEX_API_KEY — default codex-env endpoint for live agents
+#   MM_BASE_URL / MM_API_KEY — optional MiniMax Responses endpoint for Codex
+#                              and OpenAI Agents SDK profile=minimax
 ```
 
 Sanity check:
 
 ```bash
-python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('XM_LLM_API_KEY') or os.environ.get('CODEX_API_KEY'), 'No provider key set — did you source .env?'"
+python -c "import os; assert os.environ.get('KIMI_API_KEY') or os.environ.get('MIMO_TP_KEY') or os.environ.get('NV_API_KEY') or os.environ.get('XM_LLM_API_KEY') or os.environ.get('CODEX_API_KEY') or os.environ.get('MM_API_KEY'), 'No provider key set — did you source .env?'"
 ```
 
 `.env` is in `.gitignore` — do not commit, do not paste into logs / PRs / SUMMARY files.
