@@ -87,10 +87,10 @@ OpenClaw workflows. Guarded recipes include OpenClaw Gateway recipes,
 verification gates. System-provider Claude Code is also blocked on the work
 network. `just code::cc`, `just harness::navigator`, and
 `just molmo::claude-report` may run there when `.env` contains a supported MiMo,
-Kimi, or mify Anthropic key route. Codex recipes may run there when
-`XM_LLM_API_KEY` configures the default mify route, or when `CODEX_BASE_URL` and
-`CODEX_API_KEY` configure an explicit non-mify Codex route. Model-only overrides
-do not bypass the guard.
+Kimi, or mify Anthropic key route. Codex recipes default to `codex-env` and may
+run there when `CODEX_BASE_URL` and `CODEX_API_KEY` are configured. The mify
+route is available only with explicit `ROBOCLAWS_CODEX_PROVIDER=mify` and
+`XM_LLM_API_KEY`. Model-only overrides do not bypass the guard.
 
 Coding-agent runtime contract: run direct Codex / Claude Code demos through
 `just code::codex` or `just code::cc`. The pinned Docker-backed coding-agent

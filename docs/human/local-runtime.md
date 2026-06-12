@@ -18,16 +18,18 @@ NV_API_KEY=          # NVIDIA NIM, optional
 
 XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1  # Internal multi-model aggregator
 XM_LLM_ANTHROPIC_BASE_URL=      # Optional Claude mify route override
-XM_LLM_API_KEY=      # Default Codex mify route
+XM_LLM_API_KEY=      # Codex mify key only with explicit ROBOCLAWS_CODEX_PROVIDER=mify
 
-CODEX_BASE_URL=      # Optional non-mify Codex Responses-compatible endpoint
-CODEX_API_KEY=       # Optional non-mify Codex endpoint key
+CODEX_BASE_URL=      # Default Codex codex-env Responses-compatible endpoint
+CODEX_API_KEY=       # Default Codex codex-env endpoint key
 ```
 
-The launch recipes infer the repo-local runtime route from those keys. Codex
-prefers the internal multi-model aggregator when `XM_LLM_API_KEY` is present
-(`mify`, `xiaomi/mimo-v2.5`, Responses API, web search disabled). Explicit
-`CODEX_BASE_URL` / `CODEX_API_KEY` remains available for non-mify debugging.
+The launch recipes infer the repo-local runtime route from explicit provider
+settings. Codex defaults to `codex-env` and requires `CODEX_BASE_URL` plus
+`CODEX_API_KEY` (`gpt-5.5`, Responses API). It does not fall back to mify when
+`XM_LLM_API_KEY` is present. To use mify, set `ROBOCLAWS_CODEX_PROVIDER=mify`
+explicitly; that profile uses `XM_LLM_API_KEY`, `xiaomi/mimo-v2.5`, Responses
+API, and web search disabled.
 Claude Code prefers a MiMo key when available, then Kimi, then the mify
 Anthropic route from `XM_LLM_API_KEY` (`mify-anthropic`,
 `xiaomi/mimo-v2.5`). It falls back to the host system provider only off the work
@@ -35,8 +37,8 @@ network.
 
 Run `just dev::network-status` before OpenClaw, Claude Code, or Codex
 workflows. On the work network, OpenClaw and system-provider Claude Code are
-blocked; repo-local `.env` Codex routes (`XM_LLM_API_KEY`, or
-`CODEX_BASE_URL` plus `CODEX_API_KEY`) and Claude `mify-anthropic` remain
+blocked; the repo-local Codex `codex-env` route (`CODEX_BASE_URL` plus
+`CODEX_API_KEY`), explicit Codex mify override, and Claude `mify-anthropic` remain
 allowed. Work-network restrictions are documented in
 [`AGENTS.md`](../../AGENTS.md).
 

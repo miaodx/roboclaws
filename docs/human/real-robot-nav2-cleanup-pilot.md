@@ -103,8 +103,8 @@ just task::run household-cleanup direct evidence_lane=world-oracle-labels seed=7
 ```
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
-`XM_LLM_API_KEY` in the repo-local `.env` to use the default internal mify route
-(`xiaomi/mimo-v2.5`, Responses API), then run:
+`CODEX_BASE_URL` and `CODEX_API_KEY` in the repo-local `.env` for the default
+`codex-env` route, then run:
 
 ```bash
 just task::run household-cleanup codex evidence_lane=world-oracle-labels seed=7 generated_mess_count=10

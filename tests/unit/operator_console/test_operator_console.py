@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import subprocess
+import threading
+import urllib.request
+from functools import partial
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -20,10 +25,22 @@ from roboclaws.operator_console.routes import (
     list_console_routes,
     validate_supported_routes_against_catalog,
 )
+from roboclaws.operator_console.server import ConsoleRequestHandler
 from roboclaws.operator_console.state import (
     derive_operator_state,
     redacted_artifact_text,
 )
+
+CODEX_ENV = {
+    "CODEX_BASE_URL": "https://codex.example.test/v1",
+    "CODEX_API_KEY": "key",
+}
+
+
+def _free_port() -> str:
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        return str(listener.getsockname()[1])
 
 
 def _just_bin() -> str:
@@ -111,19 +128,19 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
 
 def test_console_readiness_enforces_locks_and_preflights(tmp_path: Path) -> None:
     route = get_route("codex-isaac-cleanup")
-    readiness = route_readiness(tmp_path, route, env={"XM_LLM_API_KEY": "key"})
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is False
     assert "Isaac preflight has not passed" in readiness["blocker"]
 
     accepted = tmp_path / "output" / "isaaclab" / "runtime-preflight-accepted.json"
     accepted.parent.mkdir(parents=True)
     accepted.write_text("{}", encoding="utf-8")
-    readiness = route_readiness(tmp_path, route, env={"XM_LLM_API_KEY": "key"})
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is True
 
     lock = ResourceLock(tmp_path, route.lock_name)
     lock.acquire(run_id="active", pid=os.getpid())
-    readiness = route_readiness(tmp_path, route, env={"XM_LLM_API_KEY": "key"})
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
     assert readiness["can_start"] is False
     assert "Backend lock is held" in readiness["blocker"]
 
@@ -221,3 +238,22 @@ def test_just_console_run_recipe_is_public() -> None:
     )
     summary = set(result.stdout.split())
     assert "console::run" in summary
+
+
+def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        with urllib.request.urlopen(f"http://{host}:{port}/styles.css") as response:
+            assert response.headers["Cache-Control"] == "no-store, max-age=0"
+            assert response.headers["Content-Type"] == "text/css; charset=utf-8"
+        request = urllib.request.Request(f"http://{host}:{port}/styles.css", method="HEAD")
+        with urllib.request.urlopen(request) as response:
+            assert response.headers["Cache-Control"] == "no-store, max-age=0"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
