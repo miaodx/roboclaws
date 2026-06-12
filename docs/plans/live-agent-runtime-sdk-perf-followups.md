@@ -126,6 +126,23 @@ summaries record aggregate retained/evicted image counts and byte deltas only.
 This is deterministic model-facing prep only; no cleanup-pass or speed claim is
 made.
 
+2026-06-12 Candidate P/AA live gate update: a scoped raw-FPV live attempt is
+recorded in `docs/status/active/agent-sdk-raw-fpv-live-caps.json`. The initial
+`mify` Responses route was blocked before launch because `camera-raw-fpv`
+requires verified image transport and the provider registry marks
+`openai-agents-sdk+mify` `image_transport=unknown`. The verified
+`openai-agents-sdk+codex-env` route was then tried twice at
+`output/agent-sdk-perf-followups/raw-fpv-budgeted-codex/0612_1512/seed-7/`
+and
+`output/agent-sdk-perf-followups/raw-fpv-budgeted-codex-retry/0612_1514/seed-7/`.
+Both attempts failed before task work with classified
+`provider_transient_failure` / `upstream_unavailable` after the model-service
+retry path. The attempts prove the raw-FPV route gates and telemetry are
+working, but produce no raw-FPV behavior, cleanup-pass, image-memory, repeated
+failure, or speed evidence. Do not bypass the raw-FPV image-transport guard;
+retry P/AA only after `codex-env` upstream availability recovers or another
+OpenAI Agents SDK provider has verified `image_transport=supported`.
+
 2026-06-12 live row update: the first resumed provider-backed pass satisfied
 the no-provider Group 0 dry-run/offline preflight, recorded `network: work`
 with repo-local `codex-env` / `mify` routes allowed, confirmed provider
@@ -193,6 +210,129 @@ remaining proof is a tightly scoped provider-backed rerun that confirms the
 trace contains `observe_camera_grounded_candidates` requests before making any
 speed claim.
 
+2026-06-12 Candidate O live retry update: the scoped `mify` Responses
+camera-grounded promptfix2 retry completed at
+`output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-promptfix2/0612_1126/seed-7/`.
+The live runner originally exited nonzero only because the checker had a stale
+public-agent-view provenance allowlist; `run_result.json` and `report.html`
+were already written. The checker now accepts the public
+`camera-grounded-labels` producer/model provenance only inside the
+camera-model-policy observed-object branch, while retaining the existing
+private-field and support-estimate checks. Direct checker reruns now pass for
+both the promptfix2 artifact and the earlier `0612_1032` composite diagnostic
+artifact. The promptfix2 trace exercises the shortcut with
+5 `observe_camera_grounded_candidates` requests, plus 16
+`declare_visual_candidates` requests and 19 underlying `observe` requests from
+the composite tool's trace-preserving substeps. Shared report-performance
+comparison against the `0612_1012` baseline is accepted diagnostically with
+same recorded quality (`completion_status=success`, `restored_count=4/5`,
+`sweep_coverage_rate=1.0`, `disturbance_count=0`), `-303.142s` observed wall,
+`-319.020s` observed model API time, and `+50586` uncached input tokens. Treat
+this as a valid Candidate O mechanism/diagnostic speed row, not a normalized
+or publishable speed claim.
+
+2026-06-12 Q/Y promptfix2 refresh update: the zero-provider live-refresh
+manifest now includes the O promptfix2 retry and the decision packet classifies
+camera-grounded declaration work into composite-internal versus standalone
+requests. This avoids treating trace-preserving composite substeps as leftover
+two-step agent work. The refreshed packet accepts both completed live rows and
+records promptfix2 as 5 `observe_camera_grounded_candidates` requests, 16 total
+`declare_visual_candidates` requests, 5 composite-internal declarations, and 11
+standalone declarations. Because standalone declarations remain, Q/Y still
+recommends residual O work for camera-grounded, but the stronger normalized
+latency priority is now: (1) direct wall-clock visual capture reduction F,
+(2) N/I/AB live A/B for model/SDK between-tool gap and repeated map/state
+payloads, and (3) O paired repeats or prompt/tool tightening for the remaining
+standalone two-step calls. Token deltas are diagnostic context only and are not
+a deciding cost metric for this plan.
+
+2026-06-12 Candidate F live A/B update: the scoped `mify` Responses
+`world-public-labels` action-timeline run completed at
+`output/agent-sdk-perf-followups/mify-world-public-mimo-compact-action-timeline/0612_1303/seed-7/`
+and is compared against
+`output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`
+in
+`output/agent-sdk-perf-followups/mify-world-public-action-timeline-comparison-diagnostic.json`.
+The mechanism worked locally: `robot_view_capture_s` dropped from `93.256s` to
+`54.975s`. The row is still rejected as a speed win because behavior quality
+regressed (`restored_count=4/5` to `3/5`, `completion_status=success` to
+`partial_success`) and end-to-end time got worse (`+181.786s` observed wall,
+`+216.535s` observed model API, `+212.509s` model/SDK between-tool gap). Q/Y now
+keeps this as an expected-rejected evidence row instead of a pending F run.
+Given the maintainer clarification that token cost is not a decision objective,
+token deltas remain telemetry only; prioritize wall-clock and normalized or
+paired-comparable latency. At that point this moved the next high-leverage work toward
+N/I/AB live A/B against the dominant model/SDK between-tool gap and toward D/C
+racing prep before any C live racing experiment, rather than another standalone
+F row.
+
+2026-06-12 Candidate I/N/AB live A/B update: the scoped `mify` Responses
+`world-public-labels` input-compaction run completed as an expected-rejected
+evidence row at
+`output/agent-sdk-perf-followups/mify-world-public-mimo-compact-input-compaction/0612_1327/seed-7/`,
+compared against
+`output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`
+in
+`output/agent-sdk-perf-followups/mify-world-public-input-compaction-comparison-diagnostic.json`.
+The model-input filter mechanism worked: `model_input_filter_metrics` reports
+`input_bytes_before=71186480`, `input_bytes_after=4316462`,
+`input_byte_reduction_ratio=0.939364`, `metric_map_output_count=292`, and
+`repeated_metric_map_output_count=208`. Model work also dropped substantially
+(`max_input_tokens=118979` to `25152`, uncached input tokens `197838` to
+`63045`). The row is rejected because it failed to call `done` after two SDK
+invocations, has no `run_result.json`, raised failed/noop tool count to `31`,
+and got slower (`+62.627s` observed wall, `+102.956s` observed model API,
+`+102.04s` model/SDK between-tool gap). Since token cost is not a decision
+objective, this proves compaction mechanics but argues against accepting the
+current I/N/AB policy as a wall-clock improvement.
+
+2026-06-12 Candidate D deterministic prep update: the private SDK model
+boundary now records per-arm racing observability before enabling Candidate C.
+Each SDK model request writes sanitized `model_racing_arm_start`,
+`model_racing_arm_finish`, and failure events with a stable call/arm id,
+provider profile, wire API, model id, elapsed time, winner/cancel flags,
+failure class, usage/token availability, and loser-billing-unknown fields. The
+current implementation is single-arm/no-racing (`racing_enabled=false`,
+`racing_multiplier=1.0`) and does not change the default model call path,
+public MCP/profile behavior, or cleanup success gates. `live_timing.json` now
+summarizes the events as
+`model_racing_observability_metrics` under timeline latency attribution. This
+was deterministic observability prep only at this point in the log; the later C
+live row is recorded below.
+
+2026-06-12 Candidate C deterministic prep update: the private SDK model
+boundary now has an opt-in `get_response` racing arm through
+`--model-racing` / `ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING`, with
+`--model-racing-arm-count` / `ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT`
+as the live-run cap surface. Defaults remain single-arm/no-racing. When enabled,
+each SDK `get_response` request launches the configured number of same-provider
+arms, returns the first successful SDK model response to the OpenAI Agents SDK
+history, cancels pending losers, and records sanitized winner/loser/cancel
+events through the Candidate D telemetry surface. `stream_response` is
+explicitly kept single-arm and is labeled as such in racing metrics. Focused
+unit tests cover winner selection, loser cancellation, all-arm failure, stream
+non-racing behavior, and prompt/privacy redaction. This is deterministic C prep
+only; no provider-backed C live row or wall-clock speed claim is made.
+
+2026-06-12 Candidate C live A/B update: the scoped `mify` Responses
+`world-public-labels` racing pair completed at
+`output/agent-sdk-perf-followups/c-racing-baseline/0612_1429/seed-7/`
+and
+`output/agent-sdk-perf-followups/c-racing-candidate/0612_1448/seed-7/`,
+with caps recorded in
+`docs/status/active/agent-sdk-c-racing-live-caps.json` and comparison
+`output/agent-sdk-perf-followups/c-racing-comparison-diagnostic.json`.
+The mechanism worked: candidate `live_timing.json` records
+`racing_enabled=true`, `racing_multiplier=2.0`, 53 raced model calls, 106
+arms, 76 winners, and 75 cancelled loser arms with sanitized D telemetry. The
+row is rejected as a speed win because behavior quality regressed
+(`completion_status=success` to `partial_success`, `restored_count=4` to `3`)
+even though observed wall time improved by `-260.987s` and
+`mcp_between_tool_gap_s` improved by `-247.174s`. Observed model API time rose
+by `+397.292s`, as expected for two-arm racing work, and token/cost telemetry
+remains non-decisive under the current priority. Q/Y refresh now records C as
+expected-rejected evidence rather than a pending live arm.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -242,23 +382,33 @@ speed claim.
   dominant buckets, failed/noop counts, and candidate recommendations, while the
   decision packet summary aggregates candidate and candidate-group rankings
   without adding provider calls or raw payload persistence.
-- Q/Y has also been refreshed against the first completed live Responses pair
-  through `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`.
-  This is an offline/no-provider packet over existing run artifacts, not a new
-  live row. It accepted the completed `mify` world-public diagnostic comparison
-  and points the next live arm toward lane-specific camera/visual reductions
-  after the current backend slot is free.
+- Q/Y has also been refreshed against completed live Responses pairs through
+  `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`. This is an
+  offline/no-provider packet over existing run artifacts, not a new live row.
+  It accepted the completed `mify` world-public diagnostic comparison plus the
+  camera-grounded O promptfix2 mechanism row, records composite-internal versus
+  standalone camera declarations, and points the next work toward wall-clock
+  visual capture reduction, N/I/AB model-facing compaction A/B, and residual O
+  tightening/repeats rather than token-cost-only work.
 - Candidate N deterministic prep is implemented inside the existing opt-in SDK
   model-input compaction arm. Repeated `metric_map` outputs are summarized only
   in model-facing SDK input, only when smaller than the original, and only with
   hash/size/count metadata; complete MCP trace/report artifacts remain
   unchanged.
+- Candidate F deterministic prep is implemented as an SDK-private
+  `robot_view_capture_policy=action_timeline` arm. The cleanup server can skip
+  report-only `observe` / `scene_objects` robot-view captures while preserving
+  before/after views, cleanup action views, raw-FPV observe artifact capture,
+  traces, and reports. The OpenAI Agents live runner records the policy in
+  `agent_sdk_perf_profile` and forwards it to the private cleanup server only
+  when explicitly requested. No live speed claim is made.
 
 ## Not Done
 
 - Full live GPT/MiMo x evidence-lane matrix.
-- Follow-up optimization groups 1-5 beyond Candidates A, G/J, and deterministic
-  I/AB prep.
+- Follow-up optimization groups 1-5 beyond accepted deterministic prep and
+  diagnostic rows still need live A/B, repeats, baseline refresh, or promotion
+  guards before any normalized/publishable speed claim.
 - Provider-backed Responses-native A/B evaluation for server-managed
   continuation, conversation/session state, prompt-cache retention, and
   model-input compaction.
@@ -342,32 +492,75 @@ Use this queue unless fresh evidence changes it:
 4. Candidate G/J deterministic settings and cache attribution is accepted; live
    A/B for speed is authorized and should run when credentials/backend access
    and recorded caps are available.
-5. Candidate I/AB deterministic prep is accepted; provider-backed Responses
-   compaction/session/continuation A/B is authorized and should run when
-   credentials/backend access and recorded caps are available.
+5. Candidate I/AB deterministic prep is accepted, and one `mify`
+   `world-public-labels` input-compaction live row has completed. The row proves
+   model-facing byte/token compaction but is rejected for wall-clock and cleanup
+   behavior. Further I/N/AB work should change the compaction policy or
+   continuation/session behavior before another live row.
 6. Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
-   been refreshed from the first completed `mify` live Responses pair. Refresh
-   again whenever new live rows or candidate arms change the packet.
+   been refreshed from the completed `mify` world-public pair, O promptfix2
+   camera-grounded mechanism row, and the expected-rejected F action-timeline
+   row. Refresh again whenever new live rows or candidate arms change the
+   packet.
 7. Candidate N deterministic prep is accepted inside the opt-in model-input
-   compaction arm; live A/B is authorized and should run when credentials/backend
-   access and recorded caps are available.
+   compaction arm. The first live I/N row proved compaction events and repeated
+   map counters, but `metric_map_bytes_reduced=0` and behavior regressed; do not
+   claim an N speedup from that row.
 8. Run scoped B live baseline refresh before any strong speed claim when
    credentials/backend access and recorded caps are available.
 9. Candidate O deterministic prep is accepted as an SDK-private opt-in MCP
    composite-tool flag for `camera-grounded-labels`. The first `mify` Responses
    live diagnostic row had same-or-better quality and faster wall time, but the
-   trace did not call `observe_camera_grounded_candidates`; do not claim a
-   composite-tool speed win from that row. Prompt/tool selection has been
-   repaired; a valid O proof still requires a provider-backed retry that
-   actually exercises the shortcut.
+   trace did not call `observe_camera_grounded_candidates`. The promptfix2
+   retry does exercise the shortcut and passes the checker after the narrow
+   camera-grounded provenance allowlist repair; classify it as a valid
+   mechanism/diagnostic speed row, not a normalized or publishable speed claim.
+   The refreshed Q/Y packet shows O is not exhausted: 11 standalone camera
+   declarations still remain after the 5 composite calls.
 10. Candidate P deterministic prep is accepted as a raw-FPV repeated visual
-    candidate failure rail; live raw-FPV tests are authorized, while cleanup-pass
-    and speed claims still require report-quality evidence.
+    candidate failure rail. A live raw-FPV gate attempt is now blocked: `mify`
+    lacks verified image transport and `codex-env` hit repeated
+    provider-transient 502 before task work. Cleanup-pass and speed claims still
+    require report-quality evidence.
 11. Candidate AA deterministic prep is accepted as raw-FPV model-facing image
-    memory inside the private SDK input filter; live raw-FPV tests are
-    authorized, while cleanup-pass and speed claims still require report-quality
-    evidence.
-12. Defer C/D/K/E/F/M/W/X unless the dependency evidence below appears.
+    memory inside the private SDK input filter. The same live raw-FPV gate
+    attempt produced no image-memory behavior evidence because provider failure
+    happened before the first task model response. Cleanup-pass and speed claims
+    still require report-quality evidence.
+12. Candidate F deterministic prep is accepted as an SDK-private
+    `robot_view_capture_policy=action_timeline` arm, and one `mify`
+    `world-public-labels` live A/B row has completed. The policy reduced
+    `robot_view_capture_s` but the row is rejected because cleanup quality
+    regressed and observed wall/model time increased. Do not claim an F speedup
+    from this row; only revisit F as a paired/repeated or lane-specific follow-up
+    after higher-leverage model/SDK-gap work.
+13. Because token cost is not a deciding objective, D/C racing is no longer
+    deferred mainly on cost. Candidate D deterministic observability prep is now
+    implemented as a single-arm/no-racing event and timing surface. Candidate C
+    deterministic prep is implemented behind explicit opt-in flags and live cap
+    fields, and one capped `mify` Responses `world-public-labels` live A/B has
+    completed. The mechanism reduced observed wall time but regressed cleanup
+    quality, so C is now expected-rejected evidence rather than an accepted
+    speed win. Do not rerun the same racing policy unchanged; next wall-clock
+    work should either preserve behavior in a redesigned compaction/session
+    arm, gather O paired/tightening evidence, retry raw-FPV P/AA only after the
+    provider/image-transport block clears, or broaden B baseline coverage.
+    Still defer K/E/M/X unless the dependency evidence below appears.
+
+Current wall-clock priority after the C and raw-FPV updates:
+
+1. O paired repeats or prompt/tool tightening for `camera-grounded-labels`,
+   because O is the only live mechanism row that preserved recorded quality and
+   reduced wall/model time, but it still needs paired/repeated evidence before a
+   normalized or publishable claim.
+2. Behavior-preserving compaction/session redesign, not a rerun of the rejected
+   I/N/AB policy. Any new row must preserve `done`, report-quality evidence,
+   and task-state semantics while attacking the dominant model/SDK
+   between-tool gap.
+3. Scoped B baseline coverage across provider/model, `wire_api`, and evidence
+   lanes before broad speed claims.
+4. Raw-FPV P/AA live retry only after `codex-env` upstream availability recovers
+   or another OpenAI Agents SDK route has verified image transport.
 
 Do not spend more time on standalone Group 0 unless a new candidate changes the
 manifest, artifact schema, budget gate, privacy gate, comparator, or decision
@@ -396,7 +589,7 @@ decision-ready. Expected direct speedup is none.
 | T | gate, mostly done | Run offline replay/fake-provider preflight. | Paid live runs should not discover schema failures. | Every live candidate has a no-provider preflight result. | Stop before live when replay, fake-provider, or schema checks fail. |
 | U | gate, mostly done | Run artifact privacy/schema gates. | More telemetry must not leak prompts, model text, tool bodies, secrets, or private truth. | Forbidden keys/content fail; allowed aggregate fields pass. | Block publication and live continuation on privacy failure. |
 | V | gate | Gate live cost, time, concurrency, context, and racing multiplier. | Matrices and racing can burn budget and backend time. | Dry-run prints max runs, wall-clock, turn/context caps, concurrency, and multiplier. | Refuse live execution without acknowledged caps. |
-| W | defer | Add repeatability policy for publishable claims. | One live run can be lucky. | Winner rows can be repeated or paired; single-run rows are labeled diagnostic. | Do not require repeats for first diagnostic pass; repeat only winners. |
+| W | keep-for-normalized-claims | Add repeatability policy for publishable or normalized claims. | One live run can be lucky, and the current target is wall-clock plus normalized or paired-comparable latency rather than token cost. | Winner rows can be repeated or paired; single-run rows are labeled diagnostic. | Do not require repeats for first diagnostic pass; require paired/repeated evidence before normalized or publishable speed claims. |
 | Y | accepted-deterministic-enrichment, live rows authorized | Generate decision packet/dashboard from shared performance packets. | Reviewers need one closeout artifact, but the metrics source should be canonical. | Implemented for Group 0: packet records accepted/rejected/inconclusive/blocked/unsupported rows plus aggregate recommendation summary, top candidate ids/groups, dominant bucket counts, and artifact links. Live rows are authorized under the standing run authorization and need packet refresh after execution. | Missing decision data means inconclusive, not accepted; extend only when new live rows, candidate arms, or dashboard outputs need it. |
 | B | keep | Refresh live provider/model x evidence-lane baseline matrix with `wire_api` as an axis. | GPT/MiMo, Responses/Chat routes, and evidence lanes differ materially; anecdotes are insufficient. | Responses rows cover `codex-env`/`mify`; Chat-compatible rows cover `mimo-openai-chat`/`kimi-openai-chat` only when supported; unsupported rows are labeled. | Live rows are authorized by this plan when credentials/backend access and recorded caps are available; do not expand into Claude SDK integration. |
 | Z | gate, mostly done | Use shared report-performance comparison for quality and timing guardrails. | Faster can still mean worse cleanup. | Rows include shared quality fields plus wall, model/API, provider HTTP, context, call-count, and residual timing fields where available. | Reject faster-but-worse unless explicitly waived; missing telemetry is unavailable, not zero. |
@@ -413,7 +606,7 @@ without changing default MCP/profile behavior.
 | G | accepted-deterministic, live A/B authorized | Expose explicit SDK `ModelSettings` / `RunConfig` performance profiles. | Current runtime relies too much on provider defaults while turns/context remain high. | Implemented: runtime applies explicit SDK settings, disables sensitive trace data in run config, and records sanitized settings in timing/events. Live A/B speed proof is authorized but still requires baseline/candidate evidence. | Continue to AB/I deterministic prep or live A/B when credentials/backend access and recorded caps are available. |
 | J | accepted with G for attribution | Record prompt-cache retention and stable-prefix evidence. | Cache behavior can explain or hide speed wins, and some cache levers are Responses-specific. | Implemented: timing/cache summaries carry prompt-cache retention policy and stable-prefix hash; cached vs uncached usage remains unavailable unless span usage exists. | Do not claim cache speedup when usage is unavailable, provider is Chat-only, or prefix changes are untracked. |
 | H | bypass-for-now | Use SDK-native session/Responses continuation instead of prompt replay. | Prompt replay can grow context, but compact continuation already fixed the immediate replay issue. | Only reconsider if Q shows continuation replay remains a top context source. | Do not run as next pass; stop if continuation changes task state or hides failure state. |
-| I | accepted-deterministic-prep, live A/B authorized | Add SDK `call_model_input_filter` or equivalent state compaction. | Repeated public tool state is a likely context driver after kickoff compaction. | Implemented: replay/fake-provider proof shows oversized public tool outputs and repeated metric maps can be compacted in model-facing input while reports and traces remain complete. | Stop on missing public state, private truth leak, report evidence loss, checker regression, missing credentials/backend, or failed run caps/privacy gates. |
+| I | accepted-deterministic-prep, live row rejected | Add SDK `call_model_input_filter` or equivalent state compaction. | Repeated public tool state is a likely context driver after kickoff compaction. | Implemented: replay/fake-provider proof shows oversized public tool outputs and repeated metric maps can be compacted in model-facing input while reports and traces remain complete. The first `mify` world-public live row reduced model-facing input bytes by `93.9364%` and uncached input tokens by `134793`, but failed to call `done`, raised failed/noop tool count, and got slower, so the current policy is rejected as a speed win. | Do not rerun the same policy unchanged. Next I work needs a behavior-preserving compaction/session change or a tighter gate that keeps `done`, report-quality evidence, and task-state semantics intact while reducing model/SDK latency. |
 | L | merge into Q/Y | Audit non-tool responses and turn-count waste. | 72-78 model turns suggests avoidable text-only or deferred-action turns. | Q/Y records non-tool, deferred, noop, and turn-waste counts. | Create a separate fix arm only if waste is material. |
 | AB | keep, Responses-only | Add a Responses-native feature audit and A/B arm before broad protocol fallback work. | The SDK route now has both Responses and Chat-compatible directions; speed claims must not mix them. | Decision packet records `wire_api=responses`, enabled Responses-only levers, and shared performance deltas for server-managed continuation/session state, prompt-cache retention/stable prefixes, or related SDK settings. | Stop if provider is Chat-only, SDK state hides MCP-visible task state, artifacts lose trace/report completeness, or privacy gates require raw prompt/tool payload persistence. Chat support is compatibility work unless its own metrics prove speed. |
 
@@ -424,10 +617,10 @@ remaining waste. Keep changes SDK-private or opt-in until X passes.
 
 | ID | Queue | Do | Why | Success | Stop / next |
 | --- | --- | --- | --- | --- | --- |
-| O | accepted-deterministic-prep, live diagnostic inconclusive, prompt-selection repaired | Collapse deterministic `camera-grounded-labels` observe/label two-step work. | This lane may spend time on deterministic plumbing that can be represented more directly. | Implemented as private opt-in `observe_camera_grounded_candidates`: default public MCP/profile tools stay unchanged, the tool exists only behind `--agent-sdk-camera-grounded-composite-tools`, and deterministic tests prove it returns the existing observe payload plus compact `declare_visual_candidates` output while preserving sub-tool trace events. The first `mify` Responses live diagnostic row kept same-or-better quality and faster observed wall time, but it did not exercise the shortcut: 0 `observe_camera_grounded_candidates`, 19 `observe`, and 19 `declare_visual_candidates` requests. The compact private prompt now prefers the shortcut when the O flag is enabled. | Do not claim a Candidate O speed win until a provider-backed row actually calls the shortcut. Next step is a tightly scoped O retry; stop if evidence semantics blur into raw-FPV, grounding detail is lost, or the tool is promoted beyond SDK-private/opt-in behavior without X. |
+| O | accepted-deterministic-prep, live diagnostic mechanism row accepted | Collapse deterministic `camera-grounded-labels` observe/label two-step work. | This lane may spend time on deterministic plumbing that can be represented more directly. | Implemented as private opt-in `observe_camera_grounded_candidates`: default public MCP/profile tools stay unchanged, the tool exists only behind `--agent-sdk-camera-grounded-composite-tools`, and deterministic tests prove it returns the existing observe payload plus compact `declare_visual_candidates` output while preserving sub-tool trace events. The first `mify` Responses live diagnostic row kept same-or-better quality and faster observed wall time, but did not exercise the shortcut. The promptfix2 retry did exercise it: 5 `observe_camera_grounded_candidates`, 16 `declare_visual_candidates`, and 19 underlying `observe` substep requests, with same recorded quality and an accepted diagnostic comparison (`-303.142s` wall, `-319.020s` model API, `+50586` uncached input tokens). Direct checker reruns pass for both composite artifacts after the narrow camera-grounded provenance allowlist repair. | Keep O SDK-private/opt-in. Treat promptfix2 as a valid mechanism/diagnostic speed row, not a normalized or publishable speed claim. Next recommended work is paired/repeated O evidence or prompt/tool tightening for the 11 remaining standalone camera declarations; stop if evidence semantics blur into raw-FPV, grounding detail is lost, or the tool is promoted beyond SDK-private/opt-in behavior without X. |
 | M | defer | Prune irrelevant tools by evidence lane. | Smaller tool surfaces can reduce choice noise, but broad pruning can break valid actions. | Lane-local allowlist keeps all legitimate cleanup actions available. | Try only if Q shows tool-choice noise after G/I/O; keep SDK-private or opt-in. |
-| N | accepted-deterministic-prep, live A/B authorized | Add repeated `metric_map` delta contract. | Re-sending static map state can inflate context. | Implemented in the opt-in SDK model-input filter: first map remains full, repeated maps can become hash/size/count summaries only when smaller, and full map responses remain in traces/reports. | Live A/B is authorized; promote no public/default behavior without X cross-client proof. |
-| F | defer | Reduce or reuse report-only visual capture. | Visual capture can be a real wall-clock bucket independent of model speed. | A/B lowers `robot_view_capture_s` while report reviewability and checker results remain intact. | Bypass unless Q shows visual capture is a top remaining cost. |
+| N | accepted-deterministic-prep, live row rejected | Add repeated `metric_map` delta contract. | Re-sending static map state can inflate context. | Implemented in the opt-in SDK model-input filter: first map remains full, repeated maps can become hash/size/count summaries only when smaller, and full map responses remain in traces/reports. The first live compaction row recorded `metric_map_output_count=292` and `repeated_metric_map_output_count=208`, but `metric_map_bytes_reduced=0` and cleanup behavior regressed. | Do not claim an N speedup. Revisit only if the repeated-map summary can actually reduce map bytes and preserve cleanup behavior, or after D/C clarifies provider tail latency. |
+| F | accepted-deterministic-prep, live row rejected | Reduce or reuse report-only visual capture. | Visual capture is a material wall-clock bucket independent of model speed: live-refresh rows show `93.256s`/`28.81%` for world-public and `156.962s`/`18.37%` for camera-grounded. | Implemented as private opt-in `robot_view_capture_policy=action_timeline`: default `full` behavior is unchanged; the policy skips report-only `observe` / `scene_objects` robot-view captures while preserving before/after views, cleanup action views, raw-FPV observe artifact capture, traces, and reports. Focused server and live-runner tests prove the policy and flag forwarding. The completed `mify` world-public live row reduced `robot_view_capture_s` from `93.256s` to `54.975s`, but quality regressed from `4/5` restored to `3/5` and wall/model time increased by `+181.786s`/`+216.535s`, so the row is rejected as a speed win. | Keep SDK-private/opt-in. Do not rerun F as the next standalone arm; only revisit with paired/repeated evidence or a lane where same-or-better quality is preserved. |
 
 ### Group 3: Raw-FPV Stabilization
 
@@ -436,8 +629,8 @@ racing, or attempting cleanup-pass claims.
 
 | ID | Queue | Do | Why | Success | Stop / next |
 | --- | --- | --- | --- | --- | --- |
-| P | accepted-deterministic-prep, raw-FPV live tests authorized | Add raw-FPV visual-candidate failure rails. | Raw-FPV repeats unresolved visual searches and needs actionable terminal reasons. | Implemented: `raw_fpv_repeated_failure_limit` classifies repeated compact visual-candidate failure fingerprints as `raw_fpv_repeated_candidate_failure`, records aggregate terminal details in timing/latency attribution, and preserves raw prompt/tool-payload privacy. | Live raw-FPV tests are authorized; cleanup-pass or speed claims still require report-quality evidence. Continue to AA only when image-memory policy is the next raw-FPV focus. Stop on unclassified provider failure, context breach, or pressure to persist full image/tool payloads. |
-| AA | accepted-deterministic-prep, raw-FPV live tests authorized | Add raw-FPV image-memory and multiresolution policy. | Replaying stale full-frame images consumes context without improving cleanup. | Implemented as private SDK model-facing image memory: `raw_fpv_budgeted_v1` keeps the latest full raw-FPV frame, summarizes older image blocks only when smaller, and records aggregate retained/evicted counts plus byte deltas while MCP/report artifacts remain complete. Multiresolution thumbnails/crops remain future work if live evidence shows they are needed. | Live raw-FPV tests are authorized; cleanup-pass or speed claims still require report-quality evidence. Stop if raw-FPV is relabeled as camera-grounded evidence, visual proof disappears, or summaries need raw image bytes/tool payload bodies in persisted events. |
+| P | accepted-deterministic-prep, live blocked | Add raw-FPV visual-candidate failure rails. | Raw-FPV repeats unresolved visual searches and needs actionable terminal reasons. | Implemented: `raw_fpv_repeated_failure_limit` classifies repeated compact visual-candidate failure fingerprints as `raw_fpv_repeated_candidate_failure`, records aggregate terminal details in timing/latency attribution, and preserves raw prompt/tool-payload privacy. The first live gate attempt is blocked before raw-FPV behavior evidence: `mify` has unverified image transport and two `codex-env` attempts failed with `provider_transient_failure` / `upstream_unavailable` before task work. | Retry only after `codex-env` upstream availability recovers or another OpenAI Agents SDK provider has verified image transport. Cleanup-pass or speed claims still require report-quality evidence. Stop on unclassified provider failure, context breach, or pressure to persist full image/tool payloads. |
+| AA | accepted-deterministic-prep, live blocked | Add raw-FPV image-memory and multiresolution policy. | Replaying stale full-frame images consumes context without improving cleanup. | Implemented as private SDK model-facing image memory: `raw_fpv_budgeted_v1` keeps the latest full raw-FPV frame, summarizes older image blocks only when smaller, and records aggregate retained/evicted counts plus byte deltas while MCP/report artifacts remain complete. The first live gate attempt produced no image-memory behavior evidence because provider failure occurred before raw-FPV observations. Multiresolution thumbnails/crops remain future work if live evidence shows they are needed. | Retry only after a verified-image-transport provider can complete task work. Cleanup-pass or speed claims still require report-quality evidence. Stop if raw-FPV is relabeled as camera-grounded evidence, visual proof disappears, or summaries need raw image bytes/tool payload bodies in persisted events. |
 
 ### Group 4: Expensive Orchestration
 
@@ -446,8 +639,8 @@ latency target is worth the extra cost and risk.
 
 | ID | Queue | Do | Why | Success | Stop / next |
 | --- | --- | --- | --- | --- | --- |
-| D | merge into C prerequisite | Add per-arm racing cache/cost observability. | Racing can look faster while hiding loser-arm billable work. | Timing records arm start/finish/cancel, winner, usage availability, token/cache fields, and unknown loser billing. | Do D only immediately before/with C. |
-| C | defer | Race individual SDK model calls. | The bottleneck may be per-call provider tail latency, not whole-run orchestration. | First schema-valid/MCP-legal response wins; only winner enters history; losers are cancelled/recorded. | Do not run until D exists, Q proves tail latency dominates, run caps cover the racing multiplier, and label lanes are scoped. |
+| D | accepted-deterministic-prep, C prerequisite | Add per-arm racing observability. | Racing can look faster while hiding loser-arm work; even when token cost is not a decision objective, normalized wall-clock claims need winner/loser timing and cancellation evidence. | Implemented: each SDK model call records sanitized lifecycle events, stable call/arm ids, elapsed time, winner/cancel flags, failure class, provider/model/wire axes, aggregate token usage availability, loser-billing-unknown fields, and aggregate `model_racing_observability_metrics` in `live_timing.json` latency attribution. Single-arm/no-racing remains the default. | Keep D events mandatory for any C row. |
+| C | accepted-deterministic-prep, live row rejected | Race individual SDK `get_response` model calls. | The dominant bucket is still model/SDK between-tool gap, and token cost is not a deciding objective, so provider tail-latency racing is a plausible wall-clock arm once attribution exists. | Implemented behind `--model-racing` / `ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING`, default off. First successful SDK model response wins and enters history; pending losers are cancelled/recorded; all-arm failure preserves retry/failure semantics; `stream_response` remains single-arm. The scoped `mify` Responses live row proves the racing mechanism and D telemetry, but rejects the current policy as a speed win because cleanup quality regressed (`4/5` restored to `3/5`) despite observed wall improvement (`-260.987s`). | Do not rerun the same C policy unchanged. Revisit only with behavior-preserving controls, paired/repeated evidence that restores same-or-better quality, or a narrower lane where racing does not change cleanup behavior. |
 | K | bypass-for-now | Audit parallel tool-call policy. | Robot actions are stateful and serial; parallelism is risky. | Policy distinguishes safe read-only tools from stateful actions. | Revisit only for read-only tools if G exposes provider parallelism benefit. |
 | E | bypass-for-now | Consider broad agent-visible state delta/compaction. | E is an umbrella for I/N/AA and risks public contract drift. | SDK-private or opt-in deltas reduce repeated state while preserving complete trace/report evidence. | Use I, N, and AA first; revive E only if concrete arms are insufficient. |
 
@@ -516,13 +709,16 @@ Each candidate arm writes one decision row:
 | --- | --- | --- | --- | --- | --- | --- |
 | A | `openai-agents-live`, provider/evidence lane agnostic deterministic proof | `agent_sdk_skill_context=canonical_skill_markdown`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `roboclaws/agents/live_runtime.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted | Deterministic proof shows the SDK route receives the canonical skill text, artifact discovery includes `openai-agents-skill-context.json`, and persisted timing/event/artifact summaries omit the skill body and raw prompt/tool payloads. No speed claim is made from this row. | G/J settings and cache attribution, then AB only for `wire_api=responses` rows. |
 | G,J | `openai-agents-live`, provider/evidence lane agnostic deterministic settings attribution | `sdk_model_settings`, `sdk_run_config`, `prompt_cache_retention`, `stable_prefix_hash`; no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic, live A/B authorized | Deterministic proof shows explicit SDK model/run settings are constructed and passed into Agent/Runner, sanitized runtime events expose those settings, cache summaries record retention and stable-prefix hash, and missing usage remains unavailable rather than zero. No speedup claim is made without live baseline/candidate rows. | AB/I deterministic prep, then provider-backed A/B under the standing authorization once credentials/backend availability, network guard, and recorded run caps pass. |
-| I,AB | `openai-agents-live`, provider/evidence lane agnostic deterministic compaction prep plus Responses feature audit | `model_input_compaction=public_tool_result_summary_v1` opt-in, `agent_sdk_responses_features`, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic-prep, live A/B authorized | Deterministic proof shows the SDK route can install `RunConfig.call_model_input_filter`, keep the feature off by default, compact oversized public tool outputs before model calls with aggregate byte-delta events, and record Responses continuation/session capability as gated metadata. Persisted events omit raw prompts, model text, tool payload bodies, credentials, and private truth. No speedup claim is made without live baseline/candidate rows. | N deterministic prep inside the same model-input filter, then B live baseline refresh and Responses/I A/B rows under the standing authorization once credentials/backend availability, network guard, and recorded run caps pass. |
-| N | `openai-agents-live`, provider/evidence lane agnostic deterministic repeated-map delta prep | `model_input_compaction=public_tool_result_summary_v1+repeated_metric_map_delta_v1` opt-in, no live provider call, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic-prep, live A/B authorized | Deterministic proof shows repeated `metric_map` outputs can be summarized in model-facing SDK input with original hash, size, map id/version/mode, waypoint counts, and runtime-object/candidate counts, only when the summary is smaller. `model_input_filter_metrics` and timeline attribution aggregate metric-map output counts and byte reductions without storing map bodies in SDK events. | Candidate O deterministic prep is now accepted; live A/B speed proof for N/O is authorized once credentials/backend availability, network guard, and recorded run caps pass. |
-| O | `openai-agents-live`, `mify` Responses `camera-grounded-labels` live diagnostic plus prompt repair | `camera_grounded_composite_tools=observe_camera_grounded_candidates` opt-in, registered only by `--agent-sdk-camera-grounded-composite-tools`, no default public MCP/profile change | Deterministic prep evidence above; live rows `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7/` and `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite/0612_1032/seed-7/`; metrics `output/agent-sdk-perf-followups/mify-camera-grounded-baseline-metrics.json` and `output/agent-sdk-perf-followups/mify-camera-grounded-composite-metrics.json`; comparison `output/agent-sdk-perf-followups/mify-camera-grounded-composite-comparison.json`; tool-count inspection `jq -r 'select(.event=="request") \| .tool' <trace.jsonl> \| sort \| uniq -c`; prompt repair in `roboclaws/agents/prompts/household_cleanup.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/contract/dev_tools/test_task_agent_just_recipes.py`, and `tests/unit/agents/test_live_runtime.py` | diagnostic, no valid O speed win yet | The candidate row had same-or-better recorded quality (`completion_status=success`, `restored_count=4/5`, `sweep_coverage_rate=1.0`) and faster observed wall/model API time (`-37.851s` wall, `-30.280s` model API), but it made 79 model calls vs 76 baseline, 78 MCP calls vs 75 baseline, and did not call the intended shortcut. The trace still has 19 `observe` and 19 `declare_visual_candidates` requests and zero `observe_camera_grounded_candidates` requests. Focused tests now prove the private compact prompt names the shortcut when the O flag is enabled. | Keep deterministic O prep, but classify current live proof as inconclusive/invalid for the composite mechanism. Next recommended work is a tightly scoped rerun that confirms the shortcut is used before making any speed claim. X remains required before any default/public promotion. |
-| P | `openai-agents-live`, `camera-raw-fpv` deterministic repeated-failure rail prep | `raw_fpv_repeated_failure_limit=3` in `raw_fpv_budgeted_v1`, optional `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT` override, no public MCP/profile change | `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `just/molmo.just`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff format --check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic-prep, raw-FPV live tests authorized | Deterministic proof shows repeated unresolved `navigate_to_visual_candidate` failures produce `raw_fpv_repeated_candidate_failure` before context-window failure, with compact fingerprint fields and aggregate terminal counts in `agent_sdk_budget_terminal` / latency attribution. Persisted detail excludes raw prompts, model text, full image-region payloads, full tool payload bodies, credentials, and private truth. | Candidate AA deterministic prep is now accepted. Any cleanup-pass or speed claim still needs credentials/backend availability, network guard, recorded run caps, and report-quality evidence. |
-| AA | `openai-agents-live`, `camera-raw-fpv` deterministic image-memory prep | `raw_fpv_image_memory_v1` in the SDK model-input filter, default enabled only by `raw_fpv_budgeted_v1`, optional `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY` and retain-count override, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `just/molmo.just`, `tests/unit/agents/test_live_runtime.py`, `tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`; `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py` | accepted-deterministic-prep, raw-FPV live tests authorized | Deterministic proof shows older raw-FPV image blocks can be summarized before SDK model calls while the latest full image remains model-visible, summaries store only observation id, sizes, hashes, and retention policy, and `model_input_filter_metrics` / timeline attribution aggregate retained/evicted counts and byte deltas. The MCP raw-FPV observe contract still returns compact state plus a full PNG image block, and report artifacts remain complete. | B live baseline refresh and any raw-FPV cleanup-pass or speed claim are authorized once credentials/backend availability, network guard, recorded run caps, and report-quality evidence exist. Multiresolution thumbnail/crop policy is parked until live evidence shows retained full-frame policy is insufficient. |
+| I,AB | `openai-agents-live`, deterministic compaction prep plus `mify` Responses `world-public-labels` live row | `model_input_compaction=public_tool_result_summary_v1+repeated_metric_map_delta_v1` opt-in, `agent_sdk_responses_features`, no public MCP/profile change | Deterministic prep evidence above; live baseline `output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`; input-compaction candidate `output/agent-sdk-perf-followups/mify-world-public-mimo-compact-input-compaction/0612_1327/seed-7/`; comparison `output/agent-sdk-perf-followups/mify-world-public-input-compaction-comparison-diagnostic.json`; refresh row `mify_world_public_input_compaction_refresh` in `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`. | accepted-deterministic-prep, live row rejected | Deterministic proof shows the SDK route can install `RunConfig.call_model_input_filter`, keep the feature off by default, compact oversized public tool outputs before model calls with aggregate byte-delta events, and record Responses continuation/session capability as gated metadata. The live row proves the model-facing hook is active (`input_byte_reduction_ratio=0.939364`, uncached input tokens `197838` to `63045`) but rejects the current policy as a wall-clock win because it failed before `done`, produced no `run_result.json`, raised failed/noop calls to `31`, and increased observed wall/model time by `+62.627s` / `+102.956s`. | Do not rerun the same compaction policy unchanged. Any next compaction/session arm must preserve behavior and task-state completeness before it can support a wall-clock claim. |
+| N | `openai-agents-live`, deterministic repeated-map delta prep plus `mify` Responses `world-public-labels` live row | `model_input_compaction=public_tool_result_summary_v1+repeated_metric_map_delta_v1` opt-in, no public MCP/profile change | Deterministic prep evidence above; live input-compaction row `output/agent-sdk-perf-followups/mify-world-public-mimo-compact-input-compaction/0612_1327/seed-7/`; comparison `output/agent-sdk-perf-followups/mify-world-public-input-compaction-comparison-diagnostic.json`. | accepted-deterministic-prep, live row rejected | Deterministic proof shows repeated `metric_map` outputs can be summarized in model-facing SDK input with original hash, size, map id/version/mode, waypoint counts, and runtime-object/candidate counts, only when the summary is smaller. The live row recorded `metric_map_output_count=292` and `repeated_metric_map_output_count=208`, but `metric_map_bytes_reduced=0`; behavior regressed and the row failed before `done`. | Do not claim an N speedup. Revisit only if repeated-map summaries actually reduce map bytes and preserve cleanup behavior inside a redesigned compaction/session arm. |
+| D | `openai-agents-live`, provider/evidence lane agnostic deterministic racing-observability prep | `model_racing_observability=per_arm_observability_v1`, single-arm/no-racing, no public MCP/profile change | `roboclaws/agents/drivers/openai_agents_live.py`, `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`, `tests/unit/agents/test_live_runtime.py`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`; `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py` | accepted-deterministic-prep, C prerequisite satisfied | Deterministic proof shows SDK model calls now emit sanitized single-arm lifecycle events with stable call/arm ids, elapsed time, winner/cancel flags, failure class, provider/model/wire axes, token usage availability, and loser-billing-unknown fields. The runner aggregates these into `model_racing_observability_metrics` in `live_timing.json` timeline latency attribution. The completed C live row preserved D telemetry for both the single-arm baseline and two-arm candidate. | Keep D events mandatory for any future racing variant. |
+| C | `openai-agents-live`, provider/evidence lane agnostic deterministic get-response racing prep plus `mify` Responses `world-public-labels` live row | `model_racing=get_response_racing_v1` opt-in through `--model-racing` / `ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING`, arm count 2, default off, no public MCP/profile change | Deterministic prep evidence above; live caps `docs/status/active/agent-sdk-c-racing-live-caps.json`; baseline `output/agent-sdk-perf-followups/c-racing-baseline/0612_1429/seed-7/`; candidate `output/agent-sdk-perf-followups/c-racing-candidate/0612_1448/seed-7/`; comparison `output/agent-sdk-perf-followups/c-racing-comparison-diagnostic.json`; refresh row `mify_world_public_c_racing_refresh` in `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`. | accepted-deterministic-prep, live row rejected | Deterministic proof shows SDK `get_response` calls can race two or more same-provider arms, return the first successful SDK model response, cancel pending losers, record winner/cancel/failure usage-availability telemetry through D, and keep raw prompts/model text/tool payload bodies out of events. The live row proves the mechanism (`racing_enabled=true`, `racing_multiplier=2.0`, 53 raced calls, 106 arms, 76 winners, 75 cancelled losers) and reduced observed wall time by `-260.987s`, but rejects the policy because behavior quality regressed (`completion_status=success` to `partial_success`, `restored_count=4` to `3`). Observed model API time rose by `+397.292s`, so normalized/publishable claims remain unavailable. | Do not claim a C speedup. Do not rerun the same racing policy unchanged; prefer behavior-preserving compaction/session redesign, O paired/tightening evidence, raw-FPV P/AA live rows, or broader B baselines before another C variant. |
+| O | `openai-agents-live`, `mify` Responses `camera-grounded-labels` live diagnostic plus promptfix2 retry | `camera_grounded_composite_tools=observe_camera_grounded_candidates` opt-in, registered only by `--agent-sdk-camera-grounded-composite-tools`, no default public MCP/profile change | Deterministic prep evidence above; baseline `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7/`; inconclusive first composite row `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite/0612_1032/seed-7/`; valid mechanism retry `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-promptfix2/0612_1126/seed-7/`; metrics `output/agent-sdk-perf-followups/mify-camera-grounded-baseline-metrics.json`, `output/agent-sdk-perf-followups/mify-camera-grounded-composite-metrics.json`, and `output/agent-sdk-perf-followups/mify-camera-grounded-composite-promptfix2-metrics.json`; comparisons `output/agent-sdk-perf-followups/mify-camera-grounded-composite-comparison.json` and `output/agent-sdk-perf-followups/mify-camera-grounded-composite-promptfix2-comparison.json`; direct checker reruns: `.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py --expect-task '帮我收拾这个房间' --expect-task-name household-cleanup --expect-backend molmospaces_subprocess --expect-policy openai_agents_agent --expect-profile camera-grounded-labels --expect-mcp-server molmo_cleanup_realworld --min-generated-mess-count 5 --require-agent-driven --require-advisory-scoring --require-completion-claim --require-goal-contract --require-clean-agent-run <run_result.json>` for both composite artifacts; focused tests for prompt rendering, stale prompt rerender, and checker provenance. | accepted-diagnostic-mechanism-row, not normalized/publishable speed claim | The first composite row had same-or-better recorded quality and faster wall/model API time, but it did not call the intended shortcut. The promptfix2 retry did: 5 `observe_camera_grounded_candidates`, 16 `declare_visual_candidates`, and 19 underlying `observe` substep requests. It preserved quality (`completion_status=success`, `restored_count=4/5`, `semantic_accepted_count=5/5`, `sweep_coverage_rate=1.0`, `disturbance_count=0`) and the shared diagnostic comparison accepted the row with `-303.142s` observed wall and `-319.020s` observed model API time, while uncached input tokens rose by `+50586`. The live runner's stored terminal still says checker status 1 because it ran before the checker allowlist patch; direct checker reruns now pass. | Keep O SDK-private/opt-in. Refresh Q/Y with promptfix2 before selecting the next arm. More O replicas may build confidence, but default/public promotion still requires X cross-client proof and normalized/publishable speed claims still require calibrated/repeated evidence. |
+| F | `openai-agents-live`, deterministic robot-view capture prep plus `mify` Responses `world-public-labels` live A/B | `robot_view_capture_policy=action_timeline` opt-in, forwarded to cleanup server only when explicitly requested, no default public MCP/profile change | Deterministic prep evidence above; live baseline `output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`; action-timeline candidate `output/agent-sdk-perf-followups/mify-world-public-mimo-compact-action-timeline/0612_1303/seed-7/`; comparison `output/agent-sdk-perf-followups/mify-world-public-action-timeline-comparison-diagnostic.json`; refresh row `mify_world_public_f_action_timeline_refresh` in `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`. | accepted-deterministic-prep, live row rejected | Deterministic proof shows the server defaults to full robot-view capture, but `action_timeline` skips report-only `observe` / `scene_objects` captures while preserving raw-FPV observe artifact capture and cleanup action captures. The live runner records the policy under `agent_sdk_perf_profile.robot_view_capture_policy`, mirrors it in `live_timing.json`, and forwards `--robot-view-capture-policy action_timeline` to the cleanup server only for opt-in SDK runs. The live row proves the mechanism can reduce visual capture time (`93.256s` to `54.975s`) but rejects it as a speed win because quality regressed (`4/5` restored to `3/5`; `success` to `partial_success`) and observed wall/model time increased (`+181.786s` / `+216.535s`). | Keep F SDK-private/opt-in. Do not run another standalone F row next; revisit only with paired/repeated evidence or a lane where same-or-better quality is preserved. |
+| P | `openai-agents-live`, `camera-raw-fpv` deterministic repeated-failure rail prep plus blocked live gate attempts | `raw_fpv_repeated_failure_limit=3` in `raw_fpv_budgeted_v1`, optional `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT` override, no public MCP/profile change | Deterministic prep evidence above; live caps `docs/status/active/agent-sdk-raw-fpv-live-caps.json`; blocked `mify` image-transport gate; failed `codex-env` attempts `output/agent-sdk-perf-followups/raw-fpv-budgeted-codex/0612_1512/seed-7/` and `output/agent-sdk-perf-followups/raw-fpv-budgeted-codex-retry/0612_1514/seed-7/`. | accepted-deterministic-prep, live blocked | Deterministic proof shows repeated unresolved `navigate_to_visual_candidate` failures produce `raw_fpv_repeated_candidate_failure` before context-window failure, with compact fingerprint fields and aggregate terminal counts in `agent_sdk_budget_terminal` / latency attribution. Persisted detail excludes raw prompts, model text, full image-region payloads, full tool payload bodies, credentials, and private truth. Live attempts did not reach raw-FPV task work: `mify` is blocked by unverified image transport, and two `codex-env` attempts hit `provider_transient_failure` / `upstream_unavailable` before tool calls beyond initial setup. | Retry only after provider availability or verified image transport changes. Any cleanup-pass or speed claim still needs report-quality evidence. |
+| AA | `openai-agents-live`, `camera-raw-fpv` deterministic image-memory prep plus blocked live gate attempts | `raw_fpv_image_memory_v1` in the SDK model-input filter, default enabled only by `raw_fpv_budgeted_v1`, optional `ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY` and retain-count override, no public MCP/profile change | Deterministic prep evidence above; live caps `docs/status/active/agent-sdk-raw-fpv-live-caps.json`; blocked `mify` image-transport gate; failed `codex-env` attempts `output/agent-sdk-perf-followups/raw-fpv-budgeted-codex/0612_1512/seed-7/` and `output/agent-sdk-perf-followups/raw-fpv-budgeted-codex-retry/0612_1514/seed-7/`. | accepted-deterministic-prep, live blocked | Deterministic proof shows older raw-FPV image blocks can be summarized before SDK model calls while the latest full image remains model-visible, summaries store only observation id, sizes, hashes, and retention policy, and `model_input_filter_metrics` / timeline attribution aggregate retained/evicted counts and byte deltas. The MCP raw-FPV observe contract still returns compact state plus a full PNG image block, and report artifacts remain complete. Live attempts did not reach raw-FPV observations, so image-memory behavior remains unmeasured live. | Retry only after provider availability or verified image transport changes. Multiresolution thumbnail/crop policy is parked until live evidence shows retained full-frame policy is insufficient. |
 | B,I/AB | `openai-agents-live`, `mify` Responses `world-public-labels` live baseline vs `mimo_compact_v1` candidate | Baseline profile versus `mimo_compact_v1`; same provider profile, wire API, model, evidence lane, seed, map bundle, backend, and run caps. No public MCP/profile change. | `output/agent-sdk-perf-followups/mify-world-public-baseline/0612_0814/seed-7/`; `output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`; `output/agent-sdk-perf-followups/mify-world-public-comparison-diagnostic.json`; `output/agent-sdk-perf-followups/mify-world-public-comparison.json`; `.venv/bin/python scripts/reports/extract_live_report_metrics.py --write-model-call-metrics <run-dir>` for both rows; `.venv/bin/python scripts/reports/compare_live_report_metrics.py --baseline-run-dir output/agent-sdk-perf-followups/mify-world-public-baseline/0612_0814/seed-7 --candidate-run-dir output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7 --diagnostic --output output/agent-sdk-perf-followups/mify-world-public-comparison-diagnostic.json`; `./scripts/dev/run_pytest_standalone.sh -q tests/unit/reports/test_live_performance.py`; `.venv/bin/ruff check roboclaws/reports/live_performance.py tests/unit/reports/test_live_performance.py` | diagnostic, no speed win | Both live rows finished and produced reports. Candidate quality was not worse after capping sweep over-coverage at required full coverage, and candidate reduced model/MCP calls by 2 each, but it was slower: +5.746s observed wall, +8.749s observed model API, and +7033 uncached input tokens. Treat this as evidence against claiming a `mimo_compact_v1` world-public speedup on this single row; it does not reject the deterministic prep. | Refresh Q/Y with this live packet before choosing the next arm. Prefer camera-grounded Candidate O live A/B or raw-FPV diagnostic rows if Q/Y still rank Group 2/3; retry GPT `codex-env` only after the transient 502 gate clears. |
-| Q,Y | Group 0 deterministic recommendation packet plus completed-live refresh | `reducible_bucket_report.latency_buckets`, `dominant_bucket`, `recommendation_summary`, no live provider call, no public MCP/profile change | `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`, `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `docs/status/active/agent-sdk-speedup-foundation-matrix.json`; `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`; `output/agent-sdk-speedup-foundation/decision.json`; `output/agent-sdk-perf-followups/live-refresh-decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-live-refresh-matrix.json --offline-preflight --decision-packet output/agent-sdk-perf-followups/live-refresh-decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-live-refresh-matrix.json --dry-run` | accepted-deterministic-enrichment, refreshed-with-live-packet, live rows authorized | Deterministic proof shows the packet can rank candidate ids/groups from shared performance summaries, preserve unsupported rows, classify dominant buckets, and keep the recommendation claim scoped to diagnostic evidence. The refreshed fixture packet accepted 5 supported rows and ranked Group 2 lane-specific reductions first after already-prepped Group 1 candidates. The live-refresh packet accepted the completed `mify` Responses world-public pair with no provider calls planned; the candidate was same-or-better quality but slower, with `model_or_sdk_between_tool_gap` still dominant (`205.026s`, 63.34%) and material visual capture (`93.256s`, 28.81%). External `mimo-openai-chat` camera-grounded DINO evidence shows 14 `declare_visual_candidates` calls, supporting Candidate O as the next camera-grounded A/B target without making a Responses speed claim. | Run Candidate O camera-grounded live A/B next once the current user-owned visual backend run releases port `18788`; use raw-FPV P/AA only after O or if camera-grounded remains blocked; retry GPT `codex-env` only after the transient 502 gate clears. |
+| Q,Y | Group 0 deterministic recommendation packet plus completed-live refresh | `reducible_bucket_report.latency_buckets`, `dominant_bucket`, `recommendation_summary`, `expected_decision_status` for known rejected evidence rows, no live provider call, no public MCP/profile change | `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`, `tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`; `docs/status/active/agent-sdk-speedup-foundation-matrix.json`; `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`; `output/agent-sdk-speedup-foundation/decision.json`; `output/agent-sdk-perf-followups/live-refresh-decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-live-refresh-matrix.json --offline-preflight --decision-packet output/agent-sdk-perf-followups/live-refresh-decision.json`; `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-live-refresh-matrix.json --dry-run` | accepted-deterministic-enrichment, refreshed-with-live-packet, live rows authorized | Deterministic proof shows the packet can rank candidate ids/groups from shared performance summaries, preserve unsupported rows, classify dominant buckets, preserve known rejected evidence rows without turning the refresh command into an infrastructure failure, and keep recommendation claims scoped to diagnostic evidence. The live-refresh packet accepts the completed `mify` Responses world-public pair and O promptfix2 mechanism row, and keeps F action-timeline, I/N input-compaction, and C racing rows as expected-rejected evidence. The accepted rows still show model/SDK between-tool gap as the dominant reducible bucket; rejected F, I/N, and C rows show that visual-capture reduction, input reduction, or same-provider racing alone is insufficient when task behavior and wall-clock or quality regress. Token deltas are telemetry only under the current maintainer priority. | Next recommended arms: O paired/tightening evidence first, behavior-preserving compaction/session redesign second, scoped B baseline coverage third, and raw-FPV P/AA retry only after provider/image-transport availability changes. Do not rerun the rejected F, I/N, or C policies unchanged. |
 
 ## Evidence Ladder
 

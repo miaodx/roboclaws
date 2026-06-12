@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"decision packet: {args.decision_packet}")
 
-    failed = [row for row in packet["rows"] if row["status"] in {"rejected", "blocked"}]
+    failed = [row for row in packet["rows"] if _is_unexpected_failure(row)]
     if failed:
         for row in failed:
             print(
@@ -161,6 +161,7 @@ def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
         "quality_policy": str(row.get("quality_policy") or "same_or_better"),
         "quality_waiver": str(row.get("quality_waiver") or ""),
         "expected_terminal": str(row.get("expected_terminal") or ""),
+        "expected_decision_status": str(row.get("expected_decision_status") or ""),
         "unsupported_reason": unsupported_reason,
         "status": "unsupported" if unsupported_reason else "pending",
         "reasons": [unsupported_reason] if unsupported_reason else [],
@@ -288,6 +289,7 @@ def _run_summary(run_dir: Path) -> dict[str, Any]:
     quality = _dict(metrics.get("quality"))
     timing = _dict(metrics.get("timing"))
     call_counts = _dict(metrics.get("call_counts"))
+    trace_events = _read_jsonl(run_dir / "trace.jsonl")
     return {
         "run_dir": str(run_dir),
         "elapsed_s": _float_or_none(timing.get("observed_wall_s")),
@@ -307,6 +309,7 @@ def _run_summary(run_dir: Path) -> dict[str, Any]:
         "semantic_accepted_count": quality.get("semantic_accepted_count"),
         "failed_or_noop_tool_count": quality.get("failed_or_noop_tool_count"),
         "tool_counts": _dict(call_counts.get("mcp_tool_counts")),
+        "camera_grounded_tool_breakdown": _camera_grounded_tool_breakdown(trace_events),
         "metrics": metrics,
     }
 
@@ -373,6 +376,7 @@ def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str,
     tool_handler = _float_or_none(summary.get("tool_handler_s")) or 0.0
     failed_or_noop_tool_count = _int_or_none(summary.get("failed_or_noop_tool_count")) or 0
     tool_counts = _dict(summary.get("tool_counts"))
+    camera_grounded_breakdown = _dict(summary.get("camera_grounded_tool_breakdown"))
     buckets = _latency_buckets(
         elapsed_s=elapsed,
         between_tool_gap_s=between_gap,
@@ -387,12 +391,26 @@ def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str,
                 "reason": "model/SDK between-tool gap remains a dominant bucket",
             }
         )
-    if lane == "camera-grounded-labels" and tool_counts.get("declare_visual_candidates", 0) > 0:
+    standalone_declares = _int_or_none(
+        camera_grounded_breakdown.get("standalone_declare_visual_candidates")
+    )
+    if (
+        lane == "camera-grounded-labels"
+        and (
+            standalone_declares
+            if standalone_declares is not None
+            else tool_counts.get(
+                "declare_visual_candidates",
+                0,
+            )
+        )
+        > 0
+    ):
         recommendations.append(
             {
                 "candidate_group": "group2_lane_specific_reductions",
                 "candidate_ids": ["O"],
-                "reason": "camera-grounded observe/label two-step is present",
+                "reason": "standalone camera-grounded observe/label two-step is present",
             }
         )
     if tool_counts.get("metric_map", 0) > 1:
@@ -428,6 +446,7 @@ def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str,
         "latency_buckets": buckets,
         "dominant_bucket": _dominant_bucket(buckets),
         "tool_counts": tool_counts,
+        "camera_grounded_tool_breakdown": camera_grounded_breakdown,
         "failed_or_noop_tool_count": failed_or_noop_tool_count,
         "recommendations": recommendations,
     }
@@ -565,6 +584,7 @@ def _dry_run_row(row: dict[str, Any]) -> dict[str, Any]:
         "stop_conditions": _str_list(row.get("stop_conditions")),
         "unsupported_reason": str(row.get("unsupported_reason") or ""),
         "provider_calls": bool(row.get("provider_calls")),
+        "expected_decision_status": str(row.get("expected_decision_status") or ""),
     }
 
 
@@ -572,6 +592,13 @@ def _block(row: dict[str, Any], reason: str) -> None:
     row["status"] = "blocked"
     if reason not in row["reasons"]:
         row["reasons"].append(reason)
+
+
+def _is_unexpected_failure(row: dict[str, Any]) -> bool:
+    status = str(row.get("status") or "")
+    if status not in {"rejected", "blocked"}:
+        return False
+    return status != str(row.get("expected_decision_status") or "")
 
 
 def _terminal_state(live_timing: dict[str, Any], status: dict[str, Any]) -> str:
@@ -624,6 +651,38 @@ def _tool_counts(events: list[dict[str, Any]]) -> dict[str, int]:
             continue
         counts[tool] = counts.get(tool, 0) + 1
     return dict(sorted(counts.items()))
+
+
+def _camera_grounded_tool_breakdown(events: list[dict[str, Any]]) -> dict[str, int]:
+    composite_requests = 0
+    declare_requests = 0
+    composite_internal_declares = 0
+    standalone_declares = 0
+    composite_open = 0
+    for event in events:
+        event_kind = event.get("event")
+        if event_kind not in {"request", "response"}:
+            continue
+        tool = str(event.get("tool") or "")
+        if event_kind == "request" and tool == "observe_camera_grounded_candidates":
+            composite_requests += 1
+            composite_open += 1
+            continue
+        if event_kind == "response" and tool == "observe_camera_grounded_candidates":
+            composite_open = max(0, composite_open - 1)
+            continue
+        if event_kind == "request" and tool == "declare_visual_candidates":
+            declare_requests += 1
+            if composite_open > 0:
+                composite_internal_declares += 1
+            else:
+                standalone_declares += 1
+    return {
+        "observe_camera_grounded_candidates": composite_requests,
+        "declare_visual_candidates_requests": declare_requests,
+        "composite_internal_declare_visual_candidates": composite_internal_declares,
+        "standalone_declare_visual_candidates": standalone_declares,
+    }
 
 
 def _not_lower(candidate: Any, baseline: Any) -> bool:

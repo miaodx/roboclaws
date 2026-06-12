@@ -218,6 +218,8 @@ run_cli() {
     MIMO_TP_KEY \
     XM_LLM_API_KEY \
     XM_LLM_BASE_URL \
+    MM_API_KEY \
+    MM_BASE_URL \
     HTTP_PROXY \
     HTTPS_PROXY \
     ALL_PROXY \

@@ -13,6 +13,7 @@ task ids.
 
 from __future__ import annotations
 
+from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.household.profiles import (
     cleanup_evidence_lane_names,
     validate_evidence_lane_camera_labeler,
@@ -148,6 +149,14 @@ def _resolve_launch(
         provider_profile=provider_profile,
     )
     evidence_mode, profile, report, overrides = _resolve_evidence_mode(surface, raw_mode, overrides)
+    if profile and profile != "smoke":
+        lane_compatibility = evidence_lane_compatibility(
+            evidence_lane=profile,
+            agent_engine=agent_engine.id,
+            provider_profile=resolved_provider_profile,
+        )
+        if not lane_compatibility.allowed:
+            raise LaunchError(str(lane_compatibility.reason))
     overrides = _merge_default_overrides(overrides, world.default_overrides)
     overrides = _merge_default_overrides(overrides, backend.default_overrides)
     overrides, dispatch_setup_overrides = _normalize_scenario_setup_overrides(

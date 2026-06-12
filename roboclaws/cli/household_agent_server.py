@@ -34,6 +34,8 @@ from roboclaws.household.realworld_mcp_server import (
     DEFAULT_HOST,
     DEFAULT_PORT,
     MCP_SERVER_NAME,
+    ROBOT_VIEW_CAPTURE_POLICIES,
+    ROBOT_VIEW_CAPTURE_POLICY_FULL,
     RealWorldMolmoCleanupMCPServer,
     make_molmo_realworld_cleanup_mcp,
 )
@@ -132,6 +134,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--include-robot", action="store_true")
     parser.add_argument("--robot-name", default="rby1m")
     parser.add_argument("--record-robot-views", action="store_true")
+    parser.add_argument(
+        "--robot-view-capture-policy",
+        choices=tuple(sorted(ROBOT_VIEW_CAPTURE_POLICIES)),
+        default=ROBOT_VIEW_CAPTURE_POLICY_FULL,
+        help=(
+            "Report robot-view capture policy. The default captures every eligible "
+            "tool; action_timeline keeps before/after and cleanup action views while "
+            "skipping report-only observe/scene_objects captures."
+        ),
+    )
     parser.add_argument("--scene-source", default="procthor-10k-val")
     parser.add_argument("--scene-index", type=int, default=0)
     parser.add_argument(
@@ -302,6 +314,7 @@ def run_molmo_realworld_cleanup_agent_server(
     goal_contract_path: str | Path | None = None,
     rerun_command: str | None = None,
     agent_sdk_camera_grounded_composite_tools: bool = False,
+    robot_view_capture_policy: str = ROBOT_VIEW_CAPTURE_POLICY_FULL,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
 ) -> dict[str, Any]:
@@ -412,6 +425,7 @@ def run_molmo_realworld_cleanup_agent_server(
             goal_contract=goal_contract,
             operator_messages_path=operator_messages_path,
             agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
+            robot_view_capture_policy=robot_view_capture_policy,
             rerun_command=rerun_command,
         )
         server.run_in_thread()
@@ -518,6 +532,7 @@ def main(argv: list[str] | None = None) -> int:
             agent_sdk_camera_grounded_composite_tools=(
                 args.agent_sdk_camera_grounded_composite_tools
             ),
+            robot_view_capture_policy=args.robot_view_capture_policy,
         )
     except Exception as exc:
         print(f"Molmo real-world cleanup agent server failed: {exc}", file=sys.stderr)

@@ -202,7 +202,7 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
     validate_supported_routes_against_catalog()
 
 
-def test_openai_agents_route_payload_lists_chat_provider_profiles() -> None:
+def test_openai_agents_route_payload_lists_provider_profiles() -> None:
     route = get_selection(
         "molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels"
     )
@@ -212,9 +212,14 @@ def test_openai_agents_route_payload_lists_chat_provider_profiles() -> None:
     assert payload["supported_provider_profiles"] == [
         "codex-env",
         "mify",
+        "minimax",
         "mimo-openai-chat",
         "kimi-openai-chat",
     ]
+    route_by_profile = {route["provider_profile"]: route for route in payload["provider_routes"]}
+    assert route_by_profile["mify"]["route_status"] == "provisional"
+    assert route_by_profile["mimo-openai-chat"]["wire_api"] == "chat-completions"
+    assert route_by_profile["minimax"]["route_capabilities"]["image_transport"] == "unknown"
 
 
 def test_console_exposes_all_supported_household_evidence_lanes() -> None:

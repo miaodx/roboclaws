@@ -4,19 +4,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from roboclaws.core.provider_factory import create_provider
 from roboclaws.core.provider_retry import retry_delay_seconds
-from roboclaws.core.vlm import (
+from roboclaws.core.provider_runtime import (
     NAVIGATION_ACTIONS,
     SAFE_FALLBACK_ACTION,
-    AnthropicProvider,
-    KimiCodingProvider,
-    KimiProvider,
-    MockProvider,
-    OpenAIProvider,
     ProviderHealthError,
     VLMProvider,
-    create_provider,
 )
+from roboclaws.core.providers.anthropic import AnthropicProvider
+from roboclaws.core.providers.kimi import KimiCodingProvider, KimiProvider
+from roboclaws.core.providers.mock import MockProvider
+from roboclaws.core.providers.openai import OpenAIProvider
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -112,42 +111,42 @@ def test_create_provider_unknown_raises():
 
 def test_create_provider_gpt4o(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.OpenAIProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.OpenAIProvider.__init__", return_value=None):
         p = create_provider("gpt-4o")
     assert isinstance(p, OpenAIProvider)
 
 
 def test_create_provider_gpt4o_mini(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.OpenAIProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.OpenAIProvider.__init__", return_value=None):
         p = create_provider("gpt-4o-mini")
     assert isinstance(p, OpenAIProvider)
 
 
 def test_create_provider_kimi(monkeypatch):
     monkeypatch.setenv("KIMI_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.KimiProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.KimiProvider.__init__", return_value=None):
         p = create_provider("kimi")
     assert isinstance(p, KimiProvider)
 
 
 def test_create_provider_kimi_alias(monkeypatch):
     monkeypatch.setenv("KIMI_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.KimiProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.KimiProvider.__init__", return_value=None):
         p = create_provider("kimi-k2-5")
     assert isinstance(p, KimiProvider)
 
 
 def test_create_provider_anthropic(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.AnthropicProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.AnthropicProvider.__init__", return_value=None):
         p = create_provider("anthropic")
     assert isinstance(p, AnthropicProvider)
 
 
 def test_create_provider_claude_sonnet(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.AnthropicProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.AnthropicProvider.__init__", return_value=None):
         p = create_provider("claude-3-5-sonnet-20241022")
     assert isinstance(p, AnthropicProvider)
 

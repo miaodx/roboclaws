@@ -1085,6 +1085,7 @@ def _assert_public_agent_view(
             return
         assert observed, agent_view
         allowed_producer_types = {
+            CAMERA_GROUNDED_LABELS_LANE,
             SIMULATED_CAMERA_MODEL_PROVENANCE,
             EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
             MAIN_CLEANUP_AGENT_PRODUCER,
@@ -1097,6 +1098,7 @@ def _assert_public_agent_view(
             }, item
             assert item.get("producer_type") in allowed_producer_types, item
             assert item.get("model_provenance") in {
+                CAMERA_GROUNDED_LABELS_LANE,
                 SIMULATED_CAMERA_MODEL_PROVENANCE,
                 EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
                 MAIN_CLEANUP_AGENT_PRODUCER,

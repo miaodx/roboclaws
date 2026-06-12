@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from roboclaws.core.provider_retry import is_transient_provider_error, retry_delay_seconds
-
-if TYPE_CHECKING:
-    from roboclaws.core.vlm import ProviderStatus
+from roboclaws.core.provider_runtime import (
+    ProviderHealthError,
+    ProviderStatus,
+    _maybe_open_circuit,
+    _record_call_failure,
+)
 
 
 @dataclass(frozen=True)
@@ -22,11 +24,9 @@ class ProviderExceptionDecision:
 def raise_if_provider_circuit_open(
     *,
     provider_name: str,
-    status: "ProviderStatus",
+    status: ProviderStatus,
 ) -> None:
     """Raise when the provider's safety circuit has already opened."""
-    from roboclaws.core.vlm import ProviderHealthError
-
     if status.stop_reason:
         raise ProviderHealthError(
             f"{provider_name} provider circuit is open: {status.stop_reason}",
@@ -41,10 +41,8 @@ def build_provider_status(
     max_transient_errors: int | None = None,
     max_calls_with_retries: int | None = None,
     max_consecutive_failures: int | None = None,
-) -> "ProviderStatus":
+) -> ProviderStatus:
     """Return a provider status snapshot configured with safety budgets."""
-    from roboclaws.core.vlm import ProviderStatus
-
     return ProviderStatus(
         provider_name=provider_name,
         model=model,
@@ -57,7 +55,7 @@ def build_provider_status(
 def handle_provider_exception(
     *,
     provider_name: str,
-    status: "ProviderStatus",
+    status: ProviderStatus,
     exc: Exception,
     started: float,
     attempt: int,
@@ -67,8 +65,6 @@ def handle_provider_exception(
     retry_backoff_cap: float,
 ) -> ProviderExceptionDecision:
     """Account for a provider exception and return whether the caller should retry."""
-    from roboclaws.core.vlm import ProviderHealthError, _maybe_open_circuit, _record_call_failure
-
     transient = is_transient_provider_error(exc)
     status.last_error = str(exc)[:400]
     status.last_error_kind = exc.__class__.__name__

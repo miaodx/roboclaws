@@ -5,13 +5,7 @@ import os
 import time
 from typing import Any
 
-from roboclaws.core.provider_safety import (
-    build_provider_status,
-    handle_provider_exception,
-    raise_if_provider_circuit_open,
-)
-from roboclaws.core.providers.anthropic import _AnthropicBase
-from roboclaws.core.vlm import (
+from roboclaws.core.provider_runtime import (
     _COST_PER_M,
     NAVIGATION_ACTIONS,
     _build_agent_action_model,
@@ -21,6 +15,12 @@ from roboclaws.core.vlm import (
     fallback_action_decision,
     parse_action_decision,
 )
+from roboclaws.core.provider_safety import (
+    build_provider_status,
+    handle_provider_exception,
+    raise_if_provider_circuit_open,
+)
+from roboclaws.core.providers.anthropic import _AnthropicBase
 
 _KIMI_HTTP_TIMEOUT_ENV = "KIMI_HTTP_TIMEOUT"
 _KIMI_DEFAULT_COST = {"input": 1.00, "output": 3.00}

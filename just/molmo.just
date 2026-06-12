@@ -608,6 +608,13 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --max-observe-per-waypoint "$prompt_max_observe_per_waypoint"
           --done-retry-budget "$prompt_done_retry_budget"
         )
+        if [[ "$driver" == "openai-agents-live" && "$profile" == "camera-grounded-labels" ]]; then
+          case "${ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS:-}" in
+            1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+              prompt_args+=(--camera-grounded-composite-tools)
+              ;;
+          esac
+        fi
         if [[ -n "$task_intent" ]]; then
           prompt_args+=(--intent "$task_intent")
         fi
@@ -736,7 +743,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           tmux_env_args=()
           for env_name in \
             OPENAI_API_KEY CODEX_API_KEY CODEX_BASE_URL KIMI_API_KEY MIMO_TP_KEY \
-            XM_LLM_API_KEY XM_LLM_BASE_URL \
+            XM_LLM_API_KEY XM_LLM_BASE_URL MM_API_KEY MM_BASE_URL \
             HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY \
             http_proxy https_proxy all_proxy no_proxy \
             DISPLAY XAUTHORITY MUJOCO_GL PYOPENGL_PLATFORM LIBGL_ALWAYS_SOFTWARE \
@@ -865,6 +872,16 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS:-}" ]]; then
             runner_args+=(--context-hard-limit-tokens "${ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS}")
           fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING:-}" ]]; then
+            if [[ "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
+              runner_args+=(--no-model-racing)
+            else
+              runner_args+=(--model-racing)
+            fi
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT:-}" ]]; then
+            runner_args+=(--model-racing-arm-count "${ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT}")
+          fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT:-}" ]]; then
             runner_args+=(--max-observe-per-waypoint "${ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT}")
           fi
@@ -873,6 +890,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT:-}" ]]; then
             runner_args+=(--raw-fpv-repeated-failure-limit "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY:-}" ]]; then
+            runner_args+=(--robot-view-capture-policy "${ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY}")
           fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY:-}" ]]; then
             if [[ "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then

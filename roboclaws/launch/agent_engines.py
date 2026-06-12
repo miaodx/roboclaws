@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from roboclaws.agents.provider_registry import (
+    default_provider_profile,
+    provider_env_key,
+    supported_provider_profiles,
+)
+
 
 @dataclass(frozen=True)
 class AgentEngineSpec:
@@ -26,32 +32,27 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
         label="Codex CLI",
         dispatch_runner="codex",
         internal_runner_class="live-agent",
-        supported_provider_profiles=("codex-env", "mify"),
-        default_provider_profile="codex-env",
-        provider_env_key="ROBOCLAWS_CODEX_PROVIDER",
+        supported_provider_profiles=supported_provider_profiles("codex-cli"),
+        default_provider_profile=default_provider_profile("codex-cli"),
+        provider_env_key=provider_env_key("codex-cli"),
     ),
     "claude-code": AgentEngineSpec(
         id="claude-code",
         label="Claude Code",
         dispatch_runner="claude",
         internal_runner_class="live-agent",
-        supported_provider_profiles=("kimi-anthropic", "mimo-anthropic", "mify-anthropic"),
-        default_provider_profile="mimo-anthropic",
-        provider_env_key="ROBOCLAWS_CLAUDE_PROVIDER",
+        supported_provider_profiles=supported_provider_profiles("claude-code"),
+        default_provider_profile=default_provider_profile("claude-code"),
+        provider_env_key=provider_env_key("claude-code"),
     ),
     "openai-agents-sdk": AgentEngineSpec(
         id="openai-agents-sdk",
         label="OpenAI Agents SDK",
         dispatch_runner="openai-agents-live",
         internal_runner_class="live-agent",
-        supported_provider_profiles=(
-            "codex-env",
-            "mify",
-            "mimo-openai-chat",
-            "kimi-openai-chat",
-        ),
-        default_provider_profile="codex-env",
-        provider_env_key="ROBOCLAWS_CODEX_PROVIDER",
+        supported_provider_profiles=supported_provider_profiles("openai-agents-sdk"),
+        default_provider_profile=default_provider_profile("openai-agents-sdk"),
+        provider_env_key=provider_env_key("openai-agents-sdk"),
         availability="experimental",
         experimental=True,
     ),
@@ -68,8 +69,8 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
         label="OpenClaw Gateway",
         dispatch_runner="openclaw",
         internal_runner_class="gateway",
-        supported_provider_profiles=("kimi",),
-        default_provider_profile="kimi",
+        supported_provider_profiles=supported_provider_profiles("openclaw-gateway"),
+        default_provider_profile=default_provider_profile("openclaw-gateway"),
     ),
     "script-runner": AgentEngineSpec(
         id="script-runner",

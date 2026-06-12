@@ -18,6 +18,7 @@ AI agents should also read these docs when they need human-facing context.
 - [MolmoSpaces visual grounding results](molmospaces-visual-grounding-results.md)
 - [MolmoSpaces cleanup profile architecture](molmospaces-cleanup-mode-architecture.md)
 - [Model matrix](model-matrix.md)
+- [Model route verdicts](model-route-verdicts.yaml)
 
 ## Runbooks
 
