@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 
+from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.routes import get_route
 from roboclaws.operator_console.state import (
     derive_operator_state,
@@ -187,6 +188,134 @@ def test_state_summarizes_nested_mcp_trace_responses_for_live_decision(
     )
 
 
+def test_state_summarizes_claude_events_for_live_decision(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0608_2118" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_route("claude-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-claude"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "response",
+                "tool": "metric_map",
+                "request": {},
+                "response": {"ok": True, "status": "ok", "tool": "metric_map"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (attempt_dir / "claude-events.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "thinking", "thinking": "hidden scratchpad"},
+                        {"type": "text", "text": "I will sweep every waypoint before cleanup."},
+                    ]
+                },
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "type": "user",
+                "message": {
+                    "content": [
+                        {"type": "text", "text": "tool result that should not become decision"}
+                    ]
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("claude-mujoco-cleanup"))
+
+    assert state["status"] == "running-claude"
+    assert (
+        state["latest_public_decision_evidence"]["decision"]
+        == "I will sweep every waypoint before cleanup."
+    )
+    labels = {item["label"] for item in state["artifact_paths"]}
+    assert "Claude Events" in labels
+
+
+def test_state_pairs_split_request_response_tool_trace_for_latest_tool(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0609_1025" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "request",
+                "tool": "navigate_to_waypoint",
+                "request": {"waypoint_id": "generated_exploration_005"},
+                "ts": 100.0,
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "event": "response",
+                "tool": "navigate_to_waypoint",
+                "response": {
+                    "ok": True,
+                    "status": "ok",
+                    "tool": "navigate_to_waypoint",
+                    "waypoint_id": "generated_exploration_005",
+                },
+                "ts": 100.125,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["latest_tool_call"] == {
+        "name": "navigate_to_waypoint",
+        "ok": True,
+        "arguments": {"waypoint_id": "generated_exploration_005"},
+        "latency_ms": 125.0,
+        "error": "",
+    }
+
+
 def test_state_ignores_runtime_capture_when_selecting_latest_robot_tool(
     tmp_path: Path,
 ) -> None:
@@ -312,6 +441,215 @@ def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:
     assert state["status"] == "provider_transient_failed"
     assert state["status_label"] == "Provider transient failure"
     assert state["terminal_reason"] == "provider_transient_failure"
+
+
+def test_state_treats_cleanup_status_success_as_passed(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0608_2017" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "cleanup_status": "success",
+                "completion_status": "success",
+                "final_status": "success",
+                "score": {
+                    "completion_status": "success",
+                    "status": "success",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["status"] == "passed"
+    assert state["checker_status"]["status"] == "passed"
+    assert state["public_run_result"]["cleanup_status"] == "success"
+
+
+def test_state_keeps_failed_phase_when_result_contains_success(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0609_1025" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "failed",
+                "exit_status": 1,
+                "reason": "cleanup checker exited with status 1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "cleanup_status": "success",
+                "score": {"status": "success"},
+                "agent_diagnostics": {"fridge_inside_sequence_ok": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
+    (attempt_dir / "checker.log").write_text("checker failed\n", encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["status"] == "failed"
+    assert state["checker_status"]["status"] == "failed"
+    assert state["checker_status"]["reason"] == (
+        "fridge cleanup sequence incomplete; call close_receptacle with the same "
+        "fridge fixture_id after place_inside before moving on or done."
+    )
+    assert state["checker_status"]["message"].startswith(
+        "Checker failed: fridge cleanup sequence incomplete"
+    )
+    assert state["terminal_reason"] == "cleanup checker exited with status 1"
+    assert state["controls"]["stop_available"] is False
+
+
+def test_state_allows_stop_to_release_lock_for_failed_terminal_run(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0609_1025" / "seed-7"
+    route = get_route("codex-mujoco-cleanup")
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": route.to_payload(),
+                "phase": "starting",
+                "backend_lock": route.lock_name,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "failed",
+                "exit_status": 1,
+                "reason": "cleanup checker exited with status 1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "cleanup_status": "success",
+                "agent_diagnostics": {"fridge_inside_sequence_ok": False},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "checker.log").write_text("checker failed\n", encoding="utf-8")
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id="wrapper-run", pid=12345)
+
+    state = derive_operator_state(tmp_path, run_dir, route)
+
+    assert state["status"] == "failed"
+    assert state["checker_status"]["status"] == "failed"
+    assert state["controls"]["stop_available"] is True
+
+
+def test_state_summarizes_checker_log_failure_when_structured_diagnostic_missing(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0609_1030" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "failed", "exit_status": 1}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps({"cleanup_status": "success"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
+    (attempt_dir / "checker.log").write_text(
+        "AssertionError: {'agent_diagnostics': {'fridge_inside_sequence_ok': False}}\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["checker_status"]["status"] == "failed"
+    assert state["checker_status"]["message"] == (
+        "Checker failed: fridge cleanup sequence incomplete; call close_receptacle with "
+        "the same fridge fixture_id after place_inside before moving on or done."
+    )
+
+
+def test_state_surfaces_openai_agents_artifacts(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "sdk-run"
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "sdk-run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-openai-agents"}),
+        encoding="utf-8",
+    )
+    (run_dir / "openai-agents-events.jsonl").write_text('{"event":"result"}\n', encoding="utf-8")
+    (run_dir / "openai-agents-trace.json").write_text('{"trace_id":"trace_1"}\n', encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["status"] == "running-openai-agents"
+    labels = {item["label"] for item in state["artifact_paths"]}
+    assert "OpenAI Agents Events" in labels
+    assert "OpenAI Agents Trace" in labels
 
 
 def test_redacted_artifact_text_redacts_secrets(tmp_path: Path) -> None:

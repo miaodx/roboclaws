@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.launch.catalog import resolve_task_launch
+from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleRoute, accepted_isaac_preflight, get_route
@@ -177,13 +178,15 @@ def start_console_run(
             process.terminate()
         lock.release(run_id=run_id, force=True)
         raise
+    started_at_epoch = time.time()
+    started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     state = {
         "run_id": run_id,
         "route": route.to_payload(),
         "phase": "starting",
         "pid": process.pid,
-        "started_at_epoch": time.time(),
-        "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "started_at_epoch": started_at_epoch,
+        "started_at": started_at,
         "backend_lock": route.lock_name,
         "lock": lock_state.to_payload(),
         "argv": argv,
@@ -191,6 +194,14 @@ def start_console_run(
         "run_dir": str(run_dir),
     }
     (run_dir / "operator_state.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    append_run_history(
+        root,
+        run_id=run_id,
+        route=route,
+        run_dir=run_dir,
+        started_at_epoch=started_at_epoch,
+        started_at=started_at,
+    )
     return state
 
 
@@ -218,7 +229,10 @@ def route_readiness(
     gate_map = gates or {}
     gate_rows: list[dict[str, Any]] = []
     blocker = ""
-    lock_state = ResourceLock(root, route.lock_name).read()
+    lock = ResourceLock(root, route.lock_name)
+    lock_state = lock.read()
+    if _release_terminal_owner_lock(root, lock_state):
+        lock_state = lock.read()
     attachable_run = _attachable_run_payload(root, lock_state)
     lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
     real_movement_enabled = _truthy_override(override_map.get("real_movement_enabled"))
@@ -326,12 +340,19 @@ def stop_console_run(root: Path, run_id: str, *, emergency: bool = False) -> dic
     state = json.loads(state_path.read_text(encoding="utf-8"))
     display_run_dir = resolve_display_run_dir(run_dir)
     terminal_phase = "human_takeover_stop" if emergency else "stopped_by_operator"
+    existing_terminal_phase = _existing_terminal_phase(display_run_dir, state)
     _stop_live_child_run(display_run_dir)
-    _mark_live_child_stopped(display_run_dir, terminal_phase)
     pid = state.get("pid")
     _terminate_process_group(pid if isinstance(pid, int) else None)
-    state["phase"] = terminal_phase
-    state["terminal_reason"] = state["phase"]
+    if existing_terminal_phase:
+        state["phase"] = existing_terminal_phase
+        state["terminal_reason"] = _existing_terminal_reason(display_run_dir, state) or (
+            state.get("terminal_reason") or existing_terminal_phase
+        )
+    else:
+        _mark_live_child_stopped(display_run_dir, terminal_phase)
+        state["phase"] = terminal_phase
+        state["terminal_reason"] = state["phase"]
     state["stopped_at_epoch"] = time.time()
     state["display_run_dir"] = str(display_run_dir)
     state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
@@ -529,6 +550,8 @@ def _attachable_run_payload(root: Path, lock_state: Any) -> dict[str, Any] | Non
     route_payload = state.get("route") if isinstance(state.get("route"), dict) else {}
     display_run_dir = resolve_display_run_dir(run_dir)
     live_status = _read_json(display_run_dir / "live_status.json")
+    if _existing_terminal_phase(display_run_dir, state):
+        return None
     active_pid = _live_run_pid(display_run_dir) or lock_state.pid
     if lock_state.stale and not _display_run_attachable(display_run_dir, live_status, active_pid):
         return None
@@ -562,6 +585,48 @@ def _display_run_attachable(
     if _tmux_session_active(display_run_dir):
         return True
     return False
+
+
+TERMINAL_RUN_PHASES = {
+    "failed",
+    "finished",
+    "passed",
+    "stopped_by_operator",
+    "human_takeover_stop",
+}
+
+
+def _release_terminal_owner_lock(root: Path, lock_state: Any) -> bool:
+    if not lock_state.held or not lock_state.owner_run_id:
+        return False
+    run_dir = console_output_root(root) / "runs" / lock_state.owner_run_id
+    state = _read_json(run_dir / "operator_state.json")
+    if not state:
+        return False
+    display_run_dir = resolve_display_run_dir(run_dir)
+    if not _existing_terminal_phase(display_run_dir, state):
+        return False
+    ResourceLock(root, lock_state.name).release(run_id=lock_state.owner_run_id, force=True)
+    return True
+
+
+def _existing_terminal_phase(display_run_dir: Path, state: dict[str, Any]) -> str:
+    live_status = _read_json(display_run_dir / "live_status.json")
+    for payload in (live_status, state):
+        phase = str(payload.get("phase") or "").strip().lower()
+        if phase in TERMINAL_RUN_PHASES:
+            return phase
+    return ""
+
+
+def _existing_terminal_reason(display_run_dir: Path, state: dict[str, Any]) -> str:
+    live_status = _read_json(display_run_dir / "live_status.json")
+    for payload in (live_status, state):
+        for key in ("terminal_reason", "reason", "error_reason", "terminate_reason"):
+            value = payload.get(key)
+            if value:
+                return str(value)
+    return ""
 
 
 def _live_run_pid(display_run_dir: Path) -> int | None:

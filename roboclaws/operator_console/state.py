@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.redaction import redact_text
 from roboclaws.operator_console.routes import ConsoleRoute
 
@@ -15,10 +16,20 @@ LIVE_RUN_MARKERS = (
     "live_status.json",
     "run_result.json",
     "trace.jsonl",
+    "codex-events.jsonl",
+    "claude-events.jsonl",
     "report.html",
     "runtime_metric_map.json",
     "tmux_session.txt",
     "driver.log",
+    "openai-agents-events.jsonl",
+    "openai-agents-trace.json",
+)
+
+AGENT_EVENT_GLOBS = (
+    "codex-events*.jsonl",
+    "claude-events*.jsonl",
+    "openai-agents-events*.jsonl",
 )
 
 
@@ -65,10 +76,18 @@ def derive_operator_state(
         artifacts.extend(link.to_payload(root) for link in _wrapper_artifact_links(run_dir))
     latest_view_assets = _latest_view_assets(root, display_run_dir)
     public_result = _public_run_result_summary(run_result)
-    latest_agent_message = _latest_codex_agent_message(display_run_dir)
+    latest_agent_message = _latest_agent_message(display_run_dir)
+    run_id = str(status.get("run_id") or run_dir.name)
+    stop_available = _stop_available(
+        root=root,
+        run_id=run_id,
+        route=route,
+        status=status,
+        phase=phase,
+    )
 
     return {
-        "run_id": str(status.get("run_id") or run_dir.name),
+        "run_id": run_id,
         "display_run_id": _display_run_id(run_dir, display_run_dir),
         "route": status.get("route") or (route.to_payload() if route else None),
         "run_dir": str(run_dir),
@@ -92,7 +111,7 @@ def derive_operator_state(
         "public_run_result": public_result,
         "controls": {
             "pause_available": bool(route.pause_supported) if route else False,
-            "stop_available": phase not in {"passed", "failed", "stopped_by_operator"},
+            "stop_available": stop_available,
             "emergency_stop_required": bool(route.emergency_stop_required) if route else False,
         },
     }
@@ -174,15 +193,20 @@ def _last_robot_tool_jsonl(path: Path) -> dict[str, Any]:
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return {}
-    for line in reversed(lines):
+    payloads: list[dict[str, Any]] = []
+    for line in lines:
         if not line.strip():
             continue
         try:
             payload = json.loads(line)
         except json.JSONDecodeError:
             continue
+        if isinstance(payload, dict):
+            payloads.append(payload)
+    for index in range(len(payloads) - 1, -1, -1):
+        payload = payloads[index]
         if isinstance(payload, dict) and _is_robot_tool_trace(payload):
-            return payload
+            return _paired_tool_trace(payload, payloads[:index])
     return {}
 
 
@@ -193,16 +217,65 @@ def _is_robot_tool_trace(payload: dict[str, Any]) -> bool:
     return True
 
 
-def _latest_codex_agent_message(run_dir: Path) -> str:
-    event_paths = sorted(run_dir.glob("codex-events*.jsonl"), key=lambda path: path.stat().st_mtime)
+def _paired_tool_trace(trace: dict[str, Any], previous: list[dict[str, Any]]) -> dict[str, Any]:
+    if trace.get("event") != "response":
+        return trace
+    request = trace.get("request") if isinstance(trace.get("request"), dict) else None
+    if request:
+        return _with_latency_from_request(trace, None)
+    tool = str(trace.get("tool") or trace.get("tool_name") or "")
+    for candidate in reversed(previous):
+        if candidate.get("event") != "request":
+            continue
+        candidate_tool = str(candidate.get("tool") or candidate.get("tool_name") or "")
+        if candidate_tool != tool:
+            continue
+        merged = dict(trace)
+        candidate_request = candidate.get("request")
+        if isinstance(candidate_request, dict):
+            merged["request"] = candidate_request
+        return _with_latency_from_request(merged, candidate)
+    return trace
+
+
+def _with_latency_from_request(
+    trace: dict[str, Any], request_trace: dict[str, Any] | None
+) -> dict[str, Any]:
+    if trace.get("latency_ms") is not None or trace.get("duration_ms") is not None:
+        return trace
+    start = _numeric_trace_time(request_trace) if request_trace is not None else None
+    end = _numeric_trace_time(trace)
+    if start is None or end is None or end < start:
+        return trace
+    merged = dict(trace)
+    merged["latency_ms"] = round((end - start) * 1000, 3)
+    return merged
+
+
+def _numeric_trace_time(trace: dict[str, Any] | None) -> float | None:
+    if not trace:
+        return None
+    for key in ("ts", "timestamp", "wallclock_elapsed"):
+        try:
+            return float(trace.get(key))
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _latest_agent_message(run_dir: Path) -> str:
+    event_paths: list[Path] = []
+    for pattern in AGENT_EVENT_GLOBS:
+        event_paths.extend(path for path in run_dir.glob(pattern) if path.is_file())
+    event_paths = sorted(set(event_paths), key=_safe_mtime)
     for path in reversed(event_paths):
-        message = _last_codex_agent_message(path)
+        message = _last_agent_message(path)
         if message:
             return message
     return ""
 
 
-def _last_codex_agent_message(path: Path) -> str:
+def _last_agent_message(path: Path) -> str:
     if not path.exists():
         return ""
     try:
@@ -216,13 +289,67 @@ def _last_codex_agent_message(path: Path) -> str:
             payload = json.loads(line)
         except json.JSONDecodeError:
             continue
-        item = payload.get("item") if isinstance(payload, dict) else None
-        if not isinstance(item, dict) or item.get("type") != "agent_message":
+        if not isinstance(payload, dict):
             continue
+        text = _agent_message_text(payload)
+        if text:
+            return text
+    return ""
+
+
+def _agent_message_text(payload: dict[str, Any]) -> str:
+    item = payload.get("item")
+    if isinstance(item, dict) and item.get("type") == "agent_message":
         text = item.get("text")
         if text:
             return str(text)
+
+    message = payload.get("message")
+    if isinstance(message, dict) and _is_assistant_message_payload(payload, message):
+        text = _message_content_text(message.get("content"))
+        if text:
+            return text
+
+    if _is_assistant_payload(payload):
+        text = _message_content_text(payload.get("content"))
+        if text:
+            return text
+
+    summary = payload.get("summary")
+    if isinstance(summary, dict):
+        for key in ("final_output", "output_text", "message"):
+            value = summary.get(key)
+            if value:
+                return str(value)
     return ""
+
+
+def _is_assistant_message_payload(payload: dict[str, Any], message: dict[str, Any]) -> bool:
+    return (
+        str(payload.get("type") or "").lower() == "assistant"
+        or str(message.get("role") or "").lower() == "assistant"
+    )
+
+
+def _is_assistant_payload(payload: dict[str, Any]) -> bool:
+    return str(payload.get("role") or "").lower() == "assistant"
+
+
+def _message_content_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    texts: list[str] = []
+    for item in content:
+        if isinstance(item, str):
+            texts.append(item)
+            continue
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") in {None, "text", "output_text"} and item.get("text"):
+            texts.append(str(item["text"]))
+    return "\n".join(text.strip() for text in texts if text and text.strip())
 
 
 def _latest_existing(run_dir: Path, names: tuple[str, ...]) -> Path:
@@ -240,6 +367,9 @@ def _artifact_links(run_dir: Path) -> list[ArtifactLink]:
         ("Run Result", "run_result.json", "json"),
         ("Trace", "trace.jsonl", "jsonl"),
         ("Agent Events", "codex-events.jsonl", "jsonl"),
+        ("Claude Events", "claude-events.jsonl", "jsonl"),
+        ("OpenAI Agents Events", "openai-agents-events.jsonl", "jsonl"),
+        ("OpenAI Agents Trace", "openai-agents-trace.json", "json"),
         ("Driver Log", "driver.log", "log"),
         ("Checker Output", "checker.log", "log"),
         ("Runtime Map", "runtime_metric_map.json", "json"),
@@ -304,17 +434,23 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
 def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> dict[str, Any]:
     checker_log = _latest_existing(run_dir, ("checker.log",))
     report = _latest_existing(run_dir, ("report.html",))
-    ok = bool(
-        run_result.get("ok")
-        or run_result.get("success")
-        or run_result.get("cleanup_success")
-        or run_result.get("semantic_map_success")
-    )
+    normalized_phase = phase.lower()
+    failure_reason = _checker_failure_reason(run_result, checker_log)
+    if normalized_phase in {"failed", "error", "terminated"}:
+        return {
+            "status": "failed",
+            "report_exists": report.exists(),
+            "checker_log": str(checker_log) if checker_log.exists() else "",
+            "reason": failure_reason,
+            "message": _checker_failure_message(checker_log, failure_reason, "Run failed."),
+        }
+    ok = _run_result_success(run_result)
     if ok and report.exists():
         return {
             "status": "passed",
             "report_exists": True,
             "checker_log": str(checker_log) if checker_log.exists() else "",
+            "reason": "",
             "message": "Checker passed.",
         }
     if run_result:
@@ -322,14 +458,17 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
             "status": "failed",
             "report_exists": report.exists(),
             "checker_log": str(checker_log) if checker_log.exists() else "",
-            "message": "Checker failed." if checker_log.exists() else "Run result is present.",
+            "reason": failure_reason,
+            "message": _checker_failure_message(
+                checker_log, failure_reason, "Run result is present."
+            ),
         }
-    normalized_phase = phase.lower()
     if normalized_phase == "checking-result":
         return {
             "status": "running",
             "report_exists": report.exists(),
             "checker_log": str(checker_log) if checker_log.exists() else "",
+            "reason": "",
             "message": "Checker is running.",
         }
     if _phase_is_active(normalized_phase):
@@ -337,14 +476,130 @@ def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> di
             "status": "waiting",
             "report_exists": False,
             "checker_log": "",
+            "reason": "",
             "message": "Checker will run when the live agent hands off to result checking.",
         }
     return {
         "status": "pending",
         "report_exists": False,
         "checker_log": str(checker_log) if checker_log.exists() else "",
+        "reason": "",
         "message": "Checker has not run yet.",
     }
+
+
+def _checker_failure_message(checker_log: Path, reason: str, fallback: str) -> str:
+    if reason:
+        return f"Checker failed: {reason}"
+    if checker_log.exists():
+        return "Checker failed. Open Checker Output for details."
+    return fallback
+
+
+def _checker_failure_reason(run_result: dict[str, Any], checker_log: Path) -> str:
+    reason = _structured_checker_failure_reason(run_result)
+    if reason:
+        return reason
+    return _checker_log_failure_reason(checker_log)
+
+
+def _structured_checker_failure_reason(run_result: dict[str, Any]) -> str:
+    diagnostics = run_result.get("agent_diagnostics") or {}
+    if not isinstance(diagnostics, dict):
+        diagnostics = {}
+    if diagnostics.get("fridge_inside_sequence_ok") is False:
+        return (
+            "fridge cleanup sequence incomplete; call close_receptacle with the same "
+            "fridge fixture_id after place_inside before moving on or done."
+        )
+    stale_reference_errors = int(diagnostics.get("stale_reference_errors") or 0)
+    if stale_reference_errors > 0:
+        return (
+            f"{stale_reference_errors} stale reference error(s); use object and fixture ids "
+            "from the latest observe response."
+        )
+    semantic_order_errors = int(
+        diagnostics.get("semantic_order_unrecovered_errors")
+        or diagnostics.get("semantic_order_errors")
+        or 0
+    )
+    if semantic_order_errors > 0:
+        return (
+            f"{semantic_order_errors} semantic order error(s); call the required_tool from "
+            "the failed MCP response before trying another cleanup tool."
+        )
+    duplicate_navigation_count = int(diagnostics.get("duplicate_post_place_navigation_count") or 0)
+    if duplicate_navigation_count > 0:
+        return (
+            f"{duplicate_navigation_count} duplicate post-place navigation event(s); after "
+            "placing an object, observe before choosing the next object or waypoint."
+        )
+    if diagnostics.get("premature_done") is True:
+        source = diagnostics.get("premature_done_source")
+        suffix = f" ({source})" if source else ""
+        return f"done was called before cleanup was complete{suffix}."
+    return ""
+
+
+def _checker_log_failure_reason(checker_log: Path) -> str:
+    if not checker_log.exists():
+        return ""
+    try:
+        text = checker_log.read_text(encoding="utf-8", errors="replace")[:80_000]
+    except OSError:
+        return ""
+    if "fridge_inside_sequence_ok" in text:
+        return (
+            "fridge cleanup sequence incomplete; call close_receptacle with the same "
+            "fridge fixture_id after place_inside before moving on or done."
+        )
+    if "stale_reference_errors" in text:
+        return (
+            "stale reference errors; use object and fixture ids from the latest observe response."
+        )
+    if "semantic_order" in text:
+        return (
+            "semantic cleanup order failed; call the required_tool from the failed MCP "
+            "response before trying another cleanup tool."
+        )
+    return ""
+
+
+def _run_result_success(run_result: dict[str, Any]) -> bool:
+    if not run_result:
+        return False
+    if _run_result_has_failure(run_result):
+        return False
+    for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
+        if run_result.get(key) is True:
+            return True
+    for key in ("cleanup_status", "completion_status", "final_status", "status"):
+        if _is_success_string(run_result.get(key)):
+            return True
+    score = run_result.get("score")
+    if isinstance(score, dict):
+        for key in ("completion_status", "status"):
+            if _is_success_string(score.get(key)):
+                return True
+    return False
+
+
+def _run_result_has_failure(run_result: dict[str, Any]) -> bool:
+    for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
+        if run_result.get(key) is False:
+            return True
+    for key in ("cleanup_status", "completion_status", "final_status", "status"):
+        if _is_failure_string(run_result.get(key)):
+            return True
+    return False
+
+
+def _is_success_string(value: Any) -> bool:
+    return str(value).strip().lower() in {"success", "ok", "passed"}
+
+
+def _is_failure_string(value: Any) -> bool:
+    return str(value).strip().lower() in {"failed", "failure", "error"}
 
 
 def _terminal_reason(
@@ -409,11 +664,39 @@ def _phase_is_active(phase: str) -> bool:
         "starting-server",
         "running",
         "running-codex",
+        "running-claude",
+        "running-openai-agents",
         "waiting-for-server-finish",
         "checking-result",
         "paused",
         "stopping",
     }
+
+
+def _stop_available(
+    *,
+    root: Path,
+    run_id: str,
+    route: ConsoleRoute | None,
+    status: dict[str, Any],
+    phase: str,
+) -> bool:
+    normalized = phase.lower()
+    if _phase_is_active(normalized):
+        return True
+    if normalized not in {
+        "failed",
+        "finished",
+        "passed",
+        "stopped_by_operator",
+        "human_takeover_stop",
+    }:
+        return False
+    lock_name = str(status.get("backend_lock") or (route.lock_name if route else ""))
+    if not lock_name:
+        return False
+    lock_state = ResourceLock(root, lock_name).read()
+    return lock_state.held and lock_state.owner_run_id == run_id
 
 
 def _decision_evidence(
@@ -503,6 +786,9 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "success",
         "cleanup_success",
         "semantic_map_success",
+        "cleanup_status",
+        "completion_status",
+        "final_status",
         "terminate_reason",
         "primitive_provenance",
     )
@@ -529,6 +815,13 @@ def _run_dir_activity_mtime(path: Path) -> float:
                 pass
     if mtimes:
         return max(mtimes)
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _safe_mtime(path: Path) -> float:
     try:
         return path.stat().st_mtime
     except OSError:

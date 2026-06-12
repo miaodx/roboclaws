@@ -9,6 +9,7 @@
 # - openclaw-smoke  OpenClaw-labeled MCP smoke; no live Gateway
 # - codex-live      live Codex CLI connected to the cleanup MCP server
 # - claude-live     live Claude Code connected to the cleanup MCP server
+# - openai-agents-live experimental OpenAI Agents SDK route, private/non-default
 # - openclaw-live   live OpenClaw Gateway connected to the cleanup MCP server
 #
 # Cleanup evidence lanes:
@@ -134,11 +135,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     fi
 
     case "$driver" in
-      direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live)
+      direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openai-agents-live|openclaw-live)
         ;;
       *)
         echo "error: unsupported driver '$driver'" >&2
-        echo "       expected direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openclaw-live" >&2
+        echo "       expected direct|mcp-smoke|openclaw-smoke|codex-live|claude-live|openai-agents-live|openclaw-live" >&2
         echo "       use mcp-smoke/openclaw-smoke for deterministic substitutes; live agent names are explicit" >&2
         exit 1
         ;;
@@ -418,7 +419,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
 
-    live_drivers=(codex-live claude-live openclaw-live)
+    live_drivers=(codex-live claude-live openai-agents-live openclaw-live)
     for live_driver in "${live_drivers[@]}"; do
       if [[ "$driver" == "$live_driver" ]]; then
         seed_count="$(wc -w <<<"$seeds" | tr -d ' ')"
@@ -430,6 +431,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         run_dir="${run_root}/seed-${seed}"
         mkdir -p "$run_dir"
         policy="${driver%-live}_agent"
+        if [[ "$driver" == "openai-agents-live" ]]; then
+          policy="openai_agents_agent"
+        fi
         server_host="$host"
         client_url="http://${host}:${port}/mcp"
         server_startup_timeout_s="${ROBOCLAWS_MOLMO_LIVE_SERVER_STARTUP_TIMEOUT_S:-600}"
@@ -443,9 +447,14 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           roboclaws_assert_claude_code_network_allowed "Claude Code Molmo cleanup live report"
         elif [[ "$driver" == "codex-live" ]]; then
           roboclaws_assert_codex_network_allowed "Codex Molmo cleanup live report"
+        elif [[ "$driver" == "openai-agents-live" ]]; then
+          roboclaws_assert_codex_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
         fi
         codex_model=""
         codex_profile_summary="system defaults"
+        openai_agents_model=""
+        openai_agents_profile="codex-env"
+        openai_agents_profile_summary="codex-env model=gpt-5.5"
         claude_profile_summary="system defaults"
         codex_model_args=()
         claude_model_args=()
@@ -454,6 +463,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"
           codex_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
           roboclaws_codex_provider_args codex_model_args
+        elif [[ "$driver" == "openai-agents-live" ]]; then
+          openai_agents_profile="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)"
+          openai_agents_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"
+          openai_agents_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL)"
         elif [[ "$driver" == "claude-live" ]]; then
           claude_profile_summary="$(roboclaws_code_agent_profile_summary ROBOCLAWS_CLAUDE_PROVIDER ROBOCLAWS_CLAUDE_MODEL)"
           roboclaws_claude_provider_args claude_model_args claude_env_args
@@ -674,6 +687,63 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             runner_args+=("--checker-visual-arg=$arg")
           done
 
+          exec "${runner_args[@]}"
+        fi
+
+        if [[ "$driver" == "openai-agents-live" ]]; then
+          active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_openai_agents_cleanup[.]py' || true)"
+          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-cleanup' || true)"
+          if [[ -n "$active_runner$active_server" ]]; then
+            echo "error: another live Molmo cleanup run appears to be active" >&2
+            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
+            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
+            echo "probe latest: just molmo::status" >&2
+            echo "stop the active run before launching another; visual Molmo cleanup owns a MuJoCo-backed backend" >&2
+            exit 1
+          fi
+
+          probe_host="$host"
+          if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
+            probe_host="127.0.0.1"
+          fi
+          if (echo > /dev/tcp/"$probe_host"/"$port") >/dev/null 2>&1; then
+            echo "error: requested MCP port ${host}:${port} is already accepting connections" >&2
+            echo "       refusing to choose another port because each live visual cleanup run owns a MuJoCo-backed backend" >&2
+            exit 1
+          fi
+
+          status_path="${run_dir}/live_status.json"
+          runner_args=(
+            .venv/bin/python
+            scripts/molmo_cleanup/run_live_openai_agents_cleanup.py
+            --repo-root "$PWD"
+            --run-dir "$run_dir"
+            --status-path "$status_path"
+            --client-url "$client_url"
+            --host "$host"
+            --port "$port"
+            --lock-path output/molmo/.live-openai-agents.lock
+            --provider-profile "$openai_agents_profile"
+            --model "$openai_agents_model"
+            --max-turns "${ROBOCLAWS_OPENAI_AGENTS_MAX_TURNS:-128}"
+            --incomplete-turn-continuation-attempts "${ROBOCLAWS_OPENAI_AGENTS_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS:-2}"
+            --server-startup-timeout-s "$server_startup_timeout_s"
+            --kickoff-prompt "$kickoff_prompt"
+            --backend "$backend"
+            --task-name "$task_name"
+            --policy "$policy"
+            --task "$task"
+            --min-generated-mess-count "$min_generated_mess_count"
+            --profile "$profile"
+          )
+          for arg in "${server_args[@]}"; do
+            runner_args+=("--server-arg=$arg")
+          done
+          for arg in "${checker_visual_args[@]}"; do
+            runner_args+=("--checker-visual-arg=$arg")
+          done
+
+          echo "==> OpenAI Agents SDK provider for this run: ${openai_agents_profile_summary}"
           exec "${runner_args[@]}"
         fi
 
@@ -1104,7 +1174,7 @@ renderer-comparison seed="7" generated_mess_count="10" output_dir="output/molmo/
     )
     if [[ ! -x "$standard_python" ]]; then
       echo "error: missing standard MolmoSpaces runtime: ${standard_python}" >&2
-      echo "       run: uv sync --extra dev --extra molmospaces" >&2
+      echo "       run: uv sync --extra dev" >&2
       exit 1
     fi
     if [[ ! -x "$filament_python" ]]; then
@@ -1214,7 +1284,7 @@ scene-camera-comparison seed="7" generated_mess_count="1" output_dir="output/mol
     genesis_python="${ROBOCLAWS_GENESIS_PYTHON:-.venv-genesis/bin/python}"
     if [[ ! -x "$molmospaces_python" ]]; then
       echo "error: missing MolmoSpaces runtime: ${molmospaces_python}" >&2
-      echo "       run: uv sync --extra dev --extra molmospaces" >&2
+      echo "       run: uv sync --extra dev" >&2
       exit 1
     fi
     if [[ ! -x "$isaac_python" ]]; then

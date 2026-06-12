@@ -23,7 +23,7 @@ binaries with no system-package dependencies — install once, forget.
 
 | Tool | What it does | Why we use it |
 |------|--------------|---------------|
-| [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev --extra openclaw` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock` |
+| [`uv`](https://docs.astral.sh/uv/) | project environment manager | `uv sync --extra dev` builds the repo-local `.venv/` from `pyproject.toml` and `uv.lock`, including the standard MolmoSpaces/MuJoCo CPU runtime |
 | [`just`](https://just.systems/) | command runner | replaces the `Makefile` matrix; human-facing runs use `just task::run <task> <driver> [report]` with lower-level modules hidden from completion but still available for debugging |
 
 ### Install
