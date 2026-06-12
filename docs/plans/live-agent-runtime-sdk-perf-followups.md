@@ -422,31 +422,32 @@ improved by `-630.633s` / `-619.022s` / `-612.38s`. The repeat exercised 13
 `observe_camera_grounded_candidates` calls, recorded 14
 `declare_visual_candidates` calls, compacted 192 of 364 camera-grounded history
 items, and reduced camera-grounded history bytes by `3483115`. This strengthens
-the O+AC wall-clock direction, while the one residual standalone declaration and
-missing calibration coefficients mean the claim remains diagnostic rather than
-normalized or publishable.
+the O+AC wall-clock direction, while the one residual standalone declaration
+keeps the claim diagnostic rather than broad or publishable.
 
 2026-06-12 O+AC calibrated-normalized diagnostic update: the shared
 report-performance extractor/comparison now accepts an explicit
 `roboclaws_model_latency_calibration_v1` packet through `--calibration` and
 keeps the default no-calibration behavior unchanged. A named diagnostic packet
-was generated from 193 sanitized model-call rows across the camera-grounded
+is generated from 193 sanitized model-call rows across the camera-grounded
 baseline, fixed4, and repeat artifacts at
 `output/agent-sdk-perf-followups/mify-camera-grounded-o-ac-calibration.json`.
-It is available, but its limitation is explicit:
-`simple_two-feature_fit_for_diagnostics_only_requires_named_dataset_review`, so
-it is not a committed repo-default or publishable calibration. The calibrated
-comparison artifacts are
+It now records same-dataset fit error statistics (`mae_s=4.785298`,
+`rmse_s=6.423924`, `p95_abs_error_s=15.654567`, `r2=0.048291`) and remains
+explicitly limited by `diagnostic_same_dataset_fit_not_holdout_validated` and
+`not_repo_default_calibration`, so it is not a committed repo-default or
+publishable calibration. The calibrated comparison artifacts are
 `output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-fixed4-normalized-comparison.json`
 and
 `output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-repeat-mify-normalized-comparison.json`.
 Both preserve the same quality gates and accepted wall-clock comparison. Under
-this diagnostic calibration, estimated model-work deltas increase
-(`+163.807s` fixed4, `+338.039s` repeat), while model-latency residual deltas
-drop sharply (`-817.37s` fixed4, `-957.061s` repeat). Interpret this as
-evidence that the O+AC paired wall-clock gain is coming from reduced residual
-model/SDK/provider waiting rather than reduced calibrated model-work. The claim
-is now calibrated-diagnostic, still not broad or publishable.
+this diagnostic calibration, estimated model-work deltas improve
+(`-112.56s` fixed4, `-85.531s` repeat), but the larger effect remains
+model-latency residual reduction (`-541.003s` fixed4, `-533.491s` repeat).
+Interpret this as evidence that the O+AC paired wall-clock gain is dominated by
+reduced residual model/SDK/provider waiting, with some same-dataset normalized
+model-work reduction under a low-explanatory-power fit. The claim is
+calibrated-diagnostic, still not broad or publishable.
 
 2026-06-12 B baseline coverage refresh update: the scoped provider/model
 coverage pass now records all three planned `world-public-labels` rows in
@@ -703,9 +704,9 @@ Current wall-clock priority after the O+AC calibrated-normalized diagnostic upda
    `world-public-labels` provider/model pass has one completed
    Chat-compatible MiMo row and two provider blockers (`kimi-openai-chat` 403
    and `codex-env` 502).
-2. Promote calibration only after a named reviewed dataset with error statistics
-   exists; the current O+AC calibration is diagnostic and local to the completed
-   artifacts.
+2. Promote calibration only after reviewed holdout or cross-run validation
+   exists; the current O+AC calibration has error statistics, but they are from
+   a same-dataset diagnostic fit local to the completed artifacts.
 3. Raw-FPV P/AA live retry only after `codex-env` upstream availability recovers
    or another OpenAI Agents SDK route has verified image transport.
 4. Revisit deferred H/M/K/E only if refreshed Q/Y evidence shows a material
@@ -803,7 +804,7 @@ task-state semantics, and complete trace/report artifacts.
 
 | ID | Queue | Do | Why | Success | Stop / next |
 | --- | --- | --- | --- | --- | --- |
-| AC | accepted-deterministic-prep, live paired rows accepted, calibrated-diagnostic comparison generated | Add completion-safe camera-grounded history compaction. | O continuation tightening removed standalone declarations but failed before completion on context budget. The rejected I/N policy compacted too broadly and broke task completion; AC narrows compaction to old camera-grounded observation/declaration history while retaining recent actionable outputs. | Implemented as `camera_grounded_history_v1` inside the private SDK model-input filter. It is off by default, can be enabled through `--camera-grounded-history-compaction` / `ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION`, keeps the latest N camera-grounded outputs full, summarizes older outputs only when smaller, records aggregate camera-grounded byte/count metrics, and preserves complete MCP traces/reports/run artifacts. The fixed4 and repeat rows completed with `done`, `run_result.json`, same-or-better quality, and paired wall improvements of `-659.477s` / `-630.633s`. The explicit diagnostic calibration packet from 193 model-call rows adds normalized comparison fields: estimated model-work increases while model-latency residual falls by `-817.37s` / `-957.061s`. | Keep AC SDK-private/opt-in. Treat calibrated output as diagnostic because the coefficient packet is a simple two-feature fit without reviewed error statistics. Next proof is broader B baseline coverage or a reviewed calibration dataset before broad/publishable claims. |
+| AC | accepted-deterministic-prep, live paired rows accepted, calibrated-diagnostic comparison generated | Add completion-safe camera-grounded history compaction. | O continuation tightening removed standalone declarations but failed before completion on context budget. The rejected I/N policy compacted too broadly and broke task completion; AC narrows compaction to old camera-grounded observation/declaration history while retaining recent actionable outputs. | Implemented as `camera_grounded_history_v1` inside the private SDK model-input filter. It is off by default, can be enabled through `--camera-grounded-history-compaction` / `ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION`, keeps the latest N camera-grounded outputs full, summarizes older outputs only when smaller, records aggregate camera-grounded byte/count metrics, and preserves complete MCP traces/reports/run artifacts. The fixed4 and repeat rows completed with `done`, `run_result.json`, same-or-better quality, and paired wall improvements of `-659.477s` / `-630.633s`. The explicit diagnostic calibration packet from 193 model-call rows now records error statistics and normalized comparison fields: estimated model-work improves by `-112.56s` / `-85.531s`, while model-latency residual falls by `-541.003s` / `-533.491s`. | Keep AC SDK-private/opt-in. Treat calibrated output as diagnostic because the packet is same-dataset fitted, not holdout-validated or repo-default. Next proof is broader evidence-lane/provider coverage or reviewed holdout calibration before broad/publishable claims. |
 
 ### Group 5: Promotion And Compatibility
 
