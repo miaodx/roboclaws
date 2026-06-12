@@ -66,7 +66,14 @@ work. A behavior-preserving compaction/session redesign, O paired proof after
 that redesign, a later raw-FPV retry after provider or image-transport
 availability changes, and broader B baseline coverage remain valid next arms.
 Token deltas are telemetry only; cost is not a deciding objective for this
-plan. The full live provider/model x evidence-lane performance matrix is still not done. The follow-up execution plan is
+plan. Candidate AC now provides the first deterministic slice of the
+behavior-preserving redesign: an opt-in private SDK
+`camera_grounded_history_v1` model-input filter that keeps recent actionable
+camera-grounded outputs full while summarizing older camera-grounded
+observation/declaration history before SDK model calls. It is deterministic
+prep only; the next speed decision needs an O+AC provider-backed paired row
+that preserves `done`, `run_result.json`, and same-or-better report-quality
+evidence. The full live provider/model x evidence-lane performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -376,6 +383,10 @@ Raw-FPV failure classification:
   delta summaries, no-growth compaction behavior through the smaller-than-
   original guard, profile attribution, aggregate metric-map byte counters, and
   timeline attribution projection.
+- Candidate AC has regression coverage for camera-grounded history compaction,
+  nested model-input compaction policy propagation, profile/default parsing,
+  aggregate camera-grounded byte/count metrics, and the existing live-refresh
+  no-provider matrix dry-run/offline-preflight gate.
 
 Verification:
 
@@ -448,7 +459,9 @@ Parked work:
     Candidate O promptfix2 mechanism row, and the expected-rejected F, I/N, C,
     and O continuation-tightening rows. The current wall-clock priority is
     behavior-preserving compaction/session redesign, then O paired proof after
-    that redesign, then scoped B baseline coverage.
+    that redesign, then scoped B baseline coverage. Candidate AC is the first
+    deterministic redesign slice and should be paired with the next O proof row
+    rather than rerunning the rejected I/N or O-tightening policies unchanged.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
@@ -477,6 +490,11 @@ Parked work:
   - Candidate C per-model-call racing is implemented and live-tested, but the
     current two-arm policy is rejected as faster-but-worse; do not rerun it
     unchanged.
+  - Candidate AC camera-grounded history compaction is implemented as
+    deterministic prep. It is SDK-private/off by default and has no live speed
+    claim until an O+AC row completes with `done`, `run_result.json`,
+    same-or-better cleanup quality, and lower paired-comparable wall/model
+    latency.
   - Agent-visible state delta/compaction and selective visual artifact capture
     remain possible later speed levers only after behavior-preserving changes;
     the current I/N, F, C, and O-tightening policies are rejected as wall-clock

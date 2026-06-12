@@ -435,7 +435,7 @@ def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
         env_name=MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
         default=DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS,
     )
-    return {
+    payload = {
         "schema": "agent_sdk_model_input_compaction_v1",
         "enabled": enabled,
         "mode": mode,
@@ -444,6 +444,11 @@ def _input_compaction_config(request: LiveAgentRequest) -> dict[str, Any]:
             "filter is model-facing only; MCP traces, reports, and run artifacts remain complete"
         ),
     }
+    for nested_key in ("raw_fpv_image_memory", "camera_grounded_history"):
+        nested = config.get(nested_key)
+        if isinstance(nested, dict):
+            payload[nested_key] = nested
+    return payload
 
 
 def _bool_setting(value: Any, *, default: bool) -> bool:
@@ -492,6 +497,9 @@ def _model_input_compaction_filter(
             raw_fpv_image_memory=config.get("raw_fpv_image_memory")
             if isinstance(config.get("raw_fpv_image_memory"), dict)
             else None,
+            camera_grounded_history=config.get("camera_grounded_history")
+            if isinstance(config.get("camera_grounded_history"), dict)
+            else None,
         )
         _append_model_input_filter_event(
             events_path,
@@ -532,10 +540,14 @@ def _compact_model_input_items(
     public_tool_output_summary: bool = True,
     repeated_metric_map_delta: bool = True,
     raw_fpv_image_memory: dict[str, Any] | None = None,
+    camera_grounded_history: dict[str, Any] | None = None,
 ) -> tuple[list[Any], dict[str, Any]]:
     image_policy = _raw_fpv_image_memory_policy(raw_fpv_image_memory)
     image_plan = _raw_fpv_image_memory_plan(items, image_policy)
     image_metrics = _new_raw_fpv_image_memory_metrics(image_policy)
+    camera_policy = _camera_grounded_history_policy(camera_grounded_history)
+    camera_plan = _camera_grounded_history_plan(items, camera_policy)
+    camera_metrics = _new_camera_grounded_history_metrics(camera_policy)
     filtered: list[Any] = []
     items_seen: dict[str, int] = {}
     metric_map_seen = False
@@ -557,6 +569,13 @@ def _compact_model_input_items(
                 image_info=image_info,
                 policy=image_policy,
                 metrics=image_metrics,
+            )
+        elif (camera_info := camera_plan.get(index)) is not None:
+            candidate, candidate_kind = _camera_grounded_history_candidate(
+                item,
+                camera_info=camera_info,
+                policy=camera_policy,
+                metrics=camera_metrics,
             )
         else:
             candidate, candidate_kind = _compaction_candidate(
@@ -602,6 +621,7 @@ def _compact_model_input_items(
         "metric_map_bytes_after": metric_map_bytes_after,
         "metric_map_bytes_reduced": max(0, metric_map_bytes_before - metric_map_bytes_after),
         **image_metrics,
+        **camera_metrics,
     }
 
 
@@ -784,6 +804,250 @@ def _raw_fpv_image_memory_candidate(
         metrics["raw_fpv_image_bytes_before"] - metrics["raw_fpv_image_bytes_after"],
     )
     return summary, "raw_fpv_image_memory"
+
+
+def _camera_grounded_history_policy(config: dict[str, Any] | None) -> dict[str, Any]:
+    config = config if isinstance(config, dict) else {}
+    enabled = _boolish(config.get("enabled"), default=False)
+    retained = _positive_int(config.get("retained_recent_outputs"), default=4)
+    if not enabled:
+        retained = 0
+    return {
+        "schema": "agent_sdk_camera_grounded_history_policy_v1",
+        "enabled": enabled,
+        "mode": str(
+            config.get("mode") or ("retain_latest_actionable_outputs" if enabled else "off")
+        ),
+        "retained_recent_outputs": retained,
+        "summary_kind": "roboclaws_camera_grounded_history_summary_v1",
+        "candidate_ids": ["AC"] if enabled else [],
+        "private_artifact_policy": (
+            "model-facing camera-grounded history compaction only; MCP traces, reports, "
+            "and run artifacts remain complete"
+        ),
+    }
+
+
+def _new_camera_grounded_history_metrics(policy: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "camera_grounded_history_enabled": bool(policy.get("enabled")),
+        "camera_grounded_history_mode": str(policy.get("mode") or "off"),
+        "camera_grounded_history_retained_limit": int(policy.get("retained_recent_outputs") or 0),
+        "camera_grounded_history_item_count": 0,
+        "camera_grounded_history_retained_count": 0,
+        "camera_grounded_history_compacted_count": 0,
+        "camera_grounded_history_bytes_before": 0,
+        "camera_grounded_history_bytes_after": 0,
+        "camera_grounded_history_bytes_reduced": 0,
+    }
+
+
+def _camera_grounded_history_plan(
+    items: list[Any],
+    policy: dict[str, Any],
+) -> dict[int, dict[str, Any]]:
+    if not policy.get("enabled"):
+        return {}
+    candidates = [
+        (index, info)
+        for index, item in enumerate(items)
+        if (info := _camera_grounded_history_info(item)) is not None
+    ]
+    retain_limit = int(policy.get("retained_recent_outputs") or 0)
+    retained = {index for index, _info in candidates[-retain_limit:]} if retain_limit > 0 else set()
+    return {
+        index: {
+            **info,
+            "retain_full_output": index in retained,
+        }
+        for index, info in candidates
+    }
+
+
+def _camera_grounded_history_info(item: Any) -> dict[str, Any] | None:
+    payload = _to_jsonable(item)
+    if not isinstance(payload, dict):
+        return None
+    item_type = str(payload.get("type") or "")
+    if item_type not in {
+        "function_call_output",
+        "computer_call_output",
+        "mcp_call",
+        "mcp_approval_response",
+    }:
+        return None
+    output = payload.get("output") if "output" in payload else payload.get("content")
+    decoded = _decode_tool_output_payload(output)
+    if not isinstance(decoded, dict):
+        return None
+    tool = str(decoded.get("tool") or payload.get("name") or payload.get("tool") or "")
+    call_id = str(payload.get("call_id") or "")
+    if not tool and "observe_camera_grounded_candidates" in call_id:
+        tool = "observe_camera_grounded_candidates"
+    if not tool and "declare_visual_candidates" in call_id:
+        tool = "declare_visual_candidates"
+    if not tool and "observe" in call_id:
+        tool = "observe"
+    if tool not in {
+        "observe_camera_grounded_candidates",
+        "declare_visual_candidates",
+        "observe",
+    }:
+        return None
+    if tool == "observe" and str(decoded.get("perception_mode") or "") != "camera_model_policy":
+        return None
+    if tool == "declare_visual_candidates" and not (
+        "camera_model_candidates" in decoded
+        or "model_declared_observations" in decoded
+        or "visual_grounding_pipeline" in decoded
+    ):
+        return None
+    output_text = output if isinstance(output, str) else json.dumps(output, sort_keys=True)
+    raw_fpv_observation = decoded.get("raw_fpv_observation")
+    raw_fpv_observation = raw_fpv_observation if isinstance(raw_fpv_observation, dict) else {}
+    return {
+        "item_type": item_type,
+        "tool": tool,
+        "output_key": "output" if "output" in payload else "content",
+        "output_text": output_text,
+        "observation_id": str(
+            decoded.get("observation_id") or raw_fpv_observation.get("observation_id") or ""
+        ),
+        "waypoint_id": str(decoded.get("waypoint_id") or ""),
+        "room_id": str(decoded.get("room_id") or decoded.get("current_room_id") or ""),
+        "status": str(decoded.get("status") or ""),
+        "ok": bool(decoded.get("ok", False)),
+        "candidate_count": _camera_grounded_candidate_count(decoded),
+        "actionable_candidate_count": _camera_grounded_actionable_candidate_count(decoded),
+        "candidate_refs": _camera_grounded_candidate_refs(decoded),
+    }
+
+
+def _camera_grounded_candidate_count(decoded: dict[str, Any]) -> int:
+    for key in ("camera_model_candidates", "model_declared_observations"):
+        value = decoded.get(key)
+        if isinstance(value, list):
+            return len(value)
+    declaration = decoded.get("declaration")
+    if isinstance(declaration, dict):
+        return _camera_grounded_candidate_count(declaration)
+    return 0
+
+
+def _camera_grounded_actionable_candidate_count(decoded: dict[str, Any]) -> int:
+    candidates = _camera_grounded_candidates(decoded)
+    return sum(
+        1
+        for candidate in candidates
+        if isinstance(candidate, dict)
+        and (
+            candidate.get("cleanup_recommended") is True
+            or str(candidate.get("actionability_status") or "") == "actionable"
+            or (
+                isinstance(candidate.get("visual_grounding_evidence"), dict)
+                and str(candidate["visual_grounding_evidence"].get("candidate_state") or "")
+                == "navigation_authorized"
+            )
+        )
+    )
+
+
+def _camera_grounded_candidates(decoded: dict[str, Any]) -> list[Any]:
+    for key in ("camera_model_candidates", "model_declared_observations"):
+        value = decoded.get(key)
+        if isinstance(value, list):
+            return value
+    declaration = decoded.get("declaration")
+    if isinstance(declaration, dict):
+        return _camera_grounded_candidates(declaration)
+    return []
+
+
+def _camera_grounded_candidate_refs(decoded: dict[str, Any]) -> list[dict[str, Any]]:
+    refs: list[dict[str, Any]] = []
+    for candidate in _camera_grounded_candidates(decoded)[:8]:
+        if not isinstance(candidate, dict):
+            continue
+        evidence = candidate.get("visual_grounding_evidence")
+        evidence = evidence if isinstance(evidence, dict) else {}
+        refs.append(
+            _drop_empty(
+                {
+                    "object_id": candidate.get("object_id"),
+                    "category": candidate.get("category"),
+                    "recommended_tool": candidate.get("recommended_tool"),
+                    "source_observation_id": candidate.get("source_observation_id")
+                    or evidence.get("source_observation_id"),
+                    "waypoint_id": candidate.get("waypoint_id"),
+                    "room_id": candidate.get("room_id") or candidate.get("current_room_id"),
+                    "cleanup_recommended": candidate.get("cleanup_recommended"),
+                    "actionability_status": candidate.get("actionability_status"),
+                    "candidate_state": evidence.get("candidate_state"),
+                }
+            )
+        )
+    return refs
+
+
+def _camera_grounded_history_candidate(
+    item: Any,
+    *,
+    camera_info: dict[str, Any],
+    policy: dict[str, Any],
+    metrics: dict[str, Any],
+) -> tuple[Any | None, str]:
+    original_bytes = _json_size_bytes(item)
+    metrics["camera_grounded_history_item_count"] += 1
+    metrics["camera_grounded_history_bytes_before"] += original_bytes
+    if camera_info.get("retain_full_output"):
+        metrics["camera_grounded_history_retained_count"] += 1
+        metrics["camera_grounded_history_bytes_after"] += original_bytes
+        return None, ""
+    output_text = str(camera_info.get("output_text") or "")
+    summary = {
+        "schema": "roboclaws_camera_grounded_history_summary_v1",
+        "item_type": camera_info.get("item_type") or "",
+        "tool": camera_info.get("tool") or "",
+        "original_chars": len(output_text),
+        "original_sha256": hashlib.sha256(output_text.encode("utf-8")).hexdigest(),
+        "observation_id": camera_info.get("observation_id") or "",
+        "waypoint_id": camera_info.get("waypoint_id") or "",
+        "room_id": camera_info.get("room_id") or "",
+        "status": camera_info.get("status") or "",
+        "ok": bool(camera_info.get("ok")),
+        "candidate_count": camera_info.get("candidate_count") or 0,
+        "actionable_candidate_count": camera_info.get("actionable_candidate_count") or 0,
+        "candidate_refs": camera_info.get("candidate_refs") or [],
+        "retention_policy": {
+            "mode": policy.get("mode"),
+            "retained_recent_outputs": policy.get("retained_recent_outputs"),
+        },
+        "summary": (
+            "Older camera-grounded observation/declaration output compacted before this SDK "
+            "model call. Use the latest retained camera-grounded outputs and current MCP "
+            "tools for actionable state; Roboclaws trace/report artifacts retain complete "
+            "tool responses."
+        ),
+        "private_artifact_policy": policy.get("private_artifact_policy"),
+    }
+    if _json_size_bytes(summary) >= original_bytes:
+        metrics["camera_grounded_history_retained_count"] += 1
+        metrics["camera_grounded_history_bytes_after"] += original_bytes
+        return None, ""
+    compacted = copy.deepcopy(_to_jsonable(item))
+    compacted[str(camera_info.get("output_key") or "output")] = json.dumps(
+        _drop_empty(summary),
+        sort_keys=True,
+    )
+    compacted_bytes = _json_size_bytes(compacted)
+    metrics["camera_grounded_history_compacted_count"] += 1
+    metrics["camera_grounded_history_bytes_after"] += compacted_bytes
+    metrics["camera_grounded_history_bytes_reduced"] = max(
+        0,
+        metrics["camera_grounded_history_bytes_before"]
+        - metrics["camera_grounded_history_bytes_after"],
+    )
+    return compacted, "camera_grounded_history"
 
 
 def _is_metric_map_tool_output(item: Any) -> bool:

@@ -1097,8 +1097,15 @@ def test_openai_agents_runtime_configures_model_input_compaction_filter(
                 "wire_api": "responses",
                 "model_input_compaction": {
                     "enabled": True,
-                    "mode": "public_tool_result_summary_v1",
+                    "mode": "public_tool_result_summary_v1+camera_grounded_history_v1",
                     "min_chars": 80,
+                    "camera_grounded_history": {
+                        "schema": "agent_sdk_camera_grounded_history_policy_v1",
+                        "enabled": True,
+                        "mode": "retain_latest_actionable_outputs",
+                        "retained_recent_outputs": 2,
+                        "candidate_ids": ["AC"],
+                    },
                 },
             }
         },
@@ -1113,7 +1120,17 @@ def test_openai_agents_runtime_configures_model_input_compaction_filter(
         for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
     ]
     assert events[0]["model_input_compaction"]["enabled"] is True
-    assert events[0]["model_input_compaction"]["mode"] == "public_tool_result_summary_v1"
+    assert (
+        events[0]["model_input_compaction"]["mode"]
+        == "public_tool_result_summary_v1+camera_grounded_history_v1"
+    )
+    assert events[0]["model_input_compaction"]["camera_grounded_history"] == {
+        "schema": "agent_sdk_camera_grounded_history_policy_v1",
+        "enabled": True,
+        "mode": "retain_latest_actionable_outputs",
+        "retained_recent_outputs": 2,
+        "candidate_ids": ["AC"],
+    }
     assert "call_model_input_filter" not in events[0]["sdk_run_config"]
 
 
@@ -1268,6 +1285,88 @@ def test_model_input_compaction_evicted_raw_fpv_images_keep_latest_frame() -> No
     assert metrics["raw_fpv_image_evicted_count"] == 1
     assert metrics["raw_fpv_image_bytes_after"] < metrics["raw_fpv_image_bytes_before"]
     assert metrics["raw_fpv_image_bytes_reduced"] > 0
+
+
+def test_model_input_compaction_summarizes_old_camera_grounded_history() -> None:
+    def camera_output(idx: int) -> dict[str, object]:
+        return {
+            "ok": True,
+            "status": "ok",
+            "tool": "observe_camera_grounded_candidates",
+            "observation_id": f"raw_fpv_{idx:03d}",
+            "waypoint_id": f"generated_exploration_{idx:03d}",
+            "room_id": f"room_{idx}",
+            "camera_model_candidates": [
+                {
+                    "object_id": f"observed_{idx:03d}",
+                    "category": "Potato",
+                    "recommended_tool": "place_inside",
+                    "cleanup_recommended": True,
+                    "visual_grounding_evidence": {
+                        "candidate_state": "navigation_authorized",
+                        "source_observation_id": f"raw_fpv_{idx:03d}",
+                    },
+                    "large_public_camera_payload": "x" * 5000,
+                }
+            ],
+            "raw_fpv_observation": {
+                "observation_id": f"raw_fpv_{idx:03d}",
+                "public_camera_diagnostics": "y" * 5000,
+            },
+        }
+
+    items = [
+        {
+            "type": "function_call_output",
+            "call_id": f"call_observe_camera_grounded_candidates_{idx}",
+            "output": json.dumps(camera_output(idx)),
+        }
+        for idx in range(1, 4)
+    ]
+
+    filtered, metrics = _compact_model_input_items(
+        items,
+        min_chars=999_999,
+        public_tool_output_summary=False,
+        repeated_metric_map_delta=False,
+        camera_grounded_history={
+            "enabled": True,
+            "mode": "retain_latest_actionable_outputs",
+            "retained_recent_outputs": 1,
+        },
+    )
+
+    first_replacement = json.loads(filtered[0]["output"])
+    assert first_replacement["schema"] == "roboclaws_camera_grounded_history_summary_v1"
+    assert first_replacement["tool"] == "observe_camera_grounded_candidates"
+    assert first_replacement["observation_id"] == "raw_fpv_001"
+    assert first_replacement["candidate_count"] == 1
+    assert first_replacement["actionable_candidate_count"] == 1
+    assert first_replacement["candidate_refs"] == [
+        {
+            "object_id": "observed_001",
+            "category": "Potato",
+            "recommended_tool": "place_inside",
+            "source_observation_id": "raw_fpv_001",
+            "cleanup_recommended": True,
+            "candidate_state": "navigation_authorized",
+        }
+    ]
+    assert "large_public_camera_payload" not in json.dumps(filtered[0])
+    assert "public_camera_diagnostics" not in json.dumps(filtered[0])
+    assert (
+        json.loads(filtered[-1]["output"])["raw_fpv_observation"]["public_camera_diagnostics"]
+        == "y" * 5000
+    )
+    assert metrics["camera_grounded_history_enabled"] is True
+    assert metrics["camera_grounded_history_item_count"] == 3
+    assert metrics["camera_grounded_history_retained_count"] == 1
+    assert metrics["camera_grounded_history_compacted_count"] == 2
+    assert (
+        metrics["camera_grounded_history_bytes_after"]
+        < metrics["camera_grounded_history_bytes_before"]
+    )
+    assert metrics["camera_grounded_history_bytes_reduced"] > 0
 
 
 def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
@@ -3100,6 +3199,8 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
         done_retry_budget=None,
         model_input_compaction=None,
         model_input_compaction_min_chars=None,
+        camera_grounded_history_compaction=None,
+        camera_grounded_history_retain=None,
         camera_grounded_composite_tools=None,
         robot_view_capture_policy="",
         model_service_retry_attempts=None,
@@ -3196,6 +3297,17 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
     assert gpt["model_input_compaction"]["candidate_ids"] == []
     assert gpt["model_input_compaction"]["repeated_metric_map_delta"] is False
+    assert gpt["model_input_compaction"]["camera_grounded_history"] == {
+        "schema": "agent_sdk_camera_grounded_history_policy_v1",
+        "enabled": False,
+        "mode": "off",
+        "retained_recent_outputs": 0,
+        "candidate_ids": [],
+        "private_artifact_policy": (
+            "model-facing camera-grounded history compaction only; MCP traces, reports, "
+            "and run artifacts remain complete"
+        ),
+    }
     assert gpt["camera_grounded_composite_tools"]["candidate_ids"] == ["O"]
     assert gpt["camera_grounded_composite_tools"]["enabled"] is False
 
@@ -3289,6 +3401,7 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert (
         custom["model_input_compaction"]["raw_fpv_image_memory"]["retained_full_frame_limit"] == 2
     )
+    assert custom["model_input_compaction"]["camera_grounded_history"]["enabled"] is False
     assert custom["robot_view_capture_policy"]["policy"] == "action_timeline"
     assert custom["robot_view_capture_policy"]["candidate_ids"] == ["F"]
 
@@ -3301,6 +3414,8 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
                 "model_input_compaction_min_chars": 80,
                 "raw_fpv_image_memory": True,
                 "raw_fpv_image_memory_retain": 2,
+                "camera_grounded_history_compaction": True,
+                "camera_grounded_history_retain": 3,
                 "camera_grounded_composite_tools": True,
             }
         )
@@ -3309,10 +3424,11 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
         "schema": "agent_sdk_model_input_compaction_v1",
         "enabled": True,
         "mode": (
-            "public_tool_result_summary_v1+repeated_metric_map_delta_v1+raw_fpv_image_memory_v1"
+            "public_tool_result_summary_v1+repeated_metric_map_delta_v1+raw_fpv_image_memory_v1+"
+            "camera_grounded_history_v1"
         ),
         "min_chars": 80,
-        "candidate_ids": ["I", "N", "AA"],
+        "candidate_ids": ["I", "N", "AA", "AC"],
         "hook": "RunConfig.call_model_input_filter",
         "repeated_metric_map_delta": True,
         "raw_fpv_image_memory": {
@@ -3324,6 +3440,17 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
             "private_artifact_policy": (
                 "model-facing raw-FPV image memory only; MCP traces, reports, and image "
                 "artifacts remain complete"
+            ),
+        },
+        "camera_grounded_history": {
+            "schema": "agent_sdk_camera_grounded_history_policy_v1",
+            "enabled": True,
+            "mode": "retain_latest_actionable_outputs",
+            "retained_recent_outputs": 3,
+            "candidate_ids": ["AC"],
+            "private_artifact_policy": (
+                "model-facing camera-grounded history compaction only; MCP traces, reports, "
+                "and run artifacts remain complete"
             ),
         },
         "private_artifact_policy": (
