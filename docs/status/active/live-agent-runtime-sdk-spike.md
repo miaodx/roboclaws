@@ -44,14 +44,17 @@ before `done` and got slower, so it is expected-rejected evidence rather than a
 wall-clock win. D per-arm racing observability is now implemented as
 single-arm/no-racing deterministic prep. C get-response racing deterministic
 prep is now implemented behind explicit opt-in flags, with winner/loser/cancel
-telemetry and `stream_response` kept single-arm. The next normalized-latency
-priority can be a scoped C live A/B if Q still shows model/SDK gap dominant and
-live caps cover the racing multiplier. A behavior-preserving compaction/session
-redesign, O paired repeats/tightening, and raw-FPV P/AA remain valid alternate
-lower-priority arms. Token deltas are telemetry only; cost is not a deciding
-objective for this plan. The full live provider/model x
-evidence-lane performance matrix is still not done. The follow-up execution
-plan is
+telemetry and `stream_response` kept single-arm. The scoped C `mify` Responses
+`world-public-labels` live A/B has now completed. It proves the racing
+mechanism and telemetry (`racing_enabled=true`, `racing_multiplier=2.0`, 53
+raced calls, 106 arms, 76 winners, 75 cancelled loser arms), and wall time
+improved by `-260.987s`, but cleanup quality regressed from success / 4 restored
+targets to partial_success / 3 restored targets. Treat C as expected-rejected
+evidence, not a wall-clock speed win. A behavior-preserving compaction/session
+redesign, O paired repeats/tightening, raw-FPV P/AA live rows, and broader B
+baseline coverage remain valid next arms. Token deltas are telemetry only; cost
+is not a deciding objective for this plan. The full live provider/model x
+evidence-lane performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -238,8 +241,20 @@ Result:
   `ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING` plus arm-count cap controls, defaults
   to no racing, races only SDK `get_response`, returns the first successful SDK
   model response, cancels pending losers, records sanitized D telemetry, and
-  keeps `stream_response` single-arm. No provider-backed C row or wall-clock
-  speed claim is made yet.
+  keeps `stream_response` single-arm.
+- The Candidate C `mify` Responses live A/B completed under
+  `docs/status/active/agent-sdk-c-racing-live-caps.json`: baseline
+  `output/agent-sdk-perf-followups/c-racing-baseline/0612_1429/seed-7/`,
+  candidate
+  `output/agent-sdk-perf-followups/c-racing-candidate/0612_1448/seed-7/`,
+  comparison
+  `output/agent-sdk-perf-followups/c-racing-comparison-diagnostic.json`. The
+  candidate used two racing arms and recorded sanitized winner/cancel telemetry,
+  but the comparison rejects it as faster-but-worse: observed wall time
+  improved by `-260.987s`, `mcp_between_tool_gap_s` improved by `-247.174s`,
+  observed model API time increased by `+397.292s`, and behavior quality
+  regressed from `completion_status=success`, `restored_count=4` to
+  `completion_status=partial_success`, `restored_count=3`.
 - Completed external camera-grounded Chat-compatible evidence at
   `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
   shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14
