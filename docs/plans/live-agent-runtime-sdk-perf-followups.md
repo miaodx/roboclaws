@@ -484,6 +484,31 @@ The refreshed decision packet now has 11 rows: 5 accepted, 4 rejected, and 2
 blocked. This is coverage/blocker evidence only; it does not change the O+AC
 speed conclusion.
 
+2026-06-12 latency-objective direction audit update: the maintainer clarified
+that token cost is not a decision objective for this pass. Token and byte deltas
+remain useful telemetry for explaining context behavior, but the optimization
+target is wall-clock latency and especially normalized/calibrated or
+paired-comparable latency. The current direction audit covers the meaningful
+candidate families in this plan: the live-refresh decision packet has 11 rows
+with 5 accepted, 4 rejected, and 2 blocked. The only accepted speed direction is
+O+AC (`camera_grounded_composite_tools` plus
+`camera_grounded_history_v1`): fixed4 and repeat rows preserve cleanup quality
+and improve paired wall/model latency by `-659.477s` / `-653.563s` and
+`-630.633s` / `-619.022s`. Holdout-normalized model-work deltas are still
+weak/inconsistent (`-13.613s`, `+35.951s`) while residual reductions dominate
+(`-639.95s`, `-654.973s`), so the current claim is a paired wall-clock win
+driven by reduced wait/residual latency, not a publishable normalized
+model-work win. F, broad I/N/AB compaction, C racing, and O-only continuation
+tightening have all been tried and rejected under current policies; do not
+rerun them unchanged. P/AA raw-FPV remains live-blocked by provider image
+transport/upstream availability, and B has produced coverage/blocker evidence
+only. The remaining useful work is therefore limited to: a reviewed holdout or
+cross-run calibration dataset with acceptable explanatory power; B coverage only
+where it adds new provider/evidence-lane information; a behavior-preserving
+Responses-native session/continuation/cache A/B arm if it directly targets the
+remaining latency bucket; and raw-FPV P/AA only after provider/image-transport
+availability changes.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -556,17 +581,22 @@ speed conclusion.
 
 ## Not Done
 
-- Full live GPT/MiMo x evidence-lane matrix.
-- Follow-up optimization groups 1-5 beyond accepted deterministic prep and
-  diagnostic rows still need live A/B, repeats, baseline refresh, or promotion
-  guards before any normalized/publishable speed claim.
-- Provider-backed Responses-native A/B evaluation for server-managed
-  continuation, conversation/session state, prompt-cache retention, and
-  model-input compaction.
-- OpenAI Agents SDK provider-backed matrix rows for Chat-compatible profiles
-  such as `mimo-openai-chat` and `kimi-openai-chat`, when credentials and
-  backend access are available under the standing authorization. These rows
-  prove compatibility unless their own metrics support a speed claim.
+- Full live GPT/MiMo x evidence-lane matrix. The scoped `world-public-labels`
+  B refresh has one completed MiMo Chat row and two provider blockers; further B
+  work should run only when it adds new provider/evidence-lane information.
+- Publishable normalized speedup claim. O+AC has repeated paired wall-clock
+  wins, but the current holdout calibration has weak explanatory power and keeps
+  normalized model-work claims diagnostic.
+- Provider-backed Responses-native A/B evaluation for a behavior-preserving
+  server-managed continuation, conversation/session state, prompt-cache
+  retention, or cache/settings arm, if it directly targets the remaining
+  latency bucket and preserves `done` / `run_result.json`.
+- Raw-FPV P/AA live behavior evidence, only after a provider with verified image
+  transport is available or `codex-env` upstream availability recovers.
+- OpenAI Agents SDK provider-backed matrix rows for additional Chat-compatible
+  profiles or lanes, when credentials and backend access are available and the
+  row adds coverage. These rows prove compatibility unless their own metrics
+  support a speed claim.
 - Publishable speedup claim across all relevant lanes and providers.
 
 ## Hard Constraints
