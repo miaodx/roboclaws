@@ -531,6 +531,113 @@ def test_agent_sdk_perf_matrix_accepts_expected_raw_fpv_diagnostic_terminal(
     assert row["quality_comparison"]["regressed"] is True
 
 
+def test_agent_sdk_perf_matrix_summarizes_candidate_coverage(
+    tmp_path: Path,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100)
+    accepted = _write_run(tmp_path / "accepted", restored=5, elapsed_s=70)
+    rejected = _write_run(tmp_path / "rejected", restored=4, elapsed_s=50)
+    blocked = _write_run(
+        tmp_path / "blocked",
+        restored=0,
+        elapsed_s=20,
+        status={"phase": "failed", "reason": "agent_cli_failure", "exit_status": 1},
+        run_result=False,
+    )
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=accepted,
+        candidate_groups=[
+            {"group_id": "group1_private_sdk_levers", "candidate_ids": ["A", "I"]},
+            {"group_id": "group2_lane_specific_reductions", "candidate_ids": ["F"]},
+            {"group_id": "group3_raw_fpv_stabilization", "candidate_ids": ["P"]},
+            {"group_id": "group4_expensive_orchestration", "candidate_ids": ["C"]},
+        ],
+        extra_rows=[
+            {
+                "row_id": "rejected_f",
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "evidence_lane": "world-public-labels",
+                "candidate_group": "group0_foundation",
+                "candidate_ids": ["Q", "Y"],
+                "dependency_candidate_ids": ["F"],
+                "feature_flags": {
+                    "expected_rejected_evidence": True,
+                    "offline_preflight": True,
+                    "provider_calls": False,
+                    "quality_comparator": True,
+                },
+                "stop_conditions": ["privacy_gate_failed", "unexpected_decision_status"],
+                "baseline_role": "completed_live_responses_baseline",
+                "baseline_run_dir": str(baseline),
+                "candidate_run_dir": str(rejected),
+                "provider_calls": False,
+                "expected_terminal": "finished",
+                "expected_decision_status": "rejected",
+            },
+            {
+                "row_id": "blocked_p",
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "evidence_lane": "camera-raw-fpv",
+                "candidate_group": "group0_foundation",
+                "candidate_ids": ["Q", "Y"],
+                "dependency_candidate_ids": ["P"],
+                "feature_flags": {
+                    "expected_blocked_evidence": True,
+                    "offline_preflight": True,
+                    "provider_calls": False,
+                    "quality_comparator": True,
+                },
+                "stop_conditions": ["privacy_gate_failed", "unexpected_decision_status"],
+                "baseline_role": "blocked_live_baseline",
+                "baseline_run_dir": str(blocked),
+                "candidate_run_dir": str(blocked),
+                "provider_calls": False,
+                "expected_terminal": "agent_cli_failure",
+                "expected_decision_status": "blocked",
+            },
+        ],
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 0
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    coverage = packet["summary"]["candidate_coverage"]
+    assert coverage["source"] == "candidate_groups_and_decision_rows"
+    assert coverage["candidate_count"] == 15
+    assert coverage["state_counts"]["accepted_only"] >= 1
+    assert coverage["state_counts"]["rejected_only"] == 1
+    assert coverage["state_counts"]["blocked_only"] == 1
+    assert coverage["state_counts"]["no_decision_row"] == 3
+    assert {"A", "C", "I"} == set(coverage["no_decision_row_candidate_ids"])
+    items = {item["candidate_id"]: item for item in coverage["items"]}
+    assert items["R"]["evidence_state"] == "accepted_only"
+    assert items["F"]["evidence_state"] == "rejected_only"
+    assert items["P"]["evidence_state"] == "blocked_only"
+    assert items["C"]["evidence_state"] == "no_decision_row"
+    assert items["R"]["row_ids"] == ["gpt_world_public_group0"]
+    assert items["F"]["row_ids"] == ["rejected_f"]
+    assert items["P"]["row_ids"] == ["blocked_p"]
+    assert items["C"]["row_ids"] == []
+    assert "do not rerun unchanged" in items["F"]["next_action"]
+    assert "recorded provider/backend/capability blocker changes" in items["P"]["next_action"]
+    assert "no decision-row evidence yet" in items["C"]["next_action"]
+
+
 def _write_manifest(
     tmp_path: Path,
     *,
@@ -541,6 +648,8 @@ def _write_manifest(
     expected_decision_status: str = "",
     feature_flags_extra: dict[str, object] | None = None,
     calibration_path: Path | None = None,
+    candidate_groups: list[dict[str, object]] | None = None,
+    extra_rows: list[dict[str, object]] | None = None,
 ) -> Path:
     feature_flags = {
         "dry_run_matrix": True,
@@ -552,6 +661,45 @@ def _write_manifest(
     }
     if feature_flags_extra:
         feature_flags.update(feature_flags_extra)
+    rows: list[dict[str, object]] = [
+        {
+            "row_id": "gpt_world_public_group0",
+            "provider_profile": "codex-env",
+            "model": "gpt-5.5",
+            "evidence_lane": lane,
+            "candidate_group": "group0_foundation",
+            "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
+            "dependency_candidate_ids": [],
+            "feature_flags": feature_flags,
+            "stop_conditions": [
+                "privacy_gate_failed",
+                "quality_regression",
+                "provider_calls_planned",
+            ],
+            "baseline_role": "full_lane_baseline",
+            "baseline_run_dir": str(baseline),
+            "candidate_run_dir": str(candidate),
+            "calibration_path": str(calibration_path or ""),
+            "provider_calls": False,
+            "expected_terminal": expected_terminal,
+            "expected_decision_status": expected_decision_status,
+        },
+        {
+            "row_id": "unsupported_provider",
+            "provider_profile": "kimi-anthropic",
+            "model": "kimi",
+            "evidence_lane": lane,
+            "candidate_group": "group0_foundation",
+            "candidate_ids": ["B"],
+            "dependency_candidate_ids": [],
+            "feature_flags": {"unsupported_matrix_row": True, "provider_calls": False},
+            "stop_conditions": ["unsupported_provider_route"],
+            "provider_calls": False,
+            "unsupported_reason": "unsupported provider route",
+        },
+    ]
+    if extra_rows:
+        rows.extend(extra_rows)
     manifest = tmp_path / "matrix.json"
     manifest.write_text(
         json.dumps(
@@ -563,49 +711,14 @@ def _write_manifest(
                     "max_wall_clock_s": 0,
                     "racing_multiplier": 1.0,
                 },
-                "candidate_groups": [
+                "candidate_groups": candidate_groups
+                or [
                     {
                         "group_id": "group0_foundation",
                         "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
                     }
                 ],
-                "rows": [
-                    {
-                        "row_id": "gpt_world_public_group0",
-                        "provider_profile": "codex-env",
-                        "model": "gpt-5.5",
-                        "evidence_lane": lane,
-                        "candidate_group": "group0_foundation",
-                        "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
-                        "dependency_candidate_ids": [],
-                        "feature_flags": feature_flags,
-                        "stop_conditions": [
-                            "privacy_gate_failed",
-                            "quality_regression",
-                            "provider_calls_planned",
-                        ],
-                        "baseline_role": "full_lane_baseline",
-                        "baseline_run_dir": str(baseline),
-                        "candidate_run_dir": str(candidate),
-                        "calibration_path": str(calibration_path or ""),
-                        "provider_calls": False,
-                        "expected_terminal": expected_terminal,
-                        "expected_decision_status": expected_decision_status,
-                    },
-                    {
-                        "row_id": "unsupported_provider",
-                        "provider_profile": "kimi-anthropic",
-                        "model": "kimi",
-                        "evidence_lane": lane,
-                        "candidate_group": "group0_foundation",
-                        "candidate_ids": ["B"],
-                        "dependency_candidate_ids": [],
-                        "feature_flags": {"unsupported_matrix_row": True, "provider_calls": False},
-                        "stop_conditions": ["unsupported_provider_route"],
-                        "provider_calls": False,
-                        "unsupported_reason": "unsupported provider route",
-                    },
-                ],
+                "rows": rows,
             }
         ),
         encoding="utf-8",

@@ -480,17 +480,17 @@ baseline coverage only (`partial_success`, `restored_count=3/5`,
 is blocked by provider-transient 502 `upstream_unavailable` before task tool
 calls, with shared metrics at
 `output/agent-sdk-perf-followups/b-baseline-codex-env-world-public-metrics.json`.
-The refreshed decision packet now has 11 rows: 5 accepted, 4 rejected, and 2
-blocked. This is coverage/blocker evidence only; it does not change the O+AC
-speed conclusion.
+That B refresh moved the decision packet to 11 rows: 5 accepted, 4 rejected,
+and 2 blocked. This is coverage/blocker evidence only; it does not change the
+O+AC speed conclusion.
 
 2026-06-12 latency-objective direction audit update: the maintainer clarified
 that token cost is not a decision objective for this pass. Token and byte deltas
 remain useful telemetry for explaining context behavior, but the optimization
 target is wall-clock latency and especially normalized/calibrated or
 paired-comparable latency. The current direction audit covers the meaningful
-candidate families in this plan: the live-refresh decision packet has 11 rows
-with 5 accepted, 4 rejected, and 2 blocked. The only accepted speed direction is
+candidate families in this plan: the live-refresh decision packet now has 12 rows
+with 5 accepted, 4 rejected, and 3 blocked. The only accepted speed direction is
 O+AC (`camera_grounded_composite_tools` plus
 `camera_grounded_history_v1`): fixed4 and repeat rows preserve cleanup quality
 and improve paired wall/model latency by `-659.477s` / `-653.563s` and
@@ -508,6 +508,17 @@ where it adds new provider/evidence-lane information; a behavior-preserving
 Responses-native session/continuation/cache A/B arm if it directly targets the
 remaining latency bucket; and raw-FPV P/AA only after provider/image-transport
 availability changes.
+
+2026-06-12 machine coverage audit update: the live-refresh decision packet now
+adds `summary.candidate_coverage`, generated from `candidate_groups` plus
+`candidate_ids` / `dependency_candidate_ids` on each row. The refreshed packet
+has 23 candidate IDs: 2 accepted-only (`AC`, `W`), 3 rejected-only (`C`, `D`,
+`F`), 2 blocked-only (`P`, `AA`), 7 mixed-evidence, and 9 with no live-refresh
+decision row (`A`, `G`, `J`, `H`, `L`, `M`, `K`, `E`, `X`). The no-row set is
+intentional for deterministic-only, deferred, bypassed, or promotion-gate
+directions unless refreshed Q/Y or a changed dependency justifies a new row.
+This is now the machine-readable answer to "which directions have been tried,
+blocked, rejected, or not yet given row evidence."
 
 ## Completed Prerequisites
 
@@ -556,8 +567,9 @@ availability changes.
 - Q/Y deterministic decision enrichment is implemented in the Group 0
   preflight. `reducible_bucket_report` rows now expose latency buckets,
   dominant buckets, failed/noop counts, and candidate recommendations, while the
-  decision packet summary aggregates candidate and candidate-group rankings
-  without adding provider calls or raw payload persistence.
+  decision packet summary aggregates candidate and candidate-group rankings plus
+  candidate-level coverage state without adding provider calls or raw payload
+  persistence.
 - Q/Y has also been refreshed against completed live Responses pairs through
   `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`. This is an
   offline/no-provider packet over existing run artifacts, not a new live row.

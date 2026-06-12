@@ -265,6 +265,7 @@ def _finalize_packet(packet: dict[str, Any]) -> None:
         ],
         "unsupported": [row["row_id"] for row in packet["rows"] if row["status"] == "unsupported"],
         "recommendation_summary": _recommendation_summary(packet["rows"]),
+        "candidate_coverage": _candidate_coverage(packet),
     }
 
 
@@ -596,6 +597,109 @@ def _recommendation_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
         ],
         "row_recommendations": row_recommendations,
     }
+
+
+def _candidate_coverage(packet: dict[str, Any]) -> dict[str, Any]:
+    groups_by_candidate: dict[str, set[str]] = {}
+    for group in packet.get("candidate_groups") or []:
+        if not isinstance(group, dict):
+            continue
+        group_id = str(group.get("group_id") or "")
+        for candidate_id in _str_list(group.get("candidate_ids")):
+            groups_by_candidate.setdefault(candidate_id, set())
+            if group_id:
+                groups_by_candidate[candidate_id].add(group_id)
+
+    rows_by_candidate: dict[str, list[dict[str, Any]]] = {}
+    for row in packet.get("rows") or []:
+        if not isinstance(row, dict):
+            continue
+        candidate_ids = set(_str_list(row.get("candidate_ids")))
+        candidate_ids.update(_str_list(row.get("dependency_candidate_ids")))
+        for candidate_id in candidate_ids:
+            rows_by_candidate.setdefault(candidate_id, []).append(row)
+            groups_by_candidate.setdefault(candidate_id, set())
+
+    items: list[dict[str, Any]] = []
+    state_counts: dict[str, int] = {}
+    for candidate_id in sorted(groups_by_candidate):
+        rows = rows_by_candidate.get(candidate_id, [])
+        statuses = _status_counts(rows)
+        state = _candidate_evidence_state(statuses)
+        state_counts[state] = state_counts.get(state, 0) + 1
+        items.append(
+            {
+                "candidate_id": candidate_id,
+                "group_ids": sorted(groups_by_candidate.get(candidate_id) or []),
+                "row_ids": [str(row.get("row_id") or "") for row in rows],
+                "status_counts": statuses,
+                "evidence_state": state,
+                "next_action": _candidate_next_action(state),
+            }
+        )
+
+    return {
+        "source": "candidate_groups_and_decision_rows",
+        "candidate_count": len(items),
+        "state_counts": dict(sorted(state_counts.items())),
+        "covered_candidate_ids": [
+            item["candidate_id"] for item in items if item["evidence_state"] != "no_decision_row"
+        ],
+        "no_decision_row_candidate_ids": [
+            item["candidate_id"] for item in items if item["evidence_state"] == "no_decision_row"
+        ],
+        "items": items,
+    }
+
+
+def _status_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        status = str(row.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _candidate_evidence_state(status_counts: dict[str, int]) -> str:
+    if not status_counts:
+        return "no_decision_row"
+    accepted = status_counts.get("accepted", 0)
+    rejected = status_counts.get("rejected", 0)
+    blocked = status_counts.get("blocked", 0)
+    inconclusive = status_counts.get("inconclusive", 0)
+    unsupported = status_counts.get("unsupported", 0)
+    if accepted and not (rejected or blocked or inconclusive or unsupported):
+        return "accepted_only"
+    if rejected and not (accepted or blocked or inconclusive or unsupported):
+        return "rejected_only"
+    if blocked and not (accepted or rejected or inconclusive or unsupported):
+        return "blocked_only"
+    if unsupported and not (accepted or rejected or blocked or inconclusive):
+        return "unsupported_only"
+    if inconclusive and not (accepted or rejected or blocked or unsupported):
+        return "inconclusive_only"
+    return "mixed_evidence"
+
+
+def _candidate_next_action(state: str) -> str:
+    return {
+        "accepted_only": (
+            "maintain accepted evidence; rerun only for repeat, calibration, or broader coverage"
+        ),
+        "rejected_only": (
+            "do not rerun unchanged; require a changed mechanism or behavior-preserving gate"
+        ),
+        "blocked_only": "retry only after the recorded provider/backend/capability blocker changes",
+        "unsupported_only": "do not run until the route is supported",
+        "inconclusive_only": "add stronger baseline/candidate evidence before claiming speedup",
+        "mixed_evidence": (
+            "inspect row variants before choosing the next arm; avoid treating one row as "
+            "the whole candidate"
+        ),
+        "no_decision_row": (
+            "no decision-row evidence yet; run only if refreshed Q/Y or plan gates justify it"
+        ),
+    }.get(state, "inspect candidate state before continuing")
 
 
 def _privacy_findings(packet: dict[str, Any]) -> list[dict[str, Any]]:

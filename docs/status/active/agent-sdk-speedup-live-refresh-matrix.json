@@ -29,9 +29,14 @@
       "purpose": "raw-FPV diagnostic stabilization"
     },
     {
-      "candidate_ids": ["C", "D"],
+      "candidate_ids": ["C", "D", "K", "E"],
       "group_id": "group4_expensive_orchestration",
       "purpose": "model-call racing and per-arm observability"
+    },
+    {
+      "candidate_ids": ["X"],
+      "group_id": "group5_promotion_and_compatibility",
+      "purpose": "cross-client guard before promoting private or opt-in speedups"
     }
   ],
   "rows": [
@@ -384,6 +389,39 @@
       "provider_profile": "codex-env",
       "quality_policy": "same_or_better",
       "row_id": "codex_env_responses_world_public_b_blocked_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "blocked_live_raw_fpv_responses_attempt",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/raw-fpv-budgeted-codex-retry/0612_1514/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/raw-fpv-budgeted-codex-retry/0612_1514/seed-7",
+      "dependency_candidate_ids": ["P", "AA"],
+      "evidence_lane": "camera-raw-fpv",
+      "expected_decision_status": "blocked",
+      "expected_terminal": "provider_transient_failure",
+      "feature_flags": {
+        "expected_blocked_evidence": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "raw_fpv_image_memory": "raw_fpv_image_memory_v1",
+        "raw_fpv_repeated_failure_limit": 3,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true,
+        "wire_api": "responses"
+      },
+      "model": "gpt-5.5",
+      "provider_calls": false,
+      "provider_profile": "codex-env",
+      "quality_policy": "same_or_better",
+      "row_id": "raw_fpv_codex_env_p_aa_blocked_refresh",
       "stop_conditions": [
         "privacy_gate_failed",
         "missing_baseline_or_candidate",
