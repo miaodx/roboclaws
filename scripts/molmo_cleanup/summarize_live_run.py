@@ -119,6 +119,8 @@ def _artifact_summary(run_dir: Path) -> dict[str, str]:
         "run_live_codex.sh",
         "driver.log",
         "codex-events.jsonl",
+        "openai-agents-events.jsonl",
+        "openai-agents-trace.json",
         "codex-last-message.md",
         "codex.stderr.log",
         "live_timing.json",
@@ -255,6 +257,7 @@ def _timing_summary(
     if profile_metadata.get("record_robot_views") is False:
         skipped_work.append("per-tool robot-view timeline capture")
     codex_events = live_timing.get("codex_events") or {}
+    openai_agents = live_timing.get("openai_agents") or {}
     return {
         "live": live_timing,
         "runner": live_timing.get("runner_timing") or {},
@@ -262,6 +265,7 @@ def _timing_summary(
         "profile": profile_metadata,
         "skipped_work": skipped_work,
         "codex_events": codex_events,
+        "openai_agents": openai_agents,
         "baseline": _baseline_comparison(runtime_timing, live_timing, run_dir),
     }
 

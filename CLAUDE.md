@@ -40,9 +40,10 @@ how to run another iteration (`just agent::harness run <task>`).
 
 Use the repo-local `.venv/` as the canonical Python environment. It is managed
 by `uv` from `pyproject.toml` / `uv.lock`, and demos should not rely on hidden
-external virtualenvs under `/tmp` or another repo. If a demo needs MolmoSpaces,
-MuJoCo, OpenClaw, or other extra dependencies, add or use a declared
-`pyproject.toml` extra and install it into this checkout's `.venv/`.
+external virtualenvs under `/tmp` or another repo. The `dev` extra includes the
+standard MolmoSpaces/MuJoCo CPU runtime. If a demo needs another optional
+dependency group, add or use a declared `pyproject.toml` extra and install it
+into this checkout's `.venv/`.
 Use `uv sync` for declared project environments and `uv pip install` only for
 explicit local one-off installs. Do not use plain `pip install` for repo setup.
 
@@ -57,12 +58,8 @@ ruff format --check .
 pytest
 ```
 
-For real MolmoSpaces/MuJoCo demos, sync the declared extra into the same
-repo-local environment:
-
-```bash
-uv sync --extra dev --extra molmospaces
-```
+Isaac Lab remains intentionally isolated in `.venv-isaaclab/`; use the Isaac
+preflight harness when testing that backend.
 
 Run demos (requires AI2-THOR, auto-downloads Unity build ~1GB; see `AGENTS.md` §1.3 for VLM key setup):
 

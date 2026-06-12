@@ -150,6 +150,17 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert state["env_overrides"] == {
         "ROBOCLAWS_CODEX_PROVIDER": "mify",
     }
+    history_path = console_output_root(tmp_path) / "runs.jsonl"
+    history_rows = [
+        json.loads(line)
+        for line in history_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    assert history_rows[-1]["run_id"] == state["run_id"]
+    assert history_rows[-1]["route_id"] == route.id
+    assert history_rows[-1]["run_dir"] == str(
+        console_output_root(tmp_path) / "runs" / state["run_id"]
+    )
     lock = ResourceLock(tmp_path, route.lock_name).read()
     assert lock.pid == 12345
     state_path = console_output_root(tmp_path) / "runs" / state["run_id"] / "operator_state.json"
@@ -178,7 +189,7 @@ def test_readiness_exposes_attachable_run_for_held_backend_lock(tmp_path: Path) 
     )
     ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=pid)
 
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
 
     assert readiness["can_start"] is False
     assert readiness["blocker_kind"] == "locked"
@@ -225,7 +236,7 @@ def test_readiness_keeps_stale_wrapper_lock_attachable_when_child_live_run_is_ac
     lock = ResourceLock(tmp_path, route.lock_name)
     lock.acquire(run_id=run_id, pid=99999999)
 
-    readiness = route_readiness(tmp_path, route, env=CODEX_ENV)
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
 
     assert readiness["can_start"] is False
     assert readiness["blocker_kind"] == "locked"
@@ -233,6 +244,47 @@ def test_readiness_keeps_stale_wrapper_lock_attachable_when_child_live_run_is_ac
     assert readiness["attachable_run"]["run_id"] == run_id
     assert readiness["attachable_run"]["phase"] == "running-codex"
     assert readiness["attachable_run"]["display_run_dir"] == str(attempt_dir.resolve())
+
+
+def test_readiness_releases_terminal_failed_lock_instead_of_attaching_dead_run(
+    tmp_path: Path,
+) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "failed-wrapper-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0609_1025" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 123450,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "failed",
+                "exit_status": 1,
+                "reason": "cleanup checker exited with status 1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=123450)
+
+    readiness = route_readiness(tmp_path, route, overrides={"port": _free_port()}, env=CODEX_ENV)
+
+    assert readiness["can_start"] is True
+    assert readiness["blocker_kind"] == ""
+    assert readiness["attachable_run"] is None
+    assert ResourceLock(tmp_path, route.lock_name).read().held is False
 
 
 def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
@@ -297,6 +349,56 @@ def test_stop_console_run_targets_nested_live_attempt(tmp_path: Path) -> None:
     assert live_status["phase"] == "stopped_by_operator"
     assert live_status["exit_status"] == 130
     assert ResourceLock(tmp_path, route.lock_name).read().held is False
+
+
+def test_stop_console_run_releases_failed_terminal_lock_without_relabeling_failure(
+    tmp_path: Path,
+) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "failed-wrapper-run"
+    run_dir = console_output_root(tmp_path) / "runs" / run_id
+    attempt_dir = run_dir / "0609_1025" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 123450,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps(
+            {
+                "phase": "failed",
+                "exit_status": 1,
+                "reason": "cleanup checker exited with status 1",
+            }
+        ),
+        encoding="utf-8",
+    )
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=123450)
+
+    with (
+        patch("roboclaws.operator_console.launcher._stop_live_child_run") as stop_child,
+        patch("roboclaws.operator_console.launcher._terminate_process_group") as stop_wrapper,
+    ):
+        state = stop_console_run(tmp_path, run_id)
+
+    assert state["phase"] == "failed"
+    assert state["terminal_reason"] == "cleanup checker exited with status 1"
+    assert state["display_run_dir"] == str(attempt_dir.resolve())
+    stop_child.assert_called_once_with(attempt_dir.resolve())
+    stop_wrapper.assert_called_once_with(123450)
+    assert ResourceLock(tmp_path, route.lock_name).read().held is False
+    live_status = json.loads((attempt_dir / "live_status.json").read_text(encoding="utf-8"))
+    assert live_status["phase"] == "failed"
+    assert live_status["exit_status"] == 1
 
 
 def test_stop_console_run_stops_docker_container_bound_to_attempt_workspace(

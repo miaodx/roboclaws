@@ -264,3 +264,34 @@ def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
+    tmp_path: Path,
+) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "latest-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps({"run_id": run_id, "route": route.to_payload(), "phase": "finished"}),
+        encoding="utf-8",
+    )
+    (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        with urllib.request.urlopen(f"http://{host}:{port}/api/runs/latest") as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["run_id"] == run_id
+    assert payload["route_id"] == route.id
+    assert payload["run_dir"] == str(run_dir.resolve())

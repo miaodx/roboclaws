@@ -53,6 +53,7 @@ const els = {
   routeStatus: document.getElementById("route-status"),
   lockStatus: document.getElementById("lock-status"),
   elapsedStatus: document.getElementById("elapsed-status"),
+  latestResultButton: document.getElementById("latest-result-button"),
   pauseButton: document.getElementById("pause-button"),
   stopButton: document.getElementById("stop-button"),
   emergencyButton: document.getElementById("emergency-button"),
@@ -111,6 +112,7 @@ function bindEvents() {
     input.addEventListener("change", refreshSelectedRouteReadiness);
   });
   els.startButton.addEventListener("click", handleStartAction);
+  els.latestResultButton.addEventListener("click", attachLatestResult);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
     confirmAction({
@@ -609,6 +611,27 @@ function attachExistingRun(run) {
   startPolling();
 }
 
+async function attachLatestResult() {
+  const result = await fetchJson("/api/runs/latest");
+  if (result.error) {
+    els.eventList.textContent = result.error;
+    return;
+  }
+  const route = state.routes.find((item) => item.id === result.route_id);
+  if (route) {
+    state.selectedRoute = route;
+    renderRoutes();
+    renderSelection();
+  }
+  state.activeRunId = result.run_id;
+  state.activeRouteId = result.route_id || (route ? route.id : state.selectedRoute.id);
+  els.eventList.textContent = `Attached latest result ${result.run_id}${
+    result.display_run_id ? ` / ${result.display_run_id}` : ""
+  }.`;
+  renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
+  startPolling();
+}
+
 function scheduleReadinessRefresh() {
   if (state.readinessTimer) {
     clearTimeout(state.readinessTimer);
@@ -826,7 +849,9 @@ function renderRunState(payload) {
 
 function renderControls(payload) {
   const controls = payload.controls || {};
-  els.pauseButton.disabled = !controls.pause_available;
+  const pauseAvailable = Boolean(controls.pause_available);
+  els.pauseButton.hidden = !pauseAvailable;
+  els.pauseButton.disabled = !pauseAvailable;
   els.stopButton.disabled = !controls.stop_available;
   els.emergencyButton.disabled = !controls.emergency_stop_required;
 }
@@ -1011,10 +1036,32 @@ async function postRunAction(action) {
   const result = await fetchJson(`/api/runs/${encodeURIComponent(state.activeRunId)}/${action}`, {
     method: "POST",
   });
+  if (result.error) {
+    els.eventList.textContent = result.error;
+    return;
+  }
   if (result.reason) {
     els.eventList.textContent = result.reason;
   }
+  if (["stop", "emergency-stop"].includes(action)) {
+    detachRunAfterStop(result);
+    await refreshSelectedRouteReadiness();
+    return;
+  }
   pollState();
+}
+
+function detachRunAfterStop(result) {
+  if (state.pollTimer) {
+    clearInterval(state.pollTimer);
+    state.pollTimer = null;
+  }
+  state.activeRunId = null;
+  state.activeRouteId = "";
+  state.activeState = null;
+  els.eventList.textContent =
+    result.terminal_reason || result.phase || "Run stopped; backend lock released.";
+  renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
 }
 
 async function toggleRawEvidence() {
