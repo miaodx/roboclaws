@@ -33,6 +33,7 @@ def score_cleanup(
     status = _status_for_count(
         restored_count=len(restored),
         success_threshold=private_manifest.success_threshold,
+        target_count=len(private_manifest.targets),
     )
     return CleanupScore(
         status=status,
@@ -45,7 +46,14 @@ def score_cleanup(
     )
 
 
-def _status_for_count(*, restored_count: int, success_threshold: int) -> CleanupStatus:
+def _status_for_count(
+    *,
+    restored_count: int,
+    success_threshold: int,
+    target_count: int,
+) -> CleanupStatus:
+    if target_count <= 0:
+        return "success"
     if restored_count >= success_threshold:
         return "success"
     if restored_count > 0:

@@ -448,7 +448,10 @@ def _assert_result(
     private = data.get("private_evaluation") or {}
     assert private.get("generated_mess_count") == data.get("generated_mess_count"), data
     assert private.get("generated_mess_count", 0) >= min_generated_mess_count, data
-    assert private.get("acceptable_destination_sets"), data
+    if int(private.get("generated_mess_count") or 0) > 0:
+        assert private.get("acceptable_destination_sets"), data
+    else:
+        assert private.get("acceptable_destination_sets") == {}, data
     if enforce_success and not semantic_success_gate:
         for item in data.get("semantic_substeps") or []:
             phases = successful_semantic_phases(item.get("steps", []))
@@ -2286,9 +2289,13 @@ def _assert_advisory_scoring(data: dict[str, Any], base: Path, report_text: str)
     assert advisory.get("schema_version") == "advisory_cleanup_scoring_v1", advisory
     assert advisory.get("authoritative") is False, advisory
     assert advisory.get("status") == "ok", advisory
-    assert advisory.get("object_reviews"), advisory
+    reviews = advisory.get("object_reviews") or []
+    if int(data.get("generated_mess_count") or 0) == 0:
+        assert advisory.get("overall_verdict") == "no_targets", advisory
+    else:
+        assert reviews, advisory
     counts = advisory.get("counts") or {}
-    assert int(counts.get("total_reviewed") or 0) == len(advisory["object_reviews"]), advisory
+    assert int(counts.get("total_reviewed") or 0) == len(reviews), advisory
     artifacts = data.get("artifacts") or {}
     advisory_path = _resolve_path(base, artifacts.get("advisory_evaluation", ""))
     assert advisory_path.is_file(), advisory_path

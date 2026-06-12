@@ -59,6 +59,18 @@ _Avoid_: new public task, new profile name, agent-facing tool namespace
 
 ## Household World And Cleanup Vocabulary
 
+**Environment Setup**:
+A private pre-run world initialization choice that prepares the room before a
+task starts. Public launch routes expose `environment_setup=baseline` or a
+relocation setup; reports may record setup provenance, but Agent View must not.
+_Avoid_: task intent, cleanup scenario, agent-facing context
+
+**Relocation Policy**:
+An Environment Setup mode that moves eligible loose or cleanup-related objects
+before the run starts. The policy, object IDs, before/after locations, and
+relocation count stay private/report-side.
+_Avoid_: public mess generator, cleanup worklist, private scoring truth
+
 **Navigation Map Artifact**:
 A reusable static source of navigation geometry and public semantic annotations.
 Rich variants may include rooms, fixtures, inspection waypoints, and driveable
@@ -121,7 +133,7 @@ _Avoid_: backend variant name, implementation detail, hidden evaluator
 **Observed Object Prior**:
 A movable object observation loaded from an earlier runtime-map snapshot into a
 later run. It is planning evidence and should be confirmed before action.
-_Avoid_: static fixture, current-run confirmed handle, private generated mess
+_Avoid_: static fixture, current-run confirmed handle, private relocation truth
 
 **RAW-FPV Semantic Context**:
 Public Runtime Metric Map or semantic-map prior context supplied to a
@@ -305,7 +317,7 @@ _Avoid_: pretending success, omitting unavailable tools from evidence
 - Runtime observations and map update candidates must not silently mutate the
   source Navigation Map Artifact. Observed Object Priors need current-run
   confirmation before becoming actionable cleanup handles.
-- Private generated mess sets, acceptable destinations, hidden target lists,
+- Private relocation/generated mess sets, acceptable destinations, hidden target lists,
   private manifests, and scorer truth must not enter public profile metadata,
   Agent View, skill prompts, or MCP responses.
 - `done` may return public readiness blockers and required next tools, but those

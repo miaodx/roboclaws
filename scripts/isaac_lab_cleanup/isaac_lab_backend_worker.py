@@ -8004,23 +8004,25 @@ def _scenario_from_scene_index(
         )
 
     receptacle_payloads = [receptacle.to_public_dict() for receptacle in receptacles]
-    if generated_mess_manifest:
+    if generated_mess_count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
+    if generated_mess_count == 0:
+        selected = []
+    elif generated_mess_manifest:
         selected = targets_from_generated_mess_manifest(
             selectable_objects,
             receptacle_payloads,
             generated_mess_manifest,
-            target_count=max(1, int(generated_mess_count)),
+            target_count=int(generated_mess_count),
         )
     else:
         selected = select_generated_mess_targets(
             selectable_objects,
             receptacle_payloads,
-            target_count=max(1, int(generated_mess_count)),
+            target_count=int(generated_mess_count),
             seed=seed,
             object_ids=generated_mess_object_ids or None,
         )
-    if not selected:
-        return None
 
     objects = tuple(
         CleanupObject(
@@ -8039,8 +8041,6 @@ def _scenario_from_scene_index(
         for item in selected
     )
 
-    if not targets:
-        return None
     scenario_id = f"isaac-scene-index-{scene_source}-{scene_index}-{seed}-{len(targets)}"
     return CleanupScenario(
         scenario_id=scenario_id,
@@ -8222,13 +8222,21 @@ def _scenario_from_generated_mess_manifest_or_limit(
             scenario,
             generated_mess_count=generated_mess_count,
         )
+    if generated_mess_count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
+    if generated_mess_count == 0:
+        return _scenario_without_private_targets(
+            scenario,
+            scenario_id=f"{scenario.scenario_id}-canonical-mess-0",
+            objects=(),
+        )
     objects = [item.to_public_dict() for item in scenario.objects]
     receptacles = [item.to_public_dict() for item in scenario.receptacles]
     selected = targets_from_generated_mess_manifest(
         objects,
         receptacles,
         generated_mess_manifest,
-        target_count=max(1, int(generated_mess_count)),
+        target_count=int(generated_mess_count),
     )
     target_ids = {str(item["object_id"]) for item in selected}
     source_objects = {item.object_id: item for item in scenario.objects}
@@ -8272,7 +8280,15 @@ def _limit_scenario_to_generated_mess_count(
     *,
     generated_mess_count: int,
 ) -> CleanupScenario:
-    count = max(1, int(generated_mess_count))
+    count = int(generated_mess_count)
+    if count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
+    if count == 0:
+        return _scenario_without_private_targets(
+            scenario,
+            scenario_id=f"{scenario.scenario_id}-isaac-0",
+            objects=(),
+        )
     targets = tuple(scenario.private_manifest.targets[:count])
     if not targets:
         return scenario
@@ -8291,6 +8307,26 @@ def _limit_scenario_to_generated_mess_count(
             scenario_id=scenario_id,
             targets=targets,
             success_threshold=len(targets),
+        ),
+    )
+
+
+def _scenario_without_private_targets(
+    scenario: CleanupScenario,
+    *,
+    scenario_id: str,
+    objects: tuple[CleanupObject, ...],
+) -> CleanupScenario:
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=scenario.task,
+        seed=scenario.seed,
+        objects=objects,
+        receptacles=scenario.receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
         ),
     )
 

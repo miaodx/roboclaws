@@ -13,6 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
+from roboclaws.launch.environment_setup import (
+    ENVIRONMENT_SETUP_BASELINE,
+    ENVIRONMENT_SETUP_OPTIONS,
+    RELOCATION_SETUP_OPTIONS,
+)
 from roboclaws.operator_console.history import append_run_history
 from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.locks import ResourceLock
@@ -101,11 +106,17 @@ def build_launch_argv(
 ) -> list[str]:
     """Build a fixed argv list for a console route."""
 
-    request_overrides = overrides or {}
-    _validate_override_keys(route, request_overrides)
     selected_intent = _selected_intent(route, intent)
+    request_overrides = _normalized_launch_overrides(
+        route,
+        overrides or {},
+        selected_intent=selected_intent,
+    )
+    _validate_override_keys(route, request_overrides)
     output_dir = console_output_root(root) / "runs" / run_id
     overridden_keys = set(request_overrides)
+    if request_overrides.get("environment_setup") == ENVIRONMENT_SETUP_BASELINE:
+        overridden_keys.add("relocation_count")
     default_overrides = [
         item for item in route.default_overrides if _override_key(item) not in overridden_keys
     ]
@@ -393,7 +404,8 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
     allowed = {
         "seed",
         "seeds",
-        "generated_mess_count",
+        "environment_setup",
+        "relocation_count",
         "context_json",
         "visual_grounding",
         "visual_grounding_timeout",
@@ -401,6 +413,7 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
         "scene_source",
         "scene_index",
         "isaac_scene_usd_path",
+        "map_bundle",
         "robot_views",
         "record_robot_views",
         "real_movement_enabled",
@@ -418,9 +431,59 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
             raise ConsoleLaunchError(f"invalid NUL byte in route parameter: {key}")
         if key == "port":
             _parse_port(value)
+        if key == "environment_setup" and value not in ENVIRONMENT_SETUP_OPTIONS:
+            allowed_values = "|".join(ENVIRONMENT_SETUP_OPTIONS)
+            raise ConsoleLaunchError(
+                f"unsupported environment_setup: {value}; expected {allowed_values}"
+            )
+        if key == "relocation_count":
+            _parse_nonnegative_int(value, key)
     for key in route.required_overrides:
         if key not in allowed:
             raise ConsoleLaunchError(f"route registry uses unsupported parameter: {key}")
+
+
+def _normalized_launch_overrides(
+    route: ConsoleRoute,
+    overrides: dict[str, str],
+    *,
+    selected_intent: str,
+) -> dict[str, str]:
+    normalized = {str(key): str(value) for key, value in overrides.items()}
+    if "generated_mess_count" in normalized:
+        raise ConsoleLaunchError(
+            "generated_mess_count is no longer a public route parameter; "
+            "use environment_setup and relocation_count"
+        )
+    default_map = {
+        _override_key(item): item.split("=", 1)[1]
+        for item in route.default_overrides
+        if "=" in item
+    }
+    setup = str(
+        normalized.get("environment_setup")
+        or (
+            default_map.get("environment_setup")
+            if selected_intent == route.intent
+            else ENVIRONMENT_SETUP_BASELINE
+        )
+        or ENVIRONMENT_SETUP_BASELINE
+    )
+    if setup not in ENVIRONMENT_SETUP_OPTIONS:
+        allowed_values = "|".join(ENVIRONMENT_SETUP_OPTIONS)
+        raise ConsoleLaunchError(
+            f"unsupported environment_setup: {setup}; expected {allowed_values}"
+        )
+    normalized["environment_setup"] = setup
+    if setup in RELOCATION_SETUP_OPTIONS:
+        relocation_count = str(
+            normalized.get("relocation_count") or default_map.get("relocation_count") or "5"
+        )
+        _parse_nonnegative_int(relocation_count, "relocation_count")
+        normalized["relocation_count"] = relocation_count
+    else:
+        normalized.pop("relocation_count", None)
+    return normalized
 
 
 def _validate_env_overrides(route: ConsoleRoute, env_overrides: dict[str, str]) -> None:
@@ -944,6 +1007,16 @@ def _parse_port(value: str) -> int:
     if not 1 <= port <= 65535:
         raise ConsoleLaunchError(f"invalid MCP port: {value}")
     return port
+
+
+def _parse_nonnegative_int(raw: str, key: str) -> int:
+    try:
+        value = int(str(raw).strip())
+    except ValueError as exc:
+        raise ConsoleLaunchError(f"{key} must be an integer") from exc
+    if value < 0:
+        raise ConsoleLaunchError(f"{key} must be >= 0")
+    return value
 
 
 def _truthy_override(raw: str | None) -> bool:

@@ -6,7 +6,10 @@ import socket
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from roboclaws.operator_console.launcher import (
+    ConsoleLaunchError,
     LaunchRequest,
     _terminate_process_group,
     build_launch_argv,
@@ -54,6 +57,17 @@ def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> Non
     isaac_map_gate = next(gate for gate in isaac_map["gates"] if gate["id"] == "isaac_preflight")
     assert isaac_map_gate["severity"] == "advisory"
     assert isaac_map_gate["blocks_start"] is False
+
+    b1_map12 = route_readiness(
+        tmp_path,
+        get_route("codex-b1-map12-open-ended"),
+        overrides={"port": _free_port()},
+        env=CODEX_ENV,
+    )
+    assert b1_map12["can_start"] is True
+    b1_gate = next(gate for gate in b1_map12["gates"] if gate["id"] == "isaac_preflight")
+    assert b1_gate["severity"] == "advisory"
+    assert b1_gate["blocks_start"] is False
 
     agibot = route_readiness(
         tmp_path,
@@ -107,13 +121,49 @@ def test_launcher_replaces_route_default_overrides(tmp_path: Path) -> None:
         route,
         root=tmp_path,
         run_id="run-1",
-        overrides={"seed": "9", "generated_mess_count": "2"},
+        overrides={
+            "seed": "9",
+            "environment_setup": "relocate-loose-objects",
+            "relocation_count": "2",
+        },
     )
 
     assert "seed=7" not in argv
-    assert "generated_mess_count=5" not in argv
+    assert "environment_setup=relocate-cleanup-related-objects" not in argv
+    assert "relocation_count=5" not in argv
     assert "seed=9" in argv
-    assert "generated_mess_count=2" in argv
+    assert "environment_setup=relocate-loose-objects" in argv
+    assert "relocation_count=2" in argv
+    assert not any(item.startswith("generated_mess_count=") for item in argv)
+
+
+def test_launcher_rejects_old_public_generated_mess_override(tmp_path: Path) -> None:
+    route = get_route("codex-mujoco-cleanup")
+
+    with pytest.raises(ConsoleLaunchError, match="generated_mess_count is no longer"):
+        build_launch_argv(
+            route,
+            root=tmp_path,
+            run_id="run-1",
+            overrides={"generated_mess_count": "2"},
+        )
+
+
+def test_launcher_drops_relocation_count_for_baseline_setup(tmp_path: Path) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    argv = build_launch_argv(
+        route,
+        root=tmp_path,
+        run_id="run-1",
+        overrides={
+            "environment_setup": "baseline",
+            "relocation_count": "2",
+        },
+    )
+
+    assert "environment_setup=baseline" in argv
+    assert not any(item.startswith("relocation_count=") for item in argv)
+    assert not any(item.startswith("generated_mess_count=") for item in argv)
 
 
 def test_launcher_passes_operator_message_path_for_steer_routes(tmp_path: Path) -> None:

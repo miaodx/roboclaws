@@ -17,6 +17,12 @@ from roboclaws.household.profiles import (
     validate_evidence_lane_camera_labeler,
 )
 from roboclaws.household.tasks import HOUSEHOLD_TASK_SPECS
+from roboclaws.launch.environment_setup import (
+    ENVIRONMENT_SETUP_BASELINE,
+    ENVIRONMENT_SETUP_OPTIONS,
+    ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
+    RELOCATION_SETUP_OPTIONS,
+)
 from roboclaws.launch.evaluation import evaluation_spec_for_intent
 from roboclaws.launch.goals import normalize_goal_contract
 from roboclaws.launch.intents import TASK_INTENT_SPECS, TaskIntentSpec
@@ -321,6 +327,11 @@ def _resolve_launch(
         )
     evidence_mode, profile, report, overrides = _resolve_evidence_mode(surface, raw_mode, overrides)
     backend = _override_value(overrides, "backend") or surface.default_backend
+    overrides, dispatch_setup_overrides = _normalize_environment_setup_overrides(
+        overrides,
+        surface=surface,
+        intent=intent,
+    )
     goal_contract = normalize_goal_contract(surface=surface, intent=intent, raw_prompt=prompt)
     plan_overrides = _overrides_with_surface_context(
         overrides,
@@ -328,7 +339,9 @@ def _resolve_launch(
         intent_id=intent.intent_id,
         goal_contract_json=goal_contract.to_json(),
     )
-    dispatch_overrides = _without_launch_only_overrides(plan_overrides)
+    dispatch_overrides = _without_launch_only_overrides(
+        (*plan_overrides, *dispatch_setup_overrides)
+    )
     argv = build_agent_run_argv(
         task=intent.lower_task,
         driver=driver,
@@ -394,6 +407,68 @@ def _without_launch_only_overrides(overrides: tuple[str, ...]) -> tuple[str, ...
         "evidence_lane",
         "profile",
         "report",
+        "environment_setup",
+        "relocation_count",
     ):
         result = _without_override(result, key)
     return result
+
+
+def _normalize_environment_setup_overrides(
+    overrides: tuple[str, ...],
+    *,
+    surface: TaskSurfaceSpec,
+    intent: TaskIntentSpec,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    if surface.surface_id != "household-world":
+        return overrides, ()
+    if _override_value(overrides, "generated_mess_count") is not None:
+        raise LaunchError(
+            "generated_mess_count is no longer a public run::surface argument",
+            "use environment_setup=baseline|relocate-loose-objects|"
+            "relocate-cleanup-related-objects and relocation_count=<N>",
+        )
+    default_setup = (
+        ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS
+        if intent.intent_id == "cleanup"
+        else ENVIRONMENT_SETUP_BASELINE
+    )
+    setup = _override_value(overrides, "environment_setup") or default_setup
+    if setup not in ENVIRONMENT_SETUP_OPTIONS:
+        raise LaunchError(
+            f"unsupported environment_setup '{setup}'",
+            f"expected {'|'.join(ENVIRONMENT_SETUP_OPTIONS)}",
+        )
+    relocation_count = _override_value(overrides, "relocation_count")
+    private_count = "0"
+    if setup in RELOCATION_SETUP_OPTIONS:
+        relocation_count = relocation_count or "5"
+        _parse_nonnegative_int(relocation_count, key="relocation_count")
+        private_count = relocation_count
+    elif relocation_count not in {None, "", "0"}:
+        raise LaunchError(
+            "relocation_count is only valid when environment_setup relocates objects",
+            "use environment_setup=relocate-loose-objects or "
+            "environment_setup=relocate-cleanup-related-objects",
+        )
+    merged = _without_override(
+        _without_override(
+            _without_override(overrides, "environment_setup"),
+            "relocation_count",
+        ),
+        "generated_mess_count",
+    )
+    merged = (*merged, f"environment_setup={setup}")
+    if setup in RELOCATION_SETUP_OPTIONS:
+        merged = (*merged, f"relocation_count={relocation_count}")
+    return merged, (f"generated_mess_count={private_count}",)
+
+
+def _parse_nonnegative_int(raw: str, *, key: str) -> int:
+    try:
+        value = int(str(raw).strip())
+    except ValueError as exc:
+        raise LaunchError(f"{key} must be an integer") from exc
+    if value < 0:
+        raise LaunchError(f"{key} must be >= 0")
+    return value

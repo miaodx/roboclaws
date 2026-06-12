@@ -47,6 +47,7 @@ from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
     normalize_task_intent_mode,
 )
+from roboclaws.household.types import CleanupScenario, PrivateScoringManifest
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
@@ -297,8 +298,8 @@ def run_molmo_realworld_cleanup_agent_server(
     output_dir.mkdir(parents=True, exist_ok=True)
     if backend == AGIBOT_GDK_BACKEND:
         generated_mess_count = 0
-    if generated_mess_count < 1 and backend != AGIBOT_GDK_BACKEND:
-        raise ValueError("generated_mess_count must be >= 1")
+    if generated_mess_count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
         required=require_map_bundle,
@@ -362,6 +363,8 @@ def run_molmo_realworld_cleanup_agent_server(
         base_contract = CleanupBackendSession(scenario, backend=backend_instance)
     else:
         scenario = build_cleanup_scenario(seed=seed)
+        if generated_mess_count == 0:
+            scenario = _scenario_without_private_targets(scenario)
         base_contract = CleanupBackendSession(scenario)
 
     server: RealWorldMolmoCleanupMCPServer | None = None
@@ -440,6 +443,22 @@ def run_molmo_realworld_cleanup_agent_server(
             )
             server.close()
     return result
+
+
+def _scenario_without_private_targets(scenario: CleanupScenario) -> CleanupScenario:
+    scenario_id = f"{scenario.scenario_id}-baseline"
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=scenario.task,
+        seed=scenario.seed,
+        objects=scenario.objects,
+        receptacles=scenario.receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
+        ),
+    )
 
 
 def main(argv: list[str] | None = None) -> int:

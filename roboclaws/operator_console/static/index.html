@@ -52,8 +52,18 @@
             <input id="seed-input" name="seed" value="7" />
           </label>
           <label>
-            Generated mess count
-            <input id="mess-count-input" name="generated_mess_count" value="5" />
+            Environment setup
+            <select id="environment-setup-input" name="environment_setup">
+              <option value="baseline">Baseline</option>
+              <option value="relocate-loose-objects">Relocate loose objects</option>
+              <option value="relocate-cleanup-related-objects">
+                Relocate cleanup-related objects
+              </option>
+            </select>
+          </label>
+          <label id="relocation-count-field">
+            Relocation count
+            <input id="relocation-count-input" name="relocation_count" value="5" />
           </label>
           <label>
             Agent port

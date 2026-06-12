@@ -23,6 +23,7 @@
 # - just harness::molmo-isaac-runtime-smoke  strict Isaac Lab renderer/USD smoke gate
 # - just harness::molmo-isaac-cleanup-smoke  strict Isaac Lab cleanup report gate
 # - just harness::molmo-isaac-prepared-cleanup-smoke  prepare semantic USD + strict cleanup gate
+# - just harness::b1-map12-navigation-smoke  B1 / robot_map_12 local navigation smoke
 # - just harness::regression          capture/analyze baseline vs candidate
 # - just harness::list-tasks          show available task definitions
 # - just harness::history             show the cross-run summary from PLAN.md
@@ -865,6 +866,80 @@ molmo-isaac-runtime-smoke *overrides:
       check_cmd+=(--require-segmentation-evidence)
     fi
     "${check_cmd[@]}"
+
+# Local B1 / robot_map_12 Digital Twin navigation smoke. This is a maintainer
+# confidence layer, not a public household-world surface or cleanup intent.
+b1-map12-navigation-smoke *overrides:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    args=("$@")
+    runtime_python=".venv-isaaclab/bin/python"
+    b1_root="data/robot-data-lab/scene-engine/data/B1_floor2_slow"
+    map12_root="vendors/agibot_sdk/artifacts/maps/robot_map_12"
+    output_dir="output/b1-map12/navigation-smoke"
+    readiness_output=""
+    stamp=""
+    robot_name="rby1m"
+    prepare_robot_usd="true"
+    require_navigation_success="true"
+    accept_nvidia_eula="true"
+    for arg in "${args[@]}"; do
+      if [[ "$arg" != *=* ]]; then
+        echo "error: override '$arg' is not key=value" >&2
+        exit 1
+      fi
+      key="${arg%%=*}"
+      value="${arg#*=}"
+      key="${key#--}"
+      key="${key//-/_}"
+      case "$key" in
+        runtime_python|b1_root|map12_root|output_dir|readiness_output|stamp|\
+        robot_name|prepare_robot_usd|require_navigation_success|accept_nvidia_eula)
+          ;;
+        *)
+          echo "error: unsupported override key '$key'" >&2
+          exit 1
+          ;;
+      esac
+      printf -v "$key" '%s' "$value"
+    done
+    if [[ -z "$stamp" ]]; then
+      stamp="$({{timestamp_cmd}})"
+    fi
+    run_dir="${output_dir}/${stamp}"
+    if [[ -z "$readiness_output" ]]; then
+      readiness_output="${run_dir}/readiness.json"
+    fi
+    mkdir -p "$run_dir"
+    if [[ "$accept_nvidia_eula" == "true" ]]; then
+      export OMNI_KIT_ACCEPT_EULA="YES"
+    fi
+    "$runtime_python" scripts/isaac_lab_cleanup/check_b1_map12_readiness.py \
+      --b1-root "$b1_root" \
+      --map12-root "$map12_root" \
+      --output "$readiness_output"
+    if [[ "$prepare_robot_usd" == "true" && ! -s output/isaaclab/robots/rby1m/rby1m_holobase_isaac.usda ]]; then
+      "$runtime_python" scripts/isaac_lab_cleanup/import_rby1m_robot_usd.py --static-only
+    fi
+    "$runtime_python" scripts/isaac_lab_cleanup/run_b1_map12_navigation_smoke.py \
+      --readiness-artifact "$readiness_output" \
+      --output-dir "$run_dir" \
+      --robot-name "$robot_name"
+    final_args=(
+      --b1-root "$b1_root"
+      --map12-root "$map12_root"
+      --output "${run_dir}/readiness_with_navigation.json"
+      --navigation-artifact "${run_dir}/navigation_smoke.json"
+    )
+    if [[ "$require_navigation_success" == "true" ]]; then
+      final_args+=(--require-navigation-success)
+    fi
+    "$runtime_python" scripts/isaac_lab_cleanup/check_b1_map12_readiness.py "${final_args[@]}"
+    .venv/bin/python scripts/isaac_lab_cleanup/render_b1_map12_navigation_report.py \
+      --run-dir "$run_dir" \
+      --navigation-artifact "${run_dir}/navigation_smoke.json" \
+      --readiness-artifact "${run_dir}/readiness_with_navigation.json"
+    echo "==> report: ${run_dir}/report.html"
 
 # Strict local Isaac Lab cleanup report smoke. This uses the existing
 # household-cleanup backend selector, then applies report-level Isaac gates so a

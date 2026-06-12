@@ -92,9 +92,13 @@ from roboclaws.household.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
+from roboclaws.household.types import CleanupScenario, PrivateScoringManifest
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_client_from_env,
+)
+from roboclaws.launch.environment_setup_metadata import (
+    environment_setup_run_metadata_from_env,
 )
 from roboclaws.launch.goals import (
     completion_claim_from_done_reason,
@@ -309,8 +313,8 @@ def run_realworld_cleanup(
         raise ValueError(
             "record_robot_views requires a visual subprocess backend and include_robot"
         )
-    if generated_mess_count < 1:
-        raise ValueError("generated_mess_count must be >= 1")
+    if generated_mess_count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
     if map_mode not in REALWORLD_MAP_MODES:
         allowed = ", ".join(sorted(REALWORLD_MAP_MODES))
         raise ValueError(f"map_mode must be one of: {allowed}")
@@ -364,6 +368,8 @@ def run_realworld_cleanup(
         scenario = backend_instance.scenario
     else:
         scenario = build_cleanup_scenario(seed=seed)
+        if generated_mess_count == 0:
+            scenario = _scenario_without_private_targets(scenario)
 
     base_contract = CleanupBackendSession(scenario, backend=backend_instance)
     contract = RealWorldCleanupContract(
@@ -847,8 +853,12 @@ def run_realworld_cleanup(
             cleanup_primitive_evidence=cleanup_primitive_evidence,
         )
         run_result["artifacts"]["planner_proof_views"] = str(output_dir / "planner_proof")
-    if run_metadata_overrides:
-        run_result = _merge_run_metadata(run_result, run_metadata_overrides)
+    run_metadata = _merge_run_metadata(
+        environment_setup_run_metadata_from_env(),
+        run_metadata_overrides or {},
+    )
+    if run_metadata:
+        run_result = _merge_run_metadata(run_result, run_metadata)
 
     report_path = render_cleanup_report(
         run_dir=output_dir,
@@ -896,6 +906,22 @@ def _failed_score(contract: RealWorldCleanupContract) -> dict[str, Any]:
             "status": "failed",
         },
     }
+
+
+def _scenario_without_private_targets(scenario: CleanupScenario) -> CleanupScenario:
+    scenario_id = f"{scenario.scenario_id}-baseline"
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=scenario.task,
+        seed=scenario.seed,
+        objects=scenario.objects,
+        receptacles=scenario.receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
+        ),
+    )
 
 
 def _merge_run_metadata(

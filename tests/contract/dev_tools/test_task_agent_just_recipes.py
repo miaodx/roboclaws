@@ -717,6 +717,10 @@ def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> Non
             ("household-cleanup", "codex", "camera-raw-fpv", "cleanup_routine=mcp"),
             "unsupported cleanup_routine",
         ),
+        (
+            ("household-cleanup", "codex", "world-oracle-labels", "generated_mess_count=5"),
+            "generated_mess_count is no longer",
+        ),
     ),
 )
 def test_task_router_rejects_removed_compatibility_aliases(
@@ -737,7 +741,11 @@ def test_task_router_is_importable_source_of_truth() -> None:
         "codex",
         "smoke",
         "output_dir=output/custom",
+        "generated_mess_count=5",
     )
+    assert "environment_setup=relocate-cleanup-related-objects" in resolved.overrides
+    assert "relocation_count=5" in resolved.overrides
+    assert not any(item.startswith("generated_mess_count=") for item in resolved.overrides)
     assert resolved.task == "household-cleanup"
     assert resolved.driver == "codex"
     assert resolved.mode == "smoke"
@@ -762,7 +770,11 @@ def test_task_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
         "codex",
         "smoke",
         "backend=agibot_gdk",
+        "generated_mess_count=5",
     )
+    assert "environment_setup=relocate-cleanup-related-objects" in plan.overrides
+    assert "relocation_count=5" in plan.overrides
+    assert not any(item.startswith("generated_mess_count=") for item in plan.overrides)
     assert plan.task == "household-cleanup"
     assert plan.driver == "codex"
     assert plan.profile == "smoke"
@@ -811,7 +823,7 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
     assert "checker=cleanup_report" in plan_trace
     assert (
         "target=just agent::run household-cleanup codex camera-grounded-labels "
-        "camera_labeler=grounding-dino"
+        "camera_labeler=grounding-dino generated_mess_count=5"
     ) in plan_trace
 
 
@@ -833,7 +845,11 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
         "household-cleanup",
         "codex",
         "world-public-labels",
+        "generated_mess_count=5",
     )
+    assert "environment_setup=relocate-cleanup-related-objects" in plan.overrides
+    assert "relocation_count=5" in plan.overrides
+    assert not any(item.startswith("generated_mess_count=") for item in plan.overrides)
 
 
 def test_prompt_mapping_ai2thor_nav_openclaw_visual_default() -> None:
@@ -917,7 +933,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
         "7",
         "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
-        "10",
+        "5",
         "127.0.0.1",
         "18788",
     ]
@@ -950,7 +966,8 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "world-oracle-labels",
         "backend=isaaclab_subprocess",
         "seed=7",
-        "generated_mess_count=1",
+        "environment_setup=relocate-cleanup-related-objects",
+        "relocation_count=1",
     )
 
     assert route[:6] == [
@@ -1142,7 +1159,8 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
         "agibot_map_artifact_dir=vendors/agibot_sdk/artifacts/maps/robot_map_9",
         "run_dir=output/agibot/molmospaces-sim/test-run",
         "rehearsal_mode=cleanup-actions",
-        "generated_mess_count=5",
+        "environment_setup=relocate-cleanup-related-objects",
+        "relocation_count=5",
         "cleanup_object_count=1",
     )
 
@@ -1182,7 +1200,7 @@ def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehard
         "run_dir=output/agibot/molmospaces-sim/map-build-test",
         "runtime=molmospaces-subprocess",
         "camera_labeler=grounding-dino",
-        "generated_mess_count=5",
+        "environment_setup=baseline",
     )
 
     assert route[:3] == [
@@ -1344,7 +1362,7 @@ def test_molmo_world_labels_allows_explicit_robot_view_capture_toggle() -> None:
         "7",
         "output/household/household-cleanup/codex-report",
         "帮我收拾这个房间",
-        "10",
+        "5",
         "127.0.0.1",
         "18788",
         "auto",
