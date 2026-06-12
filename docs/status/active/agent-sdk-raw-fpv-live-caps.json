@@ -1,0 +1,104 @@
+{
+  "schema": "agent_sdk_raw_fpv_live_caps_v1",
+  "created_at": "2026-06-12T00:00:00+08:00",
+  "candidate_ids": ["P", "AA", "Q", "Y"],
+  "purpose": "Scoped raw-FPV live diagnostic after repeated-failure and image-memory deterministic prep.",
+  "planned_live_rows": 2,
+  "max_wall_clock_s_per_row": 2700,
+  "concurrency": 1,
+  "provider_profile": "codex-env",
+  "wire_api": "responses",
+  "model": "gpt-5.5",
+  "surface": "household-world",
+  "intent": "cleanup",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "implementation_backend": "molmospaces_subprocess",
+  "evidence_lane": "camera-raw-fpv",
+  "seed": 7,
+  "scenario_setup": "relocate-cleanup-related-objects",
+  "relocation_count": 5,
+  "agent_sdk_perf_profile": "raw_fpv_budgeted_v1",
+  "raw_fpv_candidate_budget": 24,
+  "raw_fpv_repeated_failure_limit": 3,
+  "raw_fpv_image_memory": {
+    "enabled": true,
+    "retained_full_frame_limit": 1
+  },
+  "context_limits": {
+    "soft_tokens": 64000,
+    "hard_tokens": 96000,
+    "max_turns": 40,
+    "max_continuations": 1
+  },
+  "credential_gate": {
+    "XM_LLM_API_KEY": "present",
+    "XM_LLM_BASE_URL": "present",
+    "CODEX_API_KEY": "present",
+    "CODEX_BASE_URL": "present"
+  },
+  "network_gate": {
+    "network": "work",
+    "openclaw_blocked": true,
+    "system_claude_blocked": true,
+    "mify_route_allowed": true
+  },
+  "route_gate": {
+    "attempted_first": {
+      "provider_profile": "mify",
+      "model": "mimo-v2.5",
+      "status": "blocked",
+      "reason": "camera-raw-fpv requires verified image transport for openai-agents-sdk+mify; registry marks image_transport=unknown."
+    },
+    "selected": {
+      "provider_profile": "codex-env",
+      "model": "gpt-5.5",
+      "status": "allowed",
+      "reason": "provider registry marks image_transport=supported for openai-agents-sdk+codex-env."
+    }
+  },
+  "backend_gate": {
+    "visual_backend_slots": 1,
+    "held_slots": 0,
+    "available": true
+  },
+  "stop_conditions": [
+    "network_policy_failure",
+    "missing_credentials",
+    "backend_slot_unavailable",
+    "privacy_or_schema_failure",
+    "unclassified_provider_failure",
+    "context_limit_failure",
+    "wall_clock_timeout"
+  ],
+  "quality_policy": "diagnostic terminal classification; cleanup-pass or speed claims require report-quality evidence",
+  "claim_scope": "diagnostic live raw-FPV row only; not a cleanup-pass or normalized speed claim",
+  "outcome": {
+    "status": "blocked",
+    "reason": "No raw-FPV behavior evidence was produced because the only verified OpenAI Agents SDK image-transport route hit repeated provider_transient_failure before task work.",
+    "mify_attempt": {
+      "status": "blocked",
+      "reason": "camera-raw-fpv requires verified image transport for openai-agents-sdk+mify; registry marks image_transport=unknown."
+    },
+    "codex_env_attempts": [
+      {
+        "run_dir": "output/agent-sdk-perf-followups/raw-fpv-budgeted-codex/0612_1512/seed-7",
+        "status": "failed",
+        "reason": "provider_transient_failure",
+        "provider_reason": "upstream_unavailable",
+        "model_request_attempts": 2,
+        "retry_exhausted": true
+      },
+      {
+        "run_dir": "output/agent-sdk-perf-followups/raw-fpv-budgeted-codex-retry/0612_1514/seed-7",
+        "status": "failed",
+        "reason": "provider_transient_failure",
+        "provider_reason": "upstream_unavailable",
+        "model_request_attempts": 2,
+        "retry_exhausted": true
+      }
+    ],
+    "raw_fpv_behavior_evidence": "unavailable",
+    "next": "Retry P/AA only after codex-env upstream availability recovers or another OpenAI Agents SDK route has verified image_transport=supported; do not bypass the raw-FPV image-transport guard."
+  }
+}

@@ -50,11 +50,15 @@ mechanism and telemetry (`racing_enabled=true`, `racing_multiplier=2.0`, 53
 raced calls, 106 arms, 76 winners, 75 cancelled loser arms), and wall time
 improved by `-260.987s`, but cleanup quality regressed from success / 4 restored
 targets to partial_success / 3 restored targets. Treat C as expected-rejected
-evidence, not a wall-clock speed win. A behavior-preserving compaction/session
-redesign, O paired repeats/tightening, raw-FPV P/AA live rows, and broader B
-baseline coverage remain valid next arms. Token deltas are telemetry only; cost
-is not a deciding objective for this plan. The full live provider/model x
-evidence-lane performance matrix is still not done. The follow-up execution plan is
+evidence, not a wall-clock speed win. The first raw-FPV P/AA live gate attempt
+is now blocked: `openai-agents-sdk+mify` is rejected by the image-transport
+guard, and two `openai-agents-sdk+codex-env` raw-FPV attempts failed with
+classified `provider_transient_failure` / `upstream_unavailable` before task
+work. A behavior-preserving compaction/session redesign, O paired
+repeats/tightening, a later raw-FPV retry after provider or image-transport
+availability changes, and broader B baseline coverage remain valid next arms.
+Token deltas are telemetry only; cost is not a deciding objective for this
+plan. The full live provider/model x evidence-lane performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -173,6 +177,17 @@ Result:
   artifacts, and robot-view images remain complete; the raw-FPV MCP observe
   boundary still returns compact state plus a full PNG image block. This is
   model-facing prep, not a cleanup-pass or speed claim.
+- The Candidate P/AA raw-FPV live gate is recorded at
+  `docs/status/active/agent-sdk-raw-fpv-live-caps.json`. `mify` was blocked by
+  the route image-transport guard (`image_transport=unknown`), and the verified
+  `codex-env` image-transport route failed twice before task work:
+  `output/agent-sdk-perf-followups/raw-fpv-budgeted-codex/0612_1512/seed-7/`
+  and
+  `output/agent-sdk-perf-followups/raw-fpv-budgeted-codex-retry/0612_1514/seed-7/`.
+  Both failures are classified as `provider_transient_failure` with provider
+  reason `upstream_unavailable` after the model-service retry path. No raw-FPV
+  behavior, cleanup-pass, image-memory, repeated-failure, or speed evidence is
+  available from these attempts.
 - The 2026-06-12 live pass satisfied the no-provider Group 0 dry-run/offline
   preflight and recorded live caps: 2 planned live rows for the successful
   `mify` pass, 45-minute wall-clock cap per row, context hard limit 128k,
@@ -234,8 +249,8 @@ Result:
   elapsed time, winner/cancel flags, provider/model/wire axes, failure class,
   token usage availability, and loser-billing-unknown fields. `live_timing.json`
   aggregates these under `model_racing_observability_metrics` in timeline
-  latency attribution. Current mode is `racing_enabled=false`,
-  `racing_multiplier=1.0`; no C racing run or speed claim is made yet.
+  latency attribution. The completed C live row preserved the same D telemetry
+  for the single-arm baseline and the two-arm racing candidate.
 - Candidate C deterministic get-response racing prep is implemented. The
   private SDK route accepts `--model-racing` /
   `ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING` plus arm-count cap controls, defaults
@@ -419,11 +434,12 @@ Parked work:
     credentials/backend availability, network policy, and recorded run caps.
     The first `mify` `world-public-labels` baseline versus `mimo_compact_v1`
     row is diagnostic only, not a speed win.
-  - Q/Y deterministic recommendation enrichment is accepted for Group 0; the
-    current no-provider packet pointed to Group 2 N/O after already-accepted
-    Group 1 prep. Q/Y has now been refreshed with the completed `mify`
-    world-public live packet; refresh it again with the Candidate O promptfix2
-    mechanism row before selecting the next arm.
+  - Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
+    now been refreshed with the completed `mify` world-public pair, the
+    Candidate O promptfix2 mechanism row, and the expected-rejected F, I/N, and
+    C rows. The current wall-clock priority is O paired/tightening evidence,
+    then behavior-preserving compaction/session redesign, then scoped B
+    baseline coverage.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
@@ -433,19 +449,23 @@ Parked work:
     and is an accepted mechanism/diagnostic speed row, but normalized or
     publishable speed claims still require calibrated/repeated evidence.
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
-    visual-candidate failure rail; cleanup-pass and live speed claims remain
-    gated.
+    visual-candidate failure rail; the first live gate is blocked by image
+    transport/provider availability, and cleanup-pass plus live speed claims
+    remain gated.
   - Candidate AA deterministic prep is accepted as raw-FPV SDK model-facing
-    image memory; live cleanup-pass and speed claims remain gated, while
-    multiresolution thumbnail/crop policy stays parked until live evidence says
-    retained full-frame policy is insufficient.
+    image memory; the first live gate did not reach raw-FPV observations, so
+    live cleanup-pass and speed claims remain gated while multiresolution
+    thumbnail/crop policy stays parked until live evidence says retained
+    full-frame policy is insufficient.
   - Full provider/model x evidence-lane matrix before broad speed claims. The
     GPT `codex-env` baseline needs retry only after the transient 502 gate
     clears.
-  - Optional per-model-call racing inside the SDK model interface, only with
-    per-arm cache/cost telemetry and explicit live-run approval.
+  - Candidate C per-model-call racing is implemented and live-tested, but the
+    current two-arm policy is rejected as faster-but-worse; do not rerun it
+    unchanged.
   - Agent-visible state delta/compaction and selective visual artifact capture
-    as later speed levers.
+    remain possible later speed levers only after behavior-preserving changes;
+    the current I/N and F policies are rejected as wall-clock wins.
   - Additional SDK-native reduce-entropy candidates captured after the first
     batch: explicit `ModelSettings`/`RunConfig` performance profiles,
     Responses/session continuation, `call_model_input_filter` compaction,

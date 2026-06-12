@@ -27,6 +27,11 @@
       "candidate_ids": ["P", "AA"],
       "group_id": "group3_raw_fpv_stabilization",
       "purpose": "raw-FPV diagnostic stabilization"
+    },
+    {
+      "candidate_ids": ["C", "D"],
+      "group_id": "group4_expensive_orchestration",
+      "purpose": "model-call racing and per-arm observability"
     }
   ],
   "rows": [
