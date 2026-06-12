@@ -31,6 +31,13 @@ Metric Map through public observation evidence. `intent=cleanup` should consume
 that enriched Runtime Metric Map instead of depending on hand-authored fixture
 semantics.
 
+**Companion plan, 2026-06-11:** use
+[`2026-06-11-adaptive-target-inspection.md`](2026-06-11-adaptive-target-inspection.md)
+for the adaptive inspection behavior behind generated waypoints, camera
+adjustments, verified standoff/inspection candidates, and Target Actionability
+Status transitions. The simplified sweep wording below should not be read as
+one waypoint arrival plus one observation.
+
 ## Problem
 
 Roboclaws cleanup already has a public coarse map path: `metric_map()` projects

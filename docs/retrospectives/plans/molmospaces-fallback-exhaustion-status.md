@@ -1,7 +1,7 @@
 # MolmoSpaces Fallback Exhaustion Status
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0062-surface-fallback-exhaustion-status.md`
+**ADR:** `docs/adr/archive/execution-log/0062-surface-fallback-exhaustion-status.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/71-molmospaces-fallback-exhaustion-status/`
 
 ## Problem

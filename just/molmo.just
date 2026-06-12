@@ -352,8 +352,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           continue
         fi
         case "$checker_arg" in
-          --min-semantic-accepted-count|--min-model-declared-actions)
+          --min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions)
             skip_checker_arg_value="true"
+            ;;
+          --require-model-declared-observations)
             ;;
           *)
             filtered_checker_visual_args+=("$checker_arg")
@@ -373,8 +375,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           continue
         fi
         case "$checker_arg" in
-          --min-semantic-accepted-count|--min-model-declared-actions)
+          --min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions)
             skip_checker_arg_value="true"
+            ;;
+          --require-model-declared-observations)
             ;;
           *)
             filtered_checker_visual_args+=("$checker_arg")
@@ -1208,97 +1212,6 @@ apple2apple-grid mode="dry-run" output_dir="output/molmo/apple2apple-grid" seed=
       fi
     fi
     "$python_bin" scripts/molmo_cleanup/run_molmo_apple2apple_test_grid.py "${args[@]}"
-
-# Build or execute the eight-case live Codex cleanup harness.
-codex-harness8 mode="dry-run" *overrides:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mode="{{mode}}"
-    output_dir="output/molmo/codex-harness8"
-    seed="7"
-    generated_mess_count="10"
-    row=""
-    runtime_map_prior=""
-    visual_grounding_timeout_s="auto"
-    provider_retry_attempts="1"
-    provider_retry_sleep_s="60"
-    parallelism="1"
-    base_port="18788"
-    dino_sidecar_lifecycle="auto"
-    dino_sidecar_startup_timeout_s="180"
-
-    mode="${mode#mode=}"
-    for override in {{overrides}}; do
-      [[ -z "$override" ]] && continue
-      if [[ "$override" != *=* ]]; then
-        echo "error: override '$override' is not key=value" >&2
-        exit 1
-      fi
-      key="${override%%=*}"
-      value="${override#*=}"
-      key="${key#--}"
-      key="${key//-/_}"
-      case "$key" in
-        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|provider_retry_attempts|provider_retry_sleep_s|parallelism|base_port|dino_sidecar_lifecycle|dino_sidecar_startup_timeout_s)
-          ;;
-        visual_grounding_timeout)
-          key="visual_grounding_timeout_s"
-          ;;
-        provider_retry_sleep)
-          key="provider_retry_sleep_s"
-          ;;
-        *)
-          echo "error: unsupported override key '$key'" >&2
-          exit 1
-          ;;
-      esac
-      printf -v "$key" '%s' "$value"
-    done
-
-    args=(
-      --output-dir "$output_dir"
-      --seed "$seed"
-      --generated-mess-count "$generated_mess_count"
-      --visual-grounding-timeout-s "$visual_grounding_timeout_s"
-      --parallelism "$parallelism"
-      --base-port "$base_port"
-      --provider-retry-attempts "$provider_retry_attempts"
-      --provider-retry-sleep-s "$provider_retry_sleep_s"
-      --dino-sidecar-lifecycle "$dino_sidecar_lifecycle"
-      --dino-sidecar-startup-timeout-s "$dino_sidecar_startup_timeout_s"
-    )
-    if [[ -n "$row" ]]; then
-      IFS=',' read -r -a selected_rows <<< "$row"
-      for selected_row in "${selected_rows[@]}"; do
-        [[ -z "$selected_row" ]] && continue
-        args+=(--row "$selected_row")
-      done
-    fi
-    if [[ -n "$runtime_map_prior" ]]; then
-      args+=(--runtime-map-prior "$runtime_map_prior")
-    fi
-    case "$mode" in
-      dry-run|dry|"")
-        ;;
-      execute|run|live)
-        args+=(--execute --continue-on-error)
-        ;;
-      *)
-        echo "error: unsupported codex-harness8 mode '$mode' (expected dry-run or execute)" >&2
-        exit 1
-        ;;
-    esac
-    python_bin="${ROBOCLAWS_PYTHON:-}"
-    if [[ -z "$python_bin" ]]; then
-      if [[ -x ".venv/bin/python" ]]; then
-        python_bin=".venv/bin/python"
-      elif command -v python3 >/dev/null 2>&1; then
-        python_bin="python3"
-      else
-        python_bin="python"
-      fi
-    fi
-    "$python_bin" scripts/molmo_cleanup/run_codex_cleanup_harness8.py "${args[@]}"
 
 # Live OpenClaw Gateway report. Starts the cleanup MCP server and then chat::run.
 openclaw-report seed="7" output_dir="output/molmo/openclaw-report" task="帮我收拾这个房间" generated_mess_count="10" profile="world-oracle-labels" port="18788":

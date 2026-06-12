@@ -2,7 +2,7 @@
 
 **Status:** Completed in Phase 80 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0071-add-wide-placement-profile-retry.md`
+**ADR:** `docs/adr/archive/execution-log/0071-add-wide-placement-profile-retry.md`
 
 ## Goal
 

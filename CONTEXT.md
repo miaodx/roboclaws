@@ -66,6 +66,14 @@ A reusable package of model operating knowledge, scripts, heuristics, examples,
 and checks that attempts goals by calling available tools.
 _Avoid_: robot capability claim, MCP contract, backend primitive
 
+**Agent Validation Matrix**:
+An agent-facing verification skill that selects and optionally executes the
+relevant deterministic, product, live-agent, Agent SDK, perception, simulator,
+or hardware gates for a plan or diff. It records why gates were selected,
+skipped, run, or blocked. It is not an MCP capability, task skill, or fixed
+benchmark grid.
+_Avoid_: manual checklist, hidden evaluator, one-size-fits-all harness
+
 **Trace-Preserving Skill Routine**:
 A reusable skill routine that composes lower-level public tools while recording
 substeps, evidence, status, and recovery context.
@@ -159,6 +167,15 @@ Runtime Metric Map snapshot for later robot tasks. It selects a map-building
 skill, requires household world capabilities, and disables manipulation. In the
 minimal-map mainline, it turns sparse maps into cleanup-usable public evidence.
 _Avoid_: cleanup profile, private target discovery, source-map mutation, MCP tool
+
+**Open-Ended Intent Outcome**:
+The terminal intent-level result for `surface=household-world
+intent=open-ended`. It is satisfied by agent-declared goal completion plus the
+required public artifacts, goal contract, trace, report, and open-ended
+artifact checker. Cleanup scoring may remain advisory evidence on the artifact,
+but cleanup restoration fields must not be the authoritative terminal outcome
+for open-ended runs.
+_Avoid_: cleanup success, private scorer result, restored-object count
 
 **Cleanup Intent**:
 A first-class household-world intent that consumes household world evidence and

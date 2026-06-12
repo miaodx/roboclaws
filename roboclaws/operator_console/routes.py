@@ -19,7 +19,7 @@ from roboclaws.launch.environment_setup import (
     ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
 )
 from roboclaws.launch.intents import TASK_INTENT_SPECS
-from roboclaws.launch.worlds import WORLD_SPECS
+from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS, WORLD_SPECS
 
 DEFAULT_PROMPTS = {
     "cleanup": "帮我收拾这个房间",
@@ -35,6 +35,24 @@ ISAAC_SUPPORTED_EVIDENCE_LANES = tuple(
     lane for lane in REAL_EVIDENCE_LANES if lane != CAMERA_GROUNDED_LABELS_LANE
 )
 ISAAC_UNSUPPORTED_EVIDENCE_LANES = (CAMERA_GROUNDED_LABELS_LANE,)
+MOLMOSPACES_DEFAULT_CLEANUP_TARGET_COUNT = 5
+MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS = (
+    "molmospaces/val_0",
+    "molmospaces/val_2",
+    "molmospaces/val_3",
+    "molmospaces/val_4",
+    "molmospaces/val_9",
+)
+MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS = (
+    "molmospaces/val_0",
+    "molmospaces/val_1",
+    "molmospaces/val_2",
+    "molmospaces/val_3",
+    "molmospaces/val_4",
+    "molmospaces/val_5",
+    "molmospaces/val_7",
+    "molmospaces/val_9",
+)
 
 
 @dataclass(frozen=True)
@@ -175,6 +193,7 @@ class ConsoleLaunchSelection:
             "required_overrides": list(self.required_overrides),
             "default_overrides": list(self.default_overrides),
             "launch_default_overrides": list(self.launch_default_overrides),
+            "preview_assets": _preview_assets_payload(world.preview_assets),
             "gates": [gate.to_payload() for gate in self.gates],
             "required_gates": [gate.to_payload() for gate in self.gates if gate.required],
             "state": "enabled" if self.enabled else "disabled",
@@ -371,6 +390,7 @@ def list_worlds(*, include_hidden: bool = False) -> tuple[dict[str, Any], ...]:
                 "default_backend": world.default_backend,
                 "resource_kind": world.resource_kind,
                 "availability": world.availability,
+                "preview_assets": _preview_assets_payload(world.preview_assets),
             }
         )
     return tuple(rows)
@@ -386,6 +406,10 @@ def list_evidence_lanes() -> tuple[dict[str, str], ...]:
         }
         for lane in cleanup_evidence_lane_names()
     )
+
+
+def _preview_assets_payload(items: tuple[tuple[str, str], ...]) -> dict[str, dict[str, str]]:
+    return {name: {"path": path, "href": path} for name, path in items}
 
 
 def list_console_combinations(
@@ -457,89 +481,7 @@ def _common_gates() -> tuple[RouteGate, ...]:
 def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
     common_gates = _common_gates()
     return (
-        *_lane_selections(
-            "molmospaces/val_0",
-            "mujoco",
-            "cleanup",
-            "codex-cli",
-            "codex-env",
-            gates=common_gates,
-            default_overrides=("seed=7",),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "mujoco",
-            "cleanup",
-            "claude-code",
-            "mimo-anthropic",
-            gates=common_gates,
-            default_overrides=("seed=7",),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "mujoco",
-            "cleanup",
-            "openai-agents-sdk",
-            "codex-env",
-            gates=common_gates,
-            default_overrides=("seed=7",),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "mujoco",
-            "map-build",
-            "codex-cli",
-            "codex-env",
-            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            gates=common_gates,
-            default_overrides=("seed=7",),
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "mujoco",
-            "map-build",
-            "direct-runner",
-            None,
-            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            gates=(MCP_PORT_FREE_GATE,),
-            default_overrides=("seed=7",),
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "isaaclab",
-            "cleanup",
-            "codex-cli",
-            "codex-env",
-            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
-            default_overrides=("seed=7", "relocation_count=1"),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "isaaclab",
-            "cleanup",
-            "claude-code",
-            "mimo-anthropic",
-            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
-            default_overrides=("seed=7", "relocation_count=1"),
-            supports_operator_steer=True,
-        ),
-        *_lane_selections(
-            "molmospaces/val_0",
-            "isaaclab",
-            "map-build",
-            "codex-cli",
-            "codex-env",
-            evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
-            scenario_setup=ENVIRONMENT_SETUP_BASELINE,
-            gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
-            default_overrides=("seed=7",),
-        ),
+        *_molmospaces_enabled_combinations(),
         *_lane_selections(
             "agibot-g2/map-12",
             "agibot-gdk",
@@ -577,8 +519,117 @@ def _enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
     )
 
 
+def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
+    rows: list[ConsoleLaunchSelection] = []
+    common_gates = _common_gates()
+    for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
+        if world_id in MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS:
+            rows.extend(
+                _lane_selections(
+                    world_id,
+                    "mujoco",
+                    "cleanup",
+                    "codex-cli",
+                    "codex-env",
+                    gates=common_gates,
+                    default_overrides=("seed=7",),
+                    supports_operator_steer=True,
+                )
+            )
+            rows.extend(
+                _lane_selections(
+                    world_id,
+                    "mujoco",
+                    "cleanup",
+                    "claude-code",
+                    "mimo-anthropic",
+                    gates=common_gates,
+                    default_overrides=("seed=7",),
+                    supports_operator_steer=True,
+                )
+            )
+            rows.extend(
+                _lane_selections(
+                    world_id,
+                    "mujoco",
+                    "cleanup",
+                    "openai-agents-sdk",
+                    "codex-env",
+                    gates=common_gates,
+                    default_overrides=("seed=7",),
+                    supports_operator_steer=True,
+                )
+            )
+        rows.extend(
+            _lane_selections(
+                world_id,
+                "mujoco",
+                "map-build",
+                "codex-cli",
+                "codex-env",
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                gates=common_gates,
+                default_overrides=("seed=7",),
+            )
+        )
+        rows.extend(
+            _lane_selections(
+                world_id,
+                "mujoco",
+                "map-build",
+                "direct-runner",
+                None,
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                gates=(MCP_PORT_FREE_GATE,),
+                default_overrides=("seed=7",),
+            )
+        )
+        if world_id in MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS:
+            rows.extend(
+                _lane_selections(
+                    world_id,
+                    "isaaclab",
+                    "cleanup",
+                    "codex-cli",
+                    "codex-env",
+                    evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
+                    gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+                    default_overrides=("seed=7", "relocation_count=1"),
+                    supports_operator_steer=True,
+                )
+            )
+            rows.extend(
+                _lane_selections(
+                    world_id,
+                    "isaaclab",
+                    "cleanup",
+                    "claude-code",
+                    "mimo-anthropic",
+                    evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
+                    gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+                    default_overrides=("seed=7", "relocation_count=1"),
+                    supports_operator_steer=True,
+                )
+            )
+        rows.extend(
+            _lane_selections(
+                world_id,
+                "isaaclab",
+                "map-build",
+                "codex-cli",
+                "codex-env",
+                evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                gates=(*common_gates, ISAAC_PREFLIGHT_GATE),
+                default_overrides=("seed=7",),
+            )
+        )
+    return tuple(rows)
+
+
 def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
     return (
+        *_disabled_molmospaces_cleanup_combinations(),
         *_lane_selections(
             "molmospaces/val_0",
             "isaaclab",
@@ -675,6 +726,61 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             unsupported_reason="OpenAI Agents SDK is not proven for open-ended household runs yet.",
         ),
     )
+
+
+def _disabled_molmospaces_cleanup_combinations() -> tuple[ConsoleLaunchSelection, ...]:
+    rows: list[ConsoleLaunchSelection] = []
+    for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
+        if world_id not in MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS:
+            reason = (
+                "This scene does not expose at least "
+                f"{MOLMOSPACES_DEFAULT_CLEANUP_TARGET_COUNT} generated cleanup targets "
+                "under the current cleanup rules. Use Map Build or choose a cleanup-ready scene."
+            )
+            for agent_engine_id, provider_profile in (
+                ("codex-cli", "codex-env"),
+                ("claude-code", "mimo-anthropic"),
+                ("openai-agents-sdk", "codex-env"),
+            ):
+                rows.extend(
+                    _lane_selections(
+                        world_id,
+                        "mujoco",
+                        "cleanup",
+                        agent_engine_id,
+                        provider_profile,
+                        enabled=False,
+                        unsupported_reason=reason,
+                        gates=_common_gates(),
+                        default_overrides=("seed=7",),
+                        supports_operator_steer=True,
+                    )
+                )
+        if world_id not in MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS:
+            reason = (
+                "This scene has no generated cleanup targets under the current cleanup rules. "
+                "Use Map Build or choose a cleanup-ready scene."
+            )
+            for agent_engine_id, provider_profile in (
+                ("codex-cli", "codex-env"),
+                ("claude-code", "mimo-anthropic"),
+            ):
+                rows.extend(
+                    _lane_selections(
+                        world_id,
+                        "isaaclab",
+                        "cleanup",
+                        agent_engine_id,
+                        provider_profile,
+                        evidence_lanes=ISAAC_SUPPORTED_EVIDENCE_LANES,
+                        enabled=False,
+                        unsupported_reason=reason,
+                        gates=(*_common_gates(), ISAAC_PREFLIGHT_GATE),
+                        default_overrides=("seed=7", "relocation_count=1"),
+                        supports_operator_steer=True,
+                    )
+                )
+    return tuple(rows)
 
 
 def _selection(

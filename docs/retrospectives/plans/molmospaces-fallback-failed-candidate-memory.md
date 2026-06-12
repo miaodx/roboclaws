@@ -1,7 +1,7 @@
 # MolmoSpaces Fallback Failed Candidate Memory
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0057-remember-failed-fallback-candidates.md`
+**ADR:** `docs/adr/archive/execution-log/0057-remember-failed-fallback-candidates.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/66-molmospaces-fallback-failed-candidate-memory/`
 
 ## Problem

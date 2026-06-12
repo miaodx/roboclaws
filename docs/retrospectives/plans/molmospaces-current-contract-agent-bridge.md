@@ -88,7 +88,7 @@ This phase may keep current-contract shortcuts, including global
 Use a new Molmo-specific MCP server, not the AI2-THOR navigation server.
 
 See ADR-0004:
-[`docs/adr/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md`](../adr/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md).
+[`docs/adr/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md`](../../adr/0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md).
 
 Expected shape:
 

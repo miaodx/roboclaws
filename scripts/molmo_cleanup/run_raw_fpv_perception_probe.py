@@ -47,8 +47,8 @@ DEFAULT_CONTRAST_RUN_DIRS = (
     Path("output/household/household-cleanup/codex-camera-labels/0606_1227/seed-7"),
 )
 DEFAULT_SEMANTIC_MAP_PRIOR = Path(
-    "output/molmo/codex-harness8/0607_0943-codexenv-cleanwt/"
-    "_semantic-map-prior-dino/0607_0943/seed-7/runtime_metric_map.json"
+    "output/household/semantic-map-build/direct-camera-grounded-labels/"
+    "seed-7/runtime_metric_map.json"
 )
 DEFAULT_OUTPUT_ROOT = Path("output/molmo/raw-fpv-perception-probe")
 DEFAULT_MODEL = "gpt-5.5"

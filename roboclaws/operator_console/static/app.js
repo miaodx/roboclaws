@@ -101,10 +101,10 @@ const els = {
 
 async function boot() {
   const payload = await fetchJson("/api/routes");
-  state.worlds = payload.worlds || [];
   state.evidenceLanes = payload.evidence_lanes || [];
   state.combinations = payload.combinations || payload.routes || [];
   state.routes = state.combinations;
+  state.worlds = orderedVisibleWorlds(payload.worlds || []);
   state.readiness = payload.readiness || {};
   state.selectedWorld = state.worlds[0] || null;
   state.selectedRoute =
@@ -119,6 +119,29 @@ async function boot() {
   renderSelection();
   bindEvents();
   renderViewModes();
+}
+
+function orderedVisibleWorlds(worlds) {
+  return worlds
+    .map((world, index) => ({
+      world,
+      index,
+      enabledLaunchCount: combinationsForWorld(world.id).filter((item) => item.enabled).length,
+    }))
+    .filter((item) => item.enabledLaunchCount > 0)
+    .sort((left, right) => {
+      const leftMolmo = isMolmospacesWorld(left.world);
+      const rightMolmo = isMolmospacesWorld(right.world);
+      if (leftMolmo !== rightMolmo) {
+        return leftMolmo ? 1 : -1;
+      }
+      return left.index - right.index;
+    })
+    .map((item) => item.world);
+}
+
+function isMolmospacesWorld(world) {
+  return world.id.startsWith("molmospaces/") || (world.tags || []).includes("molmospaces");
 }
 
 function bindEvents() {
@@ -465,7 +488,10 @@ function selectedCombinationFromAxes() {
       item.intent_id === intentId &&
       item.agent_engine_id === agentEngineId
   );
-  const candidates = axisCandidates.filter((item) => item.evidence_lane === evidenceLane);
+  const candidates = axisCandidates.filter(
+    (item) =>
+      item.evidence_lane === evidenceLane
+  );
   const providerProfile = els.providerProfileInput.value;
   return (
     candidates.find(
@@ -497,6 +523,7 @@ function renderSelection() {
   renderIntentSelector(route);
   renderScenarioSetup(route);
   renderOperatorInput(route);
+  renderSelectedScenePreview(route);
 
   const gates = readiness.gates || route.gates || [];
   els.gateList.innerHTML = "";
@@ -534,14 +561,14 @@ function renderAxisSelectors() {
     state.selectedRoute && state.selectedRoute.backend_id
   );
   renderSelectOptions(
-    els.intentInput,
-    uniqueOptions(combos, "intent_id", "intent_id", intentLabel),
-    state.selectedIntent || (state.selectedRoute && state.selectedRoute.intent_id)
-  );
-  renderSelectOptions(
     els.agentEngineInput,
     uniqueOptions(combos, "agent_engine_id", "agent_engine_label"),
     state.selectedRoute && state.selectedRoute.agent_engine_id
+  );
+  renderSelectOptions(
+    els.intentInput,
+    intentOptionsForCurrentAxes(combos),
+    state.selectedIntent || (state.selectedRoute && state.selectedRoute.intent_id)
   );
   renderSelectOptions(
     els.evidenceLaneInput,
@@ -567,6 +594,33 @@ function uniqueOptions(items, valueKey, labelKey, labelFn) {
     });
   }
   return [...seen.values()];
+}
+
+function intentOptionsForCurrentAxes(combos) {
+  const backendId = els.backendInput.value;
+  const agentEngineId = els.agentEngineInput.value;
+  const intentValues = [
+    ...new Set(combos.map((item) => item.intent_id).filter(Boolean)),
+  ];
+  return intentValues.map((value) => {
+    const matching = combos.filter(
+      (item) =>
+        item.backend_id === backendId &&
+        item.agent_engine_id === agentEngineId &&
+        item.intent_id === value
+    );
+    const enabledMatch = matching.find((item) => item.enabled);
+    const disabledMatch = matching.find((item) => !item.enabled);
+    const reason = disabledMatch
+      ? disabledMatch.unsupported_reason || disabledMatch.disabled_reason || "Unavailable for this route."
+      : "Unavailable for this route.";
+    return {
+      value,
+      label: intentLabel(value),
+      disabled: !enabledMatch,
+      title: enabledMatch ? "" : reason,
+    };
+  });
 }
 
 function evidenceLaneOptions(combos) {
@@ -1368,11 +1422,18 @@ async function pollState() {
 
 function renderRunState(payload) {
   const route = payload.launch_selection || payload.route || state.selectedRoute || {};
-  const attemptLabel = payload.display_run_id && payload.display_run_id !== payload.run_id
-    ? ` / ${payload.display_run_id}`
+  const runLabel = compactRunId(payload.run_id);
+  const displayRunLabel = compactDisplayRunId(payload.display_run_id || "");
+  const attemptLabel = displayRunLabel && displayRunLabel !== runLabel
+    ? ` / ${displayRunLabel}`
     : "";
   document.querySelector(".top-run-bar").classList.add("run-active");
-  els.runTitle.textContent = `${route.label || "Agent run"} / ${payload.run_id}${attemptLabel}`;
+  els.runTitle.textContent = `${route.label || "Agent run"} / ${runLabel}${attemptLabel}`;
+  els.runTitle.title = `${route.label || "Agent run"} / ${payload.run_id || ""}${
+    payload.display_run_id && payload.display_run_id !== payload.run_id
+      ? ` / ${payload.display_run_id}`
+      : ""
+  }`;
   els.routeStatus.textContent = payload.status_label || payload.phase || payload.status || "Running";
   els.routeStatus.className = `badge ${statusClass(payload.status || payload.phase)}`;
   els.lockStatus.textContent = `lock: ${route.lock_name || payload.backend_lock || "none"}`;
@@ -1513,6 +1574,20 @@ function renderViews(assets, route = state.selectedRoute) {
   setImageSlot("grounding", assets.grounding, "No grounding result yet.");
   ensureActiveViewAvailable(route);
   renderViewModes(route);
+}
+
+function renderSelectedScenePreview(route = state.selectedRoute) {
+  if (state.activeRunId) {
+    return;
+  }
+  const previews = route && route.preview_assets ? route.preview_assets : {};
+  setImageSlot("fpv", previews.fpv, "No scene FPV preview is available.");
+  setImageSlot("map", previews.map, "No scene map preview is available.");
+  setImageSlot("grounding", null, "Grounding will appear after a camera-grounded run starts.");
+  const chaseEmptyText = routeHasOverviewChase(route)
+    ? "Chase preview will appear after a run starts."
+    : "Chase view unavailable for this backend.";
+  setImageSlot("chase", previews.chase, chaseEmptyText);
 }
 
 function setImageSlot(name, asset, emptyText) {
@@ -1767,6 +1842,20 @@ function formatElapsed(seconds) {
   const minutes = String(Math.floor(value / 60)).padStart(2, "0");
   const rest = String(value % 60).padStart(2, "0");
   return `${minutes}:${rest}`;
+}
+
+function compactRunId(runId) {
+  return String(runId || "").replace(
+    /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})(.*)$/,
+    "$2$3-$4$5$7"
+  );
+}
+
+function compactDisplayRunId(displayRunId) {
+  return String(displayRunId || "").replace(
+    /^(\d{2})(\d{2})_(\d{2})(\d{2})(.*)$/,
+    "$1$2_$3$4$5"
+  );
 }
 
 function escapeHtml(value) {

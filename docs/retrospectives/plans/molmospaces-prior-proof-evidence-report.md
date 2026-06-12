@@ -2,7 +2,7 @@
 
 **Status:** Completed for Phase 86 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0077-render-prior-proof-evidence-in-runner-reports.md`
+**ADR:** `docs/adr/archive/execution-log/0077-render-prior-proof-evidence-in-runner-reports.md`
 
 ## Goal
 

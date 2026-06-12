@@ -99,6 +99,9 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "attachExistingRun" in app
     assert "attachable_run" in app
     assert "renderStartAction" in app
+    assert "compactRunId" in app
+    assert "compactDisplayRunId" in app
+    assert '"$2$3-$4$5$7"' in app
     assert "Run Attached" in app
     assert "Use Steer or Ask Why" in app
     assert "/api/readiness" in app
@@ -107,8 +110,32 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "state.evidenceLanes" in app
     assert "payload.evidence_lanes" in app
     assert "evidenceLaneOptions" in app
+    assert "intentOptionsForCurrentAxes" in app
     assert "node.disabled = Boolean(option.disabled)" in app
     assert "node.title = option.title" in app
+    assert "orderedVisibleWorlds(payload.worlds || [])" in app
+    assert "enabledLaunchCount > 0" in app
+    assert "isMolmospacesWorld" in app
+    assert "return leftMolmo ? 1 : -1" in app
+
+
+def test_static_app_renders_scene_preview_assets() -> None:
+    app = (STATIC_ROOT / "app.js").read_text(encoding="utf-8")
+    preview_dir = STATIC_ROOT / "previews"
+
+    assert "renderSelectedScenePreview" in app
+    assert "renderSelectedScenePreview(route);" in app
+    assert "route.preview_assets" in app
+    assert "state.activeRunId" in app
+    assert "Grounding will appear after a camera-grounded run starts." in app
+
+    preview_files = sorted(path.name for path in preview_dir.glob("molmospaces-val_*-*.png"))
+    assert len(preview_files) == 20
+    for scene_index in range(10):
+        for view_name in ("fpv", "map"):
+            path = preview_dir / f"molmospaces-val_{scene_index}-{view_name}.png"
+            assert path.is_file()
+            assert path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
 
 
 def test_static_app_exposes_explicit_intent_selector_and_interpretation() -> None:
@@ -164,6 +191,9 @@ def test_static_app_uses_overview_workspace_and_outputs_copy() -> None:
     assert ".blank-panel" in css
     assert "[hidden]" in css
     assert "display: none !important" in css
+    assert ".top-run-bar.run-active #run-title" in css
+    assert "font-size: 14px" in css
+    assert "text-overflow: ellipsis" in css
 
 
 def test_static_app_announces_run_state_via_live_region() -> None:

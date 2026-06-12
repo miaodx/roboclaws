@@ -1,7 +1,7 @@
 # MolmoSpaces Fallback Exhaustion Blockers
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0063-summarize-fallback-exhaustion-blockers.md`
+**ADR:** `docs/adr/archive/execution-log/0063-summarize-fallback-exhaustion-blockers.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/72-molmospaces-fallback-exhaustion-blockers/`
 
 ## Problem

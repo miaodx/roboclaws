@@ -229,6 +229,8 @@ just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco
 just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http
 just agent::harness molmo-visual-grounding-benchmark pipeline=grounding-dino,yoloe,yoloe+mimo-v2.5
 just agent::harness molmo-visual-grounding-benchmark matrix=harness/visual_grounding/first_wave_gpu_sidecar_matrix.json corpus=harness/visual_grounding/local_raw_fpv_corpus.json timeout_s=60
+just agent::harness agent-validation recommend plan=docs/plans/example.md budget=focused
+just agent::harness agent-validation execute since=origin/main budget=focused
 .venv/bin/python scripts/visual_grounding/build_representative_visual_grounding_corpus.py output --output output/visual-grounding-corpora/representative-raw-fpv/representative_raw_fpv_corpus.json
 .venv/bin/python scripts/visual_grounding/build_molmospaces_visual_grounding_bbox_corpus.py --output output/visual-grounding-corpora/molmospaces-bbox-10x10/corpus.json --scene-indices 0-9 --targets-per-scene 10
 VISUAL_GROUNDING_DINO_MODEL_ID=IDEA-Research/grounding-dino-base VISUAL_GROUNDING_DINO_BOX_THRESHOLD=0.25 VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 .venv-visual-grounding/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline real-router --adapter-mode real
@@ -372,6 +374,12 @@ only after the public axes have been resolved.
 The required PR gate is reproducible locally with
 `just agent::verify ci-required`. Use `just agent::verify mock` for a faster
 loop when you do not need the mock HTML report artifact.
+
+Use `just agent::harness agent-validation recommend|execute ...` when a plan or
+diff needs an adaptive validation matrix instead of a hand-written fixed
+harness. The matrix writes JSON, Markdown, and HTML under
+`output/agent-validation-matrix/` and records selected, skipped, run, and
+blocked gates with source-signal rationale.
 
 For tests, set `ROBOCLAWS_JUST_TRACE=1` to print the lower-level command route
 without launching the underlying simulator, Gateway, or agent.

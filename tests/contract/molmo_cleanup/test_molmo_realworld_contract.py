@@ -967,6 +967,32 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
     assert runtime_map["static_map"]["fixtures"] == []
     assert runtime_map["static_map"]["driveable_ways"] == []
     assert runtime_map["generated_exploration_candidates"]
+    assert runtime_map["target_candidates"]
+    waypoint_candidate = next(
+        item
+        for item in runtime_map["target_candidates"]
+        if item["candidate_type"] == "generated_exploration_candidate"
+        and item["waypoint_id"] == waypoint["waypoint_id"]
+    )
+    assert waypoint_candidate["candidate_id"].startswith(
+        "target_candidate_waypoint_generated_exploration_"
+    )
+    assert waypoint_candidate["target_actionability_status"] == "actionable"
+    assert waypoint_candidate["verified_navigation"] is True
+    assert waypoint_candidate["inspection_budget"]["observed"] is True
+    assert waypoint_candidate["inspection_budget"]["observation_count"] >= 1
+    assert any(
+        item["target_actionability_status"] == "needs_observe"
+        for item in runtime_map["target_candidates"]
+        if item["candidate_type"] == "generated_exploration_candidate"
+    )
+    target_search = runtime_map["target_search_summary"]
+    assert target_search["schema"] == "target_search_summary_v1"
+    assert target_search["candidate_count"] == len(runtime_map["target_candidates"])
+    assert target_search["viewpoint_budget"]["visited_waypoint_count"] >= 1
+    assert target_search["viewpoint_budget"]["unvisited_waypoint_count"] >= 1
+    assert target_search["inspection_observations"]
+    assert target_search["private_truth_included"] is False
     assert runtime_map["public_semantic_anchors"]
     waypoint_anchor = next(
         item
@@ -991,6 +1017,85 @@ def test_minimal_map_mode_hides_authored_semantics_and_uses_generated_candidates
         "anchor_fixture_"
     )
     _assert_no_forbidden_keys(agent_view)
+
+
+def test_target_candidates_track_camera_adjustment_and_visual_actionability() -> None:
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    first_observation = _first_non_empty_observation(contract)
+    handle = first_observation["visible_object_detections"][0]["object_id"]
+
+    pre_scan_map = contract.agent_view_payload()["runtime_metric_map"]
+    pre_scan_candidate = next(
+        item for item in pre_scan_map["target_candidates"] if item.get("object_id") == handle
+    )
+
+    assert pre_scan_candidate["target_actionability_status"] == "visible_only"
+    assert pre_scan_candidate["verified_navigation"] is False
+    assert pre_scan_candidate["rejection_reason"] == "visual_evidence_not_reviewable"
+    generated_waypoint_id = pre_scan_candidate["generated_inspection_waypoint_id"]
+    generated_waypoint = next(
+        item
+        for item in pre_scan_map["generated_target_inspection_candidates"]
+        if item["waypoint_id"] == generated_waypoint_id
+    )
+    generated_target_candidate = next(
+        item
+        for item in pre_scan_map["target_candidates"]
+        if item["candidate_type"] == "generated_target_inspection_candidate"
+        and item["waypoint_id"] == generated_waypoint_id
+    )
+    metric_waypoints = contract.metric_map()["inspection_waypoints"]
+
+    assert generated_waypoint["waypoint_source"] == "generated_target_inspection_candidate"
+    assert generated_waypoint["verified_navigation"] is True
+    assert generated_waypoint["source_target_candidate_id"] == pre_scan_candidate["candidate_id"]
+    assert generated_target_candidate["target_actionability_status"] == "needs_observe"
+    assert (
+        generated_target_candidate["source_target_candidate_id"]
+        == pre_scan_candidate["candidate_id"]
+    )
+    assert generated_waypoint_id in {str(item["waypoint_id"]) for item in metric_waypoints}
+    assert contract.navigate_to_object(handle)["ok"] is False
+
+    waypoint_navigation = contract.navigate_to_waypoint(generated_waypoint_id)
+    waypoint_observation = contract.observe()
+    waypoint_candidate = next(
+        item
+        for item in contract.agent_view_payload()["runtime_metric_map"]["target_candidates"]
+        if item["candidate_type"] == "generated_target_inspection_candidate"
+        and item["waypoint_id"] == generated_waypoint_id
+    )
+
+    assert waypoint_navigation["ok"] is True
+    assert waypoint_navigation["pose_source"] == "inspection_waypoint"
+    assert waypoint_observation["waypoint_id"] == generated_waypoint_id
+    assert waypoint_candidate["target_actionability_status"] == "actionable"
+    assert waypoint_candidate["inspection_budget"]["observed"] is True
+
+    contract.adjust_camera(yaw_delta_deg=15)
+    confirmed_observation = contract.observe()
+    confirmed = next(
+        item
+        for item in confirmed_observation["visible_object_detections"]
+        if item["object_id"] == handle
+    )
+    post_scan_map = contract.agent_view_payload()["runtime_metric_map"]
+    post_scan_candidate = next(
+        item for item in post_scan_map["target_candidates"] if item.get("object_id") == handle
+    )
+    summary = post_scan_map["target_search_summary"]
+
+    assert confirmed["candidate_state"] == "navigation_authorized"
+    assert post_scan_candidate["target_actionability_status"] == "actionable"
+    assert post_scan_candidate["verified_navigation"] is True
+    assert post_scan_candidate["visual_grounding_evidence"]["reviewability_status"] == "reviewable"
+    assert summary["camera_adjustment_budget"]["attempt_count"] == 1
+    assert summary["inspection_observations"][-1]["camera_adjusted"] is True
+    assert any(
+        item["changed_candidate_state_count"] >= 1 for item in summary["inspection_observations"]
+    )
+    assert contract.navigate_to_object(handle)["ok"] is True
+    _assert_no_forbidden_keys(post_scan_map)
 
 
 def test_minimal_runtime_map_current_anchor_overrides_same_id_prior_anchor() -> None:
