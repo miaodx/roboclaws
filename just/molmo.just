@@ -904,6 +904,16 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN:-}" ]]; then
             runner_args+=(--raw-fpv-image-memory-retain "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN}")
           fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION:-}" ]]; then
+            if [[ "${ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
+              runner_args+=(--no-camera-grounded-history-compaction)
+            else
+              runner_args+=(--camera-grounded-history-compaction)
+            fi
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN:-}" ]]; then
+            runner_args+=(--camera-grounded-history-retain "${ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN}")
+          fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET:-}" ]]; then
             runner_args+=(--done-retry-budget "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET}")
           fi

@@ -62,6 +62,7 @@ def extract_report_performance_metrics(
     run_dir: Path,
     *,
     write_model_call_metrics: bool = False,
+    calibration: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build one sanitized performance packet for a live-agent run directory."""
 
@@ -96,7 +97,14 @@ def extract_report_performance_metrics(
         ),
         "limitations": [],
     }
-    packet["timing"].update(_normalized_model_timing(packet["timing"], packet["model_work"]))
+    packet["timing"].update(
+        _normalized_model_timing(
+            packet["timing"],
+            packet["model_work"],
+            calibration=calibration,
+            run_identity=packet["run_identity"],
+        )
+    )
     packet["limitations"] = _packet_limitations(packet)
     return packet
 
@@ -293,9 +301,10 @@ def compare_run_dirs(
     key: str = "",
     quality_waiver: str = "",
     diagnostic: bool = False,
+    calibration: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    baseline = extract_report_performance_metrics(baseline_dir)
-    candidate = extract_report_performance_metrics(candidate_dir)
+    baseline = extract_report_performance_metrics(baseline_dir, calibration=calibration)
+    candidate = extract_report_performance_metrics(candidate_dir, calibration=calibration)
     return compare_report_performance_metrics(
         baseline,
         candidate,
@@ -341,6 +350,17 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
         if isinstance(payload, dict):
             rows.append(payload)
     return rows
+
+
+def read_model_latency_calibration(path: Path) -> dict[str, Any]:
+    """Read a named model-latency calibration packet."""
+
+    packet = read_json(path)
+    if not packet:
+        return {}
+    result = dict(packet)
+    result["source_path"] = str(path)
+    return result
 
 
 def _run_identity(
@@ -525,18 +545,11 @@ def _timing_packet(
 def _normalized_model_timing(
     timing: dict[str, Any],
     model_work: dict[str, Any],
+    *,
+    calibration: dict[str, Any] | None = None,
+    run_identity: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    estimate = {
-        "available": False,
-        "source": "unavailable",
-        "estimated_s": None,
-        "limitations": ["calibration_coefficients_unavailable"],
-        "policy": (
-            "No authoritative repo-default coefficients are committed for v1. "
-            "Use calibrate_model_latency.py with a named dataset before making "
-            "normalized speed claims."
-        ),
-    }
+    estimate = _estimate_model_work_s(model_work, calibration, run_identity)
     observed = _float_or_none(timing.get("observed_model_api_s"))
     residual = None
     if observed is not None and estimate["estimated_s"] is not None:
@@ -553,6 +566,197 @@ def _normalized_model_timing(
         "model_or_sdk_residual_s": broader_residual,
         "model_work_available": bool(model_work.get("available")),
     }
+
+
+def _estimate_model_work_s(
+    model_work: dict[str, Any],
+    calibration: dict[str, Any] | None,
+    run_identity: dict[str, Any] | None,
+) -> dict[str, Any]:
+    unavailable = {
+        "available": False,
+        "source": "unavailable",
+        "estimated_s": None,
+        "limitations": ["calibration_coefficients_unavailable"],
+        "policy": (
+            "No authoritative repo-default coefficients are committed for v1. "
+            "Use calibrate_model_latency.py with a named dataset before making "
+            "normalized speed claims."
+        ),
+    }
+    calibration = _dict(calibration)
+    if not calibration:
+        return unavailable
+    limitations = [str(item) for item in calibration.get("limitations") or [] if str(item)]
+    if calibration.get("schema") != "roboclaws_model_latency_calibration_v1":
+        return {
+            **unavailable,
+            "limitations": ["calibration_schema_unrecognized"],
+            "source": str(calibration.get("source_path") or "calibration_packet"),
+        }
+    if calibration.get("available") is not True:
+        return {
+            **unavailable,
+            "limitations": sorted({"calibration_unavailable", *limitations}),
+            "source": str(calibration.get("source_path") or "calibration_packet"),
+            "sample_count": _int_or_none(calibration.get("sample_count")),
+            "total_row_count": _int_or_none(calibration.get("total_row_count")),
+        }
+    coefficient_selection = _select_calibration_coefficients(calibration, run_identity)
+    coefficients = coefficient_selection["coefficients"]
+    if not coefficients:
+        return {
+            **unavailable,
+            "limitations": sorted(
+                {
+                    "calibration_coefficients_unavailable",
+                    *limitations,
+                    *coefficient_selection["limitations"],
+                }
+            ),
+            "source": str(calibration.get("source_path") or "calibration_packet"),
+            "sample_count": _int_or_none(calibration.get("sample_count")),
+            "total_row_count": _int_or_none(calibration.get("total_row_count")),
+        }
+    required = {
+        "uncached_input_s_per_token": "total_uncached_input_tokens",
+        "cached_input_s_per_token": "total_cached_input_tokens",
+        "output_s_per_token": "total_output_tokens",
+        "reasoning_s_per_token": "total_reasoning_tokens",
+    }
+    values: dict[str, float] = {
+        "intercept_s": _float_or_none(coefficients.get("intercept_s")) or 0.0
+    }
+    missing: list[str] = []
+    for coefficient_key, work_key in required.items():
+        work_value = _int_or_none(model_work.get(work_key))
+        coefficient_value = _float_or_none(coefficients.get(coefficient_key))
+        if work_value is None:
+            if coefficient_value not in {None, 0.0}:
+                missing.append(work_key)
+            values[coefficient_key] = 0.0
+            continue
+        if coefficient_value is None:
+            if work_value > 0:
+                missing.append(coefficient_key)
+            values[coefficient_key] = 0.0
+            continue
+        values[coefficient_key] = coefficient_value
+    image_units = _image_input_units(model_work)
+    image_coefficient = _first_float(
+        coefficients,
+        "image_input_s_per_unit",
+        "image_s_per_unit",
+        "image_input_s_per_pixel",
+    )
+    if image_units > 0 and image_coefficient is None:
+        missing.append("image_s_per_unit")
+        image_coefficient = 0.0
+    if missing or not model_work.get("available"):
+        return {
+            **unavailable,
+            "limitations": sorted(
+                {
+                    *limitations,
+                    *coefficient_selection["limitations"],
+                    *(f"{item}_unavailable" for item in missing),
+                    *([] if model_work.get("available") else ["model_work_unavailable"]),
+                }
+            ),
+            "source": str(calibration.get("source_path") or "calibration_packet"),
+            "sample_count": _int_or_none(calibration.get("sample_count")),
+            "total_row_count": _int_or_none(calibration.get("total_row_count")),
+        }
+    estimated = (
+        values["intercept_s"]
+        + (_int_or_none(model_work.get("total_uncached_input_tokens")) or 0)
+        * values["uncached_input_s_per_token"]
+        + (_int_or_none(model_work.get("total_cached_input_tokens")) or 0)
+        * values["cached_input_s_per_token"]
+        + (_int_or_none(model_work.get("total_output_tokens")) or 0) * values["output_s_per_token"]
+        + (_int_or_none(model_work.get("total_reasoning_tokens")) or 0)
+        * values["reasoning_s_per_token"]
+        + image_units * (image_coefficient or 0.0)
+    )
+    return {
+        "available": True,
+        "source": str(calibration.get("source_path") or "calibration_packet"),
+        "estimated_s": round(estimated, 3),
+        "limitations": sorted({*limitations, *coefficient_selection["limitations"]}),
+        "policy": "calibrated_explicit_packet_required_for_normalized_model_time",
+        "sample_count": _int_or_none(calibration.get("sample_count")),
+        "total_row_count": _int_or_none(calibration.get("total_row_count")),
+        "coefficient_scope": coefficient_selection["scope"],
+    }
+
+
+def _select_calibration_coefficients(
+    calibration: dict[str, Any],
+    run_identity: dict[str, Any] | None,
+) -> dict[str, Any]:
+    sets = calibration.get("coefficient_sets")
+    if isinstance(sets, list):
+        identity = _dict(run_identity)
+        ranked: list[tuple[int, dict[str, Any]]] = []
+        for item in sets:
+            if not isinstance(item, dict):
+                continue
+            mismatched = False
+            score = 0
+            for key in ("agent_engine", "provider_profile", "model", "wire_api", "evidence_lane"):
+                expected = str(item.get(key) or "")
+                actual = str(identity.get(key) or "")
+                if not expected:
+                    continue
+                if actual and expected != actual:
+                    mismatched = True
+                    break
+                score += 1
+            if not mismatched:
+                ranked.append((score, item))
+        if ranked:
+            _, best = sorted(ranked, key=lambda pair: pair[0], reverse=True)[0]
+            return {
+                "coefficients": _dict(best.get("coefficients")),
+                "limitations": [str(item) for item in best.get("limitations") or [] if str(item)],
+                "scope": {
+                    key: best.get(key)
+                    for key in (
+                        "agent_engine",
+                        "provider_profile",
+                        "model",
+                        "wire_api",
+                        "evidence_lane",
+                    )
+                    if best.get(key)
+                }
+                or {"type": "matched_coefficient_set"},
+            }
+        return {
+            "coefficients": {},
+            "limitations": ["calibration_no_matching_coefficient_set"],
+            "scope": {},
+        }
+    return {
+        "coefficients": _dict(calibration.get("coefficients")),
+        "limitations": [],
+        "scope": {"type": "global"},
+    }
+
+
+def _image_input_units(model_work: dict[str, Any]) -> int:
+    pixels = _int_or_none(model_work.get("image_input_pixels")) or 0
+    if pixels > 0:
+        return pixels
+    return _int_or_none(model_work.get("image_input_count")) or 0
+
+
+def _first_float(container: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        value = _float_or_none(container.get(key))
+        if value is not None:
+            return value
+    return None
 
 
 def _openai_agents_model_call_rows(
@@ -889,6 +1093,14 @@ def _timing_comparison(baseline: Any, candidate: Any) -> dict[str, Any]:
         "provider_http_duration_delta_s": _delta(
             candidate.get("provider_http_duration_s"),
             baseline.get("provider_http_duration_s"),
+        ),
+        "estimated_model_work_delta_s": _delta(
+            _dict(candidate.get("estimated_model_work_s")).get("estimated_s"),
+            _dict(baseline.get("estimated_model_work_s")).get("estimated_s"),
+        ),
+        "model_latency_residual_delta_s": _delta(
+            candidate.get("model_latency_residual_s"),
+            baseline.get("model_latency_residual_s"),
         ),
         "model_or_sdk_residual_delta_s": _delta(
             candidate.get("model_or_sdk_residual_s"),

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
 
@@ -12,6 +13,10 @@ from roboclaws.reports.live_performance import (
     extract_report_performance_metrics,
     privacy_findings_for_run_dir,
     write_model_call_metrics_jsonl,
+)
+
+CALIBRATE_SCRIPT = (
+    Path(__file__).resolve().parents[3] / "scripts/reports/calibrate_model_latency.py"
 )
 
 
@@ -52,6 +57,137 @@ def test_extract_report_performance_metrics_covers_quality_model_work_and_timing
     assert rows[0]["schema"] == MODEL_CALL_METRIC_SCHEMA
     assert rows[0]["source"] == "openai_agents_span"
     assert rows[0]["wire_api"] == "responses"
+
+
+def test_extract_report_performance_metrics_uses_explicit_calibration(
+    tmp_path: Path,
+) -> None:
+    run_dir = _write_run(
+        tmp_path / "run",
+        restored=5,
+        elapsed_s=70,
+        gap_s=30,
+        input_tokens=400,
+        cached_tokens=100,
+        output_tokens=20,
+        reasoning_tokens=4,
+        duration_s=12.5,
+    )
+
+    packet = extract_report_performance_metrics(run_dir, calibration=_calibration_packet())
+
+    estimate = packet["timing"]["estimated_model_work_s"]
+    assert estimate["available"] is True
+    assert estimate["source"] == "calibration_packet"
+    assert estimate["sample_count"] == 20
+    assert estimate["coefficient_scope"] == {
+        "agent_engine": "openai-agents-sdk",
+        "provider_profile": "codex-env",
+        "model": "gpt-5.5",
+        "wire_api": "responses",
+    }
+    assert estimate["estimated_s"] == 5.9
+    assert packet["timing"]["model_latency_residual_s"] == 6.6
+    assert "calibration_coefficients_unavailable" not in packet["limitations"]
+
+
+def test_compare_run_dirs_with_calibration_reports_normalized_deltas(tmp_path: Path) -> None:
+    baseline = _write_run(
+        tmp_path / "baseline",
+        restored=5,
+        elapsed_s=100,
+        gap_s=50,
+        input_tokens=400,
+        cached_tokens=100,
+        output_tokens=20,
+        reasoning_tokens=4,
+        duration_s=12.5,
+    )
+    candidate = _write_run(
+        tmp_path / "candidate",
+        restored=5,
+        elapsed_s=80,
+        gap_s=40,
+        input_tokens=300,
+        cached_tokens=50,
+        output_tokens=15,
+        reasoning_tokens=2,
+        duration_s=8.0,
+    )
+
+    comparison = compare_run_dirs(
+        baseline_dir=baseline,
+        candidate_dir=candidate,
+        calibration=_calibration_packet(),
+    )
+
+    assert comparison["status"] == "accepted"
+    timing = comparison["timing_comparison"]
+    assert timing["observed_wall_delta_s"] == -20
+    assert timing["estimated_model_work_delta_s"] == -1.2
+    assert timing["model_latency_residual_delta_s"] == -3.3
+    assert timing["baseline"]["estimated_model_work_s"]["estimated_s"] == 5.9
+    assert timing["candidate"]["estimated_model_work_s"]["estimated_s"] == 4.7
+
+
+def test_calibrate_model_latency_writes_error_statistics(tmp_path: Path) -> None:
+    calibrator = _load_calibrator()
+    metrics_path = tmp_path / "model_call_metrics.jsonl"
+    rows = [
+        _model_call_metric_row(
+            uncached_input_tokens=100 + index,
+            cached_input_tokens=20,
+            output_tokens=10 + index % 3,
+            reasoning_tokens=2,
+            duration_s=1.0 + ((100 + index) * 0.01) + ((10 + index % 3) * 0.05),
+        )
+        for index in range(24)
+    ]
+    metrics_path.write_text(
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+
+    packet = calibrator.build_calibration_packet(
+        [metrics_path],
+        dataset_name="unit-test-calibration",
+        min_samples=20,
+        min_group_samples=20,
+    )
+
+    assert packet["schema"] == "roboclaws_model_latency_calibration_v1"
+    assert packet["available"] is True
+    assert packet["dataset_name"] == "unit-test-calibration"
+    assert packet["sample_count"] == 24
+    assert packet["fit"]["error_stats"]["sample_count"] == 24
+    assert packet["fit"]["error_stats"]["mae_s"] >= 0
+    assert packet["fit"]["error_stats"]["rmse_s"] >= 0
+    assert packet["coefficient_sets"][0]["provider_profile"] == "codex-env"
+    assert packet["coefficient_sets"][0]["model"] == "gpt-5.5"
+    assert "diagnostic_same_dataset_fit_not_holdout_validated" in packet["limitations"]
+
+
+def test_calibrate_model_latency_fails_closed_on_too_few_rows(tmp_path: Path) -> None:
+    calibrator = _load_calibrator()
+    metrics_path = tmp_path / "model_call_metrics.jsonl"
+    metrics_path.write_text(
+        "".join(
+            json.dumps(_model_call_metric_row(uncached_input_tokens=index + 1, duration_s=1.0))
+            + "\n"
+            for index in range(3)
+        ),
+        encoding="utf-8",
+    )
+
+    packet = calibrator.build_calibration_packet(
+        [metrics_path],
+        dataset_name="too-small",
+        min_samples=20,
+    )
+
+    assert packet["available"] is False
+    assert packet["sample_count"] == 3
+    assert "insufficient_calibration_samples" in packet["limitations"]
 
 
 def test_model_call_metrics_reports_unavailable_without_zeroing_missing_telemetry(
@@ -337,3 +473,69 @@ def _write_run(
         encoding="utf-8",
     )
     return run_dir
+
+
+def _calibration_packet() -> dict[str, object]:
+    return {
+        "schema": "roboclaws_model_latency_calibration_v1",
+        "available": True,
+        "sample_count": 20,
+        "total_row_count": 20,
+        "limitations": ["unit_test_calibration"],
+        "coefficient_sets": [
+            {
+                "agent_engine": "openai-agents-sdk",
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "wire_api": "responses",
+                "coefficients": {
+                    "intercept_s": 1.0,
+                    "uncached_input_s_per_token": 0.01,
+                    "cached_input_s_per_token": 0.001,
+                    "output_s_per_token": 0.05,
+                    "reasoning_s_per_token": 0.2,
+                    "image_s_per_unit": 0.0,
+                },
+            }
+        ],
+    }
+
+
+def _load_calibrator():
+    spec = importlib.util.spec_from_file_location("calibrate_model_latency", CALIBRATE_SCRIPT)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+def _model_call_metric_row(
+    *,
+    uncached_input_tokens: int,
+    duration_s: float,
+    cached_input_tokens: int = 0,
+    output_tokens: int = 1,
+    reasoning_tokens: int = 0,
+) -> dict[str, object]:
+    return {
+        "schema": MODEL_CALL_METRIC_SCHEMA,
+        "agent_engine": "openai-agents-sdk",
+        "provider_profile": "codex-env",
+        "wire_api": "responses",
+        "model": "gpt-5.5",
+        "attempt_index": 0,
+        "call_index": 0,
+        "duration_s": duration_s,
+        "input_tokens": uncached_input_tokens + cached_input_tokens,
+        "cached_input_tokens": cached_input_tokens,
+        "uncached_input_tokens": uncached_input_tokens,
+        "output_tokens": output_tokens,
+        "reasoning_tokens": reasoning_tokens,
+        "image_input_count": 0,
+        "image_input_pixels": 0,
+        "status": "success",
+        "failure_class": "",
+        "source": "unit_test",
+        "limitations": [],
+    }

@@ -213,6 +213,53 @@ def test_agent_sdk_perf_matrix_allows_expected_rejected_evidence_row(
     assert packet["summary"]["rejected"] == ["gpt_world_public_group0"]
 
 
+def test_agent_sdk_perf_matrix_records_expected_blocked_evidence_row(
+    tmp_path: Path,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(
+        tmp_path / "baseline",
+        restored=0,
+        elapsed_s=20,
+        status={"phase": "failed", "reason": "agent_cli_failure", "exit_status": 1},
+        run_result=False,
+    )
+    candidate = _write_run(
+        tmp_path / "candidate",
+        restored=0,
+        elapsed_s=20,
+        status={"phase": "failed", "reason": "agent_cli_failure", "exit_status": 1},
+        run_result=False,
+    )
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        expected_terminal="agent_cli_failure",
+        expected_decision_status="blocked",
+        feature_flags_extra={"expected_blocked_evidence": True},
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 0
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "blocked"
+    assert row["expected_decision_status"] == "blocked"
+    assert "expected blocked evidence" in row["reasons"]
+    assert packet["summary"]["blocked"] == ["gpt_world_public_group0"]
+
+
 def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     tmp_path: Path,
 ) -> None:
@@ -419,7 +466,18 @@ def _write_manifest(
     lane: str = "world-public-labels",
     expected_terminal: str = "finished",
     expected_decision_status: str = "",
+    feature_flags_extra: dict[str, object] | None = None,
 ) -> Path:
+    feature_flags = {
+        "dry_run_matrix": True,
+        "offline_preflight": True,
+        "privacy_gate": True,
+        "provider_calls": False,
+        "quality_comparator": True,
+        "reducible_bucket_report": True,
+    }
+    if feature_flags_extra:
+        feature_flags.update(feature_flags_extra)
     manifest = tmp_path / "matrix.json"
     manifest.write_text(
         json.dumps(
@@ -446,14 +504,7 @@ def _write_manifest(
                         "candidate_group": "group0_foundation",
                         "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
                         "dependency_candidate_ids": [],
-                        "feature_flags": {
-                            "dry_run_matrix": True,
-                            "offline_preflight": True,
-                            "privacy_gate": True,
-                            "provider_calls": False,
-                            "quality_comparator": True,
-                            "reducible_bucket_report": True,
-                        },
+                        "feature_flags": feature_flags,
                         "stop_conditions": [
                             "privacy_gate_failed",
                             "quality_regression",
