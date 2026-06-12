@@ -61,6 +61,8 @@ def test_realworld_mcp_registered_tools_match_profile_public_surface(tmp_path: P
 
         assert _fastmcp_tool_names(server) == set(profile.public_tool_names())
         assert not profile.privileged_tool_names()
+        assert "resolve_target_query" in profile.public_tool_names()
+        assert "resolve_target_query" in server._agent_view_payload()["public_tool_names"]
     finally:
         server.close()
 
@@ -322,6 +324,37 @@ def test_realworld_mcp_minimal_map_exposes_actionable_runtime_anchors(
     assert navigation["fixture_id"] == target_anchor_id
 
 
+def test_realworld_mcp_resolves_stale_target_query_to_public_anchor(
+    tmp_path: Path,
+) -> None:
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=build_cleanup_scenario(seed=7),
+        port=0,
+        map_mode=MINIMAL_MAP_MODE,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        for waypoint in metric_map["inspection_waypoints"]:
+            server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+            server.call_tool("observe")
+        resolution = server.call_tool(
+            "resolve_target_query",
+            query="sink_01",
+            operation="destination",
+        )
+    finally:
+        server.close()
+
+    assert resolution["ok"] is True
+    assert resolution["schema"] == "target_query_resolution_v1"
+    assert resolution["status"] == "matched"
+    assert resolution["best_match"]["anchor_id"].startswith("anchor_fixture_")
+    assert "sink" in resolution["best_match"]["category"].lower()
+    assert resolution["best_match"]["private_truth_included"] is False
+    assert "target_receptacle_id" not in json.dumps(resolution)
+
+
 def test_realworld_mcp_rejects_removed_cleanup_composite(
     tmp_path: Path,
 ) -> None:
@@ -417,6 +450,7 @@ def test_realworld_mcp_smoke_writes_agent_artifacts(tmp_path: Path) -> None:
     assert "Planner Proof Requests" in report_text
     assert "Waypoint Honesty & Cleanup Loop" in report_text
     assert "Real-Robot Readiness" in report_text
+    assert "Semantic Map" in report_text
     assert "Nav2 Map Bundle" in report_text
     assert "map_bundle/map.yaml" in report_text
     assert "report_only_simulation_view" in report_text

@@ -162,6 +162,7 @@ def test_real_robot_cleanup_profile_keeps_manipulation_blocked() -> None:
         "declare_visual_candidates",
         "navigate_to_visual_candidate",
         "inspect_visible_object",
+        "resolve_target_query",
         "navigate_to_object",
         "navigate_to_receptacle",
         "done",

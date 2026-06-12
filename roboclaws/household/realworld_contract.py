@@ -28,6 +28,7 @@ from roboclaws.household.semantic_timeline import (
     PLACE_PHASE,
     SEMANTIC_LOOP_VARIANT,
 )
+from roboclaws.household.target_query import resolve_target_query
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
     normalize_task_intent_mode,
@@ -425,6 +426,7 @@ class RealWorldCleanupContract:
             "declare_visual_candidates",
             "navigate_to_visual_candidate",
             "inspect_visible_object",
+            "resolve_target_query",
             "navigate_to_object",
             "pick",
             "navigate_to_receptacle",
@@ -818,6 +820,28 @@ class RealWorldCleanupContract:
             coverage_estimate=waypoint["coverage_estimate"],
             backend_pose_mutation=navigation,
             navigation_status=(navigation or {}).get("status", "ok"),
+        )
+
+    def resolve_target_query(
+        self,
+        query: str,
+        *,
+        operation: str = "inspect",
+        max_results: int = 8,
+    ) -> dict[str, Any]:
+        runtime_map = self.runtime_metric_map_payload(
+            metric_map=self.metric_map(),
+            fixture_hints=self.fixture_hints(),
+        )
+        resolution = resolve_target_query(
+            runtime_map,
+            query,
+            operation=operation,
+            max_results=max_results,
+        )
+        return self._ok(
+            "resolve_target_query",
+            **{key: value for key, value in resolution.items() if key not in {"tool", "ok"}},
         )
 
     def observe(self) -> dict[str, Any]:
@@ -1891,6 +1915,9 @@ class RealWorldCleanupContract:
             "observed_objects": runtime_observed_objects,
             "target_candidates": target_candidates,
             "target_search_summary": self._target_search_summary(target_candidates),
+            "target_query_recovery": self._target_query_recovery_summary(
+                target_candidates,
+            ),
             "map_update_candidates": map_update_candidates,
             "producer_summary": _runtime_map_producer_summary(
                 runtime_observed_objects,
@@ -2161,6 +2188,56 @@ class RealWorldCleanupContract:
         }
         _assert_no_forbidden_agent_view_keys(summary)
         return summary
+
+    def _target_query_recovery_summary(
+        self,
+        target_candidates: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        runtime_map = {
+            "target_candidates": target_candidates,
+            "target_search_summary": self._target_search_summary(target_candidates),
+        }
+        summary = {
+            "schema": "target_query_recovery_summary_v1",
+            "source": "runtime_metric_map_target_candidates",
+            "status": "available",
+            "supported_operations": [
+                "inspect",
+                "map-build",
+                "destination",
+                "place",
+                "navigate",
+                "open-ended",
+            ],
+            "recovery_policy": (
+                "Resolve stale labels, raw fixture ids, and open-ended target names "
+                "through public target_candidates. Navigation may use only returned "
+                "public waypoint ids, anchor ids, observed object handles, or "
+                "candidate_fixture_id fields; not-found claims must include the "
+                "public_search_budget from a resolution."
+            ),
+            "example_queries": [
+                resolve_target_query(runtime_map, query, operation="destination")
+                for query in self._target_query_recovery_examples(target_candidates)
+            ],
+            "private_truth_included": False,
+        }
+        _assert_no_forbidden_agent_view_keys(summary)
+        return summary
+
+    @staticmethod
+    def _target_query_recovery_examples(
+        target_candidates: list[dict[str, Any]],
+    ) -> list[str]:
+        examples: list[str] = []
+        for candidate in target_candidates:
+            for key in ("label", "category", "waypoint_id", "anchor_id", "object_id"):
+                value = str(candidate.get(key) or "").strip()
+                if value and value not in examples:
+                    examples.append(value)
+                if len(examples) >= 3:
+                    return examples
+        return examples
 
     def _candidate_inspection_budget(self, waypoint_id: str) -> dict[str, Any]:
         observations = [

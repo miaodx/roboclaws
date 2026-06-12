@@ -1566,11 +1566,12 @@ function renderArtifacts(items) {
 
 function renderViews(assets, route = state.selectedRoute) {
   setImageSlot("fpv", assets.fpv, "No frame yet. Waiting for the first observation artifact.");
+  setImageSlot("map", assets.map, "Semantic map artifact has not been written yet.");
+  setImageSlot("topdown", assets.topdown, "Top-down scene view has not been written yet.");
   const chaseEmptyText = routeHasOverviewChase(route)
     ? "No chase frame yet. Waiting for the first observation artifact."
     : "Chase view unavailable for this backend.";
   setImageSlot("chase", assets.chase, chaseEmptyText);
-  setImageSlot("map", assets.map, "Map artifact has not been written yet.");
   setImageSlot("grounding", assets.grounding, "No grounding result yet.");
   ensureActiveViewAvailable(route);
   renderViewModes(route);
@@ -1582,7 +1583,8 @@ function renderSelectedScenePreview(route = state.selectedRoute) {
   }
   const previews = route && route.preview_assets ? route.preview_assets : {};
   setImageSlot("fpv", previews.fpv, "No scene FPV preview is available.");
-  setImageSlot("map", previews.map, "No scene map preview is available.");
+  setImageSlot("map", previews.map, "No semantic map preview is available.");
+  setImageSlot("topdown", previews.topdown, "No top-down scene preview is available.");
   setImageSlot("grounding", null, "Grounding will appear after a camera-grounded run starts.");
   const chaseEmptyText = routeHasOverviewChase(route)
     ? "Chase preview will appear after a run starts."
@@ -1627,7 +1629,8 @@ function setImageSlot(name, asset, emptyText) {
 function imageLabel(name) {
   const labels = {
     fpv: "FPV",
-    map: "Map",
+    map: "Semantic Map",
+    topdown: "Top-down Scene View",
     grounding: "Grounding",
     chase: "Chase",
   };
@@ -1692,7 +1695,9 @@ function ensureActiveViewAvailable(route = state.selectedRoute) {
 }
 
 function routeViewModes(route) {
-  return new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
+  const modes = new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
+  modes.add("topdown");
+  return modes;
 }
 
 function routeHasOverviewChase(route, modes = routeViewModes(route)) {
@@ -1725,7 +1730,7 @@ function selectedClaudeProviderLabel() {
 
 function visiblePanelsForView(view, modes, route = state.selectedRoute) {
   if (view === "overview") {
-    const panels = new Set(["fpv", "map"]);
+    const panels = new Set(["fpv", "map", "topdown"]);
     if (routeHasOverviewChase(route, modes)) {
       panels.add("chase");
     } else {

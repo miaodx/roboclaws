@@ -445,7 +445,7 @@ def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> Non
     assert reset_state["camera_state"]["latest_event"] == "navigate_to_object_reset"
 
 
-def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
+def test_state_splits_semantic_map_from_top_down_scene_view(
     tmp_path: Path,
 ) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
@@ -466,16 +466,56 @@ def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
     )
     robot_map = robot_views / "0042_observe.map.png"
     report_map = map_bundle / "report_static_navigation_map.png"
+    semantic_map = run_dir / "semantic_map.png"
     robot_map.write_bytes(b"robot map")
     report_map.write_bytes(b"report map")
+    semantic_map.write_bytes(b"semantic map")
     os.utime(robot_map, (1, 1))
     os.utime(report_map, (2, 2))
+    os.utime(semantic_map, (3, 3))
 
     state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
 
-    assert state["latest_view_assets"]["map"]["path"] == str(robot_map.resolve())
+    assert state["latest_view_assets"]["map"]["path"] == str(semantic_map.resolve())
+    assert state["latest_view_assets"]["topdown"]["path"] == str(robot_map.resolve())
     assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
     assert "?v=" in state["latest_view_assets"]["map"]["href"]
+
+
+def test_state_uses_latest_grounding_overlay_as_fpv_when_available(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "run"
+    robot_views = run_dir / "robot_views"
+    overlays = run_dir / "visual_grounding" / "overlays" / "raw_fpv_001"
+    robot_views.mkdir(parents=True)
+    overlays.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "running",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    raw_fpv = robot_views / "raw_fpv_001.fpv.png"
+    first_overlay = overlays / "candidate_001.jpg"
+    latest_overlay = overlays / "candidate_002.jpg"
+    raw_fpv.write_bytes(b"raw fpv")
+    first_overlay.write_bytes(b"first dino overlay")
+    latest_overlay.write_bytes(b"latest dino overlay")
+    os.utime(raw_fpv, (1, 1))
+    os.utime(first_overlay, (2, 2))
+    os.utime(latest_overlay, (3, 3))
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["latest_view_assets"]["grounding"]["path"] == str(latest_overlay.resolve())
+    assert state["latest_view_assets"]["fpv"]["path"] == str(latest_overlay.resolve())
+    assert state["latest_view_assets"]["fpv"]["display_source"] == "visual_grounding_overlay"
 
 
 def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:

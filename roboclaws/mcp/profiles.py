@@ -429,6 +429,19 @@ _HOUSEHOLD_WORLD_TOOLS = (
         (PROVENANCE_API_SEMANTIC, PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
         "Inspect a previously observed public object handle.",
     ),
+    _tool(
+        "resolve_target_query",
+        "mapping.resolve_target_query",
+        FAMILY_MAPPING,
+        CLASSIFICATION_COMPOSED,
+        (
+            PROVENANCE_API_SEMANTIC,
+            PROVENANCE_NAV2_ACTION,
+            PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
+            PROVENANCE_BLOCKED_CAPABILITY,
+        ),
+        "Resolve a target query against public Runtime Metric Map target candidates.",
+    ),
 )
 
 _HOUSEHOLD_MANIPULATION_TOOLS = (
@@ -720,6 +733,18 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             CLASSIFICATION_CANONICAL,
             (PROVENANCE_CAMERA_ARTIFACT, PROVENANCE_BLOCKED_CAPABILITY),
             "Inspect a robot-camera-visible public object handle.",
+        ),
+        _tool(
+            "resolve_target_query",
+            "mapping.resolve_target_query",
+            FAMILY_MAPPING,
+            CLASSIFICATION_COMPOSED,
+            (
+                PROVENANCE_NAV2_ACTION,
+                PROVENANCE_AGIBOT_GDK_MAP_CONTEXT,
+                PROVENANCE_BLOCKED_CAPABILITY,
+            ),
+            "Resolve a target query against public runtime-map target candidates.",
         ),
         _tool(
             "navigate_to_object",

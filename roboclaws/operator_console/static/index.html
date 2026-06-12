@@ -184,7 +184,8 @@
         <nav class="view-modes" aria-label="Workspace view modes">
           <button class="view-mode active" data-view="overview">Overview</button>
           <button class="view-mode" data-view="fpv">FPV</button>
-          <button class="view-mode" data-view="map">Map</button>
+          <button class="view-mode" data-view="map">Semantic Map</button>
+          <button class="view-mode" data-view="topdown">Top-down</button>
           <button class="view-mode" data-view="grounding">Grounding</button>
           <button class="view-mode" data-view="chase">Chase</button>
           <button class="view-mode" data-view="outputs">Outputs</button>
@@ -199,8 +200,12 @@
             <div class="image-frame ratio-4-3" id="grounding-frame">No grounding result yet.</div>
           </article>
           <article class="image-panel" data-panel="map">
-            <div class="panel-header"><span>Map</span><button data-copy="map">Copy Path</button></div>
-            <div class="image-frame" id="map-frame">Map artifact has not been written yet.</div>
+            <div class="panel-header"><span>Semantic Map</span><button data-copy="map">Copy Path</button></div>
+            <div class="image-frame" id="map-frame">Semantic map artifact has not been written yet.</div>
+          </article>
+          <article class="image-panel" data-panel="topdown">
+            <div class="panel-header"><span>Top-down</span><button data-copy="topdown">Copy Path</button></div>
+            <div class="image-frame" id="topdown-frame">Top-down scene view has not been written yet.</div>
           </article>
           <article class="image-panel" data-panel="chase">
             <div class="panel-header"><span>Chase</span><button data-copy="chase">Copy Path</button></div>
