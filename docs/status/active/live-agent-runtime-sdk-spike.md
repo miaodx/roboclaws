@@ -66,9 +66,13 @@ work. The O+AC fixed4 row is the cleanest paired diagnostic wall-clock result,
 and the O+AC repeat row now strengthens the same direction. Explicit
 calibrated-normalized diagnostic comparisons now exist for both O+AC rows; they
 show the observed improvement is residual/wait reduction rather than reduced
-estimated model work under the simple calibration. Broader B baseline coverage,
-a reviewed calibration dataset, and a later raw-FPV retry after provider or
-image-transport availability changes remain valid next arms. Token deltas are
+estimated model work under the simple calibration. The scoped B
+`world-public-labels` coverage pass now records one completed MiMo Chat row and
+two provider blockers (`kimi-openai-chat` 403 and `codex-env` 502), so broader
+B work is now additional evidence-lane/provider availability coverage rather
+than rerunning the same rows. A reviewed calibration dataset and a later
+raw-FPV retry after provider or image-transport availability changes remain
+valid next arms. Token deltas are
 telemetry only; cost is not a deciding objective for this plan. Candidate AC
 now provides the first deterministic slice of the
 behavior-preserving redesign: an opt-in private SDK
@@ -513,10 +517,11 @@ Parked work:
     now been refreshed with the completed `mify` world-public pair, the
     Candidate O promptfix2 mechanism row, the O+AC fixed4 and repeat paired rows, and the
     expected-rejected F, I/N, C, and O continuation-tightening rows. The current
-    wall-clock priority is scoped B baseline coverage, then reviewed calibration
-    governance, with raw-FPV retry only after provider/image-transport
-    availability changes. O+AC calibrated-normalized diagnostic artifacts now
-    exist, but they are not broad or publishable speed claims.
+    wall-clock priority is broader B coverage only where it adds new
+    evidence-lane/provider information, then reviewed calibration governance,
+    with raw-FPV retry only after provider/image-transport availability
+    changes. O+AC calibrated-normalized diagnostic artifacts now exist, but
+    they are not broad or publishable speed claims.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
@@ -540,8 +545,10 @@ Parked work:
     thumbnail/crop policy stays parked until live evidence says retained
     full-frame policy is insufficient.
   - Full provider/model x evidence-lane matrix before broad speed claims. The
-    GPT `codex-env` baseline needs retry only after the transient 502 gate
-    clears.
+    scoped `world-public-labels` B pass has one completed MiMo Chat row and
+    two provider blockers; retry GPT `codex-env` only after the transient 502
+    gate clears, and retry `kimi-openai-chat` only after the provider route is
+    allowed for this use.
   - Candidate C per-model-call racing is implemented and live-tested, but the
     current two-arm policy is rejected as faster-but-worse; do not rerun it
     unchanged.

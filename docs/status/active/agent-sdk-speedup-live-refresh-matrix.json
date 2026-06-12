@@ -289,6 +289,101 @@
         "provider_calls_planned",
         "unexpected_decision_status"
       ]
+    },
+    {
+      "baseline_role": "completed_live_chat_compatible_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1959/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B", "Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1959/seed-7",
+      "dependency_candidate_ids": ["B"],
+      "evidence_lane": "world-public-labels",
+      "expected_decision_status": "accepted",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "baseline_coverage_only": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true,
+        "wire_api": "chat-completions"
+      },
+      "model": "mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mimo-openai-chat",
+      "quality_policy": "same_or_better",
+      "row_id": "mimo_chat_world_public_b_baseline_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "blocked_live_chat_compatible_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/b-baseline-kimi-openai-chat-world-public/0612_2009/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B", "Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/b-baseline-kimi-openai-chat-world-public/0612_2009/seed-7",
+      "dependency_candidate_ids": ["B"],
+      "evidence_lane": "world-public-labels",
+      "expected_decision_status": "blocked",
+      "expected_terminal": "agent_cli_failure",
+      "feature_flags": {
+        "baseline_coverage_only": true,
+        "expected_blocked_evidence": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true,
+        "wire_api": "chat-completions"
+      },
+      "model": "kimi-k2.6",
+      "provider_calls": false,
+      "provider_profile": "kimi-openai-chat",
+      "quality_policy": "same_or_better",
+      "row_id": "kimi_chat_world_public_b_blocked_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "blocked_live_responses_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/b-baseline-codex-env-world-public/0612_2013/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B", "Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/b-baseline-codex-env-world-public/0612_2013/seed-7",
+      "dependency_candidate_ids": ["B"],
+      "evidence_lane": "world-public-labels",
+      "expected_decision_status": "blocked",
+      "expected_terminal": "provider_transient_failure",
+      "feature_flags": {
+        "baseline_coverage_only": true,
+        "expected_blocked_evidence": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true,
+        "wire_api": "responses"
+      },
+      "model": "gpt-5.5",
+      "provider_calls": false,
+      "provider_profile": "codex-env",
+      "quality_policy": "same_or_better",
+      "row_id": "codex_env_responses_world_public_b_blocked_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
     }
   ]
 }

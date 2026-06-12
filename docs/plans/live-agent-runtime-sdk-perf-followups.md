@@ -448,6 +448,21 @@ evidence that the O+AC paired wall-clock gain is coming from reduced residual
 model/SDK/provider waiting rather than reduced calibrated model-work. The claim
 is now calibrated-diagnostic, still not broad or publishable.
 
+2026-06-12 B baseline coverage refresh update: the scoped provider/model
+coverage pass now records all three planned `world-public-labels` rows in
+`docs/status/active/agent-sdk-b-baseline-coverage-live-caps.json` and the
+live-refresh matrix. `mimo-openai-chat` / Chat Completions completed as
+baseline coverage only (`partial_success`, `restored_count=3/5`,
+`semantic_accepted_count=5/5`, `sweep_coverage_rate=1.0`, wall `390.264s`).
+`kimi-openai-chat` / Chat Completions is blocked by provider 403
+`access_terminated_error` before task tool calls. `codex-env` / Responses GPT
+is blocked by provider-transient 502 `upstream_unavailable` before task tool
+calls, with shared metrics at
+`output/agent-sdk-perf-followups/b-baseline-codex-env-world-public-metrics.json`.
+The refreshed decision packet now has 11 rows: 5 accepted, 4 rejected, and 2
+blocked. This is coverage/blocker evidence only; it does not change the O+AC
+speed conclusion.
+
 ## Completed Prerequisites
 
 - The private `openai-agents-live` route can run cleanup through MCP, `done`,
@@ -623,8 +638,11 @@ Use this queue unless fresh evidence changes it:
    compaction arm. The first live I/N row proved compaction events and repeated
    map counters, but `metric_map_bytes_reduced=0` and behavior regressed; do not
    claim an N speedup from that row.
-8. Run scoped B live baseline refresh before any strong speed claim when
-   credentials/backend access and recorded caps are available.
+8. Scoped B live baseline refresh has now covered the planned
+   `world-public-labels` rows: `mimo-openai-chat` completed as baseline
+   coverage only, while `kimi-openai-chat` and `codex-env` are expected-blocked
+   provider evidence in the refresh packet. Broader speed claims still need
+   additional evidence-lane/provider coverage when those routes are available.
 9. Candidate O deterministic prep is accepted as an SDK-private opt-in MCP
    composite-tool flag for `camera-grounded-labels`. The first `mify` Responses
    live diagnostic row had same-or-better quality and faster wall time, but the
@@ -680,9 +698,11 @@ Use this queue unless fresh evidence changes it:
 
 Current wall-clock priority after the O+AC calibrated-normalized diagnostic update:
 
-1. Scoped B baseline coverage across provider/model, `wire_api`, and evidence
-   lanes before broad speed claims. The current live proof is concentrated on
-   `mify` Responses and two evidence lanes.
+1. Extend B only where it adds new information: remaining broad-claim coverage
+   is now evidence-lane/provider availability work, because the scoped
+   `world-public-labels` provider/model pass has one completed
+   Chat-compatible MiMo row and two provider blockers (`kimi-openai-chat` 403
+   and `codex-env` 502).
 2. Promote calibration only after a named reviewed dataset with error statistics
    exists; the current O+AC calibration is diagnostic and local to the completed
    artifacts.

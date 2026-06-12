@@ -219,6 +219,9 @@ def _apply_quality_gate(packet: dict[str, Any]) -> None:
         if row["quality_waiver"]:
             row["status"] = "accepted"
             row["reasons"].append(f"quality waiver: {row['quality_waiver']}")
+        elif _expected_blocked_evidence(row, candidate):
+            row["status"] = "blocked"
+            row["reasons"].append("expected blocked evidence")
         elif _raw_fpv_classified_diagnostic(row, candidate):
             row["status"] = "accepted"
             row["reasons"].append("raw-FPV accepted as classified diagnostic evidence")
@@ -366,6 +369,17 @@ def _raw_fpv_classified_diagnostic(row: dict[str, Any], candidate: dict[str, Any
         return False
     expected = str(row.get("expected_terminal") or "")
     return not expected or terminal == expected
+
+
+def _expected_blocked_evidence(row: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    flags = _dict(row.get("feature_flags"))
+    if not flags.get("expected_blocked_evidence"):
+        return False
+    expected = str(row.get("expected_terminal") or "")
+    terminal = str(candidate.get("terminal") or "")
+    if not expected:
+        return terminal not in {"", "unknown", "missing", "finished"}
+    return terminal == expected
 
 
 def _reducible_bucket_report(summary: dict[str, Any], *, lane: str) -> dict[str, Any]:
