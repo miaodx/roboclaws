@@ -105,6 +105,20 @@ def test_compare_rejects_faster_but_worse_candidate(tmp_path: Path) -> None:
     assert comparison["timing_comparison"]["observed_wall_delta_s"] == -50
 
 
+def test_compare_caps_sweep_overcoverage_for_quality_gate(tmp_path: Path) -> None:
+    baseline = _write_run(tmp_path / "baseline", restored=3, elapsed_s=100, gap_s=50)
+    candidate = _write_run(tmp_path / "candidate", restored=4, elapsed_s=50, gap_s=25)
+    run_result = json.loads((baseline / "run_result.json").read_text(encoding="utf-8"))
+    run_result["sweep_coverage_rate"] = 1.071429
+    (baseline / "run_result.json").write_text(json.dumps(run_result), encoding="utf-8")
+
+    comparison = compare_run_dirs(baseline_dir=baseline, candidate_dir=candidate)
+
+    assert comparison["quality_comparison"]["checks"]["sweep_coverage_rate"] is True
+    assert comparison["quality_comparison"]["regressed"] is False
+    assert comparison["status"] == "accepted"
+
+
 def test_compare_treats_different_wire_api_as_different_identity(tmp_path: Path) -> None:
     baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100, gap_s=50)
     candidate = _write_run(

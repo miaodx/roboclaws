@@ -18,10 +18,11 @@ deterministic recommendation enrichment were accepted on 2026-06-12. Candidate
 N deterministic repeated-map prep and Candidate O deterministic
 camera-grounded composite prep were accepted on 2026-06-12. Candidate P
 deterministic raw-FPV repeated-failure rails and Candidate AA deterministic
-raw-FPV image-memory prep were accepted on 2026-06-12. The full live
-provider/model x evidence-lane performance matrix is not done; it remains
-parked pending explicit live-run approval, credentials/backend availability,
-and budget acknowledgement. The follow-up execution plan is
+raw-FPV image-memory prep were accepted on 2026-06-12. The first resumed
+provider-backed pass on 2026-06-12 produced one `mify` Responses
+`world-public-labels` baseline/candidate comparison and one blocked
+`codex-env` GPT baseline attempt; the full live provider/model x evidence-lane
+performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -131,6 +132,30 @@ Result:
   artifacts, and robot-view images remain complete; the raw-FPV MCP observe
   boundary still returns compact state plus a full PNG image block. This is
   model-facing prep, not a cleanup-pass or speed claim.
+- The 2026-06-12 live pass satisfied the no-provider Group 0 dry-run/offline
+  preflight and recorded live caps: 2 planned live rows for the successful
+  `mify` pass, 45-minute wall-clock cap per row, context hard limit 128k,
+  concurrency 1, racing multiplier 1, provider credentials present,
+  MolmoSpaces/MuJoCo backend slot available, and `network: work` with
+  repo-local `codex-env` / `mify` routes allowed.
+- The GPT `codex-env` `world-public-labels` baseline attempt stopped before
+  task work with classified transient provider 502
+  (`provider_transient_failure`, `upstream_unavailable`) after model-service
+  retry; no GPT speed or quality claim is made from that row.
+- The `mify` Responses `world-public-labels` baseline and `mimo_compact_v1`
+  candidate both finished. The diagnostic comparison is not a speed win:
+  candidate quality was not worse, model/MCP calls each dropped by 2, but
+  observed wall time was +5.746s, observed model API time was +8.749s, and
+  uncached input tokens were +7033. Artifacts:
+  `output/agent-sdk-perf-followups/mify-world-public-baseline/0612_0814/seed-7/`,
+  `output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`,
+  and
+  `output/agent-sdk-perf-followups/mify-world-public-comparison-diagnostic.json`.
+- The shared report-performance quality comparator now caps sweep
+  over-coverage at 1.0 for same-or-better comparison, so extra baseline
+  inspection waypoints do not create a false regression when the candidate
+  still reaches full required coverage. This does not waive cleanup quality,
+  disturbance, failed/noop, or semantic acceptance checks.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -239,24 +264,27 @@ Parked work:
 - Post-optimization perf follow-up batch captured in
   `docs/plans/live-agent-runtime-sdk-perf-followups.md`:
   - Candidate A skill parity is accepted; keep its metadata/privacy guard and
-    optionally run live A/B only after live approval/budget/backend gates pass.
+    optionally run live A/B only after recorded budget/backend/network gates
+    pass.
   - Candidate G/J deterministic settings/cache attribution is accepted; live
-    A/B speed proof remains gated on explicit approval, credentials/backend
-    availability, and budget acknowledgement.
+    A/B speed proof remains gated on credentials/backend availability,
+    network policy, and recorded run caps.
   - Candidate I/AB deterministic prep is accepted; live model-input compaction,
     server-managed continuation, and session-state A/B proof remains gated on
-    explicit approval, credentials/backend availability, and budget
-    acknowledgement.
+    credentials/backend availability, network policy, and recorded run caps.
+    The first `mify` `world-public-labels` baseline versus `mimo_compact_v1`
+    row is diagnostic only, not a speed win.
   - Q/Y deterministic recommendation enrichment is accepted for Group 0; the
     current no-provider packet pointed to Group 2 N/O after already-accepted
-    Group 1 prep.
+    Group 1 prep. Refresh Q/Y with live packets before the next arm choice.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
     `observe_camera_grounded_candidates` MCP shortcut for
     `camera-grounded-labels`; default public MCP/profile tools remain
     unchanged, while raw-FPV lane work remains lane-specific and live speed
-    claims remain gated.
+    claims remain gated. Camera-grounded live A/B remains a likely next arm
+    after Q/Y refresh.
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
     visual-candidate failure rail; cleanup-pass and live speed claims remain
     gated.
@@ -264,7 +292,9 @@ Parked work:
     image memory; live cleanup-pass and speed claims remain gated, while
     multiresolution thumbnail/crop policy stays parked until live evidence says
     retained full-frame policy is insufficient.
-  - Full provider/model x evidence-lane matrix before new speed claims.
+  - Full provider/model x evidence-lane matrix before broad speed claims. The
+    GPT `codex-env` baseline needs retry only after the transient 502 gate
+    clears.
   - Optional per-model-call racing inside the SDK model interface, only with
     per-arm cache/cost telemetry and explicit live-run approval.
   - Agent-visible state delta/compaction and selective visual artifact capture
@@ -279,11 +309,10 @@ Parked work:
     delta prep, the camera-grounded observe/label two-step collapse, raw-FPV
     visual-candidate failure rails, and raw-FPV image memory have deterministic
     prep accepted.
-  - Big-flow infrastructure follow-ups after the Group 0 foundation: live
-    matrix execution approval, richer feature-flag attribution in live timing,
-    variance/repeatability policy for publishable claims, cross-client
-    regression guard, and multiresolution raw-FPV thumbnail/crop policy if live
-    evidence shows it is needed.
+  - Big-flow infrastructure follow-ups after the Group 0 foundation: richer
+    feature-flag attribution in live timing, variance/repeatability policy for
+    publishable claims, cross-client regression guard, and multiresolution
+    raw-FPV thumbnail/crop policy if live evidence shows it is needed.
   - Default MCP composite/merge tools remain out of scope; Candidate O is
     SDK-private and opt-in only.
 - Anthropic Claude Agent SDK spike.

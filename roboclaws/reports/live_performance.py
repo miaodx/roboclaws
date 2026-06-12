@@ -843,9 +843,10 @@ def _quality_comparison(
             candidate.get("mess_restoration_rate"),
             baseline.get("mess_restoration_rate"),
         ),
-        "sweep_coverage_rate": _not_lower(
+        "sweep_coverage_rate": _not_lower_with_cap(
             candidate.get("sweep_coverage_rate"),
             baseline.get("sweep_coverage_rate"),
+            cap=1.0,
         ),
         "disturbance_count": _not_higher(
             candidate.get("disturbance_count"),
@@ -1291,6 +1292,14 @@ def _not_lower(candidate: Any, baseline: Any) -> bool:
     if candidate_value is None or baseline_value is None:
         return True
     return candidate_value >= baseline_value
+
+
+def _not_lower_with_cap(candidate: Any, baseline: Any, *, cap: float) -> bool:
+    candidate_value = _float_or_none(candidate)
+    baseline_value = _float_or_none(baseline)
+    if candidate_value is None or baseline_value is None:
+        return True
+    return min(candidate_value, cap) >= min(baseline_value, cap)
 
 
 def _not_higher(candidate: Any, baseline: Any) -> bool:
