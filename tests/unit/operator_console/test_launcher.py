@@ -31,15 +31,29 @@ def _free_port() -> str:
         return str(listener.getsockname()[1])
 
 
-def test_launcher_readiness_validates_isaac_and_agibot_gates(tmp_path: Path) -> None:
+def test_launcher_readiness_layers_isaac_and_agibot_gates(tmp_path: Path) -> None:
     isaac = route_readiness(
         tmp_path,
         get_route("codex-isaac-cleanup"),
         overrides={"port": _free_port()},
         env=CODEX_ENV,
     )
-    assert not isaac["can_start"]
-    assert "Isaac preflight" in isaac["blocker"]
+    assert isaac["can_start"] is True
+    isaac_gate = next(gate for gate in isaac["gates"] if gate["id"] == "isaac_preflight")
+    assert isaac_gate["severity"] == "advisory"
+    assert isaac_gate["blocks_start"] is False
+    assert "Launch can start" in isaac_gate["message"]
+
+    isaac_map = route_readiness(
+        tmp_path,
+        get_route("codex-isaac-map-build"),
+        overrides={"port": _free_port()},
+        env=CODEX_ENV,
+    )
+    assert isaac_map["can_start"] is True
+    isaac_map_gate = next(gate for gate in isaac_map["gates"] if gate["id"] == "isaac_preflight")
+    assert isaac_map_gate["severity"] == "advisory"
+    assert isaac_map_gate["blocks_start"] is False
 
     agibot = route_readiness(
         tmp_path,
@@ -48,8 +62,26 @@ def test_launcher_readiness_validates_isaac_and_agibot_gates(tmp_path: Path) -> 
         gates={"localization_ready": True, "run_enabled": False, "estop_ready": True},
         env=CODEX_ENV,
     )
-    assert not agibot["can_start"]
-    assert "Agibot operator gates" in agibot["blocker"]
+    assert agibot["can_start"] is True
+    run_gate = next(gate for gate in agibot["gates"] if gate["id"] == "run_enabled")
+    assert run_gate["severity"] == "capability"
+    assert run_gate["blocks_start"] is False
+    assert "Dry-run launch can start" in run_gate["message"]
+
+    movement = route_readiness(
+        tmp_path,
+        get_route("codex-agibot-g2-map-build"),
+        overrides={
+            "context_json": str(tmp_path / "context.json"),
+            "port": _free_port(),
+            "real_movement_enabled": "true",
+        },
+        gates={"localization_ready": True, "run_enabled": False, "estop_ready": True},
+        env=CODEX_ENV,
+    )
+    assert movement["can_start"] is False
+    assert movement["blocker_kind"] == "needs_real_movement_gate"
+    assert "Real movement is enabled" in movement["blocker"]
 
 
 def test_launcher_builds_route_specific_overrides(tmp_path: Path) -> None:

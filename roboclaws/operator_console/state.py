@@ -360,8 +360,8 @@ def _terminal_reason(
 
 def _status_from_phase(phase: str, checker: dict[str, Any], terminal_reason: str) -> str:
     lower = phase.lower()
-    if _is_rate_limit_reason(terminal_reason):
-        return "rate_limited"
+    if _is_provider_transient_reason(terminal_reason):
+        return "provider_transient_failed"
     if lower in {"stopped_by_operator", "human_takeover_stop", "failed", "passed"}:
         return lower
     if checker.get("status") == "passed":
@@ -374,14 +374,14 @@ def _status_from_phase(phase: str, checker: dict[str, Any], terminal_reason: str
 
 
 def _status_label(phase: str, terminal_reason: str) -> str:
-    if _is_rate_limit_reason(terminal_reason):
-        return "Provider rate limited"
+    if _is_provider_transient_reason(terminal_reason):
+        return "Provider transient failure"
     return phase
 
 
-def _is_rate_limit_reason(reason: str) -> bool:
+def _is_provider_transient_reason(reason: str) -> bool:
     normalized = reason.lower()
-    return "rate limit" in normalized or "rate_limited" in normalized or "429" in normalized
+    return "provider_transient_failure" in normalized or "provider transient" in normalized
 
 
 def _elapsed_seconds(status: dict[str, Any]) -> float | None:

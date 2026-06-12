@@ -500,127 +500,22 @@ def test_live_codex_failure_status_includes_reason(tmp_path: Path, monkeypatch) 
 def test_live_codex_prompts_block_plan_tool() -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
 
-    initial = run_codex._codex_live_prompt("clean")
-    continuation = run_codex._codex_continuation_prompt(
-        turn_index=1,
-        profile="camera-grounded-labels",
-    )
+    prompt = run_codex._codex_live_prompt("clean")
 
-    for prompt in (initial, continuation):
-        assert "do not call update_plan" in prompt
-        assert "do not create todo/checklist" in prompt
-        assert "Do not call read_mcp_resource" in prompt
-        assert "Do not call exec_command" in prompt
-        assert "coding/developer tool" in prompt
-        assert "server=cleanup" in prompt
-        assert "namespace cleanup" in prompt
-        assert "declared Codex MCP server" not in prompt
-        assert "server named cleanup" not in prompt
-        assert "never use mcp__cleanup__" in prompt
-        assert "mcp__roboclaws__" in prompt
-        assert "roboclaws__" in prompt
-        assert "use place_inside for" in prompt
-        assert "required_tool next" in prompt
-
-
-def test_live_codex_raw_continuation_prompt_blocks_label_declarations() -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-
-    continuation = run_codex._codex_continuation_prompt(turn_index=1, profile="camera-raw-fpv")
-
-    assert "For camera-raw-fpv observations" in continuation
-    assert "Do not call declare_visual_candidates" in continuation
-    assert "call navigate_to_visual_candidate" in continuation
-    assert "copied from fixture_hints" not in continuation
-    assert "omit target_fixture_id" in continuation
-    assert "candidate_fixture_id/recommended_tool" in continuation
-    assert "required_next_tool=pick" in continuation
-    assert "immediately call pick with that object_id" in continuation
-    assert "then navigate_to_receptacle with that candidate_fixture_id" in continuation
-    assert "do not continue the sweep" in continuation
-    assert "Prefer image_region type verbal_region" in continuation
-    assert "image_region={type:verbal_region,value:front of desk}" in continuation
-    assert "Never send bbox_normalized" in continuation
-    assert 'target_fixture_id=""' in continuation
-    assert 'target_fixture_id="None"' in continuation
-    assert "target_fixture_id=null" in continuation
-    assert "For camera-grounded-labels observations" not in continuation
-    assert "server named cleanup" not in continuation
-    assert "never use mcp__cleanup__" in continuation
-    assert "roboclaws__" in continuation
-    assert "mcp__roboclaws__" in continuation
-
-
-def test_live_codex_sanitized_continuation_prompt_uses_contract_first_recovery() -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-
-    continuation = run_codex._codex_continuation_prompt(
-        turn_index=8,
-        profile="world-public-labels",
-    )
-
-    assert "For world-public-labels observations" in continuation
-    assert "already_handled" in continuation
-    assert "do not inspect, navigate to, or pick another handle from the same stale area" in (
-        continuation
-    )
-    assert "Choose destinations only from public anchors" in continuation
-    assert "destination_policy" in continuation
-    assert "destination_options" in continuation
-    assert "If no matching public destination is available yet" in continuation
-    assert "continue the waypoint sweep rather than inventing fixture ids" in continuation
-    assert "Treat public tool responses as authoritative" in continuation
-    assert "pending_cleanup_candidates" in continuation
-    assert "required_tool" in continuation
-    assert "finish the anchor discovery sweep before the first pick" not in continuation
-    assert "Last trace state:" not in continuation
-    assert "Last done response rejected closeout" not in continuation
-    assert "Last metric_map state says held_object_id" not in continuation
-    assert "visible_object_detections are observation evidence, not a mandatory work queue" in (
-        continuation
-    )
-
-
-def test_live_codex_final_continuation_prompt_prioritizes_required_sweep() -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-
-    continuation = run_codex._codex_continuation_prompt(
-        turn_index=8,
-        profile="world-public-labels",
-        final_turn=True,
-    )
-
-    assert "This is the final automatic continuation" in continuation
-    assert "Do not start a new optional cleanup chain from visible_object_detections" in (
-        continuation
-    )
-    assert "Follow public required_tool" in continuation
-    assert "unvisited_waypoint_ids" in continuation
-    assert "next_waypoint_id" in continuation
-    assert "pending_cleanup_candidates" in continuation
-    assert "Only call done after every inspection waypoint has an observe response" in continuation
-    assert "handle only those exact pending candidates" not in continuation
-    assert "destination_options.recommended_tool" not in continuation
-
-
-def test_live_codex_sanitized_lane_gets_larger_default_turn_budget() -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-
-    assert (
-        run_codex._codex_max_turns(
-            profile="world-public-labels",
-            requested_continuations=8,
-        )
-        == 15
-    )
-    assert run_codex._codex_max_turns(profile="world-oracle-labels", requested_continuations=8) == 9
-    assert (
-        run_codex._codex_max_turns(
-            profile="world-public-labels",
-            requested_continuations=20,
-        )
-        == 21
-    )
+    assert "do not call update_plan" in prompt
+    assert "do not create todo/checklist" in prompt
+    assert "Do not call read_mcp_resource" in prompt
+    assert "Do not call exec_command" in prompt
+    assert "coding/developer tool" in prompt
+    assert "server=cleanup" in prompt
+    assert "namespace cleanup" in prompt
+    assert "declared Codex MCP server" not in prompt
+    assert "server named cleanup" not in prompt
+    assert "never use mcp__cleanup__" in prompt
+    assert "mcp__roboclaws__" in prompt
+    assert "roboclaws__" in prompt
+    assert "use place_inside for" in prompt
+    assert "required_tool next" in prompt
 
 
 def test_live_codex_turn_idle_timeout_uses_env_default(monkeypatch) -> None:
@@ -637,7 +532,7 @@ def test_live_codex_turn_idle_timeout_uses_env_default(monkeypatch) -> None:
     assert run_codex._codex_turn_idle_timeout_s(None) == 300.0
 
 
-def test_live_codex_idle_turn_starts_continuation(tmp_path: Path, monkeypatch) -> None:
+def test_live_codex_idle_turn_fails_without_continuation(tmp_path: Path, monkeypatch) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -650,7 +545,6 @@ def test_live_codex_idle_turn_starts_continuation(tmp_path: Path, monkeypatch) -
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
         codex_provider_summary="mify model=xiaomi/mimo-v2.5",
-        codex_max_continuations=1,
         codex_turn_idle_timeout_s=3.0,
         kickoff_prompt="clean",
         codex_model_arg=[],
@@ -672,39 +566,36 @@ def test_live_codex_idle_turn_starts_continuation(tmp_path: Path, monkeypatch) -
         calls.append((command, idle_timeout_s))
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(calls) == 1:
-            stdout_path.write_text(
-                '{"type":"error","message":"stream disconnected before completion: '
-                'idle timeout waiting for SSE"}\n',
-                encoding="utf-8",
-            )
-            stderr_path.write_text(
-                "codex turn idle timeout after 3s; terminating process group for continuation\n",
-                encoding="utf-8",
-            )
-            return run_codex.CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS
-        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
-        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
-        return 0
+        stdout_path.write_text(
+            '{"type":"error","message":"stream disconnected before completion: '
+            'idle timeout waiting for SSE"}\n',
+            encoding="utf-8",
+        )
+        stderr_path.write_text(
+            "codex turn idle timeout after 3s; terminating process group and failing live run\n",
+            encoding="utf-8",
+        )
+        return run_codex.CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS
 
     monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
     monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
     monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
 
-    runner._run_codex()
+    try:
+        runner._run_codex()
+    except run_codex.LiveAgentRunFailure as exc:
+        assert exc.failure.reason == "idle_timeout"
+        assert exc.failure.retryable is False
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected idle timeout to fail the live run")
 
-    assert len(calls) == 2
+    assert len(calls) == 1
     assert calls[0][1] == 3.0
-    assert calls[1][1] == 3.0
-    assert "Continue the same active cleanup MCP session" in calls[1][0][-1]
-    assert runner.live_timing["codex_recoverable_errors"] == [
-        {"turn": 1, "type": "codex_turn_idle_timeout"}
-    ]
+    assert "Continue the same active cleanup MCP session" not in calls[0][0][-1]
+    assert "codex_recoverable_errors" not in runner.live_timing
 
 
-def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_live_codex_tool_binding_failure_is_non_retryable(tmp_path: Path, monkeypatch) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -717,7 +608,6 @@ def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
         codex_provider_summary="mify model=xiaomi/mimo-v2.5",
-        codex_max_continuations=1,
         kickoff_prompt="clean",
         codex_model_arg=[],
         backend="molmospaces_subprocess",
@@ -738,33 +628,32 @@ def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
         calls.append(command)
         stdout_path.parent.mkdir(parents=True, exist_ok=True)
         stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(calls) == 1:
-            stdout_path.write_text(
-                '{"type":"error","message":"function_call name '
-                "'_iv9s__mcp__roboclaws____update_plan' is not declared in tools\"}\n",
-                encoding="utf-8",
-            )
-            stderr_path.write_text(
-                "unsupported call: _iv9s__mcp__roboclaws____update_plan\n",
-                encoding="utf-8",
-            )
-            return 1
-        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
-        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
-        return 0
+        stdout_path.write_text(
+            '{"type":"error","message":"function_call name '
+            "'_iv9s__mcp__roboclaws____update_plan' is not declared in tools\"}\n",
+            encoding="utf-8",
+        )
+        stderr_path.write_text(
+            "unsupported call: _iv9s__mcp__roboclaws____update_plan\n",
+            encoding="utf-8",
+        )
+        return 1
 
     monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
     monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
     monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
 
-    runner._run_codex()
+    try:
+        runner._run_codex()
+    except run_codex.LiveAgentRunFailure as exc:
+        assert exc.failure.reason == "tool_binding_failure"
+        assert exc.failure.retryable is False
+        assert exc.failure.resume_available is False
+    else:  # pragma: no cover - defensive assertion
+        raise AssertionError("expected tool-binding failure")
 
-    assert len(calls) == 2
-    assert runner.live_timing["codex_recoverable_errors"] == [
-        {"turn": 1, "type": "misrouted_update_plan_tool"}
-    ]
+    assert len(calls) == 1
     assert "do not call update_plan" in calls[0][-1]
-    assert "do not call update_plan" in calls[1][-1]
     assert "Do not call read_mcp_resource" in calls[0][-1]
     assert "Do not call exec_command" in calls[0][-1]
     assert "server=cleanup" in calls[0][-1]
@@ -775,9 +664,7 @@ def test_live_codex_recovers_from_misrouted_update_plan_tool_error(
     assert "roboclaws__" in calls[0][-1]
 
 
-def test_live_codex_recovers_from_misrouted_read_mcp_resource_tool_error(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_live_codex_provider_transient_failure_is_retryable(tmp_path: Path, monkeypatch) -> None:
     run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
     run_dir = tmp_path / "run"
     run_dir.mkdir()
@@ -790,275 +677,6 @@ def test_live_codex_recovers_from_misrouted_read_mcp_resource_tool_error(
         client_url="http://127.0.0.1:18788/mcp",
         codex_bin="codex",
         codex_provider_summary="mify model=xiaomi/mimo-v2.5",
-        codex_max_continuations=1,
-        kickoff_prompt="clean",
-        codex_model_arg=[],
-        backend="molmospaces_subprocess",
-        policy="codex_agent",
-        profile="camera-raw-fpv",
-    )
-    runner = run_codex.LiveCodexCleanupRunner(args)
-    runner.server_proc = SimpleNamespace(poll=lambda: None)
-    calls: list[list[str]] = []
-
-    def fake_prepare_agent_workspace(**_kwargs):
-        return agent_dir, agent_dir
-
-    def fake_subprocess_run(*_args, **_kwargs):
-        return SimpleNamespace(returncode=0)
-
-    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
-        calls.append(command)
-        stdout_path.parent.mkdir(parents=True, exist_ok=True)
-        stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(calls) == 1:
-            stdout_path.write_text(
-                '{"type":"error","message":"function_call name '
-                "'read_mcp_resource' is not declared in tools\"}\n",
-                encoding="utf-8",
-            )
-            stderr_path.write_text(
-                "resources/read failed: unknown MCP server 'mcp__roboclaws__'\n",
-                encoding="utf-8",
-            )
-            return 1
-        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
-        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
-        return 0
-
-    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
-    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
-
-    runner._run_codex()
-
-    assert len(calls) == 2
-    assert runner.live_timing["codex_recoverable_errors"] == [
-        {"turn": 1, "type": "misrouted_read_mcp_resource_tool"}
-    ]
-    assert "Do not call read_mcp_resource" in calls[0][-1]
-    assert "Do not call read_mcp_resource" in calls[1][-1]
-    assert "Do not call exec_command" in calls[1][-1]
-    assert "server=cleanup" in calls[1][-1]
-    assert "namespace cleanup" in calls[1][-1]
-    assert "server named cleanup" not in calls[1][-1]
-    assert "never use mcp__cleanup__" in calls[1][-1]
-    assert "mcp__roboclaws__" in calls[1][-1]
-    assert "roboclaws__" in calls[1][-1]
-
-
-def test_live_codex_recovers_from_misrouted_mcp_namespace_tool_error(
-    tmp_path: Path, monkeypatch
-) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    agent_dir = tmp_path / "agent"
-    agent_dir.mkdir()
-    args = SimpleNamespace(
-        run_dir=run_dir,
-        status_path=tmp_path / "status.json",
-        repo_root=REPO_ROOT,
-        client_url="http://127.0.0.1:18788/mcp",
-        codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
-        codex_max_continuations=1,
-        kickoff_prompt="clean",
-        codex_model_arg=[],
-        backend="molmospaces_subprocess",
-        policy="codex_agent",
-        profile="camera-raw-fpv",
-    )
-    runner = run_codex.LiveCodexCleanupRunner(args)
-    runner.server_proc = SimpleNamespace(poll=lambda: None)
-    calls: list[list[str]] = []
-
-    def fake_prepare_agent_workspace(**_kwargs):
-        return agent_dir, agent_dir
-
-    def fake_subprocess_run(*_args, **_kwargs):
-        return SimpleNamespace(returncode=0)
-
-    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
-        calls.append(command)
-        stdout_path.parent.mkdir(parents=True, exist_ok=True)
-        stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(calls) == 1:
-            stdout_path.write_text(
-                '{"type":"error","message":"function_call namespace '
-                "'mcp__cleanup__' does not contain function 'metric_map'\"}\n",
-                encoding="utf-8",
-            )
-            stderr_path.write_text("", encoding="utf-8")
-            return 1
-        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
-        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
-        return 0
-
-    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
-    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
-
-    runner._run_codex()
-
-    assert len(calls) == 2
-    assert runner.live_timing["codex_recoverable_errors"] == [
-        {"turn": 1, "type": "misrouted_mcp_namespace_tool"}
-    ]
-    assert "server=cleanup" in calls[1][-1]
-    assert "namespace cleanup" in calls[1][-1]
-    assert "declared Codex MCP server" not in calls[1][-1]
-    assert "server named cleanup" not in calls[1][-1]
-    assert "never use mcp__cleanup__" in calls[1][-1]
-    assert "mcp__roboclaws__" in calls[1][-1]
-    assert "roboclaws__" in calls[1][-1]
-
-
-def test_live_codex_recovers_from_missing_mcp_namespace_tool_error(
-    tmp_path: Path, monkeypatch
-) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    agent_dir = tmp_path / "agent"
-    agent_dir.mkdir()
-    args = SimpleNamespace(
-        run_dir=run_dir,
-        status_path=tmp_path / "status.json",
-        repo_root=REPO_ROOT,
-        client_url="http://127.0.0.1:18788/mcp",
-        codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
-        codex_max_continuations=1,
-        kickoff_prompt="clean",
-        codex_model_arg=[],
-        backend="molmospaces_subprocess",
-        policy="codex_agent",
-        profile="camera-grounded-labels",
-    )
-    runner = run_codex.LiveCodexCleanupRunner(args)
-    runner.server_proc = SimpleNamespace(poll=lambda: None)
-    calls: list[list[str]] = []
-
-    def fake_prepare_agent_workspace(**_kwargs):
-        return agent_dir, agent_dir
-
-    def fake_subprocess_run(*_args, **_kwargs):
-        return SimpleNamespace(returncode=0)
-
-    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
-        calls.append(command)
-        stdout_path.parent.mkdir(parents=True, exist_ok=True)
-        stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(calls) == 1:
-            stdout_path.write_text(
-                '{"type":"error","message":"function_call name '
-                "'metric_map' requires namespace for namespace function tools\"}\n",
-                encoding="utf-8",
-            )
-            stderr_path.write_text("", encoding="utf-8")
-            return 1
-        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
-        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
-        return 0
-
-    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
-    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
-
-    runner._run_codex()
-
-    assert len(calls) == 2
-    assert runner.live_timing["codex_recoverable_errors"] == [
-        {"turn": 1, "type": "missing_mcp_namespace_tool"}
-    ]
-    assert "server=cleanup" in calls[1][-1]
-    assert "namespace cleanup" in calls[1][-1]
-    assert "never emit bare metric_map without namespace" in calls[1][-1]
-    assert "never use mcp__cleanup__" in calls[1][-1]
-
-
-def test_live_codex_recovers_from_misrouted_undeclared_coding_tool_error(
-    tmp_path: Path, monkeypatch
-) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    agent_dir = tmp_path / "agent"
-    agent_dir.mkdir()
-    args = SimpleNamespace(
-        run_dir=run_dir,
-        status_path=tmp_path / "status.json",
-        repo_root=REPO_ROOT,
-        client_url="http://127.0.0.1:18788/mcp",
-        codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
-        codex_max_continuations=1,
-        kickoff_prompt="clean",
-        codex_model_arg=[],
-        backend="molmospaces_subprocess",
-        policy="codex_agent",
-        profile="camera-raw-fpv",
-    )
-    runner = run_codex.LiveCodexCleanupRunner(args)
-    runner.server_proc = SimpleNamespace(poll=lambda: None)
-    calls: list[list[str]] = []
-
-    def fake_prepare_agent_workspace(**_kwargs):
-        return agent_dir, agent_dir
-
-    def fake_subprocess_run(*_args, **_kwargs):
-        return SimpleNamespace(returncode=0)
-
-    def fake_run_and_tee(command, *, stdout_path, stderr_path, **_kwargs):
-        calls.append(command)
-        stdout_path.parent.mkdir(parents=True, exist_ok=True)
-        stderr_path.parent.mkdir(parents=True, exist_ok=True)
-        if len(calls) == 1:
-            stdout_path.write_text(
-                '{"type":"error","message":"function_call name '
-                "'exec_command' is not declared in tools\"}\n",
-                encoding="utf-8",
-            )
-            stderr_path.write_text("", encoding="utf-8")
-            return 1
-        (run_dir / "run_result.json").write_text("{}", encoding="utf-8")
-        stdout_path.write_text('{"type":"turn.completed"}\n', encoding="utf-8")
-        return 0
-
-    monkeypatch.setattr(run_codex, "_prepare_agent_workspace", fake_prepare_agent_workspace)
-    monkeypatch.setattr(run_codex.subprocess, "run", fake_subprocess_run)
-    monkeypatch.setattr(run_codex, "_run_and_tee", fake_run_and_tee)
-
-    runner._run_codex()
-
-    assert len(calls) == 2
-    assert runner.live_timing["codex_recoverable_errors"] == [
-        {"turn": 1, "type": "misrouted_undeclared_tool_call"}
-    ]
-    assert "Do not call exec_command" in calls[1][-1]
-    assert "coding/developer tool" in calls[1][-1]
-    assert "server=cleanup" in calls[1][-1]
-    assert "namespace cleanup" in calls[1][-1]
-    assert "never use mcp__cleanup__" in calls[1][-1]
-    assert "mcp__roboclaws__" in calls[1][-1]
-    assert "roboclaws__" in calls[1][-1]
-
-
-def test_live_codex_provider_rate_limit_exits_for_row_retry(tmp_path: Path, monkeypatch) -> None:
-    run_codex = _load_module(RUN_CODEX_PATH, "run_live_codex_cleanup")
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    agent_dir = tmp_path / "agent"
-    agent_dir.mkdir()
-    args = SimpleNamespace(
-        run_dir=run_dir,
-        status_path=tmp_path / "status.json",
-        repo_root=REPO_ROOT,
-        client_url="http://127.0.0.1:18788/mcp",
-        codex_bin="codex",
-        codex_provider_summary="mify model=xiaomi/mimo-v2.5",
-        codex_max_continuations=1,
         kickoff_prompt="clean",
         codex_model_arg=[],
         backend="molmospaces_subprocess",
@@ -1093,10 +711,13 @@ def test_live_codex_provider_rate_limit_exits_for_row_retry(tmp_path: Path, monk
 
     try:
         runner._run_codex()
-    except run_codex.ProviderRateLimitError as exc:
-        assert "rate limit" in str(exc)
+    except run_codex.LiveAgentRunFailure as exc:
+        assert exc.failure.reason == "provider_transient_failure"
+        assert exc.failure.provider_reason == "rate_limit"
+        assert exc.failure.retryable is True
+        assert exc.failure.resume_available is True
     else:  # pragma: no cover - defensive assertion
-        raise AssertionError("expected provider rate limit to exit for row retry")
+        raise AssertionError("expected provider transient failure")
 
     assert len(calls) == 1
     assert "codex_recoverable_errors" not in runner.live_timing

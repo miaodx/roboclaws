@@ -19,8 +19,8 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
 from roboclaws.household.generated_mess import generated_mess_success_threshold
-from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
 from roboclaws.household.report import runtime_timing_from_trace
 
 try:
@@ -66,8 +66,12 @@ CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION = (
 )
 
 
-class ProviderRateLimitError(RuntimeError):
-    """Raised when Codex provider rate limiting should be retried by the caller."""
+class LiveAgentRunFailure(RuntimeError):
+    """Raised after a live-agent turn writes structured failure status."""
+
+    def __init__(self, message: str, failure: LiveAgentFailure) -> None:
+        super().__init__(message)
+        self.failure = failure
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -86,14 +90,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--codex-bin", required=True)
     parser.add_argument("--codex-model", default="")
     parser.add_argument("--codex-provider-summary", default="system defaults")
-    parser.add_argument("--codex-max-continuations", type=int, default=8)
     parser.add_argument(
         "--codex-turn-idle-timeout-s",
         type=float,
         default=None,
         help=(
-            "Maximum quiet time for one Codex exec turn before killing it and "
-            "starting the next continuation. Set to 0 to disable."
+            "Maximum quiet time for the Codex exec turn before killing it and "
+            "failing this live run. Set to 0 to disable."
         ),
     )
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
@@ -148,6 +151,12 @@ class LiveCodexCleanupRunner:
             self._write_live_timing("failed", 130, reason="keyboard_interrupt")
             self._cleanup_server()
             return 130
+        except LiveAgentRunFailure as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            self._write_status("failed", 1, **exc.failure.status_fields())
+            self._write_live_timing("failed", 1, **exc.failure.status_fields())
+            self._cleanup_server()
+            return 1
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
@@ -285,138 +294,57 @@ class LiveCodexCleanupRunner:
             print(f"==> Codex provider for this run: {self.args.codex_provider_summary}")
         print(f"==> kickoff: {self.args.kickoff_prompt}")
 
-        event_paths: list[Path] = []
-        max_turns = _codex_max_turns(
-            profile=self.args.profile,
-            requested_continuations=self.args.codex_max_continuations,
-        )
         turn_idle_timeout_s = _codex_turn_idle_timeout_s(
             getattr(self.args, "codex_turn_idle_timeout_s", None)
         )
-        for turn_index in range(max_turns):
-            is_initial_turn = turn_index == 0
-            prompt = (
-                _codex_live_prompt(self.args.kickoff_prompt)
-                if is_initial_turn
-                else _codex_continuation_prompt(
-                    turn_index=turn_index,
-                    profile=self.args.profile,
-                    final_turn=turn_index + 1 == max_turns,
-                )
-            )
-            suffix = "" if is_initial_turn else f"-continuation-{turn_index}"
-            turn_last_message_cli_path = (
-                last_message_cli_path
-                if is_initial_turn
-                else last_message_cli_path.replace(".md", f"{suffix}.md")
-            )
-            turn_last_message_host_path = (
-                last_message_host_path
-                if is_initial_turn
-                else last_message_host_path.with_name(f"codex-last-message{suffix}.md")
-            )
-            command = [
-                self.args.codex_bin,
-                "exec",
-                "--json",
-                "--output-last-message",
-                turn_last_message_cli_path,
-                *self.args.codex_model_arg,
-                FULL_PERMISSION_ARG,
-                "--cd",
-                agent_cd,
-                prompt,
-            ]
-            command_path = (
-                self.run_dir / "codex-command.txt"
-                if is_initial_turn
-                else self.run_dir / f"codex-command{suffix}.txt"
-            )
-            command_path.write_text(
-                " ".join(_shell_quote(item) for item in command) + "\n",
-                encoding="utf-8",
-            )
-            codex_events_path = (
-                self.run_dir / "codex-events.jsonl"
-                if is_initial_turn
-                else self.run_dir / f"codex-events{suffix}.jsonl"
-            )
-            stderr_path = (
-                self.run_dir / "codex.stderr.log"
-                if is_initial_turn
-                else self.run_dir / f"codex{suffix}.stderr.log"
-            )
-            print(
-                "==> Codex turn "
-                f"{turn_index + 1}/{max_turns}" + ("" if is_initial_turn else " (continuation)")
-            )
-            status = _run_and_tee(
-                command,
-                cwd=agent_task_dir,
-                stdout_path=codex_events_path,
-                stderr_path=stderr_path,
-                env=env,
-                idle_timeout_s=turn_idle_timeout_s,
-            )
-            event_paths.append(codex_events_path)
-            if turn_last_message_host_path.is_file():
-                shutil.copyfile(turn_last_message_host_path, self.run_dir / "codex-last-message.md")
-            if status != 0:
-                if self.server_proc is not None and self.server_proc.poll() is not None:
-                    break
-                if (self.run_dir / "run_result.json").is_file():
-                    break
-                if status == CODEX_TURN_IDLE_TIMEOUT_EXIT_STATUS and turn_index + 1 < max_turns:
-                    print("==> Codex turn went idle before done; starting continuation")
-                    recoveries = self.live_timing.setdefault("codex_recoverable_errors", [])
-                    if isinstance(recoveries, list):
-                        recoveries.append(
-                            {
-                                "turn": turn_index + 1,
-                                "type": "codex_turn_idle_timeout",
-                            }
-                        )
-                    continue
-                recoverable_error = _recoverable_provider_tool_error(codex_events_path, stderr_path)
-                if turn_index + 1 < max_turns and recoverable_error:
-                    if recoverable_error == "provider_rate_limit":
-                        self._mark_timing("codex_exec_end")
-                        self.live_timing["codex_events"] = _combined_codex_event_summary(
-                            event_paths
-                        )
-                        raise ProviderRateLimitError(
-                            "Codex provider rate limit; rerun the whole cleanup row"
-                        )
-                    print(
-                        "==> Codex attempted an unsupported provider/tool call "
-                        f"({recoverable_error}); continuing with recovery prompt"
-                    )
-                    recoveries = self.live_timing.setdefault("codex_recoverable_errors", [])
-                    if isinstance(recoveries, list):
-                        recoveries.append(
-                            {
-                                "turn": turn_index + 1,
-                                "type": recoverable_error,
-                            }
-                        )
-                    continue
-                self._mark_timing("codex_exec_end")
-                self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)
-                raise RuntimeError(f"Codex exec exited with status {status}")
-            if self.server_proc is not None and self.server_proc.poll() is not None:
-                break
-            if (self.run_dir / "run_result.json").is_file():
-                break
-            if turn_index + 1 < max_turns:
-                print("==> Codex turn ended before done; starting continuation")
+        prompt = _codex_live_prompt(self.args.kickoff_prompt)
+        command = [
+            self.args.codex_bin,
+            "exec",
+            "--json",
+            "--output-last-message",
+            last_message_cli_path,
+            *self.args.codex_model_arg,
+            FULL_PERMISSION_ARG,
+            "--cd",
+            agent_cd,
+            prompt,
+        ]
+        (self.run_dir / "codex-command.txt").write_text(
+            " ".join(_shell_quote(item) for item in command) + "\n",
+            encoding="utf-8",
+        )
+        codex_events_path = self.run_dir / "codex-events.jsonl"
+        stderr_path = self.run_dir / "codex.stderr.log"
+        print("==> Codex turn 1/1")
+        status = _run_and_tee(
+            command,
+            cwd=agent_task_dir,
+            stdout_path=codex_events_path,
+            stderr_path=stderr_path,
+            env=env,
+            idle_timeout_s=turn_idle_timeout_s,
+        )
+        if last_message_host_path.is_file():
+            shutil.copyfile(last_message_host_path, self.run_dir / "codex-last-message.md")
         self._mark_timing("codex_exec_end")
-        self.live_timing["codex_events"] = _combined_codex_event_summary(event_paths)
+        self.live_timing["codex_events"] = _combined_codex_event_summary([codex_events_path])
+        if status != 0 and not (self.run_dir / "run_result.json").is_file():
+            failure = classify_live_agent_failure(
+                codex_events_path,
+                stderr_path,
+                exit_status=status,
+            )
+            raise LiveAgentRunFailure(
+                f"Codex exec failed after one live-agent turn: {failure.reason}",
+                failure,
+            )
         if (
             self.server_proc is not None
             and self.server_proc.poll() is None
             and not (self.run_dir / "run_result.json").is_file()
         ):
-            raise RuntimeError(f"Codex exec ended without done after {max_turns} turn(s)")
+            raise RuntimeError("Codex exec ended without done after one live-agent turn")
 
     def _wait_for_server_finish(self) -> None:
         assert self.server_proc is not None
@@ -518,6 +446,10 @@ class LiveCodexCleanupRunner:
         exit_status: int,
         *,
         reason: str = "",
+        provider_reason: str = "",
+        retryable: bool | None = None,
+        resume_available: bool | None = None,
+        detail: str = "",
     ) -> None:
         finished_at = time.time()
         payload = dict(self.live_timing)
@@ -530,6 +462,14 @@ class LiveCodexCleanupRunner:
         )
         if reason:
             payload["reason"] = reason
+        if provider_reason:
+            payload["provider_reason"] = provider_reason
+        if retryable is not None:
+            payload["retryable"] = retryable
+        if resume_available is not None:
+            payload["resume_available"] = resume_available
+        if detail:
+            payload["detail"] = detail
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
         payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
         first_request = _first_mcp_request_epoch(self.run_dir)
@@ -566,6 +506,10 @@ class LiveCodexCleanupRunner:
         exit_status: int | None = None,
         *,
         reason: str = "",
+        provider_reason: str = "",
+        retryable: bool | None = None,
+        resume_available: bool | None = None,
+        detail: str = "",
     ) -> None:
         payload: dict[str, object] = {
             "phase": phase,
@@ -573,6 +517,14 @@ class LiveCodexCleanupRunner:
         }
         if reason:
             payload["reason"] = reason
+        if provider_reason:
+            payload["provider_reason"] = provider_reason
+        if retryable is not None:
+            payload["retryable"] = retryable
+        if resume_available is not None:
+            payload["resume_available"] = resume_available
+        if detail:
+            payload["detail"] = detail
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -682,7 +634,7 @@ def _wait_for_process_with_idle_timeout(
             timeout_log.write(
                 (
                     f"codex turn idle timeout after {idle_timeout_s:g}s; "
-                    "terminating process group for continuation\n"
+                    "terminating process group and failing live run\n"
                 ).encode("utf-8")
             )
             timeout_log.flush()
@@ -851,110 +803,12 @@ def _combined_codex_event_summary(paths: list[Path]) -> dict[str, Any]:
     }
 
 
-def _codex_continuation_prompt(
-    *,
-    turn_index: int,
-    profile: str,
-    final_turn: bool = False,
-) -> str:
-    if profile == "camera-raw-fpv":
-        perception_instruction = (
-            "For camera-raw-fpv observations, inspect the raw FPV image block yourself. "
-            "Do not call declare_visual_candidates. "
-            + raw_fpv_inline_candidate_instruction()
-            + " If navigate_to_visual_candidate returns ok=true, object_id, "
-            "candidate_fixture_id, and required_next_tool=pick, immediately call "
-            "pick with that object_id, then navigate_to_receptacle with that "
-            "candidate_fixture_id, then the response's recommended_tool. "
-            "Do not re-check fixture_hints, do not infer that minimal-map hidden "
-            "fixtures make the target impossible, and do not continue the sweep "
-            "until that grounded chain either succeeds or a cleanup tool rejects it. "
-            "Prefer image_region type verbal_region, for example "
-            "image_region={type:verbal_region,value:front of desk}. "
-            "Never send bbox_normalized. "
-            "Continue with pick -> navigate_to_receptacle -> open? -> "
-            "place/place_inside only after visual grounding resolves."
-        )
-    elif profile == "camera-grounded-labels":
-        perception_instruction = (
-            "For camera-grounded-labels observations, call declare_visual_candidates "
-            "with observation_id only and omit candidates so the configured "
-            "camera labeler produces labels. Continue cleaning public "
-            "camera_model_candidates with navigate_to_object -> pick -> "
-            "navigate_to_receptacle -> open? -> place/place_inside."
-        )
-    elif profile == "world-public-labels":
-        perception_instruction = (
-            "For world-public-labels observations, visible_object_detections are "
-            "observation evidence, not a mandatory work queue. Before acting on a "
-            "re-observed handle, call metric_map if needed and check "
-            "runtime_metric_map.observed_objects plus cleanup_worklist state; skip "
-            "handles whose public state/actionability shows placed, held, "
-            "already_handled, or not pending. If a cleanup tool returns "
-            "already_handled, follow its recovery_hint and do not inspect, navigate "
-            "to, or pick another handle from the same stale area just because it "
-            "appeared in the same observe response. Choose destinations only from "
-            "public anchors, destination_policy, destination_options, and tool "
-            "responses. If no matching public destination is available yet, continue "
-            "the waypoint sweep rather than inventing fixture ids. Treat public tool "
-            "responses as authoritative: if done returns pending_cleanup_candidates, "
-            "clean those listed handles using candidate_fixture_id or "
-            "destination_options and then call done again; if any tool returns "
-            "required_tool, call that public tool next."
-        )
-    else:
-        perception_instruction = (
-            "Continue cleaning public observed cleanup candidates with the profile's "
-            "available observation handles and cleanup tools."
-        )
-    closeout_instruction = ""
-    if final_turn:
-        closeout_instruction = (
-            " This is the final automatic continuation. Treat it as mandatory closeout, "
-            "not optional cleanup. Do not start a new optional cleanup chain from "
-            "visible_object_detections. Follow public required_tool, "
-            "unvisited_waypoint_ids, next_waypoint_id, and pending_cleanup_candidates "
-            "fields from metric_map or done responses. Only call done after every "
-            "inspection waypoint has an observe response and no public pending or "
-            "held cleanup work remains."
-        )
-    return _codex_live_prompt(
-        "Continue the same active cleanup MCP session. This is automatic "
-        f"continuation turn {turn_index}; do not restart the scenario and do not read "
-        "private scoring artifacts. Use the cleanup MCP tool entries exactly as "
-        "exposed by Codex: Codex events should show server=cleanup and "
-        "tool=metric_map/observe/pick/place/done. If the tool protocol requires "
-        "a function namespace, use namespace cleanup with the unprefixed tool "
-        "name; never emit bare metric_map without namespace, and never use "
-        "mcp__cleanup__ or roboclaws__. Do not call read_mcp_resource/resources "
-        "tools; continue from the prompt instructions. First call metric_map if "
-        "you need current public state, cleanup_worklist, "
-        "visited waypoints, or held_object_id. If the previous turn ended by saying "
-        "it would call a tool, make that exact tool call "
-        f"now before writing progress text. {perception_instruction} "
-        "Observe after each successful placement, sweep remaining inspection_waypoints with "
-        "navigate_to_waypoint -> observe, and call done only after every "
-        "inspection waypoint has an observe response and pending public cleanup "
-        f"candidates are handled.{closeout_instruction}"
-    )
-
-
 def _codex_live_prompt(prompt: str) -> str:
     return (
         f"{CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION}\n"
         f"{CODEX_LIVE_SEMANTIC_ORDER_INSTRUCTION}\n\n"
         f"{prompt}"
     )
-
-
-def _codex_max_turns(*, profile: str, requested_continuations: int) -> int:
-    continuations = max(0, int(requested_continuations))
-    if profile == "world-public-labels":
-        # The sanitized minimal-map lane has more public discovery work because
-        # destination oracle hints are hidden, so keep enough turns for normal
-        # coverage and done-recovery loops without changing cleanup policy.
-        continuations = max(continuations, 14)
-    return max(1, continuations + 1)
 
 
 def _codex_turn_idle_timeout_s(configured: float | None) -> float | None:
@@ -967,36 +821,6 @@ def _codex_turn_idle_timeout_s(configured: float | None) -> float | None:
         except ValueError:
             return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
     return DEFAULT_CODEX_TURN_IDLE_TIMEOUT_S
-
-
-def _recoverable_provider_tool_error(*paths: Path) -> str | None:
-    for path in paths:
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8", errors="replace").lower()
-        if "update_plan" in text and (
-            "not declared in tools" in text or "unsupported call" in text
-        ):
-            return "misrouted_update_plan_tool"
-        if "read_mcp_resource" in text and (
-            "not declared in tools" in text
-            or "unknown mcp server" in text
-            or "resources/read failed" in text
-        ):
-            return "misrouted_read_mcp_resource_tool"
-        if "mcp__" in text and "does not contain function" in text:
-            return "misrouted_mcp_namespace_tool"
-        if "requires namespace for namespace function tools" in text:
-            return "missing_mcp_namespace_tool"
-        if "function_call name" in text and "not declared in tools" in text:
-            return "misrouted_undeclared_tool_call"
-        if "429 too many requests" in text or "exceeded retry limit, last status: 429" in text:
-            return "provider_rate_limit"
-    return None
-
-
-def _is_update_plan_tool_error(*paths: Path) -> bool:
-    return _recoverable_provider_tool_error(*paths) == "misrouted_update_plan_tool"
 
 
 def _model_api_durations_from_event(event: dict[str, Any]) -> list[float]:
