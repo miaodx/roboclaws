@@ -177,6 +177,7 @@
           <dl id="run-state">
             <dt>Phase</dt><dd id="phase-value">idle</dd>
             <dt>Backend Lock</dt><dd id="backend-lock-value">none</dd>
+            <dt>Camera</dt><dd id="camera-angle-value">neutral</dd>
             <dt>Terminal</dt><dd id="terminal-value">none</dd>
           </dl>
         </section>
@@ -191,6 +192,22 @@
         <section>
           <h2>Proof</h2>
           <div id="proof-state" class="evidence-box">No checker result yet.</div>
+        </section>
+        <section class="operator-message-panel">
+          <h2>Operator</h2>
+          <div class="operator-mode-tabs" role="group" aria-label="Operator message mode">
+            <button class="operator-mode active" data-operator-mode="ask_why">Ask Why</button>
+            <button class="operator-mode" data-operator-mode="steer">Steer</button>
+            <button class="operator-mode" data-operator-mode="continue">Continue</button>
+          </div>
+          <textarea
+            id="operator-message-input"
+            maxlength="1600"
+            rows="4"
+            placeholder="Select an explicit mode, then enter operator text."
+          ></textarea>
+          <button id="operator-message-button" class="secondary" disabled>Send</button>
+          <div id="operator-message-status" class="field-help">Attach a run to send messages.</div>
         </section>
         <section>
           <h2>Raw Logs</h2>

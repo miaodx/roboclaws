@@ -515,6 +515,15 @@ _HOUSEHOLD_DONE_TOOL = _tool(
     "Terminate the selected household task and write artifacts.",
 )
 
+_HOUSEHOLD_OPERATOR_MESSAGES_TOOL = _tool(
+    "check_operator_messages",
+    "episode.check_operator_messages",
+    FAMILY_EPISODE,
+    CLASSIFICATION_CANONICAL,
+    (PROVENANCE_API_SEMANTIC,),
+    "Read public operator steering messages at task-owned safe checkpoints.",
+)
+
 _HOUSEHOLD_WORLD_PROFILE = ContractProfile(
     profile_id=HOUSEHOLD_WORLD_PROFILE,
     version=1,
@@ -578,7 +587,7 @@ _HOUSEHOLD_EPISODE_PROFILE = ContractProfile(
         "agibot_gdk",
     ),
     capability_families=(FAMILY_EPISODE,),
-    public_tools=(_HOUSEHOLD_DONE_TOOL,),
+    public_tools=(_HOUSEHOLD_OPERATOR_MESSAGES_TOOL, _HOUSEHOLD_DONE_TOOL),
     privileged_tools=(),
     privacy_exclusions=_MOLMO_PRIVATE_EXCLUSIONS,
     summary="Composable household task lifecycle profile for explicit run completion.",
@@ -601,6 +610,7 @@ _MOLMO_PROFILE = ContractProfile(
     public_tools=(
         *_HOUSEHOLD_WORLD_TOOLS,
         *_HOUSEHOLD_MANIPULATION_TOOLS,
+        _HOUSEHOLD_OPERATOR_MESSAGES_TOOL,
         _HOUSEHOLD_DONE_TOOL,
     ),
     privileged_tools=(),
@@ -775,6 +785,14 @@ _REAL_ROBOT_PROFILE = ContractProfile(
             CLASSIFICATION_CANONICAL,
             (PROVENANCE_BLOCKED_CAPABILITY,),
             "Return a structured blocked-capability response until manipulation is proven.",
+        ),
+        _tool(
+            "check_operator_messages",
+            "episode.check_operator_messages",
+            FAMILY_EPISODE,
+            CLASSIFICATION_CANONICAL,
+            (PROVENANCE_BLOCKED_CAPABILITY,),
+            "Return no public steering messages until the physical pilot route enables steering.",
         ),
         _tool(
             "done",

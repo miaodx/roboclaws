@@ -19,6 +19,17 @@ from typing import BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
+from roboclaws.household.visual_backend_slots import (
+    MOLMOSPACES_SUBPROCESS_BACKEND,
+    VisualBackendSlotError,
+    VisualBackendSlotLease,
+    acquire_visual_backend_slot,
+)
 
 FULL_PERMISSION_ARGS = ("--dangerously-skip-permissions", "--permission-mode", "bypassPermissions")
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
@@ -50,6 +61,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--policy", required=True)
     parser.add_argument("--task", required=True)
     parser.add_argument("--min-generated-mess-count", required=True)
@@ -75,6 +87,7 @@ class LiveClaudeCleanupRunner:
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
         self.lock_file = None
+        self.visual_slot: VisualBackendSlotLease | None = None
 
     def run(self) -> int:
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -89,22 +102,48 @@ class LiveClaudeCleanupRunner:
         except KeyboardInterrupt:
             self._write_status("failed", 130)
             self._cleanup_server()
+            self._release_visual_slot()
             return 130
         except LiveAgentRunFailure as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, **exc.failure.status_fields())
             self._cleanup_server()
+            self._release_visual_slot()
             return 1
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
             self._cleanup_server()
+            self._release_visual_slot()
             return 1
 
         self._write_status("finished", 0)
+        self._release_visual_slot()
         return 0
 
     def _acquire_lock(self) -> None:
+        if self.args.backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+            try:
+                self.visual_slot = acquire_visual_backend_slot(
+                    repo_root=self.args.repo_root,
+                    run_id=_run_id_from_run_dir(self.run_dir),
+                    pid=os.getpid(),
+                    backend=self.args.backend,
+                    port=self.args.port,
+                    output_dir=self.run_dir,
+                    status_path=self.status_path,
+                    owner="claude-live",
+                )
+            except VisualBackendSlotError as exc:
+                detail = (
+                    f": {json.dumps(exc.active_slots, sort_keys=True)}" if exc.active_slots else ""
+                )
+                raise RuntimeError(
+                    "no MolmoSpaces visual backend slot is available"
+                    f" under {self.args.repo_root / 'output/molmo/visual-backend-slots'}{detail}"
+                ) from exc
+            return
+
         self.args.lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_file = self.args.lock_path.open("a+", encoding="utf-8")
         try:
@@ -133,6 +172,16 @@ class LiveClaudeCleanupRunner:
         )
         lock_file.flush()
         self.lock_file = lock_file
+
+    def _release_visual_slot(self) -> None:
+        if self.visual_slot is None:
+            return
+        try:
+            self.visual_slot.release()
+        except VisualBackendSlotError as exc:
+            print(f"warning: could not release visual backend slot: {exc}", file=sys.stderr)
+        finally:
+            self.visual_slot = None
 
     def _start_server(self) -> None:
         print("==> Claude Code Molmo cleanup runner")
@@ -302,6 +351,13 @@ class LiveClaudeCleanupRunner:
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
+        custom_task = (
+            normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
+            == TASK_INTENT_MODE_CUSTOM
+        )
+        checker_visual_args = list(self.args.checker_visual_arg)
+        if custom_task:
+            checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -323,7 +379,7 @@ class LiveClaudeCleanupRunner:
             self.args.min_generated_mess_count,
             "--require-agent-driven",
             "--require-advisory-scoring",
-            *self.args.checker_visual_arg,
+            *checker_visual_args,
         ]
         if self.args.profile in {
             "smoke",
@@ -331,7 +387,10 @@ class LiveClaudeCleanupRunner:
             "camera-grounded-labels",
             "camera-raw-fpv",
         }:
-            checker_args.append("--require-clean-agent-run")
+            if custom_task:
+                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
+            else:
+                checker_args.append("--require-clean-agent-run")
         checker_args.append(str(run_result))
 
         status = _run_and_tee(
@@ -381,6 +440,8 @@ class LiveClaudeCleanupRunner:
             payload["resume_available"] = resume_available
         if detail:
             payload["detail"] = detail
+        if self.visual_slot is not None:
+            payload["visual_backend_slot"] = self.visual_slot.to_payload()
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -530,6 +591,43 @@ def _shell_quote(value: str) -> str:
     if all(char in safe for char in value):
         return value
     return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def _append_missing_checker_flag(args: list[str], flag: str) -> None:
+    if flag not in args:
+        args.append(flag)
+
+
+def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
+    filtered: list[str] = []
+    skip_value = False
+    for arg in args:
+        if skip_value:
+            skip_value = False
+            continue
+        if arg in {
+            "--min-semantic-accepted-count",
+            "--min-model-declared-observations",
+            "--min-model-declared-actions",
+            "--min-sweep-coverage",
+        }:
+            skip_value = True
+            continue
+        if arg in {
+            "--require-clean-agent-run",
+            "--require-model-declared-observations",
+        }:
+            continue
+        filtered.append(arg)
+    return filtered
+
+
+def _run_id_from_run_dir(run_dir: Path) -> str:
+    name = run_dir.name
+    parent = run_dir.parent.name
+    if parent:
+        return f"{parent}/{name}"
+    return name
 
 
 if __name__ == "__main__":

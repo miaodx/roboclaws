@@ -15,7 +15,10 @@ from roboclaws.agents.live_runtime import (
     live_agent_result_from_artifacts,
 )
 from roboclaws.agents.live_status import LiveAgentFailure
-from scripts.molmo_cleanup.run_live_openai_agents_cleanup import LiveOpenAIAgentsCleanupRunner
+from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
+    LiveOpenAIAgentsCleanupRunner,
+    _mcp_control_plane_metrics,
+)
 
 
 def test_live_agent_request_keeps_one_turn_policy_explicit(tmp_path: Path) -> None:
@@ -215,7 +218,11 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     monkeypatch.setitem(
         __import__("sys").modules,
         "agents.mcp",
-        SimpleNamespace(MCPServerStreamableHttp=lambda **kwargs: SimpleNamespace(kwargs=kwargs)),
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
     )
     monkeypatch.setitem(
         __import__("sys").modules,
@@ -236,7 +243,64 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     assert captured["base_url"] == "https://codex.example.test/v1"
     assert captured["api_key"] == "fake-codex-key"
     assert captured["agent_kwargs"]["model"] is captured["responses_model"]
+    assert captured["mcp_server_kwargs"]["cache_tools_list"] is True
     assert captured["runner_kwargs"]["max_turns"] == 128
+
+
+def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            pass
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={"cache_tools_list": False},
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    assert captured["mcp_server_kwargs"]["cache_tools_list"] is False
 
 
 def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, monkeypatch) -> None:
@@ -350,6 +414,7 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
     assert timing["runtime"] == "openai-agents-live"
     assert timing["openai_agents"]["trace_id"] == "trace_1"
+    assert timing["mcp_control_plane_metrics"]["available"] is False
     assert checker_commands
     checker_command = checker_commands[0]
     assert "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py" in checker_command
@@ -580,3 +645,44 @@ def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
     timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
     assert len(timing["openai_agents_attempts"]) == 2
     assert timing["openai_agents"]["phase"] == "agent-turn-complete"
+
+
+def test_openai_agents_control_plane_metrics_parse_server_log(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-server.log").write_text(
+        "\n".join(
+            [
+                "[2026-06-09] INFO Created new transport with session ID: abc",
+                'INFO:     127.0.0.1:1 - "POST /mcp HTTP/1.1" 200 OK',
+                "[2026-06-09] INFO Processing request of type ListToolsRequest",
+                'INFO:     127.0.0.1:2 - "POST /mcp HTTP/1.1" 202 Accepted',
+                "[2026-06-09] INFO Processing request of type CallToolRequest",
+                "[2026-06-09] INFO Processing request of type CallToolRequest",
+                "OPENAI_API_KEY is not set, skipping trace export",
+                "[2026-06-09] INFO Terminating session: abc",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = _mcp_control_plane_metrics(run_dir)
+
+    assert metrics["available"] is True
+    assert metrics["request_type_counts"] == {
+        "CallToolRequest": 2,
+        "ListToolsRequest": 1,
+    }
+    assert metrics["total_mcp_request_count"] == 3
+    assert metrics["call_tool_request_count"] == 2
+    assert metrics["list_tools_request_count"] == 1
+    assert metrics["control_request_count"] == 1
+    assert metrics["list_tools_per_call_tool"] == 0.5
+    assert metrics["streamable_http_session_count"] == 1
+    assert metrics["session_termination_count"] == 1
+    assert metrics["trace_export_skip_count"] == 1
+    assert metrics["http_status_counts"] == {
+        "200 OK": 1,
+        "202 Accepted": 1,
+    }

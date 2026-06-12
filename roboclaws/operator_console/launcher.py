@@ -14,6 +14,7 @@ from typing import Any
 
 from roboclaws.launch.catalog import resolve_task_launch
 from roboclaws.operator_console.history import append_run_history
+from roboclaws.operator_console.interactions import MESSAGE_LOG, attach_run_to_session
 from roboclaws.operator_console.locks import ResourceLock
 from roboclaws.operator_console.paths import console_output_root
 from roboclaws.operator_console.routes import ConsoleRoute, accepted_isaac_preflight, get_route
@@ -55,6 +56,9 @@ class LaunchRequest:
     overrides: dict[str, str] | None = None
     env_overrides: dict[str, str] | None = None
     gates: dict[str, bool] | None = None
+    operator_session_id: str = ""
+    parent_run_id: str = ""
+    continuation_packet: dict[str, Any] | None = None
 
 
 def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str, str]:
@@ -124,6 +128,8 @@ def build_launch_argv(
             raise ConsoleLaunchError(
                 "This route cannot accept a custom prompt safely. Use the default task prompt."
             )
+        if route.task == "household-cleanup" and "task_intent_mode" not in request_overrides:
+            args.append("task_intent_mode=custom")
         args.append(f"prompt={prompt}")
 
     resolve_task_launch(args)
@@ -141,7 +147,7 @@ def start_console_run(
     run_env = load_repo_dotenv(root, env)
     route = get_route(request.route_id)
     gate_payload = request.gates or {}
-    overrides = request.overrides or {}
+    overrides = dict(request.overrides or {})
     env_overrides = request.env_overrides or {}
     run_env = _apply_env_overrides(route, run_env, env_overrides)
     readiness = route_readiness(root, route, overrides=overrides, gates=gate_payload, env=run_env)
@@ -149,6 +155,9 @@ def start_console_run(
         raise ConsoleLaunchError(str(readiness["blocker"]))
 
     run_id = _new_run_id(route)
+    run_dir = console_output_root(root) / "runs" / run_id
+    if route.supports_operator_steer:
+        overrides.setdefault("operator_messages_path", str(run_dir / MESSAGE_LOG))
     argv = build_launch_argv(
         route,
         root=root,
@@ -156,7 +165,6 @@ def start_console_run(
         prompt=request.prompt,
         overrides=overrides,
     )
-    run_dir = console_output_root(root) / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "console-launch.log"
     lock = ResourceLock(root, route.lock_name)
@@ -180,8 +188,12 @@ def start_console_run(
         raise
     started_at_epoch = time.time()
     started_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    session = attach_run_to_session(root, run_id, request.operator_session_id)
     state = {
         "run_id": run_id,
+        "operator_session_id": session["operator_session_id"],
+        "parent_run_id": request.parent_run_id,
+        "continuation_packet": request.continuation_packet or {},
         "route": route.to_payload(),
         "phase": "starting",
         "pid": process.pid,
@@ -382,6 +394,8 @@ def _validate_override_keys(route: ConsoleRoute, overrides: dict[str, str]) -> N
         "policy",
         "host",
         "port",
+        "operator_messages_path",
+        "task_intent_mode",
     }
     for key, value in overrides.items():
         if key not in allowed:

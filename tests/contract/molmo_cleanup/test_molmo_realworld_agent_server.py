@@ -51,6 +51,26 @@ def test_realworld_agent_server_prints_visual_setup(tmp_path: Path, capsys) -> N
     assert "Visual report : enabled" in output
 
 
+def test_realworld_agent_server_custom_task_setup_does_not_prompt_full_sweep(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    server_module.print_setup(
+        tmp_path,
+        "http://127.0.0.1:18788/mcp",
+        "codex_agent",
+        task_intent_mode="custom",
+    )
+
+    output = capsys.readouterr().out
+    assert "Treat the operator task as the authoritative goal scope." in output
+    assert "Observe only as needed for the custom task" in output
+    assert "Act only on task-relevant observed_* objects." in output
+    assert "skills/molmo-realworld-cleanup/SKILL.md" not in output
+    assert "Sweep waypoints" not in output
+    assert "Clean plausible observed_* objects with navigate->pick" not in output
+
+
 def test_realworld_agent_server_client_setup_commands() -> None:
     commands = server_module.client_setup_commands("http://127.0.0.1:18788/mcp")
 

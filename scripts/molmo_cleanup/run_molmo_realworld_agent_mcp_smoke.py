@@ -34,6 +34,7 @@ from roboclaws.household.subprocess_backend import (  # noqa: E402
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
+from roboclaws.household.task_intent import TASK_INTENT_MODE_DEFAULT  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
@@ -49,6 +50,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--policy", default="realworld_contract_smoke_agent")
     parser.add_argument(
         "--backend",
@@ -111,6 +113,7 @@ def run_smoke(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     if generated_mess_count < 1:
@@ -160,6 +163,7 @@ def run_smoke(
         visual_grounding=visual_grounding,
         visual_grounding_base_url=visual_grounding_base_url,
         visual_grounding_timeout_s=visual_grounding_timeout_s,
+        task_intent_mode=task_intent_mode,
     )
     try:
         _drive_public_sweep(server)
@@ -354,6 +358,7 @@ def main(argv: list[str] | None = None) -> int:
         visual_grounding=args.visual_grounding,
         visual_grounding_base_url=args.visual_grounding_base_url,
         visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+        task_intent_mode=args.task_intent_mode,
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0

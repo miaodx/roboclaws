@@ -5,12 +5,25 @@ from __future__ import annotations
 import argparse
 
 from roboclaws.household.raw_fpv_guidance import raw_fpv_inline_candidate_instruction
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
+from roboclaws.household.visual_scan_guidance import visual_scan_prompt_rule
 
-COMMON_PREFIX = (
-    "Use the bundled molmo-realworld-cleanup skill instructions. "
+TOOL_PROTOCOL_PREFIX = (
     "Use the cleanup MCP tool entries exactly as exposed by Codex; in text, "
     "refer to unprefixed tool names, and if the tool protocol requires a namespace "
     "use namespace cleanup, never mcp__cleanup__ or roboclaws__. "
+)
+
+COMMON_PREFIX = (
+    "Use the bundled molmo-realworld-cleanup skill instructions. " + TOOL_PROTOCOL_PREFIX
+)
+
+CUSTOM_PREFIX = (
+    "Use the MCP tools as a bounded household robot capability surface. " + TOOL_PROTOCOL_PREFIX
 )
 
 COMMON_WAYPOINT_RULES = (
@@ -23,9 +36,7 @@ COMMON_WAYPOINT_RULES = (
 
 COMMON_CLEANUP_RULES = (
     "clean plausible observed objects only after their candidate_state is "
-    "navigation_authorized; if a world-label object is visual_scan_required, call "
-    "adjust_camera toward it, then observe, then use the refreshed same-handle "
-    "source FPV bbox before navigate_to_object. Clean with "
+    f"navigation_authorized; {visual_scan_prompt_rule()} Clean with "
     "navigate->pick->navigate->open?->place/place_inside following required_tool "
     "if returned, use place_inside for "
     "shelf/bookshelf/bookcase/shelving/fridge targets, do not call scene_objects "
@@ -35,7 +46,78 @@ COMMON_CLEANUP_RULES = (
     "is generated."
 )
 
-WORLD_LABELS_PROMPT = COMMON_PREFIX + COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES
+CUSTOM_TASK_RULES = (
+    "The operator task is the only goal. Do not start a room-cleanup routine, full "
+    "waypoint sweep, visual-scan prerequisite, or pick/place chain unless the operator "
+    "task itself requires it. Use metric_map, fixture_hints, navigate_to_waypoint, "
+    "observe, and adjust_camera only as needed to gather enough public evidence for "
+    "the operator task. If the task asks for information, report the answer and call "
+    "done once satisfied. If the task requires manipulating an object, act only on "
+    "task-relevant observed objects, use the public navigation/manipulation tools, "
+    "and follow required_tool or public error responses. Do not call scene_objects or "
+    "read private scoring artifacts. Do not treat unrelated pending cleanup candidates "
+    "as part of the operator task. When the operator task is satisfied and you are not "
+    "holding an object, call done so the report is generated."
+)
+
+HOUSEHOLD_CLEANUP_TASK_PREFIX = "This run is household-cleanup. User task: {task}. "
+CUSTOM_HOUSEHOLD_TASK_PREFIX = (
+    "This run is household-cleanup with a custom operator task. "
+    "The following operator task is authoritative and overrides the default cleanup "
+    "task: {task}. When this wrapper and the operator task conflict, follow the "
+    "operator task subject to public tool safety and error responses. "
+)
+
+DEFAULT_HOUSEHOLD_CLEANUP_TASK = "clean up this room"
+
+
+def _normalize_task(task: str) -> str:
+    return " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
+
+
+def _task_prefix(task: str, *, task_intent_mode: str = TASK_INTENT_MODE_DEFAULT) -> str:
+    normalized = _normalize_task(task)
+    if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
+        return CUSTOM_HOUSEHOLD_TASK_PREFIX.format(task=normalized)
+    return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
+
+
+def _normalize_task_intent_mode(task_intent_mode: str) -> str:
+    return normalize_task_intent_mode(task_intent_mode)
+
+
+def _with_task(
+    prompt: str,
+    task: str,
+    *,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+) -> str:
+    prefix = CUSTOM_PREFIX if task_intent_mode == TASK_INTENT_MODE_CUSTOM else COMMON_PREFIX
+    return prefix + _task_prefix(task, task_intent_mode=task_intent_mode) + prompt
+
+
+def _custom_scope_suffix() -> str:
+    return (
+        " In custom operator task mode, do not infer additional cleanup goals from "
+        "the household-cleanup route name."
+    )
+
+
+def _task_aware_prompt(prompt: str, *, task_intent_mode: str) -> str:
+    if task_intent_mode == TASK_INTENT_MODE_CUSTOM:
+        return prompt + _custom_scope_suffix()
+    return prompt
+
+
+def _legacy_task_prefix(task: str) -> str:
+    """Compatibility shim for callers/tests that imported the old helper."""
+
+    normalized = " ".join(str(task or "").split()) or DEFAULT_HOUSEHOLD_CLEANUP_TASK
+    return HOUSEHOLD_CLEANUP_TASK_PREFIX.format(task=normalized)
+
+
+_task_prefix_legacy = _legacy_task_prefix
+
 
 SEMANTIC_MAP_BUILD_RULES = (
     "This run is semantic-map-build, not household-cleanup. User task: {task}. "
@@ -54,8 +136,7 @@ SEMANTIC_MAP_BUILD_RULES = (
 )
 
 WORLD_LABELS_SANITIZED_PROMPT = (
-    COMMON_PREFIX
-    + COMMON_WAYPOINT_RULES
+    COMMON_WAYPOINT_RULES
     + "treat visible_object_detections as perfect structured detections without "
     "cleanup destination oracle fields; do not wait for or rely on "
     "cleanup_recommended, and treat every observed detection as a cleanup "
@@ -76,7 +157,7 @@ WORLD_LABELS_SANITIZED_PROMPT = (
 )
 
 CAMERA_LABELS_PROMPT = (
-    COMMON_PREFIX + "When the next action is an MCP tool call, make that tool call before "
+    "When the next action is an MCP tool call, make that tool call before "
     "writing progress text and never end a turn by saying you will call a tool "
     "later. After every successful place/place_inside, immediately call observe "
     "before ending the turn or choosing another object. "
@@ -99,11 +180,8 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     cleanup_count = max(1, int(target_cleanup_count))
     cleanup_count_text = str(cleanup_count)
     return (
-        "Use the bundled molmo-realworld-cleanup skill instructions. This is the "
-        "trace-preserving camera-raw-fpv skill lane. Use the cleanup MCP tool entries exactly "
-        "as exposed by Codex; in text, refer to unprefixed tool names, and if the tool "
-        "protocol requires a namespace use namespace cleanup, never mcp__cleanup__ or "
-        "roboclaws__. Call metric_map and fixture_hints first, build an exact waypoint "
+        "This is the trace-preserving camera-raw-fpv skill lane. Call metric_map and "
+        "fixture_hints first, build an exact waypoint "
         "checklist from metric_map.inspection_waypoints, sweep every inspection "
         "waypoint with navigate_to_waypoint then observe, and mark a waypoint complete "
         "only after that waypoint_id has an observe response. Inspect each raw FPV "
@@ -136,16 +214,59 @@ def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     )
 
 
-def render_kickoff_prompt(profile: str, *, target_cleanup_count: int = 7) -> str:
+def render_kickoff_prompt(
+    profile: str,
+    *,
+    task: str = "",
+    target_cleanup_count: int = 7,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
+) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
+    intent_mode = _normalize_task_intent_mode(task_intent_mode)
     if profile == "camera-raw-fpv":
-        return _camera_raw_prompt(target_cleanup_count=target_cleanup_count)
+        return _with_task(
+            _task_aware_prompt(
+                CUSTOM_TASK_RULES
+                if intent_mode == TASK_INTENT_MODE_CUSTOM
+                else _camera_raw_prompt(target_cleanup_count=target_cleanup_count),
+                task_intent_mode=intent_mode,
+            ),
+            task,
+            task_intent_mode=intent_mode,
+        )
     if profile == "camera-grounded-labels":
-        return CAMERA_LABELS_PROMPT
+        return _with_task(
+            _task_aware_prompt(
+                CUSTOM_TASK_RULES
+                if intent_mode == TASK_INTENT_MODE_CUSTOM
+                else CAMERA_LABELS_PROMPT,
+                task_intent_mode=intent_mode,
+            ),
+            task,
+            task_intent_mode=intent_mode,
+        )
     if profile == "world-public-labels":
-        return WORLD_LABELS_SANITIZED_PROMPT
-    return WORLD_LABELS_PROMPT
+        return _with_task(
+            _task_aware_prompt(
+                CUSTOM_TASK_RULES
+                if intent_mode == TASK_INTENT_MODE_CUSTOM
+                else WORLD_LABELS_SANITIZED_PROMPT,
+                task_intent_mode=intent_mode,
+            ),
+            task,
+            task_intent_mode=intent_mode,
+        )
+    return _with_task(
+        _task_aware_prompt(
+            CUSTOM_TASK_RULES
+            if intent_mode == TASK_INTENT_MODE_CUSTOM
+            else COMMON_WAYPOINT_RULES + COMMON_CLEANUP_RULES,
+            task_intent_mode=intent_mode,
+        ),
+        task,
+        task_intent_mode=intent_mode,
+    )
 
 
 def render_semantic_map_build_prompt(profile: str, task: str) -> str:
@@ -176,13 +297,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default="")
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--target-cleanup-count", type=int, default=7)
     args = parser.parse_args(argv)
     if args.task_name == "semantic-map-build":
         task = args.task or "build a semantic map of this room"
         print(render_semantic_map_build_prompt(args.profile, task))
     else:
-        print(render_kickoff_prompt(args.profile, target_cleanup_count=args.target_cleanup_count))
+        print(
+            render_kickoff_prompt(
+                args.profile,
+                task=args.task,
+                target_cleanup_count=args.target_cleanup_count,
+                task_intent_mode=args.task_intent_mode,
+            )
+        )
     return 0
 
 

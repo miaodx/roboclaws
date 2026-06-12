@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import re
@@ -7,6 +8,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -28,6 +30,7 @@ MOLMO_JUST = JUST_DIR / "molmo.just"
 CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 CODING_AGENT_DOCKER = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
+LIVE_CLAUDE_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_claude_cleanup.py"
 LIVE_OPENAI_AGENTS_RUNNER = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_openai_agents_cleanup.py"
 )
@@ -162,6 +165,16 @@ def clean_code_agent_env() -> dict[str, str]:
     return env
 
 
+def load_script_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_public_just_summary_is_small_facade() -> None:
     summary = just_summary()
 
@@ -202,6 +215,8 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
             "row=direct-world-public-labels",
             "provider_retry_attempts=2",
             "provider_retry_sleep_s=0",
+            "parallelism=2",
+            "base_port=18788",
         ],
         cwd=REPO_ROOT,
         env=env,
@@ -213,6 +228,8 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
     assert f"codex harness8 manifest: {output_dir / 'codex_cleanup_harness8.json'}" in result.stdout
     manifest = json.loads((output_dir / "codex_cleanup_harness8.json").read_text(encoding="utf-8"))
     assert manifest["schema"] == "codex_cleanup_harness8_v1"
+    assert manifest["parallelism"] == 2
+    assert manifest["base_port"] == 18788
     assert len(manifest["rows"]) == 8
     assert {row["row_id"] for row in manifest["rows"]} == {
         "direct-world-oracle-labels",
@@ -233,6 +250,19 @@ def test_molmo_codex_harness8_recipe_traces_to_runner(tmp_path: Path) -> None:
         "camera-grounded-labels",
     ]
     assert "camera_labeler=grounding-dino" in setup_command
+    direct_rows = {
+        row["row_id"]: row
+        for row in manifest["rows"]
+        if row["row_id"] in {"direct-world-oracle-labels", "direct-world-public-labels"}
+    }
+    assert direct_rows["direct-world-oracle-labels"]["assigned_port"] == 18788
+    assert direct_rows["direct-world-public-labels"]["assigned_port"] == 18790
+    assert "port=18788" in direct_rows["direct-world-oracle-labels"]["command"]
+    assert "port=18790" in direct_rows["direct-world-public-labels"]["command"]
+    assert (
+        direct_rows["direct-world-oracle-labels"]["env"]["ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS"]
+        == "2"
+    )
 
 
 def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
@@ -241,6 +271,7 @@ def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
         "dry-run",
         "output_dir=/tmp/roboclaws-codex-harness8",
         "row=direct-world-oracle-labels",
+        "parallelism=2",
     )
 
     assert route == [
@@ -249,6 +280,7 @@ def test_agent_harness_allows_codex_cleanup_harness8_target() -> None:
         "dry-run",
         "output_dir=/tmp/roboclaws-codex-harness8",
         "row=direct-world-oracle-labels",
+        "parallelism=2",
     ]
 
 
@@ -715,6 +747,8 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
         "auto",
         "",
         "household-cleanup",
+        "",
+        "default_cleanup",
     ]
 
 
@@ -1152,6 +1186,54 @@ def test_household_cleanup_route_passes_runtime_map_prior_override() -> None:
     assert route[16] == "output/prior/runtime_metric_map.json"
 
 
+def test_household_cleanup_route_passes_operator_messages_path_override() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "codex",
+        "world-oracle-labels",
+        "operator_messages_path=output/operator-console/runs/run-a/operator_messages.jsonl",
+    )
+
+    assert route[-2] == "output/operator-console/runs/run-a/operator_messages.jsonl"
+    assert route[-1] == "default_cleanup"
+
+
+def test_household_cleanup_prompt_override_uses_custom_task_intent() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "codex",
+        "world-oracle-labels",
+        "prompt=我渴了，帮我找些解渴的东西",
+    )
+
+    assert "我渴了，帮我找些解渴的东西" in route
+    assert route[-1] == "custom"
+
+
+def test_household_cleanup_prompt_override_does_not_imply_direct_custom_task() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "direct",
+        "smoke",
+        "prompt=我渴了，帮我找些解渴的东西",
+    )
+
+    assert "我渴了，帮我找些解渴的东西" in route
+    assert route[-1] == "default_cleanup"
+
+
+def test_household_cleanup_prompt_override_does_not_imply_openclaw_custom_task() -> None:
+    route = trace_task_run(
+        "household-cleanup",
+        "openclaw",
+        "world-oracle-labels",
+        "prompt=我渴了，帮我找些解渴的东西",
+    )
+
+    assert "我渴了，帮我找些解渴的东西" in route
+    assert route[-1] == "default_cleanup"
+
+
 def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     prompt = render_kickoff_prompt("camera-raw-fpv")
 
@@ -1215,6 +1297,7 @@ def test_molmo_live_kickoff_prompt_receives_success_threshold_for_camera_raw() -
     assert 'prompt_cleanup_count="$generated_mess_count"' in text
     assert 'prompt_cleanup_count="$generated_mess_success_threshold"' in text
     assert '--target-cleanup-count "$prompt_cleanup_count"' in text
+    assert '--task-intent-mode "$task_intent_mode"' in text
 
 
 def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshold() -> None:
@@ -1224,21 +1307,124 @@ def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshol
     assert "generated_mess_success_threshold(int(self.args.min_generated_mess_count))" in text
     assert "def _raw_fpv_required_cleanup_count" not in text
     assert "math.ceil(generated_mess_count * 0.70)" not in text
-    assert (
-        '"--min-model-declared-observations",\n                raw_fpv_required_cleanup_count'
-        in text
-    )
-    assert '"--min-model-declared-actions",\n                raw_fpv_required_cleanup_count' in text
-    assert (
-        '"--min-semantic-accepted-count",\n                    raw_fpv_required_cleanup_count'
-        in text
-    )
+    assert '"--min-model-declared-observations"' in text
+    assert '"--min-model-declared-actions"' in text
+    assert '"--min-semantic-accepted-count"' in text
+    assert "raw_fpv_required_cleanup_count" in text
     assert '"--min-semantic-accepted-count", "7"' not in text
+
+
+def test_live_runners_custom_task_checker_drops_full_cleanup_gates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    modules = [
+        (
+            load_script_module(LIVE_CODEX_RUNNER, "run_live_codex_cleanup_custom_gate_test"),
+            "LiveCodexCleanupRunner",
+            {
+                "tmux_session": "custom-gate-test",
+                "codex_bin": "codex",
+                "codex_model": "",
+                "codex_provider_summary": "test",
+                "codex_model_arg": [],
+            },
+        ),
+        (
+            load_script_module(LIVE_CLAUDE_RUNNER, "run_live_claude_cleanup_custom_gate_test"),
+            "LiveClaudeCleanupRunner",
+            {
+                "claude_bin": "claude",
+                "claude_provider_summary": "test",
+                "claude_model_arg": [],
+                "claude_env": [],
+            },
+        ),
+        (
+            load_script_module(
+                LIVE_OPENAI_AGENTS_RUNNER,
+                "run_live_openai_agents_cleanup_custom_gate_test",
+            ),
+            "LiveOpenAIAgentsCleanupRunner",
+            {
+                "provider_profile": "codex-env",
+                "model": "gpt-5.5",
+                "max_turns": 128,
+                "incomplete_turn_continuation_attempts": 0,
+                "cache_tools_list": True,
+            },
+        ),
+    ]
+
+    for module, runner_name, extra_args in modules:
+        run_dir = tmp_path / runner_name
+        run_dir.mkdir()
+        (run_dir / "run_result.json").write_text("{}\n", encoding="utf-8")
+        captured_commands: list[list[str]] = []
+
+        def fake_run_and_tee(command, *, cwd, stdout_path, stderr_path, env, **_kwargs):
+            captured_commands.append(command)
+            stdout_path.write_text("checker ok\n", encoding="utf-8")
+            return 0
+
+        monkeypatch.setattr(module, "_run_and_tee", fake_run_and_tee)
+        args = SimpleNamespace(
+            run_dir=run_dir,
+            repo_root=REPO_ROOT,
+            status_path=run_dir / "live_status.json",
+            client_url="http://127.0.0.1:18788/mcp",
+            host="127.0.0.1",
+            port=18788,
+            lock_path=tmp_path / f"{runner_name}.lock",
+            server_startup_timeout_s=1.0,
+            kickoff_prompt="custom prompt",
+            backend="molmospaces_subprocess",
+            task_name="household-cleanup",
+            task_intent_mode="custom",
+            policy="codex_agent" if "Codex" in runner_name else "test_agent",
+            task="我渴了，帮我找些解渴的东西",
+            min_generated_mess_count="5",
+            profile="camera-raw-fpv",
+            server_arg=[],
+            checker_visual_arg=[
+                "--require-robot-views",
+                "--require-raw-fpv-observations",
+                "--require-model-declared-observations",
+                "--min-model-declared-observations",
+                "4",
+                "--min-model-declared-actions",
+                "4",
+                "--min-semantic-accepted-count",
+                "4",
+                "--min-sweep-coverage",
+                "1.0",
+                "--require-clean-agent-run",
+            ],
+            **extra_args,
+        )
+
+        runner = getattr(module, runner_name)(args)
+        runner._check_result()
+
+        assert captured_commands, runner_name
+        checker_command = captured_commands[0]
+        assert "--allow-partial-cleanup" in checker_command
+        assert checker_command.count("--allow-partial-cleanup") == 1
+        assert "--require-robot-views" in checker_command
+        assert "--require-raw-fpv-observations" in checker_command
+        assert "--require-clean-agent-run" not in checker_command
+        assert "--require-model-declared-observations" not in checker_command
+        assert "--min-model-declared-observations" not in checker_command
+        assert "--min-model-declared-actions" not in checker_command
+        assert "--min-semantic-accepted-count" not in checker_command
+        assert "--min-sweep-coverage" not in checker_command
 
 
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     prompt = render_kickoff_prompt("world-oracle-labels")
 
+    assert "This run is household-cleanup" in prompt
+    assert "User task: clean up this room" in prompt
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
     assert "selected Nav2 map bundle" in prompt
@@ -1253,6 +1439,34 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "never mcp__cleanup__" in prompt
     assert "roboclaws__" in prompt
     assert "visit any missing waypoint_id" in prompt
+    assert "fresh same-handle source FPV observation with a reviewable bbox" in prompt
+    assert "adjust_camera(0, 0) is only a no-op camera command" in prompt
+
+
+def test_molmo_cleanup_live_prompt_includes_custom_user_task() -> None:
+    prompt = render_kickoff_prompt(
+        "world-oracle-labels",
+        task="我渴了，帮我找些解渴的东西",
+        task_intent_mode="custom",
+    )
+
+    assert "This run is household-cleanup" in prompt
+    assert "custom operator task" in prompt
+    assert "authoritative and overrides the default cleanup task" in prompt
+    assert "我渴了，帮我找些解渴的东西" in prompt
+    assert "The operator task is the only goal" in prompt
+    assert "Do not start a room-cleanup routine" in prompt
+    assert "visual-scan prerequisite" in prompt
+    assert "If the task asks for information, report the answer" in prompt
+    assert "Do not treat unrelated pending cleanup candidates" in prompt
+    assert "call done so the report is generated" in prompt
+    assert "Use the MCP tools as a bounded household robot capability surface" in prompt
+    assert "Use the bundled molmo-realworld-cleanup skill instructions" not in prompt
+    assert "build an exact waypoint checklist" not in prompt
+    assert "sweep every waypoint" not in prompt
+    assert "fresh same-handle source FPV observation" not in prompt
+    assert "cleaned every public recommended candidate" not in prompt
+    assert "call done only after every metric_map.inspection_waypoints" not in prompt
 
 
 def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
@@ -1848,17 +2062,28 @@ def test_molmo_codex_live_is_detached_and_probeable() -> None:
     runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
 
     assert 'tmux new-session -d -s "$session_name"' in molmo_text
+    assert (
+        'session_suffix="$(basename "$(dirname "$run_root")")-$(basename "$run_root")"'
+        in molmo_text
+    )
+    assert "p${port}-seed-${seed}" in molmo_text
     assert "run_live_codex.sh" in molmo_text
     assert "scripts/molmo_cleanup/run_live_codex_cleanup.py" in molmo_text
-    assert "another live Molmo cleanup run appears to be active" in molmo_text
+    assert "another interactive Codex Molmo cleanup session appears to be active" in molmo_text
+    assert "another non-Molmo live cleanup run appears to be active" in molmo_text
+    assert "ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS" in molmo_text
+    assert "ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \\" in molmo_text
+    assert "roboclaws.household.visual_backend_slots acquire" in molmo_text
+    assert "visual_backend_slot.json" in molmo_text
     assert "refusing to choose another port" in molmo_text
     assert "--lock-path output/molmo/.live-codex.lock" in molmo_text
     assert "tmux_session.txt" in molmo_text
     assert "live_status.json" in molmo_text
     assert "codex-events.jsonl" in runner_text
     assert "codex-last-message.md" in runner_text
-    assert "fcntl.flock" in runner_text
-    assert "another live Molmo cleanup run holds" in runner_text
+    assert "acquire_visual_backend_slot" in runner_text
+    assert "visual_backend_slot" in runner_text
+    assert "no MolmoSpaces visual backend slot is available" in runner_text
     assert "is already in use before server start" in runner_text
     assert re.search(r'^status path=""', molmo_text, re.MULTILINE)
     assert "scripts/molmo_cleanup/summarize_live_run.py" in molmo_text

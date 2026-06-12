@@ -72,6 +72,9 @@ def test_route_payload_exposes_ui_field_groups_and_view_modes() -> None:
     isaac = get_route("codex-isaac-cleanup").to_payload()
     agibot = get_route("codex-agibot-g2-map-build").to_payload()
 
+    assert mujoco["supports_operator_steer"] is True
+    assert isaac["supports_operator_steer"] is True
+    assert agibot["supports_operator_steer"] is False
     assert mujoco["field_groups"] == ["common"]
     assert any(gate["id"] == "mcp_port_free" for gate in mujoco["gates"])
     assert "overview" in mujoco["view_modes"]
@@ -97,6 +100,7 @@ def test_prompt_gating_uses_argv_element_not_shell_joining(tmp_path) -> None:
     )
     assert argv[:4] == ["just", "task::run", "household-cleanup", "codex"]
     assert "backend=molmospaces_subprocess" in argv
+    assert "task_intent_mode=custom" in argv
     assert "prompt=collect mugs; rm -rf / should stay text" in argv
 
 

@@ -42,6 +42,11 @@ from roboclaws.household.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
 )
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
 from roboclaws.household.visual_grounding import (
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
@@ -64,6 +69,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--policy", default="codex_agent")
     parser.add_argument("--task-name", default="household-cleanup")
     parser.add_argument("--task", default=DEFAULT_REALWORLD_TASK)
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument(
         "--backend",
         choices=(
@@ -137,6 +143,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--rerun-command",
         help="Exact public command that launched this run, shown in report.html.",
     )
+    parser.add_argument(
+        "--operator-messages-path",
+        type=Path,
+        help="Operator-console JSONL inbox for active-run steering messages.",
+    )
     return parser.parse_args(argv)
 
 
@@ -174,6 +185,7 @@ def print_setup(
     perception_mode: str = VISIBLE_OBJECT_DETECTIONS_MODE,
     record_robot_views: bool = False,
     cleanup_profile: str | None = None,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
 ) -> None:
     commands = client_setup_commands(url)
     print("\nMolmo real-world cleanup MCP server is ready.")
@@ -198,9 +210,15 @@ def print_setup(
         )
     print(f"  {commands['OpenClaw']}")
     print("\nThen start the agent and use this kickoff:")
-    print("  Read skills/molmo-realworld-cleanup/SKILL.md.")
-    print("  Call roboclaws__metric_map and roboclaws__fixture_hints first.")
-    print("  Sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe.")
+    custom_task = normalize_task_intent_mode(task_intent_mode) == TASK_INTENT_MODE_CUSTOM
+    if custom_task:
+        print("  Treat the operator task as the authoritative goal scope.")
+        print("  Call roboclaws__metric_map and roboclaws__fixture_hints first.")
+        print("  Observe only as needed for the custom task; stop when the task is satisfied.")
+    else:
+        print("  Read skills/molmo-realworld-cleanup/SKILL.md.")
+        print("  Call roboclaws__metric_map and roboclaws__fixture_hints first.")
+        print("  Sweep waypoints with roboclaws__navigate_to_waypoint then roboclaws__observe.")
     if perception_mode == RAW_FPV_ONLY_MODE:
         print("  Raw FPV mode returns camera observations, not observed_* detections.")
         print("  Inspect image blocks and call navigate_to_visual_candidate before pick.")
@@ -209,7 +227,12 @@ def print_setup(
         print("  Candidates come from the configured server-side camera labeler.")
         print("  Clean plausible observed_* camera candidates with the semantic cleanup loop.")
     else:
-        print("  Clean plausible observed_* objects with navigate->pick->navigate->open?->place.")
+        if custom_task:
+            print("  Act only on task-relevant observed_* objects.")
+        else:
+            print(
+                "  Clean plausible observed_* objects with navigate->pick->navigate->open?->place."
+            )
     print("  The server rejects skipped semantic phases; follow required_tool if returned.")
     print("  Do not call scene_objects or read private scoring artifacts.")
     print("\nThis server exits when the agent calls roboclaws__done or you press Ctrl-C.\n")
@@ -255,11 +278,13 @@ def run_molmo_realworld_cleanup_agent_server(
     visual_grounding: str = SIM_VISUAL_GROUNDING_PIPELINE_ID,
     visual_grounding_base_url: str | None = None,
     visual_grounding_timeout_s: float | None = None,
+    operator_messages_path: str | Path | None = None,
     context_json: str | Path | None = None,
     runner_python: str | Path | None = None,
     runner_script: str | Path | None = None,
     agibot_map_artifact_dir: str | Path | None = None,
     real_movement_enabled: bool = False,
+    task_intent_mode: str = TASK_INTENT_MODE_DEFAULT,
     rerun_command: str | None = None,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
@@ -361,6 +386,8 @@ def run_molmo_realworld_cleanup_agent_server(
             visual_grounding=visual_grounding,
             visual_grounding_base_url=visual_grounding_base_url,
             visual_grounding_timeout_s=visual_grounding_timeout_s,
+            task_intent_mode=task_intent_mode,
+            operator_messages_path=operator_messages_path,
             rerun_command=rerun_command,
         )
         server.run_in_thread()
@@ -374,6 +401,7 @@ def run_molmo_realworld_cleanup_agent_server(
                 perception_mode=perception_mode,
                 record_robot_views=record_robot_views,
                 cleanup_profile=cleanup_profile,
+                task_intent_mode=task_intent_mode,
             )
         while not server.done_event.wait(poll_interval_s):
             pass
@@ -436,11 +464,13 @@ def main(argv: list[str] | None = None) -> int:
             visual_grounding=args.visual_grounding,
             visual_grounding_base_url=args.visual_grounding_base_url,
             visual_grounding_timeout_s=args.visual_grounding_timeout_s,
+            operator_messages_path=args.operator_messages_path,
             context_json=args.context_json,
             runner_python=args.runner_python,
             runner_script=args.runner_script,
             agibot_map_artifact_dir=args.agibot_map_artifact_dir,
             real_movement_enabled=args.real_movement_enabled,
+            task_intent_mode=args.task_intent_mode,
             rerun_command=args.rerun_command,
         )
     except Exception as exc:

@@ -28,6 +28,11 @@ from roboclaws.household.semantic_timeline import (
     PLACE_PHASE,
     SEMANTIC_LOOP_VARIANT,
 )
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+    task_intent_is_custom,
+)
 from roboclaws.household.types import CleanupScenario
 from roboclaws.household.visual_grounding import (
     EXTERNAL_VISUAL_GROUNDING_PROVENANCE,
@@ -39,6 +44,13 @@ from roboclaws.household.visual_grounding import (
     sim_visual_grounding_pipeline,
     visual_grounding_failure_response,
     visual_grounding_request,
+)
+from roboclaws.household.visual_scan_guidance import (
+    VISUAL_SCAN_NOOP_ERROR_REASON,
+    noop_camera_adjustment_hint,
+    visual_evidence_recovery_hint,
+    visual_scan_done_recovery_hint,
+    visual_scan_payload,
 )
 from roboclaws.maps.bundle import metric_map_bundle_metadata, validate_nav2_map_bundle
 from roboclaws.maps.project import fixture_hints_from_bundle, metric_map_from_bundle
@@ -235,6 +247,9 @@ class RealWorldCleanupContract:
             str(cleanup_profile or "").strip().lower().replace("_", "-") if cleanup_profile else ""
         )
         self.public_acceptance_config = _public_acceptance_config(public_acceptance_config)
+        self.task_intent_mode = normalize_task_intent_mode(
+            self.public_acceptance_config.get("task_intent_mode")
+        )
         self.sanitize_world_labels = self.cleanup_profile == WORLD_LABELS_SANITIZED_PROFILE
         self.visible_detection_exposure_policy = (
             SANITIZED_VISIBLE_OBJECT_DETECTIONS_POLICY
@@ -836,13 +851,30 @@ class RealWorldCleanupContract:
         pitch_delta_deg: float = 0.0,
     ) -> dict[str, Any]:
         previous = self._camera_offset()
+        yaw_delta = _float_or_zero(yaw_delta_deg)
+        pitch_delta = _float_or_zero(pitch_delta_deg)
+        if not yaw_delta and not pitch_delta:
+            return self._error(
+                "adjust_camera",
+                VISUAL_SCAN_NOOP_ERROR_REASON,
+                camera_offset=previous,
+                previous_camera_offset=previous,
+                required_next_tool="adjust_camera",
+                followup_tool="observe",
+                yaw_bounds_deg=[-45, 45],
+                pitch_bounds_deg=[-20, 20],
+                waypoint_id=self._current_waypoint_id,
+                recovery_hint=noop_camera_adjustment_hint(),
+                no_camera_motion=True,
+                fresh_fpv_observation_required=True,
+            )
         self._camera_yaw_offset_deg = _clamp(
-            self._camera_yaw_offset_deg + _float_or_zero(yaw_delta_deg),
+            self._camera_yaw_offset_deg + yaw_delta,
             -45.0,
             45.0,
         )
         self._camera_pitch_offset_deg = _clamp(
-            self._camera_pitch_offset_deg + _float_or_zero(pitch_delta_deg),
+            self._camera_pitch_offset_deg + pitch_delta,
             -20.0,
             20.0,
         )
@@ -1477,18 +1509,16 @@ class RealWorldCleanupContract:
         semantic_cleanup_evidence: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         blockers: list[dict[str, Any]] = []
-        pending = self._pending_cleanup_candidates()
+        custom_task = self._custom_task_intent()
+        pending = (
+            self._held_cleanup_candidates() if custom_task else self._pending_cleanup_candidates()
+        )
         if pending:
             required_tool = str(pending[0].get("required_tool") or "navigate_to_object")
             if any(str(item.get("state") or "") == "held" for item in pending):
                 required_tool = "navigate_to_receptacle"
             if required_tool == "adjust_camera":
-                recovery_hint = (
-                    "Pending observed handles are semantic candidates that still need "
-                    "agent-facing FPV confirmation. Call adjust_camera toward a candidate, "
-                    "then observe, then navigate_to_object only after candidate_state is "
-                    "navigation_authorized."
-                )
+                recovery_hint = visual_scan_done_recovery_hint()
             else:
                 recovery_hint = (
                     "Clean pending observed handles before done. For held objects, select a "
@@ -1508,7 +1538,7 @@ class RealWorldCleanupContract:
             )
 
         coverage = self._sweep_coverage()
-        if coverage["unvisited_waypoint_ids"]:
+        if not custom_task and coverage["unvisited_waypoint_ids"]:
             next_waypoint_id = coverage["unvisited_waypoint_ids"][0]
             blockers.append(
                 {
@@ -1557,6 +1587,7 @@ class RealWorldCleanupContract:
             "status": "blocked" if blockers else "ready",
             "blockers": blockers,
             "policy_uses_private_truth": False,
+            "task_intent_mode": self.task_intent_mode,
             "public_contract_note": (
                 "Done readiness is evaluated from public Agent View state, public tool "
                 "trace evidence, and public run acceptance configuration. It does not "
@@ -1584,6 +1615,8 @@ class RealWorldCleanupContract:
         return self._error("done", error_reason, status="blocked", **payload)
 
     def _required_model_declared_observations(self) -> int:
+        if self._custom_task_intent():
+            return 0
         configured = _positive_int(
             self.public_acceptance_config.get("required_model_declared_observations")
         )
@@ -1629,6 +1662,8 @@ class RealWorldCleanupContract:
         return blocker
 
     def _grounded_cleanup_chain_requirement(self) -> tuple[int, str]:
+        if self._custom_task_intent():
+            return 0, ""
         explicit_count = _positive_int(
             self.public_acceptance_config.get("required_grounded_cleanup_chains")
         )
@@ -1681,6 +1716,9 @@ class RealWorldCleanupContract:
             "total_waypoints": total_waypoints,
             "unvisited_waypoint_ids": unvisited,
         }
+
+    def _custom_task_intent(self) -> bool:
+        return task_intent_is_custom(self.task_intent_mode)
 
     def agent_view_payload(self) -> dict[str, Any]:
         observed_objects = [
@@ -2695,6 +2733,13 @@ class RealWorldCleanupContract:
             )
         return pending
 
+    def _held_cleanup_candidates(self) -> list[dict[str, Any]]:
+        return [
+            item
+            for item in self._pending_cleanup_candidates()
+            if str(item.get("state") or "") == "held"
+        ]
+
     def _destination_options_for_policy(self, policy: dict[str, Any]) -> list[dict[str, Any]]:
         preferred = [
             _normalize_fixture_category_label(item)
@@ -2983,7 +3028,7 @@ class RealWorldCleanupContract:
                 "waypoint_id": str(public_waypoint.get("waypoint_id") or ""),
                 "candidate_state": candidate_state,
                 "candidate_state_history": _candidate_state_history(candidate_state),
-                "visual_scan": _visual_scan_guidance(visual_confirmation),
+                "visual_scan": visual_scan_payload(visual_confirmation),
                 "locality_status": "same_waypoint_source_observation"
                 if visual_confirmation
                 else "semantic_hint_requires_source_fpv_scan",
@@ -3705,7 +3750,7 @@ class RealWorldCleanupContract:
                 }
             )
             if actionability_status != "actionable":
-                recovery_hint = _visual_evidence_recovery_hint()
+                recovery_hint = visual_evidence_recovery_hint()
         target_plausibility = self._target_plausibility(
             category=str(candidate.get("category") or ""),
             target_fixture_id=target_fixture_id,
@@ -3977,7 +4022,7 @@ class RealWorldCleanupContract:
             or declaration.get("grounding_confidence")
             or 0.0,
             source_observation_id=evidence.get("source_observation_id", ""),
-            recovery_hint=_visual_evidence_recovery_hint(),
+            recovery_hint=visual_evidence_recovery_hint(),
         )
 
     def _next_visible_observation_id(self) -> str:
@@ -4638,24 +4683,6 @@ def _candidate_state_history(candidate_state: str) -> list[str]:
     return [CANDIDATE_STATE_SEMANTIC]
 
 
-def _visual_scan_guidance(visual_confirmation: bool) -> dict[str, Any]:
-    if visual_confirmation:
-        return {
-            "status": "confirmed_from_source_fpv_observation",
-            "required_next_tool": "navigate_to_object",
-        }
-    return {
-        "status": "required_before_navigation",
-        "required_next_tool": "adjust_camera",
-        "followup_tool": "observe",
-        "public_contract_note": (
-            "Structured world labels are semantic hints only. Adjust the camera toward "
-            "the candidate and observe again so the source FPV observation carries a "
-            "reviewable bbox before navigate_to_object or pick."
-        ),
-    }
-
-
 def _required_tool_for_candidate_state(candidate_state: str) -> str:
     if candidate_state == CANDIDATE_STATE_NAVIGATION_AUTHORIZED:
         return "navigate_to_object"
@@ -4664,14 +4691,6 @@ def _required_tool_for_candidate_state(candidate_state: str) -> str:
     if candidate_state == CANDIDATE_STATE_VISUAL_SCAN_REQUIRED:
         return "adjust_camera"
     return "observe"
-
-
-def _visual_evidence_recovery_hint() -> str:
-    return (
-        "Do not navigate or pick this candidate until the agent-facing FPV evidence "
-        "has a reviewable bbox. Observe or adjust_camera, then retry with "
-        "image_region={type:bbox,value:[x,y,width,height]} from the visible object."
-    )
 
 
 def _synthetic_observation_id(handle: str, waypoint_id: Any) -> str:
@@ -6081,6 +6100,9 @@ def _public_acceptance_config(config: dict[str, Any] | None) -> dict[str, Any]:
     policy = str(source.get("done_readiness_policy") or "").strip()
     if policy:
         accepted["done_readiness_policy"] = policy
+    task_intent_mode = normalize_task_intent_mode(source.get("task_intent_mode"))
+    if task_intent_mode != TASK_INTENT_MODE_DEFAULT:
+        accepted["task_intent_mode"] = task_intent_mode
     _assert_no_forbidden_agent_view_keys(accepted)
     return accepted
 

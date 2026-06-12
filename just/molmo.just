@@ -41,7 +41,7 @@ default:
 # Explicit cleanup evidence-lane runner. The recipe parameter remains named
 # `profile` for positional Just compatibility; public callers should pass the
 # new evidence lane names.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -69,6 +69,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     min_generated_mess_count_override="{{min_generated_mess_count_override}}"
     generated_mess_object_ids="{{generated_mess_object_ids}}"
     task_name="{{task_name}}"
+    operator_messages_path="{{operator_messages_path}}"
+    task_intent_mode="{{task_intent_mode}}"
 
     # Just recipe parameters are positional. Strip optional key= prefixes for
     # the first axes so `just molmo::cleanup driver=direct profile=smoke`
@@ -103,6 +105,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     generated_mess_object_ids="${generated_mess_object_ids#generated_mess_object_ids=}"
     task_name="${task_name#task_name=}"
     task_name="${task_name#task-name=}"
+    operator_messages_path="${operator_messages_path#operator_messages_path=}"
+    operator_messages_path="${operator_messages_path#operator-messages-path=}"
+    task_intent_mode="${task_intent_mode#task_intent_mode=}"
+    task_intent_mode="${task_intent_mode#task-intent-mode=}"
+    task_intent_mode="${task_intent_mode:-default_cleanup}"
     generated_mess_success_threshold=$(( (generated_mess_count * 7 + 9) / 10 ))
 
     if [[ "$camera_labeler" == visual_grounding=* ]]; then
@@ -349,6 +356,28 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       done
       checker_visual_args=("${filtered_checker_visual_args[@]}")
     fi
+    if [[ "$task_intent_mode" == "custom" ]]; then
+      profile_requires_clean_success="false"
+      filtered_checker_visual_args=()
+      skip_checker_arg_value="false"
+      for checker_arg in "${checker_visual_args[@]}"; do
+        if [[ "$skip_checker_arg_value" == "true" ]]; then
+          skip_checker_arg_value="false"
+          continue
+        fi
+        case "$checker_arg" in
+          --min-semantic-accepted-count|--min-model-declared-observations|--min-model-declared-actions|--min-sweep-coverage)
+            skip_checker_arg_value="true"
+            ;;
+          --require-clean-agent-run|--require-model-declared-observations)
+            ;;
+          *)
+            filtered_checker_visual_args+=("$checker_arg")
+            ;;
+        esac
+      done
+      checker_visual_args=("${filtered_checker_visual_args[@]}")
+    fi
     semantic_sweep_args+=(--map-mode "$map_mode")
     if [[ "$map_mode" == "minimal" ]]; then
       checker_semantic_args+=(--require-minimal-map)
@@ -418,6 +447,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     echo "    views    : ${robot_views}"
     echo "    seeds    : ${seeds}"
     echo "    run root : ${run_root}"
+    interactive_visual_cap="${ROBOCLAWS_MOLMO_INTERACTIVE_VISUAL_BACKEND_CAP:-1}"
+    if [[ "${ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS:-0}" == "1" ]]; then
+      interactive_visual_cap="${ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS:-1}"
+    fi
 
     live_drivers=(codex-live claude-live openai-agents-live openclaw-live)
     for live_driver in "${live_drivers[@]}"; do
@@ -449,6 +482,31 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           roboclaws_assert_codex_network_allowed "Codex Molmo cleanup live report"
         elif [[ "$driver" == "openai-agents-live" ]]; then
           roboclaws_assert_codex_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
+        fi
+        if [[ "$backend" != "molmospaces_subprocess" ]]; then
+          active_runner=""
+          active_sessions=""
+          case "$driver" in
+            codex-live)
+              active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_codex_cleanup[.]py' || true)"
+              active_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^roboclaws-molmo-codex-' || true)"
+              ;;
+            claude-live)
+              active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_claude_cleanup[.]py' || true)"
+              ;;
+            openai-agents-live)
+              active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_openai_agents_cleanup[.]py' || true)"
+              ;;
+          esac
+          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-cleanup' || true)"
+          if [[ -n "$active_runner$active_server$active_sessions" ]]; then
+            echo "error: another non-Molmo live cleanup run appears to be active" >&2
+            [[ -n "$active_sessions" ]] && echo "active tmux sessions:" >&2 && echo "$active_sessions" >&2
+            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
+            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
+            echo "probe latest: just molmo::status" >&2
+            exit 1
+          fi
         fi
         codex_model=""
         codex_profile_summary="system defaults"
@@ -488,7 +546,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         if [[ "$profile" == "camera-raw-fpv" ]]; then
           prompt_cleanup_count="$generated_mess_success_threshold"
         fi
-        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count")"
+        kickoff_prompt="$(.venv/bin/python -m roboclaws.agents.prompts.household_cleanup --profile "$profile" --task-name "$task_name" --task "$task" --target-cleanup-count "$prompt_cleanup_count" --task-intent-mode "$task_intent_mode")"
 
         server_args=(
           --host "$server_host"
@@ -499,6 +557,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --task-name "$task_name"
           --backend "$backend"
           --task "$task"
+          --task-intent-mode "$task_intent_mode"
           --generated-mess-count "$generated_mess_count"
           "${generated_mess_object_args[@]}"
           --perception-mode "$perception_mode"
@@ -514,6 +573,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         if [[ -n "$isaac_scene_usd_path" ]]; then
           server_args+=(--isaac-scene-usd-path "$isaac_scene_usd_path")
         fi
+        if [[ -n "$operator_messages_path" ]]; then
+          server_args+=(--operator-messages-path "$operator_messages_path")
+        fi
 
         if [[ "$driver" == "codex-live" ]]; then
           if ! command -v tmux >/dev/null 2>&1; then
@@ -521,17 +583,15 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             exit 1
           fi
 
-          active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_codex_cleanup[.]py' || true)"
-          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-cleanup' || true)"
-          active_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^roboclaws-molmo-codex-' || true)"
-          if [[ -n "$active_runner$active_server$active_sessions" ]]; then
-            echo "error: another live Molmo cleanup run appears to be active" >&2
-            [[ -n "$active_sessions" ]] && echo "active tmux sessions:" >&2 && echo "$active_sessions" >&2
-            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
-            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
-            echo "probe latest: just molmo::status" >&2
-            echo "stop the active run before launching another; visual Molmo cleanup owns a MuJoCo-backed backend" >&2
-            exit 1
+          if [[ "$interactive_visual_cap" == "1" ]]; then
+            active_sessions="$(tmux list-sessions -F '#S' 2>/dev/null | grep '^roboclaws-molmo-codex-' || true)"
+            if [[ -n "$active_sessions" ]]; then
+              echo "error: another interactive Codex Molmo cleanup session appears to be active" >&2
+              echo "active tmux sessions:" >&2
+              echo "$active_sessions" >&2
+              echo "probe latest: just molmo::status" >&2
+              exit 1
+            fi
           fi
 
           probe_host="$host"
@@ -544,7 +604,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             exit 1
           fi
 
-          session_name="roboclaws-molmo-codex-${stamp}-seed-${seed}"
+          session_suffix="$(basename "$(dirname "$run_root")")-$(basename "$run_root")"
+          session_name="roboclaws-molmo-codex-${stamp}-${session_suffix}-p${port}-seed-${seed}"
           session_name="${session_name//[^A-Za-z0-9_.-]/-}"
           if tmux has-session -t "$session_name" >/dev/null 2>&1; then
             echo "error: tmux session already exists: ${session_name}" >&2
@@ -574,6 +635,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -614,6 +676,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
             ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S \
+            ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \
+            ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS \
             ROBOCLAWS_ISAACLAB_PYTHON ROBOCLAWS_ISAACLAB_RUNTIME_MODE \
             ROBOCLAWS_REPORT_RERUN_COMMAND
           do
@@ -632,17 +696,6 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
 
         if [[ "$driver" == "claude-live" ]]; then
-          active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_claude_cleanup[.]py' || true)"
-          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-cleanup' || true)"
-          if [[ -n "$active_runner$active_server" ]]; then
-            echo "error: another live Molmo cleanup run appears to be active" >&2
-            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
-            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
-            echo "probe latest: just molmo::status" >&2
-            echo "stop the active run before launching another; visual Molmo cleanup owns a MuJoCo-backed backend" >&2
-            exit 1
-          fi
-
           probe_host="$host"
           if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
             probe_host="127.0.0.1"
@@ -669,6 +722,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
+            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
@@ -691,17 +745,6 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         fi
 
         if [[ "$driver" == "openai-agents-live" ]]; then
-          active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_openai_agents_cleanup[.]py' || true)"
-          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-cleanup' || true)"
-          if [[ -n "$active_runner$active_server" ]]; then
-            echo "error: another live Molmo cleanup run appears to be active" >&2
-            [[ -n "$active_runner" ]] && echo "active runners:" >&2 && echo "$active_runner" >&2
-            [[ -n "$active_server" ]] && echo "active MCP servers:" >&2 && echo "$active_server" >&2
-            echo "probe latest: just molmo::status" >&2
-            echo "stop the active run before launching another; visual Molmo cleanup owns a MuJoCo-backed backend" >&2
-            exit 1
-          fi
-
           probe_host="$host"
           if [[ "$probe_host" == "0.0.0.0" || "$probe_host" == "::" ]]; then
             probe_host="127.0.0.1"
@@ -731,11 +774,17 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
             --min-generated-mess-count "$min_generated_mess_count"
             --profile "$profile"
           )
+          if [[ "${ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST:-true}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
+            runner_args+=(--no-cache-tools-list)
+          else
+            runner_args+=(--cache-tools-list)
+          fi
           for arg in "${server_args[@]}"; do
             runner_args+=("--server-arg=$arg")
           done
@@ -747,6 +796,21 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           exec "${runner_args[@]}"
         fi
 
+        visual_slot_path=""
+        slot_run_id="$(basename "$run_root")/seed-${seed}"
+        if [[ "$backend" == "molmospaces_subprocess" ]]; then
+          visual_slot_json="$(.venv/bin/python -m roboclaws.household.visual_backend_slots acquire \
+            --repo-root "$PWD" \
+            --run-id "$slot_run_id" \
+            --pid "$$" \
+            --backend "$backend" \
+            --port "$port" \
+            --output-dir "$run_dir" \
+            --status-path "${run_dir}/live_status.json" \
+            --owner "$driver")"
+          printf '%s\n' "$visual_slot_json" > "${run_dir}/visual_backend_slot.json"
+          visual_slot_path="$(printf '%s' "$visual_slot_json" | .venv/bin/python -c 'import json, sys; print(json.load(sys.stdin)["path"])')"
+        fi
         .venv/bin/python -m roboclaws.cli.agent_server household-cleanup "${server_args[@]}" &
         server_pid="$!"
         cleanup_server() {
@@ -754,6 +818,12 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if kill -0 "$server_pid" >/dev/null 2>&1; then
             kill "$server_pid" >/dev/null 2>&1 || true
             wait "$server_pid" >/dev/null 2>&1 || true
+          fi
+          if [[ -n "$visual_slot_path" ]]; then
+            .venv/bin/python -m roboclaws.household.visual_backend_slots release \
+              --path "$visual_slot_path" \
+              --run-id "$slot_run_id" \
+              --pid "$$" >/dev/null 2>&1 || true
           fi
         }
         trap cleanup_server EXIT INT TERM
@@ -802,8 +872,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ "$driver" == "openclaw-live" ]]; then
             checker_args+=(--require-openclaw-minimum)
           fi
-          if [[ "$profile_requires_clean_success" == "true" && "$driver" != "openclaw-live" ]]; then
+          if [[ "$profile_requires_clean_success" == "true" && "$driver" != "openclaw-live" && "$task_intent_mode" != "custom" ]]; then
             checker_args+=(--require-clean-agent-run)
+          fi
+          if [[ "$task_intent_mode" == "custom" ]]; then
+            checker_args+=(--allow-partial-cleanup)
           fi
           .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
             "${checker_args[@]}" \
@@ -850,6 +923,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --seed "$seed" \
             --backend "$backend" \
             --task "$task" \
+            --task-intent-mode "$task_intent_mode" \
             --policy "$policy" \
             --generated-mess-count "$generated_mess_count" \
             "${generated_mess_object_args[@]}" \
@@ -882,8 +956,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --expect-mcp-server molmo_cleanup_realworld
           --require-agent-driven
         )
-        if [[ "$profile_requires_clean_success" == "true" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" && "$task_intent_mode" != "custom" ]]; then
           checker_args+=(--require-clean-agent-run)
+        fi
+        if [[ "$task_intent_mode" == "custom" ]]; then
+          checker_args+=(--allow-partial-cleanup)
         fi
         ;;
       openclaw-smoke)
@@ -893,8 +970,11 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --require-agent-driven
           --require-openclaw-minimum
         )
-        if [[ "$profile_requires_clean_success" == "true" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" && "$task_intent_mode" != "custom" ]]; then
           checker_args+=(--require-clean-agent-run)
+        fi
+        if [[ "$task_intent_mode" == "custom" ]]; then
+          checker_args+=(--allow-partial-cleanup)
         fi
         ;;
     esac
@@ -1058,6 +1138,8 @@ codex-harness8 mode="dry-run" *overrides:
     visual_grounding_timeout_s="auto"
     provider_retry_attempts="1"
     provider_retry_sleep_s="60"
+    parallelism="1"
+    base_port="18788"
     dino_sidecar_lifecycle="auto"
     dino_sidecar_startup_timeout_s="180"
 
@@ -1073,7 +1155,7 @@ codex-harness8 mode="dry-run" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|provider_retry_attempts|provider_retry_sleep_s|dino_sidecar_lifecycle|dino_sidecar_startup_timeout_s)
+        output_dir|seed|generated_mess_count|row|runtime_map_prior|visual_grounding_timeout_s|provider_retry_attempts|provider_retry_sleep_s|parallelism|base_port|dino_sidecar_lifecycle|dino_sidecar_startup_timeout_s)
           ;;
         visual_grounding_timeout)
           key="visual_grounding_timeout_s"
@@ -1094,6 +1176,8 @@ codex-harness8 mode="dry-run" *overrides:
       --seed "$seed"
       --generated-mess-count "$generated_mess_count"
       --visual-grounding-timeout-s "$visual_grounding_timeout_s"
+      --parallelism "$parallelism"
+      --base-port "$base_port"
       --provider-retry-attempts "$provider_retry_attempts"
       --provider-retry-sleep-s "$provider_retry_sleep_s"
       --dino-sidecar-lifecycle "$dino_sidecar_lifecycle"
