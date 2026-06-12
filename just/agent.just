@@ -149,7 +149,7 @@ run dispatch_target agent_engine mode="" *overrides:
         map_bundle|mode|output_dir|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
-        operator_messages_path|task_intent|task_intent_mode|task_surface|goal_contract_json|goal_contract_path|\
+        operator_messages_path|skill_name|task_intent|task_intent_mode|task_preset|task_surface|goal_contract_json|goal_contract_path|\
         scene_index|scene_source|seed|seeds|semantic_sweep|task|timeout_s|\
         isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
@@ -233,10 +233,16 @@ run dispatch_target agent_engine mode="" *overrides:
     report_rerun_parts=("just" "run::surface")
     case "$implementation_task_name" in
       semantic-map-build)
-        report_rerun_parts+=("surface=household-world" "intent=map-build")
+        report_rerun_parts+=("surface=household-world" "preset=map-build")
         ;;
       household-cleanup)
-        report_rerun_parts+=("surface=household-world" "intent=${kv[task_intent]:-cleanup}")
+        if [[ "${kv[task_preset]:-}" == "cleanup" ]]; then
+          report_rerun_parts+=("surface=household-world" "preset=cleanup")
+        elif [[ "${kv[task_intent]:-cleanup}" == "open-ended" ]]; then
+          report_rerun_parts+=("surface=household-world")
+        else
+          report_rerun_parts+=("surface=household-world" "preset=${kv[task_intent]:-cleanup}")
+        fi
         ;;
       molmo-planner-proof)
         report_rerun_parts+=("surface=planner-proof" "intent=planner-proof")
@@ -324,8 +330,23 @@ run dispatch_target agent_engine mode="" *overrides:
         else
           prompt="$(cleanup_prompt)"
         fi
+        skill_name="$(get skill_name "${ROBOCLAWS_TASK_SKILL:-}")"
         task_intent_mode="$(get task_intent_mode "${ROBOCLAWS_TASK_INTENT_MODE:-}")"
         resolved_task_intent="$(get task_intent "${ROBOCLAWS_TASK_INTENT:-}")"
+        if [[ -z "$resolved_task_intent" ]]; then
+          if [[ "$implementation_task_name" == "semantic-map-build" ]]; then
+            resolved_task_intent="map-build"
+          else
+            resolved_task_intent="cleanup"
+          fi
+        fi
+        if [[ -z "$skill_name" ]]; then
+          if [[ "$implementation_task_name" == "semantic-map-build" || "$resolved_task_intent" == "open-ended" ]]; then
+            skill_name="household-open-task"
+          else
+            skill_name="molmo-realworld-cleanup"
+          fi
+        fi
         if [[ -z "$task_intent_mode" ]]; then
           task_intent_mode="default_cleanup"
         fi
@@ -749,6 +770,8 @@ run dispatch_target agent_engine mode="" *overrides:
         ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \
           ROBOCLAWS_GOAL_CONTRACT_PATH="$goal_contract_path" \
           ROBOCLAWS_TASK_INTENT="$resolved_task_intent" \
+          ROBOCLAWS_TASK_PRESET="${kv[task_preset]:-}" \
+          ROBOCLAWS_TASK_SKILL="$skill_name" \
           run_just molmo::cleanup "${molmo_args[@]}"
         ;;
 

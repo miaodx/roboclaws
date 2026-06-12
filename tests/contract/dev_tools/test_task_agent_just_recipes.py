@@ -242,9 +242,9 @@ def surface_args_from_legacy_task_args(*args: str) -> tuple[str, ...]:
         mode = ""
 
     task_map = {
-        "semantic-map-build": ("surface=household-world", "intent=map-build"),
-        "household-cleanup": ("surface=household-world", "intent=cleanup"),
-        "molmo-cleanup": ("surface=household-world", "intent=cleanup"),
+        "semantic-map-build": ("surface=household-world", "preset=map-build"),
+        "household-cleanup": ("surface=household-world", "preset=cleanup"),
+        "molmo-cleanup": ("surface=household-world", "preset=cleanup"),
         "molmo-planner-proof": ("surface=planner-proof", "intent=planner-proof"),
     }
     engine_map = {
@@ -363,7 +363,7 @@ def test_harness_agent_validation_recipe_writes_recommendation(tmp_path: Path) -
     manifest = json.loads((output_dir / "validation_matrix.json").read_text(encoding="utf-8"))
     assert manifest["schema"] == "agent_validation_matrix_v1"
     selected_gate_ids = {gate["gate_id"] for gate in manifest["gates"] if gate["selected"]}
-    assert "openai-agents-sdk-cleanup" in selected_gate_ids
+    assert "openai-agents-sdk-open-task" in selected_gate_ids
     assert (output_dir / "validation_matrix.md").exists()
     assert (output_dir / "validation_matrix.html").exists()
 
@@ -580,7 +580,7 @@ def test_surface_prompt_mapping_household_cleanup_codex_world_labels_default() -
     route = trace_surface_run(
         "surface=household-world",
         "agent_engine=codex-cli",
-        "intent=cleanup",
+        "preset=cleanup",
     )
 
     assert route[:6] == [
@@ -610,13 +610,15 @@ def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
     ]
     assert "我渴了，帮我找些解渴的东西" in route
     assert route[-1] == "default_cleanup"
-    assert plan_trace[:5] == [
+    assert plan_trace[:6] == [
         "launch-plan",
         "surface=household-world",
         "world=molmospaces/val_0",
         "backend=mujoco",
         "intent=open-ended",
+        "preset=",
     ]
+    assert "skill=household-open-task" in plan_trace
     assert "prompt=household_open_ended" in plan_trace
     assert "checker=open_ended_report" in plan_trace
     assert "goal=我渴了，帮我找些解渴的东西" in plan_trace
@@ -627,7 +629,6 @@ def test_surface_open_ended_supports_mcp_smoke_for_local_gate() -> None:
         (
             "surface=household-world",
             "agent_engine=direct-runner",
-            "intent=open-ended",
             "run_preset=smoke",
             "evidence_lane=world-oracle-labels",
             "prompt=我渴了，帮我找些解渴的东西",
@@ -637,11 +638,15 @@ def test_surface_open_ended_supports_mcp_smoke_for_local_gate() -> None:
 
     assert plan.surface == "household-world"
     assert plan.intent == "open-ended"
+    assert plan.preset is None
+    assert plan.skill_name == "household-open-task"
     assert plan.agent_engine == "direct-runner"
     assert plan.dispatch_runner == "mcp-smoke"
     assert plan.internal_runner_class == "smoke"
     assert plan.goal_contract.goal_scope == "agent-declared"
     assert env["ROBOCLAWS_TASK_INTENT"] == "open-ended"
+    assert "ROBOCLAWS_TASK_PRESET" not in env
+    assert env["ROBOCLAWS_TASK_SKILL"] == "household-open-task"
     assert json.loads(env["ROBOCLAWS_GOAL_CONTRACT_JSON"])["intent"] == "open-ended"
 
 
@@ -651,7 +656,7 @@ def test_surface_launch_rejects_smoke_as_public_evidence_lane() -> None:
             (
                 "surface=household-world",
                 "agent_engine=direct-runner",
-                "intent=cleanup",
+                "preset=cleanup",
                 "evidence_lane=smoke",
             )
         )
@@ -668,7 +673,7 @@ def test_surface_launch_rejects_public_profile_alias() -> None:
             (
                 "surface=household-world",
                 "agent_engine=codex-cli",
-                "intent=cleanup",
+                "preset=cleanup",
                 "profile=world-oracle-labels",
             )
         )
@@ -685,7 +690,7 @@ def test_surface_launch_rejects_public_visual_grounding_axis() -> None:
             (
                 "surface=household-world",
                 "agent_engine=direct-runner",
-                "intent=cleanup",
+                "preset=cleanup",
                 "evidence_lane=camera-grounded-labels",
                 "camera_labeler=grounding-dino",
                 "visual_grounding=grounding-dino",
@@ -706,7 +711,7 @@ def test_surface_launch_rejects_public_map_mode_axis() -> None:
             (
                 "surface=household-world",
                 "agent_engine=direct-runner",
-                "intent=cleanup",
+                "preset=cleanup",
                 "map_mode=minimal",
             )
         )
@@ -720,13 +725,15 @@ def test_surface_cleanup_prompt_stays_cleanup_intent_when_explicit() -> None:
         (
             "surface=household-world",
             "agent_engine=codex-cli",
-            "intent=cleanup",
+            "preset=cleanup",
             "prompt=只收拾桌面上的杯子",
         )
     )
 
     assert plan.surface == "household-world"
     assert plan.intent == "cleanup"
+    assert plan.preset == "cleanup"
+    assert plan.skill_name == "molmo-realworld-cleanup"
     assert plan.prompt_id == "household_cleanup"
     assert plan.checker_id == "cleanup_report"
     assert plan.goal_contract.goal_scope == "prompt-scoped"
@@ -739,7 +746,7 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
         (
             "surface=household-world",
             "agent_engine=codex-cli",
-            "intent=map-build",
+            "preset=map-build",
             "evidence_lane=world-oracle-labels",
         )
     )
@@ -751,6 +758,8 @@ def test_surface_launch_plan_exposes_goal_contract_and_evaluation_policy() -> No
     assert plan.agent_engine == "codex-cli"
     assert plan.provider_profile == "codex-env"
     assert plan.intent == "map-build"
+    assert plan.preset == "map-build"
+    assert plan.skill_name == "household-open-task"
     assert plan.dispatch_target == "household-world.map-build"
     assert plan.goal_contract.schema == "roboclaws_goal_contract_v1"
     assert plan.goal_contract.surface == "household-world"
@@ -769,7 +778,7 @@ def test_surface_launch_exports_goal_contract_to_lower_recipe_environment() -> N
         (
             "surface=household-world",
             "agent_engine=direct-runner",
-            "intent=cleanup",
+            "preset=cleanup",
             "run_preset=smoke",
             "evidence_lane=world-oracle-labels",
         )
@@ -778,6 +787,8 @@ def test_surface_launch_exports_goal_contract_to_lower_recipe_environment() -> N
 
     assert env["ROBOCLAWS_TASK_SURFACE"] == "household-world"
     assert env["ROBOCLAWS_TASK_INTENT"] == "cleanup"
+    assert env["ROBOCLAWS_TASK_PRESET"] == "cleanup"
+    assert env["ROBOCLAWS_TASK_SKILL"] == "molmo-realworld-cleanup"
     assert json.loads(env["ROBOCLAWS_GOAL_CONTRACT_JSON"])["intent"] == "cleanup"
 
 
@@ -863,7 +874,7 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
         (
             "surface=household-world",
             "agent_engine=openai-agents-sdk",
-            "intent=cleanup",
+            "preset=cleanup",
             "run_preset=smoke",
             "evidence_lane=world-oracle-labels",
         )
@@ -935,7 +946,7 @@ def test_surface_router_is_importable_source_of_truth() -> None:
         (
             "surface=household-world",
             "agent_engine=codex-cli",
-            "intent=cleanup",
+            "preset=cleanup",
             "run_preset=smoke",
             "evidence_lane=world-oracle-labels",
             "output_dir=output/custom",
@@ -974,7 +985,7 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
             "world=agibot-g2/map-12",
             "backend=agibot-gdk",
             "agent_engine=codex-cli",
-            "intent=cleanup",
+            "preset=cleanup",
             "run_preset=smoke",
             "evidence_lane=world-oracle-labels",
         )
@@ -993,6 +1004,8 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
     assert "relocation_count=5" in plan.overrides
     assert not any(item.startswith("generated_mess_count=") for item in plan.overrides)
     assert plan.dispatch_target == "household-world.cleanup"
+    assert plan.preset == "cleanup"
+    assert plan.skill_name == "molmo-realworld-cleanup"
     assert plan.agent_engine == "codex-cli"
     assert plan.dispatch_runner == "codex"
     assert plan.profile == "smoke"
@@ -1015,7 +1028,7 @@ def test_surface_launch_rejects_retired_vlm_policy_engine() -> None:
             (
                 "surface=household-world",
                 "agent_engine=vlm-policy",
-                "intent=cleanup",
+                "preset=cleanup",
                 "evidence_lane=world-oracle-labels",
             )
         )
@@ -1040,9 +1053,11 @@ def test_trace_mode_exposes_resolved_python_launch_plan() -> None:
         "world=molmospaces/val_0",
         "backend=mujoco",
         "intent=cleanup",
+        "preset=cleanup",
         "agent_engine=codex-cli",
-        "provider_profile=codex-env",
     ]
+    assert "provider_profile=codex-env" in plan_trace
+    assert "skill=molmo-realworld-cleanup" in plan_trace
     assert "dispatch_runner=codex" in plan_trace
     assert "dispatch_target=household-world.cleanup" in plan_trace
     assert "mode=camera-grounded-labels" in plan_trace
@@ -1062,7 +1077,7 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
         (
             "surface=household-world",
             "agent_engine=codex-cli",
-            "intent=cleanup",
+            "preset=cleanup",
             "evidence_lane=world-public-labels",
         )
     )
@@ -1953,9 +1968,9 @@ def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
         intent="open-ended",
     )
 
-    assert "This run is surface=household-world intent=open-ended" in prompt
+    assert "This run is surface=household-world with no task preset" in prompt
     assert "custom operator task" not in prompt
-    assert "authoritative and overrides the default cleanup task" in prompt
+    assert "The following operator task is authoritative" in prompt
     assert "我渴了，帮我找些解渴的东西" in prompt
     assert "The operator task is the only goal" in prompt
     assert "Do not start a room-cleanup routine" in prompt
@@ -1980,7 +1995,7 @@ def test_molmo_cleanup_live_prompt_ignores_legacy_custom_mode_without_open_ended
     )
 
     assert "This run is surface=household-world intent=cleanup" in prompt
-    assert "This run is surface=household-world intent=open-ended" not in prompt
+    assert "This run is surface=household-world with no task preset" not in prompt
     assert "The operator task is the only goal" not in prompt
     assert "Use the bundled molmo-realworld-cleanup skill instructions" in prompt
 

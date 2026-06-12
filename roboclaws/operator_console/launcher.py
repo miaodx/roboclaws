@@ -70,11 +70,14 @@ class LaunchRequest:
     def selection_id(self) -> str:
         if self.world_id and self.backend_id and self.intent_id and self.agent_engine_id:
             lane = self.evidence_lane or "world-oracle-labels"
+            task_selector = (
+                self.intent_id if self.intent_id in {"cleanup", "map-build"} else "open-task"
+            )
             return "::".join(
                 (
                     self.world_id,
                     self.backend_id,
-                    self.intent_id,
+                    task_selector,
                     self.agent_engine_id,
                     lane,
                 )
@@ -130,6 +133,7 @@ def build_launch_argv(
 
     selection = route.selection if isinstance(route, ConsoleRoute) else route
     selected_intent = str(intent or selection.intent_id)
+    selected_preset = selection.preset_id if selected_intent == selection.intent_id else ""
     request_overrides = _normalized_launch_overrides(
         selection,
         overrides or {},
@@ -149,12 +153,15 @@ def build_launch_argv(
         f"surface={selection.surface}",
         f"world={selection.world_id}",
         f"backend={selection.backend_id}",
-        f"intent={selected_intent}",
         f"agent_engine={selection.agent_engine_id}",
         f"evidence_lane={selection.evidence_lane}",
         f"scenario_setup={request_overrides.pop('scenario_setup', selection.scenario_setup)}",
         *default_overrides,
     ]
+    if selected_preset:
+        args.insert(3, f"preset={selected_preset}")
+    elif selected_intent != "open-ended":
+        args.insert(3, f"intent={selected_intent}")
     provider_profile = request_overrides.pop("provider_profile", selection.provider_profile or "")
     if provider_profile:
         args.append(f"provider_profile={provider_profile}")

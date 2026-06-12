@@ -13,10 +13,11 @@ Roboclaws uses a **skill-first, MCP-bounded** architecture:
 
 1. A user gives an **open-ended goal**, such as "clean the room" or "take
    useful photos."
-2. A known goal resolves to a **surface and intent** such as
-   `surface=household-world intent=map-build` or
-   `surface=household-world intent=cleanup`.
-3. The intent selects, defaults, or creates an **agent skill**.
+2. The goal resolves to a **surface open-task contract** plus either a
+   natural-language `prompt=...` or an optional preset such as
+   `surface=household-world preset=map-build` or
+   `surface=household-world preset=cleanup`.
+3. The surface or preset selects, defaults, or creates an **agent skill**.
 4. The skill may call scripts, examples, checks, and MCP tools.
 5. The **MCP capability profile** keeps the public robot capability boundary stable.
 6. The execution backend runs environment-specific primitives.
@@ -36,9 +37,9 @@ profiles stay bounded and auditable.
 A profile is not a task recipe. It is closer to the capability side of a skill
 manifest: a named, reusable environment of public tools, evidence boundaries,
 blocked capabilities, provenance expectations, and private-data exclusions. A
-runnable surface and intent answer "what public run is this and how is it
-accepted?", a skill answers "how should I accomplish this goal?", and a profile
-answers "which stable robot capabilities may this skill rely on?"
+runnable surface and optional preset answer "what public run is this and how is
+it accepted?", a skill answers "how should I accomplish this goal?", and a
+profile answers "which stable robot capabilities may this skill rely on?"
 
 ## Abstraction Ladder
 
@@ -47,7 +48,7 @@ Build from the bottom up, but let the agent enter from the top:
 | Level | Owns | Examples | What to watch |
 | --- | --- | --- | --- |
 | Open-ended goal | Human intent | "clean the room", "inspect this room" | Do not turn this into one opaque MCP tool. |
-| Runnable surface and intent | Public command, parameters, report shape, acceptance gates | `surface=household-world intent=map-build`, `surface=household-world intent=cleanup` | Keep it separate from strategy and backend implementation. |
+| Runnable surface and optional preset | Public command, parameters, report shape, acceptance gates | `surface=household-world prompt=...`, `surface=household-world preset=map-build`, `surface=household-world preset=cleanup` | Keep it separate from strategy and backend implementation. |
 | Agent skill | Reusable behavior package | `molmo-realworld-cleanup`, `actionable-semantic-map-conversion` | Skills can evolve, merge, split, and be pruned. |
 | Trace-preserving skill routine | Skill-side reusable execution shape | scripted cleanup loop, `navigate -> observe -> pick -> place` | Default home for reusable composition before MCP promotion. |
 | Composite action | Describes a skill's internal behavior shape | `navigate -> observe -> pick -> place` | Descriptive by default, not a separate artifact. |
@@ -57,17 +58,17 @@ Build from the bottom up, but let the agent enter from the top:
 | Execution backend | Actual environment | MolmoSpaces, Isaac Lab, RBY1M, Agibot G2 | Backends differ; profiles should not pretend otherwise. |
 
 Capability profiles sit beside this ladder as reusable public environments for
-skills. For example, `surface=household-world intent=map-build` can select a
+skills. For example, `surface=household-world preset=map-build` can select a
 map-building skill that requires household world capabilities and forbids
-manipulation, while `surface=household-world intent=cleanup` can select a
+manipulation, while `surface=household-world preset=cleanup` can select a
 cleanup skill that requires the same world capabilities plus manipulation. Both
-intents can share the same world profile without making the profile own either
-intent.
+presets can share the same world profile without making the profile own either
+task.
 
 Composition is the rule. A task or skill may require multiple capability
 profiles or capability modules, but a new profile should not be made by copying
 another profile's tool list and adding more tools. For example,
-`intent=cleanup` should require `household_world_v1` plus manipulation
+`preset=cleanup` should require `household_world_v1` plus manipulation
 capabilities; it should not define a cleanup profile that duplicates the whole
 world profile. The selected skill is where composite behavior such as
 `navigate_to_object -> pick -> navigate_to_receptacle -> open? -> place` lives.
@@ -187,13 +188,13 @@ Canonical public capability tools cover household world evidence only:
 - public observation, camera adjustment, visual candidate declaration, and
   visible-object inspection.
 
-`household_world_v1` is shared by `intent=map-build`, `intent=cleanup`,
-inspection, search, open-ended household goals, and future household intents.
+`household_world_v1` is shared by `preset=map-build`, `preset=cleanup`,
+inspection, search, no-preset household goals, and future household presets.
 It excludes manipulation and task-completion tools such as `pick`, `place`,
 `open_receptacle`,
 `close_receptacle`, and `done`.
 
-The artifact boundary is task-neutral: `intent=map-build` may emit a raw
+The artifact boundary is task-neutral: `preset=map-build` may emit a raw
 `runtime_metric_map.json`, and map-conversion skills may turn Agibot
 `navigation_memory.json` into `actionable_semantic_map_snapshot_v1`. Cleanup
 and open household tasks consume the canonical snapshot or its runtime-map
@@ -288,11 +289,12 @@ Prefer names that describe reusable capability environments:
 - `household_world_v1`
 - `household_manipulation_v1`
 
-Task-like public work belongs in the surface/intent catalog:
+Task-like public work belongs in the surface open-task contract and optional
+preset catalog:
 
-- `surface=household-world intent=map-build`
-- `surface=household-world intent=cleanup`
-- `surface=household-world intent=open-ended`
+- `surface=household-world prompt=...`
+- `surface=household-world preset=map-build`
+- `surface=household-world preset=cleanup`
 
 Reusable strategy names belong in skills:
 
@@ -344,7 +346,7 @@ live at the current profile head.
 
 ```text
 Open-ended goal
-  -> runnable surface and intent selection
+  -> runnable surface and optional preset selection
   -> skill library search / skill creation
   -> selected skill calls scripts and MCP tools
   -> capability profile constrains public capabilities

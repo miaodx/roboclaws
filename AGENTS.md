@@ -107,8 +107,8 @@ Codex / Claude Code household demos. Launch those demos through the public
 catalog:
 
 ```bash
-just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels
-just run::surface surface=household-world agent_engine=claude-code intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=claude-code preset=cleanup evidence_lane=world-oracle-labels
 ```
 
 The recipes carry the required bypass-approval / bypass-sandbox flags and
@@ -218,8 +218,8 @@ pytest -q
 Use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
-just run::surface surface=household-world agent_engine=direct-runner intent=map-build evidence_lane=world-oracle-labels
-just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=direct-runner preset=map-build evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli preset=cleanup evidence_lane=world-oracle-labels
 just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
 just agent::verify mock                          # maintainer confidence gate
 ```
@@ -369,7 +369,7 @@ routine progress.
 ## 9) Just command routing
 
 When a user asks in natural language to run a demo, cleanup task, or proof task,
-translate it to the composable public surface/intent command instead of
+translate it to the composable public surface/preset command instead of
 searching for a bespoke recipe name.
 
 When a plan, diff, PR, or handoff asks which verification gates to run for
@@ -395,14 +395,14 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 Use `report=visual` by default for non-Molmo surfaces. For household cleanup,
 use `evidence_lane=world-oracle-labels` by default. `smoke` is a verification
 preset or private runner mode, not a public evidence lane.
-If a household prompt is supplied and no `intent=` is named, let the canonical
-surface infer `intent=open-ended`; use `intent=cleanup prompt=...` only when the
-prompt explicitly narrows cleanup scope.
+For household, omit `preset=` for open-ended prompt-driven work; use
+`preset=cleanup prompt=...` only when the prompt explicitly narrows cleanup
+scope.
 
 Examples:
 
-- "run the semantic map build task" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels`
-- "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels`
+- "run the semantic map build task" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels`
+- "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels`
 - "run an open-ended household goal with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"`
 - "run the planner proof dry run" -> `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run`
 

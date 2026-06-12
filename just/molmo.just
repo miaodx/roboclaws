@@ -41,7 +41,7 @@ default:
 # Explicit cleanup evidence-lane runner. The recipe parameter remains named
 # `profile` for positional Just compatibility; public callers should pass the
 # new evidence lane names.
-cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" goal_contract_json="" goal_contract_path="":
+cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cleanup" task="帮我收拾这个房间" generated_mess_count="10" host="127.0.0.1" port="18788" map_bundle="auto" cleanup_routine="auto" robot_views="auto" camera_labeler="" visual_grounding_timeout_s="auto" semantic_sweep="off" runtime_map_prior="" backend_override="auto" map_mode="minimal" scene_source="procthor-10k-val" scene_index="0" isaac_scene_usd_path="" min_generated_mess_count_override="auto" generated_mess_object_ids="" task_name="household-cleanup" operator_messages_path="" task_intent_mode="default_cleanup" skill_name="" goal_contract_json="" goal_contract_path="":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -71,6 +71,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_name="{{task_name}}"
     operator_messages_path="{{operator_messages_path}}"
     task_intent_mode="{{task_intent_mode}}"
+    skill_name="{{skill_name}}"
     goal_contract_json="{{goal_contract_json}}"
     goal_contract_path="{{goal_contract_path}}"
 
@@ -112,6 +113,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
     task_intent_mode="${task_intent_mode#task_intent_mode=}"
     task_intent_mode="${task_intent_mode#task-intent-mode=}"
     task_intent_mode="${task_intent_mode:-default_cleanup}"
+    skill_name="${skill_name#skill_name=}"
+    skill_name="${skill_name#skill-name=}"
+    skill_name="${skill_name:-${ROBOCLAWS_TASK_SKILL:-}}"
     goal_contract_json="${goal_contract_json#goal_contract_json=}"
     goal_contract_json="${goal_contract_json#goal-contract-json=}"
     goal_contract_path="${goal_contract_path#goal_contract_path=}"
@@ -124,6 +128,13 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         semantic-map-build) task_intent="map-build" ;;
         *) task_intent="cleanup" ;;
       esac
+    fi
+    if [[ -z "$skill_name" ]]; then
+      if [[ "$task_name" == "semantic-map-build" || "$task_intent" == "open-ended" ]]; then
+        skill_name="household-open-task"
+      else
+        skill_name="molmo-realworld-cleanup"
+      fi
     fi
     open_ended_intent="false"
     if [[ "$task_intent" == "open-ended" ]]; then
@@ -574,7 +585,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           claude_bin="$PWD/${docker_shim_dir}/claude"
           export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE:-1}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}}"
-          export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup}"
+          export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}}"
           export ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE="${ROBOCLAWS_CODE_AGENT_DOCKER_WORKSPACE:-${run_dir}/agent-docker-workspace}"
         fi
         prompt_cleanup_count="$generated_mess_count"
@@ -709,6 +720,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --skill-name "$skill_name"
             --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
@@ -757,7 +769,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \
             ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS \
             ROBOCLAWS_ISAACLAB_PYTHON ROBOCLAWS_ISAACLAB_RUNTIME_MODE \
-            ROBOCLAWS_REPORT_RERUN_COMMAND
+            ROBOCLAWS_REPORT_RERUN_COMMAND ROBOCLAWS_TASK_INTENT ROBOCLAWS_TASK_PRESET ROBOCLAWS_TASK_SKILL
           do
             if [[ -n "${!env_name:-}" ]]; then
               tmux_env_args+=(-e "${env_name}=${!env_name}")
@@ -800,6 +812,8 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --server-startup-timeout-s "$server_startup_timeout_s"
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
+            --task-name "$task_name"
+            --skill-name "$skill_name"
             --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"
@@ -854,6 +868,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             --kickoff-prompt "$kickoff_prompt"
             --backend "$backend"
             --task-name "$task_name"
+            --skill-name "$skill_name"
             --task-intent-mode "$task_intent_mode"
             --policy "$policy"
             --task "$task"

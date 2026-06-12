@@ -85,6 +85,7 @@ class ConsoleLaunchSelection:
     provider_profile: str | None
     evidence_lane: str
     scenario_setup: str
+    preset_id: str = ""
     enabled: bool = True
     unsupported_reason: str = ""
     required_overrides: tuple[str, ...] = ()
@@ -101,7 +102,7 @@ class ConsoleLaunchSelection:
             (
                 self.world_id,
                 self.backend_id,
-                self.intent_id,
+                self.preset_id or "open-task",
                 self.agent_engine_id,
                 self.evidence_lane,
             )
@@ -156,12 +157,13 @@ class ConsoleLaunchSelection:
             f"surface={self.surface}",
             f"world={self.world_id}",
             f"backend={self.backend_id}",
-            f"intent={self.intent_id}",
             f"agent_engine={self.agent_engine_id}",
             f"evidence_lane={self.evidence_lane}",
             f"scenario_setup={self.scenario_setup}",
             *self.launch_default_overrides,
         ]
+        if self.preset_id:
+            args.insert(3, f"preset={self.preset_id}")
         if self.provider_profile:
             args.append(f"provider_profile={self.provider_profile}")
         return args
@@ -179,6 +181,8 @@ class ConsoleLaunchSelection:
             "backend_label": backend.label,
             "intent_id": self.intent_id,
             "intent": self.intent_id,
+            "preset_id": self.preset_id,
+            "preset": self.preset_id,
             "agent_engine_id": self.agent_engine_id,
             "agent_engine_label": engine.label,
             "agent_engine_availability": engine.availability,
@@ -226,6 +230,9 @@ class ConsoleLaunchSelection:
             "intent_options": [_intent_option(self.intent_id)],
             "default_intent": self.intent_id,
             "supported_intents": [self.intent_id],
+            "preset_options": [_preset_option(self.preset_id)] if self.preset_id else [],
+            "default_preset": self.preset_id,
+            "supported_presets": [self.preset_id] if self.preset_id else [],
         }
         return payload
 
@@ -600,6 +607,19 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 world_id,
                 "mujoco",
                 "open-ended",
+                "openai-agents-sdk",
+                "codex-env",
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                gates=common_gates,
+                default_overrides=("seed=7",),
+                supports_operator_steer=True,
+            )
+        )
+        rows.extend(
+            _lane_selections(
+                world_id,
+                "mujoco",
+                "open-ended",
                 "claude-code",
                 "mimo-anthropic",
                 scenario_setup=ENVIRONMENT_SETUP_BASELINE,
@@ -752,15 +772,6 @@ def _disabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
                 "Map-build is currently proven for Codex CLI and direct runner only."
             ),
         ),
-        _selection(
-            "molmospaces/val_0",
-            "mujoco",
-            "open-ended",
-            "openai-agents-sdk",
-            "codex-env",
-            enabled=False,
-            unsupported_reason="OpenAI Agents SDK is not proven for open-ended household runs yet.",
-        ),
     )
 
 
@@ -843,6 +854,7 @@ def _selection(
         if intent_id == "cleanup"
         else ENVIRONMENT_SETUP_BASELINE
     )
+    preset_id = intent_id if intent_id in {"cleanup", "map-build"} else ""
     return ConsoleLaunchSelection(
         world_id=world_id,
         backend_id=backend_id,
@@ -851,6 +863,7 @@ def _selection(
         provider_profile=provider_profile,
         evidence_lane=evidence_lane,
         scenario_setup=setup,
+        preset_id=preset_id,
         enabled=enabled,
         unsupported_reason=unsupported_reason,
         required_overrides=required_overrides,
@@ -967,7 +980,7 @@ _LEGACY_ROUTE_BY_ID: dict[str, ConsoleRoute] = {
     "codex-b1-map12-open-ended": ConsoleRoute(
         id="codex-b1-map12-open-ended",
         label="B1 / Map 12 / Isaac Lab / Open-ended / Codex CLI",
-        selection=get_selection("b1-map12::isaaclab::open-ended::codex-cli::world-oracle-labels"),
+        selection=get_selection("b1-map12::isaaclab::open-task::codex-cli::world-oracle-labels"),
     ),
     "agibot-g2-cleanup": ConsoleRoute(
         id="agibot-g2-cleanup",
@@ -1001,6 +1014,14 @@ def _intent_option(intent_id: str) -> dict[str, str]:
         "evaluation_policy": spec.evaluation_policy,
         "done_readiness_policy": spec.done_readiness_policy,
         "checker_policy": spec.checker_policy,
+    }
+
+
+def _preset_option(preset_id: str) -> dict[str, str]:
+    return {
+        "id": preset_id,
+        "label": _intent_label(preset_id),
+        "intent_id": preset_id,
     }
 
 

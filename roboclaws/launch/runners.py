@@ -33,6 +33,10 @@ def export_env_from_overrides(overrides: tuple[str, ...]) -> dict[str, str]:
             env["ROBOCLAWS_TASK_SURFACE"] = override.removeprefix("task_surface=")
         elif override.startswith("task_intent="):
             env["ROBOCLAWS_TASK_INTENT"] = override.removeprefix("task_intent=")
+        elif override.startswith("task_preset="):
+            env["ROBOCLAWS_TASK_PRESET"] = override.removeprefix("task_preset=")
+        elif override.startswith("skill_name="):
+            env["ROBOCLAWS_TASK_SKILL"] = override.removeprefix("skill_name=")
     agent_engine = _override_value(overrides, "agent_engine")
     provider_profile = _override_value(overrides, "provider_profile")
     if agent_engine == "codex-cli" and provider_profile:

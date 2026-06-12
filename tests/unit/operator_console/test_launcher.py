@@ -231,7 +231,8 @@ def test_launcher_holds_lock_before_spawning_process(tmp_path: Path) -> None:
     assert state["selected_intent"] == "open-ended"
     assert state["next_goal_packet"] == {"schema": "operator_console_next_goal_packet_v1"}
     assert "continuation_packet" not in state
-    assert "intent=open-ended" in state["argv"]
+    assert not any(item.startswith("intent=") for item in state["argv"])
+    assert not any(item.startswith("preset=") for item in state["argv"])
     assert "prompt=收拾桌面上的杯子" in state["argv"]
     assert state["operator_session_id"].startswith("session-")
     assert any(item.startswith("operator_messages_path=") for item in state["argv"])
@@ -788,10 +789,10 @@ def test_claude_cleanup_route_uses_claude_driver(tmp_path: Path) -> None:
         "surface=household-world",
         "world=molmospaces/val_0",
         "backend=mujoco",
-        "intent=cleanup",
+        "preset=cleanup",
         "agent_engine=claude-code",
     ]
-    assert "intent=cleanup" in argv
+    assert "preset=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
     assert "provider_profile=mimo-anthropic" in argv
     assert "scenario_setup=relocate-cleanup-related-objects" in argv

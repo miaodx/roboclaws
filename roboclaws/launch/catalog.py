@@ -18,13 +18,12 @@ from roboclaws.household.profiles import (
     cleanup_evidence_lane_names,
     validate_evidence_lane_camera_labeler,
 )
-from roboclaws.household.tasks import HOUSEHOLD_TASK_SPECS
+from roboclaws.household.tasks import HOUSEHOLD_PRESET_SPECS, HOUSEHOLD_TASK_SPECS
 from roboclaws.launch.agent_engines import AGENT_ENGINE_SPECS, AgentEngineSpec
 from roboclaws.launch.backends import BACKEND_SPECS, BackendSpec
 from roboclaws.launch.environment_setup import (
     ENVIRONMENT_SETUP_BASELINE,
     ENVIRONMENT_SETUP_OPTIONS,
-    ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
     RELOCATION_SETUP_OPTIONS,
 )
 from roboclaws.launch.evaluation import evaluation_spec_for_intent
@@ -32,7 +31,7 @@ from roboclaws.launch.goals import normalize_goal_contract
 from roboclaws.launch.intents import TASK_INTENT_SPECS, TaskIntentSpec
 from roboclaws.launch.plans import LaunchPlan
 from roboclaws.launch.runners import build_agent_run_argv
-from roboclaws.launch.task_specs import TaskSurfaceSpec
+from roboclaws.launch.task_specs import TaskPresetSpec, TaskSurfaceSpec
 from roboclaws.launch.worlds import DEFAULT_WORLD_BY_SURFACE, WORLD_SPECS, WorldSpec
 
 CANONICAL_SURFACES: set[str] = {
@@ -87,8 +86,14 @@ def resolve_surface_launch(args: list[str] | tuple[str, ...]) -> LaunchPlan:
     agent_engine = _normalize_agent_engine(agent_engine_value)
     provider_profile = _override_value(overrides, "provider_profile")
     prompt = _override_value(overrides, "prompt") or ""
+    preset = _normalize_preset(_override_value(overrides, "preset"), surface=surface)
     intent = TASK_INTENT_SPECS[
-        _normalize_intent(_override_value(overrides, "intent"), surface=surface, prompt=prompt)
+        _normalize_intent(
+            _override_value(overrides, "intent"),
+            surface=surface,
+            prompt=prompt,
+            preset=preset,
+        )
     ]
 
     stripped_overrides = overrides
@@ -99,12 +104,14 @@ def resolve_surface_launch(args: list[str] | tuple[str, ...]) -> LaunchPlan:
         "agent_engine",
         "provider_profile",
         "intent",
+        "preset",
     ):
         stripped_overrides = _without_override(stripped_overrides, key)
 
     return _resolve_launch(
         surface=surface,
         intent=intent,
+        preset=preset,
         world=world,
         backend=backend,
         agent_engine=agent_engine,
@@ -119,6 +126,7 @@ def _resolve_launch(
     *,
     surface: TaskSurfaceSpec,
     intent: TaskIntentSpec,
+    preset: TaskPresetSpec | None,
     world: WorldSpec,
     backend: BackendSpec,
     agent_engine: AgentEngineSpec,
@@ -163,16 +171,19 @@ def _resolve_launch(
         overrides,
         surface=surface,
         intent=intent,
+        preset=preset,
     )
     goal_contract = normalize_goal_contract(surface=surface, intent=intent, raw_prompt=prompt)
     plan_overrides = _overrides_with_surface_context(
         overrides,
         surface_id=surface.surface_id,
         intent_id=intent.intent_id,
+        preset_id=preset.preset_id if preset else "",
         world_id=world.id,
         backend_id=backend.id,
         agent_engine_id=agent_engine.id,
         provider_profile=resolved_provider_profile,
+        skill_name=preset.skill_name if preset else intent.skill_name,
         goal_contract_json=goal_contract.to_json(),
     )
     dispatch_overrides = (
@@ -191,6 +202,7 @@ def _resolve_launch(
         argv=argv,
         surface=surface.surface_id,
         intent=intent.intent_id,
+        preset=preset.preset_id if preset else None,
         world=world.id,
         backend=backend.id,
         implementation_backend=backend.implementation_backend,
@@ -208,9 +220,14 @@ def _resolve_launch(
         report=report,
         prompt_id=intent.prompt_id,
         checker_id=intent.checker_id,
+        skill_name=preset.skill_name if preset else intent.skill_name,
         mcp_server_id=surface.mcp_server_id,
-        required_capabilities=tuple(
-            dict.fromkeys((*surface.required_capabilities, *intent.required_capabilities))
+        required_capabilities=(
+            preset.required_capabilities
+            if preset
+            else tuple(
+                dict.fromkeys((*surface.required_capabilities, *intent.required_capabilities))
+            )
         ),
         required_artifacts=intent.required_artifacts,
         goal_contract=goal_contract,
@@ -297,11 +314,48 @@ def _normalize_agent_engine(value: str) -> AgentEngineSpec:
     return spec
 
 
-def _normalize_intent(value: str | None, *, surface: TaskSurfaceSpec, prompt: str) -> str:
+def _normalize_preset(value: str | None, *, surface: TaskSurfaceSpec) -> TaskPresetSpec | None:
+    raw = str(value or "").strip()
+    if raw.startswith("preset="):
+        raw = raw.removeprefix("preset=")
+    if raw.startswith("run_preset="):
+        raise LaunchError(
+            "run_preset= is reserved for verification presets",
+            "use preset=cleanup|map-build for household task presets, "
+            "or run_preset=smoke for smoke verification",
+        )
+    if not raw:
+        return None
+    if surface.surface_id != "household-world":
+        raise LaunchError(f"surface '{surface.surface_id}' does not accept preset=")
+    spec = HOUSEHOLD_PRESET_SPECS.get(raw)
+    if spec is None or raw not in surface.supported_presets:
+        raise LaunchError(
+            f"unsupported household-world preset '{raw}'",
+            f"expected {'|'.join(surface.supported_presets)}",
+        )
+    return spec
+
+
+def _normalize_intent(
+    value: str | None,
+    *,
+    surface: TaskSurfaceSpec,
+    prompt: str,
+    preset: TaskPresetSpec | None,
+) -> str:
     raw = str(value or "").strip()
     if raw.startswith("intent="):
         raw = raw.removeprefix("intent=")
-    intent_id = raw or ("open-ended" if prompt and surface.surface_id == "household-world" else "")
+    if preset is not None and raw and raw != preset.intent_id:
+        raise LaunchError(
+            f"intent='{raw}' conflicts with preset='{preset.preset_id}'",
+            f"omit intent= or use preset={preset.preset_id}",
+        )
+    intent_id = preset.intent_id if preset is not None else raw
+    intent_id = intent_id or (
+        "open-ended" if prompt and surface.surface_id == "household-world" else ""
+    )
     intent_id = intent_id or surface.default_intent
     if intent_id not in surface.supported_intents:
         raise LaunchError(
@@ -343,9 +397,7 @@ def _resolve_evidence_mode(
                 "use evidence_lane=world-oracle-labels|world-public-labels|"
                 "camera-grounded-labels|camera-raw-fpv",
             )
-        run_preset = _override_value(overrides, "run_preset") or _override_value(
-            overrides, "preset"
-        )
+        run_preset = _override_value(overrides, "run_preset")
         if run_preset and run_preset != "smoke":
             raise LaunchError("unsupported run_preset", "expected smoke")
         evidence_lane = raw_mode or _override_value(overrides, "evidence_lane")
@@ -410,9 +462,7 @@ def _dispatch_runner_for_selection(
     overrides: tuple[str, ...],
 ) -> str:
     if agent_engine.id == "direct-runner":
-        run_preset = _override_value(overrides, "run_preset") or _override_value(
-            overrides, "preset"
-        )
+        run_preset = _override_value(overrides, "run_preset")
         if run_preset == "smoke" and intent.intent_id in {"cleanup", "open-ended"}:
             return "mcp-smoke"
     return agent_engine.dispatch_runner
@@ -446,6 +496,7 @@ def _normalize_scenario_setup_overrides(
     *,
     surface: TaskSurfaceSpec,
     intent: TaskIntentSpec,
+    preset: TaskPresetSpec | None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     if surface.surface_id != "household-world":
         return overrides, ()
@@ -460,11 +511,7 @@ def _normalize_scenario_setup_overrides(
             "use scenario_setup=baseline|relocate-loose-objects|"
             "relocate-cleanup-related-objects and relocation_count=<N>",
         )
-    default_setup = (
-        ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS
-        if intent.intent_id == "cleanup"
-        else ENVIRONMENT_SETUP_BASELINE
-    )
+    default_setup = preset.default_scenario_setup if preset else ENVIRONMENT_SETUP_BASELINE
     setup = _override_value(overrides, "scenario_setup") or default_setup
     if setup not in ENVIRONMENT_SETUP_OPTIONS:
         raise LaunchError(
@@ -501,20 +548,25 @@ def _overrides_with_surface_context(
     *,
     surface_id: str,
     intent_id: str,
+    preset_id: str,
     world_id: str,
     backend_id: str,
     agent_engine_id: str,
     provider_profile: str | None,
+    skill_name: str,
     goal_contract_json: str,
 ) -> tuple[str, ...]:
     merged = overrides
     for key in (
         "surface",
         "intent",
+        "preset",
+        "task_preset",
         "world",
         "backend",
         "agent_engine",
         "provider_profile",
+        "skill_name",
         "goal_contract_json",
     ):
         merged = _without_override(merged, key)
@@ -522,6 +574,8 @@ def _overrides_with_surface_context(
         merged = (*merged, f"task_surface={surface_id}")
     if _override_value(merged, "task_intent") is None:
         merged = (*merged, f"task_intent={intent_id}")
+    if preset_id and _override_value(merged, "task_preset") is None:
+        merged = (*merged, f"task_preset={preset_id}")
     if _override_value(merged, "world") is None:
         merged = (*merged, f"world={world_id}")
     if _override_value(merged, "backend") is None:
@@ -530,6 +584,8 @@ def _overrides_with_surface_context(
         merged = (*merged, f"agent_engine={agent_engine_id}")
     if provider_profile and _override_value(merged, "provider_profile") is None:
         merged = (*merged, f"provider_profile={provider_profile}")
+    if skill_name and _override_value(merged, "skill_name") is None:
+        merged = (*merged, f"skill_name={skill_name}")
     if _override_value(merged, "goal_contract_json") is None:
         merged = (*merged, f"goal_contract_json={goal_contract_json}")
     return merged
@@ -540,10 +596,12 @@ def _without_launch_only_overrides(overrides: tuple[str, ...]) -> tuple[str, ...
     for key in (
         "task_surface",
         "task_intent",
+        "task_preset",
         "world",
         "backend",
         "agent_engine",
         "provider_profile",
+        "skill_name",
         "goal_contract_json",
         "goal_contract_path",
         "evidence_lane",

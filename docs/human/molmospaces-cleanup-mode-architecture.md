@@ -54,15 +54,15 @@ metadata and report metadata.
 Current canonical command shape:
 
 ```bash
-just run::surface surface=household-world world=<world> backend=<backend> intent=cleanup agent_engine=<engine> [provider_profile=<profile>] evidence_lane=<lane> [camera_labeler=<labeler>]
+just run::surface surface=household-world world=<world> backend=<backend> preset=cleanup agent_engine=<engine> [provider_profile=<profile>] evidence_lane=<lane> [camera_labeler=<labeler>]
 ```
 
 Examples:
 
 ```bash
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=camera-raw-fpv
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=camera-raw-fpv
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=sim-projected-labels
 ```
 
 No backward compatibility is required for this refactor. The new names can

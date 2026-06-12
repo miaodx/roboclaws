@@ -3,9 +3,38 @@
 from __future__ import annotations
 
 from roboclaws.household.profiles import cleanup_evidence_lane_names
-from roboclaws.launch.task_specs import TaskSurfaceSpec
+from roboclaws.launch.environment_setup import (
+    ENVIRONMENT_SETUP_BASELINE,
+    ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
+)
+from roboclaws.launch.task_specs import TaskPresetSpec, TaskSurfaceSpec
 
 HOUSEHOLD_EVIDENCE_LANES: tuple[str, ...] = cleanup_evidence_lane_names()
+
+HOUSEHOLD_PRESET_SPECS: dict[str, TaskPresetSpec] = {
+    "cleanup": TaskPresetSpec(
+        preset_id="cleanup",
+        intent_id="cleanup",
+        skill_name="molmo-realworld-cleanup",
+        required_capabilities=(
+            "household_world",
+            "household_manipulation",
+            "household_episode",
+        ),
+        default_scenario_setup=ENVIRONMENT_SETUP_RELOCATE_CLEANUP_RELATED_OBJECTS,
+        report_profile="cleanup",
+        validation_gate_tags=("cleanup", "manipulation", "private-scorer-boundary"),
+    ),
+    "map-build": TaskPresetSpec(
+        preset_id="map-build",
+        intent_id="map-build",
+        skill_name="household-open-task",
+        required_capabilities=("household_world", "household_episode"),
+        default_scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+        report_profile="runtime_metric_map",
+        validation_gate_tags=("map-build", "runtime-metric-map"),
+    ),
+}
 
 HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
     "household-world": TaskSurfaceSpec(
@@ -20,7 +49,7 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
             "openclaw",
         ),
         supported_intents=("cleanup", "map-build", "open-ended"),
-        default_intent="cleanup",
+        default_intent="open-ended",
         supported_reports=(),
         default_report=None,
         default_profile="world-oracle-labels",
@@ -30,9 +59,9 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
         checker_base="household_world",
         required_capabilities=(
             "household_world",
-            "household_manipulation",
             "household_episode",
         ),
+        supported_presets=tuple(HOUSEHOLD_PRESET_SPECS),
     ),
     "planner-proof": TaskSurfaceSpec(
         surface_id="planner-proof",

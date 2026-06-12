@@ -121,10 +121,10 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         "surface=household-world",
         "world=molmospaces/val_0",
         "backend=mujoco",
-        "intent=cleanup",
+        "preset=cleanup",
         "agent_engine=codex-cli",
     ]
-    assert "intent=cleanup" in argv
+    assert "preset=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
     assert "provider_profile=codex-env" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
@@ -140,8 +140,8 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         intent="open-ended",
         prompt="pick up the mug; rm -rf /",
     )
-    assert "intent=open-ended" in open_ended
-    assert "intent=cleanup" not in open_ended
+    assert not any(item.startswith("intent=") for item in open_ended)
+    assert not any(item.startswith("preset=") for item in open_ended)
     assert "scenario_setup=baseline" in open_ended
     assert not any(item.startswith("relocation_count=") for item in open_ended)
     assert not any(item.startswith("generated_mess_count=") for item in open_ended)

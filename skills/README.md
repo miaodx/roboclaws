@@ -29,6 +29,8 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
 
 ## Maintained Skills
 
+- `household-open-task`: default household-world open-task behavior over public
+  map, observation, target-query, and episode capabilities.
 - `molmo-realworld-cleanup`: household cleanup behavior over public household
   world, manipulation, and episode capabilities.
 - `agent-validation-matrix`: adaptive validation orchestration that selects and

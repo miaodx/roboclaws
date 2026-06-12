@@ -1,9 +1,9 @@
 ---
 plan_scope: open-ended-household-default-architecture
-status: DISCOVERY
+status: PARTIALLY_IMPLEMENTED
 created: 2026-06-12
-last_reviewed: 2026-06-12
-implementation_allowed: false
+last_reviewed: 2026-06-13
+implementation_allowed: true
 compatibility_policy: forward-only; no backward compatibility required
 source:
   - user request to make open-ended household tasks the default architecture
@@ -16,9 +16,53 @@ related_context:
   - docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
   - docs/plans/2026-06-11-open-ended-proof-status.md
   - docs/adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md
+  - docs/adr/0139-use-household-open-task-surface-with-presets.md
 ---
 
 # Open-Ended Household Default Architecture
+
+## Implementation Status
+
+First public-contract slice implemented on 2026-06-12 and locally verified on
+2026-06-13 CST:
+
+- `surface=household-world` now defaults to the no-preset household open-task
+  contract.
+- `preset=cleanup` and `preset=map-build` select the existing cleanup and
+  map-build internal intent policies through a small household preset registry.
+- Open-task routes use the `household-open-task` skill; cleanup routes use
+  `molmo-realworld-cleanup`.
+- Required capabilities are preset/skill-scoped: no-preset open tasks and
+  map-build require world+episode, while cleanup adds manipulation.
+- Operator-console no-preset selection ids use `open-task`; cleanup/map-build
+  selection ids use their preset names.
+- OpenAI Agents SDK has an enabled no-preset open-task route and validation
+  matrix gate.
+- Active docs and ADR-0139 describe the public command contract as
+  `surface + prompt + optional preset`.
+
+Verified product evidence for this slice:
+
+- `preset=cleanup` direct product gate passed with report:
+  `output/agent-validation-matrix/20260612T182533Z/gates/household-direct-world-oracle-product/run/0613_0231/seed-7/report.html`.
+- `preset=map-build` direct product gate passed with Runtime Metric Map and
+  report:
+  `output/agent-validation-matrix/20260612T182533Z/gates/direct-map-build-world-oracle/run/0613_0233/seed-7/report.html`.
+- No-preset Codex open-task product gate passed with `done`, an open-ended
+  completion claim, `run_result.json`, model usage metrics, and report:
+  `output/agent-validation-matrix/20260612T182533Z/gates/codex-open-task-world-oracle/run/0613_0235/seed-7/report.html`.
+- No-preset OpenAI Agents SDK open-task product gate reached the MCP server but
+  stopped before robot action with upstream `provider_transient_failure`
+  (`502 bad_response_status_code`) from the `codex-env` provider route:
+  `output/agent-validation-matrix/20260612T182533Z/gates/openai-agents-sdk-open-task/run/0613_0239/seed-7/live_status.json`.
+
+Remaining required proof before this plan is fully implemented:
+
+- Re-run the no-preset OpenAI Agents SDK product gate when the provider route is
+  healthy; current status is `BLOCKED_NEEDS_LOCAL_VALIDATION` on external
+  provider availability, not on deterministic launch-contract behavior.
+- Runtime/server naming cleanup and task-neutral artifact schema replacement
+  remain parked follow-up slices.
 
 ## Current Finding
 
@@ -1007,15 +1051,16 @@ Harness Matrix baseline:
 - Important interpretation: this is a pre-migration baseline. The matrix still
   selects legacy `intent=cleanup` and `intent=map-build` product gates because
   current code has not migrated to `surface + prompt + optional preset`.
-- Post-implementation expectation: rerunning the same matrix should select
-  no-preset household open-task gates for Coding Agent and Agent SDK, plus
+- Post-implementation result: rerunning the matrix selected no-preset
+  household open-task gates for Coding Agent and Agent SDK, plus
   `preset=cleanup` and `preset=map-build` product gates, instead of legacy
   peer-intent gates.
 - Product proof priority: the highest-signal gates are the real no-preset
   Coding Agent run and the real no-preset OpenAI Agents SDK run:
   `surface=household-world prompt="我渴了，帮我找些解渴的东西"`.
-  If keys, Docker, simulator runtime, or network block either run, completion is
-  `BLOCKED_NEEDS_LOCAL_VALIDATION`.
+  The Codex run passed on 2026-06-13 CST. The OpenAI Agents SDK run is
+  `BLOCKED_NEEDS_LOCAL_VALIDATION` because the configured provider route
+  returned upstream 502 before robot action.
 
 Execution:
 

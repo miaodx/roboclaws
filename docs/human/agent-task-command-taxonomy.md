@@ -1,14 +1,15 @@
 # Surface And Agent Command Taxonomy
 
-The implemented public command model is the surface/intent catalog in
-`just run::surface`. Older `task::run` and AI2-THOR task ids are retired.
+The implemented public command model is the surface open-task catalog in
+`just run::surface`, with optional presets for repeated household jobs. Older
+`task::run` and AI2-THOR task ids are retired.
 
 ## Public Surface
 
 Normal users should start with:
 
 ```bash
-just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [intent=<intent>] [provider_profile=<profile>] [key=value ...]
+just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backend=<backend>] [preset=<preset>] [prompt=<goal>] [provider_profile=<profile>] [key=value ...]
 ```
 
 Current surfaces:
@@ -16,11 +17,12 @@ Current surfaces:
 - `household-world`
 - `planner-proof`
 
-Current household intents:
+Current household presets:
 
 - `map-build`
 - `cleanup`
-- `open-ended`
+
+No-preset household runs are open-ended prompt-driven tasks.
 
 Current household backends:
 
@@ -36,9 +38,9 @@ Current agent engines:
 - `openai-agents-sdk`
 - `openclaw-gateway`
 
-`prompt=...` without an explicit household intent resolves to
-`intent=open-ended`. `intent=cleanup prompt=...` keeps cleanup semantics while
-narrowing the user-scoped cleanup request.
+`prompt=...` without a household preset runs the default open-task contract.
+`preset=cleanup prompt=...` keeps cleanup semantics while narrowing the
+user-scoped cleanup request.
 
 ## Maintainer Dispatch
 

@@ -6,7 +6,7 @@
 
 当前硬件验收只接受这个组合：
 
-- public surface/intent: `surface=household-world intent=map-build`
+- public surface/preset: `surface=household-world preset=map-build`
 - driver: `codex`
 - evidence lane: `camera-grounded-labels`
 - backend: `agibot_gdk`
@@ -86,7 +86,7 @@ PNC、真实相机或 DINO。
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco preset=map-build agent_engine=direct-runner evidence_lane=camera-grounded-labels \
   runtime=fixture \
   rehearsal_mode=contract \
   camera_labeler=grounding-dino \
@@ -119,7 +119,7 @@ map-build intent + Codex CLI engine 组合。可以自动验证 gate 和 launche
 Codex 或机器人：
 
 ```bash
-ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/example/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -295,7 +295,7 @@ VISUAL_GROUNDING_DINO_TEXT_THRESHOLD=0.20 \
 ```bash
 OPEN_EVIDENCE_REFRESH_PROMPT='基于当前已有语义地图，自主选择 3 个最值得复核的 public semantic anchor 或 inspection waypoint，依次导航过去观察。优先选择 actionability=actionable、needs_review、costmap_disagrees 或缺少当前画面证据的目标；如果目标不可达或证据不清楚，跳过并记录原因。最后调用 done，总结你选择了哪里、为什么选择、每个点看到什么、哪些点被跳过。'
 
-just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-codex-dry-run \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -318,7 +318,7 @@ dry run 不能称为 hardware evidence。
 只有 operator 确认 run-level gate 后，才启用 movement：
 
 ```bash
-just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
+just run::surface surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels \
   context_json=output/agibot/map-context/<stamp>/agibot_map_context.completed.json \
   output_dir=output/agibot/semantic-map-build-hardware \
   policy=codex_agibot_semantic_map_build_pilot \
@@ -337,7 +337,7 @@ output/agibot/semantic-map-build-hardware/<stamp>/seed-7/
 ## HTML control console
 
 可以和 HTML control console 结合。console 仍然走同一个 public selection：
-`surface=household-world world=agibot-g2/map-12 backend=agibot-gdk intent=map-build agent_engine=codex-cli evidence_lane=camera-grounded-labels`。
+`surface=household-world world=agibot-g2/map-12 backend=agibot-gdk preset=map-build agent_engine=codex-cli evidence_lane=camera-grounded-labels`。
 
 启动 console：
 
@@ -368,7 +368,7 @@ console 当前支持：
   `camera_labeler=grounding-dino` 和 `visual_grounding_timeout_s=20`。
 - 自定义 task prompt。
 - 持有 `agibot_g2` backend lock。
-- 启动 Codex `surface=household-world intent=map-build` run。
+- 启动 Codex `surface=household-world preset=map-build` run。
 - 显示 FPV、map、grounding、outputs、raw evidence。
 - 提供 Stop Run 和 Emergency Stop 控件。
 

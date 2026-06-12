@@ -42,6 +42,10 @@ from roboclaws.operator_console.state import derive_operator_state, redacted_art
 PAUSE_UNAVAILABLE_REASON = "Pause is unavailable for this route. Use Stop or Emergency Stop."
 
 
+def _selection_task_selector(intent_id: str) -> str:
+    return intent_id if intent_id in {"cleanup", "map-build"} else "open-task"
+
+
 class ConsoleRequestHandler(SimpleHTTPRequestHandler):
     """Serve static assets plus JSON APIs."""
 
@@ -102,7 +106,13 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                     agent_engine_id = str(query.get("agent_engine_id", [""])[0])
                     evidence_lane = str(query.get("evidence_lane", ["world-oracle-labels"])[0])
                     selection_id = "::".join(
-                        (world_id, backend_id, intent_id, agent_engine_id, evidence_lane)
+                        (
+                            world_id,
+                            backend_id,
+                            _selection_task_selector(intent_id),
+                            agent_engine_id,
+                            evidence_lane,
+                        )
                     )
                 route = get_selection(selection_id)
                 overrides = {
@@ -259,7 +269,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                             launch_parts = {
                                 "world_id": parts[0],
                                 "backend_id": parts[1],
-                                "intent_id": parts[2],
+                                "intent_id": "open-ended" if parts[2] == "open-task" else parts[2],
                                 "agent_engine_id": parts[3],
                                 "evidence_lane": parts[4],
                             }

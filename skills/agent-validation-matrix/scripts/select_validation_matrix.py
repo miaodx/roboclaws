@@ -135,6 +135,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent-engine", default="")
     parser.add_argument("--provider-profile", default="")
     parser.add_argument("--intent", default="")
+    parser.add_argument("--preset", default="")
     parser.add_argument("--evidence-lane", default="")
     parser.add_argument("--camera-labeler", default="")
     parser.add_argument("--output-dir", type=Path)
@@ -152,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         agent_engine=_split_csv(args.agent_engine),
         provider_profile=_split_csv(args.provider_profile),
         intent=_split_csv(args.intent),
+        preset=_split_csv(args.preset),
         evidence_lane=_split_csv(args.evidence_lane),
         camera_labeler=_split_csv(args.camera_labeler),
         output_dir=args.output_dir,
@@ -170,6 +172,7 @@ def build_validation_matrix(
     agent_engine: Sequence[str] = (),
     provider_profile: Sequence[str] = (),
     intent: Sequence[str] = (),
+    preset: Sequence[str] = (),
     evidence_lane: Sequence[str] = (),
     camera_labeler: Sequence[str] = (),
     output_dir: Path | None = None,
@@ -186,6 +189,7 @@ def build_validation_matrix(
         "agent_engine": _dedupe(agent_engine),
         "provider_profile": _dedupe(provider_profile),
         "intent": _dedupe(intent),
+        "preset": _dedupe(preset),
         "evidence_lane": _dedupe(evidence_lane),
         "camera_labeler": _dedupe(camera_labeler),
     }
@@ -295,6 +299,10 @@ def _detect_signals(
         signals.append(_override_signal("cleanup_skill", "agent_engine=codex-cli"))
     if "open-ended" in explicit_axes.get("intent", []):
         signals.append(_override_signal("open_ended", "intent=open-ended"))
+    if "cleanup" in explicit_axes.get("preset", []):
+        signals.append(_override_signal("cleanup_skill", "preset=cleanup"))
+    if "map-build" in explicit_axes.get("preset", []):
+        signals.append(_override_signal("map_build", "preset=map-build"))
     if "camera-grounded-labels" in explicit_axes.get("evidence_lane", []):
         signals.append(_override_signal("visual_grounding", "evidence_lane=camera-grounded-labels"))
     if "camera-raw-fpv" in explicit_axes.get("evidence_lane", []):
@@ -355,7 +363,7 @@ def _candidate_gates(
                 "surface=household-world",
                 f"world={DEFAULT_WORLD}",
                 f"backend={DEFAULT_BACKEND}",
-                "intent=cleanup",
+                "preset=cleanup",
                 "agent_engine=direct-runner",
                 "evidence_lane=world-oracle-labels",
                 f"seed={DEFAULT_SEED}",
@@ -364,6 +372,7 @@ def _candidate_gates(
             axes={
                 "agent_engine": "direct-runner",
                 "intent": "cleanup",
+                "preset": "cleanup",
                 "evidence_lane": "world-oracle-labels",
                 "backend": DEFAULT_BACKEND,
                 "world": DEFAULT_WORLD,
@@ -399,6 +408,30 @@ def _candidate_gates(
             gate_dir=gate_dir,
         ),
         _gate(
+            gate_id="codex-open-task-world-oracle",
+            command=_open_task_command(
+                gate_dir=gate_dir,
+                gate_id="codex-open-task-world-oracle",
+                agent_engine="codex-cli",
+                provider_profile=codex_provider,
+                evidence_lane="world-oracle-labels",
+            ),
+            axes={
+                "agent_engine": "codex-cli",
+                "provider_profile": codex_provider,
+                "intent": "open-ended",
+                "preset": "",
+                "evidence_lane": "world-oracle-labels",
+                "backend": DEFAULT_BACKEND,
+                "world": DEFAULT_WORLD,
+            },
+            reason="Open-task launch changes need a representative live Codex household gate.",
+            rule_ids=("open_ended",),
+            requirements=("just", "python_env", "docker", "codex_provider"),
+            expense="live-agent",
+            gate_dir=gate_dir,
+        ),
+        _gate(
             gate_id="codex-cleanup-world-oracle",
             command=_cleanup_command(
                 gate_dir=gate_dir,
@@ -411,6 +444,7 @@ def _candidate_gates(
                 "agent_engine": "codex-cli",
                 "provider_profile": codex_provider,
                 "intent": "cleanup",
+                "preset": "cleanup",
                 "evidence_lane": "world-oracle-labels",
                 "backend": DEFAULT_BACKEND,
                 "world": DEFAULT_WORLD,
@@ -434,6 +468,7 @@ def _candidate_gates(
                 "agent_engine": "codex-cli",
                 "provider_profile": codex_provider,
                 "intent": "cleanup",
+                "preset": "cleanup",
                 "evidence_lane": "camera-raw-fpv",
                 "backend": DEFAULT_BACKEND,
                 "world": DEFAULT_WORLD,
@@ -445,10 +480,10 @@ def _candidate_gates(
             gate_dir=gate_dir,
         ),
         _gate(
-            gate_id="openai-agents-sdk-cleanup",
-            command=_cleanup_command(
+            gate_id="openai-agents-sdk-open-task",
+            command=_open_task_command(
                 gate_dir=gate_dir,
-                gate_id="openai-agents-sdk-cleanup",
+                gate_id="openai-agents-sdk-open-task",
                 agent_engine="openai-agents-sdk",
                 provider_profile=codex_provider,
                 evidence_lane="world-oracle-labels",
@@ -456,13 +491,17 @@ def _candidate_gates(
             axes={
                 "agent_engine": "openai-agents-sdk",
                 "provider_profile": codex_provider,
-                "intent": "cleanup",
+                "intent": "open-ended",
+                "preset": "",
                 "evidence_lane": "world-oracle-labels",
                 "backend": DEFAULT_BACKEND,
                 "world": DEFAULT_WORLD,
             },
-            reason="Agent SDK runner or prompt changes need an OpenAI Agents SDK product gate.",
-            rule_ids=("agent_sdk",),
+            reason=(
+                "Agent SDK runner or prompt changes need a no-preset household open-task "
+                "product gate."
+            ),
+            rule_ids=("agent_sdk", "open_ended"),
             requirements=("just", "python_env", "openai_agents_package", "codex_provider"),
             expense="live-agent",
             gate_dir=gate_dir,
@@ -479,6 +518,7 @@ def _candidate_gates(
             axes={
                 "agent_engine": "direct-runner",
                 "intent": "cleanup",
+                "preset": "cleanup",
                 "evidence_lane": "camera-grounded-labels",
                 "camera_labeler": "sim-projected-labels",
                 "backend": DEFAULT_BACKEND,
@@ -502,6 +542,7 @@ def _candidate_gates(
             axes={
                 "agent_engine": "direct-runner",
                 "intent": "cleanup",
+                "preset": "cleanup",
                 "evidence_lane": "camera-grounded-labels",
                 "camera_labeler": "grounding-dino",
                 "backend": DEFAULT_BACKEND,
@@ -524,6 +565,7 @@ def _candidate_gates(
             axes={
                 "agent_engine": "direct-runner",
                 "intent": "cleanup",
+                "preset": "cleanup",
                 "evidence_lane": "camera-raw-fpv",
                 "backend": DEFAULT_BACKEND,
                 "world": DEFAULT_WORLD,
@@ -542,7 +584,7 @@ def _candidate_gates(
                 "surface=household-world",
                 f"world={DEFAULT_WORLD}",
                 f"backend={DEFAULT_BACKEND}",
-                "intent=map-build",
+                "preset=map-build",
                 "agent_engine=direct-runner",
                 "evidence_lane=world-oracle-labels",
                 f"seed={DEFAULT_SEED}",
@@ -552,6 +594,7 @@ def _candidate_gates(
             axes={
                 "agent_engine": "direct-runner",
                 "intent": "map-build",
+                "preset": "map-build",
                 "evidence_lane": "world-oracle-labels",
                 "backend": DEFAULT_BACKEND,
                 "world": DEFAULT_WORLD,
@@ -576,6 +619,7 @@ def _candidate_gates(
             axes={
                 "agent_engine": "direct-runner",
                 "intent": "cleanup",
+                "preset": "cleanup",
                 "evidence_lane": "world-oracle-labels",
                 "runtime_map_prior": "required",
                 "backend": DEFAULT_BACKEND,
@@ -605,7 +649,7 @@ def _cleanup_command(
         "surface=household-world",
         f"world={DEFAULT_WORLD}",
         f"backend={DEFAULT_BACKEND}",
-        "intent=cleanup",
+        "preset=cleanup",
         f"agent_engine={agent_engine}",
         f"evidence_lane={evidence_lane}",
         f"seed={DEFAULT_SEED}",
@@ -617,6 +661,32 @@ def _cleanup_command(
         command.append(f"provider_profile={provider_profile}")
     if camera_labeler:
         command.append(f"camera_labeler={camera_labeler}")
+    return command
+
+
+def _open_task_command(
+    *,
+    gate_dir: Path,
+    gate_id: str,
+    agent_engine: str,
+    evidence_lane: str,
+    provider_profile: str = "",
+) -> list[str]:
+    command = [
+        "just",
+        "run::surface",
+        "surface=household-world",
+        f"world={DEFAULT_WORLD}",
+        f"backend={DEFAULT_BACKEND}",
+        f"agent_engine={agent_engine}",
+        f"evidence_lane={evidence_lane}",
+        f"seed={DEFAULT_SEED}",
+        "scenario_setup=baseline",
+        "prompt=我渴了，帮我找些解渴的东西",
+        f"output_dir={gate_dir / gate_id / 'run'}",
+    ]
+    if provider_profile:
+        command.append(f"provider_profile={provider_profile}")
     return command
 
 

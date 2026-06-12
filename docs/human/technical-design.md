@@ -16,16 +16,21 @@ Current public work is selected by a small launch catalog:
 surface + world + backend + intent + agent_engine + provider_profile + evidence_lane
 ```
 
+For household work, the public selector is now the `household-world` open-task
+surface plus either `prompt=...` or optional `preset=map-build|cleanup`. The
+internal goal contract still records `task_intent` for artifacts and checkers.
+
 The active surfaces are:
 
 - `surface=household-world`
 - `surface=planner-proof`
 
-The household intents are:
+The household presets are:
 
-- `intent=map-build`
-- `intent=cleanup`
-- `intent=open-ended`
+- `preset=map-build`
+- `preset=cleanup`
+
+No-preset household runs are open-ended prompt-driven tasks.
 
 The design goal is not to hide a whole task behind one opaque tool. Every
 serious run should leave reviewable evidence: a goal contract, public MCP/tool
@@ -52,7 +57,7 @@ without leaking private truth into MCP profile metadata or agent inputs.
 
 ## Backend Strategy
 
-Backends are variants under the same surface/intent contract:
+Backends are variants under the same surface/preset contract:
 
 - `mujoco` for standard MolmoSpaces local cleanup.
 - `isaaclab` for GPU/high-fidelity scene and segmentation work.
@@ -73,9 +78,10 @@ Agent engines are product runtimes, not tasks:
 - OpenClaw Gateway;
 - script runner for proof/dry-run paths.
 
-Reusable behavior belongs in skills. The maintained household cleanup skill can
-drive cleanup, map-build, and open-ended household goals because the goal
-contract and checker policy decide what completion means for a run.
+Reusable behavior belongs in skills. The maintained cleanup skill drives
+`preset=cleanup`; the `household-open-task` skill drives no-preset household
+goals and `preset=map-build`. The goal contract and checker policy decide what
+completion means for a run.
 
 ## Current Non-Goals
 
