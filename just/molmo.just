@@ -608,6 +608,13 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --max-observe-per-waypoint "$prompt_max_observe_per_waypoint"
           --done-retry-budget "$prompt_done_retry_budget"
         )
+        if [[ "$driver" == "openai-agents-live" && "$profile" == "camera-grounded-labels" ]]; then
+          case "${ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS:-}" in
+            1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+              prompt_args+=(--camera-grounded-composite-tools)
+              ;;
+          esac
+        fi
         if [[ -n "$task_intent" ]]; then
           prompt_args+=(--intent "$task_intent")
         fi

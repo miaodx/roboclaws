@@ -22,12 +22,13 @@ raw-FPV image-memory prep were accepted on 2026-06-12. The first resumed
 provider-backed pass on 2026-06-12 produced one `mify` Responses
 `world-public-labels` baseline/candidate comparison and one blocked
 `codex-env` GPT baseline attempt. The first Candidate O `mify` Responses
-`camera-grounded-labels` pair completed but is diagnostic/inconclusive for O
+`camera-grounded-labels` pair completed but was diagnostic/inconclusive for O
 because the composite shortcut was enabled but never called. Prompt/tool
-selection has been repaired so the private compact O prompt now names the
-shortcut when enabled; the remaining O gate is a tightly scoped live retry that
-actually calls the shortcut. The full live provider/model x evidence-lane
-performance matrix is still not done. The follow-up execution plan is
+selection has been repaired, and the promptfix2 retry now exercises the
+shortcut and passes direct checker reruns after a narrow camera-grounded public
+provenance checker repair. Treat it as an accepted O mechanism/diagnostic speed
+row, not a normalized or publishable speed claim. The full live provider/model x
+evidence-lane performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -189,6 +190,22 @@ Result:
   `observe_camera_grounded_candidates` when
   `camera_grounded_composite_tools.enabled=true`, while the default
   camera-grounded prompt still uses the public two-step path.
+- The Candidate O promptfix2 retry completed at
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-promptfix2/0612_1126/seed-7/`.
+  The live runner wrote `run_result.json`, `report.html`, and timing artifacts,
+  then exited nonzero only because the checker had a stale public provenance
+  allowlist. The checker now allows `camera-grounded-labels` as public
+  producer/model provenance only inside the camera-model-policy observed-object
+  branch, preserving private-field and support-estimate checks. Direct checker
+  reruns pass for both composite artifacts. The promptfix2 trace includes
+  5 `observe_camera_grounded_candidates` requests, 16
+  `declare_visual_candidates` requests, and 19 underlying `observe` substep
+  requests. Shared comparison against the `0612_1012` baseline is accepted
+  diagnostically with same quality (`completion_status=success`,
+  `restored_count=4/5`, `semantic_accepted_count=5/5`,
+  `sweep_coverage_rate=1.0`, `disturbance_count=0`), `-303.142s` observed
+  wall, `-319.020s` observed model API time, and `+50586` uncached input
+  tokens.
 - The shared report-performance quality comparator now caps sweep
   over-coverage at 1.0 for same-or-better comparison, so extra baseline
   inspection waypoints do not create a false regression when the candidate
@@ -315,17 +332,16 @@ Parked work:
   - Q/Y deterministic recommendation enrichment is accepted for Group 0; the
     current no-provider packet pointed to Group 2 N/O after already-accepted
     Group 1 prep. Q/Y has now been refreshed with the completed `mify`
-    world-public live packet; it points to Group 2 lane-specific reductions,
-    but the first Candidate O live pair did not exercise the shortcut and does
-    not prove a composite-tool speed win.
+    world-public live packet; refresh it again with the Candidate O promptfix2
+    mechanism row before selecting the next arm.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
     `observe_camera_grounded_candidates` MCP shortcut for
     `camera-grounded-labels`; default public MCP/profile tools remain
-    unchanged. Live proof remains inconclusive until a provider-backed row
-    actually calls the shortcut; next work is a tightly scoped O retry before
-    claiming speed.
+    unchanged. The promptfix2 `mify` Responses row actually calls the shortcut
+    and is an accepted mechanism/diagnostic speed row, but normalized or
+    publishable speed claims still require calibrated/repeated evidence.
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
     visual-candidate failure rail; cleanup-pass and live speed claims remain
     gated.

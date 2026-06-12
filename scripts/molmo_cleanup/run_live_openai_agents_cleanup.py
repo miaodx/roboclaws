@@ -1446,9 +1446,17 @@ def _validate_context_limits(profile: dict[str, Any]) -> None:
 def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any]) -> str:
     mode = str(profile.get("prompt_mode") or "full")
     original = str(getattr(args, "kickoff_prompt", "") or "")
-    if _prompt_already_matches_profile(original, mode=mode):
-        return original
     lane = str(getattr(args, "profile", "") or "")
+    composite_tools = _camera_grounded_composite_tools_enabled_for_run(
+        profile,
+        evidence_lane=lane,
+    )
+    if _prompt_already_matches_profile(
+        original,
+        mode=mode,
+        camera_grounded_composite_tools=composite_tools,
+    ):
+        return original
     task_name = str(getattr(args, "task_name", "") or "")
     intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
     can_render = (
@@ -1471,10 +1479,7 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
             raw_fpv_candidate_budget=int(profile.get("raw_fpv_candidate_budget") or 24),
             max_observe_per_waypoint=int(profile.get("max_observe_per_waypoint") or 1),
             done_retry_budget=int(profile.get("done_retry_budget") or 1),
-            camera_grounded_composite_tools=_camera_grounded_composite_tools_enabled_for_run(
-                profile,
-                evidence_lane=lane,
-            ),
+            camera_grounded_composite_tools=composite_tools,
         )
     except ValueError:
         return original
@@ -1494,7 +1499,15 @@ def _target_cleanup_count_for_prompt(args: argparse.Namespace, *, lane: str) -> 
 def _kickoff_prompt_source(args: argparse.Namespace, profile: dict[str, Any]) -> str:
     original = str(getattr(args, "kickoff_prompt", "") or "")
     mode = str(profile.get("prompt_mode") or "full")
-    if _prompt_already_matches_profile(original, mode=mode):
+    composite_tools = _camera_grounded_composite_tools_enabled_for_run(
+        profile,
+        evidence_lane=str(getattr(args, "profile", "") or ""),
+    )
+    if _prompt_already_matches_profile(
+        original,
+        mode=mode,
+        camera_grounded_composite_tools=composite_tools,
+    ):
         return f"provided-profile-rendered-{mode}"
     rendered = _profiled_kickoff_prompt(args, profile=profile)
     if rendered == original:
@@ -1502,8 +1515,15 @@ def _kickoff_prompt_source(args: argparse.Namespace, profile: dict[str, Any]) ->
     return f"profile-rendered-{profile.get('prompt_mode') or 'full'}"
 
 
-def _prompt_already_matches_profile(prompt: str, *, mode: str) -> bool:
+def _prompt_already_matches_profile(
+    prompt: str,
+    *,
+    mode: str,
+    camera_grounded_composite_tools: bool = False,
+) -> bool:
     if mode == "compact":
+        if camera_grounded_composite_tools:
+            return "observe_camera_grounded_candidates" in prompt
         return (
             "Compact action cadence for world-public-labels" in prompt
             or "Compact action cadence for camera-grounded-labels" in prompt

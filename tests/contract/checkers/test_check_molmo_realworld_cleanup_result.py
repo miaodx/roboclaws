@@ -2917,6 +2917,42 @@ def test_checker_allows_main_agent_model_declared_camera_policy_retry(tmp_path: 
     )
 
 
+def test_checker_allows_camera_grounded_label_lane_public_provenance() -> None:
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+    result = _external_visual_grounding_checker_result(
+        overlay="visual_grounding/overlays/raw_fpv_001/candidate_001.jpg"
+    )
+    observed = dict(result["model_declared_observations"][0])
+    observed.update(
+        {
+            "producer_type": "camera-grounded-labels",
+            "model_provenance": "camera-grounded-labels",
+            "perception_source": "model_declared_observation",
+            "support_estimate": {
+                "source": "public_semantic_anchor",
+                "producer_type": "camera-grounded-labels",
+                "model_provenance": "camera-grounded-labels",
+                "perception_source": "model_declared_observation",
+                "source_observation_id": "raw_fpv_001",
+            },
+        }
+    )
+
+    checker._assert_public_agent_view(
+        {
+            "contract": checker.REALWORLD_CONTRACT,
+            "forbidden_private_fields_absent": True,
+            "metric_map": {},
+            "fixture_hints": [],
+            "perception_mode": CAMERA_MODEL_POLICY_MODE,
+            "structured_detections_available": False,
+            "raw_fpv_observations": result["raw_fpv_observations"],
+            "camera_model_policy_evidence": result["camera_model_policy_evidence"],
+            "observed_objects": [observed],
+        }
+    )
+
+
 def test_checker_requires_external_visual_grounding_bbox_overlay(tmp_path: Path) -> None:
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
     raw_fpv = tmp_path / "robot_views" / "raw_fpv_001.jpg"

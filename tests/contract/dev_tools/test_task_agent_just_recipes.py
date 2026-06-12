@@ -2038,6 +2038,16 @@ def test_molmo_compact_camera_prompt_can_prefer_composite_observe_tool() -> None
     assert "only MCP done producing run_result.json counts" in prompt
 
 
+def test_molmo_just_openai_agents_composite_env_forwards_prompt_flag() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS" in text
+    assert "prompt_args+=(--camera-grounded-composite-tools)" in text
+    assert (
+        '[[ "$driver" == "openai-agents-live" && "$profile" == "camera-grounded-labels" ]]' in text
+    )
+
+
 def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
     prompt = render_kickoff_prompt(
         "camera-raw-fpv",

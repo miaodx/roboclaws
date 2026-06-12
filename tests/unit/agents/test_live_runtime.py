@@ -24,6 +24,7 @@ from roboclaws.agents.live_runtime import (
     live_agent_result_from_artifacts,
 )
 from roboclaws.agents.live_status import LiveAgentFailure
+from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
 from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     IncompleteTurnRecoveryPolicy,
     LiveOpenAIAgentsCleanupRunner,
@@ -31,6 +32,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _cache_metrics,
     _context_growth_metrics,
     _context_metrics,
+    _kickoff_prompt_source,
     _live_timing_timeline,
     _load_agent_sdk_skill_context,
     _mcp_control_plane_metrics,
@@ -38,6 +40,7 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _model_service_fallback_metrics,
     _openai_agents_event_metrics,
     _openai_agents_span_metrics,
+    _profiled_kickoff_prompt,
     _resolve_agent_sdk_perf_profile,
 )
 
@@ -1394,6 +1397,35 @@ def test_openai_agents_camera_grounded_composite_profile_adds_private_server_fla
     assert composite["enabled"] is True
     assert composite["tool_names"] == ["observe_camera_grounded_candidates"]
     assert timing["agent_sdk_camera_grounded_composite_tools"] == composite
+
+
+def test_openai_agents_camera_grounded_composite_rerenders_stale_two_step_prompt() -> None:
+    stale_prompt = render_kickoff_prompt("camera-grounded-labels", prompt_mode="compact")
+    args = Namespace(
+        kickoff_prompt=stale_prompt,
+        profile="camera-grounded-labels",
+        task_name="household-cleanup",
+        task="clean",
+        task_intent_mode="default_cleanup",
+        min_generated_mess_count="5",
+    )
+    profile = {
+        "prompt_mode": "compact",
+        "raw_fpv_candidate_budget": 24,
+        "max_observe_per_waypoint": 1,
+        "done_retry_budget": 1,
+        "camera_grounded_composite_tools": {
+            "enabled": True,
+            "tool_names": ["observe_camera_grounded_candidates"],
+        },
+    }
+
+    prompt = _profiled_kickoff_prompt(args, profile=profile)
+
+    assert "declare_visual_candidates with observation_id only" in stale_prompt
+    assert "observe_camera_grounded_candidates instead of a separate observe" in prompt
+    assert "declare_visual_candidates with observation_id only" not in prompt
+    assert _kickoff_prompt_source(args, profile) == "profile-rendered-compact"
 
 
 def test_openai_agents_cleanup_runner_loads_canonical_skill_context(
