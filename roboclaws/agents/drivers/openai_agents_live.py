@@ -880,7 +880,9 @@ def _camera_grounded_history_info(item: Any) -> dict[str, Any] | None:
     decoded = _decode_tool_output_payload(output)
     if not isinstance(decoded, dict):
         return None
-    tool = str(decoded.get("tool") or payload.get("name") or payload.get("tool") or "")
+    tool = _normalize_mcp_tool_name(
+        decoded.get("tool") or payload.get("name") or payload.get("tool") or ""
+    )
     call_id = str(payload.get("call_id") or "")
     if not tool and "observe_camera_grounded_candidates" in call_id:
         tool = "observe_camera_grounded_candidates"
@@ -921,6 +923,13 @@ def _camera_grounded_history_info(item: Any) -> dict[str, Any] | None:
         "actionable_candidate_count": _camera_grounded_actionable_candidate_count(decoded),
         "candidate_refs": _camera_grounded_candidate_refs(decoded),
     }
+
+
+def _normalize_mcp_tool_name(value: Any) -> str:
+    tool = str(value or "").strip()
+    if "__" in tool:
+        tool = tool.rsplit("__", 1)[-1]
+    return tool
 
 
 def _camera_grounded_candidate_count(decoded: dict[str, Any]) -> int:

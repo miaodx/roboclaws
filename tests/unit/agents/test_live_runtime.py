@@ -1369,6 +1369,66 @@ def test_model_input_compaction_summarizes_old_camera_grounded_history() -> None
     assert metrics["camera_grounded_history_bytes_reduced"] > 0
 
 
+def test_model_input_compaction_summarizes_prefixed_mcp_camera_grounded_history() -> None:
+    def camera_output(idx: int) -> dict[str, object]:
+        return {
+            "ok": True,
+            "status": "ok",
+            "observation_id": f"raw_fpv_{idx:03d}",
+            "waypoint_id": f"generated_exploration_{idx:03d}",
+            "camera_model_candidates": [
+                {
+                    "object_id": f"observed_{idx:03d}",
+                    "category": "Book",
+                    "recommended_tool": "place",
+                    "actionability_status": "actionable",
+                    "large_public_camera_payload": "x" * 5000,
+                }
+            ],
+        }
+
+    items = [
+        {
+            "type": "mcp_call",
+            "id": f"mcp_{idx}",
+            "name": "roboclaws__observe_camera_grounded_candidates",
+            "server_label": "roboclaws",
+            "arguments": "{}",
+            "output": json.dumps(camera_output(idx)),
+            "status": "completed",
+        }
+        for idx in range(1, 4)
+    ]
+
+    filtered, metrics = _compact_model_input_items(
+        items,
+        min_chars=999_999,
+        public_tool_output_summary=False,
+        repeated_metric_map_delta=False,
+        camera_grounded_history={
+            "enabled": True,
+            "mode": "retain_latest_actionable_outputs",
+            "retained_recent_outputs": 1,
+        },
+    )
+
+    first_replacement = json.loads(filtered[0]["output"])
+    assert first_replacement["schema"] == "roboclaws_camera_grounded_history_summary_v1"
+    assert first_replacement["tool"] == "observe_camera_grounded_candidates"
+    assert first_replacement["observation_id"] == "raw_fpv_001"
+    assert first_replacement["candidate_count"] == 1
+    assert first_replacement["actionable_candidate_count"] == 1
+    assert "large_public_camera_payload" not in json.dumps(filtered[0])
+    assert json.loads(filtered[-1]["output"])["camera_model_candidates"][0][
+        "large_public_camera_payload"
+    ] == ("x" * 5000)
+    assert metrics["camera_grounded_history_enabled"] is True
+    assert metrics["camera_grounded_history_item_count"] == 3
+    assert metrics["camera_grounded_history_retained_count"] == 1
+    assert metrics["camera_grounded_history_compacted_count"] == 2
+    assert metrics["camera_grounded_history_bytes_reduced"] > 0
+
+
 def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
     tmp_path: Path, monkeypatch
 ) -> None:
