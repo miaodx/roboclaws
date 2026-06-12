@@ -1339,7 +1339,7 @@ def test_coding_agent_model_helper_prefers_driver_override_then_shared_fallback(
     ]
 
 
-def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
+def test_coding_agent_provider_helper_defaults_codex_to_codex_env_without_args() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -1364,14 +1364,10 @@ def test_coding_agent_provider_helper_defaults_to_system_without_args() -> None:
         text=True,
     )
 
-    assert result.stdout.splitlines() == [
-        "system",
-        "claude_model_args=0",
-        "claude_env_args=0",
-    ]
+    assert result.stdout.splitlines() == ["codex-env", "claude_model_args=0", "claude_env_args=0"]
 
 
-def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -> None:
+def test_coding_agent_codex_default_ignores_xm_key_and_requires_codex_env() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -1382,45 +1378,24 @@ def test_coding_agent_codex_mify_profile_is_default_when_xm_key_is_available() -
             set -euo pipefail
             source "$ROBOCLAWS_HELPER"
             XM_LLM_API_KEY=fake-xm-key
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
             args=()
             roboclaws_codex_provider_args args
-            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
-            printf '%s\n' "${args[@]}"
             """,
         ],
         cwd=REPO_ROOT,
         env=env,
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
 
-    assert result.stdout.splitlines() == [
-        (
-            "mify model=xiaomi/mimo-v2.5 "
-            "base_url=https://api.llm.mioffice.cn/v1 key_env=XM_LLM_API_KEY "
-            "protocol=responses"
-        ),
-        "-c",
-        'model="xiaomi/mimo-v2.5"',
-        "-c",
-        'model_provider="mify"',
-        "-c",
-        'model_providers.mify.name="mify"',
-        "-c",
-        'model_providers.mify.base_url="https://api.llm.mioffice.cn/v1"',
-        "-c",
-        'model_providers.mify.env_key="XM_LLM_API_KEY"',
-        "-c",
-        'model_providers.mify.wire_api="responses"',
-        "-c",
-        "model_providers.mify.supports_parallel_tool_calls=false",
-        "-c",
-        'web_search="disabled"',
-    ]
+    assert result.returncode == 2
+    assert result.stdout.splitlines() == ["codex-env"]
+    assert "codex-env requires CODEX_BASE_URL" in result.stderr
 
 
-def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_router() -> None:
+def test_coding_agent_codex_default_prefers_codex_env_even_when_xm_key_is_available() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
     result = subprocess.run(
@@ -1434,6 +1409,49 @@ def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_rout
             XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
             CODEX_BASE_URL=https://api-router.evad.mioffice.cn/v1
             CODEX_API_KEY=fake-codex-key
+            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "codex-env",
+        "-c",
+        'model="gpt-5.5"',
+        "-c",
+        'model_provider="codex-env"',
+        "-c",
+        'model_providers.codex-env.name="codex-env"',
+        "-c",
+        'model_providers.codex-env.base_url="https://api-router.evad.mioffice.cn/v1"',
+        "-c",
+        'model_providers.codex-env.env_key="CODEX_API_KEY"',
+        "-c",
+        'model_providers.codex-env.wire_api="responses"',
+    ]
+
+
+def test_coding_agent_codex_explicit_mify_profile_uses_xm_key() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=mify
+            XM_LLM_API_KEY=fake-xm-key
+            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
             roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
             args=()
             roboclaws_codex_provider_args args
@@ -1466,32 +1484,6 @@ def test_coding_agent_codex_mify_profile_prefers_internal_platform_over_api_rout
         "-c",
         'web_search="disabled"',
     ]
-
-
-def test_coding_agent_codex_mify_base_url_alone_does_not_shadow_codex_env() -> None:
-    env = clean_code_agent_env()
-    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
-    result = subprocess.run(
-        [
-            "bash",
-            "-c",
-            """
-            set -euo pipefail
-            source "$ROBOCLAWS_HELPER"
-            XM_LLM_BASE_URL=https://api.llm.mioffice.cn/v1
-            CODEX_BASE_URL=https://codex.example.test/v1
-            CODEX_API_KEY=fake-codex-key
-            roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER
-            """,
-        ],
-        cwd=REPO_ROOT,
-        env=env,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.stdout.strip() == "codex-env"
 
 
 def test_coding_agent_codex_can_disable_responses_websockets() -> None:
@@ -1817,7 +1809,8 @@ def test_codex_provider_smoke_requires_repo_local_endpoint() -> None:
     code_text = CODE_JUST.read_text(encoding="utf-8")
 
     assert re.search(r"^codex-provider-smoke ", code_text, re.MULTILINE)
-    assert "no repo-local Codex endpoint configured" in code_text
+    assert "codex-env is the default" in code_text
+    assert "ROBOCLAWS_CODEX_PROVIDER=mify" in code_text
     assert "--sandbox read-only" in code_text
     assert "--ephemeral" in code_text
     assert "--ignore-user-config" in code_text

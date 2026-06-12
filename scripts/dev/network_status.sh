@@ -58,7 +58,7 @@ print_status() {
       echo "probe: reachable $probe_url"
       echo "guard: OpenClaw and system-provider Claude Code just recipes are blocked here"
       echo "guard: Claude Code may run with repo-local kimi-anthropic, mify-anthropic, or mimo-anthropic profiles"
-      echo "guard: Codex may run with repo-local mify or codex-env profiles from .env"
+      echo "guard: Codex defaults to codex-env; mify requires an explicit provider override"
       echo "guard: Codex recipes do not fall back to a missing repo-local provider route"
       ;;
     1)

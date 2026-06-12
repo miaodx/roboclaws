@@ -36,7 +36,9 @@ def test_network_status_reports_work_when_probe_returns_http(tmp_path: Path) -> 
     assert "api-router.evad.mioffice.cn" in result.stdout
     assert "OpenClaw and system-provider Claude Code" in result.stdout
     assert "mify-anthropic" in result.stdout
-    assert "Codex may run with repo-local mify or codex-env profiles from .env" in result.stdout
+    assert (
+        "Codex defaults to codex-env; mify requires an explicit provider override" in result.stdout
+    )
     assert "system-provider Codex just recipes are blocked" not in result.stdout
 
 
@@ -143,7 +145,7 @@ def test_claude_provider_guard_allows_mify_anthropic_on_work_network(tmp_path: P
     assert "repo-local Claude provider (mify-anthropic)" in result.stderr
 
 
-def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: Path) -> None:
+def test_codex_provider_guard_defaults_to_codex_env_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
     env.pop("ROBOCLAWS_CODEX_PROVIDER", None)
     env.pop("ROBOCLAWS_CODE_AGENT_PROVIDER", None)
@@ -164,16 +166,17 @@ def test_codex_provider_guard_blocks_system_provider_on_work_network(tmp_path: P
         ],
         cwd=REPO_ROOT,
         env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=True,
         capture_output=True,
         text=True,
     )
 
-    assert result.returncode == 1
-    assert "blocked while using system Codex provider" in result.stderr
+    assert "repo-local Codex provider (codex-env)" in result.stderr
 
 
 def test_codex_provider_guard_allows_mify_profile_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
+    env["ROBOCLAWS_CODEX_PROVIDER"] = "mify"
     env["XM_LLM_API_KEY"] = "fake-xm-key"
 
     result = subprocess.run(

@@ -33,17 +33,22 @@ just task::run semantic-map-build direct evidence_lane=camera-grounded-labels \
 
 ## Preflight
 
-On the work network, Codex is allowed only through a repo-local mify or
-codex-env route. Check this first:
+On the work network, Codex defaults to the repo-local `codex-env` route. The
+mify route is allowed only when `ROBOCLAWS_CODEX_PROVIDER=mify` is set
+explicitly. Check this first:
 
 ```bash
 just dev::network-status
 set -a && source .env && set +a
 python - <<'PY'
 import os
-assert os.environ.get("XM_LLM_API_KEY") or (
-    os.environ.get("CODEX_API_KEY") and os.environ.get("CODEX_BASE_URL")
-), "No Codex provider route configured"
+provider = os.environ.get("ROBOCLAWS_CODEX_PROVIDER") or "codex-env"
+if provider == "mify":
+    assert os.environ.get("XM_LLM_API_KEY"), "mify requires XM_LLM_API_KEY"
+else:
+    assert os.environ.get("CODEX_API_KEY") and os.environ.get("CODEX_BASE_URL"), (
+        "codex-env requires CODEX_BASE_URL and CODEX_API_KEY"
+    )
 PY
 ```
 

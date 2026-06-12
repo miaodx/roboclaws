@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Agent Operator Console</title>
-    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/styles.css?v=decision-proof-20260608" />
   </head>
   <body>
     <div class="app-shell">
@@ -57,6 +57,31 @@
             Context JSON
             <input id="context-json-input" name="context_json" placeholder="Agibot context path" />
           </label>
+          </div>
+          <div id="codex-fields" class="route-fields" hidden>
+          <label>
+            Codex provider
+            <select id="codex-provider-input" name="codex_provider">
+              <option value="codex-env" selected>codex-env</option>
+              <option value="mify">mify</option>
+            </select>
+          </label>
+          <div class="prompt-copy" id="codex-provider-help">
+            codex-env uses CODEX_BASE_URL and CODEX_API_KEY. mify requires XM_LLM_API_KEY.
+          </div>
+          </div>
+          <div id="claude-fields" class="route-fields" hidden>
+          <label>
+            Claude provider
+            <select id="claude-provider-input" name="claude_provider">
+              <option value="kimi-anthropic">Kimi</option>
+              <option value="mimo-anthropic" selected>MiMo token plan</option>
+              <option value="mify-anthropic">MiMo mify</option>
+            </select>
+          </label>
+          <div class="prompt-copy" id="claude-provider-help">
+            Kimi uses KIMI_API_KEY. MiMo token plan uses MIMO_TP_KEY. MiMo mify uses XM_LLM_API_KEY.
+          </div>
           </div>
           <div id="isaac-fields" class="route-fields" hidden>
           <label>
@@ -129,6 +154,7 @@
             <div class="panel-header"><span>Chase</span><button data-copy="chase">Copy Path</button></div>
             <div class="image-frame ratio-16-9" id="chase-frame">Chase view unavailable for this backend.</div>
           </article>
+          <article class="image-panel blank-panel" data-panel="blank-chase" aria-hidden="true"></article>
           <article id="outputs-panel" class="outputs-panel" data-panel="outputs">
             <h2>Outputs</h2>
             <div id="artifact-list" class="artifact-list"></div>
@@ -137,6 +163,15 @@
       </main>
 
       <aside class="state-rail">
+        <div
+          id="state-rail-resizer"
+          class="splitter state-rail-splitter"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize run evidence panel"
+          tabindex="0"
+          title="Drag to resize run evidence panel"
+        ></div>
         <section>
           <h2>Run State</h2>
           <dl id="run-state">
@@ -160,12 +195,22 @@
         <section>
           <h2>Raw Logs</h2>
           <button id="toggle-raw-button" class="secondary">Show Raw Evidence</button>
-          <pre id="raw-evidence" class="raw-evidence" hidden></pre>
         </section>
       </aside>
 
       <footer class="event-strip">
+        <div
+          id="evidence-strip-resizer"
+          class="splitter event-strip-splitter"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Resize raw evidence log panel"
+          tabindex="0"
+          title="Drag to resize raw evidence log panel"
+          hidden
+        ></div>
         <div id="event-log" role="status" aria-live="polite">Choose an agent route on the left. The console will show required gates before launch.</div>
+        <pre id="raw-evidence" class="raw-evidence" tabindex="0" hidden></pre>
       </footer>
     </div>
 
@@ -180,6 +225,21 @@
       </form>
     </dialog>
 
-    <script src="/app.js"></script>
+    <dialog id="image-dialog" class="image-dialog">
+      <form method="dialog">
+        <div class="image-dialog-header">
+          <div>
+            <h2 id="image-dialog-title">View Artifact</h2>
+            <div id="image-dialog-path" class="field-help"></div>
+          </div>
+          <button value="close" class="secondary">Close</button>
+        </div>
+        <div class="image-dialog-frame">
+          <img id="image-dialog-img" alt="Expanded artifact" />
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/app.js?v=decision-proof-20260608"></script>
   </body>
 </html>

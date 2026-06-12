@@ -212,7 +212,7 @@ codex-provider-smoke prompt="Reply exactly with: roboclaws-codex-provider-ok":
     roboclaws_load_dotenv .env
     codex_provider="$(roboclaws_code_agent_provider ROBOCLAWS_CODEX_PROVIDER)"
     if [[ "$codex_provider" == "system" ]]; then
-      echo "error: no repo-local Codex endpoint configured; set XM_LLM_API_KEY for mify, or CODEX_BASE_URL and CODEX_API_KEY for codex-env, in .env" >&2
+      echo "error: unsupported system Codex provider; codex-env is the default and requires CODEX_BASE_URL plus CODEX_API_KEY, or set ROBOCLAWS_CODEX_PROVIDER=mify explicitly with XM_LLM_API_KEY" >&2
       exit 1
     fi
     roboclaws_assert_codex_network_allowed "Codex provider smoke"

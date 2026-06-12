@@ -10,7 +10,19 @@ const state = {
   activeView: "overview",
 };
 
+const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
+const STATE_RAIL_DEFAULT_WIDTH = 300;
+const STATE_RAIL_MIN_WIDTH = 260;
+const STATE_RAIL_MAX_WIDTH = 760;
+const WORKSPACE_MIN_WIDTH = 420;
+const EVIDENCE_STRIP_HEIGHT_KEY = "roboclaws.operatorConsole.evidenceStripHeight";
+const EVIDENCE_STRIP_DEFAULT_HEIGHT = 280;
+const EVIDENCE_STRIP_MIN_HEIGHT = 160;
+const EVIDENCE_STRIP_MAX_HEIGHT = 620;
+const MAIN_CONTENT_MIN_HEIGHT = 360;
+
 const els = {
+  appShell: document.querySelector(".app-shell"),
   routeList: document.getElementById("route-list"),
   taskPrompt: document.getElementById("prompt-input"),
   promptHelp: document.getElementById("prompt-copy"),
@@ -20,9 +32,13 @@ const els = {
   portInput: document.getElementById("port-input"),
   selectedRouteSummary: document.getElementById("selected-route-summary"),
   commonFields: document.getElementById("common-fields"),
+  codexFields: document.getElementById("codex-fields"),
+  claudeFields: document.getElementById("claude-fields"),
   isaacFields: document.getElementById("isaac-fields"),
   agibotFields: document.getElementById("agibot-fields"),
   agibotGateFields: document.getElementById("agibot-gate-fields"),
+  codexProviderInput: document.getElementById("codex-provider-input"),
+  claudeProviderInput: document.getElementById("claude-provider-input"),
   contextInput: document.getElementById("context-json-input"),
   isaacSceneInput: document.getElementById("isaac-scene-input"),
   isaacPreflightGate: document.getElementById("isaac-preflight-gate"),
@@ -51,10 +67,16 @@ const els = {
   eventList: document.getElementById("event-log"),
   rawEvidence: document.getElementById("raw-evidence"),
   toggleRawButton: document.getElementById("toggle-raw-button"),
+  stateRailResizer: document.getElementById("state-rail-resizer"),
+  evidenceStripResizer: document.getElementById("evidence-strip-resizer"),
   confirmDialog: document.getElementById("confirm-dialog"),
   confirmTitle: document.getElementById("confirm-title"),
   confirmAction: document.getElementById("confirm-action"),
   confirmBody: document.getElementById("confirm-body"),
+  imageDialog: document.getElementById("image-dialog"),
+  imageDialogTitle: document.getElementById("image-dialog-title"),
+  imageDialogPath: document.getElementById("image-dialog-path"),
+  imageDialogImg: document.getElementById("image-dialog-img"),
 };
 
 async function boot() {
@@ -74,6 +96,8 @@ function bindEvents() {
   });
   [
     els.contextInput,
+    els.codexProviderInput,
+    els.claudeProviderInput,
     els.portInput,
     els.isaacPreflightGate,
     els.localizationGate,
@@ -88,7 +112,7 @@ function bindEvents() {
     input.addEventListener("change", renderRoutes);
     input.addEventListener("change", refreshSelectedRouteReadiness);
   });
-  els.startButton.addEventListener("click", confirmLaunch);
+  els.startButton.addEventListener("click", handleStartAction);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
     confirmAction({
@@ -109,12 +133,234 @@ function bindEvents() {
     });
   });
   els.toggleRawButton.addEventListener("click", toggleRawEvidence);
+  bindStateRailResize();
+  bindEvidenceStripResize();
   document.querySelectorAll(".view-mode").forEach((button) => {
     button.addEventListener("click", () => {
       state.activeView = button.dataset.view;
       renderViewModes();
     });
   });
+}
+
+function bindEvidenceStripResize() {
+  if (!els.appShell || !els.evidenceStripResizer) {
+    return;
+  }
+  const savedHeight = readSavedEvidenceStripHeight();
+  if (savedHeight) {
+    setEvidenceStripHeight(savedHeight, { persist: false });
+  }
+  els.evidenceStripResizer.addEventListener("pointerdown", startEvidenceStripResize);
+  els.evidenceStripResizer.addEventListener("keydown", handleEvidenceStripResizeKey);
+  window.addEventListener("resize", () => {
+    setEvidenceStripHeight(currentEvidenceStripHeight(), { persist: false });
+  });
+}
+
+function startEvidenceStripResize(event) {
+  if (window.matchMedia("(max-width: 1360px)").matches) {
+    return;
+  }
+  event.preventDefault();
+  const startY = event.clientY;
+  const startHeight = currentEvidenceStripHeight();
+  const pointerId = event.pointerId;
+  els.evidenceStripResizer.setPointerCapture(pointerId);
+  document.body.classList.add("resizing-evidence-strip");
+
+  const onPointerMove = (moveEvent) => {
+    setEvidenceStripHeight(startHeight + startY - moveEvent.clientY, { persist: false });
+  };
+  const stopResize = () => {
+    document.body.classList.remove("resizing-evidence-strip");
+    persistEvidenceStripHeight(currentEvidenceStripHeight());
+    els.evidenceStripResizer.removeEventListener("pointermove", onPointerMove);
+    try {
+      els.evidenceStripResizer.releasePointerCapture(pointerId);
+    } catch {
+      // Pointer capture may already be released after a cancelled drag.
+    }
+  };
+
+  els.evidenceStripResizer.addEventListener("pointermove", onPointerMove);
+  els.evidenceStripResizer.addEventListener("pointerup", stopResize, { once: true });
+  els.evidenceStripResizer.addEventListener("pointercancel", stopResize, { once: true });
+}
+
+function handleEvidenceStripResizeKey(event) {
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) {
+    return;
+  }
+  event.preventDefault();
+  const step = event.shiftKey ? 80 : 24;
+  const bounds = evidenceStripHeightBounds();
+  if (event.key === "Home") {
+    setEvidenceStripHeight(bounds.min);
+  } else if (event.key === "End") {
+    setEvidenceStripHeight(bounds.max);
+  } else {
+    const direction = event.key === "ArrowUp" ? 1 : -1;
+    setEvidenceStripHeight(currentEvidenceStripHeight() + direction * step);
+  }
+}
+
+function setEvidenceStripHeight(height, options = {}) {
+  const persist = options.persist !== false;
+  const bounds = evidenceStripHeightBounds();
+  const nextHeight = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(height))));
+  document.documentElement.style.setProperty("--evidence-strip-height", `${nextHeight}px`);
+  els.evidenceStripResizer.setAttribute("aria-valuemin", String(bounds.min));
+  els.evidenceStripResizer.setAttribute("aria-valuemax", String(bounds.max));
+  els.evidenceStripResizer.setAttribute("aria-valuenow", String(nextHeight));
+  if (persist) {
+    persistEvidenceStripHeight(nextHeight);
+  }
+}
+
+function currentEvidenceStripHeight() {
+  const rawValue = getComputedStyle(document.documentElement)
+    .getPropertyValue("--evidence-strip-height")
+    .trim();
+  const parsed = Number.parseFloat(rawValue);
+  return Number.isFinite(parsed) ? parsed : EVIDENCE_STRIP_DEFAULT_HEIGHT;
+}
+
+function evidenceStripHeightBounds() {
+  const shellHeight = els.appShell.getBoundingClientRect().height || window.innerHeight;
+  const availableHeight = shellHeight - 56 - MAIN_CONTENT_MIN_HEIGHT;
+  const max = Math.max(
+    EVIDENCE_STRIP_MIN_HEIGHT,
+    Math.min(EVIDENCE_STRIP_MAX_HEIGHT, Math.floor(availableHeight))
+  );
+  return { min: EVIDENCE_STRIP_MIN_HEIGHT, max };
+}
+
+function readSavedEvidenceStripHeight() {
+  try {
+    const height = Number.parseFloat(localStorage.getItem(EVIDENCE_STRIP_HEIGHT_KEY) || "");
+    return Number.isFinite(height) ? height : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function persistEvidenceStripHeight(height) {
+  try {
+    localStorage.setItem(EVIDENCE_STRIP_HEIGHT_KEY, String(Math.round(height)));
+  } catch {
+    // Local storage can be disabled; resizing should still work for this page load.
+  }
+}
+
+function bindStateRailResize() {
+  if (!els.appShell || !els.stateRailResizer) {
+    return;
+  }
+  const savedWidth = readSavedStateRailWidth();
+  if (savedWidth) {
+    setStateRailWidth(savedWidth, { persist: false });
+  }
+  els.stateRailResizer.addEventListener("pointerdown", startStateRailResize);
+  els.stateRailResizer.addEventListener("keydown", handleStateRailResizeKey);
+  window.addEventListener("resize", () => {
+    setStateRailWidth(currentStateRailWidth(), { persist: false });
+  });
+}
+
+function startStateRailResize(event) {
+  if (window.matchMedia("(max-width: 1360px)").matches) {
+    return;
+  }
+  event.preventDefault();
+  const startX = event.clientX;
+  const startWidth = currentStateRailWidth();
+  const pointerId = event.pointerId;
+  els.stateRailResizer.setPointerCapture(pointerId);
+  document.body.classList.add("resizing-state-rail");
+
+  const onPointerMove = (moveEvent) => {
+    setStateRailWidth(startWidth + startX - moveEvent.clientX, { persist: false });
+  };
+  const stopResize = () => {
+    document.body.classList.remove("resizing-state-rail");
+    persistStateRailWidth(currentStateRailWidth());
+    els.stateRailResizer.removeEventListener("pointermove", onPointerMove);
+    try {
+      els.stateRailResizer.releasePointerCapture(pointerId);
+    } catch {
+      // Pointer capture may already be released after a cancelled drag.
+    }
+  };
+
+  els.stateRailResizer.addEventListener("pointermove", onPointerMove);
+  els.stateRailResizer.addEventListener("pointerup", stopResize, { once: true });
+  els.stateRailResizer.addEventListener("pointercancel", stopResize, { once: true });
+}
+
+function handleStateRailResizeKey(event) {
+  if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+    return;
+  }
+  event.preventDefault();
+  const step = event.shiftKey ? 80 : 24;
+  const bounds = stateRailWidthBounds();
+  if (event.key === "Home") {
+    setStateRailWidth(bounds.min);
+  } else if (event.key === "End") {
+    setStateRailWidth(bounds.max);
+  } else {
+    const direction = event.key === "ArrowLeft" ? 1 : -1;
+    setStateRailWidth(currentStateRailWidth() + direction * step);
+  }
+}
+
+function setStateRailWidth(width, options = {}) {
+  const persist = options.persist !== false;
+  const bounds = stateRailWidthBounds();
+  const nextWidth = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(width))));
+  document.documentElement.style.setProperty("--state-rail-width", `${nextWidth}px`);
+  els.stateRailResizer.setAttribute("aria-valuemin", String(bounds.min));
+  els.stateRailResizer.setAttribute("aria-valuemax", String(bounds.max));
+  els.stateRailResizer.setAttribute("aria-valuenow", String(nextWidth));
+  if (persist) {
+    persistStateRailWidth(nextWidth);
+  }
+}
+
+function currentStateRailWidth() {
+  const rawValue = getComputedStyle(document.documentElement)
+    .getPropertyValue("--state-rail-width")
+    .trim();
+  const parsed = Number.parseFloat(rawValue);
+  return Number.isFinite(parsed) ? parsed : STATE_RAIL_DEFAULT_WIDTH;
+}
+
+function stateRailWidthBounds() {
+  const shellWidth = els.appShell.getBoundingClientRect().width || window.innerWidth;
+  const availableWidth = shellWidth - 240 - 300 - WORKSPACE_MIN_WIDTH;
+  const max = Math.max(
+    STATE_RAIL_MIN_WIDTH,
+    Math.min(STATE_RAIL_MAX_WIDTH, Math.floor(availableWidth))
+  );
+  return { min: STATE_RAIL_MIN_WIDTH, max };
+}
+
+function readSavedStateRailWidth() {
+  try {
+    const width = Number.parseFloat(localStorage.getItem(STATE_RAIL_WIDTH_KEY) || "");
+    return Number.isFinite(width) ? width : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function persistStateRailWidth(width) {
+  try {
+    localStorage.setItem(STATE_RAIL_WIDTH_KEY, String(Math.round(width)));
+  } catch {
+    // Local storage can be disabled; resizing should still work for this page load.
+  }
 }
 
 function renderRoutes() {
@@ -187,8 +433,7 @@ function renderSelection() {
   }
 
   els.commandPreview.textContent = commandPreview(route);
-  els.startButton.disabled = !route.enabled || readiness.can_start === false;
-  els.startHelp.textContent = readiness.blocker || route.disabled_reason || "";
+  renderStartAction(route, readiness);
 }
 
 function routeStatusDisplay(route, readiness) {
@@ -199,6 +444,9 @@ function routeStatusDisplay(route, readiness) {
     return { label: "READY", className: "ready" };
   }
   const kind = readiness.blocker_kind || "";
+  if (kind === "locked" && readiness.attachable_run) {
+    return { label: "ATTACH", className: "running" };
+  }
   if (kind === "locked") return { label: "LOCKED", className: "blocked" };
   if (kind === "mcp_port_in_use") return { label: "PORT IN USE", className: "blocked" };
   if (kind === "needs_provider") return { label: "NEEDS PROVIDER", className: "needs_action" };
@@ -227,6 +475,8 @@ function renderRouteFields(route) {
   const fieldGroups = new Set(route.field_groups || ["common"]);
 
   els.commonFields.hidden = !route.enabled || !fieldGroups.has("common");
+  els.codexFields.hidden = !route.enabled || route.driver !== "codex";
+  els.claudeFields.hidden = !route.enabled || route.driver !== "claude";
   els.isaacFields.hidden = !fieldGroups.has("isaac");
   els.agibotFields.hidden = !fieldGroups.has("agibot");
   els.agibotGateFields.hidden = !fieldGroups.has("agibot_gates");
@@ -250,7 +500,9 @@ function effectiveReadiness(route) {
     return { can_start: false, blocker: route.disabled_reason || "", gates };
   }
   if (lockBlocked) {
-    blocker = "Backend lock is held by another run. Open that run or wait for it to finish.";
+    blocker =
+      base.blocker ||
+      "Backend lock is held by another run. Open that run or wait for it to finish.";
   }
 
   for (const gate of gates) {
@@ -289,6 +541,37 @@ function firstBlockingGateKind(gates) {
   return gate ? gate.kind || "" : "";
 }
 
+function renderStartAction(route, readiness) {
+  if (state.activeRunId) {
+    els.startButton.textContent = "Run Attached";
+    els.startButton.disabled = true;
+    els.startHelp.textContent = `Watching run ${state.activeRunId}.`;
+    return;
+  }
+  const attachableRun = readiness.attachable_run || null;
+  els.startButton.textContent = attachableRun ? "Attach Existing Run" : "Start Agent Run";
+  els.startButton.disabled = !route.enabled || (readiness.can_start === false && !attachableRun);
+  els.startHelp.textContent = attachableRun
+    ? `Existing run ${attachableRun.run_id} is using this backend. Attach to continue watching it.`
+    : readiness.blocker || route.disabled_reason || "";
+}
+
+function handleStartAction() {
+  const readiness = effectiveReadiness(state.selectedRoute);
+  if (readiness.attachable_run) {
+    attachExistingRun(readiness.attachable_run);
+    return;
+  }
+  confirmLaunch();
+}
+
+function attachExistingRun(run) {
+  state.activeRunId = run.run_id;
+  state.activeRouteId = run.route_id || state.selectedRoute.id;
+  renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
+  startPolling();
+}
+
 function scheduleReadinessRefresh() {
   if (state.readinessTimer) {
     clearTimeout(state.readinessTimer);
@@ -309,6 +592,12 @@ async function refreshSelectedRouteReadiness() {
   if (els.contextInput.value) {
     params.set("context_json", els.contextInput.value);
   }
+  if (route.driver === "codex") {
+    params.set("codex_provider", selectedCodexProvider());
+  }
+  if (route.driver === "claude") {
+    params.set("claude_provider", selectedClaudeProvider());
+  }
   const readiness = await fetchJson(`/api/readiness?${params.toString()}`);
   if (readiness.error) {
     els.startHelp.textContent = readiness.error;
@@ -322,6 +611,12 @@ async function refreshSelectedRouteReadiness() {
 function confirmLaunch() {
   const route = state.selectedRoute;
   const promptSource = els.taskPrompt.value.trim() ? "custom" : "default";
+  const providerRows =
+    route.driver === "codex"
+      ? `<dt>Provider</dt><dd>${escapeHtml(selectedCodexProvider())}</dd>`
+      : route.driver === "claude"
+        ? `<dt>Provider</dt><dd>${escapeHtml(selectedClaudeProviderLabel())}</dd>`
+        : "";
   const movementRows = isAgibotRoute(route)
     ? `<dt>Movement</dt><dd>${escapeHtml(
         els.realMovementGate.checked ? "enabled" : "dry-run"
@@ -333,6 +628,7 @@ function confirmLaunch() {
       <dt>Driver</dt><dd>${escapeHtml(route.driver_label || route.driver)}</dd>
       <dt>Backend</dt><dd>${escapeHtml(route.backend)}</dd>
       <dt>Profile</dt><dd>${escapeHtml(route.profile)}</dd>
+      ${providerRows}
       <dt>Lock</dt><dd>${escapeHtml(route.lock_name)}</dd>
       ${movementRows}
       <dt>Prompt</dt><dd>${promptSource}</dd>
@@ -398,6 +694,15 @@ async function launchRun() {
   if (els.isaacSceneInput.value) {
     body.overrides.isaac_scene_usd_path = els.isaacSceneInput.value;
   }
+  if (state.selectedRoute.driver === "codex") {
+    body.env_overrides = {
+      ROBOCLAWS_CODEX_PROVIDER: selectedCodexProvider(),
+    };
+  } else if (state.selectedRoute.driver === "claude") {
+    body.env_overrides = {
+      ROBOCLAWS_CLAUDE_PROVIDER: selectedClaudeProvider(),
+    };
+  }
 
   const result = await fetchJson("/api/runs", {
     method: "POST",
@@ -410,6 +715,7 @@ async function launchRun() {
   }
   state.activeRunId = result.run_id;
   state.activeRouteId = state.selectedRoute.id;
+  renderStartAction(state.selectedRoute, effectiveReadiness(state.selectedRoute));
   startPolling();
 }
 
@@ -434,14 +740,20 @@ async function pollState() {
   }
   state.activeState = payload;
   renderRunState(payload);
+  if (!els.rawEvidence.hidden) {
+    refreshRawEvidence();
+  }
 }
 
 function renderRunState(payload) {
   const route = payload.route || state.selectedRoute || {};
+  const attemptLabel = payload.display_run_id && payload.display_run_id !== payload.run_id
+    ? ` / ${payload.display_run_id}`
+    : "";
   document.querySelector(".top-run-bar").classList.add("run-active");
-  els.runTitle.textContent = `${route.label || "Agent run"} / ${payload.run_id}`;
-  els.routeStatus.textContent = payload.phase || payload.status || "Running";
-  els.routeStatus.className = `badge ${statusClass(payload.phase || payload.status)}`;
+  els.runTitle.textContent = `${route.label || "Agent run"} / ${payload.run_id}${attemptLabel}`;
+  els.routeStatus.textContent = payload.status_label || payload.phase || payload.status || "Running";
+  els.routeStatus.className = `badge ${statusClass(payload.status || payload.phase)}`;
   els.lockStatus.textContent = `lock: ${route.lock_name || payload.backend_lock || "none"}`;
   els.elapsedStatus.textContent =
     payload.elapsed_seconds == null ? "00:00" : formatElapsed(payload.elapsed_seconds);
@@ -460,7 +772,9 @@ function renderRunState(payload) {
   `;
   els.toolPanel.textContent = JSON.stringify(payload.latest_tool_call || {}, null, 2);
   els.proofPanel.textContent = `${payload.checker_status.status || "pending"}: ${
-    payload.checker_status.checker_log || "Checker has not run yet."
+    payload.checker_status.message ||
+    payload.checker_status.checker_log ||
+    "Checker has not run yet."
   }`;
   renderArtifacts(payload.artifact_paths || []);
   renderViews(payload.latest_view_assets || {}, route);
@@ -491,7 +805,10 @@ function renderArtifacts(items) {
 
 function renderViews(assets, route = state.selectedRoute) {
   setImageSlot("fpv", assets.fpv, "No frame yet. Waiting for the first observation artifact.");
-  setImageSlot("chase", assets.chase, "Chase view unavailable for this backend.");
+  const chaseEmptyText = routeHasOverviewChase(route)
+    ? "No chase frame yet. Waiting for the first observation artifact."
+    : "Chase view unavailable for this backend.";
+  setImageSlot("chase", assets.chase, chaseEmptyText);
   setImageSlot("map", assets.map, "Map artifact has not been written yet.");
   setImageSlot("grounding", assets.grounding, "No grounding result yet.");
   ensureActiveViewAvailable(route);
@@ -507,16 +824,60 @@ function setImageSlot(name, asset, emptyText) {
     slot.textContent = emptyText;
     return;
   }
-  slot.innerHTML = `<img alt="${name} artifact" src="${asset.href || artifactHref(asset.path)}" />`;
+  const src = asset.href || artifactHref(asset.path);
+  const label = imageLabel(name);
+  slot.innerHTML = `
+    <button
+      type="button"
+      class="image-preview-button"
+      data-image-src="${escapeHtml(src)}"
+      data-image-title="${escapeHtml(label)}"
+      data-image-path="${escapeHtml(asset.path || "")}"
+      aria-label="Open ${escapeHtml(label)} image preview"
+      title="Open image preview"
+    >
+      <img alt="${escapeHtml(label)} artifact" src="${escapeHtml(src)}" />
+    </button>
+  `;
+  const button = slot.querySelector(".image-preview-button");
+  button.addEventListener("click", () => {
+    openImageDialog({
+      src,
+      title: label,
+      path: asset.path || "",
+    });
+  });
+}
+
+function imageLabel(name) {
+  const labels = {
+    fpv: "FPV",
+    map: "Map",
+    grounding: "Grounding",
+    chase: "Chase",
+  };
+  return labels[name] || name;
+}
+
+function openImageDialog({ src, title, path }) {
+  if (!src) {
+    return;
+  }
+  els.imageDialogTitle.textContent = title;
+  els.imageDialogPath.textContent = path;
+  els.imageDialogImg.src = src;
+  els.imageDialogImg.alt = `${title} artifact`;
+  els.imageDialog.showModal();
 }
 
 function renderEvents(payload) {
   const bits = [
     `phase=${payload.phase}`,
+    payload.terminal_reason ? `reason=${payload.terminal_reason}` : "",
     `action=${payload.latest_action || "none"}`,
     `checker=${payload.checker_status.status || "pending"}`,
-    `outputs=${payload.run_dir}`,
-  ];
+    `outputs=${payload.display_run_dir || payload.run_dir}`,
+  ].filter(Boolean);
   els.eventList.textContent = bits.join("  ");
 }
 
@@ -526,9 +887,11 @@ function renderViewModes(route = state.selectedRoute) {
     return;
   }
   const modes = routeViewModes(route);
-  const hasGrounding = modes.has("grounding");
+  const hasOverviewChase = routeHasOverviewChase(route, modes);
   const activeView = state.activeView || "overview";
-  visualGrid.className = `view-grid mode-${activeView}${hasGrounding ? "" : " no-grounding"}`;
+  visualGrid.className = `view-grid mode-${activeView}${
+    hasOverviewChase ? " has-overview-chase" : " no-overview-chase"
+  }`;
 
   document.querySelectorAll(".view-mode").forEach((button) => {
     const enabled = modes.has(button.dataset.view);
@@ -536,7 +899,7 @@ function renderViewModes(route = state.selectedRoute) {
     button.classList.toggle("active", enabled && button.dataset.view === activeView);
   });
 
-  const visiblePanels = visiblePanelsForView(activeView, modes);
+  const visiblePanels = visiblePanelsForView(activeView, modes, route);
   document.querySelectorAll("[data-panel]").forEach((panel) => {
     panel.hidden = !visiblePanels.has(panel.dataset.panel);
   });
@@ -556,16 +919,37 @@ function routeViewModes(route) {
   return new Set(route.view_modes || ["overview", "fpv", "map", "outputs"]);
 }
 
+function routeHasOverviewChase(route, modes = routeViewModes(route)) {
+  return Boolean(route && route.resource_kind !== "physical_robot" && modes.has("chase"));
+}
+
 function isAgibotRoute(route) {
   const groups = new Set((route && route.field_groups) || []);
   return Boolean(route && (route.backend === "agibot_gdk" || groups.has("agibot_gates")));
 }
 
-function visiblePanelsForView(view, modes) {
+function selectedCodexProvider() {
+  return els.codexProviderInput.value || "codex-env";
+}
+
+function selectedClaudeProvider() {
+  return els.claudeProviderInput.value || "mimo-anthropic";
+}
+
+function selectedClaudeProviderLabel() {
+  const option = Array.from(els.claudeProviderInput.options).find(
+    (item) => item.value === selectedClaudeProvider()
+  );
+  return option ? option.textContent : selectedClaudeProvider();
+}
+
+function visiblePanelsForView(view, modes, route = state.selectedRoute) {
   if (view === "overview") {
     const panels = new Set(["fpv", "map"]);
-    if (modes.has("grounding")) {
-      panels.add("grounding");
+    if (routeHasOverviewChase(route, modes)) {
+      panels.add("chase");
+    } else {
+      panels.add("blank-chase");
     }
     return panels;
   }
@@ -597,15 +981,29 @@ async function toggleRawEvidence() {
   }
   const hidden = els.rawEvidence.hidden;
   els.rawEvidence.hidden = !hidden;
+  els.evidenceStripResizer.hidden = !hidden;
+  els.appShell.classList.toggle("raw-evidence-open", hidden);
   els.toggleRawButton.textContent = hidden ? "Hide Raw Evidence" : "Show Raw Evidence";
   if (hidden) {
-    const driver = (state.activeState.artifact_paths || []).find(
-      (item) => item.label === "Driver Log"
-    );
-    const text = driver
-      ? await fetch(`/api/raw/${encodeURI(driver.path)}`).then((response) => response.text())
-      : "";
-    els.rawEvidence.textContent = text || "No raw driver log yet.";
+    refreshRawEvidence({ forceStickToBottom: true });
+  }
+}
+
+async function refreshRawEvidence(options = {}) {
+  const forceStickToBottom = options.forceStickToBottom === true;
+  const driver = ((state.activeState && state.activeState.artifact_paths) || []).find(
+    (item) => item.label === "Driver Log"
+  );
+  const shouldStickToBottom =
+    forceStickToBottom ||
+    els.rawEvidence.scrollTop + els.rawEvidence.clientHeight >=
+      els.rawEvidence.scrollHeight - 24;
+  const text = driver
+    ? await fetch(`/api/raw/${encodeURI(driver.path)}`).then((response) => response.text())
+    : "";
+  els.rawEvidence.textContent = text || "No raw driver log yet.";
+  if (shouldStickToBottom) {
+    els.rawEvidence.scrollTop = els.rawEvidence.scrollHeight;
   }
 }
 
@@ -630,6 +1028,7 @@ function statusClass(value) {
   if (!value) return "neutral";
   const text = String(value);
   if (text.includes("pass") || text.includes("finish")) return "passed";
+  if (text.includes("rate_limit")) return "failed";
   if (text.includes("fail") || text.includes("stop")) return "failed";
   if (text.includes("run") || text.includes("start")) return "running";
   return "warning";
