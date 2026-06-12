@@ -51,6 +51,17 @@ SIGNAL_RULES: tuple[dict[str, Any], ...] = (
         ),
     },
     {
+        "id": "open_ended",
+        "label": "Open-ended household intent",
+        "patterns": (
+            r"open[-_]ended",
+            r"goal_contract",
+            r"task_intent",
+            r"completion_claim",
+            r"agent-declared",
+        ),
+    },
+    {
         "id": "mcp_checker",
         "label": "MCP/server/checker contract",
         "patterns": (
@@ -123,6 +134,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--agent-engine", default="")
     parser.add_argument("--provider-profile", default="")
+    parser.add_argument("--intent", default="")
     parser.add_argument("--evidence-lane", default="")
     parser.add_argument("--camera-labeler", default="")
     parser.add_argument("--output-dir", type=Path)
@@ -139,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
         changed_files=_split_csv_values(args.changed_file),
         agent_engine=_split_csv(args.agent_engine),
         provider_profile=_split_csv(args.provider_profile),
+        intent=_split_csv(args.intent),
         evidence_lane=_split_csv(args.evidence_lane),
         camera_labeler=_split_csv(args.camera_labeler),
         output_dir=args.output_dir,
@@ -156,6 +169,7 @@ def build_validation_matrix(
     changed_files: Sequence[str] = (),
     agent_engine: Sequence[str] = (),
     provider_profile: Sequence[str] = (),
+    intent: Sequence[str] = (),
     evidence_lane: Sequence[str] = (),
     camera_labeler: Sequence[str] = (),
     output_dir: Path | None = None,
@@ -171,6 +185,7 @@ def build_validation_matrix(
     explicit_axes = {
         "agent_engine": _dedupe(agent_engine),
         "provider_profile": _dedupe(provider_profile),
+        "intent": _dedupe(intent),
         "evidence_lane": _dedupe(evidence_lane),
         "camera_labeler": _dedupe(camera_labeler),
     }
@@ -278,6 +293,8 @@ def _detect_signals(
         signals.append(_override_signal("agent_sdk", "agent_engine=openai-agents-sdk"))
     if "codex-cli" in explicit_axes.get("agent_engine", []):
         signals.append(_override_signal("cleanup_skill", "agent_engine=codex-cli"))
+    if "open-ended" in explicit_axes.get("intent", []):
+        signals.append(_override_signal("open_ended", "intent=open-ended"))
     if "camera-grounded-labels" in explicit_axes.get("evidence_lane", []):
         signals.append(_override_signal("visual_grounding", "evidence_lane=camera-grounded-labels"))
     if "camera-raw-fpv" in explicit_axes.get("evidence_lane", []):
@@ -355,6 +372,30 @@ def _candidate_gates(
             rule_ids=("mcp_checker",),
             requirements=("just", "python_env"),
             expense="local-sim",
+            gate_dir=gate_dir,
+        ),
+        _gate(
+            gate_id="open-ended-household-contract-tests",
+            command=[
+                "./scripts/dev/run_pytest_standalone.sh",
+                "-q",
+                "tests/contract/dev_tools/test_task_agent_just_recipes.py::"
+                "test_surface_prompt_omitted_intent_with_prompt_infers_open_ended",
+                "tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::"
+                "test_realworld_mcp_open_ended_intent_is_recorded_in_run_result",
+                "tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::"
+                "test_checker_allows_open_ended_agent_view_with_no_visible_objects",
+            ],
+            axes={
+                "intent": "open-ended",
+            },
+            reason=(
+                "Open-ended, goal-contract, or completion-claim changes need a "
+                "first-class open-ended launch and artifact contract gate."
+            ),
+            rule_ids=("open_ended",),
+            requirements=("python_env",),
+            expense="deterministic",
             gate_dir=gate_dir,
         ),
         _gate(

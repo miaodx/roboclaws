@@ -54,6 +54,9 @@ aid, not a source of truth for current priority.
 
 ### Active Or Recently Touched
 
+- [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
+- [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
+- [Open-Ended Proof Status Contract](2026-06-11-open-ended-proof-status.md)
 - [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
@@ -66,6 +69,8 @@ aid, not a source of truth for current priority.
 
 ### Household World, Map Build, And Cleanup
 
+- [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
+- [Open-Ended Proof Status Contract](2026-06-11-open-ended-proof-status.md)
 - [Adaptive Target Inspection](2026-06-11-adaptive-target-inspection.md)
 - [Live-Agent Adaptive Inspection Triggerability](2026-06-11-live-agent-adaptive-inspection-triggerability.md)
 - [Mujoco Isaac Minimal Map Task Parity](mujoco-isaac-minimal-map-task-parity.md)
@@ -107,6 +112,8 @@ aid, not a source of truth for current priority.
 
 ### Launch, Console, And Agent Runtime
 
+- [Household Map, Launch, And Open-Ended Contracts](2026-06-11-household-map-launch-open-ended-contracts.md)
+- [Retire AI2-THOR And VLM Direct](refactor-retire-ai2thor-vlm-direct.md)
 - [Agent Validation Matrix Skill](2026-06-11-agent-validation-matrix-skill.md)
 - [Task Surface, Intent, And Goal Contract Refactor](task-surface-intent-goal-contract-refactor.md)
 - [Domain-First Launch Architecture](refactor-reduce-entropy-domain-first-launch-architecture.md)

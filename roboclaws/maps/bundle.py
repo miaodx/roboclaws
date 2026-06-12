@@ -357,14 +357,22 @@ def validate_nav2_map_bundle(bundle_dir: Path) -> MapBundleValidation:
     driveable = (
         semantics.get("driveable_ways") if isinstance(semantics.get("driveable_ways"), list) else []
     )
-    if not rooms:
-        errors.append("semantics.json must contain rooms")
-    if not fixtures:
-        errors.append("semantics.json must contain fixtures")
+    base_navigation_map = not rooms and not fixtures
     if not waypoints:
         errors.append("semantics.json must contain inspection_waypoints")
-    if not driveable:
+    if not driveable and not base_navigation_map:
         errors.append("semantics.json must contain driveable_ways")
+    if base_navigation_map and waypoints:
+        generated_waypoints = [
+            waypoint
+            for waypoint in waypoints
+            if waypoint.get("waypoint_source") == "generated_exploration_candidate"
+        ]
+        if not generated_waypoints:
+            errors.append(
+                "fixtureless semantics.json must contain generated_exploration_candidate "
+                "inspection_waypoints"
+            )
     if not isinstance(semantics.get("frame_ids"), dict) or not semantics["frame_ids"].get("map"):
         errors.append("semantics.json must contain frame_ids.map")
     if not isinstance(semantics.get("provenance"), dict):

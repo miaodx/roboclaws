@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import types
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -42,6 +43,7 @@ LIVE_OPENAI_AGENTS_RUNNER = (
 AGIBOT_MAP_BUILD_CODEX_RUNNER = (
     REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_agibot_map_build.py"
 )
+HOUSEHOLD_LIVE_DRIVER = REPO_ROOT / "roboclaws" / "agents" / "drivers" / "household_live.py"
 HOUSEHOLD_AGENT_SERVER_MODULE = "roboclaws.cli.agent_server"
 CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODE_AGENT_PROVIDER",
@@ -51,6 +53,10 @@ CODE_AGENT_ENV_VARS = (
     "ROBOCLAWS_CODEX_MODEL",
     "ROBOCLAWS_CLAUDE_MODEL",
     "ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS",
+    "ROBOCLAWS_PROVIDER_TIMING_PROXY",
+    "ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL",
+    "ROBOCLAWS_TIMING_PROXY_BIND_HOST",
+    "ROBOCLAWS_TIMING_PROXY_BIND_PORT",
     "KIMI_API_KEY",
     "MIMO_TP_KEY",
     "OPENAI_API_KEY",
@@ -170,6 +176,22 @@ def trace_agent_run(*args: str) -> list[str]:
     return result.stdout.strip().split("\t")
 
 
+def trace_agent_mcp(*args: str) -> list[str]:
+    binary = just_bin()
+    env = os.environ.copy()
+    env["ROBOCLAWS_JUST_TRACE"] = "1"
+    env["PATH"] = f"{Path(binary).parent}{os.pathsep}{env.get('PATH', '')}"
+    result = subprocess.run(
+        [binary, "agent::mcp", *args],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip().split("\t")
+
+
 def assert_task_run_fails(*args: str) -> str:
     return assert_surface_run_fails(*surface_args_from_legacy_task_args(*args))
 
@@ -261,7 +283,11 @@ def surface_args_from_legacy_task_args(*args: str) -> tuple[str, ...]:
         result.append(engine)
     if mode:
         if surface_parts[0] in {"surface=household-world", "surface=planner-proof"}:
-            result.append(f"evidence_lane={mode}")
+            if mode == "smoke":
+                result.append("run_preset=smoke")
+                result.append("evidence_lane=world-oracle-labels")
+            else:
+                result.append(f"evidence_lane={mode}")
         else:
             result.append(f"report={mode}")
     result.extend(normalized_overrides)
@@ -503,6 +529,52 @@ def test_run_module_exposes_surface_publicly() -> None:
     assert "-m roboclaws.cli.main run surface" in text
 
 
+def test_agent_mcp_accepts_canonical_household_dispatch_targets() -> None:
+    cleanup = trace_agent_mcp(
+        "up",
+        "household-world.cleanup",
+        "127.0.0.1",
+        "18788",
+        "output/debug/household-mcp",
+    )
+    map_build = trace_agent_mcp(
+        "up",
+        "household-world.map-build",
+        "127.0.0.1",
+        "18788",
+        "output/debug/map-build-mcp",
+    )
+
+    assert cleanup == [
+        "just",
+        "mcp::up",
+        "household-world.cleanup",
+        "127.0.0.1",
+        "18788",
+        "output/debug/household-mcp",
+    ]
+    assert map_build == [
+        "just",
+        "mcp::up",
+        "household-world.map-build",
+        "127.0.0.1",
+        "18788",
+        "output/debug/map-build-mcp",
+    ]
+
+
+def test_agent_mcp_rejects_legacy_household_dispatch_targets() -> None:
+    text = AGENT_JUST.read_text(encoding="utf-8")
+    mcp_recipe = re.search(r"^mcp action=.*?(?=^# |\\Z)", text, re.MULTILINE | re.DOTALL)
+    assert mcp_recipe is not None
+    body = mcp_recipe.group(0)
+
+    assert "household-world.cleanup|cleanup)" in body
+    assert "household-world.map-build|map-build)" in body
+    assert "household-cleanup)" not in body
+    assert "semantic-map-build)" not in body
+
+
 def test_surface_prompt_mapping_household_cleanup_codex_world_labels_default() -> None:
     route = trace_surface_run(
         "surface=household-world",
@@ -536,7 +608,7 @@ def test_surface_prompt_omitted_intent_with_prompt_infers_open_ended() -> None:
         "output/household/household-cleanup/codex-report",
     ]
     assert "我渴了，帮我找些解渴的东西" in route
-    assert route[-1] == "custom"
+    assert route[-1] == "default_cleanup"
     assert plan_trace[:5] == [
         "launch-plan",
         "surface=household-world",
@@ -555,7 +627,8 @@ def test_surface_open_ended_supports_mcp_smoke_for_local_gate() -> None:
             "surface=household-world",
             "agent_engine=direct-runner",
             "intent=open-ended",
-            "evidence_lane=smoke",
+            "run_preset=smoke",
+            "evidence_lane=world-oracle-labels",
             "prompt=我渴了，帮我找些解渴的东西",
         )
     )
@@ -569,6 +642,76 @@ def test_surface_open_ended_supports_mcp_smoke_for_local_gate() -> None:
     assert plan.goal_contract.goal_scope == "agent-declared"
     assert env["ROBOCLAWS_TASK_INTENT"] == "open-ended"
     assert json.loads(env["ROBOCLAWS_GOAL_CONTRACT_JSON"])["intent"] == "open-ended"
+
+
+def test_surface_launch_rejects_smoke_as_public_evidence_lane() -> None:
+    with pytest.raises(LaunchError, match="smoke is not an evidence lane") as exc:
+        resolve_surface_launch(
+            (
+                "surface=household-world",
+                "agent_engine=direct-runner",
+                "intent=cleanup",
+                "evidence_lane=smoke",
+            )
+        )
+
+    assert exc.value.hint == "use run_preset=smoke with evidence_lane=world-oracle-labels"
+
+
+def test_surface_launch_rejects_public_profile_alias() -> None:
+    with pytest.raises(
+        LaunchError,
+        match="profile= is no longer a public run::surface argument",
+    ) as exc:
+        resolve_surface_launch(
+            (
+                "surface=household-world",
+                "agent_engine=codex-cli",
+                "intent=cleanup",
+                "profile=world-oracle-labels",
+            )
+        )
+
+    assert "use evidence_lane=" in str(exc.value.hint)
+
+
+def test_surface_launch_rejects_public_visual_grounding_axis() -> None:
+    with pytest.raises(
+        LaunchError,
+        match="visual_grounding is no longer a public task axis",
+    ) as exc:
+        resolve_surface_launch(
+            (
+                "surface=household-world",
+                "agent_engine=direct-runner",
+                "intent=cleanup",
+                "evidence_lane=camera-grounded-labels",
+                "camera_labeler=grounding-dino",
+                "visual_grounding=grounding-dino",
+            )
+        )
+
+    assert exc.value.hint == (
+        "use camera_labeler=<labeler> with evidence_lane=camera-grounded-labels"
+    )
+
+
+def test_surface_launch_rejects_public_map_mode_axis() -> None:
+    with pytest.raises(
+        LaunchError,
+        match="map_mode= is no longer a public run::surface argument",
+    ) as exc:
+        resolve_surface_launch(
+            (
+                "surface=household-world",
+                "agent_engine=direct-runner",
+                "intent=cleanup",
+                "map_mode=minimal",
+            )
+        )
+
+    assert "Base Navigation Map" in str(exc.value.hint)
+    assert "runtime_map_prior=" in str(exc.value.hint)
 
 
 def test_surface_cleanup_prompt_stays_cleanup_intent_when_explicit() -> None:
@@ -626,7 +769,8 @@ def test_surface_launch_exports_goal_contract_to_lower_recipe_environment() -> N
             "surface=household-world",
             "agent_engine=direct-runner",
             "intent=cleanup",
-            "evidence_lane=smoke",
+            "run_preset=smoke",
+            "evidence_lane=world-oracle-labels",
         )
     )
     env = export_env_from_overrides(plan.overrides)
@@ -719,7 +863,8 @@ def test_openai_agents_sdk_cleanup_route_stays_private_non_default() -> None:
             "surface=household-world",
             "agent_engine=openai-agents-sdk",
             "intent=cleanup",
-            "evidence_lane=smoke",
+            "run_preset=smoke",
+            "evidence_lane=world-oracle-labels",
         )
     )
     assert plan.agent_engine == "openai-agents-sdk"
@@ -761,10 +906,10 @@ def test_prompt_mapping_household_cleanup_direct_world_labels_sanitized() -> Non
         (("household-cleanup", "claude-live"), "unsupported agent_engine 'claude-live'"),
         (
             ("household-cleanup", "codex", "world-oracle-labels-perf"),
-            "unsupported household cleanup lane",
+            "unsupported household-world evidence_lane",
         ),
-        (("household-cleanup", "codex", "minimal"), "unsupported household cleanup lane"),
-        (("household-cleanup", "codex", "visual"), "unsupported household cleanup lane"),
+        (("household-cleanup", "codex", "minimal"), "unsupported household-world evidence_lane"),
+        (("household-cleanup", "codex", "visual"), "unsupported household-world evidence_lane"),
         (
             ("household-cleanup", "codex", "camera-raw-fpv", "cleanup_routine=mcp"),
             "unsupported cleanup_routine",
@@ -790,7 +935,8 @@ def test_surface_router_is_importable_source_of_truth() -> None:
             "surface=household-world",
             "agent_engine=codex-cli",
             "intent=cleanup",
-            "evidence_lane=smoke",
+            "run_preset=smoke",
+            "evidence_lane=world-oracle-labels",
             "output_dir=output/custom",
         )
     )
@@ -828,7 +974,8 @@ def test_surface_launch_plan_exposes_domain_metadata_before_dispatch() -> None:
             "backend=agibot-gdk",
             "agent_engine=codex-cli",
             "intent=cleanup",
-            "evidence_lane=smoke",
+            "run_preset=smoke",
+            "evidence_lane=world-oracle-labels",
         )
     )
 
@@ -923,11 +1070,10 @@ def test_python_launch_plan_accepts_world_labels_sanitized_lane() -> None:
     assert plan.mode == "world-public-labels"
     assert plan.profile == "world-public-labels"
     assert plan.supported_profiles == (
-        "smoke",
         "world-oracle-labels",
         "world-public-labels",
-        "camera-raw-fpv",
         "camera-grounded-labels",
+        "camera-raw-fpv",
     )
     assert plan.argv == (
         "just",
@@ -992,8 +1138,8 @@ def test_key_value_third_argument_keeps_molmo_profile_default() -> None:
     ]
 
 
-def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
-    route = trace_task_run(
+def test_semantic_map_build_rejects_public_map_mode_axis() -> None:
+    stderr = assert_task_run_fails(
         "semantic-map-build",
         "direct",
         "world-oracle-labels",
@@ -1001,26 +1147,7 @@ def test_semantic_map_build_routes_minimal_map_mode_to_direct_sweep() -> None:
         "output_dir=output/custom-map",
     )
 
-    assert route[:6] == [
-        "just",
-        "molmo::cleanup",
-        "direct",
-        "world-oracle-labels",
-        "7",
-        "output/custom-map",
-    ]
-    assert route[15:] == [
-        "on",
-        "",
-        "molmospaces_subprocess",
-        "minimal",
-        "procthor-10k-val",
-        "0",
-        "",
-        "auto",
-        "",
-        "semantic-map-build",
-    ]
+    assert "map_mode= is no longer a public run::surface argument" in stderr
 
 
 def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
@@ -1048,7 +1175,7 @@ def test_molmo_cleanup_route_passes_selected_map_bundle_override() -> None:
 
 def test_molmo_cleanup_route_passes_visual_grounding_override() -> None:
     route = trace_agent_run(
-        "household-cleanup",
+        "household-world.cleanup",
         "mcp-smoke",
         "camera-grounded-labels",
         "camera_labeler=fake-http",
@@ -1099,15 +1226,34 @@ def test_molmo_cleanup_route_passes_isaac_backend_override() -> None:
     ]
 
 
-def test_molmo_cleanup_route_allows_explicit_legacy_rich_map_mode() -> None:
-    route = trace_task_run(
+def test_household_cleanup_rejects_public_legacy_rich_map_mode() -> None:
+    stderr = assert_task_run_fails(
         "household-cleanup",
         "direct",
         "world-oracle-labels",
         "map_mode=rich",
     )
 
-    assert route[18] == "rich"
+    assert "map_mode= is no longer a public run::surface argument" in stderr
+
+
+def test_agent_run_rejects_public_map_mode_override() -> None:
+    stderr = assert_agent_run_fails(
+        "household-world.cleanup",
+        "direct-runner",
+        "world-oracle-labels",
+        "map_mode=minimal",
+    )
+
+    assert "map_mode is no longer a public agent::run override" in stderr
+
+
+@pytest.mark.parametrize("dispatch_target", ("household-cleanup", "semantic-map-build"))
+def test_agent_run_rejects_legacy_household_dispatch_targets(dispatch_target: str) -> None:
+    stderr = assert_agent_run_fails(dispatch_target, "direct-runner", "world-oracle-labels")
+
+    assert f"unsupported dispatch target '{dispatch_target}'" in stderr
+    assert "household-world.cleanup|household-world.map-build" in stderr
 
 
 def test_semantic_map_build_routes_agibot_backend_to_physical_pilot_cli() -> None:
@@ -1257,8 +1403,8 @@ def test_household_cleanup_routes_agibot_backend_override_to_cleanup_pilot_cli()
 
 def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() -> None:
     route = trace_agent_run(
-        "household-cleanup",
-        "direct",
+        "household-world.cleanup",
+        "direct-runner",
         "world-oracle-labels",
         "backend=agibot_molmospaces_sim",
         "context_json=tests/fixtures/agibot_robot_map_9_context.completed.json",
@@ -1298,8 +1444,8 @@ def test_household_cleanup_routes_agibot_molmospaces_sim_backend_to_rehearsal() 
 
 def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehardware() -> None:
     route = trace_agent_run(
-        "semantic-map-build",
-        "direct",
+        "household-world.map-build",
+        "direct-runner",
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "run_dir=output/agibot/molmospaces-sim/map-build-test",
@@ -1329,8 +1475,8 @@ def test_semantic_map_build_routes_agibot_molmospaces_sim_to_minimal_map_prehard
 
 def test_semantic_map_build_agibot_sim_defaults_camera_labeler_for_public_facade() -> None:
     route = trace_agent_run(
-        "semantic-map-build",
-        "direct",
+        "household-world.map-build",
+        "direct-runner",
         "camera-grounded-labels",
         "backend=agibot_molmospaces_sim",
         "runtime=fixture",
@@ -1344,8 +1490,8 @@ def test_semantic_map_build_agibot_sim_defaults_camera_labeler_for_public_facade
 
 def test_agibot_molmospaces_sim_backend_rejects_multi_seed_runs() -> None:
     stderr = assert_agent_run_fails(
-        "household-cleanup",
-        "direct",
+        "household-world.cleanup",
+        "direct-runner",
         "world-oracle-labels",
         "backend=agibot_molmospaces_sim",
         "seeds=1 2",
@@ -1360,7 +1506,7 @@ def test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend() -> N
             os.environ.get("ROBOCLAWS_DEVTOOLS_PYTHON") or sys.executable,
             "-m",
             HOUSEHOLD_AGENT_SERVER_MODULE,
-            "household-cleanup",
+            "household-world.cleanup",
             "--help",
         ],
         cwd=REPO_ROOT,
@@ -1383,7 +1529,7 @@ def test_agibot_codex_map_build_route_requires_context_json() -> None:
         "camera_labeler=grounding-dino",
     )
 
-    assert "backend=agibot_gdk semantic-map-build Codex requires context_json" in stderr
+    assert "backend=agibot_gdk household-world.map-build codex-cli requires context_json" in stderr
 
 
 def test_molmo_camera_labels_fake_http_uses_contract_not_cleanup_quality_gate() -> None:
@@ -1549,19 +1695,20 @@ def test_household_cleanup_route_passes_operator_messages_path_override() -> Non
     assert route[-1] == "default_cleanup"
 
 
-def test_household_cleanup_prompt_override_uses_custom_task_intent() -> None:
+def test_household_open_ended_prompt_uses_first_class_intent_not_custom_mode() -> None:
     route = trace_task_run(
         "household-cleanup",
         "codex",
         "world-oracle-labels",
         "prompt=我渴了，帮我找些解渴的东西",
+        "task_intent=open-ended",
     )
 
     assert "我渴了，帮我找些解渴的东西" in route
-    assert route[-1] == "custom"
+    assert route[-1] == "default_cleanup"
 
 
-def test_household_cleanup_prompt_override_does_not_imply_direct_custom_task() -> None:
+def test_household_cleanup_prompt_override_does_not_imply_direct_open_ended_intent() -> None:
     route = trace_task_run(
         "household-cleanup",
         "direct",
@@ -1573,7 +1720,7 @@ def test_household_cleanup_prompt_override_does_not_imply_direct_custom_task() -
     assert route[-1] == "default_cleanup"
 
 
-def test_household_cleanup_prompt_override_does_not_imply_openclaw_custom_task() -> None:
+def test_household_cleanup_prompt_override_does_not_imply_openclaw_open_ended_intent() -> None:
     route = trace_task_run(
         "household-cleanup",
         "openclaw",
@@ -1609,7 +1756,7 @@ def test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist() -> None:
     assert "plain verbal_region" in prompt
     assert "Do not retry the same source_observation_id/category/region combination" in prompt
     assert "fresh source_observation_id and a tighter bbox" in prompt
-    assert "Omit source_fixture_id in minimal map mode" in prompt
+    assert "Omit source_fixture_id with Base Navigation Map context" in prompt
     assert "Never send bbox_normalized" in prompt
     assert 'target_fixture_id=""' in prompt
     assert 'target_fixture_id="None"' in prompt
@@ -1669,7 +1816,7 @@ def test_live_codex_camera_raw_default_gate_uses_generated_mess_success_threshol
     assert '"--min-semantic-accepted-count", "7"' not in text
 
 
-def test_live_runners_custom_task_checker_drops_full_cleanup_gates(
+def test_live_runners_open_ended_checker_drops_full_cleanup_gates(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1735,7 +1882,7 @@ def test_live_runners_custom_task_checker_drops_full_cleanup_gates(
             kickoff_prompt="custom prompt",
             backend="molmospaces_subprocess",
             task_name="household-cleanup",
-            task_intent_mode="custom",
+            task_intent_mode="default_cleanup",
             policy="codex_agent" if "Codex" in runner_name else "test_agent",
             task="我渴了，帮我找些解渴的东西",
             min_generated_mess_count="5",
@@ -1758,6 +1905,7 @@ def test_live_runners_custom_task_checker_drops_full_cleanup_gates(
             **extra_args,
         )
 
+        monkeypatch.setenv("ROBOCLAWS_TASK_INTENT", "open-ended")
         runner = getattr(module, runner_name)(args)
         runner._check_result()
 
@@ -1778,7 +1926,7 @@ def test_live_runners_custom_task_checker_drops_full_cleanup_gates(
 def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     prompt = render_kickoff_prompt("world-oracle-labels")
 
-    assert "This run is household-cleanup" in prompt
+    assert "This run is surface=household-world intent=cleanup" in prompt
     assert "User task: clean up this room" in prompt
     assert "exact waypoint checklist" in prompt
     assert "metric_map.inspection_waypoints" in prompt
@@ -1798,15 +1946,15 @@ def test_molmo_world_labels_prompt_requires_nav2_bundle_checklist() -> None:
     assert "adjust_camera(0, 0) is only a no-op camera command" in prompt
 
 
-def test_molmo_cleanup_live_prompt_includes_custom_user_task() -> None:
+def test_molmo_cleanup_live_prompt_includes_open_ended_user_task() -> None:
     prompt = render_kickoff_prompt(
         "world-oracle-labels",
         task="我渴了，帮我找些解渴的东西",
-        task_intent_mode="custom",
+        intent="open-ended",
     )
 
-    assert "This run is household-cleanup" in prompt
-    assert "custom operator task" in prompt
+    assert "This run is surface=household-world intent=open-ended" in prompt
+    assert "custom operator task" not in prompt
     assert "authoritative and overrides the default cleanup task" in prompt
     assert "我渴了，帮我找些解渴的东西" in prompt
     assert "The operator task is the only goal" in prompt
@@ -1822,6 +1970,19 @@ def test_molmo_cleanup_live_prompt_includes_custom_user_task() -> None:
     assert "fresh same-handle source FPV observation" not in prompt
     assert "cleaned every public recommended candidate" not in prompt
     assert "call done only after every metric_map.inspection_waypoints" not in prompt
+
+
+def test_molmo_cleanup_live_prompt_ignores_legacy_custom_mode_without_open_ended_intent() -> None:
+    prompt = render_kickoff_prompt(
+        "world-oracle-labels",
+        task="我渴了，帮我找些解渴的东西",
+        task_intent_mode="custom",
+    )
+
+    assert "This run is surface=household-world intent=cleanup" in prompt
+    assert "This run is surface=household-world intent=open-ended" not in prompt
+    assert "The operator task is the only goal" not in prompt
+    assert "Use the bundled molmo-realworld-cleanup skill instructions" in prompt
 
 
 def test_molmo_world_labels_sanitized_prompt_omits_destination_oracle_reliance() -> None:
@@ -1902,7 +2063,8 @@ def test_semantic_map_build_live_prompt_disables_cleanup_actions() -> None:
         "帮我建立这个房间的语义地图",
     )
 
-    assert "This run is semantic-map-build, not household-cleanup" in prompt
+    assert "This run is surface=household-world intent=map-build" in prompt
+    assert "This is not a cleanup run" in prompt
     assert "User task: 帮我建立这个房间的语义地图" in prompt
     assert "Do not pick, place, place_inside" in prompt
     assert "sweep every inspection waypoint" in prompt
@@ -1921,7 +2083,8 @@ def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
     codex_runner_text = LIVE_CODEX_RUNNER.read_text(encoding="utf-8")
     agibot_runner_text = AGIBOT_MAP_BUILD_CODEX_RUNNER.read_text(encoding="utf-8")
 
-    assert "roboclaws.cli.agent_server household-cleanup" in molmo_text
+    assert "roboclaws.cli.agent_server household-world.cleanup" in molmo_text
+    assert "roboclaws.cli.agent_server household-cleanup" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in molmo_text
     assert "examples/molmo_cleanup/molmo_realworld_cleanup_agent_server.py" not in codex_runner_text
     assert "examples/molmo_cleanup/agibot_semantic_map_build_agent_server.py" not in (
@@ -1931,12 +2094,93 @@ def test_live_agent_server_routes_use_cli_modules_not_examples() -> None:
     assert "semantic_map_build_server_argv" in agibot_runner_text
 
 
+def test_agent_server_cli_accepts_canonical_household_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from roboclaws.cli import agent_server
+
+    calls: list[tuple[str, list[str]]] = []
+
+    def fake_main(name: str):
+        def _main(args: list[str]) -> int:
+            calls.append((name, list(args)))
+            return 0
+
+        return _main
+
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.household_agent_server",
+        types.SimpleNamespace(main=fake_main("cleanup")),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.agibot_map_build_agent_server",
+        types.SimpleNamespace(main=fake_main("map-build")),
+    )
+
+    assert agent_server.main(["household-world.cleanup", "--host", "127.0.0.1"]) == 0
+    assert agent_server.main(["household-world.map-build", "--policy", "codex_agent"]) == 0
+    assert agent_server.main(["cleanup", "--port", "18788"]) == 0
+    assert agent_server.main(["map-build", "--host", "127.0.0.1"]) == 0
+
+    assert calls == [
+        ("cleanup", ["--host", "127.0.0.1"]),
+        ("map-build", ["--policy", "codex_agent"]),
+        ("cleanup", ["--port", "18788"]),
+        ("map-build", ["--host", "127.0.0.1"]),
+    ]
+
+
+def test_agent_server_cli_rejects_legacy_household_targets(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from roboclaws.cli import agent_server
+
+    def fail_if_called(_args: list[str]) -> int:
+        raise AssertionError("legacy server target should not import a concrete server")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.household_agent_server",
+        types.SimpleNamespace(main=fail_if_called),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "roboclaws.cli.agibot_map_build_agent_server",
+        types.SimpleNamespace(main=fail_if_called),
+    )
+
+    assert agent_server.main(["household-cleanup"]) == 2
+    assert agent_server.main(["semantic-map-build"]) == 2
+
+    stderr = capsys.readouterr().err
+    assert "unsupported server 'household-cleanup'" in stderr
+    assert "unsupported server 'semantic-map-build'" in stderr
+    assert "household-world.cleanup|household-world.map-build" in stderr
+
+
+def test_agent_server_cli_errors_use_canonical_targets(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from roboclaws.cli import agent_server
+
+    assert agent_server.main(["semantic-map"]) == 2
+
+    stderr = capsys.readouterr().err
+    assert "household-world.cleanup|household-world.map-build" in stderr
+    assert "household-cleanup" not in stderr
+    assert "semantic-map-build" not in stderr
+
+
 def test_molmo_cleanup_recipe_passes_goal_contract_to_all_household_runners() -> None:
     molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
 
     assert 'ROBOCLAWS_GOAL_CONTRACT_JSON="$goal_contract_json" \\' in agent_text
     assert 'ROBOCLAWS_GOAL_CONTRACT_PATH="$goal_contract_path" \\' in agent_text
+    assert 'ROBOCLAWS_TASK_INTENT="$resolved_task_intent" \\' in agent_text
     assert 'run_just molmo::cleanup "${molmo_args[@]}"' in agent_text
     assert 'goal_contract_json="${goal_contract_json:-${ROBOCLAWS_GOAL_CONTRACT_JSON:-}}"' in (
         molmo_text
@@ -2199,6 +2443,36 @@ def test_coding_agent_codex_can_disable_responses_websockets() -> None:
     ]
 
 
+def test_coding_agent_codex_provider_timing_proxy_disables_responses_websockets() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            CODEX_BASE_URL=https://codex.example.test/v1
+            CODEX_API_KEY=fake-codex-key
+            ROBOCLAWS_PROVIDER_TIMING_PROXY=1
+            args=()
+            roboclaws_codex_provider_args args
+            printf '%s\n' "${args[@]}"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "--disable" in result.stdout.splitlines()
+    assert "responses_websockets" in result.stdout.splitlines()
+    assert 'model_providers.codex-env.wire_api="responses"' in result.stdout.splitlines()
+
+
 def test_coding_agent_codex_key_contract_builds_scoped_config_args() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
@@ -2456,6 +2730,10 @@ def test_coding_agent_launchers_apply_provider_overrides_per_invocation() -> Non
     assert "XM_LLM_BASE_URL" in molmo_text
     assert "XM_LLM_API_KEY" in docker_text
     assert "XM_LLM_BASE_URL" in docker_text
+    assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in docker_text
+    assert "ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL" in docker_text
+    assert "ROBOCLAWS_PROVIDER_TIMING_PROXY" in molmo_text
+    assert "ROBOCLAWS_TIMING_PROXY_BIND_PORT" in molmo_text
     assert "*self.args.codex_model_arg" in runner_text
     assert "codex_provider_summary" in runner_text
     assert 'FULL_PERMISSION_ARG = "--dangerously-bypass-approvals-and-sandbox"' in runner_text
@@ -2520,11 +2798,14 @@ def test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checke
     assert '"--expect-task-name",' in runner_text
     assert 'task_name = getattr(self.args, "task_name", "household-cleanup")' in runner_text
     assert "household_intent_id_for_checker" in runner_text
+    assert 'SEMANTIC_MAP_BUILD_SERVER_TASK = "household-world.map-build"' in (
+        HOUSEHOLD_LIVE_DRIVER.read_text(encoding="utf-8")
+    )
     assert (
         household_intent_id_for_checker(
             task_name="semantic-map-build",
             task_intent="",
-            custom_task=False,
+            open_ended_task=False,
         )
         == "map-build"
     )

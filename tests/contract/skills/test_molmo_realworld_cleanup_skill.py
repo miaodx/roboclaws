@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 from typing import Any
 
+from roboclaws.household.cleanup_routine import routine_plan
 from roboclaws.household.profiles import WORLD_LABELS_PROFILE
-from roboclaws.household.realworld_contract import RICH_MAP_MODE
+from roboclaws.household.realworld_contract import MINIMAL_MAP_MODE
 from roboclaws.household.realworld_mcp_server import make_molmo_realworld_cleanup_mcp
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
@@ -41,6 +42,17 @@ def _first_detection(server: Any) -> dict[str, Any]:
     raise AssertionError("expected at least one visible detection")
 
 
+def _first_detection_by_category(server: Any, category: str) -> dict[str, Any]:
+    metric_map = server.call_tool("metric_map")
+    for waypoint in metric_map["inspection_waypoints"]:
+        server.call_tool("navigate_to_waypoint", waypoint_id=waypoint["waypoint_id"])
+        observation = server.call_tool("observe")
+        for detection in observation.get("visible_object_detections", []):
+            if detection.get("category") == category:
+                return dict(detection)
+    raise AssertionError(f"expected at least one visible {category} detection")
+
+
 def test_cleanup_skill_prioritizes_done_over_optional_reclean_loops() -> None:
     text = SKILL_PATH.read_text(encoding="utf-8")
     compact = " ".join(text.split())
@@ -63,11 +75,22 @@ def test_trace_preserving_skill_routine_uses_atomic_public_mcp_tools(tmp_path: P
         scenario=build_cleanup_scenario(seed=7),
         port=0,
         cleanup_profile=WORLD_LABELS_PROFILE,
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
     try:
-        fixture_hints = server.call_tool("fixture_hints")
-        detection = _first_detection(server)
+        detection = _first_detection_by_category(server, "food")
+        fixture_hints = {
+            "rooms": [
+                {
+                    "room_id": "runtime_semantic_anchors",
+                    "fixtures": [
+                        server.contract.public_receptacles_by_id()[
+                            str(detection["candidate_fixture_id"])
+                        ]
+                    ],
+                }
+            ]
+        }
         cleaned = routine.run_cleanup_routine(
             server.call_tool,
             object_id=detection["object_id"],
@@ -111,17 +134,30 @@ def test_trace_preserving_skill_routine_plans_public_open_close_from_fixture_hin
         run_dir=tmp_path,
         scenario=build_cleanup_scenario(seed=7),
         port=0,
-        map_mode=RICH_MAP_MODE,
+        map_mode=MINIMAL_MAP_MODE,
     )
     try:
-        fixture_hints = server.call_tool("fixture_hints")
+        detection = _first_detection_by_category(server, "food")
+        fixture_hints = {
+            "rooms": [
+                {
+                    "room_id": "runtime_semantic_anchors",
+                    "fixtures": [
+                        server.contract.public_receptacles_by_id()[
+                            str(detection["candidate_fixture_id"])
+                        ]
+                    ],
+                }
+            ]
+        }
     finally:
         server.close()
 
-    assert routine.routine_plan(
-        fixture_id="fridge_01",
+    assert str(detection["candidate_fixture_id"]).startswith("anchor_fixture_")
+    assert routine_plan(
+        fixture_id=str(detection["candidate_fixture_id"]),
         placement_tool="auto",
-        fixture_hints=fixture_hints,
+        target_fixture=fixture_hints["rooms"][0]["fixtures"][0],
     ) == [
         "navigate_to_object",
         "pick",

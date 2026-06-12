@@ -95,9 +95,9 @@ def validate_context(context: dict[str, Any]) -> list[str]:
                 "minimal context must include free_space_samples, exploration_candidates, "
                 "or generated_exploration_candidates"
             )
+    elif not rooms:
+        errors.append("rooms must contain at least one room")
     else:
-        if not rooms:
-            errors.append("rooms must contain at least one room")
         if not fixtures:
             errors.append("fixtures must contain at least one fixture")
         if not waypoints:
@@ -151,6 +151,7 @@ def metric_map_from_context(
     minimal_mode = _minimal_context_mode(context)
     generated_candidates = generated_exploration_candidates(context)
     waypoints = generated_candidates if minimal_mode else _list(context.get("inspection_waypoints"))
+    rooms = [_room_payload(room) for room in _list(context.get("rooms"))]
     return {
         "ok": True,
         "tool": "metric_map",
@@ -168,9 +169,8 @@ def metric_map_from_context(
         "occupancy_values": {"unknown": -1, "free": 0, "occupied": 100},
         "occupancy_grid_artifact": None,
         "map_preview_artifact": semantic_preview_artifact,
-        "rooms": []
-        if minimal_mode
-        else [_room_payload(room) for room in _list(context.get("rooms"))],
+        "rooms": rooms,
+        "room_category_hints": _room_category_hints(rooms, waypoints) if minimal_mode else [],
         "driveable_ways": _list(context.get("driveable_ways")),
         "robot_pose": robot_pose,
         "inspection_waypoints": [_waypoint_payload(item, frame_id=frame_id) for item in waypoints],
@@ -184,13 +184,14 @@ def metric_map_from_context(
                     "enabled": True,
                     "source": "public_occupancy_free_space",
                     "generated_candidate_count": len(generated_candidates),
-                    "source_rooms_hidden": True,
+                    "source_rooms_hidden": False,
+                    "source_room_labels_visible": bool(rooms),
                     "source_fixtures_hidden": True,
                     "source_inspection_waypoints_hidden": True,
                     "public_contract_note": (
                         "Minimal Agibot map projection exposes operator safety bounds and "
-                        "generated exploration candidates, not authored room or fixture "
-                        "semantics."
+                        "generated exploration candidates plus public room labels when "
+                        "available, not authored fixture semantics."
                     ),
                 },
             }
@@ -202,8 +203,9 @@ def metric_map_from_context(
             "and operator-recorded waypoints. Runtime movable objects and private "
             "scoring truth are not encoded."
             if not minimal_mode
-            else "Minimal Agibot map projection contains backend-agnostic safety bounds "
-            "and generated exploration candidates. Runtime movable objects, private "
+            else "Minimal Agibot map projection contains backend-agnostic safety bounds, "
+            "generated exploration candidates, and public room labels when available. "
+            "Runtime movable objects, private "
             "scoring truth, and Agibot backend internals are not encoded."
         ),
     }
@@ -222,8 +224,9 @@ def fixture_hints_from_context(context: dict[str, Any]) -> dict[str, Any]:
             "contains_runtime_observations": False,
             "generated_exploration_candidate_count": len(generated_exploration_candidates(context)),
             "public_contract_note": (
-                "Minimal Agibot map contexts do not require hand-authored room or "
-                "fixture semantics. Runtime observations may add public anchors later."
+                "Minimal Agibot map contexts may expose public room labels but do not "
+                "require hand-authored fixture semantics. Runtime observations may add "
+                "public anchors later."
             ),
             "rooms": [],
         }
@@ -325,6 +328,39 @@ def _fixture_payload(fixture: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _room_category_hints(
+    rooms: list[dict[str, Any]],
+    waypoints: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    waypoint_by_room: dict[str, str] = {}
+    for waypoint in waypoints:
+        room_id = str(waypoint.get("room_id") or "")
+        waypoint_id = str(waypoint.get("waypoint_id") or "")
+        if room_id and waypoint_id:
+            waypoint_by_room.setdefault(room_id, waypoint_id)
+    hints = []
+    for room in rooms:
+        room_id = str(room.get("room_id") or "")
+        room_label = str(room.get("room_label") or room_id.replace("_", " "))
+        if not room_id:
+            continue
+        hints.append(
+            {
+                "anchor_type": "room_area",
+                "category": "room_area",
+                "label": room_label,
+                "room_id": room_id,
+                "room_label": room_label,
+                "waypoint_id": waypoint_by_room.get(room_id, ""),
+                "affordances": ["navigate", "observe"],
+                "classification_status": "map_prior",
+                "confidence": 0.8,
+                "producer_type": "agibot_minimal_map_context",
+            }
+        )
+    return hints
+
+
 def _waypoint_payload(waypoint: dict[str, Any], *, frame_id: str) -> dict[str, Any]:
     payload = {
         "waypoint_id": str(waypoint["waypoint_id"]),
@@ -333,6 +369,7 @@ def _waypoint_payload(waypoint: dict[str, Any], *, frame_id: str) -> dict[str, A
         "y": float(waypoint["y"]),
         "yaw": float(waypoint["yaw"]),
         "room_id": str(waypoint["room_id"]),
+        "room_label": str(waypoint.get("room_label") or ""),
         "fixture_id": str(waypoint.get("fixture_id") or ""),
         "label": str(waypoint["label"]),
         "purpose": str(waypoint.get("purpose") or "inspect_fixture"),
@@ -449,6 +486,11 @@ def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, 
     )
     source_candidates = explicit or _list(context.get("free_space_samples"))
     frame_id = str(context.get("frame_id") or "map")
+    room_labels = {
+        str(room.get("room_id") or ""): str(room.get("room_label") or "")
+        for room in _list(context.get("rooms"))
+        if isinstance(room, dict) and str(room.get("room_id") or "")
+    }
     generated = []
     for index, source in enumerate(source_candidates, start=1):
         if not isinstance(source, dict):
@@ -458,6 +500,8 @@ def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, 
         if x is None or y is None:
             continue
         waypoint_id = str(source.get("waypoint_id") or f"generated_exploration_{index:03d}")
+        room_id = str(source.get("room_id") or "generated_area")
+        room_label = str(source.get("room_label") or room_labels.get(room_id) or "")
         generated.append(
             {
                 "waypoint_id": waypoint_id,
@@ -465,7 +509,8 @@ def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, 
                 "x": x,
                 "y": y,
                 "yaw": _number_or_none(source.get("yaw")) or 0.0,
-                "room_id": str(source.get("room_id") or "generated_area"),
+                "room_id": room_id,
+                "room_label": room_label,
                 "fixture_id": str(source.get("fixture_id") or ""),
                 "label": str(source.get("label") or f"Generated exploration candidate {index}"),
                 "purpose": "minimal_map_exploration",
@@ -479,7 +524,8 @@ def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, 
                     "source": str(source.get("source") or "public_free_space_sample"),
                     "candidate_index": index,
                     "source_pose": str(source.get("source_pose") or "free_space_sample"),
-                    "source_room_hidden": True,
+                    "source_room_hidden": False,
+                    "source_room_label_available": bool(room_label),
                     "source_fixtures_hidden": True,
                     "source_waypoint_hidden": True,
                 },
@@ -489,11 +535,7 @@ def generated_exploration_candidates(context: dict[str, Any]) -> list[dict[str, 
 
 
 def _minimal_context_mode(context: dict[str, Any]) -> bool:
-    return (
-        not _list(context.get("rooms"))
-        and not _list(context.get("fixtures"))
-        and not _list(context.get("inspection_waypoints"))
-    )
+    return not _list(context.get("fixtures")) and not _list(context.get("inspection_waypoints"))
 
 
 def _public_safety_bounds(context: dict[str, Any]) -> dict[str, Any]:

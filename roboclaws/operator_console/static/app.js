@@ -1537,7 +1537,7 @@ async function pollState() {
   if (!state.activeRunId) {
     return;
   }
-  const url = `/api/runs/${encodeURIComponent(state.activeRunId)}?route=${encodeURIComponent(
+  const url = `/api/runs/${encodeURIComponent(state.activeRunId)}?selection_id=${encodeURIComponent(
     state.activeRouteId
   )}`;
   const payload = await fetchJson(url);

@@ -125,6 +125,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         *) task_intent="cleanup" ;;
       esac
     fi
+    open_ended_intent="false"
+    if [[ "$task_intent" == "open-ended" ]]; then
+      open_ended_intent="true"
+    fi
     if [[ -z "$goal_contract_json" && -z "$goal_contract_path" ]]; then
       goal_contract_json="$(
         ROBOCLAWS_TASK_INTENT="$task_intent" ROBOCLAWS_TASK_PROMPT="$task" .venv/bin/python -c 'import os; from roboclaws.launch.catalog import SURFACE_SPECS; from roboclaws.launch.goals import normalize_goal_contract; from roboclaws.launch.intents import TASK_INTENT_SPECS; print(normalize_goal_contract(surface=SURFACE_SPECS["household-world"], intent=TASK_INTENT_SPECS[os.environ["ROBOCLAWS_TASK_INTENT"]], raw_prompt=os.environ.get("ROBOCLAWS_TASK_PROMPT", "")).to_json())'
@@ -214,10 +218,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       exit 1
     fi
     case "$map_mode" in
-      rich|minimal)
+      minimal)
         ;;
       *)
-        echo "error: unsupported map_mode '$map_mode' (expected rich|minimal)" >&2
+        echo "error: unsupported map_mode '$map_mode' (expected minimal)" >&2
         exit 1
         ;;
     esac
@@ -387,7 +391,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
       done
       checker_visual_args=("${filtered_checker_visual_args[@]}")
     fi
-    if [[ "$task_intent_mode" == "custom" ]]; then
+    if [[ "$open_ended_intent" == "true" ]]; then
       profile_requires_clean_success="false"
       filtered_checker_visual_args=()
       skip_checker_arg_value="false"
@@ -529,7 +533,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
               active_runner="$(pgrep -af 'scripts/molmo_cleanup/run_live_openai_agents_cleanup[.]py' || true)"
               ;;
           esac
-          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-cleanup' || true)"
+          active_server="$(pgrep -af 'roboclaws[.]cli[.]agent_server household-world[.]cleanup' || true)"
           if [[ -n "$active_runner$active_server$active_sessions" ]]; then
             echo "error: another non-Molmo live cleanup run appears to be active" >&2
             [[ -n "$active_sessions" ]] && echo "active tmux sessions:" >&2 && echo "$active_sessions" >&2
@@ -738,6 +742,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
             DISPLAY XAUTHORITY MUJOCO_GL PYOPENGL_PLATFORM LIBGL_ALWAYS_SOFTWARE \
             ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL \
             ROBOCLAWS_CODEX_DISABLE_RESPONSES_WEBSOCKETS \
+            ROBOCLAWS_PROVIDER_TIMING_PROXY \
+            ROBOCLAWS_TIMING_PROXY_UPSTREAM_BASE_URL \
+            ROBOCLAWS_TIMING_PROXY_BIND_HOST \
+            ROBOCLAWS_TIMING_PROXY_BIND_PORT \
             ROBOCLAWS_CODEX_TURN_IDLE_TIMEOUT_S \
             ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS \
             ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS \
@@ -897,7 +905,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           printf '%s\n' "$visual_slot_json" > "${run_dir}/visual_backend_slot.json"
           visual_slot_path="$(printf '%s' "$visual_slot_json" | .venv/bin/python -c 'import json, sys; print(json.load(sys.stdin)["path"])')"
         fi
-        .venv/bin/python -m roboclaws.cli.agent_server household-cleanup "${server_args[@]}" &
+        .venv/bin/python -m roboclaws.cli.agent_server household-world.cleanup "${server_args[@]}" &
         server_pid="$!"
         cleanup_server() {
           set +e
@@ -958,10 +966,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ "$driver" == "openclaw-live" ]]; then
             checker_args+=(--require-openclaw-minimum)
           fi
-          if [[ "$profile_requires_clean_success" == "true" && "$driver" != "openclaw-live" && "$task_intent_mode" != "custom" ]]; then
+          if [[ "$profile_requires_clean_success" == "true" && "$driver" != "openclaw-live" && "$open_ended_intent" != "true" ]]; then
             checker_args+=(--require-clean-agent-run)
           fi
-          if [[ "$task_intent_mode" == "custom" ]]; then
+          if [[ "$open_ended_intent" == "true" ]]; then
             checker_args+=(--allow-partial-cleanup)
           fi
           .venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
@@ -1044,10 +1052,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --expect-mcp-server molmo_cleanup_realworld
           --require-agent-driven
         )
-        if [[ "$profile_requires_clean_success" == "true" && "$task_intent_mode" != "custom" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" && "$open_ended_intent" != "true" ]]; then
           checker_args+=(--require-clean-agent-run)
         fi
-        if [[ "$task_intent_mode" == "custom" ]]; then
+        if [[ "$open_ended_intent" == "true" ]]; then
           checker_args+=(--allow-partial-cleanup)
         fi
         ;;
@@ -1058,10 +1066,10 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           --require-agent-driven
           --require-openclaw-minimum
         )
-        if [[ "$profile_requires_clean_success" == "true" && "$task_intent_mode" != "custom" ]]; then
+        if [[ "$profile_requires_clean_success" == "true" && "$open_ended_intent" != "true" ]]; then
           checker_args+=(--require-clean-agent-run)
         fi
-        if [[ "$task_intent_mode" == "custom" ]]; then
+        if [[ "$open_ended_intent" == "true" ]]; then
           checker_args+=(--allow-partial-cleanup)
         fi
         ;;

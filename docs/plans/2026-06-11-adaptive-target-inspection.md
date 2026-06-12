@@ -1,15 +1,16 @@
 # Adaptive Target Inspection
 
-**Status:** Implemented with parked exploratory gates
+**Status:** Implemented with optional exploratory follow-ups
 **Created:** 2026-06-11
 **Last reviewed:** 2026-06-11
 **Current implementation contract:** slices 1-5 are implemented for the
 deterministic household-world/MolmoSpaces direct-runner path, including public
-target-query recovery. The real Grounding-DINO direct-runner product gate and
-one Codex RAW-FPV live-agent map-build gate have passed. A small
-Grounding-DINO + MiMo refiner smoke benchmark has also passed. Remaining work
-is parked live-agent DINO validation, not a blocker for the implemented
-contract.
+target-query recovery. The real Grounding-DINO direct-runner product gate, one
+Codex RAW-FPV live-agent map-build gate, and one clean Codex Grounding-DINO
+live-agent map-build gate have passed. A small Grounding-DINO + MiMo refiner
+smoke benchmark has also passed. There are no remaining plan-scoped parked
+gates for this implementation contract; broader detector/refiner ranking is a
+future optional benchmark outside this plan's done criteria.
 **Related ADRs:** none yet. Create an ADR only if implementation adds a durable
 public MCP tool, changes `metric_map()` / Agent View payload guarantees, or
 changes public profile guarantees.
@@ -95,34 +96,28 @@ Latest focused verification:
 - `uv run ruff check scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py`
 - `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py::test_checker_accepts_live_raw_fpv_semantic_map_build_shape tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_smoke_writes_agent_artifacts -q`
 
-Parked exploratory gates:
+Completed exploratory gates:
 
-- Live-agent `camera-grounded-labels + camera_labeler=grounding-dino` has not
-  been run yet. The direct Grounding-DINO product gate already proves the real
-  camera labeler path; the live-agent DINO combination is slower and optional
-  unless a future phase specifically needs live detector-agent behavior.
-  During the 2026-06-11 follow-up pass, the first attempt was queued behind an
-  active RAW-FPV cleanup validation that held the local live-agent backend slot
-  and port `18788`; after that run naturally released the slot, a direct
-  attempt to run the gate failed before launch because another operator-console
-  interactive Codex session was active:
-  `roboclaws-molmo-codex-0611_1413-20260611-141344-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels-0611_1413-p18789-seed-7`.
-  The attempted command was
-  `VISUAL_GROUNDING_BASE_URL=http://127.0.0.1:18881 VISUAL_GROUNDING_TIMEOUT_S=120 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=codex-cli provider_profile=codex-env evidence_lane=camera-grounded-labels camera_labeler=grounding-dino map_mode=minimal scenario_setup=baseline seed=7`.
-  The recipe refused to choose another port because each live visual cleanup run
-  owns an interactive coding-agent/backend session. As of 2026-06-11 14:17:37
-  +0800, the operator-console run was still actively writing `trace.jsonl` and
-  `codex-events.jsonl` under
-  `output/operator-console/runs/20260611-141344-b1-map12-isaaclab-open-ended-codex-cli-world-oracle-labels/0611_1413/seed-7/`.
-  Re-run this gate after that session exits; the Grounding-DINO sidecar proof
-  remains available from the direct product gate and the live RAW-FPV gate
-  already covers the live-agent map-build contract without structured detector
-  labels.
+- Live-agent `camera-grounded-labels + camera_labeler=grounding-dino` has now
+  been exercised with clean detector uptime:
+  `output/household/semantic-map-build/codex-camera-grounded-labels/0611_1436/seed-7/report.html`.
+  Checker passed with
+  `.venv/bin/python scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py --expect-task-name semantic-map-build --expect-backend molmospaces_subprocess --expect-policy codex_agent --expect-profile camera-grounded-labels --expect-mcp-server molmo_cleanup_realworld --min-generated-mess-count 0 --require-agent-driven --require-runtime-metric-map --require-semantic-sweep --require-minimal-map --require-camera-model-policy --expect-visual-grounding-pipeline grounding-dino --min-sweep-coverage 1.0 output/household/semantic-map-build/codex-camera-grounded-labels/0611_1436/seed-7/run_result.json`.
+  Result: `policy=codex_agent`, 14/14 public waypoints visited, 14 raw-FPV
+  observations, 14 `declare_visual_candidates` calls, 12 model-declared
+  visual candidates, zero cleanup actions, sweep coverage 1.0, and runner wall
+  time 1087.095s. No `connection_error` was recorded in the driver log;
+  Grounding-DINO returned `status=ok` for the detector calls.
+- An earlier rescued live-agent DINO run also passed at
+  `output/household/semantic-map-build/codex-camera-grounded-labels/0611_1420/seed-7/report.html`.
+  That run remains useful recovery evidence, but the clean `0611_1436` run is
+  the detector-uptime gate for this plan closeout.
 - Grounding-DINO refiner combinations are no longer completely unrun: the
   `grounding-dino+mimo-v2.5` smoke benchmark above passed on the 3-observation
-  smoke corpus. Broader detector/refiner ranking remains parked until there is
-  a broader bbox-labeled comparison corpus or an explicit phase budget for the
-  hosted-refiner cost and latency.
+  smoke corpus. Broader detector/refiner ranking remains a future optional
+  benchmark until there is a broader bbox-labeled comparison corpus or an
+  explicit phase budget for the hosted-refiner cost and latency; it is not a
+  remaining parked gate for this adaptive-target-inspection plan.
 
 ## Problem
 

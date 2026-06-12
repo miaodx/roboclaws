@@ -40,7 +40,7 @@ For lower-level Gateway debugging, start the household MCP server and then the
 Gateway:
 
 ```bash
-just mcp::up household-cleanup 127.0.0.1 18788 output/openclaw/household-mcp
+just agent::mcp up household-world.cleanup 127.0.0.1 18788 output/openclaw/household-mcp
 export ROBOCLAWS_MCP_URL=http://host.docker.internal:18788/mcp
 just openclaw::gateway up
 ```

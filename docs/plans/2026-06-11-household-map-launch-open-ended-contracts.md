@@ -1,12 +1,13 @@
 ---
 plan_scope: household-map-launch-open-ended-contracts
-status: CONTINUE
+status: DONE
 created: 2026-06-11
 last_reviewed: 2026-06-11
 accepted_severities:
   - P1
   - P2
-implementation_allowed: false
+implementation_allowed: true
+implementation_note: selected slices were executed by focused intuitive-flow runs
 source:
   - user request to consolidate reduce-entropy directions into one plan file
   - intuitive-reduce-entropy discovery loop
@@ -22,10 +23,13 @@ related_context:
 
 # Household Map, Launch, And Open-Ended Contracts
 
-Status: CONTINUE
+Status: DONE
 
-This is a planning-only discovery artifact. Do not implement from this file
-until a later workflow explicitly selects an execution slice.
+This started as a planning-only discovery artifact. Later `intuitive-flow`
+runs selected and executed bounded slices from this file. The saturation stop
+condition is now green for current public surfaces; remaining old task strings
+are private implementation ids, artifact paths, fixtures, negative regression
+tests, or historical records.
 
 ## Loop Goal
 
@@ -694,3 +698,1364 @@ This discovery loop is saturated when:
 After the final targeted probe in this loop, additional observations were
 supporting evidence for these selected candidates or historical/local surfaces.
 No extra standalone P0/P1 or materially useful P2 candidate was selected.
+
+## Execution Log
+
+### 2026-06-11 Partial Route/Console Cleanup Proof
+
+Status remains `CONTINUE`.
+
+Current tree state now overlaps this plan with
+`docs/plans/refactor-retire-ai2thor-vlm-direct.md`: the worktree contains a
+large AI2-THOR/direct-VLM retirement diff plus the household launch/open-ended
+cleanup. The household plan is not complete yet because active first-read and
+human docs still advertise retired AI2-THOR/direct coding-agent routes, and the
+map/evidence/open-ended groups still have unchecked saturation items.
+
+Verified this slice:
+
+```bash
+uv sync --extra dev
+just --summary
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py
+```
+
+Observed proof:
+
+- `just --summary` exposes only `run::surface`, `console::run`, and
+  maintainer `agent::*` facades.
+- Operator-console route tests pass with canonical household selection IDs and
+  no AI2-THOR worlds.
+- Dev-tool route tests pass with `surface=ai2thor-world` and
+  `agent_engine=vlm-policy` rejected, while household route resolution remains
+  green.
+
+Remaining before this plan can be marked done:
+
+- reconcile active docs (`README.md`, `ARCHITECTURE.md`, `AGENTS.md`,
+  `CLAUDE.md`, `just/README.md`, and selected `docs/human/**`) with the
+  surviving launch axes;
+- finish or explicitly split the AI2-THOR/direct-VLM retirement plan, including
+  full doc, CI, lockfile, skill, and test cleanup;
+- complete the still-open map-mode/fixture-hints, evidence-lane/smoke,
+  `task_intent_mode=custom`, Agent Validation Matrix, `STATUS.md`, and
+  `docs/plans/README.md` saturation checks.
+
+Commit closeout is intentionally deferred: the tree contains broad staged
+deletions from the AI2-THOR retirement plan and several unstaged follow-up
+edits, so a semantic commit for only this household route/console proof would
+be unsafe without first separating or finishing the retirement slice.
+
+### 2026-06-11 First-Read And Current Command Doc Alignment
+
+Status remains `CONTINUE`.
+
+Aligned the current first-read and command docs with the surviving public
+catalog:
+
+- `README.md`
+- `ARCHITECTURE.md`
+- `STATUS.md`
+- `AGENTS.md`
+- `CLAUDE.md`
+- `just/README.md`
+- `docs/human/contributing.md`
+- `docs/human/mcp-skills-and-semantic-profiles.md`
+- `docs/human/ut_ci_design.md`
+- `docs/plans/README.md`
+
+Focused behavior/test cleanup:
+
+- adjusted the retired `ai2thor-nav` negative-route assertion to match the
+  current resolver error;
+- adjusted the operator-console mess-up preview test to assert the API's
+  non-blocking route message, while the UI still owns the "baseline remains
+  available" wording.
+
+Verified this slice:
+
+```bash
+just --summary
+rg -n -F \
+  -e 'surface=ai2thor-world' -e 'surface=ai2thor-games' \
+  -e 'backend=ai2thor' -e 'agent_engine=vlm-policy' \
+  -e 'evidence_lane=smoke' -e 'map_mode=minimal' \
+  -e 'map_mode=rich' -e 'mode=smoke' -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md \
+  just/README.md docs/human docs/plans/README.md
+git diff --check -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md \
+  just/README.md docs/human/contributing.md \
+  docs/human/mcp-skills-and-semantic-profiles.md \
+  docs/human/ut_ci_design.md docs/plans/README.md \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/unit/operator_console/test_messup.py \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/unit/operator_console \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+```
+
+Observed proof:
+
+- `just --summary` exposes only `run::surface`, `console::run`, and
+  maintainer `agent::*` facades.
+- The current first-read and selected human command docs no longer advertise
+  retired AI2-THOR/direct-VLM public axes, `evidence_lane=smoke`, or
+  `minimal`/`rich` as product map choices.
+- Focused route and operator-console tests pass.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff,
+  including remaining CI, lockfile, skill, report, and historical-doc cleanup;
+- finish the code-level evidence-lane cleanup where `smoke` is still accepted
+  as a private profile/evidence-mode compatibility value;
+- finish the map-mode / `fixture_hints`, `task_intent_mode=custom`, Agent
+  Validation Matrix, and remaining historical/human-doc profile terminology
+  saturation checks.
+
+### 2026-06-11 Open-Ended Intent Runtime Cleanup
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 9's current-runtime slice:
+
+- added canonical household-intent normalization around `intent=open-ended`;
+- stopped `just agent::run` from auto-generating `task_intent_mode=custom` for
+  open-ended launches;
+- exported `ROBOCLAWS_TASK_INTENT` from private lowerer to `molmo::cleanup` so
+  prompt, MCP setup, and checker filtering share the resolved first-class
+  intent;
+- made kickoff prompts, MCP setup text, MCP done readiness, deterministic MCP
+  smoke, and live runner checker gates use `task_intent=open-ended` /
+  `goal_contract.intent=open-ended` first;
+- stopped new MCP `run_result.json` artifacts from writing
+  `task_intent_mode`;
+- kept `task_intent_mode=custom` only as a tolerated legacy/manual input and
+  timing/history field while tests assert new artifacts use `task_intent`.
+
+Verified this slice:
+
+```bash
+rg -n -F -e 'task_intent_mode' -e 'custom_task' -e 'TASK_INTENT_MODE_CUSTOM' -- just roboclaws tests docs
+git diff --check -- \
+  just/agent.just just/molmo.just \
+  roboclaws/household/task_intent.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/household/realworld_mcp_server.py \
+  roboclaws/cli/household_agent_server.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/unit/agents/test_live_runtime.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/unit/agents/test_live_runtime.py \
+  tests/unit/operator_console
+```
+
+Observed proof:
+
+- open-ended prompt routing now keeps `task_intent_mode=default_cleanup` while
+  carrying the first-class `task_intent=open-ended` and goal contract;
+- open-ended MCP run results contain `task_intent=open-ended` and no
+  `task_intent_mode` field;
+- live runner checker gates drop cleanup-only success/sweep/count requirements
+  when `ROBOCLAWS_TASK_INTENT=open-ended` is present;
+- remaining current-code `task_intent_mode` references are compatibility input
+  plumbing, prompt CLI arguments, operator-console history/state fields,
+  readiness diagnostics, or live timing metadata.
+
+Remaining before this plan can be marked done:
+
+- finish the map-mode / `fixture_hints` active MCP and prompt cleanup;
+- finish the evidence-lane/smoke cleanup where `smoke` remains a private
+  compatibility profile/preset;
+- align Agent Validation Matrix gate selection with the surviving axes;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff.
+
+### 2026-06-11 Agent Validation Matrix Axis Sync
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 6's focused matrix slice:
+
+- added first-class `open_ended` signal detection for `open-ended`,
+  `goal_contract`, `task_intent`, completion-claim, and agent-declared terms;
+- added an `intent` explicit override to the selector and runner CLIs;
+- added a deterministic `open-ended-household-contract-tests` gate covering
+  route inference, MCP open-ended artifact shape, and checker acceptance;
+- kept product gates on current public axes (`surface=household-world`,
+  `intent=cleanup|map-build`, `agent_engine`, `provider_profile`,
+  `evidence_lane`, `camera_labeler`) rather than stale task/profile names;
+- classified live MCP port and MolmoSpaces visual-backend slot contention as
+  blocked resource conditions instead of false test failures.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/unit/molmo_cleanup/test_agent_validation_matrix.py
+just agent::harness agent-validation recommend \
+  plan=docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md \
+  budget=focused
+just agent::harness agent-validation execute \
+  plan=docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md \
+  budget=focused
+```
+
+Observed proof:
+
+- recommendation artifact:
+  `output/agent-validation-matrix/20260611T100425Z/validation_matrix.json`;
+- execute artifact:
+  `output/agent-validation-matrix/20260611T102524Z/validation_matrix.json`;
+- deterministic selected gates passed, including
+  `open-ended-household-contract-tests`;
+- selected live/DINO gates were environment-blocked by active live-session /
+  visual-backend slot ownership or unavailable Grounding DINO sidecar, not by
+  stale axis selection.
+
+Remaining before this plan can be marked done:
+
+- finish the map-mode / `fixture_hints` active MCP and prompt cleanup;
+- finish the evidence-lane/smoke cleanup where `smoke` remains a private
+  compatibility profile/preset;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff.
+
+### 2026-06-11 Evidence-Lane And Smoke Cleanup
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 2's public-route slice:
+
+- made public `run::surface` reject `profile=...`, `visual_grounding=...`, and
+  `evidence_lane=smoke`;
+- kept `smoke` as a private runner compatibility mode while new public smoke
+  examples use `run_preset=smoke` with a real evidence lane;
+- preserved `evidence_lane=world-oracle-labels` as the deterministic household
+  cleanup smoke lane.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/unit/agents/test_live_runtime.py \
+  tests/unit/operator_console \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/mcp/test_semantic_profiles.py \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py
+```
+
+Observed proof:
+
+- public route contract tests cover rejection of stale `profile`,
+  `visual_grounding`, and `evidence_lane=smoke` inputs;
+- the broad household launch/MCP/checker/operator-console verifier passes with
+  the current evidence-lane shape;
+- lower runner compatibility still accepts private smoke profile semantics
+  where required by deterministic smoke helpers.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 and Candidate 3 saturation around public map-mode and
+  legacy task-route terminology;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
+### 2026-06-11 Public Room Hints In Base Navigation Map
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 1 room-hint saturation slice:
+
+- exposed public `metric_map.rooms`, `room_category_hints`, and public
+  room-to-room driveable ways in Base Navigation Map mode while keeping
+  fixture tables, source inspection waypoint ids, movable-object inventory, and
+  private scoring truth hidden;
+- propagated public room labels into generated exploration waypoints, runtime
+  room-area anchors, Runtime Metric Map target candidates, and
+  `resolve_target_query` search terms so open-ended search can use room priors;
+- added Agibot `navigation_memory.json` conversion and minimal map-context
+  generation support for public room-category hints without treating fixtures
+  as active MCP inputs;
+- updated the checker and active cleanup skill wording from “rooms hidden” to
+  “public room labels may be visible; fixture tables stay hidden.”
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/maps/test_actionable_semantic_map_snapshot.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/agibot/test_agibot_map_context_scripts.py
+uv run ruff check \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/household/realworld_mcp_server.py \
+  roboclaws/household/target_query.py \
+  roboclaws/maps/actionable_snapshot.py \
+  scripts/agibot/generate_metric_map_from_context.py \
+  scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  tests/contract/maps/test_actionable_semantic_map_snapshot.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/agibot/test_agibot_map_context_scripts.py \
+  skills/molmo-realworld-cleanup/SKILL.md
+rg -n -F -e 'Minimal map mode hides authored rooms' \
+  -e 'source_room_hidden"] is True' \
+  -e 'metric_map.get("rooms") == []' \
+  -e 'metric_map["rooms"] == []' \
+  -e 'runtime_map["static_map"]["rooms"] == []' -- \
+  roboclaws tests scripts docs/human skills README.md ARCHITECTURE.md
+```
+
+Observed proof:
+
+- Base Navigation Map mode now publishes public room labels and
+  room-category hints while `fixture_hints["rooms"]`, static fixtures, and
+  forbidden private keys remain absent from the active agent view;
+- `resolve_target_query(runtime_map, "kitchen", operation="inspect")` matches
+  an actionable public waypoint through room labels/aliases;
+- Agibot minimal map-context output can carry public room labels without
+  requiring fixture semantics;
+- the final stale-room grep has no hits in the active proof scope. Separate
+  Agibot minimal-context generator assertions still intentionally cover the
+  public-room-label variant.
+
+Current remaining stop-condition failures:
+
+- Candidate 9 is still incomplete: current runtime code still tolerates and
+  branches on `task_intent_mode=custom` / `TASK_INTENT_MODE_CUSTOM` for
+  compatibility;
+- Candidate 3 still has remaining `household-cleanup` /
+  `semantic-map-build` hits that must be classified as private ids, artifacts,
+  historical docs, or current guidance needing another patch;
+- some older execution-log bullets in this file mention the AI2-THOR/direct-VLM
+  retirement as remaining, but `docs/plans/refactor-retire-ai2thor-vlm-direct.md`
+  is now `DONE`; treat those older bullets as superseded by this latest log
+  entry, not as a live blocker.
+
+### 2026-06-11 Rerun Command Surface Cleanup
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 / Candidate 1 saturation slice:
+
+- removed `map_mode=minimal` from current copyable `run::surface` rerun-command
+  fixtures in MCP and report tests;
+- updated the semantic map-build prompt helper docstring from
+  `semantic-map-build lane` to `intent=map-build`;
+- kept historical artifact paths, private server ids, and negative route tests
+  unchanged.
+
+Verified this slice:
+
+```bash
+rg -n -F -e 'map_mode=minimal' -e 'map_mode=rich' -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md just/README.md \
+  docs/human docs/plans skills just roboclaws tests scripts .github
+rg -n -F -e 'semantic-map-build lane' -e 'household-cleanup lane' \
+  -e 'This run is semantic-map-build' -e 'This run is household-cleanup' -- \
+  README.md ARCHITECTURE.md STATUS.md docs/human skills roboclaws tests scripts just
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py::test_realworld_mcp_done_persists_facade_rerun_command \
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_persists_facade_rerun_command \
+  tests/contract/reports/test_molmo_cleanup_report.py::test_cleanup_report_prefers_recorded_rerun_command
+uv run ruff check roboclaws/agents/prompts/household_cleanup.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py \
+  tests/contract/reports/test_molmo_cleanup_report.py
+git diff --check -- \
+  roboclaws/agents/prompts/household_cleanup.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py \
+  tests/contract/reports/test_molmo_cleanup_report.py \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
+```
+
+Observed proof:
+
+- active generated rerun-command fixtures no longer include public
+  `map_mode=minimal`;
+- active prompt helper wording no longer describes map-build as a
+  `semantic-map-build lane`;
+- remaining `map_mode=minimal`, `household-cleanup`, and `semantic-map-build`
+  hits are historical plans, private lowerer/server ids, artifact paths,
+  compatibility tests, or negative public-route assertions.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch terminology audit where it still points
+  future agents at legacy task names;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
+### 2026-06-11 Active Skill Public Run Command Guard
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 active-skill slice:
+
+- changed the active Actionable Semantic Map Conversion skill from online
+  `semantic-map-build` / `just task::run household-cleanup` wording to
+  `intent=map-build` and the canonical `just run::surface ... intent=cleanup`
+  downstream consumer example;
+- added a tracked-skill contract guard so active skills do not teach retired
+  `just task::run` commands.
+
+Verified this slice:
+
+```bash
+rg -n -F 'just task::run' -- \
+  README.md ARCHITECTURE.md docs/human skills just roboclaws tests scripts .github
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/skills/test_skill_manifests.py
+ROBOCLAWS_JUST_TRACE=1 just run::surface \
+  surface=household-world world=agibot-g2/map-12 backend=agibot-gdk \
+  intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels \
+  seed=7 \
+  runtime_map_prior=output/maps/robot_map_12/actionable_semantic_map_snapshot.json
+```
+
+Observed proof:
+
+- the only remaining `just task::run` grep hit is historical implementation
+  result text in `docs/human/molmospaces-cleanup-mode-architecture.md`;
+- active tracked skills now reject retired `just task::run` examples in the
+  contract suite;
+- the replacement downstream command lowers through the public launch catalog
+  in trace mode.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch terminology audit where lower
+  implementation ids remain private and do not point users at legacy public
+  commands;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
+### 2026-06-11 Maintainer Dispatch Error Terminology
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 private-dispatch wording slice:
+
+- changed current `agent::run` validation errors from `semantic-map-build`
+  task-id language to `household-world.map-build` / `codex-cli` wording;
+- changed public launch catalog invalid-lane errors from
+  `household cleanup lane` to `household-world evidence_lane`;
+- changed Agibot map-build live run guard and launch status text to
+  `household-world.map-build` while leaving private lowerer ids and artifact
+  paths unchanged.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_task_router_rejects_removed_compatibility_aliases \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agibot_codex_map_build_route_requires_context_json
+rg -n -F \
+  -e 'unsupported household cleanup evidence_lane' \
+  -e 'unsupported household cleanup lane' \
+  -e 'semantic-map-build currently supports' \
+  -e 'semantic-map-build codex unsupported backend' \
+  -e 'backend=agibot_gdk semantic-map-build Codex requires context_json' \
+  -e 'Agibot semantic-map-build Codex accepts exactly one seed' \
+  -e 'Codex Agibot semantic-map-build live report' \
+  -e 'detached Codex Agibot semantic-map-build' -- \
+  just roboclaws tests scripts README.md ARCHITECTURE.md docs/human
+uv run ruff check \
+  roboclaws/launch/catalog.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+git diff --check -- \
+  just/agent.just roboclaws/launch/catalog.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
+```
+
+Observed proof:
+
+- focused route-error tests pass with canonical terminology;
+- grep finds no old active validation/log strings for the replaced
+  `household cleanup lane` or `semantic-map-build Codex` messages.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch audit for server/internal ids that remain
+  private implementation details rather than current public route guidance.
+
+### 2026-06-11 Canonical MCP Server Dispatch Targets
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 3 MCP-dispatch cleanup slice:
+
+- made `python -m roboclaws.cli.agent_server` accept canonical
+  `household-world.cleanup` and `household-world.map-build` targets while still
+  tolerating legacy private ids for internal callers;
+- changed `just agent::mcp` and `just mcp::up` to pass/display canonical
+  household-world targets and report canonical expected values on errors;
+- updated the current MolmoSpaces entrypoint matrix from
+  `agent_server household-cleanup` to `agent_server household-world.cleanup`;
+- added CLI-router coverage for canonical targets and canonical unsupported
+  target errors.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_mcp_accepts_canonical_household_dispatch_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_accepts_canonical_household_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_errors_use_canonical_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_agent_server_routes_use_cli_modules_not_examples
+ROBOCLAWS_JUST_TRACE=1 just agent::mcp up \
+  household-world.map-build 127.0.0.1 18788 output/debug/map-build-mcp
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/integration/coding_agent/test_code_mcp_binding_smoke.py::test_just_mcp_up_emits_clean_url \
+  tests/integration/coding_agent/test_code_mcp_binding_smoke.py::test_just_mcp_up_rejects_unknown_server_before_warm_path
+uv run ruff check \
+  roboclaws/cli/agent_server.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/integration/coding_agent/test_code_mcp_binding_smoke.py
+```
+
+Observed proof:
+
+- focused dev-tool route tests pass and trace `agent::mcp` to canonical
+  `mcp::up household-world.map-build`;
+- MCP binding integration warm-path tests were skipped on this host, so they
+  remain non-counted local evidence for this slice;
+- CLI-router unsupported-target errors mention only canonical
+  `household-world.*` targets.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish the final Candidate 3 audit by classifying any remaining
+  `household-cleanup` / `semantic-map-build` hits as private ids, artifacts,
+  historical docs, or current public guidance requiring another small patch.
+
+### 2026-06-11 Candidate 1 Minimal-Only Contract Saturation
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 1's lower-contract saturation slice:
+
+- removed the active `RICH_MAP_MODE` constant and left `REALWORLD_MAP_MODES`
+  as minimal-only private compatibility;
+- made private `molmo::cleanup map_mode=...` validation accept only `minimal`;
+- migrated contract, checker, map-bundle, MCP, planner-binding, and cleanup
+  skill tests from rich static fixture expectations to Base Navigation Map plus
+  runtime public anchors;
+- let deterministic direct cleanup re-evaluate same-anchor observations after
+  visual confirmation and current worklist evidence so it can use discovered
+  runtime anchors instead of stale first-sighting hints;
+- kept planner-proof bindings strict while updating tests to bind cleanup
+  proofs to public `anchor_fixture_*` target ids;
+- updated active cleanup prompts, RAW-FPV recovery guidance, and the cleanup
+  skill so agents are instructed in Base Navigation Map terms rather than
+  `minimal map mode` terms;
+- ran the final human-doc alignment check and updated README / human cleanup
+  architecture wording from minimal-map / `map_mode` behavior to Base
+  Navigation Map plus optional `runtime_map_prior` evidence.
+
+Verified this slice:
+
+```bash
+uv sync --extra dev
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py \
+  tests/unit/molmo_cleanup/test_molmo_planner_observed_binding.py
+uv run ruff check \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/raw_fpv_guidance.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/household/realworld_cleanup.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/maps/bundle.py \
+  skills/molmo-realworld-cleanup/SKILL.md \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py \
+  tests/contract/maps/test_nav2_map_bundle_contract.py \
+  tests/unit/molmo_cleanup/test_molmo_planner_observed_binding.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_molmo_camera_raw_prompt_requires_exact_waypoint_checklist \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py::test_minimal_raw_fpv_navigate_validation_returns_schema_recovery
+rg -n -F -e 'RICH_MAP_MODE' -e 'map_mode=RICH_MAP_MODE' \
+  -e 'rich is' -e 'expected rich|minimal' -- \
+  roboclaws tests scripts skills docs/human docs/plans just
+```
+
+Observed proof:
+
+- the focused household map-mode/checker/MCP suite passes with the
+  Base Navigation Map contract;
+- active production code and tests have no `RICH_MAP_MODE` or
+  `expected rich|minimal` hits;
+- remaining grep hits are plan-history references documenting this cleanup.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 generated rerun/private-dispatch terminology where it
+  still points future agents at legacy task names;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
+### 2026-06-11 Public Map Mode Facade Rejection
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 1's public-facade slice:
+
+- made public `run::surface` reject `map_mode=...` with Base Navigation Map /
+  `runtime_map_prior=...` guidance;
+- made public `agent::run` reject `map_mode=...` before lowering to private
+  Molmo cleanup recipes;
+- flipped route contract tests that previously asserted `map_mode=minimal` and
+  `map_mode=rich` were accepted through public task-shaped calls;
+- kept lower `molmo::cleanup` map-mode plumbing as private compatibility for
+  historical/internal callers in this bounded slice.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py
+```
+
+Observed proof:
+
+- public route resolution rejects `map_mode=minimal` and `map_mode=rich`;
+- `agent::run household-world.cleanup ... map_mode=minimal` is rejected before
+  private dispatch;
+- the focused cleanup/MCP/checker contracts still pass with the private
+  default map behavior.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 saturation around lower private `map_mode` plumbing,
+  `RICH_MAP_MODE`, and stale plan/docs/tests that still treat `rich` or
+  `minimal` as active map choices;
+- finish Candidate 3 saturation around legacy task-route terminology.
+
+### 2026-06-11 Maintainer MCP Facade Dispatch Targets
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 3's maintainer-MCP slice:
+
+- made `just agent::mcp up` accept canonical dispatch targets
+  `household-world.cleanup` and `household-world.map-build`;
+- kept `mcp::up household-cleanup|semantic-map-build` as the private lower
+  helper behind the maintainer facade;
+- updated current human debugging docs to use `agent::mcp` with canonical
+  dispatch targets instead of direct `mcp::up` examples.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+ROBOCLAWS_JUST_TRACE=1 just agent::mcp up \
+  household-world.cleanup 127.0.0.1 18788 output/debug/household-mcp
+ROBOCLAWS_JUST_TRACE=1 just agent::mcp up \
+  household-world.map-build 127.0.0.1 18788 output/debug/map-build-mcp
+rg -n -F -e 'just mcp::up' -e 'task::run' -e 'household-cleanup' \
+  -e 'semantic-map-build' -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md just/README.md \
+  docs/human skills/molmo-realworld-cleanup roboclaws/launch \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+```
+
+Observed proof:
+
+- canonical `agent::mcp` targets lower to the existing private server ids in
+  trace mode;
+- current human docs no longer recommend direct `just mcp::up ...` commands;
+- remaining `household-cleanup` / `semantic-map-build` hits are private
+  implementation ids, artifact paths, active skill wording, historical docs,
+  or tests asserting the private lowering.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 saturation around lower private `map_mode` plumbing,
+  `RICH_MAP_MODE`, and stale plan/docs/tests that still treat `rich` or
+  `minimal` as active map choices;
+- finish Candidate 3 active skill wording and generated rerun/private-dispatch
+  terminology where it still points future agents at legacy task names.
+
+### 2026-06-11 Active Cleanup Skill Intent Wording
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 3's active-skill wording slice:
+
+- changed the mounted cleanup skill instructions from `semantic-map-build` task
+  wording to `intent=map-build`;
+- changed the skill manifest capability note from `household-cleanup` /
+  `semantic-map-build` task IDs to `intent=cleanup` / `intent=map-build`.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+rg -n -F -e 'semantic-map-build' -e 'household-cleanup' -e 'task::run' -- \
+  skills/molmo-realworld-cleanup
+```
+
+Observed proof:
+
+- the active `molmo-realworld-cleanup` skill no longer contains
+  `semantic-map-build`, `household-cleanup`, or `task::run` wording;
+- skill and route contracts pass with the intent-based wording.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 saturation around lower private `map_mode` plumbing,
+  `RICH_MAP_MODE`, and stale plan/docs/tests that still treat `rich` or
+  `minimal` as active map choices;
+- finish Candidate 3 generated rerun/private-dispatch terminology where it
+  still points future agents at legacy task names.
+
+### 2026-06-11 Agent Prompt Surface/Intent Headlines
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 3's agent-facing prompt slice:
+
+- changed cleanup kickoff prompt text from `This run is household-cleanup` to
+  `This run is surface=household-world intent=cleanup`;
+- changed map-build kickoff prompt text from `This run is semantic-map-build`
+  to `This run is surface=household-world intent=map-build`;
+- kept the cleanup-disabling instruction for map-build as plain behavior
+  wording instead of naming the old cleanup task id in the prompt headline.
+
+Verified this slice:
+
+```bash
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+rg -n -F -e 'This run is household-cleanup' \
+  -e 'This run is semantic-map-build' -- roboclaws tests skills docs README.md \
+  ARCHITECTURE.md just
+```
+
+Observed proof:
+
+- route/prompt contracts pass;
+- the old agent-facing prompt headlines no longer appear in current code,
+  tests, docs, or skills.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 saturation around lower private `map_mode` plumbing,
+  `RICH_MAP_MODE`, and stale plan/docs/tests that still treat `rich` or
+  `minimal` as active map choices;
+- finish Candidate 3 generated rerun/private-dispatch terminology where it
+  still points future agents at legacy task names.
+
+### 2026-06-11 Operator Console Legacy Route Launch Boundary
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 8's public launch-boundary slice:
+
+- stopped `get_selection()` from resolving legacy route ids such as
+  `codex-mujoco-cleanup`;
+- stopped `LaunchRequest(route_id=...)` and `/api/runs` from treating legacy
+  route ids as runnable launch identity;
+- carried canonical `selection_id` through legacy route payloads, history
+  attachment, attachable-run payloads, and next-goal auto-start so old artifacts
+  can remain displayable while new launches use canonical selection ids;
+- kept `ConsoleRoute`, `get_route()`, and `legacy_route_id` only for historical
+  display/test fixtures and old state parsing.
+
+Verified this slice:
+
+```bash
+rg -n -F -e 'get_route(' -e 'list_console_routes' -e 'ConsoleRoute' \
+  -e 'legacy_route_id' -e 'codex-mujoco-cleanup' -- \
+  roboclaws/operator_console tests/unit/operator_console
+git diff --check -- \
+  roboclaws/operator_console/routes.py \
+  roboclaws/operator_console/launcher.py \
+  roboclaws/operator_console/server.py \
+  roboclaws/operator_console/history.py \
+  roboclaws/operator_console/interactions.py \
+  tests/unit/operator_console/test_routes.py \
+  tests/unit/operator_console/test_launcher.py \
+  tests/unit/operator_console/test_operator_console.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console
+```
+
+Observed proof:
+
+- `get_selection("codex-mujoco-cleanup")` is rejected;
+- direct and HTTP launch attempts using only `route_id=codex-mujoco-cleanup`
+  are rejected as display-only legacy identity;
+- terminal next-goal auto-start uses the canonical selection id while preserving
+  the open-ended intent override;
+- remaining legacy route references are historical display wrappers, state
+  derivation fixtures, or explicit negative tests.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 and Candidate 3 saturation around public map-mode and
+  legacy task-route terminology.
+
+### 2026-06-11 Operator Console Reload Selection Boundary
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 8's reload-boundary cleanup:
+
+- changed browser polling from `/api/runs/<run_id>?route=...` to
+  `/api/runs/<run_id>?selection_id=...`;
+- changed the reload handler to resolve only canonical selection ids with
+  `get_selection()`, so `?route=codex-mujoco-cleanup` can no longer inject a
+  legacy route wrapper into current run state;
+- widened state normalization to accept canonical `ConsoleLaunchSelection`
+  payloads directly while preserving historical `ConsoleRoute` display records.
+
+Verified this slice:
+
+```bash
+rg -n -F '?route=' -- roboclaws/operator_console tests/unit/operator_console
+git diff --check -- \
+  roboclaws/operator_console/server.py \
+  roboclaws/operator_console/state.py \
+  roboclaws/operator_console/static/app.js \
+  tests/unit/operator_console/test_operator_console.py \
+  tests/unit/operator_console/test_static_assets.py \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md
+uv run ruff check \
+  roboclaws/operator_console/server.py \
+  roboclaws/operator_console/state.py \
+  tests/unit/operator_console/test_operator_console.py \
+  tests/unit/operator_console/test_static_assets.py
+./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console
+```
+
+Observed proof:
+
+- legacy `?route=` remains only in the explicit negative reload test and static
+  asset guard;
+- `GET /api/runs/<id>?route=codex-mujoco-cleanup` now leaves a route-less run
+  route-less instead of using a legacy wrapper;
+- operator-console unit tests pass with the canonical `selection_id` reload
+  query.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 3 private-dispatch terminology audit where lower
+  implementation ids remain private and do not point users at legacy public
+  commands.
+
+### 2026-06-11 Runtime Metric Map Guidance And Active MCP Cleanup
+
+Status remains `CONTINUE`.
+
+Implemented Candidate 7's active-surface slice:
+
+- removed `fixture_hints` from the active household cleanup MCP tool
+  registration, handler table, public tool names, and current MCP profile
+  metadata;
+- updated household prompts, raw-FPV guidance, skill instructions, setup text,
+  and deterministic MCP smoke flow to start from `metric_map`,
+  `runtime_metric_map`, and `resolve_target_query`;
+- added/kept regression coverage that active MCP rejects `fixture_hints` while
+  internal contract/report readers may still understand historical
+  `fixture_hints` artifacts;
+- updated the cleanup checker so a clean active agent run no longer requires a
+  `fixture_hints` MCP request.
+
+Verified this slice:
+
+```bash
+rg -n -F -e 'fixture_hints' -e 'metric_map' -e 'resolve_target_query' -- \
+  skills roboclaws/agents/prompts roboclaws/household docs/human tests
+git diff --check -- \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/raw_fpv_guidance.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/household/realworld_mcp_semantic_tools.py \
+  roboclaws/household/realworld_mcp_server.py \
+  roboclaws/mcp/profiles.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py \
+  skills/molmo-realworld-cleanup/SKILL.md \
+  skills/molmo-realworld-cleanup/skill.json \
+  docs/human/mcp-skills-and-semantic-profiles.md \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/contract/mcp/test_semantic_profiles.py \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/unit/agents/test_live_runtime.py \
+  tests/unit/operator_console \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/mcp/test_semantic_profiles.py \
+  tests/contract/skills/test_molmo_realworld_cleanup_skill.py
+```
+
+Observed proof:
+
+- the active household MCP server rejects `fixture_hints` and no longer records
+  `fixture_hints:request` in deterministic smoke output;
+- active prompts and the cleanup skill instruct agents to use `metric_map`,
+  runtime map anchors, and `resolve_target_query` instead of a
+  fixture-hints-first flow;
+- remaining `fixture_hints` references in the proof grep are historical report
+  fixtures, Agibot/map-context compatibility paths, internal contract helpers,
+  or explicit active-MCP rejection assertions.
+
+Remaining before this plan can be marked done:
+
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff;
+- finish Candidate 1 and Candidate 3 saturation around public map-mode and
+  legacy task-route terminology;
+- finish Candidate 8 operator-console legacy route wrapper cleanup or prove it
+  already collapsed to read-only history only.
+
+### 2026-06-11 Residual Custom Intent Mode Runtime Cleanup
+
+Status remains `CONTINUE`.
+
+Closed Candidate 9's residual current-runtime branch cleanup:
+
+- removed `TASK_INTENT_MODE_CUSTOM` and current runtime comparisons against
+  `task_intent_mode=custom`;
+- made `normalize_task_intent_mode(...)` canonicalize all historical inputs to
+  `default_cleanup`;
+- made prompt rendering, MCP server setup text, MCP contract done policy,
+  deterministic smoke, `just` lowerers, and live-runner checker gates rely on
+  first-class `task_intent` / `goal_contract.intent` for open-ended behavior;
+- renamed the live-runner checker helper parameter from `custom_task` to
+  `open_ended_task`;
+- added regression coverage proving legacy `task_intent_mode=custom` does not
+  create open-ended prompts or open-ended done policy, while explicit
+  `intent=open-ended` remains green.
+
+Verified this slice:
+
+```bash
+uv sync --extra dev
+rg -n \
+  'TASK_INTENT_MODE_CUSTOM|task_intent_mode=custom|task_intent_mode.*custom|\$task_intent_mode" == "custom|task_intent_is_custom|_custom_task_intent|custom_task' -- \
+  README.md ARCHITECTURE.md docs/human docs/plans/README.md skills just roboclaws tests scripts .github
+.venv/bin/ruff check \
+  roboclaws/household/task_intent.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/launch/evaluation.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py
+.venv/bin/ruff format --check \
+  roboclaws/household/task_intent.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/launch/evaluation.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py
+git diff --check -- \
+  just/agent.just just/molmo.just \
+  roboclaws/household/task_intent.py \
+  roboclaws/agents/prompts/household_cleanup.py \
+  roboclaws/household/realworld_contract.py \
+  roboclaws/cli/household_agent_server.py \
+  roboclaws/launch/evaluation.py \
+  scripts/molmo_cleanup/run_molmo_realworld_agent_mcp_smoke.py \
+  scripts/molmo_cleanup/run_live_codex_cleanup.py \
+  scripts/molmo_cleanup/run_live_claude_cleanup.py \
+  scripts/molmo_cleanup/run_live_openai_agents_cleanup.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_contract.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py \
+  tests/contract/molmo_cleanup/test_molmo_realworld_agent_server.py \
+  tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py \
+  tests/unit/agents/test_live_runtime.py \
+  tests/unit/operator_console
+```
+
+Observed proof:
+
+- the residual grep now reports only the historical plan entry plus explicit
+  negative regression tests that pass `task_intent_mode=custom`;
+- current open-ended prompt, done-policy, and checker behavior require
+  first-class `intent=open-ended` / `task_intent=open-ended`;
+- the focused route, MCP, checker, live-runtime, and operator-console tests
+  pass.
+
+Remaining before this plan can be marked done:
+
+- finish Candidate 3 saturation around current `household-cleanup` and
+  `semantic-map-build` references, classifying private implementation ids,
+  artifact paths, fixtures, historical docs, and public-facing drift instead
+  of rewriting blindly;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Canonical MCP Server Launch Targets
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 3 dispatch-boundary slice:
+
+- changed household live-agent server helpers to launch
+  `python -m roboclaws.cli.agent_server household-world.cleanup` and
+  `household-world.map-build`;
+- made `roboclaws.cli.agent_server` reject raw legacy server target tokens
+  `household-cleanup` and `semantic-map-build` while still accepting canonical
+  launch-shaped targets plus short aliases `cleanup` and `map-build`;
+- removed legacy target normalization from `just mcp::up` and
+  `just agent::mcp up`;
+- changed the live cleanup lowerer and active-server guard in `just/molmo.just`
+  to use `household-world.cleanup`;
+- added route tests that pin canonical MCP targets and legacy-target rejection.
+
+Verified this slice:
+
+```bash
+rg -n \
+  'agent_server household-cleanup|agent_server semantic-map-build|LEGACY_SERVER_TARGETS|SUPPORTED_SERVERS|household-cleanup\)|semantic-map-build\)' -- \
+  just/mcp.just just/agent.just just/molmo.just \
+  roboclaws/cli/agent_server.py roboclaws/agents/drivers/household_live.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+.venv/bin/ruff check \
+  roboclaws/agents/drivers/household_live.py \
+  roboclaws/cli/agent_server.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+.venv/bin/ruff format --check \
+  roboclaws/agents/drivers/household_live.py \
+  roboclaws/cli/agent_server.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+git diff --check -- \
+  roboclaws/agents/drivers/household_live.py \
+  roboclaws/cli/agent_server.py \
+  just/mcp.just just/agent.just just/molmo.just \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_mcp_accepts_canonical_household_dispatch_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_mcp_rejects_legacy_household_dispatch_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_agent_server_routes_use_cli_modules_not_examples \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_accepts_canonical_household_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_rejects_legacy_household_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_agent_server_cli_errors_use_canonical_targets \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_semantic_map_build_codex_live_passes_task_identity_to_server_and_checker
+```
+
+Observed proof:
+
+- current MCP server process launch no longer emits
+  `roboclaws.cli.agent_server household-cleanup`;
+- `agent_server` accepts canonical server targets and short aliases, but rejects
+  raw legacy target tokens before importing concrete servers;
+- remaining dispatch-scope grep hits are task intent lowerer cases in
+  `just/agent.just` / `just/molmo.just` and explicit negative route tests.
+
+Remaining before this plan can be marked done:
+
+- classify and, where current-facing, collapse remaining `household-cleanup`
+  and `semantic-map-build` hits in private task lowerers, artifact naming,
+  tests, skills, and historical docs;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Canonical `agent::run` Dispatch Targets
+
+Status remains `CONTINUE`.
+
+Implemented a Candidate 3 private-dispatch slice:
+
+- made `just agent::run` reject raw legacy dispatch targets
+  `household-cleanup`, `semantic-map-build`, and `molmo-cleanup`;
+- kept canonical maintainer dispatch targets as
+  `household-world.cleanup`, `household-world.map-build`,
+  `household-world.open-ended`, and `planner-proof.planner-proof`;
+- renamed the private lowered route variable in `just/agent.just` to
+  `implementation_task_name`, so remaining legacy strings in that recipe are
+  visibly implementation task/report/artifact identities, not accepted
+  maintainer dispatch targets;
+- updated direct `agent::run` contract tests to call canonical dispatch targets
+  and added a negative regression for raw legacy targets.
+
+Verified this slice:
+
+```bash
+rg -n -U \
+  'agent::run",\s*\n\s*"(household-cleanup|semantic-map-build)|agent::run\s+(household-cleanup|semantic-map-build)|just agent::run (household-cleanup|semantic-map-build)' -- \
+  tests scripts just docs roboclaws skills .github
+.venv/bin/ruff check \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+.venv/bin/ruff format --check \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py
+```
+
+Observed proof:
+
+- no current test/script/doc grep hit directly calls `agent::run` with raw
+  `household-cleanup` or `semantic-map-build`;
+- direct maintainer dispatch uses canonical launch-shaped targets;
+- remaining `household-cleanup` / `semantic-map-build` hits in `just/agent.just`
+  are now under `implementation_task_name` or artifact/task-name arguments for
+  lower compatibility.
+
+Remaining before this plan can be marked done:
+
+- classify the remaining `household-cleanup` / `semantic-map-build` hits as
+  private implementation ids, artifact paths, fixtures, historical docs, or
+  remaining current-facing drift;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Human Doc Legacy Task-Id Classification
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 human-doc wording slice:
+
+- changed the current Agibot G2 pilot console bullet from "Codex
+  semantic-map-build run" to canonical
+  `surface=household-world intent=map-build` wording;
+- classified remaining `docs/human/**` hits as artifact paths or historical
+  records:
+  - `docs/human/local-runtime.md` documents current output directory
+    compatibility paths;
+  - `docs/human/molmospaces-visual-grounding-results.md` names a historical
+    raw-FPV run directory;
+  - `docs/human/molmospaces-cleanup-mode-architecture.md` explicitly labels its
+    `task::run household-cleanup` note as a historical implementation result
+    superseded by newer launch-contract docs;
+  - `docs/human/agibot-g2-cleanup-pilot.md` still uses
+    `semantic-map-build-*` output directory names as artifact paths.
+
+Verified this slice:
+
+```bash
+rg -n -F -e 'semantic-map-build' -e 'household-cleanup' -e 'task::run' \
+  docs/human/agibot-g2-cleanup-pilot.md \
+  docs/human/molmospaces-cleanup-mode-architecture.md \
+  docs/human/local-runtime.md \
+  docs/human/molmospaces-visual-grounding-results.md
+git diff --check -- \
+  docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md \
+  docs/human/agibot-g2-cleanup-pilot.md
+```
+
+Remaining before this plan can be marked done:
+
+- classify or explicitly leave the remaining code/test/script hits as
+  implementation task-name compatibility, output artifact paths, fixture data,
+  or negative regressions;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Agibot Map-Build Current-Facing Wording
+
+Status remains `CONTINUE`.
+
+Implemented a narrow Candidate 3 code-prose slice:
+
+- changed user-visible Agibot map-build CLI/MCP/report prose from
+  `semantic-map-build` task wording to `intent=map-build` wording;
+- updated the physical Agibot pilot report assertion to match the new current
+  wording;
+- left schema names, MCP server ids, output directories, constants, and
+  `task_name` compatibility values unchanged.
+
+Verified this slice:
+
+```bash
+rg -n \
+  'Agibot semantic-map-build|semantic-map-build route|semantic-map-build output|semantic-map-build tools|semantic-map-build MCP server|semantic-map-build pilot|semantic-map-build hardware run|semantic-map-build evidence lane|semantic-map-build keeps|semantic-map-build camera-grounded-labels' \
+  roboclaws scripts tests
+.venv/bin/ruff check \
+  roboclaws/maps/actionable_snapshot.py \
+  roboclaws/cli/agibot_map_build_agent_server.py \
+  scripts/molmo_cleanup/run_live_codex_agibot_map_build.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  roboclaws/household/agibot_contract_rehearsal.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+.venv/bin/ruff format --check \
+  roboclaws/maps/actionable_snapshot.py \
+  roboclaws/cli/agibot_map_build_agent_server.py \
+  scripts/molmo_cleanup/run_live_codex_agibot_map_build.py \
+  roboclaws/household/agibot_cleanup_contract.py \
+  roboclaws/household/agibot_contract_rehearsal.py \
+  roboclaws/household/agibot_map_build_mcp_server.py \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py
+./scripts/dev/run_pytest_standalone.sh -q \
+  tests/contract/molmo_cleanup/test_physical_agibot_pilot.py \
+  tests/contract/molmo_cleanup/test_agibot_evidence_refresh_prompt.py \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_semantic_map_build_codex_routes_agibot_backend_to_live_runner \
+  tests/contract/dev_tools/test_task_agent_just_recipes.py::test_live_cleanup_server_entrypoint_accepts_agibot_shared_mcp_backend
+```
+
+Observed proof:
+
+- the specific current-facing Agibot phrase grep is empty;
+- Agibot map-build route, prompt, MCP, and report contract tests pass.
+
+Remaining before this plan can be marked done:
+
+- classify or explicitly leave the remaining `household-cleanup` /
+  `semantic-map-build` hits as implementation task-name compatibility, output
+  artifact paths, fixture data, negative regressions, or historical docs;
+- finish or explicitly split the broader AI2-THOR/direct-VLM retirement diff if
+  any remaining uncommitted retirement work is still in this checkout.
+
+### 2026-06-11 Final Legacy Task-Id Audit And Closeout
+
+Status is `DONE`.
+
+Closed the final Candidate 3 audit without source/runtime changes:
+
+- `README.md`, `ARCHITECTURE.md`, `STATUS.md`, `AGENTS.md`, `CLAUDE.md`,
+  `just/README.md`, and current active skills use the canonical public launch
+  shape: `just run::surface surface=household-world ... intent=map-build`,
+  `intent=cleanup`, or inferred `intent=open-ended`.
+- `just agent::run` rejects raw `household-cleanup`, `semantic-map-build`, and
+  `molmo-cleanup` dispatch targets; remaining hits in `just/agent.just` are
+  under `implementation_task_name`, lower report/artifact arguments, or
+  negative route guards.
+- `just/molmo.just` still carries private positional compatibility such as
+  `task_name="household-cleanup"` and a `semantic-map-build` lowerer branch so
+  existing run-result and checker paths keep their implementation identity.
+  Public callers route through `run::surface`.
+- `roboclaws.cli.agent_server` accepts canonical server targets
+  `household-world.cleanup` and `household-world.map-build`, then maps them to
+  concrete internal modules named by the old task ids. Raw legacy server tokens
+  are rejected by the CLI.
+- Runtime helpers, live runners, report/checker code, and Agibot rehearsal code
+  keep old `task_name` values only as artifact, schema, checker, or historical
+  compatibility identities.
+- Script hits are existing-output summarizers, raw-FPV corpus/probe paths,
+  private coding-agent isolated workspace naming, or live-runner compatibility.
+- Test hits are fixture data, artifact path expectations, private lowerer
+  assertions, or explicit negative regressions proving retired public targets
+  are rejected.
+- Human-doc hits are classified history or artifact paths:
+  `docs/human/local-runtime.md`,
+  `docs/human/molmospaces-visual-grounding-results.md`,
+  `docs/human/molmospaces-cleanup-mode-architecture.md`, and
+  `docs/human/agibot-g2-cleanup-pilot.md`.
+- The unrelated dirty B1/Map12/Isaac worktree files contain private lower-runner
+  comments or separate plan work and were left untouched.
+
+Verified this closeout:
+
+```bash
+rg -n -F -e 'task::run' -e 'household-cleanup' -e 'semantic-map-build' -- \
+  README.md ARCHITECTURE.md STATUS.md docs/human docs/plans/README.md \
+  skills just roboclaws tests scripts .github
+rg -n -F -e 'agent::run household-cleanup' \
+  -e 'agent::run semantic-map-build' \
+  -e 'just agent::run household-cleanup' \
+  -e 'just agent::run semantic-map-build' \
+  -e 'task::run' -- \
+  README.md ARCHITECTURE.md STATUS.md docs/human docs/plans/README.md \
+  skills just roboclaws tests scripts .github
+rg -n -F -e 'RICH_MAP_MODE' -e 'map_mode=rich' -e 'map_mode=minimal' \
+  -e 'evidence_lane=smoke' -e 'task_intent_mode=custom' -- \
+  README.md ARCHITECTURE.md STATUS.md AGENTS.md CLAUDE.md just/README.md \
+  docs/human docs/plans/README.md skills just roboclaws tests scripts .github
+```
+
+Observed proof:
+
+- the only remaining `task::run` hits are one historical human-doc note and
+  tests asserting active skills / command summaries no longer expose it;
+- no current doc, script, or test directly calls `agent::run` with raw
+  `household-cleanup` or `semantic-map-build`;
+- stale map-mode, smoke-lane, and custom-intent-mode public-surface probes hit
+  only explicit negative regression tests;
+- `docs/plans/refactor-retire-ai2thor-vlm-direct.md` is already `DONE`, so
+  older execution-log bullets that named the AI2-THOR/direct-VLM retirement as
+  remaining are superseded.
+
+Parked after closeout:
+
+- Historical design docs still contain old `profile=` / `cleanup_profile`
+  vocabulary in explicitly superseded implementation-result sections. They are
+  not current public launch guidance; rewrite only if a later docs cleanup
+  chooses to archive or compress those historical records.
+- Private `task_name` compatibility can be removed only with a broader artifact
+  and checker migration. That is a new compatibility-policy decision, not part
+  of this public-surface saturation plan.

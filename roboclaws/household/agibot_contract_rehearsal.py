@@ -637,7 +637,7 @@ def _prehardware_metadata_overrides(
             "RAW_FPV/camera-grounded-labels perception evidence. It is simulated and not "
             "Agibot GDK hardware proof."
         ),
-        "next_confidence_layer": "Real Agibot G2 semantic-map-build hardware run",
+        "next_confidence_layer": "Real Agibot G2 intent=map-build hardware run",
         "backend": AGIBOT_SHAPED_SIM_BACKEND,
         "backend_variant": EXECUTION_BACKEND,
         "execution_backend": EXECUTION_BACKEND,

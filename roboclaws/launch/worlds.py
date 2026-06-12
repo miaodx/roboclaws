@@ -84,12 +84,12 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         resource_kind="gpu",
         availability="experimental",
         default_overrides=(
-            "map_bundle=agibot-robot-map-12",
+            "map_bundle=b1-map12-room-semantics",
             "isaac_scene_usd_path=data/robot-data-lab/scene-engine/data/"
-            "B1_floor2_slow/usda/livingroom/livingroom_usdz_unpacked/livingroom.usda",
+            "2rd_floor_seperated/storey_1/scene_gs.usda",
             "robot_views=on",
         ),
-        preview_assets=(("map", "/asset-previews/maps/agibot-robot-map-12/preview.png"),),
+        preview_assets=(("map", "/asset-previews/maps/b1-map12-room-semantics/preview.png"),),
     ),
     "planner-proof/default": WorldSpec(
         id="planner-proof/default",

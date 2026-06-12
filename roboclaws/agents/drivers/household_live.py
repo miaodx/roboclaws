@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 HOUSEHOLD_CLEANUP_SERVER_MODULE = "roboclaws.cli.agent_server"
-HOUSEHOLD_CLEANUP_SERVER_TASK = "household-cleanup"
+HOUSEHOLD_CLEANUP_SERVER_TASK = "household-world.cleanup"
 SEMANTIC_MAP_BUILD_SERVER_MODULE = "roboclaws.cli.agent_server"
-SEMANTIC_MAP_BUILD_SERVER_TASK = "semantic-map-build"
+SEMANTIC_MAP_BUILD_SERVER_TASK = "household-world.map-build"
 
 
 def household_cleanup_server_argv(python_bin: str) -> list[str]:

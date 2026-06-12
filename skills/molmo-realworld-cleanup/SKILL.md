@@ -13,12 +13,13 @@ no `scene_objects` tool, no target list, and no hidden destination table.
 
 ## Loop
 
-1. Call `roboclaws__metric_map()` and `roboclaws__fixture_hints()` first.
+1. Call `roboclaws__metric_map()` first.
 2. Treat `inspection_waypoints` as public coverage candidates, not mess hints.
-   In the default minimal map mode, authored room and fixture labels are hidden:
-   `fixture_hints.rooms` may be empty, and the useful destination anchors come
-   from `cleanup_worklist.candidate_fixture_id`,
-   `runtime_metric_map.public_semantic_anchors`, and successful tool responses.
+   In the default Base Navigation Map contract, public room labels may be visible
+   as search priors, but fixture tables remain hidden: useful destination anchors
+   come from `cleanup_worklist.candidate_fixture_id`,
+   `runtime_metric_map.public_semantic_anchors`, `resolve_target_query`, and
+   successful tool responses.
    For any named destination, stale fixture id, old label, or open-ended target
    request, call `roboclaws__resolve_target_query(query, operation=...)` or use
    the same public `runtime_metric_map.target_candidates` resolution logic
@@ -28,8 +29,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    answer is valid only when the returned `public_search_budget` shows the
    inspected viewpoints and remaining budget; otherwise continue the public
    waypoint/camera search.
-   In explicit rich legacy/debug runs, non-empty fixture hints may still provide
-   static public landmarks. Build an exact checklist from
+   Build an exact checklist from
    `metric_map.inspection_waypoints`, then for each useful waypoint or
    current-room area, call
    `roboclaws__navigate_to_waypoint(waypoint_id)`, then
@@ -46,10 +46,10 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    high-confidence cleanup object from that source observation, then call
    `roboclaws__navigate_to_visual_candidate(source_observation_id, category,
    evidence_note, image_region, ...)` only when you intend to act on a visual
-   candidate. Omit `target_fixture_id` in minimal map mode until grounding
-   returns a public `candidate_fixture_id`; do not invent fixture ids from empty
-   fixture hints. In minimal map mode, normally omit `source_fixture_id` too; do
-   not guess it from room context or from empty fixture hints. Do not pre-register raw-FPV candidates with
+   candidate. Omit `target_fixture_id` until grounding returns a public
+   `candidate_fixture_id`; do not invent fixture ids from stale map labels.
+   With Base Navigation Map context, normally omit `source_fixture_id` too; do
+   not guess it from room context. Do not pre-register raw-FPV candidates with
    `roboclaws__declare_visual_candidates`; that producer-registration path is
    for `camera-grounded-labels`. Prefer the exact visual class when the image makes it
    clear (`plate`, `cup`, `potato`, `remotecontrol`, `book`, `pillow`); use
@@ -83,7 +83,7 @@ no `scene_objects` tool, no target list, and no hidden destination table.
    In `camera-grounded-labels` runs, use
    `roboclaws__declare_visual_candidates()` to register producer-labelled
    candidates before cleanup selection.
-   For `semantic-map-build`, use the same public map and target tools but do
+   For `intent=map-build`, use the same public map and target tools but do
    not run cleanup actions. Map-build waypoints are coverage candidates, not
    one-shot observations: when a target query, visual candidate, anchor, or
    waypoint observation is incomplete, use one bounded

@@ -78,6 +78,7 @@ class LaunchRequest:
     parent_run_id: str = ""
     next_goal_packet: dict[str, Any] | None = None
     route_id: str = ""
+    selection_id_override: str = ""
 
     @property
     def selection_id(self) -> str:
@@ -92,7 +93,12 @@ class LaunchRequest:
                     lane,
                 )
             )
-        return self.route_id
+        if self.route_id and not self.selection_id_override:
+            raise ConsoleLaunchError(
+                f"legacy route_id {self.route_id!r} is display-only; "
+                "launch with world/backend/intent/agent_engine/evidence_lane or selection_id"
+            )
+        return self.selection_id_override
 
 
 def load_repo_dotenv(root: Path, env: dict[str, str] | None = None) -> dict[str, str]:
@@ -718,8 +724,12 @@ def _attachable_run_payload(root: Path, lock_state: Any) -> dict[str, Any] | Non
     active_pid = _live_run_pid(display_run_dir) or lock_state.pid
     if lock_state.stale and not _display_run_attachable(display_run_dir, live_status, active_pid):
         return None
+    launch_payload = (
+        state.get("launch_selection") if isinstance(state.get("launch_selection"), dict) else {}
+    )
     return {
         "run_id": str(state.get("run_id") or lock_state.owner_run_id),
+        "selection_id": str(route_payload.get("selection_id") or launch_payload.get("id") or ""),
         "route_id": str(route_payload.get("id") or ""),
         "route_label": str(route_payload.get("label") or "Agent run"),
         "phase": str(live_status.get("phase") or state.get("phase") or "running"),

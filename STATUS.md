@@ -7,36 +7,38 @@ and pointers only, not a changelog or execution ledger.
 
 ## Current Focus
 
-Roboclaws is focused on the household-world launch contract:
+Roboclaws has completed the household-world launch contract saturation:
 `surface=household-world` with `intent=map-build`, `cleanup`, and
 `open-ended`, plus the `surface=planner-proof` confidence route. The
 AI2-THOR/direct-VLM public-surface retirement is implemented and verified; the
 active code, docs, tests, skills, CI, and public command facade now center on
 household-world / planner-proof.
 
-The active source of truth is
+The implemented source of truth is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
 ADR-0136. The implemented retirement record is
 `docs/plans/refactor-retire-ai2thor-vlm-direct.md`.
 
 ## Next Action
 
-Review and commit the verified retirement diff, then continue any remaining
-household map/launch/open-ended saturation work from
-`docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`.
+Use the canonical launch shape for new work:
+`just run::surface surface=household-world ... intent=map-build|cleanup` or a
+household prompt that infers `intent=open-ended`. Pick the next implementation
+task from `TODOS.md`, `docs/plans/`, or the issue tracker rather than reopening
+the completed launch-contract saturation.
 
 ## Current Blocker
 
-No current implementation blocker. The latest retirement gate passed local
-deterministic verification; live OpenClaw/Gateway and deleted AI2-THOR gates are
-not required for this retirement proof.
+No current implementation blocker. The household launch-contract saturation and
+AI2-THOR/direct-VLM retirement are implemented; live OpenClaw/Gateway and
+deleted AI2-THOR gates are not required for those proofs.
 
 ## Human Review Surface
 
 - Project orientation: `README.md`
 - Architecture and contracts: `ARCHITECTURE.md`
 - Skill-first MCP design: `docs/human/mcp-skills-and-semantic-profiles.md`
-- Active household map/launch/open-ended plan:
+- Implemented household map/launch/open-ended plan:
   `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`
 - Active launch contract ADR:
   `docs/adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md`

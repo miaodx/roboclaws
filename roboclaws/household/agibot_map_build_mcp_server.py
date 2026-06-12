@@ -108,7 +108,7 @@ def make_agibot_semantic_map_build_mcp(
 
 
 class AgibotSemanticMapBuildMCPServer:
-    """FastMCP bridge for Agibot-backed semantic-map-build pilot runs."""
+    """FastMCP bridge for Agibot-backed intent=map-build pilot runs."""
 
     def __init__(
         self,
@@ -267,32 +267,32 @@ class AgibotSemanticMapBuildMCPServer:
 
         @self._mcp.tool()
         def pick(object_id: str = "") -> dict:
-            """Blocked during Agibot semantic-map-build pilot."""
+            """Blocked during Agibot intent=map-build pilot."""
             return self.call_tool("pick", object_id=object_id)
 
         @self._mcp.tool()
         def place(fixture_id: str = "") -> dict:
-            """Blocked during Agibot semantic-map-build pilot."""
+            """Blocked during Agibot intent=map-build pilot."""
             return self.call_tool("place", fixture_id=fixture_id)
 
         @self._mcp.tool()
         def place_inside(fixture_id: str = "") -> dict:
-            """Blocked during Agibot semantic-map-build pilot."""
+            """Blocked during Agibot intent=map-build pilot."""
             return self.call_tool("place_inside", fixture_id=fixture_id)
 
         @self._mcp.tool()
         def open_receptacle(fixture_id: str = "") -> dict:
-            """Blocked during Agibot semantic-map-build pilot."""
+            """Blocked during Agibot intent=map-build pilot."""
             return self.call_tool("open_receptacle", fixture_id=fixture_id)
 
         @self._mcp.tool()
         def close_receptacle(fixture_id: str = "") -> dict:
-            """Blocked during Agibot semantic-map-build pilot."""
+            """Blocked during Agibot intent=map-build pilot."""
             return self.call_tool("close_receptacle", fixture_id=fixture_id)
 
         @self._mcp.tool()
         def done(reason: str) -> dict:
-            """Finish the Agibot semantic-map-build pilot and write report artifacts."""
+            """Finish the Agibot intent=map-build pilot and write report artifacts."""
             return self.call_tool("done", reason=reason)
 
     @property
@@ -301,7 +301,7 @@ class AgibotSemanticMapBuildMCPServer:
 
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:
         if name not in AGIBOT_SEMANTIC_MAP_BUILD_TOOLS:
-            raise ValueError(f"unknown Agibot semantic-map-build MCP tool {name!r}")
+            raise ValueError(f"unknown Agibot intent=map-build MCP tool {name!r}")
         if self.done_event.is_set() and name != "done":
             return {"ok": False, "tool": name, "status": "error", "error_reason": "run_done"}
         request = _json_safe(kwargs)
@@ -371,7 +371,7 @@ class AgibotSemanticMapBuildMCPServer:
             return self.adapter.blocked_manipulation(tool=name)
         if name == "done":
             return self._finalize_done(reason=str(request.get("reason") or ""))
-        raise AssertionError(f"unhandled Agibot semantic-map-build tool {name!r}")
+        raise AssertionError(f"unhandled Agibot intent=map-build tool {name!r}")
 
     def _finalize_done(self, *, reason: str) -> dict[str, Any]:
         if self._done_result is not None:
@@ -439,7 +439,7 @@ class AgibotSemanticMapBuildMCPServer:
                 "sweep_coverage_rate": readiness["observed_waypoint_rate"],
                 "disturbance_count": 0,
                 "public_contract_note": (
-                    "Agibot semantic-map-build does not run private cleanup scoring."
+                    "Agibot intent=map-build does not run private cleanup scoring."
                 ),
             },
             "agent_view": {
@@ -483,7 +483,7 @@ class AgibotSemanticMapBuildMCPServer:
                 "first_cleanup_before_full_survey": False,
                 "events": policy_events,
                 "operator_review_note": (
-                    "Agibot semantic-map-build records Codex-visible map, navigation, "
+                    "Agibot intent=map-build records Codex-visible map, navigation, "
                     "observation, skipped waypoint, and blocked manipulation decisions."
                 ),
             },
@@ -506,7 +506,7 @@ class AgibotSemanticMapBuildMCPServer:
                 "strict_proof_eligible": False,
                 "api_semantic_state_edits": 0,
                 "evidence_note": (
-                    "Agibot semantic-map-build intentionally disables physical manipulation."
+                    "Agibot intent=map-build intentionally disables physical manipulation."
                 ),
                 "blockers": list(BLOCKED_MANIPULATION_TOOLS),
             },
@@ -572,13 +572,13 @@ class AgibotSemanticMapBuildMCPServer:
         while time.monotonic() < deadline:
             if not thread.is_alive():
                 raise RuntimeError(
-                    f"Agibot semantic-map-build MCP server failed on {self.host}:{self.port}"
+                    f"Agibot intent=map-build MCP server failed on {self.host}:{self.port}"
                 )
             if _port_accepting(probe_host, self.port):
                 return thread
             time.sleep(0.05)
         raise RuntimeError(
-            f"Agibot semantic-map-build MCP server did not start on {self.host}:{self.port}"
+            f"Agibot intent=map-build MCP server did not start on {self.host}:{self.port}"
         )
 
     def close(self) -> None:
@@ -833,7 +833,7 @@ def _readiness_from_trace(
             item.get("failure_type", "").startswith("operator_") for item in responses
         ),
         "public_contract_note": (
-            "Agibot semantic-map-build keeps real_robot_cleanup_v1 public tools stable "
+            "Agibot intent=map-build keeps real_robot_cleanup_v1 public tools stable "
             "while the SDK runner owns GDK map, camera, and PNC evidence."
         ),
     }
@@ -843,7 +843,7 @@ def _normalized_evidence_lane(value: str) -> str:
     lane = str(value or CAMERA_GROUNDED_LABELS_LANE).strip() or CAMERA_GROUNDED_LABELS_LANE
     if lane not in AGIBOT_SEMANTIC_MAP_BUILD_LANES:
         raise ValueError(
-            f"unsupported Agibot semantic-map-build evidence lane {lane!r}; "
+            f"unsupported Agibot intent=map-build evidence lane {lane!r}; "
             "expected smoke|world-oracle-labels|world-public-labels|"
             "camera-grounded-labels|camera-raw-fpv"
         )

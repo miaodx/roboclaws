@@ -1810,9 +1810,9 @@ def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Pa
 def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() -> None:
     timing = {
         "surface": "household-world",
-        "intent": "cleanup",
+        "intent": "open-ended",
         "task_name": "household-cleanup",
-        "task_intent_mode": "custom",
+        "task_intent_mode": "default_cleanup",
         "runtime": "openai-agents-live",
         "provider_profile": "codex-env",
         "model": "gpt-5.5",
@@ -1918,9 +1918,9 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
 
     assert timeline["schema"] == "live_agent_timeline_v1"
     assert timeline["surface"] == "household-world"
-    assert timeline["intent"] == "cleanup"
+    assert timeline["intent"] == "open-ended"
     assert timeline["task_name"] == "household-cleanup"
-    assert timeline["task_intent_mode"] == "custom"
+    assert timeline["task_intent_mode"] == "default_cleanup"
     assert timeline["runtime"] == "openai-agents-live"
     assert timeline["provider_profile"] == "codex-env"
     assert timeline["model"] == "gpt-5.5"

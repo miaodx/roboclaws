@@ -35,7 +35,7 @@ AGIBOT_MAP_BUILD_SKILL = "molmo-realworld-cleanup"
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run a live Codex semantic-map-build pilot against Agibot MCP tools."
+        description="Run a live Codex intent=map-build pilot against Agibot MCP tools."
     )
     parser.add_argument("--repo-root", type=Path, required=True)
     parser.add_argument("--run-dir", type=Path, required=True)
@@ -266,7 +266,7 @@ class LiveCodexAgibotMapBuildRunner:
 def _codex_agibot_map_build_prompt(prompt: str) -> str:
     return (
         f"{CODEX_LIVE_NO_PLAN_TOOL_INSTRUCTION}\n\n"
-        "Agibot semantic-map-build route: use the cleanup MCP server only. "
+        "Agibot intent=map-build route: use the cleanup MCP server only. "
         "Call metric_map and fixture_hints first. Build a waypoint checklist from "
         "metric_map.inspection_waypoints. Visit public waypoint ids only with "
         "navigate_to_waypoint, then call observe. Do not invent coordinates, do not "
