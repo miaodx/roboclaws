@@ -15,6 +15,9 @@ GENERATOR_PATH = REPO_ROOT / "scripts" / "agibot" / "generate_metric_map_from_co
 VERIFY_PATH = REPO_ROOT / "scripts" / "agibot" / "verify_waypoints_with_pnc.py"
 SDK_RUNNER_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "run_agibot_cleanup_backend.py"
 RAW_FPV_CHECK_PATH = REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "check_raw_fpv_status.py"
+SIX_CAMERA_CAPTURE_PATH = (
+    REPO_ROOT / "vendors" / "agibot_sdk" / "tools" / "capture_six_camera_views.py"
+)
 COMPLETED_CONTEXT_FIXTURE = REPO_ROOT / "tests" / "fixtures" / "agibot_map_context.completed.json"
 
 
@@ -26,6 +29,11 @@ def _require_agibot_sdk_runner() -> None:
 def _require_raw_fpv_checker() -> None:
     if not RAW_FPV_CHECK_PATH.is_file():
         pytest.skip("Agibot raw-FPV checker is unavailable in this checkout")
+
+
+def _require_six_camera_capture() -> None:
+    if not SIX_CAMERA_CAPTURE_PATH.is_file():
+        pytest.skip("Agibot six-camera capture helper is unavailable in this checkout")
 
 
 def test_generate_metric_map_from_completed_agibot_context(tmp_path: Path) -> None:
@@ -520,6 +528,50 @@ def test_raw_fpv_checker_fails_loudly_on_missing_numpy(monkeypatch, tmp_path: Pa
             ]
         )
 
+    assert fake_gdk.gdk_release_calls == 1
+
+
+def test_six_camera_capture_writes_all_default_views_and_no_motion(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _require_six_camera_capture()
+    capture = _load_module(SIX_CAMERA_CAPTURE_PATH, "capture_six_camera_views_mocked_success")
+    fake_gdk = _FakeAgibotGDK(camera_factory=_FakeCameraFactory())
+
+    monkeypatch.setitem(sys.modules, "agibot_gdk", fake_gdk)
+    monkeypatch.setattr(capture, "require_robot_discovery", lambda robot_host: None)
+    monkeypatch.setattr(capture, "ensure_runtime", lambda robot_host, script_path: None)
+    monkeypatch.setattr(capture.time, "sleep", lambda seconds: None)
+
+    rc = capture.main_from_args(
+        [
+            "--robot-host",
+            "127.0.0.1",
+            "--output-dir",
+            str(tmp_path),
+            "--no-contact-sheet",
+        ]
+    )
+
+    status = json.loads((tmp_path / "six_view_status.json").read_text(encoding="utf-8"))
+    cameras = [item["camera"] for item in status["captures"]]
+    assert rc == 0
+    assert status["read_only"] is True
+    assert status["navigation_submission"] is False
+    assert status["motion_or_write_calls_used"] == []
+    assert cameras == [
+        "head_color",
+        "head_stereo_left",
+        "head_stereo_right",
+        "head_depth",
+        "hand_left_color",
+        "hand_right_color",
+    ]
+    for item in status["captures"]:
+        assert item["ok"] is True
+        assert item["shape"] == [640, 400]
+        assert item["image_path"].endswith(f"{item['camera']}.jpg")
+        assert (tmp_path / f"{item['camera']}.jpg").read_bytes().startswith(b"\xff\xd8")
     assert fake_gdk.gdk_release_calls == 1
 
 
