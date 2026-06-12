@@ -449,6 +449,26 @@ reduced residual model/SDK/provider waiting, with some same-dataset normalized
 model-work reduction under a low-explanatory-power fit. The claim is
 calibrated-diagnostic, still not broad or publishable.
 
+2026-06-12 O+AC holdout-calibration diagnostic update: the calibration builder
+now accepts explicit `--validation-path` / `--holdout-path` rows and records
+holdout validation error statistics in the
+`roboclaws_model_latency_calibration_v1` packet. When holdout validation is
+present but has weak explanatory power, the packet is automatically labeled
+`holdout_validation_low_explanatory_power` so downstream normalized comparisons
+remain diagnostic instead of publishable. A baseline-trained,
+fixed4/repeat-validated packet was generated locally at
+`output/agent-sdk-perf-followups/mify-camera-grounded-o-ac-holdout-calibration.json`
+from 76 training rows and 117 holdout rows. It removes the old
+same-dataset-only limitation but records weak holdout fit
+(`validation.mae_s=7.72203`, `validation.rmse_s=8.327714`,
+`validation.p95_abs_error_s=11.548254`, `validation.r2=-4.79098`). The
+holdout-normalized comparisons remain quality/wall accepted, but estimated
+model-work deltas are weak/inconsistent (`-13.613s` fixed4, `+35.951s`
+repeat) while residual reductions still dominate (`-639.95s`, `-654.973s`).
+This strengthens the conclusion that current O+AC evidence is a paired
+wall-clock win driven by reduced wait/residual latency, not a publishable
+normalized model-work win.
+
 2026-06-12 B baseline coverage refresh update: the scoped provider/model
 coverage pass now records all three planned `world-public-labels` rows in
 `docs/status/active/agent-sdk-b-baseline-coverage-live-caps.json` and the
@@ -704,9 +724,11 @@ Current wall-clock priority after the O+AC calibrated-normalized diagnostic upda
    `world-public-labels` provider/model pass has one completed
    Chat-compatible MiMo row and two provider blockers (`kimi-openai-chat` 403
    and `codex-env` 502).
-2. Promote calibration only after reviewed holdout or cross-run validation
-   exists; the current O+AC calibration has error statistics, but they are from
-   a same-dataset diagnostic fit local to the completed artifacts.
+2. Promote calibration only after a reviewed holdout/cross-run validation
+   dataset has acceptable explanatory power. The tool now supports holdout
+   validation and the first baseline-trained fixed4/repeat holdout packet
+   exists, but its holdout `r2=-4.79098` keeps normalized model-work claims
+   diagnostic only.
 3. Raw-FPV P/AA live retry only after `codex-env` upstream availability recovers
    or another OpenAI Agents SDK route has verified image transport.
 4. Revisit deferred H/M/K/E only if refreshed Q/Y evidence shows a material
@@ -804,7 +826,7 @@ task-state semantics, and complete trace/report artifacts.
 
 | ID | Queue | Do | Why | Success | Stop / next |
 | --- | --- | --- | --- | --- | --- |
-| AC | accepted-deterministic-prep, live paired rows accepted, calibrated-diagnostic comparison generated | Add completion-safe camera-grounded history compaction. | O continuation tightening removed standalone declarations but failed before completion on context budget. The rejected I/N policy compacted too broadly and broke task completion; AC narrows compaction to old camera-grounded observation/declaration history while retaining recent actionable outputs. | Implemented as `camera_grounded_history_v1` inside the private SDK model-input filter. It is off by default, can be enabled through `--camera-grounded-history-compaction` / `ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION`, keeps the latest N camera-grounded outputs full, summarizes older outputs only when smaller, records aggregate camera-grounded byte/count metrics, and preserves complete MCP traces/reports/run artifacts. The fixed4 and repeat rows completed with `done`, `run_result.json`, same-or-better quality, and paired wall improvements of `-659.477s` / `-630.633s`. The explicit diagnostic calibration packet from 193 model-call rows now records error statistics and normalized comparison fields: estimated model-work improves by `-112.56s` / `-85.531s`, while model-latency residual falls by `-541.003s` / `-533.491s`. | Keep AC SDK-private/opt-in. Treat calibrated output as diagnostic because the packet is same-dataset fitted, not holdout-validated or repo-default. Next proof is broader evidence-lane/provider coverage or reviewed holdout calibration before broad/publishable claims. |
+| AC | accepted-deterministic-prep, live paired rows accepted, calibrated-diagnostic comparison generated, holdout validation added but weak | Add completion-safe camera-grounded history compaction. | O continuation tightening removed standalone declarations but failed before completion on context budget. The rejected I/N policy compacted too broadly and broke task completion; AC narrows compaction to old camera-grounded observation/declaration history while retaining recent actionable outputs. | Implemented as `camera_grounded_history_v1` inside the private SDK model-input filter. It is off by default, can be enabled through `--camera-grounded-history-compaction` / `ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION`, keeps the latest N camera-grounded outputs full, summarizes older outputs only when smaller, records aggregate camera-grounded byte/count metrics, and preserves complete MCP traces/reports/run artifacts. The fixed4 and repeat rows completed with `done`, `run_result.json`, same-or-better quality, and paired wall improvements of `-659.477s` / `-630.633s`. The same-dataset diagnostic calibration shows estimated model-work improvements of `-112.56s` / `-85.531s` and residual reductions of `-541.003s` / `-533.491s`. The new baseline-trained holdout packet has 117 validation rows but weak explanatory power (`r2=-4.79098`), so its normalized model-work deltas are inconsistent (`-13.613s` / `+35.951s`) while residual reductions still dominate (`-639.95s` / `-654.973s`). | Keep AC SDK-private/opt-in. Treat calibrated output as diagnostic because current holdout validation is low-explanatory-power and not repo-default. Next proof is broader evidence-lane/provider coverage or a reviewed calibration dataset with acceptable holdout/cross-run fit before broad/publishable normalized claims. |
 
 ### Group 5: Promotion And Compatibility
 
