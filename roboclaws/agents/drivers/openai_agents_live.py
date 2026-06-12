@@ -876,12 +876,8 @@ def _camera_grounded_history_info(item: Any) -> dict[str, Any] | None:
         "mcp_approval_response",
     }:
         return None
-    output = payload.get("output") if "output" in payload else payload.get("content")
-    decoded = _decode_tool_output_payload(output)
-    if not isinstance(decoded, dict):
-        return None
     tool = _normalize_mcp_tool_name(
-        decoded.get("tool") or payload.get("name") or payload.get("tool") or ""
+        payload.get("name") or payload.get("tool") or payload.get("tool_name") or ""
     )
     call_id = str(payload.get("call_id") or "")
     if not tool and "observe_camera_grounded_candidates" in call_id:
@@ -890,6 +886,13 @@ def _camera_grounded_history_info(item: Any) -> dict[str, Any] | None:
         tool = "declare_visual_candidates"
     if not tool and "observe" in call_id:
         tool = "observe"
+    output = payload.get("output") if "output" in payload else payload.get("content")
+    if output is None:
+        return None
+    decoded = _decode_tool_output_payload(output)
+    decoded = decoded if isinstance(decoded, dict) else {}
+    if not tool:
+        tool = _normalize_mcp_tool_name(decoded.get("tool") or "")
     if tool not in {
         "observe_camera_grounded_candidates",
         "declare_visual_candidates",

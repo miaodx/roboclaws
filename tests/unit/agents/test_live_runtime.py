@@ -1502,6 +1502,44 @@ def test_model_input_compaction_summarizes_wrapped_mcp_camera_grounded_history()
     assert metrics["camera_grounded_history_bytes_reduced"] > 0
 
 
+def test_model_input_compaction_summarizes_named_mcp_camera_history_without_json_output() -> None:
+    items = [
+        {
+            "type": "mcp_call",
+            "id": f"mcp_{idx}",
+            "name": "roboclaws__observe_camera_grounded_candidates",
+            "server_label": "roboclaws",
+            "arguments": "{}",
+            "output": "MCP tool output body unavailable in structured JSON. " + ("x" * 5000),
+            "status": "completed",
+        }
+        for idx in range(1, 4)
+    ]
+
+    filtered, metrics = _compact_model_input_items(
+        items,
+        min_chars=999_999,
+        public_tool_output_summary=False,
+        repeated_metric_map_delta=False,
+        camera_grounded_history={
+            "enabled": True,
+            "mode": "retain_latest_actionable_outputs",
+            "retained_recent_outputs": 1,
+        },
+    )
+
+    first_replacement = json.loads(filtered[0]["output"])
+    assert first_replacement["schema"] == "roboclaws_camera_grounded_history_summary_v1"
+    assert first_replacement["tool"] == "observe_camera_grounded_candidates"
+    assert first_replacement["candidate_count"] == 0
+    assert "x" * 100 not in json.dumps(filtered[0])
+    assert "x" * 100 in json.dumps(filtered[-1])
+    assert metrics["camera_grounded_history_item_count"] == 3
+    assert metrics["camera_grounded_history_retained_count"] == 1
+    assert metrics["camera_grounded_history_compacted_count"] == 2
+    assert metrics["camera_grounded_history_bytes_reduced"] > 0
+
+
 def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
     tmp_path: Path, monkeypatch
 ) -> None:
