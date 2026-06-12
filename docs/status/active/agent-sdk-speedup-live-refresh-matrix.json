@@ -39,6 +39,71 @@
       "purpose": "cross-client guard before promoting private or opt-in speedups"
     }
   ],
+  "candidate_queue": [
+    {
+      "candidate_id": "A",
+      "queue": "accepted",
+      "row_policy": "deterministic_only_until_speed_ab_needed",
+      "coverage_state_when_no_row": "accepted_deterministic_no_live_refresh_row",
+      "next_action": "keep skill-context metadata/privacy guard; live A/B is optional"
+    },
+    {
+      "candidate_id": "G",
+      "queue": "accepted-deterministic",
+      "row_policy": "deterministic_only_until_settings_speed_ab_needed",
+      "coverage_state_when_no_row": "accepted_deterministic_no_live_refresh_row",
+      "next_action": "keep settings attribution; run live A/B only with a concrete settings hypothesis"
+    },
+    {
+      "candidate_id": "J",
+      "queue": "accepted-with-G",
+      "row_policy": "deterministic_only_until_cache_speed_ab_needed",
+      "coverage_state_when_no_row": "accepted_deterministic_no_live_refresh_row",
+      "next_action": "keep cache attribution; do not claim cache speed without usage evidence"
+    },
+    {
+      "candidate_id": "H",
+      "queue": "bypass-for-now",
+      "row_policy": "no_live_row_until_q_shows_continuation_replay_bucket",
+      "coverage_state_when_no_row": "bypassed_no_live_refresh_row",
+      "next_action": "reconsider only if Q shows continuation replay remains a top latency source"
+    },
+    {
+      "candidate_id": "L",
+      "queue": "merge-into-Q/Y",
+      "row_policy": "covered_by_recommendation_summary",
+      "coverage_state_when_no_row": "merged_no_live_refresh_row",
+      "next_action": "create a separate row only if Q/Y shows material turn-waste evidence"
+    },
+    {
+      "candidate_id": "M",
+      "queue": "defer",
+      "row_policy": "no_live_row_until_tool_choice_noise_material",
+      "coverage_state_when_no_row": "deferred_no_live_refresh_row",
+      "next_action": "try only if Q shows tool-choice noise after G/I/O"
+    },
+    {
+      "candidate_id": "K",
+      "queue": "bypass-for-now",
+      "row_policy": "no_live_row_until_read_only_parallelism_hypothesis",
+      "coverage_state_when_no_row": "bypassed_no_live_refresh_row",
+      "next_action": "revisit only for safe read-only tools if provider parallelism benefit appears"
+    },
+    {
+      "candidate_id": "E",
+      "queue": "bypass-for-now",
+      "row_policy": "covered_by_concrete_I_N_AA_AC_arms",
+      "coverage_state_when_no_row": "bypassed_no_live_refresh_row",
+      "next_action": "revive only if concrete compaction arms are insufficient"
+    },
+    {
+      "candidate_id": "X",
+      "queue": "gate-conditional",
+      "row_policy": "promotion_gate_only",
+      "coverage_state_when_no_row": "conditional_gate_no_live_refresh_row",
+      "next_action": "run only before promoting private or opt-in behavior to defaults"
+    }
+  ],
   "rows": [
     {
       "baseline_role": "completed_live_responses_baseline",

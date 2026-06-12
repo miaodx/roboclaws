@@ -139,6 +139,7 @@ def _decision_packet(manifest: dict[str, Any], *, dry_run: dict[str, Any]) -> di
         "budget_caps": dry_run["budget_caps"],
         "provider_calls_planned": dry_run["provider_calls_planned"],
         "candidate_groups": manifest.get("candidate_groups") or [],
+        "candidate_queue": _candidate_queue(manifest),
         "rows": [_decision_row(row) for row in _rows(manifest)],
         "summary": {},
     }
@@ -601,6 +602,7 @@ def _recommendation_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _candidate_coverage(packet: dict[str, Any]) -> dict[str, Any]:
     groups_by_candidate: dict[str, set[str]] = {}
+    queue_by_candidate = _candidate_queue_by_id(packet)
     for group in packet.get("candidate_groups") or []:
         if not isinstance(group, dict):
             continue
@@ -609,6 +611,8 @@ def _candidate_coverage(packet: dict[str, Any]) -> dict[str, Any]:
             groups_by_candidate.setdefault(candidate_id, set())
             if group_id:
                 groups_by_candidate[candidate_id].add(group_id)
+    for candidate_id in queue_by_candidate:
+        groups_by_candidate.setdefault(candidate_id, set())
 
     rows_by_candidate: dict[str, list[dict[str, Any]]] = {}
     for row in packet.get("rows") or []:
@@ -622,19 +626,26 @@ def _candidate_coverage(packet: dict[str, Any]) -> dict[str, Any]:
 
     items: list[dict[str, Any]] = []
     state_counts: dict[str, int] = {}
+    coverage_state_counts: dict[str, int] = {}
     for candidate_id in sorted(groups_by_candidate):
         rows = rows_by_candidate.get(candidate_id, [])
         statuses = _status_counts(rows)
         state = _candidate_evidence_state(statuses)
+        queue = queue_by_candidate.get(candidate_id, {})
+        coverage_state = _candidate_coverage_state(state, queue)
         state_counts[state] = state_counts.get(state, 0) + 1
+        coverage_state_counts[coverage_state] = coverage_state_counts.get(coverage_state, 0) + 1
         items.append(
             {
                 "candidate_id": candidate_id,
                 "group_ids": sorted(groups_by_candidate.get(candidate_id) or []),
+                "queue": str(queue.get("queue") or ""),
+                "row_policy": str(queue.get("row_policy") or ""),
                 "row_ids": [str(row.get("row_id") or "") for row in rows],
                 "status_counts": statuses,
                 "evidence_state": state,
-                "next_action": _candidate_next_action(state),
+                "coverage_state": coverage_state,
+                "next_action": _candidate_next_action(coverage_state, queue=queue),
             }
         )
 
@@ -642,14 +653,58 @@ def _candidate_coverage(packet: dict[str, Any]) -> dict[str, Any]:
         "source": "candidate_groups_and_decision_rows",
         "candidate_count": len(items),
         "state_counts": dict(sorted(state_counts.items())),
+        "coverage_state_counts": dict(sorted(coverage_state_counts.items())),
         "covered_candidate_ids": [
             item["candidate_id"] for item in items if item["evidence_state"] != "no_decision_row"
         ],
         "no_decision_row_candidate_ids": [
             item["candidate_id"] for item in items if item["evidence_state"] == "no_decision_row"
         ],
+        "unresolved_no_row_candidate_ids": [
+            item["candidate_id"]
+            for item in items
+            if item["evidence_state"] == "no_decision_row"
+            and item["coverage_state"] == "no_decision_row"
+        ],
         "items": items,
     }
+
+
+def _candidate_queue(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+    rows = manifest.get("candidate_queue")
+    if not isinstance(rows, list):
+        return []
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate_id = str(row.get("candidate_id") or "")
+        if not candidate_id:
+            continue
+        candidates.append(
+            {
+                "candidate_id": candidate_id,
+                "queue": str(row.get("queue") or ""),
+                "row_policy": str(row.get("row_policy") or ""),
+                "coverage_state_when_no_row": str(row.get("coverage_state_when_no_row") or ""),
+                "next_action": str(row.get("next_action") or ""),
+            }
+        )
+    return candidates
+
+
+def _candidate_queue_by_id(packet: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows = packet.get("candidate_queue")
+    if not isinstance(rows, list):
+        return {}
+    by_id: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate_id = str(row.get("candidate_id") or "")
+        if candidate_id:
+            by_id[candidate_id] = row
+    return by_id
 
 
 def _status_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
@@ -681,7 +736,15 @@ def _candidate_evidence_state(status_counts: dict[str, int]) -> str:
     return "mixed_evidence"
 
 
-def _candidate_next_action(state: str) -> str:
+def _candidate_coverage_state(evidence_state: str, queue: dict[str, Any]) -> str:
+    if evidence_state != "no_decision_row":
+        return evidence_state
+    return str(queue.get("coverage_state_when_no_row") or evidence_state)
+
+
+def _candidate_next_action(state: str, *, queue: dict[str, Any] | None = None) -> str:
+    if queue and queue.get("next_action"):
+        return str(queue["next_action"])
     return {
         "accepted_only": (
             "maintain accepted evidence; rerun only for repeat, calibration, or broader coverage"
@@ -698,6 +761,17 @@ def _candidate_next_action(state: str) -> str:
         ),
         "no_decision_row": (
             "no decision-row evidence yet; run only if refreshed Q/Y or plan gates justify it"
+        ),
+        "accepted_deterministic_no_live_refresh_row": (
+            "deterministic proof exists; add live row only if the plan needs provider-backed speed "
+            "evidence"
+        ),
+        "bypassed_no_live_refresh_row": "bypassed by current evidence; revisit only if Q/Y changes",
+        "deferred_no_live_refresh_row": "deferred until the named dependency evidence appears",
+        "merged_no_live_refresh_row": "covered by another candidate or summary path",
+        "conditional_gate_no_live_refresh_row": "run only before promotion or contract change",
+        "gate_no_live_refresh_row": (
+            "guardrail candidate; maintain the gate rather than a speed row"
         ),
     }.get(state, "inspect candidate state before continuing")
 

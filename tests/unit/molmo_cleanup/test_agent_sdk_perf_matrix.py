@@ -553,7 +553,31 @@ def test_agent_sdk_perf_matrix_summarizes_candidate_coverage(
             {"group_id": "group1_private_sdk_levers", "candidate_ids": ["A", "I"]},
             {"group_id": "group2_lane_specific_reductions", "candidate_ids": ["F"]},
             {"group_id": "group3_raw_fpv_stabilization", "candidate_ids": ["P"]},
-            {"group_id": "group4_expensive_orchestration", "candidate_ids": ["C"]},
+            {"group_id": "group4_expensive_orchestration", "candidate_ids": ["C", "K"]},
+            {"group_id": "group5_promotion_and_compatibility", "candidate_ids": ["X"]},
+        ],
+        candidate_queue=[
+            {
+                "candidate_id": "A",
+                "queue": "accepted",
+                "row_policy": "deterministic_only",
+                "coverage_state_when_no_row": "accepted_deterministic_no_live_refresh_row",
+                "next_action": "keep deterministic proof",
+            },
+            {
+                "candidate_id": "K",
+                "queue": "bypass-for-now",
+                "row_policy": "no_live_row_until_parallelism_hypothesis",
+                "coverage_state_when_no_row": "bypassed_no_live_refresh_row",
+                "next_action": "revisit only for read-only tools",
+            },
+            {
+                "candidate_id": "X",
+                "queue": "gate-conditional",
+                "row_policy": "promotion_gate_only",
+                "coverage_state_when_no_row": "conditional_gate_no_live_refresh_row",
+                "next_action": "run before promotion",
+            },
         ],
         extra_rows=[
             {
@@ -618,17 +642,50 @@ def test_agent_sdk_perf_matrix_summarizes_candidate_coverage(
     packet = json.loads(decision_packet.read_text(encoding="utf-8"))
     coverage = packet["summary"]["candidate_coverage"]
     assert coverage["source"] == "candidate_groups_and_decision_rows"
-    assert coverage["candidate_count"] == 15
+    assert packet["candidate_queue"] == [
+        {
+            "candidate_id": "A",
+            "queue": "accepted",
+            "row_policy": "deterministic_only",
+            "coverage_state_when_no_row": "accepted_deterministic_no_live_refresh_row",
+            "next_action": "keep deterministic proof",
+        },
+        {
+            "candidate_id": "K",
+            "queue": "bypass-for-now",
+            "row_policy": "no_live_row_until_parallelism_hypothesis",
+            "coverage_state_when_no_row": "bypassed_no_live_refresh_row",
+            "next_action": "revisit only for read-only tools",
+        },
+        {
+            "candidate_id": "X",
+            "queue": "gate-conditional",
+            "row_policy": "promotion_gate_only",
+            "coverage_state_when_no_row": "conditional_gate_no_live_refresh_row",
+            "next_action": "run before promotion",
+        },
+    ]
+    assert coverage["candidate_count"] == 17
     assert coverage["state_counts"]["accepted_only"] >= 1
     assert coverage["state_counts"]["rejected_only"] == 1
     assert coverage["state_counts"]["blocked_only"] == 1
-    assert coverage["state_counts"]["no_decision_row"] == 3
-    assert {"A", "C", "I"} == set(coverage["no_decision_row_candidate_ids"])
+    assert coverage["state_counts"]["no_decision_row"] == 5
+    assert coverage["coverage_state_counts"]["accepted_deterministic_no_live_refresh_row"] == 1
+    assert coverage["coverage_state_counts"]["bypassed_no_live_refresh_row"] == 1
+    assert coverage["coverage_state_counts"]["conditional_gate_no_live_refresh_row"] == 1
+    assert {"A", "C", "I", "K", "X"} == set(coverage["no_decision_row_candidate_ids"])
+    assert {"C", "I"} == set(coverage["unresolved_no_row_candidate_ids"])
     items = {item["candidate_id"]: item for item in coverage["items"]}
     assert items["R"]["evidence_state"] == "accepted_only"
     assert items["F"]["evidence_state"] == "rejected_only"
     assert items["P"]["evidence_state"] == "blocked_only"
     assert items["C"]["evidence_state"] == "no_decision_row"
+    assert items["A"]["coverage_state"] == "accepted_deterministic_no_live_refresh_row"
+    assert items["A"]["queue"] == "accepted"
+    assert items["A"]["row_policy"] == "deterministic_only"
+    assert items["A"]["next_action"] == "keep deterministic proof"
+    assert items["K"]["coverage_state"] == "bypassed_no_live_refresh_row"
+    assert items["X"]["coverage_state"] == "conditional_gate_no_live_refresh_row"
     assert items["R"]["row_ids"] == ["gpt_world_public_group0"]
     assert items["F"]["row_ids"] == ["rejected_f"]
     assert items["P"]["row_ids"] == ["blocked_p"]
@@ -649,6 +706,7 @@ def _write_manifest(
     feature_flags_extra: dict[str, object] | None = None,
     calibration_path: Path | None = None,
     candidate_groups: list[dict[str, object]] | None = None,
+    candidate_queue: list[dict[str, object]] | None = None,
     extra_rows: list[dict[str, object]] | None = None,
 ) -> Path:
     feature_flags = {
@@ -718,6 +776,7 @@ def _write_manifest(
                         "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
                     }
                 ],
+                "candidate_queue": candidate_queue or [],
                 "rows": rows,
             }
         ),

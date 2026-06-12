@@ -511,14 +511,16 @@ availability changes.
 
 2026-06-12 machine coverage audit update: the live-refresh decision packet now
 adds `summary.candidate_coverage`, generated from `candidate_groups` plus
-`candidate_ids` / `dependency_candidate_ids` on each row. The refreshed packet
-has 23 candidate IDs: 2 accepted-only (`AC`, `W`), 3 rejected-only (`C`, `D`,
-`F`), 2 blocked-only (`P`, `AA`), 7 mixed-evidence, and 9 with no live-refresh
-decision row (`A`, `G`, `J`, `H`, `L`, `M`, `K`, `E`, `X`). The no-row set is
-intentional for deterministic-only, deferred, bypassed, or promotion-gate
-directions unless refreshed Q/Y or a changed dependency justifies a new row.
-This is now the machine-readable answer to "which directions have been tried,
-blocked, rejected, or not yet given row evidence."
+`candidate_ids` / `dependency_candidate_ids` on each row and the explicit
+`candidate_queue` no-row policy. The refreshed packet has 23 candidate IDs:
+2 accepted-only (`AC`, `W`), 3 accepted deterministic with no live-refresh row
+(`A`, `G`, `J`), 3 rejected-only (`C`, `D`, `F`), 2 blocked-only (`P`, `AA`),
+7 mixed-evidence, 3 bypassed no-row directions (`H`, `K`, `E`), 1 merged
+no-row direction (`L`), 1 deferred no-row direction (`M`), and 1 conditional
+promotion gate (`X`). `unresolved_no_row_candidate_ids` is empty, so there is no
+currently unexplained "not tried" candidate in the plan. New live rows should be
+added only when refreshed Q/Y evidence, a changed provider/backend dependency,
+or a promotion decision changes one of those row policies.
 
 ## Completed Prerequisites
 
