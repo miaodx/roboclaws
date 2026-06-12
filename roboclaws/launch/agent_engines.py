@@ -71,6 +71,7 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
         internal_runner_class="gateway",
         supported_provider_profiles=supported_provider_profiles("openclaw-gateway"),
         default_provider_profile=default_provider_profile("openclaw-gateway"),
+        availability="validation-required",
     ),
 }
 

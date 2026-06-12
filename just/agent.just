@@ -368,7 +368,7 @@ run dispatch_target agent_engine mode="" *overrides:
               sim-projected-labels)
                 visual_grounding="sim"
                 ;;
-              grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake|grounding-dino+mimo-v2.5|yoloe+mimo-v2.5|grounding-dino+qwen3-vl|mimo-v2.5-direct|qwen3-vl-direct)
+              grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake)
                 visual_grounding="$camera_labeler"
                 ;;
               *)

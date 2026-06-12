@@ -282,18 +282,18 @@ future implementation can change `input_provenance` to `vlm_detector` or
 `object_detector`.
 
 The profile should remain stable when that happens. Model choice belongs to
-pipeline provenance, not to the profile name. Planned pipeline values include
-`sim`, `fake-http`, proposer-only routes such as `grounding-dino` and `yoloe`,
-proposer-plus-refiner routes such as `grounding-dino+mimo-v2.5`, and optional
-direct VLM routes such as `qwen3-vl-direct`. They should all feed the same
+pipeline provenance, not to the profile name. Current pipeline values include
+`sim`, `fake-http`, and detector-only routes such as `grounding-dino`, `yoloe`,
+`yolo-world`, and `omdet-turbo`. They should all feed the same
 `declare_visual_candidates` contract and produce the same normalized candidate
 shape.
 
-Grounding DINO and YOLOE should be treated as competing visual-region proposers.
-MiMo v2.5 and Qwen3-VL should first be treated as refiners over those
-proposals, with direct-producer modes kept as comparison experiments. A
-perception-isolated benchmark over fixed RAW_FPV observations should select
-which pipelines deserve full end-to-end cleanup probes.
+Grounding DINO, YOLOE, YOLO-World, and OmDet-Turbo should be treated as
+competing visual-region proposers. Hosted VLM refiner and direct-producer
+routes are retired from the active sidecar contract; reintroducing them should
+require a fresh explicit plan. A perception-isolated benchmark over fixed
+RAW_FPV observations should select which detector pipelines deserve full
+end-to-end cleanup probes.
 
 ## Model-Declared Observation Bridge
 

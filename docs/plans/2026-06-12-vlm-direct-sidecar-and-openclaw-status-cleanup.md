@@ -1,9 +1,9 @@
 ---
 plan_scope: vlm-direct-sidecar-and-openclaw-status-cleanup
-status: DRAFT
+status: IMPLEMENTED
 created: 2026-06-12
 last_reviewed: 2026-06-12
-execution_mode: pre-implementation-contract
+execution_mode: implemented-with-openclaw-local-validation-required
 source:
   - user request to finish cleanup after AI2-THOR/direct-VLM retirement
   - intuitive-reduce-entropy audit on current launch, visual-grounding, and OpenClaw surfaces
@@ -20,14 +20,15 @@ related_context:
 
 ## Current Finding
 
-The repo has removed the old `agent_engine=vlm-policy` and AI2-THOR direct VLM
-demo stack from the public launch catalog, but the visual-grounding sidecar
-still contains live hosted VLM refiner/direct-producer routes. That is now
-stronger than the intended current product shape.
+Implemented 2026-06-12: the repo has removed the old `agent_engine=vlm-policy`
+and AI2-THOR direct VLM demo stack from the public launch catalog, and the
+visual-grounding sidecar now uses a detector-only active contract. Hosted VLM
+refiner/direct-producer routes are retired from active code, command examples,
+tests, and benchmark promotion logic. OpenClaw remains guarded and
+validation-required until an off-work-network Gateway proof runs.
 
-2026-06-12 clarification: this document is now a pre-implementation contract,
-not implementation approval by itself. The next implementation should clean the
-selected surface in one formal pass after maintainers approve the boundary. The
+2026-06-12 clarification: this document started as a pre-implementation
+contract, then became the closeout record for the formal cleanup pass. The
 audit biased toward finding the largest current surface area first, because the
 previous retirement pass removed only part of the old VLM/direct shape.
 
@@ -459,7 +460,7 @@ agent engines
 
 ## Preflight Contract
 
-Preflight status: DRAFT
+Preflight status: APPROVED_AND_EXECUTED
 
 Task source: mixed user prompt, reduce-entropy audit, grill-batch decisions, and
 preflight review.
@@ -685,6 +686,64 @@ To execute:
 
 Approval: `LGTM`, `approve`, `go ahead`, or equivalent approves this contract;
 edits request revision.
+
+## Implementation Evidence
+
+Status: IMPLEMENTED with OpenClaw local validation still required.
+
+Implemented 2026-06-12:
+
+- removed hosted VLM visual-grounding camera labelers from active
+  `camera_labeler` validation;
+- removed visual-grounding request/config `refiner` fields and active hosted VLM
+  provider/refiner/direct-producer sidecar code;
+- kept detector/fake/sim labelers:
+  `sim-projected-labels`, `fake-http`, `contract-fake`, `grounding-dino`,
+  `yoloe`, `yolo-world`, and `omdet-turbo`;
+- simplified benchmark promotion to `sim` plus one detector-only proposer
+  pipeline and updated the checker to reject retired promotion slots;
+- updated contract tests with negative coverage for retired refiner/direct
+  routes;
+- updated current human docs and `just/README.md` to recommend detector-only
+  routes and keep Gemini/MiMo/Qwen evidence historical/parked;
+- marked `openclaw-gateway` metadata and local docs as `validation-required`;
+- preserved generic MiMo/Kimi/Codex/OpenAI/OpenClaw provider routing outside
+  visual grounding.
+
+Verification run:
+
+```bash
+.venv/bin/python -m py_compile scripts/visual_grounding/adapters.py scripts/visual_grounding/run_visual_grounding_benchmark.py scripts/visual_grounding/check_visual_grounding_benchmark_result.py scripts/visual_grounding/serve_fake_visual_grounding.py roboclaws/household/visual_grounding.py roboclaws/household/realworld_contract.py roboclaws/launch/agent_engines.py roboclaws/operator_console/routes.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py tests/unit/operator_console/test_routes.py
+.venv/bin/ruff check roboclaws/household/profiles.py roboclaws/household/visual_grounding.py roboclaws/household/realworld_contract.py scripts/visual_grounding/adapters.py scripts/visual_grounding/run_visual_grounding_benchmark.py scripts/visual_grounding/check_visual_grounding_benchmark_result.py scripts/visual_grounding/serve_fake_visual_grounding.py roboclaws/launch/agent_engines.py roboclaws/operator_console/routes.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py tests/unit/operator_console/test_routes.py
+.venv/bin/ruff format --check roboclaws/household/profiles.py roboclaws/household/visual_grounding.py roboclaws/household/realworld_contract.py scripts/visual_grounding/adapters.py scripts/visual_grounding/run_visual_grounding_benchmark.py scripts/visual_grounding/check_visual_grounding_benchmark_result.py scripts/visual_grounding/serve_fake_visual_grounding.py roboclaws/launch/agent_engines.py roboclaws/operator_console/routes.py tests/contract/visual_grounding/test_visual_grounding_service.py tests/contract/visual_grounding/test_visual_grounding_benchmark.py tests/unit/operator_console/test_routes.py
+./scripts/dev/run_pytest_standalone.sh -q tests/contract/visual_grounding tests/unit/molmo_cleanup/test_visual_grounding.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/unit/operator_console/test_routes.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/mcp/test_semantic_profiles.py
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=grounding-dino
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=camera-grounded-labels camera_labeler=mimo-v2.5-direct
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run
+ROBOCLAWS_JUST_TRACE=1 just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=script-runner mode=dry-run
+just dev::network-status
+.venv/bin/python scripts/visual_grounding/serve_visual_grounding_service.py --pipeline fake-http --host 127.0.0.1 --port 18880
+just agent::harness molmo-visual-grounding-benchmark pipeline=fake-http base_url=http://127.0.0.1:18880 timeout_s=5
+just agent::harness agent-validation recommend plan=docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md budget=focused
+```
+
+Results:
+
+- static checks and focused tests passed;
+- accepted `camera_labeler=grounding-dino` trace resolved;
+- retired `camera_labeler=mimo-v2.5-direct` trace failed as unsupported;
+- planner-proof resolved with `agent_engine=direct-runner`;
+- `agent_engine=script-runner` failed as unsupported;
+- fake visual-grounding benchmark passed when pointed at a running fake sidecar;
+- `just dev::network-status` reported `network: work`, so OpenClaw Gateway
+  validation was not run by policy;
+- adaptive validation recommendation artifact:
+  `output/agent-validation-matrix/20260612T131418Z/validation_matrix.html`.
+
+Remaining parked gate:
+
+- Run a separate off-work-network OpenClaw Gateway household cleanup proof before
+  calling OpenClaw healthy or stable.
 
 ## Settled Defaults
 

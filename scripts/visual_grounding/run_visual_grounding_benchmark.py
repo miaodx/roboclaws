@@ -119,13 +119,6 @@ def main(argv: list[str] | None = None) -> int:
                     or row.get("proposer_model_id")
                     or os.environ.get("VISUAL_GROUNDING_PROPOSER_MODEL_ID", "")
                 ),
-                refiner_id=str(
-                    row.get("refiner_id") or os.environ.get("VISUAL_GROUNDING_REFINER_ID", "")
-                ),
-                refiner_model_id=str(
-                    row.get("refiner_model_id")
-                    or os.environ.get("VISUAL_GROUNDING_REFINER_MODEL_ID", "")
-                ),
             )
             client = HttpVisualGroundingClient(config)
             predictions = _run_pipeline(
@@ -262,8 +255,6 @@ def _normalize_benchmark_row(row: dict[str, Any]) -> dict[str, Any]:
         "size_tier": size_tier,
         "producer_id": str(row.get("producer_id") or row.get("proposer_id") or ""),
         "proposer_model_id": model_id,
-        "refiner_id": str(row.get("refiner_id") or ""),
-        "refiner_model_id": str(row.get("refiner_model_id") or ""),
         "runtime_parameters": runtime_parameters,
         "under_sampled_reason": str(row.get("under_sampled_reason") or ""),
         "notes": str(row.get("notes") or ""),
@@ -338,7 +329,6 @@ def _run_pipeline(
                 "height": int(image.height),
             },
             proposer=_proposer_request(benchmark_row, client.config),
-            refiner=_refiner_request(benchmark_row, client.config),
         )
 
         started = time.monotonic()
@@ -820,8 +810,6 @@ def _promotion_recommendation(
         return {}
 
     best_proposer = best_for("proposer_only")
-    best_refiner = best_for("proposer_plus_refiner")
-    best_direct = best_for("direct_vlm")
     selected = [
         {
             "slot": "control",
@@ -835,16 +823,6 @@ def _promotion_recommendation(
             "best_proposer_only",
             best_proposer,
             "Highest-ranked proposer-only benchmark pipeline.",
-        ),
-        (
-            "best_proposer_plus_refiner",
-            best_refiner,
-            "Highest-ranked proposer-plus-refiner benchmark pipeline.",
-        ),
-        (
-            "best_direct_vlm",
-            best_direct,
-            "Highest-ranked direct VLM benchmark pipeline; capped to at most one.",
         ),
     ):
         pipeline_id = str(row.get("pipeline_id") or "")
@@ -861,30 +839,26 @@ def _promotion_recommendation(
     selected_pipeline_ids = [item["pipeline_id"] for item in selected]
     evidence_levels = {
         str(row.get("pipeline_id") or ""): str(result_for_rank(row).get("evidence_level") or "")
-        for row in (best_proposer, best_refiner, best_direct)
+        for row in (best_proposer,)
         if str(row.get("pipeline_id") or "") in selected_pipeline_ids
     }
     non_sim_evidence_levels = list(evidence_levels.values())
     real_stage_provenance_present = any(
-        level == "real_or_hosted_service" for level in non_sim_evidence_levels
+        level == "real_detector_sidecar" for level in non_sim_evidence_levels
     )
     selected_real_stage_provenance_complete = bool(non_sim_evidence_levels) and all(
-        level == "real_or_hosted_service" for level in non_sim_evidence_levels
+        level == "real_detector_sidecar" for level in non_sim_evidence_levels
     )
     return {
         "schema": "visual_grounding_promotion_recommendation_v1",
         "policy": {
             "control_pipeline_id": "sim",
             "max_proposer_only_pipelines": 1,
-            "max_proposer_plus_refiner_pipelines": 1,
-            "max_direct_vlm_pipelines": 1,
-            "max_total_pipelines": 4,
+            "max_total_pipelines": 2,
         },
         "selected_end_to_end_pipelines": selected_pipeline_ids,
         "selected": selected,
         "best_proposer_only_pipeline_id": str(best_proposer.get("pipeline_id") or ""),
-        "best_proposer_plus_refiner_pipeline_id": str(best_refiner.get("pipeline_id") or ""),
-        "best_direct_vlm_pipeline_id": str(best_direct.get("pipeline_id") or ""),
         "evidence_levels": evidence_levels,
         "real_stage_provenance_present": real_stage_provenance_present,
         "selected_real_stage_provenance_complete": selected_real_stage_provenance_complete,
@@ -892,22 +866,16 @@ def _promotion_recommendation(
             not selected_real_stage_provenance_complete
         ),
         "rationale": (
-            "End-to-end probes stay capped to sim, one proposer-only pipeline, "
-            "one proposer-plus-refiner pipeline, and at most one direct VLM pipeline."
+            "End-to-end probes stay capped to the sim control and one detector-only "
+            "proposer pipeline."
         ),
     }
 
 
 def _pipeline_kind(pipeline: dict[str, Any]) -> str:
     pipeline_id = str(pipeline.get("pipeline_id") or "")
-    stages = list(pipeline.get("stage_summary") or [])
-    stage_names = {str(stage.get("stage") or "") for stage in stages}
     if pipeline_id == "sim":
         return "control"
-    if pipeline_id.endswith("-direct") or "direct_producer" in stage_names:
-        return "direct_vlm"
-    if "+" in pipeline_id or "refiner" in stage_names:
-        return "proposer_plus_refiner"
     return "proposer_only"
 
 
@@ -1004,9 +972,8 @@ def _render_report(*, result: dict[str, Any], predictions: list[dict[str, Any]])
   </table>
   <h2>End-To-End Probe Recommendation</h2>
   <p>
-    The recommended full-cleanup probe set is capped to the sim control, one
-    proposer-only pipeline, one proposer-plus-refiner pipeline, and at most one
-    direct VLM pipeline.
+    The recommended full-cleanup probe set is capped to the sim control and one
+    detector-only proposer pipeline.
   </p>
   <p>{escape(promotion_gate_text)}</p>
   <table>
@@ -1340,10 +1307,10 @@ def _pipeline_evidence_level(predictions: list[dict[str, Any]]) -> str:
         for stage in _prediction_stages(predictions)
         if str(stage.get("producer_id") or "")
     }
-    if stage_versions & {"real-sidecar-adapter-v1", "hosted-openai-compatible-v1"}:
-        return "real_or_hosted_service"
+    if "real-sidecar-adapter-v1" in stage_versions:
+        return "real_detector_sidecar"
     if any(mode.startswith("real_") for mode in diagnostics_modes):
-        return "real_or_hosted_service"
+        return "real_detector_sidecar"
     if "deterministic_contract_fake" in diagnostics_modes or "fake-http" in producer_ids:
         return "contract_fake"
     if all(
@@ -1378,20 +1345,6 @@ def _proposer_request(
     if runtime_parameters:
         request["runtime_parameters"] = runtime_parameters
     return request
-
-
-def _refiner_request(
-    benchmark_row: dict[str, Any],
-    config: VisualGroundingClientConfig,
-) -> dict[str, Any]:
-    pipeline_id = str(benchmark_row["pipeline_id"])
-    parts = pipeline_id.split("+", maxsplit=1)
-    if config.refiner_id or len(parts) > 1:
-        return {
-            "producer_id": config.refiner_id or parts[-1],
-            "model_id": config.refiner_model_id or "",
-        }
-    return {}
 
 
 def _private_label(label: dict[str, Any], category_family_map: dict[str, str]) -> dict[str, Any]:

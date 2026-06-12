@@ -2883,8 +2883,6 @@ class _StaticVisualGroundingClient:
             "auth_mode": "none",
             "proposer_id": "fake-http",
             "proposer_model_id": "fake",
-            "refiner_id": "",
-            "refiner_model_id": "",
         },
     )()
 

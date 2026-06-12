@@ -6,7 +6,7 @@ import json
 import subprocess
 import sys
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -67,19 +67,14 @@ def test_configurable_service_contract_fake_mode_serves_named_pipeline() -> None
 def test_configurable_service_contract_fake_dispatcher_allows_request_pipeline() -> None:
     server = _start_service(pipeline_id="contract-fake", adapter_mode="auto")
     try:
-        response = _client("yoloe+mimo-v2.5", server).request_candidates(
-            _request("yoloe+mimo-v2.5")
-        )
+        response = _client("yoloe", server).request_candidates(_request("yoloe"))
     finally:
         server.shutdown()
         server.server_close()
 
     assert response["status"] == "ok"
-    assert response["pipeline"]["pipeline_id"] == "yoloe+mimo-v2.5"
-    assert [stage["stage"] for stage in response["pipeline"]["stages"]] == [
-        "proposer",
-        "refiner",
-    ]
+    assert response["pipeline"]["pipeline_id"] == "yoloe"
+    assert [stage["stage"] for stage in response["pipeline"]["stages"]] == ["proposer"]
     assert response["diagnostics"]["rejected_proposals"] == []
 
 
@@ -144,7 +139,7 @@ def test_real_mode_dispatches_grounding_dino_adapter(monkeypatch) -> None:
     assert response["diagnostics"]["private_truth_included"] is False
 
 
-def test_real_mode_reports_refiner_pipeline_missing_config_without_fake_success() -> None:
+def test_real_mode_rejects_retired_refiner_pipeline_without_fake_success() -> None:
     response = adapters.visual_grounding_service_response(
         payload=_request("grounding-dino+mimo-v2.5"),
         configured_pipeline_id="grounding-dino+mimo-v2.5",
@@ -153,11 +148,13 @@ def test_real_mode_reports_refiner_pipeline_missing_config_without_fake_success(
     )
 
     assert response["status"] == "failed"
-    assert response["error"]["reason"] == "missing_config"
+    assert response["error"]["reason"] == "adapter_unavailable"
     assert response["candidates"] == []
-    assert response["pipeline"]["stages"][0]["stage"] == "refiner"
-    assert response["pipeline"]["stages"][0]["producer_id"] == "mimo-v2.5"
-    assert response["diagnostics"]["required_adapters"][0]["producer_id"] == "mimo-v2.5"
+    assert response["pipeline"]["stages"][0]["stage"] == "proposer"
+    assert response["pipeline"]["stages"][0]["producer_id"] == "grounding-dino+mimo-v2.5"
+    assert response["diagnostics"]["required_adapters"][0]["producer_id"] == (
+        "grounding-dino+mimo-v2.5"
+    )
 
 
 def test_real_mode_reports_grounding_dino_missing_dependency(monkeypatch) -> None:
@@ -368,179 +365,7 @@ def test_real_mode_dispatches_omdet_turbo_adapter(monkeypatch) -> None:
     assert response["diagnostics"]["diagnostic_mode"] == "real_omdet-turbo"
 
 
-def test_real_mode_direct_mimo_uses_hosted_vlm_boundary(monkeypatch) -> None:
-    seen: dict[str, Any] = {}
-    server = _start_chat_server(
-        seen,
-        {
-            "choices": [
-                {
-                    "message": {
-                        "content": json.dumps(
-                            {
-                                "candidates": [
-                                    {
-                                        "category": "dish",
-                                        "image_region": {
-                                            "type": "bbox",
-                                            "value": [0.1, 0.2, 0.3, 0.4],
-                                        },
-                                        "confidence": 0.88,
-                                        "evidence_note": "white dish in frame",
-                                        "destination_hint": {
-                                            "candidate_fixture_id": "sink_01",
-                                            "confidence": 0.5,
-                                        },
-                                    }
-                                ],
-                                "rejected_proposals": [],
-                            }
-                        )
-                    }
-                }
-            ]
-        },
-    )
-    monkeypatch.setenv(
-        "VISUAL_GROUNDING_MIMO_BASE_URL", f"http://127.0.0.1:{server.server_port}/v1"
-    )
-    monkeypatch.setenv("VISUAL_GROUNDING_MIMO_API_KEY", "secret-mimo-key")
-    try:
-        response = adapters.visual_grounding_service_response(
-            payload=_request("mimo-v2.5-direct", image=_jpeg_image_payload()),
-            configured_pipeline_id="mimo-v2.5-direct",
-            adapter_mode="real",
-            latency_ms=1,
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-
-    assert response["status"] == "ok"
-    assert response["pipeline"]["stages"][0]["stage"] == "direct_producer"
-    assert response["pipeline"]["stages"][0]["producer_id"] == "mimo-v2.5"
-    assert response["candidates"][0]["category"] == "dish"
-    assert response["diagnostics"]["diagnostic_mode"] == "real_mimo-v2.5_direct"
-    assert response["diagnostics"]["private_truth_included"] is False
-    assert seen["path"] == "/v1/chat/completions"
-    assert seen["authorization"] == "Bearer secret-mimo-key"
-    assert seen["payload"]["model"] == "mimo-v2.5"
-    content = seen["payload"]["messages"][1]["content"]
-    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
-    assert "secret-mimo-key" not in json.dumps(response)
-
-
-def test_real_mode_refines_proposals_with_hosted_mimo(monkeypatch) -> None:
-    def fake_proposer_response(
-        *,
-        payload: dict[str, Any],
-        pipeline_id: str,
-        producer_id: str,
-        latency_ms: int,
-    ) -> dict[str, Any] | None:
-        assert producer_id == "grounding-dino"
-        return {
-            "schema": VISUAL_GROUNDING_RESPONSE_SCHEMA,
-            "status": "ok",
-            "pipeline": {
-                "pipeline_id": pipeline_id,
-                "stages": [
-                    {
-                        "stage": "proposer",
-                        "producer_id": producer_id,
-                        "model_id": "fake-dino",
-                        "version": "test",
-                        "status": "ok",
-                        "latency_ms": latency_ms,
-                    }
-                ],
-            },
-            "candidates": [
-                {
-                    "category": "dish",
-                    "image_region": {"type": "bbox", "value": [0.1, 0.2, 0.3, 0.4]},
-                    "confidence": 0.55,
-                    "evidence_note": "proposal before refiner",
-                    "destination_hint": {"candidate_fixture_id": "sink_01"},
-                }
-            ],
-            "diagnostics": {
-                "schema": "visual_grounding_diagnostics_v1",
-                "diagnostic_mode": "fake_proposer",
-                "raw_proposals": [],
-                "rejected_proposals": [],
-                "private_truth_included": False,
-            },
-        }
-
-    seen: dict[str, Any] = {}
-    server = _start_chat_server(
-        seen,
-        {
-            "choices": [
-                {
-                    "message": {
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": json.dumps(
-                                    {
-                                        "candidates": [
-                                            {
-                                                "proposal_id": "proposal_001",
-                                                "category": "dish",
-                                                "confidence": 0.91,
-                                                "evidence_note": "refiner accepted proposal",
-                                            }
-                                        ],
-                                        "rejected_proposals": [
-                                            {
-                                                "proposal_id": "proposal_999",
-                                                "reason": "not visible",
-                                            }
-                                        ],
-                                    }
-                                ),
-                            }
-                        ],
-                    }
-                }
-            ]
-        },
-    )
-    monkeypatch.setattr(adapters, "_real_proposer_response", fake_proposer_response)
-    monkeypatch.setenv(
-        "VISUAL_GROUNDING_MIMO_BASE_URL", f"http://127.0.0.1:{server.server_port}/v1"
-    )
-    monkeypatch.setenv("VISUAL_GROUNDING_MIMO_API_KEY", "secret-mimo-key")
-    try:
-        response = adapters.visual_grounding_service_response(
-            payload=_request("grounding-dino+mimo-v2.5", image=_jpeg_image_payload()),
-            configured_pipeline_id="grounding-dino+mimo-v2.5",
-            adapter_mode="real",
-            latency_ms=1,
-        )
-    finally:
-        server.shutdown()
-        server.server_close()
-
-    assert response["status"] == "ok"
-    assert [stage["stage"] for stage in response["pipeline"]["stages"]] == [
-        "proposer",
-        "refiner",
-    ]
-    assert response["pipeline"]["stages"][1]["producer_id"] == "mimo-v2.5"
-    assert response["candidates"][0]["confidence"] == 0.91
-    assert response["candidates"][0]["image_region"] == {
-        "type": "bbox",
-        "value": [0.1, 0.2, 0.3, 0.4],
-    }
-    assert response["diagnostics"]["raw_proposals"]
-    assert response["diagnostics"]["rejected_proposals"][0]["reason"] == "not visible"
-    assert "private_labels" not in json.dumps(seen["payload"])
-
-
-def test_real_mode_qwen_direct_reports_missing_config_without_fake_success() -> None:
+def test_real_mode_qwen_direct_is_retired_without_fake_success() -> None:
     response = adapters.visual_grounding_service_response(
         payload=_request("qwen3-vl-direct", image=_jpeg_image_payload()),
         configured_pipeline_id="qwen3-vl-direct",
@@ -549,11 +374,11 @@ def test_real_mode_qwen_direct_reports_missing_config_without_fake_success() -> 
     )
 
     assert response["status"] == "failed"
-    assert response["error"]["reason"] == "missing_config"
+    assert response["error"]["reason"] == "adapter_unavailable"
     assert response["candidates"] == []
-    assert response["pipeline"]["stages"][0]["stage"] == "direct_producer"
-    assert response["pipeline"]["stages"][0]["producer_id"] == "qwen3-vl"
-    assert response["diagnostics"]["required_adapters"][0]["producer_id"] == "qwen3-vl"
+    assert response["pipeline"]["stages"][0]["stage"] == "proposer"
+    assert response["pipeline"]["stages"][0]["producer_id"] == "qwen3-vl-direct"
+    assert response["diagnostics"]["required_adapters"][0]["producer_id"] == "qwen3-vl-direct"
 
 
 def test_real_adapter_bbox_normalization_and_destination_hint() -> None:
@@ -614,14 +439,17 @@ def test_adapter_catalog_lists_real_adapter_slots_without_private_truth() -> Non
         "torch",
         "transformers",
     }
-    assert by_id["mimo-v2.5"]["role"] == "refiner_or_direct_producer"
-    assert by_id["mimo-v2.5"]["runtime"]["status"] in {"configured", "missing_config"}
-    assert by_id["mimo-v2.5"]["runtime"]["auth_mode"] in {
-        "none",
-        "bearer_configured",
-    }
-    assert by_id["qwen3-vl"]["optional_extra"] == "visual-grounding-qwen3vl"
-    assert by_id["qwen3-vl"]["runtime"]["status"] in {"configured", "missing_config"}
+    for retired in {
+        "mimo-v2.5",
+        "qwen3-vl",
+        "xiaomi/mimo-v2.5",
+        "vertex_ai/gemini-3.1-flash-lite-preview",
+        "vertex_ai/gemini-3-flash-preview",
+        "tongyi/qwen3-vl-flash",
+        "tongyi/qwen3-vl-plus",
+        "siliconflow/Qwen/Qwen3-VL-8B-Instruct",
+    }:
+        assert retired not in by_id
     assert "authorization" not in json.dumps(catalog).lower()
     assert "secret-mimo-key" not in json.dumps(catalog)
 
@@ -643,13 +471,12 @@ def test_configurable_service_lists_adapter_catalog_cli() -> None:
         "yoloe",
         "yolo-world",
         "omdet-turbo",
-        "mimo-v2.5",
-        "qwen3-vl",
     }
     assert "yolo-custom" not in {item["producer_id"] for item in catalog["adapters"]}
     by_id = {item["producer_id"]: item for item in catalog["adapters"]}
     assert "runtime" in by_id["grounding-dino"]
-    assert "runtime" in by_id["mimo-v2.5"]
+    assert "mimo-v2.5" not in by_id
+    assert "qwen3-vl" not in by_id
     assert "authorization" not in result.stdout.lower()
     assert "secret-mimo-key" not in result.stdout
 
@@ -659,32 +486,6 @@ def _start_service(*, pipeline_id: str, adapter_mode: str) -> ThreadingHTTPServe
         ("127.0.0.1", 0),
         make_handler(pipeline_id=pipeline_id, adapter_mode=adapter_mode, latency_ms=1),
     )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server
-
-
-def _start_chat_server(
-    seen: dict[str, Any],
-    response_payload: dict[str, Any],
-) -> ThreadingHTTPServer:
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
-            length = int(self.headers.get("Content-Length") or 0)
-            seen["path"] = self.path
-            seen["authorization"] = self.headers.get("Authorization")
-            seen["payload"] = json.loads(self.rfile.read(length).decode("utf-8"))
-            body = json.dumps(response_payload).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, _format: str, *_args: Any) -> None:
-            return
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server

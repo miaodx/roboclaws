@@ -156,7 +156,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         sim-projected-labels)
           visual_grounding="sim"
           ;;
-        grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake|grounding-dino+mimo-v2.5|yoloe+mimo-v2.5|grounding-dino+qwen3-vl|mimo-v2.5-direct|qwen3-vl-direct)
+        grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake)
           visual_grounding="$camera_labeler"
           ;;
         *)

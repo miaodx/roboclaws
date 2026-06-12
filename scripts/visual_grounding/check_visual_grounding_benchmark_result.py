@@ -272,15 +272,28 @@ def _assert_promotion_recommendation(result: dict[str, Any]) -> None:
     )
     policy = promotion.get("policy") or {}
     _assert(policy.get("control_pipeline_id") == "sim", "promotion control must be sim")
-    _assert(int(policy.get("max_direct_vlm_pipelines") or 0) == 1, "direct VLM cap missing")
     selected = list(promotion.get("selected_end_to_end_pipelines") or [])
     _assert(selected and selected[0] == "sim", "promotion set must include sim control first")
     _assert(
         len(selected) <= int(policy.get("max_total_pipelines") or 0),
         "promotion set exceeds cap",
     )
-    direct_count = sum(1 for pipeline_id in selected if str(pipeline_id).endswith("-direct"))
-    _assert(direct_count <= 1, "promotion set includes more than one direct VLM pipeline")
+    _assert(
+        "best_direct_vlm_pipeline_id" not in promotion,
+        "promotion includes retired direct VLM slot",
+    )
+    _assert(
+        "best_proposer_plus_refiner_pipeline_id" not in promotion,
+        "promotion includes retired proposer-plus-refiner slot",
+    )
+    _assert(
+        "max_direct_vlm_pipelines" not in policy,
+        "promotion policy includes retired direct VLM cap",
+    )
+    _assert(
+        "max_proposer_plus_refiner_pipelines" not in policy,
+        "promotion policy includes retired proposer-plus-refiner cap",
+    )
     selected_rows = list(promotion.get("selected") or [])
     _assert(len(selected_rows) == len(selected), "promotion selected rows do not match ids")
     for row in selected_rows:
