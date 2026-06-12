@@ -37,8 +37,13 @@ composite-internal declaration substeps from standalone two-step declarations:
 promptfix2 has 5 composite calls, 5 composite-internal declarations, and 11
 standalone declarations. Trace review showed those residual standalone
 declarations happen after SDK continuation, so the private compact continuation
-prompt now preserves the O composite cadence for the next paired/rerun row. F
-now has an opt-in `action_timeline` prep arm, so the
+prompt now preserves the O composite cadence. The paired continuation-tightening
+rerun fixed the cadence with 14 composite calls, 14 composite-internal
+declarations, and 0 standalone declarations, but failed before `done` with
+`provider_context_budget_exceeded` (`175618` current input tokens over the
+`96000` hard limit). Treat it as expected-rejected diagnostic evidence: the O
+tool cadence is fixed, but completion now depends on behavior-preserving
+context/session growth control. F now has an opt-in `action_timeline` prep arm, so the
 F live A/B has now been tried. It reduced visual capture time but regressed
 cleanup quality and wall/model time, so it is expected-rejected evidence rather
 than a speed win. I/N/AB input-compaction live A/B has also now been tried. It
@@ -57,8 +62,8 @@ evidence, not a wall-clock speed win. The first raw-FPV P/AA live gate attempt
 is now blocked: `openai-agents-sdk+mify` is rejected by the image-transport
 guard, and two `openai-agents-sdk+codex-env` raw-FPV attempts failed with
 classified `provider_transient_failure` / `upstream_unavailable` before task
-work. A behavior-preserving compaction/session redesign, O paired
-repeats/tightening, a later raw-FPV retry after provider or image-transport
+work. A behavior-preserving compaction/session redesign, O paired proof after
+that redesign, a later raw-FPV retry after provider or image-transport
 availability changes, and broader B baseline coverage remain valid next arms.
 Token deltas are telemetry only; cost is not a deciding objective for this
 plan. The full live provider/model x evidence-lane performance matrix is still not done. The follow-up execution plan is
@@ -436,13 +441,14 @@ Parked work:
     server-managed continuation, and session-state A/B proof remains gated on
     credentials/backend availability, network policy, and recorded run caps.
     The first `mify` `world-public-labels` baseline versus `mimo_compact_v1`
-    row is diagnostic only, not a speed win.
+    row is diagnostic only, not a speed win. The latest O continuation-tightening
+    row also points to context/session growth as the next real bottleneck.
   - Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
     now been refreshed with the completed `mify` world-public pair, the
-    Candidate O promptfix2 mechanism row, and the expected-rejected F, I/N, and
-    C rows. The current wall-clock priority is O paired/tightening evidence,
-    then behavior-preserving compaction/session redesign, then scoped B
-    baseline coverage.
+    Candidate O promptfix2 mechanism row, and the expected-rejected F, I/N, C,
+    and O continuation-tightening rows. The current wall-clock priority is
+    behavior-preserving compaction/session redesign, then O paired proof after
+    that redesign, then scoped B baseline coverage.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
@@ -453,7 +459,9 @@ Parked work:
     publishable speed claims still require calibrated/repeated evidence. Trace
     review showed the remaining standalone declarations happened after SDK
     continuation; private compact-continuation guidance now preserves the
-    composite cadence for the next paired O rerun.
+    composite cadence. The latest O continuation-tightening row removed
+    standalone declarations entirely but failed before completion on provider
+    context budget, so do not rerun O unchanged.
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
     visual-candidate failure rail; the first live gate is blocked by image
     transport/provider availability, and cleanup-pass plus live speed claims
@@ -471,7 +479,8 @@ Parked work:
     unchanged.
   - Agent-visible state delta/compaction and selective visual artifact capture
     remain possible later speed levers only after behavior-preserving changes;
-    the current I/N and F policies are rejected as wall-clock wins.
+    the current I/N, F, C, and O-tightening policies are rejected as wall-clock
+    wins in their current forms.
   - Additional SDK-native reduce-entropy candidates captured after the first
     batch: explicit `ModelSettings`/`RunConfig` performance profiles,
     Responses/session continuation, `call_model_input_filter` compaction,

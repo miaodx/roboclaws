@@ -1,0 +1,126 @@
+{
+  "schema": "agent_sdk_o_continuation_tightening_live_caps_v1",
+  "created_at": "2026-06-12T15:53:10+08:00",
+  "candidate_ids": [
+    "O",
+    "Q",
+    "Y"
+  ],
+  "purpose": "Scoped Candidate O paired/rerun after compact-continuation guidance was tightened to preserve observe_camera_grounded_candidates cadence.",
+  "planned_live_rows": 1,
+  "max_wall_clock_s_per_row": 2700,
+  "concurrency": 1,
+  "racing_multiplier": 1.0,
+  "provider_profile": "mify",
+  "wire_api": "responses",
+  "model": "mimo-v2.5",
+  "surface": "household-world",
+  "intent": "cleanup",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "implementation_backend": "molmospaces_subprocess",
+  "evidence_lane": "camera-grounded-labels",
+  "camera_labeler": "sim-projected-labels",
+  "seed": 7,
+  "scenario_setup": "relocate-cleanup-related-objects",
+  "relocation_count": 5,
+  "agent_sdk_perf_profile": "mimo_compact_v1",
+  "camera_grounded_composite_tools": {
+    "enabled": true,
+    "tool_names": [
+      "observe_camera_grounded_candidates"
+    ]
+  },
+  "context_limits": {
+    "soft_tokens": 64000,
+    "hard_tokens": 96000,
+    "max_continuations": 1
+  },
+  "baseline_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7",
+  "prior_candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-promptfix2/0612_1126/seed-7",
+  "candidate_output_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-continuation-tightening",
+  "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-continuation-tightening/0612_1627/seed-7",
+  "metrics_artifact": "output/agent-sdk-perf-followups/mify-camera-grounded-composite-continuation-tightening-metrics.json",
+  "comparison_artifact": "output/agent-sdk-perf-followups/mify-camera-grounded-composite-continuation-tightening-comparison-diagnostic.json",
+  "credential_gate": {
+    "XM_LLM_API_KEY": "present",
+    "XM_LLM_BASE_URL": "present",
+    "CODEX_API_KEY": "present",
+    "CODEX_BASE_URL": "present"
+  },
+  "network_gate": {
+    "network": "work",
+    "openclaw_blocked": true,
+    "system_claude_blocked": true,
+    "mify_route_allowed": true
+  },
+  "backend_gate": {
+    "visual_backend_slots": 1,
+    "held_slots": 0,
+    "available": true,
+    "released_before_launch": true
+  },
+  "preflight_gate": {
+    "dry_run": "passed",
+    "offline_preflight": "passed",
+    "decision_packet": "output/agent-sdk-speedup-foundation/decision.json"
+  },
+  "stop_conditions": [
+    "network_policy_failure",
+    "missing_credentials",
+    "backend_slot_unavailable",
+    "privacy_or_schema_failure",
+    "quality_regression",
+    "wall_clock_timeout",
+    "context_limit_failure",
+    "no_observe_camera_grounded_candidates",
+    "standalone_declarations_not_reduced"
+  ],
+  "quality_policy": "same_or_better",
+  "claim_scope": "diagnostic paired/rerun only; normalized or publishable claims require repeated/calibrated evidence",
+  "acceptance_target": {
+    "same_or_better_recorded_quality": true,
+    "fewer_standalone_declare_visual_candidates_than_prior_promptfix2": true,
+    "wall_or_model_timing_not_regressed_vs_prior_promptfix2": true,
+    "checker_passes_or_direct_checker_rerun_explains_stale_terminal": true
+  },
+  "outcome": {
+    "status": "rejected_diagnostic",
+    "reason": "provider_context_budget_exceeded before done/run_result; not an accepted speed row.",
+    "run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-continuation-tightening/0612_1627/seed-7",
+    "exit_status": 1,
+    "terminal": "provider_context_budget_exceeded",
+    "context_budget": {
+      "context_hard_limit_tokens": 96000,
+      "current_input_tokens": 175618,
+      "max_input_tokens": 175618,
+      "response_span_count": 56,
+      "total_input_tokens": 5809877,
+      "total_uncached_input_tokens": 247637
+    },
+    "trace_cadence": {
+      "observe_camera_grounded_candidates": 14,
+      "declare_visual_candidates_total": 14,
+      "composite_internal_declare_visual_candidates": 14,
+      "standalone_declare_visual_candidates": 0,
+      "observe_total": 18
+    },
+    "timing": {
+      "observed_wall_s": 996.376,
+      "observed_model_api_s": 829.234,
+      "mcp_between_tool_gap_s": 810.777,
+      "robot_view_capture_s": 147.63,
+      "observed_wall_delta_vs_baseline_s": -161.007,
+      "observed_model_api_delta_vs_baseline_s": -164.953
+    },
+    "quality": {
+      "run_result_present": false,
+      "checker_state": "provider_context_budget_exceeded",
+      "completion_status": null,
+      "restored_count": null,
+      "total_targets": null
+    },
+    "decision": "Continuation tightening fixed the residual standalone camera-grounded declaration cadence, but the row is rejected because context growth exceeded the provider budget before task completion.",
+    "next": "Do not rerun O unchanged. Redesign behavior-preserving context/session compaction before another O proof row, or broaden scoped B baseline coverage."
+  }
+}
