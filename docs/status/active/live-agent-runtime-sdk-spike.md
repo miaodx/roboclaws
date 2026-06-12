@@ -34,11 +34,15 @@ over the promptfix2 artifact with a camera-grounded breakdown that separates
 composite-internal declaration substeps from standalone two-step declarations:
 promptfix2 has 5 composite calls, 5 composite-internal declarations, and 11
 standalone declarations. F now has an opt-in `action_timeline` prep arm, so the
-next normalized-latency priorities are F live A/B, N/I/AB live A/B for
-model/SDK between-tool gap and repeated map/state payloads, then O paired
-repeats or prompt/tool tightening for the remaining standalone declarations.
-Token deltas are diagnostic context only. The full live provider/model x
-evidence-lane performance matrix is still not done. The follow-up execution plan is
+F live A/B has now been tried. It reduced visual capture time but regressed
+cleanup quality and wall/model time, so it is expected-rejected evidence rather
+than a speed win. The next normalized-latency priorities are N/I/AB live A/B for
+the dominant model/SDK between-tool gap and repeated map/state payloads, then D
+per-arm racing observability before any C racing experiment if that gap remains,
+then O paired repeats or prompt/tool tightening for the remaining standalone
+declarations. Token deltas are telemetry only; cost is not a deciding objective
+for this plan. The full live provider/model x evidence-lane performance matrix
+is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -191,6 +195,16 @@ Result:
   declarations beyond 5 composite-internal declarations. It also keeps
   model/SDK between-tool gap dominant (`663.611s`, 77.68%) and visual capture
   material (`156.962s`, 18.37%).
+- The Candidate F action-timeline live row completed at
+  `output/agent-sdk-perf-followups/mify-world-public-mimo-compact-action-timeline/0612_1303/seed-7/`.
+  The mechanism worked locally by reducing `robot_view_capture_s` from
+  `93.256s` to `54.975s`, but the shared comparison rejects it as a speed win:
+  quality regressed from `4/5` restored to `3/5`, completion changed from
+  `success` to `partial_success`, observed wall time increased by `+181.786s`,
+  and observed model API time increased by `+216.535s`. Q/Y records this as an
+  expected-rejected evidence row in
+  `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`; it is not a
+  reason to rerun F as the next standalone arm.
 - Completed external camera-grounded Chat-compatible evidence at
   `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
   shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14

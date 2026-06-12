@@ -181,6 +181,38 @@ def test_agent_sdk_perf_matrix_rejects_faster_but_worse_quality(
     assert row["speed_comparison"]["elapsed_delta_s"] == -50.0
 
 
+def test_agent_sdk_perf_matrix_allows_expected_rejected_evidence_row(
+    tmp_path: Path,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100)
+    candidate = _write_run(tmp_path / "candidate", restored=4, elapsed_s=50)
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        expected_decision_status="rejected",
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 0
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "rejected"
+    assert row["expected_decision_status"] == "rejected"
+    assert packet["summary"]["rejected"] == ["gpt_world_public_group0"]
+
+
 def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     tmp_path: Path,
 ) -> None:
@@ -386,6 +418,7 @@ def _write_manifest(
     candidate: Path,
     lane: str = "world-public-labels",
     expected_terminal: str = "finished",
+    expected_decision_status: str = "",
 ) -> Path:
     manifest = tmp_path / "matrix.json"
     manifest.write_text(
@@ -431,6 +464,7 @@ def _write_manifest(
                         "candidate_run_dir": str(candidate),
                         "provider_calls": False,
                         "expected_terminal": expected_terminal,
+                        "expected_decision_status": expected_decision_status,
                     },
                     {
                         "row_id": "unsupported_provider",

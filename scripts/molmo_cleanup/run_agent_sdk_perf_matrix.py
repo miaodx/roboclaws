@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"decision packet: {args.decision_packet}")
 
-    failed = [row for row in packet["rows"] if row["status"] in {"rejected", "blocked"}]
+    failed = [row for row in packet["rows"] if _is_unexpected_failure(row)]
     if failed:
         for row in failed:
             print(
@@ -161,6 +161,7 @@ def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
         "quality_policy": str(row.get("quality_policy") or "same_or_better"),
         "quality_waiver": str(row.get("quality_waiver") or ""),
         "expected_terminal": str(row.get("expected_terminal") or ""),
+        "expected_decision_status": str(row.get("expected_decision_status") or ""),
         "unsupported_reason": unsupported_reason,
         "status": "unsupported" if unsupported_reason else "pending",
         "reasons": [unsupported_reason] if unsupported_reason else [],
@@ -583,6 +584,7 @@ def _dry_run_row(row: dict[str, Any]) -> dict[str, Any]:
         "stop_conditions": _str_list(row.get("stop_conditions")),
         "unsupported_reason": str(row.get("unsupported_reason") or ""),
         "provider_calls": bool(row.get("provider_calls")),
+        "expected_decision_status": str(row.get("expected_decision_status") or ""),
     }
 
 
@@ -590,6 +592,13 @@ def _block(row: dict[str, Any], reason: str) -> None:
     row["status"] = "blocked"
     if reason not in row["reasons"]:
         row["reasons"].append(reason)
+
+
+def _is_unexpected_failure(row: dict[str, Any]) -> bool:
+    status = str(row.get("status") or "")
+    if status not in {"rejected", "blocked"}:
+        return False
+    return status != str(row.get("expected_decision_status") or "")
 
 
 def _terminal_state(live_timing: dict[str, Any], status: dict[str, Any]) -> str:
