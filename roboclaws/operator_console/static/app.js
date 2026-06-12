@@ -5,6 +5,7 @@ const state = {
   activeRunId: null,
   activeRouteId: "",
   activeState: null,
+  operatorMode: "ask_why",
   pollTimer: null,
   readinessTimer: null,
   activeView: "overview",
@@ -59,10 +60,14 @@ const els = {
   emergencyButton: document.getElementById("emergency-button"),
   phaseValue: document.getElementById("phase-value"),
   backendLockValue: document.getElementById("backend-lock-value"),
+  cameraAngleValue: document.getElementById("camera-angle-value"),
   terminalValue: document.getElementById("terminal-value"),
   decisionPanel: document.getElementById("decision-state"),
   toolPanel: document.getElementById("tool-state"),
   proofPanel: document.getElementById("proof-state"),
+  operatorMessageInput: document.getElementById("operator-message-input"),
+  operatorMessageButton: document.getElementById("operator-message-button"),
+  operatorMessageStatus: document.getElementById("operator-message-status"),
   artifactList: document.getElementById("artifact-list"),
   eventList: document.getElementById("event-log"),
   rawEvidence: document.getElementById("raw-evidence"),
@@ -132,6 +137,13 @@ function bindEvents() {
       onConfirm: () => postRunAction("emergency-stop"),
     });
   });
+  document.querySelectorAll(".operator-mode").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.operatorMode = button.dataset.operatorMode || "ask_why";
+      renderOperatorMode();
+    });
+  });
+  els.operatorMessageButton.addEventListener("click", sendOperatorMessage);
   els.toggleRawButton.addEventListener("click", toggleRawEvidence);
   bindStateRailResize();
   bindEvidenceStripResize();
@@ -824,6 +836,7 @@ function renderRunState(payload) {
     payload.elapsed_seconds == null ? "00:00" : formatElapsed(payload.elapsed_seconds);
   els.phaseValue.textContent = payload.phase || "idle";
   els.backendLockValue.textContent = payload.backend_lock || "none";
+  els.cameraAngleValue.textContent = cameraStateLabel(payload.camera_state || {});
   els.terminalValue.textContent = payload.terminal_reason || "none";
 
   const decision = payload.latest_public_decision_evidence || {};
@@ -835,7 +848,7 @@ function renderRunState(payload) {
     <p>${escapeHtml(decision.reasoning || decision.decision || "")}</p>
     ${decision.blocked_reason ? `<p class="field-help">${escapeHtml(decision.blocked_reason)}</p>` : ""}
   `;
-  els.toolPanel.textContent = JSON.stringify(payload.latest_tool_call || {}, null, 2);
+  renderToolPanel(payload);
   els.proofPanel.textContent = `${payload.checker_status.status || "pending"}: ${
     payload.checker_status.message ||
     payload.checker_status.checker_log ||
@@ -845,6 +858,24 @@ function renderRunState(payload) {
   renderViews(payload.latest_view_assets || {}, route);
   renderEvents(payload);
   renderControls(payload);
+  renderOperatorMode(payload);
+}
+
+function renderToolPanel(payload) {
+  const cameraState = payload.camera_state || {};
+  const cameraSummary = cameraState.summary || "yaw 0 deg, pitch 0 deg (neutral)";
+  const activeClass = cameraState.active ? "camera-active" : "camera-neutral";
+  els.toolPanel.innerHTML = `
+    <div class="camera-angle-row">
+      <span class="camera-angle-label">Camera</span>
+      <span class="camera-angle-badge ${activeClass}">${escapeHtml(cameraSummary)}</span>
+    </div>
+    <pre class="tool-json">${escapeHtml(JSON.stringify(payload.latest_tool_call || {}, null, 2))}</pre>
+  `;
+}
+
+function cameraStateLabel(cameraState) {
+  return cameraState.summary || "yaw 0 deg, pitch 0 deg (neutral)";
 }
 
 function renderControls(payload) {
@@ -854,6 +885,86 @@ function renderControls(payload) {
   els.pauseButton.disabled = !pauseAvailable;
   els.stopButton.disabled = !controls.stop_available;
   els.emergencyButton.disabled = !controls.emergency_stop_required;
+}
+
+function renderOperatorMode(payload = state.activeState || {}) {
+  document.querySelectorAll(".operator-mode").forEach((button) => {
+    button.classList.toggle("active", button.dataset.operatorMode === state.operatorMode);
+  });
+  const controls = payload.controls || {};
+  const hasRun = Boolean(state.activeRunId);
+  const mode = state.operatorMode;
+  let enabled = hasRun;
+  let label = "Send";
+  let help = hasRun ? "Message will be written as an auditable operator artifact." : "Attach a run to send messages.";
+  if (mode === "ask_why") {
+    label = "Ask Why";
+    enabled = hasRun && controls.ask_why_available !== false;
+  } else if (mode === "steer") {
+    label = "Steer Run";
+    enabled = hasRun && Boolean(controls.steer_available);
+    if (!enabled && hasRun) {
+      help = controls.supports_operator_steer
+        ? "Steer is unavailable after this run is terminal. Use Continue instead."
+        : "This route does not expose active-run steering.";
+    }
+  } else if (mode === "continue") {
+    label = "Queue Continue";
+    enabled = hasRun && controls.continue_available !== false;
+  }
+  const messages = payload.operator_messages || {};
+  if (messages.operator_message_pending) {
+    help = `${messages.pending_steer_count || 1} steer message(s) waiting for agent checkpoint.`;
+  }
+  els.operatorMessageButton.textContent = label;
+  els.operatorMessageButton.disabled = !enabled;
+  els.operatorMessageStatus.textContent = help;
+}
+
+async function sendOperatorMessage() {
+  if (!state.activeRunId) {
+    return;
+  }
+  const text = els.operatorMessageInput.value.trim();
+  if (!text) {
+    els.operatorMessageStatus.textContent = "Enter operator text before sending.";
+    return;
+  }
+  const encodedRun = encodeURIComponent(state.activeRunId);
+  const mode = state.operatorMode;
+  const endpoint =
+    mode === "ask_why"
+      ? `/api/runs/${encodedRun}/ask-why`
+      : mode === "continue"
+        ? `/api/runs/${encodedRun}/continue`
+        : `/api/runs/${encodedRun}/messages`;
+  const key = mode === "ask_why" ? "question" : mode === "continue" ? "prompt" : "body";
+  const result = await fetchJson(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ [key]: text }),
+  });
+  if (result.error) {
+    els.operatorMessageStatus.textContent = result.error;
+    return;
+  }
+  els.operatorMessageInput.value = "";
+  els.operatorMessageStatus.textContent = operatorMessageResultText(result);
+  pollState();
+}
+
+function operatorMessageResultText(result) {
+  if (result.command_type === "ask_why") {
+    const summary = result.answer && result.answer.summary ? `: ${result.answer.summary}` : "";
+    return `Ask Why answered${summary}`;
+  }
+  if (result.command_type === "continue") {
+    return `Continue ${result.status || "queued"} (${result.queue_reason || "queued"}).`;
+  }
+  if (result.command_type === "steer") {
+    return `Steer message ${result.status || "queued"}; waiting for check_operator_messages.`;
+  }
+  return "Operator message recorded.";
 }
 
 function renderArtifacts(items) {

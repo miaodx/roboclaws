@@ -10,6 +10,7 @@ import urllib.request
 from functools import partial
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -115,6 +116,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     assert argv[:4] == ["just", "task::run", "household-cleanup", "codex"]
     assert "world-oracle-labels" in argv
     assert "backend=molmospaces_subprocess" in argv
+    assert "task_intent_mode=custom" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
 
@@ -295,3 +297,77 @@ def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     assert payload["run_id"] == run_id
     assert payload["route_id"] == route.id
     assert payload["run_dir"] == str(run_dir.resolve())
+
+
+def test_operator_console_continue_autostarts_ready_followup(tmp_path: Path) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "parent-run"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    run_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "operator_session_id": "session-test",
+                "route": route.to_payload(),
+                "phase": "finished",
+                "backend_lock": route.lock_name,
+            }
+        ),
+        encoding="utf-8",
+    )
+    session_dir = tmp_path / "output" / "operator-console" / "sessions"
+    session_dir.mkdir(parents=True)
+    (session_dir / "session-test.json").write_text(
+        json.dumps(
+            {
+                "schema": "operator_console_session_v1",
+                "operator_session_id": "session-test",
+                "created_at_epoch": 1,
+                "created_at": "2026-06-09T00:00:00Z",
+                "active_run_id": run_id,
+                "run_ids": [run_id],
+                "message_ids": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "run_result.json").write_text(
+        json.dumps({"cleanup_success": True}),
+        encoding="utf-8",
+    )
+    (run_dir / "report.html").write_text("<html>ok</html>", encoding="utf-8")
+
+    launched: dict[str, object] = {}
+
+    def fake_start(root, request):  # noqa: ANN001, ANN202
+        launched["root"] = root
+        launched["request"] = request
+        return {"run_id": "child-run"}
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{run_id}/continue",
+            method="POST",
+            data=json.dumps({"prompt": "Run the next sweep"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with patch("roboclaws.operator_console.server.start_console_run", fake_start):
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["status"] == "started"
+    assert payload["started_run"]["run_id"] == "child-run"
+    launch_request = launched["request"]
+    assert launch_request.route_id == route.id
+    assert launch_request.operator_session_id == "session-test"
+    assert launch_request.parent_run_id == run_id

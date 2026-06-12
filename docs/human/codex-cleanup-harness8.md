@@ -96,6 +96,19 @@ just agent::harness codex-cleanup-harness8 execute \
   output_dir=output/molmo/codex-harness8/$(date +%m%d_%H%M)
 ```
 
+Opt into two local visual backend slots for batch development:
+
+```bash
+ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS=2 \
+  just agent::harness codex-cleanup-harness8 execute \
+    output_dir=output/molmo/codex-harness8/$(date +%m%d_%H%M) \
+    parallelism=2
+```
+
+`parallelism=2` keeps the setup prior row serialized, assigns distinct MCP
+ports to cleanup rows, and records row start/end timing, assigned port, and
+harness parallelism in `codex_cleanup_harness8.json`.
+
 Explicit retryable provider-transient failures from the live runner are treated
 as infrastructure failures and retried once by default. For a noisier provider
 window, raise the provider retry budget without changing cleanup behavior:

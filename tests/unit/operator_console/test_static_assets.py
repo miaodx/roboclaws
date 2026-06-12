@@ -56,6 +56,14 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert "Attach Existing Run" in app
     assert "Latest Result" in html
     assert "latest-result-button" in app
+    assert 'id="camera-angle-value"' in html
+    assert "cameraStateLabel" in app
+    assert "renderToolPanel" in app
+    assert 'data-operator-mode="ask_why"' in html
+    assert 'data-operator-mode="steer"' in html
+    assert 'data-operator-mode="continue"' in html
+    assert "/ask-why" in app
+    assert "check_operator_messages" in app
     assert "attachLatestResult" in app
     assert "/api/runs/latest" in app
     assert "attachExistingRun" in app

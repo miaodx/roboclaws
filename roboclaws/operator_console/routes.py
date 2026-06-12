@@ -45,6 +45,7 @@ class ConsoleRoute:
     disabled_reason: str = ""
     pause_supported: bool = False
     emergency_stop_required: bool = False
+    supports_operator_steer: bool = False
     resource_kind: str = "simulator"
     driver_label: str = ""
     driver_family: str = "coding_agent"
@@ -145,6 +146,7 @@ def _cleanup_route(
     default_mess_count: int,
     gates: tuple[RouteGate, ...],
     resource_kind: str = "simulator",
+    supports_operator_steer: bool = True,
 ) -> ConsoleRoute:
     return ConsoleRoute(
         id=route_id,
@@ -161,6 +163,7 @@ def _cleanup_route(
         default_overrides=("seed=7", f"generated_mess_count={default_mess_count}"),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE, *gates),
         resource_kind=resource_kind,
+        supports_operator_steer=supports_operator_steer,
         driver_label="Claude Code" if driver == "claude" else "Codex",
     )
 
@@ -181,6 +184,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         default_overrides=("seed=7", "generated_mess_count=5"),
         gates=(PROVIDER_KEY_GATE, MCP_PORT_FREE_GATE),
         driver_label="Codex",
+        supports_operator_steer=True,
     ),
     _cleanup_route(
         route_id="claude-mujoco-cleanup",
@@ -190,6 +194,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         lock_name="molmospaces_mujoco",
         default_mess_count=5,
         gates=(),
+        supports_operator_steer=True,
     ),
     _cleanup_route(
         route_id="codex-isaac-cleanup",
@@ -200,6 +205,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         default_mess_count=1,
         gates=(ISAAC_PREFLIGHT_GATE,),
         resource_kind="gpu",
+        supports_operator_steer=True,
     ),
     _cleanup_route(
         route_id="claude-isaac-cleanup",
@@ -210,6 +216,7 @@ SUPPORTED_ROUTES: tuple[ConsoleRoute, ...] = (
         default_mess_count=1,
         gates=(ISAAC_PREFLIGHT_GATE,),
         resource_kind="gpu",
+        supports_operator_steer=True,
     ),
     ConsoleRoute(
         id="codex-agibot-g2-map-build",

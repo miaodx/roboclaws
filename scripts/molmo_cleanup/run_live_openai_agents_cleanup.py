@@ -7,6 +7,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -22,6 +23,17 @@ from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.household.generated_mess import generated_mess_success_threshold
 from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.household.task_intent import (
+    TASK_INTENT_MODE_CUSTOM,
+    TASK_INTENT_MODE_DEFAULT,
+    normalize_task_intent_mode,
+)
+from roboclaws.household.visual_backend_slots import (
+    MOLMOSPACES_SUBPROCESS_BACKEND,
+    VisualBackendSlotError,
+    VisualBackendSlotLease,
+    acquire_visual_backend_slot,
+)
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
@@ -89,10 +101,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "MCP done/run_result.json. The runner still never infers cleanup success."
         ),
     )
+    parser.add_argument(
+        "--cache-tools-list",
+        action=argparse.BooleanOptionalAction,
+        default=_env_bool("ROBOCLAWS_OPENAI_AGENTS_CACHE_TOOLS_LIST", default=True),
+        help=(
+            "Ask the OpenAI Agents SDK MCP client to cache the cleanup tool list. "
+            "The cleanup MCP tool catalog is static within one live run."
+        ),
+    )
     parser.add_argument("--server-startup-timeout-s", type=float, default=600.0)
     parser.add_argument("--kickoff-prompt", required=True)
     parser.add_argument("--backend", required=True)
     parser.add_argument("--task-name", default="household-cleanup")
+    parser.add_argument("--task-intent-mode", default=TASK_INTENT_MODE_DEFAULT)
     parser.add_argument("--policy", default="openai_agents_agent")
     parser.add_argument("--task", required=True)
     parser.add_argument("--min-generated-mess-count", required=True)
@@ -100,6 +122,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--server-arg", action="append", default=[])
     parser.add_argument("--checker-visual-arg", action="append", default=[])
     return parser.parse_args(argv)
+
+
+def _env_bool(name: str, *, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() not in {"0", "false", "no", "off"}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -114,7 +143,11 @@ class LiveOpenAIAgentsCleanupRunner:
         self.timing_path = self.run_dir / "live_timing.json"
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
+        self.server_log_path = self.run_dir / "openai-agents-server.log"
+        self.server_log_file: BinaryIO | None = None
+        self.server_log_thread: threading.Thread | None = None
         self.lock_file = None
+        self.visual_slot: VisualBackendSlotLease | None = None
         self.live_timing: dict[str, Any] = {
             "schema": "molmo_live_timing_v1",
             "started_at_epoch": self.started_at_epoch,
@@ -124,6 +157,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "runtime": "openai-agents-live",
             "provider_profile": getattr(args, "provider_profile", ""),
             "model": getattr(args, "model", ""),
+            "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
         }
 
     def run(self) -> int:
@@ -140,25 +174,51 @@ class LiveOpenAIAgentsCleanupRunner:
             self._write_status("failed", 130, reason="keyboard_interrupt")
             self._write_live_timing("failed", 130, reason="keyboard_interrupt")
             self._cleanup_server()
+            self._release_visual_slot()
             return 130
         except LiveAgentRunFailure as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, **exc.failure.status_fields())
             self._write_live_timing("failed", 1, **exc.failure.status_fields())
             self._cleanup_server()
+            self._release_visual_slot()
             return 1
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
             self._write_live_timing("failed", 1, reason=str(exc))
             self._cleanup_server()
+            self._release_visual_slot()
             return 1
 
         self._write_live_timing("finished", 0)
         self._write_status("finished", 0)
+        self._release_visual_slot()
         return 0
 
     def _acquire_lock(self) -> None:
+        if self.args.backend == MOLMOSPACES_SUBPROCESS_BACKEND:
+            try:
+                self.visual_slot = acquire_visual_backend_slot(
+                    repo_root=self.args.repo_root,
+                    run_id=_run_id_from_run_dir(self.run_dir),
+                    pid=os.getpid(),
+                    backend=self.args.backend,
+                    port=self.args.port,
+                    output_dir=self.run_dir,
+                    status_path=self.status_path,
+                    owner="openai-agents-live",
+                )
+            except VisualBackendSlotError as exc:
+                detail = (
+                    f": {json.dumps(exc.active_slots, sort_keys=True)}" if exc.active_slots else ""
+                )
+                raise RuntimeError(
+                    "no MolmoSpaces visual backend slot is available"
+                    f" under {self.args.repo_root / 'output/molmo/visual-backend-slots'}{detail}"
+                ) from exc
+            return
+
         self.args.lock_path.parent.mkdir(parents=True, exist_ok=True)
         lock_file = self.args.lock_path.open("a+", encoding="utf-8")
         try:
@@ -189,6 +249,16 @@ class LiveOpenAIAgentsCleanupRunner:
         lock_file.flush()
         self.lock_file = lock_file
 
+    def _release_visual_slot(self) -> None:
+        if self.visual_slot is None:
+            return
+        try:
+            self.visual_slot.release()
+        except VisualBackendSlotError as exc:
+            print(f"warning: could not release visual backend slot: {exc}", file=sys.stderr)
+        finally:
+            self.visual_slot = None
+
     def _start_server(self) -> None:
         print("==> OpenAI Agents SDK Molmo cleanup runner")
         print(f"    repo    : {self.args.repo_root}")
@@ -209,7 +279,14 @@ class LiveOpenAIAgentsCleanupRunner:
         env = os.environ.copy()
         if env.get(REPORT_RERUN_COMMAND_ENV):
             command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
-        self.server_proc = subprocess.Popen(command, cwd=self.args.repo_root, env=env)
+        self.server_proc = subprocess.Popen(
+            command,
+            cwd=self.args.repo_root,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        self._start_server_log_tee()
         (self.run_dir / "server.pid").write_text(f"{self.server_proc.pid}\n", encoding="utf-8")
 
     def _wait_for_mcp_ready(self) -> None:
@@ -331,6 +408,7 @@ class LiveOpenAIAgentsCleanupRunner:
                 "max_turns": self.args.max_turns,
                 "attempt_index": attempt_index,
                 "attempt_role": "continuation" if attempt_index else "initial",
+                "cache_tools_list": bool(getattr(self.args, "cache_tools_list", True)),
             },
             artifact_paths=artifact_paths,
         )
@@ -342,6 +420,7 @@ class LiveOpenAIAgentsCleanupRunner:
         self._mark_timing("server_wait_start")
         status = self.server_proc.wait()
         self._mark_timing("server_finished")
+        self._finish_server_log_tee()
         self.server_proc = None
         if status != 0:
             raise RuntimeError(f"cleanup MCP server exited with status {status}")
@@ -350,6 +429,13 @@ class LiveOpenAIAgentsCleanupRunner:
         self._write_status("checking-result")
         self._mark_timing("checker_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
+        custom_task = (
+            normalize_task_intent_mode(getattr(self.args, "task_intent_mode", ""))
+            == TASK_INTENT_MODE_CUSTOM
+        )
+        checker_visual_args = list(self.args.checker_visual_arg)
+        if custom_task:
+            checker_visual_args = _without_full_cleanup_checker_gates(checker_visual_args)
         run_result = self.run_dir / "run_result.json"
         if not run_result.is_file():
             raise RuntimeError(f"live run finished without {run_result}")
@@ -373,7 +459,7 @@ class LiveOpenAIAgentsCleanupRunner:
             self.args.min_generated_mess_count,
             "--require-agent-driven",
             "--require-advisory-scoring",
-            *self.args.checker_visual_arg,
+            *checker_visual_args,
         ]
         if task_name == "household-cleanup" and self.args.profile in {
             "smoke",
@@ -381,35 +467,42 @@ class LiveOpenAIAgentsCleanupRunner:
             "camera-grounded-labels",
             "camera-raw-fpv",
         }:
-            checker_args.append("--require-clean-agent-run")
+            if custom_task:
+                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
+            else:
+                checker_args.append("--require-clean-agent-run")
         if self.args.profile == "world-oracle-labels":
             _append_missing_checker_flag(checker_args, "--require-waypoint-honesty")
             _append_missing_checker_flag(checker_args, "--require-real-robot-alignment")
-            if task_name == "household-cleanup":
+            if task_name == "household-cleanup" and not custom_task:
                 _append_missing_checker_value(checker_args, "--min-semantic-accepted-count", "5")
-            _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
+            if not custom_task:
+                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
         if self.args.profile == "camera-raw-fpv":
             raw_fpv_required_cleanup_count = str(
                 generated_mess_success_threshold(int(self.args.min_generated_mess_count))
             )
-            _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
-            _append_missing_checker_value(
-                checker_args,
-                "--min-model-declared-observations",
-                raw_fpv_required_cleanup_count,
-            )
-            _append_missing_checker_value(
-                checker_args,
-                "--min-model-declared-actions",
-                raw_fpv_required_cleanup_count,
-            )
-            if task_name == "household-cleanup":
+            if not custom_task:
+                _append_missing_checker_flag(checker_args, "--require-model-declared-observations")
                 _append_missing_checker_value(
                     checker_args,
-                    "--min-semantic-accepted-count",
+                    "--min-model-declared-observations",
                     raw_fpv_required_cleanup_count,
                 )
-            _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
+                _append_missing_checker_value(
+                    checker_args,
+                    "--min-model-declared-actions",
+                    raw_fpv_required_cleanup_count,
+                )
+                if task_name == "household-cleanup":
+                    _append_missing_checker_value(
+                        checker_args,
+                        "--min-semantic-accepted-count",
+                        raw_fpv_required_cleanup_count,
+                    )
+                _append_missing_checker_value(checker_args, "--min-sweep-coverage", "1.0")
+            elif task_name == "household-cleanup":
+                _append_missing_checker_flag(checker_args, "--allow-partial-cleanup")
         checker_args.append(str(run_result))
 
         try:
@@ -461,11 +554,15 @@ class LiveOpenAIAgentsCleanupRunner:
             payload["detail"] = detail
         payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
         payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+        payload["mcp_control_plane_metrics"] = _mcp_control_plane_metrics(self.run_dir)
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc
-        if proc is None or proc.poll() is not None:
+        if proc is None:
+            return
+        if proc.poll() is not None:
+            self._finish_server_log_tee()
             return
         proc.terminate()
         try:
@@ -473,6 +570,33 @@ class LiveOpenAIAgentsCleanupRunner:
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.wait(timeout=5)
+        self._finish_server_log_tee()
+
+    def _start_server_log_tee(self) -> None:
+        proc = self.server_proc
+        if proc is None:
+            return
+        stream = getattr(proc, "stdout", None)
+        if stream is None:
+            return
+        self.server_log_path.parent.mkdir(parents=True, exist_ok=True)
+        self.server_log_file = self.server_log_path.open("ab")
+        self.server_log_thread = threading.Thread(
+            target=_tee_stream,
+            args=(stream, [self.server_log_file, sys.stdout.buffer]),
+            daemon=True,
+        )
+        self.server_log_thread.start()
+
+    def _finish_server_log_tee(self) -> None:
+        thread = self.server_log_thread
+        if thread is not None:
+            thread.join(timeout=5)
+            self.server_log_thread = None
+        log_file = self.server_log_file
+        if log_file is not None:
+            log_file.close()
+            self.server_log_file = None
 
     def _write_status(
         self,
@@ -499,6 +623,8 @@ class LiveOpenAIAgentsCleanupRunner:
             payload["resume_available"] = resume_available
         if detail:
             payload["detail"] = detail
+        if self.visual_slot is not None:
+            payload["visual_backend_slot"] = self.visual_slot.to_payload()
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status
@@ -666,6 +792,64 @@ def _mcp_trace_timing(run_dir: Path) -> dict[str, Any]:
     return runtime_timing_from_trace(_read_jsonl_path(run_dir / "trace.jsonl"))
 
 
+def _mcp_control_plane_metrics(run_dir: Path) -> dict[str, Any]:
+    log_path = run_dir / "openai-agents-server.log"
+    if not log_path.is_file():
+        return {
+            "available": False,
+            "reason": "openai-agents-server.log not present",
+        }
+
+    request_counts: dict[str, int] = {}
+    http_status_counts: dict[str, int] = {}
+    session_create_count = 0
+    session_termination_count = 0
+    trace_export_skip_count = 0
+    line_count = 0
+    for line in log_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line_count += 1
+        request_match = re.search(r"Processing request of type ([A-Za-z0-9_]+)", line)
+        if request_match:
+            request_type = request_match.group(1)
+            request_counts[request_type] = request_counts.get(request_type, 0) + 1
+        status_match = re.search(r'HTTP/[^"]+"\s+([0-9]{3})\s+([A-Za-z][A-Za-z ]*)$', line)
+        if status_match:
+            status_key = f"{status_match.group(1)} {status_match.group(2).strip()}"
+            http_status_counts[status_key] = http_status_counts.get(status_key, 0) + 1
+        if "Created new transport with session ID:" in line:
+            session_create_count += 1
+        if "Terminating session:" in line:
+            session_termination_count += 1
+        if "OPENAI_API_KEY is not set, skipping trace export" in line:
+            trace_export_skip_count += 1
+
+    call_tool_count = request_counts.get("CallToolRequest", 0)
+    list_tools_count = request_counts.get("ListToolsRequest", 0)
+    total_requests = sum(request_counts.values())
+    control_request_count = total_requests - call_tool_count
+    return {
+        "available": True,
+        "log": log_path.name,
+        "line_count": line_count,
+        "request_type_counts": dict(sorted(request_counts.items())),
+        "total_mcp_request_count": total_requests,
+        "call_tool_request_count": call_tool_count,
+        "list_tools_request_count": list_tools_count,
+        "control_request_count": control_request_count,
+        "list_tools_per_call_tool": (
+            _round_duration(list_tools_count / call_tool_count) if call_tool_count else None
+        ),
+        "streamable_http_session_count": session_create_count,
+        "session_termination_count": session_termination_count,
+        "trace_export_skip_count": trace_export_skip_count,
+        "http_status_counts": dict(sorted(http_status_counts.items())),
+        "optimization_note": (
+            "Control-plane counts are parsed from the MCP server log. Per-request "
+            "control-plane latency is not exposed by the server log yet."
+        ),
+    }
+
+
 def _read_jsonl_path(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
@@ -723,6 +907,38 @@ def _append_missing_checker_flag(args: list[str], flag: str) -> None:
 def _append_missing_checker_value(args: list[str], flag: str, value: str) -> None:
     if flag not in args:
         args.extend([flag, value])
+
+
+def _without_full_cleanup_checker_gates(args: list[str]) -> list[str]:
+    filtered: list[str] = []
+    skip_value = False
+    for arg in args:
+        if skip_value:
+            skip_value = False
+            continue
+        if arg in {
+            "--min-semantic-accepted-count",
+            "--min-model-declared-observations",
+            "--min-model-declared-actions",
+            "--min-sweep-coverage",
+        }:
+            skip_value = True
+            continue
+        if arg in {
+            "--require-clean-agent-run",
+            "--require-model-declared-observations",
+        }:
+            continue
+        filtered.append(arg)
+    return filtered
+
+
+def _run_id_from_run_dir(run_dir: Path) -> str:
+    name = run_dir.name
+    parent = run_dir.parent.name
+    if parent:
+        return f"{parent}/{name}"
+    return name
 
 
 if __name__ == "__main__":

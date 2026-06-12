@@ -202,6 +202,34 @@ def test_world_label_candidate_requires_scan_then_observe_before_navigation() ->
     _assert_no_forbidden_keys(navigation)
 
 
+def test_zero_camera_adjustment_does_not_confirm_world_label_candidate() -> None:
+    contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
+    first_observation = _first_non_empty_observation(contract)
+    handle = first_observation["visible_object_detections"][0]["object_id"]
+
+    adjusted = contract.adjust_camera(yaw_delta_deg=0, pitch_delta_deg=0)
+    second_observation = contract.observe()
+    still_pending = next(
+        item
+        for item in second_observation["visible_object_detections"]
+        if item["object_id"] == handle
+    )
+    navigation = contract.navigate_to_object(handle)
+
+    assert adjusted["ok"] is False
+    assert adjusted["error_reason"] == "noop_camera_adjustment"
+    assert adjusted["required_next_tool"] == "adjust_camera"
+    assert adjusted["followup_tool"] == "observe"
+    assert adjusted["camera_offset"] == {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0}
+    assert adjusted["no_camera_motion"] is True
+    assert adjusted["fresh_fpv_observation_required"] is True
+    assert "does not create a fresh source FPV view" in adjusted["recovery_hint"]
+    assert still_pending["candidate_state"] == "visual_scan_required"
+    assert still_pending["visual_scan"]["fresh_fpv_observation_required"] is True
+    assert navigation["ok"] is False
+    assert navigation["required_next_tool"] == "adjust_camera"
+
+
 def test_world_labels_sanitized_observations_omit_destination_oracle_fields() -> None:
     rich_contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     rich_observation = _first_non_empty_observation(rich_contract)
@@ -1207,6 +1235,23 @@ def test_realworld_contract_rejects_done_with_pending_public_candidates() -> Non
     _assert_no_forbidden_keys(done)
 
 
+def test_custom_task_done_ignores_unrelated_pending_public_candidates() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        task_prompt="我渴了，帮我找些解渴的东西",
+        public_acceptance_config={"task_intent_mode": "custom"},
+    )
+    observation = _first_non_empty_observation(contract)
+    assert observation["visible_object_detections"]
+
+    done = contract.done("custom operator task satisfied")
+
+    assert done["ok"] is True
+    assert done["tool"] == "done"
+    assert contract.evaluate_done_readiness()["task_intent_mode"] == "custom"
+    _assert_no_forbidden_keys(done)
+
+
 def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() -> None:
     contract = _contract(CleanupBackendSession(build_cleanup_scenario(seed=7)))
     observation = _first_non_empty_observation(contract)
@@ -1233,6 +1278,29 @@ def test_world_labels_done_rejects_held_public_candidate_with_receptacle_hint() 
     assert pending["candidate_fixture_id"] == detection["candidate_fixture_id"]
     blocker = done["completion"]["blockers"][0]
     assert blocker["required_tool"] == "navigate_to_receptacle"
+    _assert_no_forbidden_keys(done)
+
+
+def test_custom_task_done_still_rejects_held_public_candidate() -> None:
+    contract = _contract(
+        CleanupBackendSession(build_cleanup_scenario(seed=7)),
+        task_prompt="我渴了，帮我找些解渴的东西",
+        public_acceptance_config={"task_intent_mode": "custom"},
+    )
+    detection = _confirm_world_label_detection(
+        contract,
+        _first_detection_by_category(contract, "food"),
+    )
+
+    assert contract.navigate_to_object(detection["object_id"])["ok"] is True
+    assert contract.pick(detection["object_id"])["ok"] is True
+
+    done = contract.done("custom task finished while holding an object")
+
+    assert done["ok"] is False
+    assert done["error_reason"] == "pending_cleanup_candidates"
+    assert done["required_tool"] == "navigate_to_receptacle"
+    assert done["pending_cleanup_candidates"][0]["state"] == "held"
     _assert_no_forbidden_keys(done)
 
 

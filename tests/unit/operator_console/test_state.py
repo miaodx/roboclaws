@@ -375,6 +375,76 @@ def test_state_ignores_runtime_capture_when_selecting_latest_robot_tool(
     assert state["latest_tool_call"]["ok"] is True
 
 
+def test_state_reports_camera_angles_and_navigation_reset(tmp_path: Path) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0609_1110" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": get_route("codex-mujoco-cleanup").to_payload(),
+                "phase": "starting",
+                "backend_lock": "molmospaces_mujoco",
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "trace.jsonl").write_text(
+        json.dumps(
+            {
+                "event": "request",
+                "tool": "adjust_camera",
+                "request": {"yaw_delta_deg": 0, "pitch_delta_deg": -10},
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "event": "response",
+                "tool": "adjust_camera",
+                "response": {
+                    "ok": True,
+                    "status": "ok",
+                    "camera_offset": {"yaw_delta_deg": 0.0, "pitch_delta_deg": -10.0},
+                    "previous_camera_offset": {"yaw_delta_deg": 0.0, "pitch_delta_deg": 0.0},
+                    "waypoint_id": "generated_exploration_001",
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert state["camera_state"]["active"] is True
+    assert state["camera_state"]["summary"] == "yaw 0 deg, pitch -10 deg (active)"
+    assert state["camera_state"]["latest_adjust"]["requested_pitch_delta_deg"] == -10.0
+
+    with (attempt_dir / "trace.jsonl").open("a", encoding="utf-8") as stream:
+        stream.write(
+            json.dumps(
+                {
+                    "event": "response",
+                    "tool": "navigate_to_object",
+                    "response": {"ok": True, "status": "ok", "object_id": "observed_001"},
+                }
+            )
+            + "\n"
+        )
+
+    reset_state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
+
+    assert reset_state["camera_state"]["active"] is False
+    assert reset_state["camera_state"]["summary"] == "yaw 0 deg, pitch 0 deg (neutral)"
+    assert reset_state["camera_state"]["latest_event"] == "navigate_to_object_reset"
+
+
 def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
     tmp_path: Path,
 ) -> None:

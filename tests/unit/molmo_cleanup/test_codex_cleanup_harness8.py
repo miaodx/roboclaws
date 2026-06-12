@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from argparse import Namespace
 from pathlib import Path
 
@@ -57,6 +59,66 @@ def test_cleanup_rows_do_not_set_runner_continuation_env(tmp_path: Path) -> None
         "ROBOCLAWS_CODEX_MAX_CONTINUATIONS"
         not in rows["dino-prior-camera-grounded-labels-grounding-dino"]["rerun_command"]
     )
+
+
+def test_configure_parallelism_assigns_distinct_ports_and_batch_env(tmp_path: Path) -> None:
+    harness = harness8.build_harness(
+        output_dir=tmp_path,
+        seed=7,
+        generated_mess_count=10,
+        task="cleanup",
+        map_bundle="bundle",
+        runtime_map_prior="",
+        visual_grounding_timeout_s="auto",
+    )
+
+    harness8._configure_harness_parallelism(harness, parallelism=2, base_port=18788)
+
+    setup = harness["setup_rows"][0]
+    rows = {row["row_id"]: row for row in harness["rows"]}
+    assert setup["assigned_port"] == 18788
+    assert setup["harness_parallelism"] == 1
+    assert rows["direct-world-oracle-labels"]["assigned_port"] == 18788
+    assert rows["direct-world-public-labels"]["assigned_port"] == 18790
+    assert (
+        rows["direct-world-oracle-labels"]["env"]["ROBOCLAWS_MOLMO_ALLOW_BATCH_VISUAL_BACKENDS"]
+        == "1"
+    )
+    assert rows["direct-world-public-labels"]["env"]["ROBOCLAWS_MOLMO_MAX_VISUAL_BACKENDS"] == "2"
+
+
+def test_execute_cleanup_rows_uses_bounded_parallelism(monkeypatch: MonkeyPatch) -> None:
+    rows = [
+        {"row_id": "row-a"},
+        {"row_id": "row-b"},
+        {"row_id": "row-c"},
+    ]
+    active = 0
+    peak_active = 0
+    lock = threading.Lock()
+    started: list[str] = []
+
+    def fake_execute(row, _args):
+        nonlocal active, peak_active
+        with lock:
+            started.append(row["row_id"])
+            active += 1
+            peak_active = max(peak_active, active)
+        time.sleep(0.02)
+        with lock:
+            active -= 1
+        return 0
+
+    monkeypatch.setattr(harness8, "_execute_row_with_retries", fake_execute)
+
+    failure_count = harness8._execute_cleanup_rows(
+        rows,
+        Namespace(parallelism=2, continue_on_error=True),
+    )
+
+    assert failure_count == 0
+    assert peak_active == 2
+    assert set(started) == {"row-a", "row-b", "row-c"}
 
 
 def test_replace_runtime_map_prior_updates_prior_rows_only(tmp_path: Path) -> None:
