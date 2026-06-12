@@ -21,6 +21,7 @@ from roboclaws.household.realworld_mcp_atomic_tools import ATOMIC_CLEANUP_TOOL_N
 from roboclaws.household.realworld_mcp_semantic_tools import SEMANTIC_CLEANUP_TOOL_NAMES
 from roboclaws.household.realworld_mcp_server import (
     MCP_SERVER_NAME,
+    ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE,
     make_molmo_realworld_cleanup_mcp,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
@@ -935,6 +936,62 @@ def test_realworld_mcp_can_record_robot_view_timeline(tmp_path: Path) -> None:
     )
     assert "Robot View Timeline" in report_text
     assert "Robot-view camera" in report_text
+
+
+def test_realworld_mcp_action_timeline_policy_skips_report_only_observe_capture(
+    tmp_path: Path,
+) -> None:
+    scenario = build_cleanup_scenario(seed=7)
+    backend = _FakeVisualBackend(scenario)
+    base_contract = CleanupBackendSession(scenario, backend=backend)
+    server = make_molmo_realworld_cleanup_mcp(
+        run_dir=tmp_path,
+        scenario=scenario,
+        base_contract=base_contract,
+        port=0,
+        record_robot_views=True,
+        perception_mode=RAW_FPV_ONLY_MODE,
+        robot_view_capture_policy=ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE,
+    )
+    try:
+        metric_map = server.call_tool("metric_map")
+        server.call_tool(
+            "navigate_to_waypoint",
+            waypoint_id=metric_map["inspection_waypoints"][0]["waypoint_id"],
+        )
+        observation = server.call_tool("observe")
+        server._record_tool_robot_view(
+            "navigate_to_object",
+            {"object_id": "observed_test_object"},
+            {"ok": True, "object_id": "observed_test_object"},
+        )
+        server._record_robot_view("after", label_suffix="after")
+        steps = list(server.robot_view_steps)
+    finally:
+        server.close()
+
+    assert observation["raw_fpv_observation"]["image_artifacts"]["fpv"].endswith(".png")
+
+    actions = [step["action"] for step in steps]
+    assert server.robot_view_capture_policy == ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE
+    assert actions[0] == "before"
+    assert actions[-1] == "after"
+    assert any(action.startswith("observe raw_fpv_") for action in actions)
+    assert "observe" not in actions
+    assert any(action.startswith("navigate_to_object ") for action in actions)
+
+    trace_events = [
+        json.loads(line)
+        for line in (tmp_path / "trace.jsonl").read_text(encoding="utf-8").splitlines()
+        if line
+    ]
+    assert any(
+        item.get("event") == "robot_view_capture_skipped"
+        and item.get("tool") == "<runtime>"
+        and item.get("skipped_tool") == "observe"
+        and item.get("policy") == ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE
+        for item in trace_events
+    )
 
 
 def test_realworld_mcp_raw_fpv_mode_delivers_fpv_image_blocks(tmp_path: Path) -> None:

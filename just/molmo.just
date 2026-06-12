@@ -881,6 +881,9 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT:-}" ]]; then
             runner_args+=(--raw-fpv-repeated-failure-limit "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT}")
           fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY:-}" ]]; then
+            runner_args+=(--robot-view-capture-policy "${ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY}")
+          fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY:-}" ]]; then
             if [[ "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
               runner_args+=(--no-raw-fpv-image-memory)

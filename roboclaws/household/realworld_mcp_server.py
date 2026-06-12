@@ -102,6 +102,11 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 18788
 STARTUP_TIMEOUT_S = 2.0
 MCP_SERVER_NAME = "molmo_cleanup_realworld"
+ROBOT_VIEW_CAPTURE_POLICY_FULL = "full"
+ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE = "action_timeline"
+ROBOT_VIEW_CAPTURE_POLICIES = frozenset(
+    {ROBOT_VIEW_CAPTURE_POLICY_FULL, ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE}
+)
 AGENT_POLICIES = {
     "realworld_contract_smoke_agent",
     "codex_agent",
@@ -139,6 +144,7 @@ def make_molmo_realworld_cleanup_mcp(
     goal_contract: GoalContract | None = None,
     operator_messages_path: str | Path | None = None,
     agent_sdk_camera_grounded_composite_tools: bool = False,
+    robot_view_capture_policy: str = ROBOT_VIEW_CAPTURE_POLICY_FULL,
     rerun_command: str | None = None,
 ) -> "RealWorldMolmoCleanupMCPServer":
     return RealWorldMolmoCleanupMCPServer(
@@ -168,6 +174,7 @@ def make_molmo_realworld_cleanup_mcp(
         goal_contract=goal_contract,
         operator_messages_path=operator_messages_path,
         agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
+        robot_view_capture_policy=robot_view_capture_policy,
         rerun_command=rerun_command,
     )
 
@@ -204,6 +211,7 @@ class RealWorldMolmoCleanupMCPServer:
         goal_contract: GoalContract | None = None,
         operator_messages_path: str | Path | None = None,
         agent_sdk_camera_grounded_composite_tools: bool = False,
+        robot_view_capture_policy: str = ROBOT_VIEW_CAPTURE_POLICY_FULL,
         rerun_command: str | None = None,
     ) -> None:
         self.run_dir = Path(run_dir)
@@ -274,6 +282,9 @@ class RealWorldMolmoCleanupMCPServer:
         self.agent_sdk_camera_grounded_composite_tools = bool(
             agent_sdk_camera_grounded_composite_tools
         )
+        self.robot_view_capture_policy = _normalize_robot_view_capture_policy(
+            robot_view_capture_policy
+        )
         self.rerun_command = (
             str(rerun_command or "").strip() or os.environ.get(REPORT_RERUN_COMMAND_ENV, "").strip()
         )
@@ -315,6 +326,7 @@ class RealWorldMolmoCleanupMCPServer:
             agent_sdk_camera_grounded_composite_tools=(
                 self.agent_sdk_camera_grounded_composite_tools
             ),
+            robot_view_capture_policy=self.robot_view_capture_policy,
         )
 
     def call_tool(self, name: str, **kwargs: Any) -> dict[str, Any]:
@@ -707,6 +719,7 @@ class RealWorldMolmoCleanupMCPServer:
         if self.robot_view_steps:
             run_result["view_variant"] = ROBOT_VIEW_VARIANT
             run_result["robot_view_steps"] = self.robot_view_steps
+            run_result["robot_view_capture_policy"] = self.robot_view_capture_policy
             run_result["robot_view_camera_control"] = robot_view_camera_control_summary(
                 self.robot_view_steps
             )
@@ -901,6 +914,14 @@ class RealWorldMolmoCleanupMCPServer:
     ) -> None:
         if not self.record_robot_views or not response.get("ok"):
             return
+        if not self._should_record_tool_robot_view(tool):
+            self.write_runtime_event(
+                "robot_view_capture_skipped",
+                skipped_tool=tool,
+                policy=self.robot_view_capture_policy,
+                reason="report_only_observation",
+            )
+            return
         capture = robot_view_capture_for_tool(
             tool,
             request,
@@ -910,6 +931,15 @@ class RealWorldMolmoCleanupMCPServer:
         if capture is None:
             return
         self._record_robot_view(**capture)
+
+    def _should_record_tool_robot_view(self, tool: str) -> bool:
+        if self.robot_view_capture_policy == ROBOT_VIEW_CAPTURE_POLICY_FULL:
+            return True
+        if self.robot_view_capture_policy == ROBOT_VIEW_CAPTURE_POLICY_ACTION_TIMELINE:
+            return tool not in {"observe", "scene_objects"}
+        raise ValueError(
+            f"unsupported robot_view_capture_policy '{self.robot_view_capture_policy}'"
+        )
 
     def _internal_object_id(self, handle: str | None) -> str | None:
         if handle is None:
@@ -1227,6 +1257,14 @@ def _compact_camera_control_contract(contract: Any) -> dict[str, Any]:
         "agent_facing_fpv_source": agent_facing_fpv.get("source"),
         "canonical_camera_control": agent_facing_fpv.get("canonical_camera_control") is True,
     }
+
+
+def _normalize_robot_view_capture_policy(value: str) -> str:
+    policy = str(value or ROBOT_VIEW_CAPTURE_POLICY_FULL).strip() or ROBOT_VIEW_CAPTURE_POLICY_FULL
+    if policy not in ROBOT_VIEW_CAPTURE_POLICIES:
+        allowed = ", ".join(sorted(ROBOT_VIEW_CAPTURE_POLICIES))
+        raise ValueError(f"unsupported robot_view_capture_policy '{value}' (expected {allowed})")
+    return policy
 
 
 def _compact_cleanup_worklist_summary(worklist: dict[str, Any] | None) -> dict[str, Any]:

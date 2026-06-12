@@ -8,7 +8,8 @@ attribution, Candidate I/AB deterministic prep, and Q/Y deterministic
 recommendation enrichment, Candidate N deterministic repeated-map prep,
 Candidate O deterministic camera-grounded composite prep, and Candidate P
 deterministic raw-FPV repeated-failure rails, and Candidate AA deterministic
-raw-FPV image-memory prep for the private `openai-agents-live` route.
+raw-FPV image-memory prep, and Candidate F deterministic robot-view capture
+policy prep for the private `openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
 no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
@@ -18,7 +19,8 @@ deterministic recommendation enrichment were accepted on 2026-06-12. Candidate
 N deterministic repeated-map prep and Candidate O deterministic
 camera-grounded composite prep were accepted on 2026-06-12. Candidate P
 deterministic raw-FPV repeated-failure rails and Candidate AA deterministic
-raw-FPV image-memory prep were accepted on 2026-06-12. The first resumed
+raw-FPV image-memory prep were accepted on 2026-06-12. Candidate F deterministic
+robot-view capture policy prep was accepted on 2026-06-12. The first resumed
 provider-backed pass on 2026-06-12 produced one `mify` Responses
 `world-public-labels` baseline/candidate comparison and one blocked
 `codex-env` GPT baseline attempt. The first Candidate O `mify` Responses
@@ -31,12 +33,12 @@ row, not a normalized or publishable speed claim. Q/Y has now been refreshed
 over the promptfix2 artifact with a camera-grounded breakdown that separates
 composite-internal declaration substeps from standalone two-step declarations:
 promptfix2 has 5 composite calls, 5 composite-internal declarations, and 11
-standalone declarations. The next normalized-latency priorities are direct
-wall-clock visual capture reduction F, N/I/AB live A/B for model/SDK
-between-tool gap and repeated map/state payloads, then O paired repeats or
-prompt/tool tightening for the remaining standalone declarations. Token deltas
-are diagnostic context only. The full live provider/model x evidence-lane
-performance matrix is still not done. The follow-up execution plan is
+standalone declarations. F now has an opt-in `action_timeline` prep arm, so the
+next normalized-latency priorities are F live A/B, N/I/AB live A/B for
+model/SDK between-tool gap and repeated map/state payloads, then O paired
+repeats or prompt/tool tightening for the remaining standalone declarations.
+Token deltas are diagnostic context only. The full live provider/model x
+evidence-lane performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -130,6 +132,15 @@ Result:
   output counts, repeated-map counts, delta-compacted counts, and map byte
   deltas without storing map bodies in SDK events. This is deterministic
   model-facing prep, not a live speed claim.
+- Candidate F deterministic prep now adds an SDK-private
+  `robot_view_capture_policy=action_timeline` arm. The default remains `full`.
+  The opt-in policy skips report-only `observe` / `scene_objects` robot-view
+  captures while preserving before/after views, cleanup action views, raw-FPV
+  observe artifact capture, traces, and reports. The OpenAI Agents live runner
+  records the policy in `agent_sdk_perf_profile`, mirrors it in
+  `live_timing.json`, and forwards `--robot-view-capture-policy` to the private
+  cleanup server only when requested. This is deterministic prep only, not a
+  live speed claim.
 - Candidate P deterministic prep now adds a raw-FPV repeated visual-candidate
   failure rail to `raw_fpv_budgeted_v1`. Repeated compact
   `navigate_to_visual_candidate` failure fingerprints terminate as

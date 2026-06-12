@@ -37,6 +37,10 @@ from roboclaws.agents.provider_registry import (
     provider_route_spec,
     route_capabilities_for_engine,
 )
+from roboclaws.household.realworld_mcp_server import (
+    ROBOT_VIEW_CAPTURE_POLICIES,
+    ROBOT_VIEW_CAPTURE_POLICY_FULL,
+)
 from roboclaws.household.report import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
@@ -72,6 +76,7 @@ MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION
 RAW_FPV_IMAGE_MEMORY_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY"
 RAW_FPV_IMAGE_MEMORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN"
 CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
+ROBOT_VIEW_CAPTURE_POLICY_ENV = "ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
@@ -200,6 +205,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "for this SDK run."
         ),
     )
+    parser.add_argument(
+        "--robot-view-capture-policy",
+        default="",
+        help=(
+            "Private Agent SDK Candidate-F robot-view report capture policy. "
+            "Use action_timeline to keep before/after and cleanup action views while "
+            "skipping report-only observe/scene_objects captures."
+        ),
+    )
     parser.add_argument("--context-soft-limit-tokens", type=int, default=None)
     parser.add_argument("--context-hard-limit-tokens", type=int, default=None)
     parser.add_argument("--max-observe-per-waypoint", type=int, default=None)
@@ -300,6 +314,9 @@ class LiveOpenAIAgentsCleanupRunner:
             "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
             "agent_sdk_camera_grounded_composite_tools": (
                 self.agent_sdk_perf_profile["camera_grounded_composite_tools"]
+            ),
+            "agent_sdk_robot_view_capture_policy": (
+                self.agent_sdk_perf_profile["robot_view_capture_policy"]
             ),
             "prompt_profile_id": self.agent_sdk_perf_profile["profile_id"],
             "agent_sdk_skill_context": _skill_context_timing_summary(self.skill_context),
@@ -426,6 +443,9 @@ class LiveOpenAIAgentsCleanupRunner:
             evidence_lane=str(getattr(self.args, "profile", "") or ""),
         ):
             command.append("--agent-sdk-camera-grounded-composite-tools")
+        robot_view_capture_policy = self.agent_sdk_perf_profile["robot_view_capture_policy"]
+        if robot_view_capture_policy["policy"] != ROBOT_VIEW_CAPTURE_POLICY_FULL:
+            command.extend(["--robot-view-capture-policy", robot_view_capture_policy["policy"]])
         env = os.environ.copy()
         if env.get(REPORT_RERUN_COMMAND_ENV):
             command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
@@ -946,6 +966,7 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             args,
             defaults,
         ),
+        "robot_view_capture_policy": _robot_view_capture_policy_profile(args, defaults),
         "model_service_retry_attempts": _int_setting(
             args,
             "model_service_retry_attempts",
@@ -1119,6 +1140,15 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
             "private_artifact_policy": (
                 "SDK-private MCP tool addition only; default public MCP/profile tools remain "
                 "unchanged"
+            ),
+        },
+        "robot_view_capture_policy": {
+            "schema": "agent_sdk_robot_view_capture_policy_v1",
+            "policy": ROBOT_VIEW_CAPTURE_POLICY_FULL,
+            "candidate_ids": [],
+            "scope": "report-only robot-view capture",
+            "private_artifact_policy": (
+                "full report robot-view capture; default public route behavior unchanged"
             ),
         },
     }
@@ -1304,6 +1334,38 @@ def _camera_grounded_composite_tools_enabled_for_run(
     if not isinstance(config, dict) or not config.get("enabled"):
         return False
     return evidence_lane == "camera-grounded-labels"
+
+
+def _robot_view_capture_policy_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    default_config = (
+        defaults.get("robot_view_capture_policy")
+        if isinstance(defaults.get("robot_view_capture_policy"), dict)
+        else {}
+    )
+    policy = _string_setting(
+        args,
+        "robot_view_capture_policy",
+        ROBOT_VIEW_CAPTURE_POLICY_ENV,
+        default=str(default_config.get("policy") or ROBOT_VIEW_CAPTURE_POLICY_FULL),
+        allowed=set(ROBOT_VIEW_CAPTURE_POLICIES),
+    )
+    enabled = policy != ROBOT_VIEW_CAPTURE_POLICY_FULL
+    return {
+        "schema": "agent_sdk_robot_view_capture_policy_v1",
+        "policy": policy,
+        "candidate_ids": ["F"] if enabled else [],
+        "scope": "report-only robot-view capture",
+        "hook": "cleanup MCP server --robot-view-capture-policy",
+        "private_artifact_policy": (
+            "SDK-private report-capture reduction; before/after snapshots, cleanup action "
+            "views, raw-FPV observe artifacts, traces, and reports remain complete"
+            if enabled
+            else "full report robot-view capture; default public route behavior unchanged"
+        ),
+    }
 
 
 def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
