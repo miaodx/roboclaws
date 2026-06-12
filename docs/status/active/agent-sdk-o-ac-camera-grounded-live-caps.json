@@ -1,0 +1,132 @@
+{
+  "schema": "agent_sdk_o_ac_camera_grounded_live_caps_v1",
+  "created_at": "2026-06-12T17:40:50+08:00",
+  "candidate_ids": [
+    "O",
+    "AC",
+    "Q",
+    "Y"
+  ],
+  "purpose": "Scoped Candidate O+AC live row after camera-grounded history compaction deterministic prep.",
+  "planned_live_rows": 1,
+  "max_wall_clock_s_per_row": 2700,
+  "concurrency": 1,
+  "racing_multiplier": 1.0,
+  "provider_profile": "mify",
+  "wire_api": "responses",
+  "model": "mimo-v2.5",
+  "surface": "household-world",
+  "intent": "cleanup",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "implementation_backend": "molmospaces_subprocess",
+  "evidence_lane": "camera-grounded-labels",
+  "camera_labeler": "sim-projected-labels",
+  "seed": 7,
+  "scenario_setup": "relocate-cleanup-related-objects",
+  "relocation_count": 5,
+  "agent_sdk_perf_profile": "mimo_compact_v1",
+  "camera_grounded_composite_tools": {
+    "enabled": true,
+    "tool_names": [
+      "observe_camera_grounded_candidates"
+    ]
+  },
+  "camera_grounded_history_compaction": {
+    "enabled": true,
+    "policy": "camera_grounded_history_v1",
+    "retained_recent_outputs": 4
+  },
+  "context_limits": {
+    "soft_tokens": 64000,
+    "hard_tokens": 96000,
+    "max_continuations": 1
+  },
+  "baseline_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7",
+  "prior_candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-continuation-tightening/0612_1627/seed-7",
+  "candidate_output_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac",
+  "credential_gate": {
+    "XM_LLM_API_KEY": "present",
+    "XM_LLM_BASE_URL": "present",
+    "CODEX_API_KEY": "present",
+    "CODEX_BASE_URL": "present"
+  },
+  "network_gate": {
+    "network": "work",
+    "openclaw_blocked": true,
+    "system_claude_blocked": true,
+    "mify_route_allowed": true
+  },
+  "backend_gate": {
+    "visual_backend_slots": 1,
+    "held_slots": 0,
+    "available": true
+  },
+  "preflight_gate": {
+    "foundation_dry_run": "passed",
+    "foundation_offline_preflight": "passed",
+    "live_refresh_dry_run": "passed",
+    "live_refresh_offline_preflight": "passed",
+    "foundation_decision_packet": "output/agent-sdk-speedup-foundation/decision.json",
+    "live_refresh_decision_packet": "output/agent-sdk-perf-followups/live-refresh-decision.json"
+  },
+  "stop_conditions": [
+    "network_policy_failure",
+    "missing_credentials",
+    "backend_slot_unavailable",
+    "privacy_or_schema_failure",
+    "quality_regression",
+    "wall_clock_timeout",
+    "context_limit_failure",
+    "no_observe_camera_grounded_candidates",
+    "camera_grounded_history_compaction_not_exercised",
+    "standalone_declarations_regress"
+  ],
+  "quality_policy": "same_or_better",
+  "claim_scope": "diagnostic paired row only; normalized or publishable claims require repeated/calibrated evidence",
+  "acceptance_target": {
+    "done_and_run_result_present": true,
+    "same_or_better_recorded_quality": true,
+    "observe_camera_grounded_candidates_used": true,
+    "camera_grounded_history_compaction_exercised": true,
+    "standalone_declare_visual_candidates_not_regressed_vs_prior_tightening": true,
+    "lower_paired_comparable_wall_or_model_latency_vs_baseline": true
+  },
+  "outcome": {
+    "status": "accepted",
+    "completed_at": "2026-06-12T18:41:00+08:00",
+    "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7",
+    "comparison": "output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-fixed4-comparison.json",
+    "report": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/report.html",
+    "run_result": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/run_result.json",
+    "decision": "candidate faster with same-or-better recorded quality",
+    "quality": {
+      "completion_status": "success",
+      "restored_count": 4,
+      "total_targets": 5,
+      "semantic_accepted_count": 5,
+      "sweep_coverage_rate": 1.0,
+      "disturbance_count": 0,
+      "failed_or_noop_tool_count": 0
+    },
+    "timing_delta_s": {
+      "observed_wall": -659.477,
+      "observed_model_api": -653.563,
+      "mcp_between_tool_gap": -638.809
+    },
+    "call_count_delta": {
+      "model_call_count": -19,
+      "mcp_tool_call_count": 9
+    },
+    "mechanism": {
+      "observe_camera_grounded_candidates_count": 14,
+      "standalone_declare_visual_candidates_regressed": false,
+      "camera_grounded_history_compacted_count": 270,
+      "camera_grounded_history_item_count": 457,
+      "camera_grounded_history_bytes_reduced": 5255583,
+      "input_byte_reduction_ratio": 0.209928
+    },
+    "claim_scope": "accepted paired diagnostic row; normalized or publishable claims still require repeated/calibrated evidence",
+    "next": "Refresh the zero-provider live matrix/decision packet with this completed O+AC row, then prioritize repeated/calibrated proof or broader B baseline coverage before any publishable speed claim."
+  }
+}

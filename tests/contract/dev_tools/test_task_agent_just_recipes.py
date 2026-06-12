@@ -2048,6 +2048,16 @@ def test_molmo_just_openai_agents_composite_env_forwards_prompt_flag() -> None:
     )
 
 
+def test_molmo_just_openai_agents_forwards_camera_grounded_history_compaction() -> None:
+    text = MOLMO_JUST.read_text(encoding="utf-8")
+
+    assert "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION" in text
+    assert "--camera-grounded-history-compaction" in text
+    assert "--no-camera-grounded-history-compaction" in text
+    assert "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN" in text
+    assert "--camera-grounded-history-retain" in text
+
+
 def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
     prompt = render_kickoff_prompt(
         "camera-raw-fpv",

@@ -54,6 +54,32 @@ cosmetic one**.
 | `mimo-v2.5` *(openai)*            | `mimo_openai/…`        | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 | `mimo-v2.5` *(anthropic)*         | `mimo_anthropic/…`     | 1 048 576    | 32 768           | 1M — MiMo updates page (V2.5 long-context line)  | 1 024 576       | OK — aligned 2026-04-23                          |
 
+## Coding-Agent Route Health
+
+`docs/human/model-route-verdicts.yaml` is the compact machine-readable verdict
+table for coding-agent routes. The current MiniMax state is:
+
+- **OpenAI Agents SDK + MiniMax Responses**: works for structured cleanup.
+  Local paired runs on 2026-06-12 completed cleanup successfully for both
+  `MiniMax-M3` and `MiniMax-M2.7-highspeed` with `score.status=success` and
+  `mess_restoration_rate=1.0`.
+- **Codex CLI + MiniMax Responses**: blocked for MCP-driven cleanup today.
+  The provider Responses route connects, but MiniMax emits MCP tool calls in
+  a flattened name shape such as `mcp__cleanup__metric_map`,
+  `mcp__cleanup__ping_tool`, or `cleanup__ping_tool`. Codex's MCP router
+  rejects those as `unsupported call`; the expected routed shape is a Codex
+  MCP call with server/namespace `cleanup` and unprefixed tool names such as
+  `metric_map` or `ping_tool`.
+- Upgrading the Docker smoke image from Codex `0.130.0` to `0.139.0` did not
+  change this MiniMax MCP routing failure. Treat MiniMax in Codex as an
+  explicit re-review route, not a working cleanup route, until either Codex's
+  Responses MCP router accepts the flattened provider shape or MiniMax changes
+  its tool-call encoding.
+- The single paired Agent SDK cleanup run did not show a speed advantage for
+  `MiniMax-M2.7-highspeed`: M3 finished in about 262.9 s wall time, while
+  M2.7-highspeed finished in about 269.1 s. That is only one run, so use it as
+  cautionary evidence, not a benchmark conclusion.
+
 > A flush threshold below ~20 k is effectively "trip on the first `observe`
 > turn" because the two prompt images + bootstrap context + SOUL/AGENTS
 > files already consume 7–10 k tokens.

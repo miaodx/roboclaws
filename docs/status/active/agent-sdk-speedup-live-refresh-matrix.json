@@ -191,6 +191,199 @@
         "provider_calls_planned",
         "unexpected_decision_status"
       ]
+    },
+    {
+      "baseline_role": "completed_live_responses_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-continuation-tightening/0612_1627/seed-7",
+      "dependency_candidate_ids": ["O", "I", "AB"],
+      "evidence_lane": "camera-grounded-labels",
+      "expected_decision_status": "rejected",
+      "expected_terminal": "provider_context_budget_exceeded",
+      "feature_flags": {
+        "camera_grounded_composite_tools": true,
+        "continuation_prompt_tightening": true,
+        "expected_rejected_evidence": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true
+      },
+      "model": "mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mify",
+      "quality_policy": "same_or_better",
+      "row_id": "mify_camera_grounded_o_continuation_tightening_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "completed_live_responses_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7",
+      "dependency_candidate_ids": ["O", "AC"],
+      "evidence_lane": "camera-grounded-labels",
+      "expected_decision_status": "accepted",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "camera_grounded_composite_tools": true,
+        "camera_grounded_history_compaction": "camera_grounded_history_v1",
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true
+      },
+      "model": "mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mify",
+      "quality_policy": "same_or_better",
+      "row_id": "mify_camera_grounded_o_ac_fixed4_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "completed_live_responses_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-repeat-mify/0612_1909/seed-7",
+      "dependency_candidate_ids": ["O", "AC", "W"],
+      "evidence_lane": "camera-grounded-labels",
+      "expected_decision_status": "accepted",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "camera_grounded_composite_tools": true,
+        "camera_grounded_history_compaction": "camera_grounded_history_v1",
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "repeat_evidence": true,
+        "source_rows_already_completed": true
+      },
+      "model": "mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mify",
+      "quality_policy": "same_or_better",
+      "row_id": "mify_camera_grounded_o_ac_repeat_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "completed_live_chat_compatible_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1959/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B", "Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1959/seed-7",
+      "dependency_candidate_ids": ["B"],
+      "evidence_lane": "world-public-labels",
+      "expected_decision_status": "accepted",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "baseline_coverage_only": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true,
+        "wire_api": "chat-completions"
+      },
+      "model": "mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mimo-openai-chat",
+      "quality_policy": "same_or_better",
+      "row_id": "mimo_chat_world_public_b_baseline_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "blocked_live_chat_compatible_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/b-baseline-kimi-openai-chat-world-public/0612_2009/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B", "Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/b-baseline-kimi-openai-chat-world-public/0612_2009/seed-7",
+      "dependency_candidate_ids": ["B"],
+      "evidence_lane": "world-public-labels",
+      "expected_decision_status": "blocked",
+      "expected_terminal": "agent_cli_failure",
+      "feature_flags": {
+        "baseline_coverage_only": true,
+        "expected_blocked_evidence": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true,
+        "wire_api": "chat-completions"
+      },
+      "model": "kimi-k2.6",
+      "provider_calls": false,
+      "provider_profile": "kimi-openai-chat",
+      "quality_policy": "same_or_better",
+      "row_id": "kimi_chat_world_public_b_blocked_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
+    },
+    {
+      "baseline_role": "blocked_live_responses_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/b-baseline-codex-env-world-public/0612_2013/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B", "Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/b-baseline-codex-env-world-public/0612_2013/seed-7",
+      "dependency_candidate_ids": ["B"],
+      "evidence_lane": "world-public-labels",
+      "expected_decision_status": "blocked",
+      "expected_terminal": "provider_transient_failure",
+      "feature_flags": {
+        "baseline_coverage_only": true,
+        "expected_blocked_evidence": true,
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true,
+        "wire_api": "responses"
+      },
+      "model": "gpt-5.5",
+      "provider_calls": false,
+      "provider_profile": "codex-env",
+      "quality_policy": "same_or_better",
+      "row_id": "codex_env_responses_world_public_b_blocked_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned",
+        "unexpected_decision_status"
+      ]
     }
   ]
 }

@@ -171,4 +171,49 @@ Each entry should answer:
   - Try now: Yes for benchmark design; recurring live execution needs provider
     budget and local-network constraints.
 
+- **Periodic Docker-pinned coding-agent CLI updates**
+  - Created: 2026-06-12.
+  - Updated: 2026-06-12.
+  - Status: Parked maintenance cadence.
+  - Why: The Docker-backed coding-agent runtime pins Codex CLI and Claude Code
+    exactly so live-agent demos are reproducible, but stale pins can miss
+    provider, MCP, transport, and bug-fix changes. Version refreshes should be
+    deliberate instead of accidental.
+  - Next action: On a regular cadence, compare the pinned `@openai/codex` and
+    `@anthropic-ai/claude-code` packages against npm latest, read relevant
+    release notes, build a temporary image, and run focused MCP/provider smoke
+    tests before changing the repo pin.
+  - Evidence:
+    `scripts/dev/coding_agent_toolchain.env`;
+    `Dockerfile.coding-agents`;
+    `scripts/dev/coding_agent_docker.sh`;
+    `scripts/dev/coding_agent_env.sh`;
+    `docs/human/model-route-verdicts.yaml`.
+  - Try now: Yes for version audit and temporary-image smoke tests. Commit a
+    pin bump only when the focused smokes show a net improvement or needed fix.
+
+- **Re-review MiniMax Responses with Codex MCP routing**
+  - Created: 2026-06-12.
+  - Updated: 2026-06-12.
+  - Status: Parked provider compatibility review.
+  - Why: MiniMax `MiniMax-M3` and `MiniMax-M2.7-highspeed` work through the
+    OpenAI Agents SDK Responses route for structured cleanup, but Codex CLI
+    currently rejects MiniMax-emitted MCP tool calls as `unsupported call`
+    because the provider emits flattened tool names such as
+    `mcp__cleanup__metric_map` or `cleanup__ping_tool` instead of the routed
+    Codex MCP server/tool shape.
+  - Next action: After a relevant Codex CLI release, MiniMax token-plan release,
+    or router/tool-call compatibility note, rebuild a temporary coding-agent
+    image and rerun the focused MiniMax MCP smoke plus one household cleanup
+    attempt for `MiniMax-M3` and `MiniMax-M2.7-highspeed`.
+  - Evidence:
+    `docs/human/model-route-verdicts.yaml`;
+    `docs/human/model-matrix.md`;
+    `.tmp/minimax-mcp-text-smoke/20260612_155910-codex139-m3`;
+    `.tmp/minimax-mcp-text-smoke/20260612_155910-codex139-m27`;
+    `.tmp/minimax-mcp-text-smoke/20260612_160421-codex139-feature-m3`;
+    `.tmp/minimax-mcp-text-smoke/20260612_160421-codex139-feature-m27`.
+  - Try now: No for another blind rerun. Yes when a provider or Codex-side
+    change gives a concrete reason to expect the tool-call shape changed.
+
 _If this list empties, next work should come from a new plan or issue._

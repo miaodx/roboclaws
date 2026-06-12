@@ -77,6 +77,10 @@ MODEL_RACING_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING"
 MODEL_RACING_ARM_COUNT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT"
 RAW_FPV_IMAGE_MEMORY_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY"
 RAW_FPV_IMAGE_MEMORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN"
+CAMERA_GROUNDED_HISTORY_COMPACTION_ENV = (
+    "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_COMPACTION"
+)
+CAMERA_GROUNDED_HISTORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_HISTORY_RETAIN"
 CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
 ROBOT_VIEW_CAPTURE_POLICY_ENV = "ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
@@ -207,6 +211,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument("--raw-fpv-image-memory-retain", type=int, default=None)
+    parser.add_argument(
+        "--camera-grounded-history-compaction",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to private Agent SDK Candidate-AC camera-grounded history compaction. "
+            "Older camera-grounded observation/declaration outputs are summarized before "
+            "SDK model calls while recent actionable outputs and MCP/report artifacts remain "
+            "complete."
+        ),
+    )
+    parser.add_argument("--camera-grounded-history-retain", type=int, default=None)
     parser.add_argument(
         "--camera-grounded-composite-tools",
         action=argparse.BooleanOptionalAction,
@@ -1147,6 +1163,17 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
                     "image artifacts remain complete"
                 ),
             },
+            "camera_grounded_history": {
+                "schema": "agent_sdk_camera_grounded_history_policy_v1",
+                "enabled": False,
+                "mode": "off",
+                "retained_recent_outputs": 0,
+                "candidate_ids": [],
+                "private_artifact_policy": (
+                    "model-facing camera-grounded history compaction only; MCP traces, "
+                    "reports, and run artifacts remain complete"
+                ),
+            },
         },
         "camera_grounded_composite_tools": {
             "schema": "agent_sdk_camera_grounded_composite_tools_v1",
@@ -1269,6 +1296,7 @@ def _model_input_compaction_profile(
         default=int(default_config.get("min_chars") or 1200),
     )
     raw_fpv_image_memory = _raw_fpv_image_memory_profile(args, default_config)
+    camera_grounded_history = _camera_grounded_history_profile(args, default_config)
     mode_parts = []
     candidate_ids = []
     if enabled:
@@ -1277,7 +1305,12 @@ def _model_input_compaction_profile(
     if raw_fpv_image_memory["enabled"]:
         mode_parts.append("raw_fpv_image_memory_v1")
         candidate_ids.append("AA")
-    hook_enabled = enabled or bool(raw_fpv_image_memory["enabled"])
+    if camera_grounded_history["enabled"]:
+        mode_parts.append("camera_grounded_history_v1")
+        candidate_ids.append("AC")
+    hook_enabled = (
+        enabled or bool(raw_fpv_image_memory["enabled"]) or bool(camera_grounded_history["enabled"])
+    )
     return {
         "schema": "agent_sdk_model_input_compaction_v1",
         "enabled": hook_enabled,
@@ -1287,6 +1320,7 @@ def _model_input_compaction_profile(
         "hook": "RunConfig.call_model_input_filter",
         "repeated_metric_map_delta": enabled,
         "raw_fpv_image_memory": raw_fpv_image_memory,
+        "camera_grounded_history": camera_grounded_history,
         "private_artifact_policy": (
             "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
         ),
@@ -1392,6 +1426,42 @@ def _raw_fpv_image_memory_profile(
         "private_artifact_policy": (
             "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
             "remain complete"
+        ),
+    }
+
+
+def _camera_grounded_history_profile(
+    args: argparse.Namespace,
+    default_config: dict[str, Any],
+) -> dict[str, Any]:
+    default_policy = (
+        default_config.get("camera_grounded_history")
+        if isinstance(default_config.get("camera_grounded_history"), dict)
+        else {}
+    )
+    default_enabled = bool(default_policy.get("enabled", False))
+    enabled = _bool_arg_setting(
+        args,
+        "camera_grounded_history_compaction",
+        CAMERA_GROUNDED_HISTORY_COMPACTION_ENV,
+        default=default_enabled,
+    )
+    retain = _int_setting(
+        args,
+        "camera_grounded_history_retain",
+        CAMERA_GROUNDED_HISTORY_RETAIN_ENV,
+        default=int(default_policy.get("retained_recent_outputs") or (4 if enabled else 0)),
+    )
+    retain = max(1, int(retain or 1)) if enabled else 0
+    return {
+        "schema": "agent_sdk_camera_grounded_history_policy_v1",
+        "enabled": enabled,
+        "mode": "retain_latest_actionable_outputs" if enabled else "off",
+        "retained_recent_outputs": retain,
+        "candidate_ids": ["AC"] if enabled else [],
+        "private_artifact_policy": (
+            "model-facing camera-grounded history compaction only; MCP traces, reports, "
+            "and run artifacts remain complete"
         ),
     }
 
@@ -2891,6 +2961,14 @@ def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
     raw_fpv_image_bytes_reduced = 0
     raw_fpv_image_memory_enabled = False
     raw_fpv_image_memory_modes: set[str] = set()
+    camera_grounded_history_item_count = 0
+    camera_grounded_history_retained_count = 0
+    camera_grounded_history_compacted_count = 0
+    camera_grounded_history_bytes_before = 0
+    camera_grounded_history_bytes_after = 0
+    camera_grounded_history_bytes_reduced = 0
+    camera_grounded_history_enabled = False
+    camera_grounded_history_modes: set[str] = set()
     max_input_bytes_before = 0
     max_input_bytes_after = 0
     max_input_bytes_reduced = 0
@@ -2945,6 +3023,30 @@ def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
         raw_fpv_mode = str(metrics.get("raw_fpv_image_memory_mode") or "")
         if raw_fpv_mode:
             raw_fpv_image_memory_modes.add(raw_fpv_mode)
+        camera_grounded_history_item_count += (
+            _int_or_none(metrics.get("camera_grounded_history_item_count")) or 0
+        )
+        camera_grounded_history_retained_count += (
+            _int_or_none(metrics.get("camera_grounded_history_retained_count")) or 0
+        )
+        camera_grounded_history_compacted_count += (
+            _int_or_none(metrics.get("camera_grounded_history_compacted_count")) or 0
+        )
+        camera_grounded_history_bytes_before += (
+            _int_or_none(metrics.get("camera_grounded_history_bytes_before")) or 0
+        )
+        camera_grounded_history_bytes_after += (
+            _int_or_none(metrics.get("camera_grounded_history_bytes_after")) or 0
+        )
+        camera_grounded_history_bytes_reduced += (
+            _int_or_none(metrics.get("camera_grounded_history_bytes_reduced")) or 0
+        )
+        camera_grounded_history_enabled = camera_grounded_history_enabled or bool(
+            metrics.get("camera_grounded_history_enabled")
+        )
+        camera_grounded_mode = str(metrics.get("camera_grounded_history_mode") or "")
+        if camera_grounded_mode:
+            camera_grounded_history_modes.add(camera_grounded_mode)
         max_input_bytes_before = max(max_input_bytes_before, before)
         max_input_bytes_after = max(max_input_bytes_after, after)
         max_input_bytes_reduced = max(max_input_bytes_reduced, reduced)
@@ -2983,6 +3085,18 @@ def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
         "raw_fpv_image_byte_reduction_ratio": _ratio(
             raw_fpv_image_bytes_reduced,
             raw_fpv_image_bytes_before,
+        ),
+        "camera_grounded_history_enabled": camera_grounded_history_enabled,
+        "camera_grounded_history_modes": sorted(camera_grounded_history_modes),
+        "camera_grounded_history_item_count": camera_grounded_history_item_count,
+        "camera_grounded_history_retained_count": camera_grounded_history_retained_count,
+        "camera_grounded_history_compacted_count": camera_grounded_history_compacted_count,
+        "camera_grounded_history_bytes_before": camera_grounded_history_bytes_before,
+        "camera_grounded_history_bytes_after": camera_grounded_history_bytes_after,
+        "camera_grounded_history_bytes_reduced": camera_grounded_history_bytes_reduced,
+        "camera_grounded_history_byte_reduction_ratio": _ratio(
+            camera_grounded_history_bytes_reduced,
+            camera_grounded_history_bytes_before,
         ),
         "input_bytes_before": input_bytes_before,
         "input_bytes_after": input_bytes_after,
@@ -3360,6 +3474,15 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "raw_fpv_image_bytes_after",
         "raw_fpv_image_bytes_reduced",
         "raw_fpv_image_byte_reduction_ratio",
+        "camera_grounded_history_enabled",
+        "camera_grounded_history_modes",
+        "camera_grounded_history_item_count",
+        "camera_grounded_history_retained_count",
+        "camera_grounded_history_compacted_count",
+        "camera_grounded_history_bytes_before",
+        "camera_grounded_history_bytes_after",
+        "camera_grounded_history_bytes_reduced",
+        "camera_grounded_history_byte_reduction_ratio",
         "reason",
         "provider_reason",
         "retryable",

@@ -37,8 +37,13 @@ composite-internal declaration substeps from standalone two-step declarations:
 promptfix2 has 5 composite calls, 5 composite-internal declarations, and 11
 standalone declarations. Trace review showed those residual standalone
 declarations happen after SDK continuation, so the private compact continuation
-prompt now preserves the O composite cadence for the next paired/rerun row. F
-now has an opt-in `action_timeline` prep arm, so the
+prompt now preserves the O composite cadence. The paired continuation-tightening
+rerun fixed the cadence with 14 composite calls, 14 composite-internal
+declarations, and 0 standalone declarations, but failed before `done` with
+`provider_context_budget_exceeded` (`175618` current input tokens over the
+`96000` hard limit). Treat it as expected-rejected diagnostic evidence: the O
+tool cadence is fixed, but completion now depends on behavior-preserving
+context/session growth control. F now has an opt-in `action_timeline` prep arm, so the
 F live A/B has now been tried. It reduced visual capture time but regressed
 cleanup quality and wall/model time, so it is expected-rejected evidence rather
 than a speed win. I/N/AB input-compaction live A/B has also now been tried. It
@@ -57,11 +62,46 @@ evidence, not a wall-clock speed win. The first raw-FPV P/AA live gate attempt
 is now blocked: `openai-agents-sdk+mify` is rejected by the image-transport
 guard, and two `openai-agents-sdk+codex-env` raw-FPV attempts failed with
 classified `provider_transient_failure` / `upstream_unavailable` before task
-work. A behavior-preserving compaction/session redesign, O paired
-repeats/tightening, a later raw-FPV retry after provider or image-transport
-availability changes, and broader B baseline coverage remain valid next arms.
-Token deltas are telemetry only; cost is not a deciding objective for this
-plan. The full live provider/model x evidence-lane performance matrix is still not done. The follow-up execution plan is
+work. The O+AC fixed4 row is the cleanest paired diagnostic wall-clock result,
+and the O+AC repeat row now strengthens the same direction. Explicit
+calibrated-normalized diagnostic comparisons now exist for both O+AC rows; the
+current same-dataset calibration records error statistics but still shows low
+explanatory power, with the observed improvement dominated by residual/wait
+reduction. The scoped B
+`world-public-labels` coverage pass now records one completed MiMo Chat row and
+two provider blockers (`kimi-openai-chat` 403 and `codex-env` 502), so broader
+B work is now additional evidence-lane/provider availability coverage rather
+than rerunning the same rows. A reviewed calibration dataset and a later
+raw-FPV retry after provider or image-transport availability changes remain
+valid next arms. Token deltas are
+telemetry only; cost is not a deciding objective for this plan. Candidate AC
+now provides the first deterministic slice of the
+behavior-preserving redesign: an opt-in private SDK
+`camera_grounded_history_v1` model-input filter that keeps recent actionable
+camera-grounded outputs full while summarizing older camera-grounded
+observation/declaration history before SDK model calls. It is deterministic
+prep, and the O+AC fixed4 provider-backed paired row now completed at
+`output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/`.
+The row preserved `done`, `run_result.json`, and same-or-better report-quality
+evidence while reducing observed wall/model API time by `-659.477s` /
+`-653.563s`. A repeat row at
+`output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-repeat-mify/0612_1909/seed-7/`
+also preserved `done`, `run_result.json`, and same-or-better report quality
+while reducing observed wall/model API time by `-630.633s` / `-619.022s`.
+The diagnostic calibration packet
+`output/agent-sdk-perf-followups/mify-camera-grounded-o-ac-calibration.json`
+uses 193 sanitized model-call rows and now records fit error statistics
+(`mae_s=4.785298`, `rmse_s=6.423924`, `p95_abs_error_s=15.654567`,
+`r2=0.048291`) while remaining same-dataset/not-repo-default. Normalized
+comparison artifacts
+`output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-fixed4-normalized-comparison.json`
+and
+`output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-repeat-mify-normalized-comparison.json`
+remain accepted on quality/wall time, with estimated model-work deltas
+`-112.56s` / `-85.531s` and model-latency residual deltas `-541.003s` /
+`-533.491s`. Treat these as accepted paired plus calibrated-diagnostic rows,
+not broad or publishable speed claims. The full live provider/model x
+evidence-lane performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -246,6 +286,39 @@ Result:
   failed/noop calls to `31`, increased observed wall time by `+62.627s`, and
   increased observed model API time by `+102.956s`. It proves compaction
   mechanics, not a wall-clock win.
+- The Candidate O+AC fixed4 live row completed under
+  `docs/status/active/agent-sdk-o-ac-camera-grounded-live-caps.json`: candidate
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/`,
+  comparison
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-fixed4-comparison.json`.
+  The row is accepted as paired diagnostic evidence: recorded quality stayed
+  at `completion_status=success`, `restored_count=4/5`,
+  `semantic_accepted_count=5/5`, `disturbance_count=0`, and
+  `failed_or_noop_tool_count=0`, while observed wall time improved by
+  `-659.477s`, observed model API time by `-653.563s`, and
+  model/SDK between-tool gap by `-638.809s`. The mechanism exercised
+  `observe_camera_grounded_candidates` 14 times and compacted 270 of 457
+  camera-grounded history items, reducing camera-grounded history bytes by
+  `5255583`. The calibrated-diagnostic normalized comparison shows estimated
+  model-work `-112.56s` and model-latency residual `-541.003s` versus baseline;
+  broad/publishable claims still need broader B coverage and holdout-reviewed
+  calibration governance.
+- The Candidate O+AC repeat live row completed under
+  `docs/status/active/agent-sdk-o-ac-camera-grounded-repeat-live-caps.json`:
+  candidate
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-repeat-mify/0612_1909/seed-7/`,
+  comparison
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-repeat-mify-comparison.json`.
+  The row is accepted as repeat paired diagnostic evidence: recorded quality
+  stayed at `completion_status=success`, `restored_count=4/5`,
+  `semantic_accepted_count=5/5`, `disturbance_count=0`, and
+  `failed_or_noop_tool_count=0`, while observed wall time improved by
+  `-630.633s`, observed model API time by `-619.022s`, and model/SDK
+  between-tool gap by `-612.38s`. The repeat exercised 13 composite calls,
+  compacted 192 of 364 camera-grounded history items, and reduced
+  camera-grounded history bytes by `3483115`. The calibrated-diagnostic
+  normalized comparison shows estimated model-work `-85.531s` and
+  model-latency residual `-533.491s` versus baseline.
 - Candidate D deterministic racing-observability prep is implemented. The
   private SDK model request boundary now emits sanitized single-arm
   `model_racing_arm_start` / finish / failure events with stable call/arm ids,
@@ -371,6 +444,10 @@ Raw-FPV failure classification:
   delta summaries, no-growth compaction behavior through the smaller-than-
   original guard, profile attribution, aggregate metric-map byte counters, and
   timeline attribution projection.
+- Candidate AC has regression coverage for camera-grounded history compaction,
+  nested model-input compaction policy propagation, profile/default parsing,
+  aggregate camera-grounded byte/count metrics, and the existing live-refresh
+  no-provider matrix dry-run/offline-preflight gate.
 
 Verification:
 
@@ -436,13 +513,18 @@ Parked work:
     server-managed continuation, and session-state A/B proof remains gated on
     credentials/backend availability, network policy, and recorded run caps.
     The first `mify` `world-public-labels` baseline versus `mimo_compact_v1`
-    row is diagnostic only, not a speed win.
+    row is diagnostic only, not a speed win. The O+AC fixed4 row shows the
+    narrower camera-grounded compaction path can preserve completion and reduce
+    paired wall/model latency.
   - Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
     now been refreshed with the completed `mify` world-public pair, the
-    Candidate O promptfix2 mechanism row, and the expected-rejected F, I/N, and
-    C rows. The current wall-clock priority is O paired/tightening evidence,
-    then behavior-preserving compaction/session redesign, then scoped B
-    baseline coverage.
+    Candidate O promptfix2 mechanism row, the O+AC fixed4 and repeat paired rows, and the
+    expected-rejected F, I/N, C, and O continuation-tightening rows. The current
+    wall-clock priority is broader B coverage only where it adds new
+    evidence-lane/provider information, then holdout-reviewed calibration governance,
+    with raw-FPV retry only after provider/image-transport availability
+    changes. O+AC calibrated-normalized diagnostic artifacts now exist, but
+    they are not broad or publishable speed claims.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
@@ -453,7 +535,9 @@ Parked work:
     publishable speed claims still require calibrated/repeated evidence. Trace
     review showed the remaining standalone declarations happened after SDK
     continuation; private compact-continuation guidance now preserves the
-    composite cadence for the next paired O rerun.
+    composite cadence. The latest O continuation-tightening row removed
+    standalone declarations entirely but failed before completion on provider
+    context budget, so do not rerun O unchanged.
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
     visual-candidate failure rail; the first live gate is blocked by image
     transport/provider availability, and cleanup-pass plus live speed claims
@@ -464,14 +548,21 @@ Parked work:
     thumbnail/crop policy stays parked until live evidence says retained
     full-frame policy is insufficient.
   - Full provider/model x evidence-lane matrix before broad speed claims. The
-    GPT `codex-env` baseline needs retry only after the transient 502 gate
-    clears.
+    scoped `world-public-labels` B pass has one completed MiMo Chat row and
+    two provider blockers; retry GPT `codex-env` only after the transient 502
+    gate clears, and retry `kimi-openai-chat` only after the provider route is
+    allowed for this use.
   - Candidate C per-model-call racing is implemented and live-tested, but the
     current two-arm policy is rejected as faster-but-worse; do not rerun it
     unchanged.
+  - Candidate AC camera-grounded history compaction is implemented as
+    SDK-private/off-by-default prep and now has accepted O+AC fixed4 and repeat
+    paired diagnostic rows with `done`, `run_result.json`, same-or-better cleanup
+    quality, and lower paired-comparable wall/model latency.
   - Agent-visible state delta/compaction and selective visual artifact capture
     remain possible later speed levers only after behavior-preserving changes;
-    the current I/N and F policies are rejected as wall-clock wins.
+    the current I/N, F, C, and O-tightening policies are rejected as wall-clock
+    wins in their current forms.
   - Additional SDK-native reduce-entropy candidates captured after the first
     batch: explicit `ModelSettings`/`RunConfig` performance profiles,
     Responses/session continuation, `call_model_input_filter` compaction,

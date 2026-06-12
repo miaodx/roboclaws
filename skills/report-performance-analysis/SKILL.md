@@ -52,6 +52,21 @@ Compare two runs:
   --output output/report-performance-analysis/comparison.json
 ```
 
+Compare with explicit normalized timing:
+
+```bash
+.venv/bin/python skills/report-performance-analysis/scripts/calibrate_model_latency.py \
+  --output output/report-performance-analysis/calibration.json \
+  output/baseline/seed-7/model_call_metrics.jsonl \
+  output/candidate/seed-7/model_call_metrics.jsonl
+
+.venv/bin/python skills/report-performance-analysis/scripts/compare_live_report_metrics.py \
+  --baseline-run-dir output/baseline/seed-7 \
+  --candidate-run-dir output/candidate/seed-7 \
+  --calibration output/report-performance-analysis/calibration.json \
+  --output output/report-performance-analysis/normalized-comparison.json
+```
+
 Compare a manifest:
 
 ```bash

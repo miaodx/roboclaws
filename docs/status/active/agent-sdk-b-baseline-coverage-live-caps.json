@@ -1,0 +1,187 @@
+{
+  "schema": "agent_sdk_b_baseline_coverage_live_caps_v1",
+  "created_at": "2026-06-12T19:56:21+08:00",
+  "candidate_ids": [
+    "B",
+    "Q",
+    "Y",
+    "Z"
+  ],
+  "purpose": "Scoped B baseline coverage row for the OpenAI Agents SDK live matrix after O+AC produced the current best paired wall-clock evidence.",
+  "planned_live_rows": 3,
+  "max_wall_clock_s_per_row": 2700,
+  "concurrency": 1,
+  "racing_multiplier": 1.0,
+  "selected_rows": [
+    {
+      "provider_profile": "mimo-openai-chat",
+      "wire_api": "chat-completions",
+      "model": "mimo-v2.5",
+      "status": "completed"
+    },
+    {
+      "provider_profile": "kimi-openai-chat",
+      "wire_api": "chat-completions",
+      "model": "kimi-k2.6",
+      "status": "blocked"
+    },
+    {
+      "provider_profile": "codex-env",
+      "wire_api": "responses",
+      "model": "gpt-5.5",
+      "status": "blocked"
+    }
+  ],
+  "provider_profile": "mimo-openai-chat",
+  "wire_api": "chat-completions",
+  "model": "mimo-v2.5",
+  "surface": "household-world",
+  "intent": "cleanup",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "implementation_backend": "molmospaces_subprocess",
+  "evidence_lane": "world-public-labels",
+  "seed": 7,
+  "scenario_setup": "relocate-cleanup-related-objects",
+  "relocation_count": 5,
+  "agent_sdk_perf_profile": "baseline",
+  "context_limits": {
+    "soft_tokens": 64000,
+    "hard_tokens": 96000,
+    "max_continuations": 1
+  },
+  "candidate_output_dir": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public",
+  "next_candidate_output_dir": "output/agent-sdk-perf-followups/b-baseline-kimi-openai-chat-world-public",
+  "codex_candidate_output_dir": "output/agent-sdk-perf-followups/b-baseline-codex-env-world-public",
+  "credential_gate": {
+    "MIMO_TP_KEY": "present",
+    "KIMI_API_KEY": "present",
+    "CODEX_API_KEY": "present",
+    "CODEX_BASE_URL": "present",
+    "XM_LLM_API_KEY": "present",
+    "MM_API_KEY": "present"
+  },
+  "network_gate": {
+    "network": "work",
+    "openclaw_blocked": true,
+    "system_claude_blocked": true,
+    "mimo_openai_chat_route_allowed": true,
+    "kimi_openai_chat_route_allowed": true,
+    "codex_env_route_allowed": true
+  },
+  "backend_gate": {
+    "visual_backend_slots": 1,
+    "held_slots": 0,
+    "available": true
+  },
+  "preflight_gate": {
+    "live_refresh_dry_run": "passed",
+    "live_refresh_offline_preflight": "passed",
+    "live_refresh_decision_packet": "output/agent-sdk-perf-followups/live-refresh-decision.json"
+  },
+  "stop_conditions": [
+    "network_policy_failure",
+    "missing_credentials",
+    "backend_slot_unavailable",
+    "privacy_or_schema_failure",
+    "quality_regression",
+    "wall_clock_timeout",
+    "provider_transient_failure",
+    "unsupported_chat_tool_transport",
+    "done_or_run_result_missing"
+  ],
+  "quality_policy": "same_or_better_for_future_pairing",
+  "claim_scope": "baseline coverage row only; Chat-compatible rows prove compatibility unless their own metrics later support a speed claim",
+  "acceptance_target": {
+    "live_row_reaches_task_work": true,
+    "wire_api_recorded_as_chat_completions": true,
+    "provider_profile_recorded_as_mimo_openai_chat": true,
+    "report_and_live_timing_written_or_failure_classified": true,
+    "privacy_schema_gate_can_be_refreshed": true
+  },
+  "outcome": {
+    "status": "completed_for_planned_rows_with_provider_blockers",
+    "completed_rows": [
+      {
+        "status": "accepted",
+        "provider_profile": "mimo-openai-chat",
+        "wire_api": "chat-completions",
+        "model": "mimo-v2.5",
+        "run_dir": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1959/seed-7",
+        "report": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1959/seed-7/report.html",
+        "run_result": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1959/seed-7/run_result.json",
+        "metrics": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public-metrics.json",
+        "quality": {
+          "completion_status": "partial_success",
+          "mess_restoration_rate": 0.6,
+          "restored_count": 3,
+          "total_targets": 5,
+          "semantic_accepted_count": 5,
+          "sweep_coverage_rate": 1.0,
+          "disturbance_count": 0,
+          "failed_or_noop_tool_count": 0
+        },
+        "timing": {
+          "observed_wall_s": 390.264,
+          "mcp_between_tool_gap_s": 268.713,
+          "robot_view_capture_s": 93.454,
+          "mcp_tool_call_count": 73,
+          "model_racing_observability_elapsed_s_total": 274.621,
+          "model_racing_observability_total_uncached_input_tokens": 115791
+        },
+        "claim_scope": "Chat-compatible baseline coverage only; no speed claim because the row is self-baselined in the refresh packet."
+      }
+    ],
+    "blocked_rows": [
+      {
+        "status": "blocked",
+        "provider_profile": "kimi-openai-chat",
+        "wire_api": "chat-completions",
+        "model": "kimi-k2.6",
+        "run_dir": "output/agent-sdk-perf-followups/b-baseline-kimi-openai-chat-world-public/0612_2009/seed-7",
+        "metrics": "output/agent-sdk-perf-followups/b-baseline-kimi-openai-chat-world-public-metrics.json",
+        "failure_class": "agent_cli_failure",
+        "provider_status": "403",
+        "provider_reason": "access_terminated_error",
+        "task_tool_call_count": 0,
+        "mcp_control_plane": "list_tools_only",
+        "retryable": false,
+        "claim_scope": "Chat-compatible provider coverage blocker; no cleanup-quality or speed claim."
+      },
+      {
+        "status": "blocked",
+        "provider_profile": "codex-env",
+        "wire_api": "responses",
+        "model": "gpt-5.5",
+        "run_dir": "output/agent-sdk-perf-followups/b-baseline-codex-env-world-public/0612_2013/seed-7",
+        "metrics": "output/agent-sdk-perf-followups/b-baseline-codex-env-world-public-metrics.json",
+        "failure_class": "provider_transient_failure",
+        "provider_status": "502",
+        "provider_reason": "upstream_unavailable",
+        "task_tool_call_count": 0,
+        "mcp_control_plane": "list_tools_only",
+        "retryable": true,
+        "timing": {
+          "observed_wall_s": 55.902,
+          "observed_model_api_s": 34.815,
+          "mcp_between_tool_gap_s": 0.0,
+          "robot_view_capture_s": 1.932,
+          "model_call_count": 2
+        },
+        "claim_scope": "Responses GPT baseline coverage blocker; no cleanup-quality or speed claim."
+      }
+    ],
+    "pre_task_invocation_errors": [
+      {
+        "status": "discarded_before_provider_or_backend_work",
+        "reason": "unsupported prompt_mode=baseline",
+        "run_root": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1957"
+      },
+      {
+        "status": "discarded_before_provider_or_backend_work",
+        "reason": "unsupported continuation_mode=compact",
+        "run_root": "output/agent-sdk-perf-followups/b-baseline-mimo-openai-chat-world-public/0612_1958"
+      }
+    ]
+  }
+}
