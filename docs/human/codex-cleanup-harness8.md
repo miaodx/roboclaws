@@ -28,7 +28,7 @@ The setup row builds the prior once with:
 
 ```bash
 just run::surface surface=household-world driver=direct intent=map-build evidence_lane=camera-grounded-labels \
-  seed=7 generated_mess_count=10 camera_labeler=grounding-dino
+  seed=7 environment_setup=relocate-cleanup-related-objects relocation_count=10 camera_labeler=grounding-dino
 ```
 
 ## Preflight

@@ -39,6 +39,7 @@ from roboclaws.household.task_intent import (  # noqa: E402
     TASK_INTENT_MODE_DEFAULT,
     normalize_task_intent_mode,
 )
+from roboclaws.household.types import CleanupScenario, PrivateScoringManifest  # noqa: E402
 from roboclaws.household.visual_grounding import (  # noqa: E402
     SIM_VISUAL_GROUNDING_PIPELINE_ID,
 )
@@ -125,8 +126,8 @@ def run_smoke(
     goal_contract_path: str | Path | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    if generated_mess_count < 1:
-        raise ValueError("generated_mess_count must be >= 1")
+    if generated_mess_count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
         required=require_map_bundle,
@@ -152,6 +153,8 @@ def run_smoke(
         base_contract = CleanupBackendSession(scenario, backend=backend_instance)
     else:
         scenario = build_cleanup_scenario(seed=seed)
+        if generated_mess_count == 0:
+            scenario = _scenario_without_private_targets(scenario)
         base_contract = CleanupBackendSession(scenario)
 
     server = make_molmo_realworld_cleanup_mcp(
@@ -395,6 +398,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
+
+
+def _scenario_without_private_targets(scenario: CleanupScenario) -> CleanupScenario:
+    scenario_id = f"{scenario.scenario_id}-baseline"
+    return CleanupScenario(
+        scenario_id=scenario_id,
+        task=scenario.task,
+        seed=scenario.seed,
+        objects=scenario.objects,
+        receptacles=scenario.receptacles,
+        private_manifest=PrivateScoringManifest(
+            scenario_id=scenario_id,
+            targets=(),
+            success_threshold=0,
+        ),
+    )
 
 
 if __name__ == "__main__":

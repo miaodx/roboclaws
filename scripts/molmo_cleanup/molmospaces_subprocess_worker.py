@@ -552,8 +552,8 @@ def init_state(
 
     receptacles = _collect_receptacles(model, data, metadata)
     objects = _collect_dynamic_objects(model, data, metadata)
-    if generated_mess_count < 1:
-        raise ValueError("generated_mess_count must be >= 1")
+    if generated_mess_count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
     generated_mess_manifest = _load_generated_mess_manifest(generated_mess_manifest_path)
     if generated_mess_manifest:
         targets = targets_from_generated_mess_manifest(
@@ -562,7 +562,7 @@ def init_state(
             generated_mess_manifest,
             target_count=generated_mess_count,
         )
-    else:
+    elif generated_mess_count > 0:
         targets = select_generated_mess_targets(
             objects,
             receptacles,
@@ -570,6 +570,8 @@ def init_state(
             seed=seed,
             object_ids=generated_mess_object_ids or None,
         )
+    else:
+        targets = []
     if len(targets) < generated_mess_count:
         raise RuntimeError(
             f"expected at least {generated_mess_count} cleanup targets, found {len(targets)}"
@@ -614,7 +616,7 @@ def init_state(
     _seed_misplaced_objects(model, data, state, targets)
     _refresh_object_positions(model, data, state)
     state["room_outlines"] = _collect_room_outlines(model, data, state)
-    if include_robot:
+    if include_robot and targets:
         initial_receptacle = state["receptacles"][_target_start_receptacle_id(state, targets[0])]
         robot_pose = _robot_pose_near_receptacle(state, initial_receptacle)
         _set_robot_pose(model, data, robot_pose)
@@ -630,7 +632,9 @@ def init_state(
             "verify": "public_sim_state_report_focus_camera",
         }
     state["qpos"] = [float(value) for value in data.qpos]
-    state["current_receptacle_id"] = _target_start_receptacle_id(state, targets[0])
+    state["current_receptacle_id"] = (
+        _target_start_receptacle_id(state, targets[0]) if targets else _first_receptacle_id(state)
+    )
     state["private_manifest"] = {
         "scenario_id": f"molmospaces-procthor-val-{scene_index}-{seed}",
         "success_threshold": generated_mess_success_threshold(len(targets)),
@@ -1741,7 +1745,11 @@ def _score(final_locations: dict[str, str], manifest: dict[str, Any]) -> dict[st
                 "restored": is_restored,
             }
         )
-    status = "success" if len(restored) >= manifest["success_threshold"] else "failed"
+    status = (
+        "success"
+        if not manifest["targets"] or len(restored) >= manifest["success_threshold"]
+        else "failed"
+    )
     if status == "failed" and restored:
         status = "partial_success"
     return {
@@ -1767,6 +1775,13 @@ def _first_wrong_receptacle(state: dict[str, Any], target: dict[str, Any]) -> st
         if receptacle_id != target["target_receptacle_id"]:
             return receptacle_id
     return target["target_receptacle_id"]
+
+
+def _first_receptacle_id(state: dict[str, Any]) -> str | None:
+    first = next(iter(state["receptacles"].values()), None)
+    if first is None:
+        return None
+    return str(first["receptacle_id"])
 
 
 def _set_free_body_position(

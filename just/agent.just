@@ -846,6 +846,7 @@ harness target *args:
       molmo-isaac-runtime-preflight|molmo-isaac-usd-references|\
       molmo-isaac-runtime-smoke|molmo-isaac-cleanup-smoke|\
       molmo-isaac-prepared-cleanup-smoke|\
+      b1-map12-navigation-smoke|\
       list-tasks|history)
         trace_or_exec harness::"$target" "${rest[@]}"
         ;;

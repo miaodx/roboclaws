@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from roboclaws.launch.environment_setup_metadata import (
+    ENVIRONMENT_SETUP_METADATA_ENV,
+    environment_setup_metadata_json,
+)
+
 
 def build_agent_run_argv(
     *,
@@ -28,4 +33,19 @@ def export_env_from_overrides(overrides: tuple[str, ...]) -> dict[str, str]:
             env["ROBOCLAWS_TASK_SURFACE"] = override.removeprefix("task_surface=")
         elif override.startswith("task_intent="):
             env["ROBOCLAWS_TASK_INTENT"] = override.removeprefix("task_intent=")
+    setup = _override_value(overrides, "environment_setup")
+    if setup:
+        env[ENVIRONMENT_SETUP_METADATA_ENV] = environment_setup_metadata_json(
+            setup=setup,
+            seed=_override_value(overrides, "seed"),
+            relocation_count=_override_value(overrides, "relocation_count"),
+        )
     return env
+
+
+def _override_value(overrides: tuple[str, ...], key: str) -> str | None:
+    prefix = f"{key}="
+    for override in overrides:
+        if override.startswith(prefix):
+            return override.removeprefix(prefix)
+    return None

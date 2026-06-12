@@ -8,9 +8,21 @@ details belong in `.planning/`, `docs/adr/`, and `docs/retrospectives/`.
 
 ## Core Language
 
-**Mess Generator**:
-A pre-run process that creates the disorder the robot will later try to clean up.
-_Avoid_: Misplacer, placer setup
+**Environment Setup**:
+A private pre-run world initialization choice that prepares the room before a
+task starts. It can be `baseline` or a relocation setup, and it is independent
+of task intent and evaluation policy.
+_Avoid_: task intent, cleanup scenario, Agent View context
+
+**Relocation Policy**:
+An Environment Setup mode that moves eligible loose or cleanup-related objects
+before the run starts. The Cleanup Agent is not told the policy, object IDs, or
+before/after locations.
+_Avoid_: public mess generator, cleanup worklist, private scoring truth
+
+**Relocation Count**:
+The operator-facing number of objects that a relocation setup may move.
+_Avoid_: generated mess count, public target count
 
 **Cleanup Agent**:
 The robot or policy that perceives the messy scene and decides how to restore it.
@@ -26,8 +38,8 @@ Hidden object-to-acceptable-destination rules used only by the Scorer.
 _Avoid_: Public target map, planner hints
 
 **Generated Mess Set**:
-The hidden set of movable objects displaced by the Mess Generator for one
-cleanup run.
+The hidden private/scorer-side set of movable objects displaced by relocation
+for one cleanup evaluation run.
 _Avoid_: Five curated targets
 
 **Tidy-Plausible Outcome**:
@@ -147,9 +159,9 @@ _Avoid_: assuming object assets imply usable cached grasps
 
 ## Relationships
 
-- A **Mess Generator** creates a messy scene before the **Cleanup Agent** starts.
+- **Environment Setup** prepares the room before the **Cleanup Agent** starts.
 - A **Cleanup Agent** must not receive the **Private Scoring Truth**, hidden
-  misplaced-object list, or target count.
+  relocated-object list, or target count.
 - A **Scorer** may use the **Private Scoring Truth** only after the run ends.
 - A **Cleanup Agent** may receive public map, fixture, and robot-local
   perception data.
