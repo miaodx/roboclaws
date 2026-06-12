@@ -547,7 +547,12 @@ def _compact_model_input_items(
     image_plan = _raw_fpv_image_memory_plan(items, image_policy)
     image_metrics = _new_raw_fpv_image_memory_metrics(image_policy)
     camera_policy = _camera_grounded_history_policy(camera_grounded_history)
-    camera_plan = _camera_grounded_history_plan(items, camera_policy)
+    tool_names_by_call_id = _tool_names_by_call_id(items)
+    camera_plan = _camera_grounded_history_plan(
+        items,
+        camera_policy,
+        tool_names_by_call_id=tool_names_by_call_id,
+    )
     camera_metrics = _new_camera_grounded_history_metrics(camera_policy)
     filtered: list[Any] = []
     items_seen: dict[str, int] = {}
@@ -846,13 +851,22 @@ def _new_camera_grounded_history_metrics(policy: dict[str, Any]) -> dict[str, An
 def _camera_grounded_history_plan(
     items: list[Any],
     policy: dict[str, Any],
+    *,
+    tool_names_by_call_id: dict[str, str] | None = None,
 ) -> dict[int, dict[str, Any]]:
     if not policy.get("enabled"):
         return {}
+    tool_names_by_call_id = tool_names_by_call_id or {}
     candidates = [
         (index, info)
         for index, item in enumerate(items)
-        if (info := _camera_grounded_history_info(item)) is not None
+        if (
+            info := _camera_grounded_history_info(
+                item,
+                tool_names_by_call_id=tool_names_by_call_id,
+            )
+        )
+        is not None
     ]
     retain_limit = int(policy.get("retained_recent_outputs") or 0)
     retained = {index for index, _info in candidates[-retain_limit:]} if retain_limit > 0 else set()
@@ -865,7 +879,31 @@ def _camera_grounded_history_plan(
     }
 
 
-def _camera_grounded_history_info(item: Any) -> dict[str, Any] | None:
+def _tool_names_by_call_id(items: list[Any]) -> dict[str, str]:
+    names: dict[str, str] = {}
+    for item in items:
+        payload = _to_jsonable(item)
+        if not isinstance(payload, dict):
+            continue
+        item_type = str(payload.get("type") or "")
+        if item_type not in {"function_call", "mcp_call"}:
+            continue
+        call_id = str(payload.get("call_id") or "")
+        if not call_id:
+            continue
+        tool = _normalize_mcp_tool_name(
+            payload.get("name") or payload.get("tool") or payload.get("tool_name") or ""
+        )
+        if tool:
+            names[call_id] = tool
+    return names
+
+
+def _camera_grounded_history_info(
+    item: Any,
+    *,
+    tool_names_by_call_id: dict[str, str] | None = None,
+) -> dict[str, Any] | None:
     payload = _to_jsonable(item)
     if not isinstance(payload, dict):
         return None
@@ -877,10 +915,14 @@ def _camera_grounded_history_info(item: Any) -> dict[str, Any] | None:
         "mcp_approval_response",
     }:
         return None
-    tool = _normalize_mcp_tool_name(
-        payload.get("name") or payload.get("tool") or payload.get("tool_name") or ""
-    )
     call_id = str(payload.get("call_id") or "")
+    tool = _normalize_mcp_tool_name(
+        (tool_names_by_call_id or {}).get(call_id)
+        or payload.get("name")
+        or payload.get("tool")
+        or payload.get("tool_name")
+        or ""
+    )
     if not tool and "observe_camera_grounded_candidates" in call_id:
         tool = "observe_camera_grounded_candidates"
     if not tool and "declare_visual_candidates" in call_id:
