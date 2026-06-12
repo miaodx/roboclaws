@@ -62,18 +62,23 @@ evidence, not a wall-clock speed win. The first raw-FPV P/AA live gate attempt
 is now blocked: `openai-agents-sdk+mify` is rejected by the image-transport
 guard, and two `openai-agents-sdk+codex-env` raw-FPV attempts failed with
 classified `provider_transient_failure` / `upstream_unavailable` before task
-work. A behavior-preserving compaction/session redesign, O paired proof after
-that redesign, a later raw-FPV retry after provider or image-transport
-availability changes, and broader B baseline coverage remain valid next arms.
+work. The O+AC fixed4 row is now the strongest paired diagnostic wall-clock
+result; repeated/calibrated O+AC evidence, a later raw-FPV retry after provider
+or image-transport availability changes, and broader B baseline coverage remain
+valid next arms.
 Token deltas are telemetry only; cost is not a deciding objective for this
 plan. Candidate AC now provides the first deterministic slice of the
 behavior-preserving redesign: an opt-in private SDK
 `camera_grounded_history_v1` model-input filter that keeps recent actionable
 camera-grounded outputs full while summarizing older camera-grounded
 observation/declaration history before SDK model calls. It is deterministic
-prep only; the next speed decision needs an O+AC provider-backed paired row
-that preserves `done`, `run_result.json`, and same-or-better report-quality
-evidence. The full live provider/model x evidence-lane performance matrix is still not done. The follow-up execution plan is
+prep, and the O+AC fixed4 provider-backed paired row now completed at
+`output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/`.
+The row preserved `done`, `run_result.json`, and same-or-better report-quality
+evidence while reducing observed wall/model API time by `-659.477s` /
+`-653.563s`. Treat this as an accepted paired diagnostic row, not a normalized
+or publishable speed claim. The full live provider/model x evidence-lane
+performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -258,6 +263,21 @@ Result:
   failed/noop calls to `31`, increased observed wall time by `+62.627s`, and
   increased observed model API time by `+102.956s`. It proves compaction
   mechanics, not a wall-clock win.
+- The Candidate O+AC fixed4 live row completed under
+  `docs/status/active/agent-sdk-o-ac-camera-grounded-live-caps.json`: candidate
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/`,
+  comparison
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-fixed4-comparison.json`.
+  The row is accepted as paired diagnostic evidence: recorded quality stayed
+  at `completion_status=success`, `restored_count=4/5`,
+  `semantic_accepted_count=5/5`, `disturbance_count=0`, and
+  `failed_or_noop_tool_count=0`, while observed wall time improved by
+  `-659.477s`, observed model API time by `-653.563s`, and
+  model/SDK between-tool gap by `-638.809s`. The mechanism exercised
+  `observe_camera_grounded_candidates` 14 times and compacted 270 of 457
+  camera-grounded history items, reducing camera-grounded history bytes by
+  `5255583`. Normalized/publishable claims still need repeated or calibrated
+  evidence.
 - Candidate D deterministic racing-observability prep is implemented. The
   private SDK model request boundary now emits sanitized single-arm
   `model_racing_arm_start` / finish / failure events with stable call/arm ids,
@@ -452,16 +472,16 @@ Parked work:
     server-managed continuation, and session-state A/B proof remains gated on
     credentials/backend availability, network policy, and recorded run caps.
     The first `mify` `world-public-labels` baseline versus `mimo_compact_v1`
-    row is diagnostic only, not a speed win. The latest O continuation-tightening
-    row also points to context/session growth as the next real bottleneck.
+    row is diagnostic only, not a speed win. The O+AC fixed4 row shows the
+    narrower camera-grounded compaction path can preserve completion and reduce
+    paired wall/model latency.
   - Q/Y deterministic recommendation enrichment is accepted for Group 0; it has
     now been refreshed with the completed `mify` world-public pair, the
-    Candidate O promptfix2 mechanism row, and the expected-rejected F, I/N, C,
-    and O continuation-tightening rows. The current wall-clock priority is
-    behavior-preserving compaction/session redesign, then O paired proof after
-    that redesign, then scoped B baseline coverage. Candidate AC is the first
-    deterministic redesign slice and should be paired with the next O proof row
-    rather than rerunning the rejected I/N or O-tightening policies unchanged.
+    Candidate O promptfix2 mechanism row, the O+AC fixed4 paired row, and the
+    expected-rejected F, I/N, C, and O continuation-tightening rows. The current
+    wall-clock priority is repeated/calibrated O+AC proof, then scoped B
+    baseline coverage, with raw-FPV retry only after provider/image-transport
+    availability changes.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
@@ -491,10 +511,9 @@ Parked work:
     current two-arm policy is rejected as faster-but-worse; do not rerun it
     unchanged.
   - Candidate AC camera-grounded history compaction is implemented as
-    deterministic prep. It is SDK-private/off by default and has no live speed
-    claim until an O+AC row completes with `done`, `run_result.json`,
-    same-or-better cleanup quality, and lower paired-comparable wall/model
-    latency.
+    SDK-private/off-by-default prep and now has an accepted O+AC fixed4 paired
+    diagnostic row with `done`, `run_result.json`, same-or-better cleanup
+    quality, and lower paired-comparable wall/model latency.
   - Agent-visible state delta/compaction and selective visual artifact capture
     remain possible later speed levers only after behavior-preserving changes;
     the current I/N, F, C, and O-tightening policies are rejected as wall-clock

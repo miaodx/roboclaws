@@ -93,7 +93,40 @@
     "lower_paired_comparable_wall_or_model_latency_vs_baseline": true
   },
   "outcome": {
-    "status": "pending",
-    "next": "Run one O+AC mify Responses camera-grounded-labels row through the public surface and compare against the existing 0612_1012 baseline."
+    "status": "accepted",
+    "completed_at": "2026-06-12T18:41:00+08:00",
+    "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7",
+    "comparison": "output/agent-sdk-perf-followups/mify-camera-grounded-composite-ac-fixed4-comparison.json",
+    "report": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/report.html",
+    "run_result": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7/run_result.json",
+    "decision": "candidate faster with same-or-better recorded quality",
+    "quality": {
+      "completion_status": "success",
+      "restored_count": 4,
+      "total_targets": 5,
+      "semantic_accepted_count": 5,
+      "sweep_coverage_rate": 1.0,
+      "disturbance_count": 0,
+      "failed_or_noop_tool_count": 0
+    },
+    "timing_delta_s": {
+      "observed_wall": -659.477,
+      "observed_model_api": -653.563,
+      "mcp_between_tool_gap": -638.809
+    },
+    "call_count_delta": {
+      "model_call_count": -19,
+      "mcp_tool_call_count": 9
+    },
+    "mechanism": {
+      "observe_camera_grounded_candidates_count": 14,
+      "standalone_declare_visual_candidates_regressed": false,
+      "camera_grounded_history_compacted_count": 270,
+      "camera_grounded_history_item_count": 457,
+      "camera_grounded_history_bytes_reduced": 5255583,
+      "input_byte_reduction_ratio": 0.209928
+    },
+    "claim_scope": "accepted paired diagnostic row; normalized or publishable claims still require repeated/calibrated evidence",
+    "next": "Refresh the zero-provider live matrix/decision packet with this completed O+AC row, then prioritize repeated/calibrated proof or broader B baseline coverage before any publishable speed claim."
   }
 }
