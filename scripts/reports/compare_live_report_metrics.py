@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from roboclaws.reports.live_performance import compare_run_dirs
+from roboclaws.reports.live_performance import compare_run_dirs, read_model_latency_calibration
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -21,6 +21,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--candidate-run-dir", type=Path)
     parser.add_argument("--manifest", type=Path)
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--calibration",
+        type=Path,
+        help="Optional roboclaws_model_latency_calibration_v1 packet for normalized timing.",
+    )
     parser.add_argument("--diagnostic", action="store_true")
     parser.add_argument("--quality-waiver", default="")
     return parser.parse_args(argv)
@@ -28,14 +33,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    calibration = read_model_latency_calibration(args.calibration) if args.calibration else None
     if args.manifest:
-        payload = _compare_manifest(args.manifest, diagnostic=args.diagnostic)
+        payload = _compare_manifest(
+            args.manifest,
+            diagnostic=args.diagnostic,
+            calibration=calibration,
+        )
     elif args.baseline_run_dir and args.candidate_run_dir:
         payload = compare_run_dirs(
             baseline_dir=args.baseline_run_dir,
             candidate_dir=args.candidate_run_dir,
             quality_waiver=args.quality_waiver,
             diagnostic=args.diagnostic,
+            calibration=calibration,
         )
     else:
         print(
@@ -57,7 +68,12 @@ def main(argv: list[str] | None = None) -> int:
     return 1 if _has_rejections(payload) else 0
 
 
-def _compare_manifest(path: Path, *, diagnostic: bool) -> dict[str, Any]:
+def _compare_manifest(
+    path: Path,
+    *,
+    diagnostic: bool,
+    calibration: dict[str, Any] | None,
+) -> dict[str, Any]:
     manifest = json.loads(path.read_text(encoding="utf-8"))
     entries = manifest.get("comparisons") if isinstance(manifest, dict) else None
     if not isinstance(entries, list):
@@ -72,6 +88,7 @@ def _compare_manifest(path: Path, *, diagnostic: bool) -> dict[str, Any]:
                 candidate_dir=Path(str(entry.get("candidate_run_dir") or "")),
                 key=str(entry.get("key") or ""),
                 quality_waiver=str(entry.get("quality_waiver") or ""),
+                calibration=calibration,
                 diagnostic=diagnostic
                 or bool(entry.get("diagnostic"))
                 or str(entry.get("baseline_role") or "") == "diagnostic",

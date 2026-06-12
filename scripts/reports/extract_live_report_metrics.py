@@ -7,7 +7,10 @@ import argparse
 import json
 from pathlib import Path
 
-from roboclaws.reports.live_performance import extract_report_performance_metrics
+from roboclaws.reports.live_performance import (
+    extract_report_performance_metrics,
+    read_model_latency_calibration,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -18,6 +21,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("run_dir", type=Path, nargs="+")
     parser.add_argument("--output", type=Path)
     parser.add_argument(
+        "--calibration",
+        type=Path,
+        help="Optional roboclaws_model_latency_calibration_v1 packet for normalized timing.",
+    )
+    parser.add_argument(
         "--write-model-call-metrics",
         action="store_true",
         help="Also write model_call_metrics.jsonl into each run directory.",
@@ -27,10 +35,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    calibration = read_model_latency_calibration(args.calibration) if args.calibration else None
     packets = [
         extract_report_performance_metrics(
             run_dir,
             write_model_call_metrics=args.write_model_call_metrics,
+            calibration=calibration,
         )
         for run_dir in args.run_dir
     ]
