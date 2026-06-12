@@ -2,7 +2,7 @@
 
 **Status:** Completed in Phase 79 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0070-render-placement-scene-diagnostics.md`
+**ADR:** `docs/adr/archive/execution-log/0070-render-placement-scene-diagnostics.md`
 
 ## Goal
 

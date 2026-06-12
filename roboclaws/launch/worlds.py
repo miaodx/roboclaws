@@ -19,20 +19,47 @@ class WorldSpec:
     resource_kind: str
     availability: str = "enabled"
     default_overrides: tuple[str, ...] = ()
+    preview_assets: tuple[tuple[str, str], ...] = ()
 
 
-WORLD_SPECS: dict[str, WorldSpec] = {
-    "molmospaces/val_0": WorldSpec(
-        id="molmospaces/val_0",
-        label="MolmoSpaces val_0",
+MOLMOSPACES_CONSOLE_SCENE_INDICES: tuple[int, ...] = (0, 1, 2, 3, 4, 5, 7, 9)
+MOLMOSPACES_CONSOLE_WORLD_IDS: tuple[str, ...] = tuple(
+    f"molmospaces/val_{index}" for index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+)
+
+
+def _molmospaces_world_spec(scene_index: int) -> WorldSpec:
+    world_id = f"molmospaces/val_{scene_index}"
+    scene_name = f"val_{scene_index}"
+    tags = ("household", "molmospaces", "curated-default" if scene_index == 0 else "curated-10")
+    default_overrides = (
+        "scene_source=procthor-10k-val",
+        f"scene_index={scene_index}",
+    )
+    if scene_index != 0:
+        default_overrides = (*default_overrides, "map_bundle=none")
+    return WorldSpec(
+        id=world_id,
+        label=f"MolmoSpaces {scene_name}",
         surface_id="household-world",
         available_backends=("mujoco", "isaaclab"),
         scene_source="procthor-10k-val",
-        tags=("household", "molmospaces", "curated-default"),
+        tags=tags,
         default_backend="mujoco",
         resource_kind="simulator",
-        default_overrides=("scene_source=procthor-10k-val", "scene_index=0"),
-    ),
+        default_overrides=default_overrides,
+        preview_assets=(
+            ("fpv", f"/previews/molmospaces-{scene_name}-fpv.png"),
+            ("map", f"/previews/molmospaces-{scene_name}-map.png"),
+        ),
+    )
+
+
+WORLD_SPECS: dict[str, WorldSpec] = {
+    **{
+        f"molmospaces/val_{index}": _molmospaces_world_spec(index)
+        for index in MOLMOSPACES_CONSOLE_SCENE_INDICES
+    },
     "agibot-g2/map-12": WorldSpec(
         id="agibot-g2/map-12",
         label="Agibot G2 Map 12",

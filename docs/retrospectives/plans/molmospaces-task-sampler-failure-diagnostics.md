@@ -2,7 +2,7 @@
 
 **Status:** Completed in Phase 77 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0068-capture-task-sampler-failure-diagnostics.md`
+**ADR:** `docs/adr/archive/execution-log/0068-capture-task-sampler-failure-diagnostics.md`
 
 ## Goal
 

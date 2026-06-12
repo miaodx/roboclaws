@@ -240,6 +240,9 @@ def test_operator_state_derives_public_fields_and_artifact_links(tmp_path: Path)
     assert state["checker_status"]["status"] == "passed"
     assert "private_manifest" not in state["public_run_result"]
     assert any(item["label"] == "Report" for item in state["artifact_paths"])
+    report_link = next(item for item in state["artifact_paths"] if item["label"] == "Report")
+    assert report_link["href"].startswith("/artifacts/")
+    assert "?v=" in report_link["href"]
 
 
 def test_redaction_removes_secret_values_and_headers(tmp_path: Path) -> None:
@@ -315,12 +318,44 @@ def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path:
         "camera-raw-fpv",
     ]
     routes = {route["id"]: route for route in payload["combinations"]}
+    worlds = {world["id"]: world for world in payload["worlds"]}
+    assert "molmospaces/val_9" in worlds
+    assert worlds["molmospaces/val_9"]["preview_assets"]["map"]["href"] == (
+        "/previews/molmospaces-val_9-map.png"
+    )
+    assert (
+        routes["molmospaces/val_9::mujoco::cleanup::codex-cli::world-oracle-labels"][
+            "preview_assets"
+        ]["fpv"]["href"]
+        == "/previews/molmospaces-val_9-fpv.png"
+    )
     assert routes["molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"][
         "enabled"
     ]
     assert not routes["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"][
         "enabled"
     ]
+
+
+def test_operator_console_serves_scene_preview_assets(tmp_path: Path) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        with urllib.request.urlopen(
+            f"http://{host}:{port}/previews/molmospaces-val_9-map.png"
+        ) as response:
+            assert response.headers["Content-Type"] == "image/png"
+            assert response.read(8) == b"\x89PNG\r\n\x1a\n"
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(f"http://{host}:{port}/previews/../app.js")
+        assert exc_info.value.code == 404
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
 
 
 def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(

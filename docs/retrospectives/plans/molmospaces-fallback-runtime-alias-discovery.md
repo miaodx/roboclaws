@@ -1,7 +1,7 @@
 # MolmoSpaces Fallback Runtime Alias Discovery
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0055-discover-fallback-runtime-aliases-from-keyerrors.md`
+**ADR:** `docs/adr/archive/execution-log/0055-discover-fallback-runtime-aliases-from-keyerrors.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/64-molmospaces-fallback-runtime-alias-discovery/`
 
 ## Problem

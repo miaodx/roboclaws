@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import pytest
 
+from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS
 from roboclaws.operator_console.launcher import ConsoleLaunchError, build_launch_argv
 from roboclaws.operator_console.routes import (
+    MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS,
+    MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS,
     get_route,
     get_selection,
     list_console_combinations,
@@ -16,8 +19,23 @@ from roboclaws.operator_console.routes import (
 def test_world_catalog_exposes_scene_first_console_choices() -> None:
     worlds = {world["id"]: world for world in list_worlds()}
 
-    assert "molmospaces/val_0" in worlds
+    assert tuple(world_id for world_id in worlds if world_id.startswith("molmospaces/")) == (
+        *MOLMOSPACES_CONSOLE_WORLD_IDS,
+    )
+    assert "molmospaces/val_6" not in worlds
+    assert "molmospaces/val_8" not in worlds
     assert worlds["molmospaces/val_0"]["available_backends"] == ["mujoco", "isaaclab"]
+    assert worlds["molmospaces/val_9"]["available_backends"] == ["mujoco", "isaaclab"]
+    assert worlds["molmospaces/val_9"]["preview_assets"] == {
+        "fpv": {
+            "path": "/previews/molmospaces-val_9-fpv.png",
+            "href": "/previews/molmospaces-val_9-fpv.png",
+        },
+        "map": {
+            "path": "/previews/molmospaces-val_9-map.png",
+            "href": "/previews/molmospaces-val_9-map.png",
+        },
+    }
     assert worlds["agibot-g2/map-12"]["available_backends"] == ["agibot-gdk"]
     assert worlds["b1-map12"]["default_backend"] == "isaaclab"
 
@@ -114,6 +132,70 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
         "agibot-g2/map-12::agibot-gdk::map-build::codex-cli::camera-grounded-labels"
     )
     assert "camera_labeler=grounding-dino" in agibot_grounded.launch_default_overrides
+
+
+def test_molmospaces_scene_choices_use_scene_specific_launch_defaults(tmp_path) -> None:
+    enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
+    for world_id in MOLMOSPACES_CONSOLE_WORLD_IDS:
+        assert f"{world_id}::mujoco::map-build::direct-runner::world-oracle-labels" in enabled_ids
+    for world_id in MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS:
+        assert f"{world_id}::mujoco::cleanup::codex-cli::world-oracle-labels" in enabled_ids
+
+    val0 = get_selection("molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels")
+    val9 = get_selection("molmospaces/val_9::mujoco::cleanup::codex-cli::world-oracle-labels")
+
+    assert "scene_index=0" in val0.launch_default_overrides
+    assert "map_bundle=none" not in val0.launch_default_overrides
+    assert "scene_index=9" in val9.launch_default_overrides
+    assert "map_bundle=none" in val9.launch_default_overrides
+    assert val9.to_payload()["preview_assets"]["fpv"]["href"] == (
+        "/previews/molmospaces-val_9-fpv.png"
+    )
+
+    argv = build_launch_argv(val9, root=tmp_path, run_id="run-val-9")
+    assert "world=molmospaces/val_9" in argv
+    assert "scene_source=procthor-10k-val" in argv
+    assert "scene_index=9" in argv
+    assert "map_bundle=none" in argv
+
+
+def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
+    all_ids = {route.id for route in list_console_combinations()}
+    enabled_ids = {route.id for route in list_console_combinations(include_disabled=False)}
+    disabled = {
+        route.id: route.disabled_reason
+        for route in list_console_combinations()
+        if not route.enabled
+    }
+
+    assert not any(route_id.startswith("molmospaces/val_6::") for route_id in all_ids)
+    assert not any(route_id.startswith("molmospaces/val_8::") for route_id in all_ids)
+
+    assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels" in disabled
+    assert "molmospaces/val_1::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
+
+    enabled_mujoco_cleanup_worlds = {
+        route.world_id
+        for route in list_console_combinations(include_disabled=False)
+        if (
+            route.backend_id == "mujoco"
+            and route.intent_id == "cleanup"
+            and route.agent_engine_id == "codex-cli"
+            and route.evidence_lane == "world-oracle-labels"
+        )
+    }
+    enabled_isaac_cleanup_worlds = {
+        route.world_id
+        for route in list_console_combinations(include_disabled=False)
+        if (
+            route.backend_id == "isaaclab"
+            and route.intent_id == "cleanup"
+            and route.agent_engine_id == "codex-cli"
+            and route.evidence_lane == "world-oracle-labels"
+        )
+    }
+    assert enabled_mujoco_cleanup_worlds == set(MOLMOSPACES_MUJOCO_DEFAULT_CLEANUP_WORLD_IDS)
+    assert enabled_isaac_cleanup_worlds == set(MOLMOSPACES_ISAAC_ONE_TARGET_CLEANUP_WORLD_IDS)
 
 
 def test_console_keeps_unsupported_lane_visible_but_disabled() -> None:

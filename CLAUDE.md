@@ -170,6 +170,12 @@ Local preflight steps (key loading, Docker hygiene, ROS env stripping for
 pytest) live in `AGENTS.md` §1. For the OpenClaw Gateway path specifically,
 see `docs/human/openclaw/local.md`.
 
+For local browser QA with gstack `browse` / Playwright, follow
+`AGENTS.md` §1.1.3: if Chromium fails with `No usable sandbox!` on Ubuntu
+24.04/AppArmor hosts, run browse commands with
+`GSTACK_CHROMIUM_NO_SANDBOX=1` instead of changing system AppArmor or sysctl
+settings.
+
 ## Design principles
 
 | Principle | Practice |

@@ -44,9 +44,7 @@ class ArtifactLink:
             "label": self.label,
             "kind": self.kind,
             "path": str(self.path),
-            "href": f"/artifacts/{self.path.relative_to(root)}"
-            if _is_relative_to(self.path, root)
-            else "",
+            "href": _artifact_href(root, self.path),
         }
 
 
@@ -546,10 +544,16 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
         path = max(matches, key=lambda item: item.stat().st_mtime).resolve()
         output[key] = {
             "path": str(path),
-            "href": f"/artifacts/{path.relative_to(root)}" if _is_relative_to(path, root) else "",
+            "href": _artifact_href(root, path),
             "mtime": str(path.stat().st_mtime),
         }
     return output
+
+
+def _artifact_href(root: Path, path: Path) -> str:
+    if not _is_relative_to(path, root):
+        return ""
+    return f"/artifacts/{path.relative_to(root)}?v={path.stat().st_mtime_ns}"
 
 
 def _checker_status(run_dir: Path, run_result: dict[str, Any], phase: str) -> dict[str, Any]:
@@ -691,6 +695,14 @@ def _run_result_success(run_result: dict[str, Any]) -> bool:
         return False
     if _run_result_has_failure(run_result):
         return False
+    if _is_open_ended_run_result(run_result):
+        for key in ("intent_status", "goal_status", "final_status", "status"):
+            if _is_success_string(run_result.get(key)):
+                return True
+        score = run_result.get("score")
+        if isinstance(score, dict) and _is_success_string(score.get("status")):
+            return True
+        return False
     for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
         if run_result.get(key) is True:
             return True
@@ -706,6 +718,14 @@ def _run_result_success(run_result: dict[str, Any]) -> bool:
 
 
 def _run_result_has_failure(run_result: dict[str, Any]) -> bool:
+    if _is_open_ended_run_result(run_result):
+        for key in ("ok", "success", "semantic_map_success"):
+            if run_result.get(key) is False:
+                return True
+        for key in ("intent_status", "goal_status", "status"):
+            if _is_failure_string(run_result.get(key)):
+                return True
+        return False
     for key in ("ok", "success", "cleanup_success", "semantic_map_success"):
         if run_result.get(key) is False:
             return True
@@ -713,6 +733,14 @@ def _run_result_has_failure(run_result: dict[str, Any]) -> bool:
         if _is_failure_string(run_result.get(key)):
             return True
     return False
+
+
+def _is_open_ended_run_result(run_result: dict[str, Any]) -> bool:
+    goal_contract = (
+        run_result.get("goal_contract") if isinstance(run_result.get("goal_contract"), dict) else {}
+    )
+    intent = str(run_result.get("task_intent") or goal_contract.get("intent") or "").strip()
+    return intent == "open-ended"
 
 
 def _is_success_string(value: Any) -> bool:
@@ -919,12 +947,18 @@ def _public_run_result_summary(run_result: dict[str, Any]) -> dict[str, Any]:
         "backend",
         "policy",
         "profile",
+        "task_surface",
+        "task_intent",
+        "task_intent_mode",
         "status",
         "ok",
         "success",
         "cleanup_success",
         "semantic_map_success",
+        "intent_status",
+        "goal_status",
         "cleanup_status",
+        "cleanup_status_role",
         "completion_status",
         "final_status",
         "terminate_reason",

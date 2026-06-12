@@ -491,6 +491,13 @@ class RealWorldMolmoCleanupMCPServer:
                 "cleanup_worklist remains authoritative."
             ),
         )
+        task_intent = goal_contract_payload.get("intent") or (
+            "open-ended" if self.task_intent_mode == "custom" else self.task_name
+        )
+        terminal_status = (
+            "success" if task_intent == "open-ended" else done_response["cleanup_status"]
+        )
+        intent_status = terminal_status
 
         run_result = {
             "backend": _backend_name(self.base_contract.backend, override=self.backend_name),
@@ -500,13 +507,15 @@ class RealWorldMolmoCleanupMCPServer:
             "task_prompt": self.task_prompt,
             "task_intent_mode": self.task_intent_mode,
             "task_surface": goal_contract_payload.get("surface", "household-world"),
-            "task_intent": goal_contract_payload.get("intent")
-            or ("open-ended" if self.task_intent_mode == "custom" else self.task_name),
+            "task_intent": task_intent,
             "goal_contract": goal_contract_payload,
             "agent_completion_claim": completion_claim,
             "contract": REALWORLD_CONTRACT,
             "adr_0003_satisfied": True,
-            "final_status": done_response["cleanup_status"],
+            "final_status": terminal_status,
+            "intent_status": intent_status,
+            "goal_status": intent_status,
+            "cleanup_status_role": "advisory" if task_intent == "open-ended" else "terminal",
             "terminate_reason": reason,
             "cleanup_status": done_response["cleanup_status"],
             "completion_status": done_response["score"]["completion_status"],
@@ -641,6 +650,8 @@ class RealWorldMolmoCleanupMCPServer:
             "ok": True,
             "tool": "done",
             "status": "ok",
+            "intent_status": intent_status,
+            "goal_status": intent_status,
             "cleanup_status": done_response["cleanup_status"],
             "score": done_response["score"],
             "run_result": str(self.run_result_path),

@@ -2,7 +2,7 @@
 
 **Status:** Completed for Phase 89 on 2026-05-10
 **Parent plan:** `docs/retrospectives/plans/molmospaces-manipulation-spike.md`
-**ADR:** `docs/adr/0080-scope-proof-selection-memory-by-planner-object.md`
+**ADR:** `docs/adr/archive/execution-log/0080-scope-proof-selection-memory-by-planner-object.md`
 
 ## Goal
 

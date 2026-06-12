@@ -474,6 +474,8 @@ def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
     state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
 
     assert state["latest_view_assets"]["map"]["path"] == str(robot_map.resolve())
+    assert state["latest_view_assets"]["map"]["href"].startswith("/artifacts/")
+    assert "?v=" in state["latest_view_assets"]["map"]["href"]
 
 
 def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:
@@ -553,6 +555,106 @@ def test_state_treats_cleanup_status_success_as_passed(tmp_path: Path) -> None:
     assert state["status"] == "passed"
     assert state["checker_status"]["status"] == "passed"
     assert state["public_run_result"]["cleanup_status"] == "success"
+
+
+def test_state_treats_open_ended_cleanup_score_failure_as_advisory(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0611_1232" / "seed-7"
+    route = get_route("codex-b1-map12-open-ended")
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": route.to_payload(),
+                "phase": "starting",
+                "backend_lock": route.lock_name,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "task_intent": "open-ended",
+                "goal_contract": {"intent": "open-ended"},
+                "cleanup_status": "failed",
+                "completion_status": "failed",
+                "final_status": "failed",
+                "score": {
+                    "status": "success",
+                    "completion_status": "failed",
+                    "total_targets": 0,
+                    "sweep_coverage_rate": 1.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
+    (attempt_dir / "checker.log").write_text("molmo-realworld-cleanup ok\n", encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, route)
+
+    assert state["status"] == "passed"
+    assert state["checker_status"]["status"] == "passed"
+    assert state["checker_status"]["message"] == "Checker passed."
+    assert state["public_run_result"]["cleanup_status"] == "failed"
+
+
+def test_state_keeps_cleanup_score_failure_authoritative_for_cleanup(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
+    attempt_dir = run_dir / "0611_1232" / "seed-7"
+    route = get_route("codex-mujoco-cleanup")
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": "wrapper-run",
+                "route": route.to_payload(),
+                "phase": "starting",
+                "backend_lock": route.lock_name,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "finished", "exit_status": 0}),
+        encoding="utf-8",
+    )
+    (attempt_dir / "run_result.json").write_text(
+        json.dumps(
+            {
+                "task_intent": "cleanup",
+                "cleanup_status": "failed",
+                "completion_status": "failed",
+                "final_status": "failed",
+                "score": {
+                    "status": "success",
+                    "completion_status": "failed",
+                    "total_targets": 0,
+                    "sweep_coverage_rate": 1.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "report.html").write_text("<html></html>", encoding="utf-8")
+    (attempt_dir / "checker.log").write_text("molmo-realworld-cleanup ok\n", encoding="utf-8")
+
+    state = derive_operator_state(tmp_path, run_dir, route)
+
+    assert state["status"] == "idle"
+    assert state["checker_status"]["status"] == "failed"
+    assert state["checker_status"]["message"] == "Checker failed. Open Checker Output for details."
 
 
 def test_state_keeps_failed_phase_when_result_contains_success(tmp_path: Path) -> None:

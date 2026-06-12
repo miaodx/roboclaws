@@ -134,6 +134,11 @@ button:not(:disabled):hover {
   background: var(--panel);
 }
 
+.top-run-bar > div:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .app-title {
   margin: 0;
   font-size: 20px;
@@ -157,18 +162,23 @@ button:not(:disabled):hover {
   gap: 8px;
   flex-wrap: wrap;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
 }
 
 #run-title {
   font-size: 16px;
   font-weight: 500;
   color: var(--text);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .top-run-bar.run-active #run-title {
-  font-size: 28px;
+  font-size: 14px;
   font-weight: 500;
-  line-height: 1.15;
+  line-height: 1.25;
 }
 
 .global-controls {

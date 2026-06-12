@@ -1,7 +1,7 @@
 # MolmoSpaces Filtered Fallback Proof Execution
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0058-execute-filtered-fallback-proofs.md`
+**ADR:** `docs/adr/archive/execution-log/0058-execute-filtered-fallback-proofs.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/67-molmospaces-filtered-fallback-proof-execution/`
 
 ## Problem

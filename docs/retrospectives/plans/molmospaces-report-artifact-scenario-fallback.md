@@ -57,7 +57,7 @@ Implemented:
   scenario shell when no scenario artifact exists.
 - `tests/test_molmo_cleanup_artifact_report.py` covers scenario-less
   regeneration and asserts the report keeps plain `nav` subphase labels.
-- `docs/adr/0111-regenerate-scenario-less-cleanup-artifacts.md` records the
+- `docs/adr/archive/execution-log/0111-regenerate-scenario-less-cleanup-artifacts.md` records the
   ADR gap closed by this slice.
 
 Verification:

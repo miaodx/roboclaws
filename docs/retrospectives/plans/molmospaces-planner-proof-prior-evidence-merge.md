@@ -1,7 +1,7 @@
 # MolmoSpaces Planner Proof Prior Evidence Merge
 
 **Status:** Completed on 2026-05-10
-**ADR:** `docs/adr/0061-merge-prior-planner-proof-evidence.md`
+**ADR:** `docs/adr/archive/execution-log/0061-merge-prior-planner-proof-evidence.md`
 **GSD phase:** `.planning/milestones/v1.98-phases/70-molmospaces-prior-proof-evidence-merge/`
 
 ## Problem

@@ -70,7 +70,10 @@ def test_checker_can_require_runtime_metric_map(tmp_path: Path) -> None:
     )
     runtime_map = json.loads((tmp_path / "runtime_metric_map.json").read_text())
     assert runtime_map["schema"] == checker.RUNTIME_METRIC_MAP_SCHEMA
+    assert runtime_map["target_candidates"]
+    assert runtime_map["target_search_summary"]["schema"] == "target_search_summary_v1"
     assert "Runtime Metric Map" in (tmp_path / "report.html").read_text()
+    assert "Target Candidates" in (tmp_path / "report.html").read_text()
 
 
 def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
@@ -98,6 +101,48 @@ def test_checker_can_require_semantic_sweep_mode(tmp_path: Path) -> None:
     assert counts["adjust_camera:request"] >= 1
     assert counts.get("pick:request") is None
     assert result["runtime_metric_map"]["observed_objects"]
+
+
+def test_checker_allows_camera_model_policy_map_build_with_no_object_detections(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        semantic_sweep=True,
+        perception_mode=CAMERA_MODEL_POLICY_MODE,
+        map_mode="minimal",
+    )
+    result["observed_objects"] = []
+    result["model_declared_observations"] = []
+    result["runtime_metric_map"]["observed_objects"] = []
+    result["agent_view"]["observed_objects"] = []
+    result["agent_view"]["model_declared_observations"] = []
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+    evidence = result["camera_model_policy_evidence"]
+    evidence["candidate_count"] = 0
+    for event in evidence["events"]:
+        event["candidate_count"] = 0
+        event["registered_observed_handles"] = []
+        pipeline = event.get("visual_grounding_pipeline") or {}
+        pipeline["candidate_count"] = 0
+    result["agent_view"]["camera_model_policy_evidence"] = evidence
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=5,
+        require_runtime_metric_map=True,
+        require_semantic_sweep=True,
+        require_camera_model_policy=True,
+        require_minimal_map=True,
+    )
+    assert result["runtime_metric_map"]["target_candidates"]
 
 
 def test_checker_accepts_agibot_semantic_map_build_artifact(tmp_path: Path) -> None:
@@ -402,6 +447,53 @@ def test_checker_rejects_runtime_metric_map_private_leak(tmp_path: Path) -> None
         )
 
 
+def test_checker_rejects_target_candidate_private_leak(tmp_path: Path) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode="minimal")
+    result["runtime_metric_map"]["target_candidates"][0]["target_receptacle_id"] = "sink_01"
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_minimal_map=True,
+        )
+
+
+def test_checker_rejects_non_actionable_target_candidate_without_reason(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(output_dir=tmp_path, seed=7, map_mode="minimal")
+    candidate = next(
+        item
+        for item in result["runtime_metric_map"]["target_candidates"]
+        if item["target_actionability_status"] != "actionable"
+    )
+    candidate["rejection_reason"] = ""
+    result["agent_view"]["runtime_metric_map"] = result["runtime_metric_map"]
+
+    with pytest.raises(AssertionError):
+        checker._assert_result(
+            result,
+            tmp_path,
+            expect_task=None,
+            expect_backend="api_semantic_synthetic",
+            min_generated_mess_count=5,
+            require_runtime_metric_map=True,
+            require_minimal_map=True,
+        )
+
+
 def test_checker_rejects_promoted_runtime_semantic_anchor(tmp_path: Path) -> None:
     demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
     checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
@@ -591,6 +683,59 @@ def test_checker_allows_minimal_map_waypoint_honesty_for_open_ended_scan_only(
         require_runtime_metric_map=True,
         require_minimal_map=True,
         require_waypoint_honesty=True,
+    )
+
+
+def test_checker_allows_open_ended_agent_view_with_no_visible_objects(
+    tmp_path: Path,
+) -> None:
+    demo = _load_module(DEMO_PATH, "molmospaces_realworld_cleanup")
+    checker = _load_module(CHECKER_PATH, "check_molmo_realworld_cleanup_result")
+
+    result = demo.run_realworld_cleanup(
+        output_dir=tmp_path,
+        seed=7,
+        map_mode="minimal",
+    )
+    result["generated_mess_count"] = 0
+    result["requested_generated_mess_count"] = 0
+    result["task_intent"] = "open-ended"
+    result["task_intent_mode"] = "custom"
+    result["terminated_by"] = "agent_done"
+    result["goal_contract"] = {
+        "schema": "roboclaws_goal_contract_v1",
+        "surface": "household-world",
+        "intent": "open-ended",
+        "normalized_goal": "扫描下这个房间",
+        "goal_scope": "agent-declared",
+    }
+    result["agent_completion_claim"] = {
+        "schema": "roboclaws_agent_completion_claim_v1",
+        "completion_summary": "完成扫描，未发现可见物体检测。",
+        "why_done": "已观察公开探索点并提交结果。",
+        "evidence_used": ["metric_map", "observe"],
+        "remaining_risks": [],
+    }
+    result["private_evaluation"]["generated_mess_count"] = 0
+    result["private_evaluation"]["acceptable_destination_sets"] = {}
+    agent_view = result["agent_view"]
+    agent_view["observed_objects"] = []
+    agent_view["raw_fpv_observations"] = []
+    agent_view["model_declared_observations"] = []
+    agent_view["perception_mode"] = "visible_object_detections"
+    agent_view["structured_detections_available"] = True
+    agent_view["runtime_metric_map"]["observed_objects"] = []
+
+    checker._assert_result(
+        result,
+        tmp_path,
+        expect_task=None,
+        expect_backend="api_semantic_synthetic",
+        min_generated_mess_count=0,
+        allow_partial_cleanup=True,
+        require_runtime_metric_map=True,
+        require_minimal_map=True,
+        require_completion_claim=True,
     )
 
 
