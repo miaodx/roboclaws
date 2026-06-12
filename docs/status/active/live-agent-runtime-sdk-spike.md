@@ -35,7 +35,10 @@ row, not a normalized or publishable speed claim. Q/Y has now been refreshed
 over the promptfix2 artifact with a camera-grounded breakdown that separates
 composite-internal declaration substeps from standalone two-step declarations:
 promptfix2 has 5 composite calls, 5 composite-internal declarations, and 11
-standalone declarations. F now has an opt-in `action_timeline` prep arm, so the
+standalone declarations. Trace review showed those residual standalone
+declarations happen after SDK continuation, so the private compact continuation
+prompt now preserves the O composite cadence for the next paired/rerun row. F
+now has an opt-in `action_timeline` prep arm, so the
 F live A/B has now been tried. It reduced visual capture time but regressed
 cleanup quality and wall/model time, so it is expected-rejected evidence rather
 than a speed win. I/N/AB input-compaction live A/B has also now been tried. It
@@ -447,7 +450,10 @@ Parked work:
     `camera-grounded-labels`; default public MCP/profile tools remain
     unchanged. The promptfix2 `mify` Responses row actually calls the shortcut
     and is an accepted mechanism/diagnostic speed row, but normalized or
-    publishable speed claims still require calibrated/repeated evidence.
+    publishable speed claims still require calibrated/repeated evidence. Trace
+    review showed the remaining standalone declarations happened after SDK
+    continuation; private compact-continuation guidance now preserves the
+    composite cadence for the next paired O rerun.
   - Candidate P deterministic prep is accepted as a raw-FPV repeated
     visual-candidate failure rail; the first live gate is blocked by image
     transport/provider availability, and cleanup-pass plus live speed claims

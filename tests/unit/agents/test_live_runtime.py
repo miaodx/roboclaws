@@ -2473,6 +2473,161 @@ def test_openai_agents_cleanup_runner_compact_continuation_excludes_full_prompt(
     assert timing["openai_agents_attempts"][0]["continuation_prompt_chars"] == len(prompts[1])
 
 
+def test_openai_agents_cleanup_runner_compact_continuation_preserves_composite_cadence(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_dir = tmp_path / "run"
+    prompts: list[str] = []
+
+    class FakeProcess:
+        pid = 4242
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            self._poll: int | None = None
+
+        def poll(self) -> int | None:
+            return self._poll
+
+        def wait(self, timeout: float | None = None) -> int:
+            self._poll = 0
+            return 0
+
+        def terminate(self) -> None:
+            self._poll = 0
+
+        def kill(self) -> None:
+            self._poll = 0
+
+    class FakeRuntime:
+        def run(self, request: LiveAgentRequest) -> LiveAgentResult:
+            prompts.append(request.kickoff_prompt)
+            if len(prompts) == 1:
+                (request.run_dir / "trace.jsonl").write_text(
+                    "\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "event": "molmo_realworld_cleanup_mcp_initialized",
+                                    "cleanup_profile": "camera-grounded-labels",
+                                    "goal_contract": {
+                                        "surface": "household-world",
+                                        "intent": "cleanup",
+                                        "normalized_goal": "clean the room",
+                                    },
+                                }
+                            ),
+                            json.dumps(
+                                {
+                                    "event": "response",
+                                    "tool": "observe_camera_grounded_candidates",
+                                    "response": {
+                                        "ok": True,
+                                        "observe": {
+                                            "waypoint_id": "generated_exploration_001",
+                                        },
+                                        "declaration": {
+                                            "source_observation_id": "obs_001",
+                                        },
+                                    },
+                                }
+                            ),
+                        ]
+                    )
+                    + "\n",
+                    encoding="utf-8",
+                )
+                return LiveAgentResult(
+                    phase="agent-turn-complete",
+                    exit_status=0,
+                    run_result_present=False,
+                )
+            assert request.metadata["attempt_role"] == "continuation"
+            (request.run_dir / "run_result.json").write_text(
+                json.dumps(
+                    {
+                        "task": "clean",
+                        "task_name": "household-cleanup",
+                        "backend": "molmospaces_subprocess",
+                        "policy": "openai_agents_agent",
+                        "cleanup_success": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return LiveAgentResult(phase="finished", exit_status=0, run_result_present=True)
+
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.subprocess.Popen",
+        FakeProcess,
+    )
+    port_checks = iter([False, True])
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._port_accepting",
+        lambda *_args, **_kwargs: next(port_checks),
+    )
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.OpenAIAgentsLiveRuntime",
+        lambda: FakeRuntime(),
+    )
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._run_and_tee",
+        lambda command, *, cwd, stdout_path, stderr_path, env: 0,
+    )
+    full_prompt = "FULL ORIGINAL PROMPT THAT SHOULD NOT REPEAT"
+    args = Namespace(
+        run_dir=run_dir,
+        repo_root=_isolated_repo_root(tmp_path),
+        status_path=run_dir / "live_status.json",
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "live.lock",
+        provider_profile="mify",
+        model="mimo-v2.5",
+        max_turns=128,
+        incomplete_turn_continuation_attempts=2,
+        mcp_client_session_timeout_s=30.0,
+        agent_sdk_perf_profile="mimo_compact_v1",
+        prompt_mode="",
+        continuation_mode="",
+        context_soft_limit_tokens=None,
+        context_hard_limit_tokens=None,
+        max_observe_per_waypoint=None,
+        raw_fpv_candidate_budget=None,
+        raw_fpv_repeated_failure_limit=None,
+        done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
+        server_startup_timeout_s=1.0,
+        kickoff_prompt=full_prompt,
+        backend="molmospaces_subprocess",
+        task_name="household-cleanup",
+        policy="openai_agents_agent",
+        task="clean",
+        min_generated_mess_count="5",
+        profile="camera-grounded-labels",
+        server_arg=[],
+        checker_visual_arg=[],
+        camera_grounded_composite_tools=True,
+        model_input_compaction=None,
+        model_input_compaction_min_chars=None,
+        robot_view_capture_policy=None,
+    )
+
+    status = LiveOpenAIAgentsCleanupRunner(args).run()
+
+    assert status == 0
+    assert len(prompts) == 2
+    assert full_prompt not in prompts[1]
+    assert "compact_continuation_state" in prompts[1]
+    assert "Camera-grounded composite continuation" in prompts[1]
+    assert "observe_camera_grounded_candidates for remaining waypoint observations" in prompts[1]
+    assert "Do not resume the older observe plus declare_visual_candidates cadence" in prompts[1]
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    composite = timing["agent_sdk_perf_profile"]["camera_grounded_composite_tools"]
+    assert composite["enabled"] is True
+
+
 def test_openai_agents_cleanup_runner_uses_profiled_compact_kickoff_prompt(
     tmp_path: Path, monkeypatch
 ) -> None:

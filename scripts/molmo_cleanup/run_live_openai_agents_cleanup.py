@@ -1957,14 +1957,34 @@ def _compact_continuation_prompt(
         profile=profile,
         context_metrics=context_metrics,
     )
+    profile_guidance = _compact_continuation_profile_guidance(profile)
+    profile_guidance_section = f"\n\n{profile_guidance}" if profile_guidance else ""
     return (
         "Continuation recovery for the same live household cleanup run.\n\n"
         "Use this compact public state packet instead of replaying the original "
         "kickoff prompt. Do not summarize progress as a final answer. Inspect "
         "current public MCP state if needed, continue only missing cleanup work, "
         "and call done only after MCP-visible public state satisfies the task. "
-        "The runner will count success only when MCP done produces run_result.json.\n\n"
+        "The runner will count success only when MCP done produces run_result.json."
+        f"{profile_guidance_section}\n\n"
         f"compact_continuation_state:\n{json.dumps(state, ensure_ascii=False, sort_keys=True)}\n"
+    )
+
+
+def _compact_continuation_profile_guidance(profile: dict[str, Any]) -> str:
+    composite = profile.get("camera_grounded_composite_tools")
+    if not isinstance(composite, dict) or not bool(composite.get("enabled")):
+        return ""
+    tool_names = composite.get("tool_names")
+    if not isinstance(tool_names, list) or "observe_camera_grounded_candidates" not in tool_names:
+        return ""
+    return (
+        "Camera-grounded composite continuation: keep using "
+        "observe_camera_grounded_candidates for remaining waypoint observations. "
+        "Do not resume the older observe plus declare_visual_candidates cadence, and "
+        "do not call declare_visual_candidates again for a source_observation_id "
+        "already handled by observe_camera_grounded_candidates unless a public tool "
+        "explicitly asks for it."
     )
 
 
