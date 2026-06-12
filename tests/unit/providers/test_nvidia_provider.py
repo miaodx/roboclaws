@@ -4,7 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from roboclaws.core.vlm import NvidiaProvider, create_provider
+from roboclaws.core.provider_factory import create_provider
+from roboclaws.core.providers.openai import NvidiaProvider
 
 SAMPLE_IMAGES = ["aGVsbG8=", "d29ybGQ=", "aW1hZ2Uz"]
 SAMPLE_STATE = {"position": {"x": 1.0, "y": 0.0, "z": -2.5}, "my_agent_id": 0}
@@ -75,13 +76,13 @@ def test_nvidia_provider_cost_table_miss_does_not_crash(nvidia_provider) -> None
 
 def test_create_provider_nvidia_alias(monkeypatch) -> None:
     monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.NvidiaProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.NvidiaProvider.__init__", return_value=None):
         provider = create_provider("nvidia")
     assert isinstance(provider, NvidiaProvider)
 
 
 def test_create_provider_nvidia_full_model(monkeypatch) -> None:
     monkeypatch.setenv("NVIDIA_API_KEY", "test-key")
-    with patch("roboclaws.core.vlm.NvidiaProvider.__init__", return_value=None):
+    with patch("roboclaws.core.provider_factory.NvidiaProvider.__init__", return_value=None):
         provider = create_provider("nvidia/llama-3.1-nemotron-nano-vl-8b-v1")
     assert isinstance(provider, NvidiaProvider)

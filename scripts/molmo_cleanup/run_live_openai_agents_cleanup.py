@@ -31,6 +31,16 @@ from roboclaws.agents.drivers.openai_agents_live import (
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
+from roboclaws.agents.provider_registry import (
+    model_family_for_route_model,
+    normalize_provider_route,
+    provider_route_spec,
+    route_capabilities_for_engine,
+)
+from roboclaws.household.realworld_mcp_server import (
+    ROBOT_VIEW_CAPTURE_POLICIES,
+    ROBOT_VIEW_CAPTURE_POLICY_FULL,
+)
 from roboclaws.household.report import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
@@ -63,9 +73,12 @@ CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
 CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
 MODEL_INPUT_COMPACTION_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION"
 MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
+MODEL_RACING_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING"
+MODEL_RACING_ARM_COUNT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_RACING_ARM_COUNT"
 RAW_FPV_IMAGE_MEMORY_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY"
 RAW_FPV_IMAGE_MEMORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN"
 CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
+ROBOT_VIEW_CAPTURE_POLICY_ENV = "ROBOCLAWS_OPENAI_AGENTS_ROBOT_VIEW_CAPTURE_POLICY"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
 RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
@@ -174,6 +187,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--model-input-compaction-min-chars", type=int, default=None)
     parser.add_argument(
+        "--model-racing",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to private Agent SDK Candidate-C get_response model-call racing. "
+            "stream_response remains single-arm."
+        ),
+    )
+    parser.add_argument("--model-racing-arm-count", type=int, default=None)
+    parser.add_argument(
         "--raw-fpv-image-memory",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -192,6 +215,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Opt in to private Agent SDK Candidate-O MCP composite tools for "
             "camera-grounded-labels. The cleanup server enables the extra tool only "
             "for this SDK run."
+        ),
+    )
+    parser.add_argument(
+        "--robot-view-capture-policy",
+        default="",
+        help=(
+            "Private Agent SDK Candidate-F robot-view report capture policy. "
+            "Use action_timeline to keep before/after and cleanup action views while "
+            "skipping report-only observe/scene_objects captures."
         ),
     )
     parser.add_argument("--context-soft-limit-tokens", type=int, default=None)
@@ -294,6 +326,9 @@ class LiveOpenAIAgentsCleanupRunner:
             "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
             "agent_sdk_camera_grounded_composite_tools": (
                 self.agent_sdk_perf_profile["camera_grounded_composite_tools"]
+            ),
+            "agent_sdk_robot_view_capture_policy": (
+                self.agent_sdk_perf_profile["robot_view_capture_policy"]
             ),
             "prompt_profile_id": self.agent_sdk_perf_profile["profile_id"],
             "agent_sdk_skill_context": _skill_context_timing_summary(self.skill_context),
@@ -420,6 +455,9 @@ class LiveOpenAIAgentsCleanupRunner:
             evidence_lane=str(getattr(self.args, "profile", "") or ""),
         ):
             command.append("--agent-sdk-camera-grounded-composite-tools")
+        robot_view_capture_policy = self.agent_sdk_perf_profile["robot_view_capture_policy"]
+        if robot_view_capture_policy["policy"] != ROBOT_VIEW_CAPTURE_POLICY_FULL:
+            command.extend(["--robot-view-capture-policy", robot_view_capture_policy["policy"]])
         env = os.environ.copy()
         if env.get(REPORT_RERUN_COMMAND_ENV):
             command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
@@ -713,6 +751,9 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
         payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
         payload["model_service_fallback_metrics"] = _model_service_fallback_metrics(self.run_dir)
+        payload["model_racing_observability_metrics"] = _model_racing_observability_metrics(
+            self.run_dir
+        )
         payload["model_input_filter_metrics"] = _model_input_filter_metrics(self.run_dir)
         payload["context_metrics"] = _context_metrics(self.run_dir, payload)
         payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
@@ -848,7 +889,8 @@ class IncompleteTurnRecoveryPolicy:
 def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
     provider_profile = _normal_provider_profile(str(getattr(args, "provider_profile", "") or ""))
     model = str(getattr(args, "model", "") or "")
-    model_family = _model_family(provider_profile, model)
+    model_family = _registry_model_family(provider_profile, model)
+    route = provider_route_spec(provider_profile)
     profile_id, profile_source = _profile_id_with_source(args, provider_profile, model_family)
     defaults = _profile_defaults(profile_id)
     payload = {
@@ -857,6 +899,10 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
         "source": profile_source,
         "provider_profile": provider_profile,
         "wire_api": _wire_api_for_provider_profile(provider_profile),
+        "wire_source": route.wire_source,
+        "route_status": route.status_for_engine("openai-agents-sdk"),
+        "route_status_note": route.status_note,
+        "route_capabilities": route_capabilities_for_engine(route, "openai-agents-sdk"),
         "model_family": model_family,
         "prompt_mode": _string_setting(
             args,
@@ -935,6 +981,8 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             args,
             defaults,
         ),
+        "robot_view_capture_policy": _robot_view_capture_policy_profile(args, defaults),
+        "model_racing_observability": _model_racing_observability_profile(args, defaults),
         "model_service_retry_attempts": _int_setting(
             args,
             "model_service_retry_attempts",
@@ -1110,6 +1158,32 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
                 "unchanged"
             ),
         },
+        "robot_view_capture_policy": {
+            "schema": "agent_sdk_robot_view_capture_policy_v1",
+            "policy": ROBOT_VIEW_CAPTURE_POLICY_FULL,
+            "candidate_ids": [],
+            "scope": "report-only robot-view capture",
+            "private_artifact_policy": (
+                "full report robot-view capture; default public route behavior unchanged"
+            ),
+        },
+        "model_racing_observability": {
+            "schema": "agent_sdk_model_racing_observability_v1",
+            "enabled": False,
+            "mode": "per_arm_observability_v1",
+            "candidate_ids": ["D"],
+            "arm_count": 1,
+            "racing_multiplier": 1.0,
+            "winner_selection": "single_arm_no_racing",
+            "loser_cancellation": "not_applicable_until_racing_enabled",
+            "unknown_loser_billing": False,
+            "hook": "OpenAI Agents SDK model request boundary",
+            "private_artifact_policy": (
+                "records model-call arm lifecycle, winner/cancel fields, timing, "
+                "provider/model ids, and usage availability only; raw prompts, model text, "
+                "tool payload bodies, credentials, and private truth are not persisted"
+            ),
+        },
     }
     if profile_id in {"baseline", "custom"}:
         return baseline
@@ -1219,6 +1293,73 @@ def _model_input_compaction_profile(
     }
 
 
+def _model_racing_observability_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    config = (
+        defaults.get("model_racing_observability")
+        if isinstance(defaults.get("model_racing_observability"), dict)
+        else {}
+    )
+    enabled = _bool_arg_setting(
+        args,
+        "model_racing",
+        MODEL_RACING_ENV,
+        default=bool(config.get("enabled", False)),
+    )
+    default_arm_count = int(config.get("arm_count") or 1)
+    if enabled and default_arm_count < 2:
+        default_arm_count = 2
+    arm_count = _int_setting(
+        args,
+        "model_racing_arm_count",
+        MODEL_RACING_ARM_COUNT_ENV,
+        default=default_arm_count,
+    )
+    arm_count = max(1, int(arm_count or 1))
+    if not enabled:
+        arm_count = 1
+    else:
+        arm_count = max(2, arm_count)
+    candidate_ids = (
+        ["D", "C"] if enabled else [str(item) for item in config.get("candidate_ids", ["D"])]
+    )
+    return {
+        "schema": "agent_sdk_model_racing_observability_v1",
+        "enabled": enabled,
+        "mode": (
+            "get_response_racing_v1"
+            if enabled
+            else str(config.get("mode") or "per_arm_observability_v1")
+        ),
+        "candidate_ids": candidate_ids,
+        "arm_count": arm_count,
+        "racing_multiplier": float(
+            arm_count if enabled else config.get("racing_multiplier") or 1.0
+        ),
+        "winner_selection": (
+            "first_successful_sdk_response"
+            if enabled
+            else str(config.get("winner_selection") or "single_arm_no_racing")
+        ),
+        "loser_cancellation": str(
+            "cancel_pending_losers"
+            if enabled
+            else config.get("loser_cancellation") or "not_applicable_until_racing_enabled"
+        ),
+        "unknown_loser_billing": True
+        if enabled
+        else bool(config.get("unknown_loser_billing", False)),
+        "hook": str(config.get("hook") or "OpenAI Agents SDK model request boundary"),
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model "
+            "ids, and usage availability only; raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted"
+        ),
+    }
+
+
 def _raw_fpv_image_memory_profile(
     args: argparse.Namespace,
     default_config: dict[str, Any],
@@ -1295,6 +1436,38 @@ def _camera_grounded_composite_tools_enabled_for_run(
     return evidence_lane == "camera-grounded-labels"
 
 
+def _robot_view_capture_policy_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    default_config = (
+        defaults.get("robot_view_capture_policy")
+        if isinstance(defaults.get("robot_view_capture_policy"), dict)
+        else {}
+    )
+    policy = _string_setting(
+        args,
+        "robot_view_capture_policy",
+        ROBOT_VIEW_CAPTURE_POLICY_ENV,
+        default=str(default_config.get("policy") or ROBOT_VIEW_CAPTURE_POLICY_FULL),
+        allowed=set(ROBOT_VIEW_CAPTURE_POLICIES),
+    )
+    enabled = policy != ROBOT_VIEW_CAPTURE_POLICY_FULL
+    return {
+        "schema": "agent_sdk_robot_view_capture_policy_v1",
+        "policy": policy,
+        "candidate_ids": ["F"] if enabled else [],
+        "scope": "report-only robot-view capture",
+        "hook": "cleanup MCP server --robot-view-capture-policy",
+        "private_artifact_policy": (
+            "SDK-private report-capture reduction; before/after snapshots, cleanup action "
+            "views, raw-FPV observe artifacts, traces, and reports remain complete"
+            if enabled
+            else "full report robot-view capture; default public route behavior unchanged"
+        ),
+    }
+
+
 def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
     wire_api = str(profile.get("wire_api") or "")
     provider_profile = str(profile.get("provider_profile") or "")
@@ -1325,26 +1498,15 @@ def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normal_provider_profile(provider_profile: str) -> str:
-    if provider_profile in {"codex-mify", "mify"}:
-        return "mify"
-    if provider_profile in {"mimo-chat", "mimo-openai-chat"}:
-        return "mimo-openai-chat"
-    if provider_profile in {"kimi-chat", "kimi-openai-chat"}:
-        return "kimi-openai-chat"
-    return provider_profile or "codex-env"
+    return normalize_provider_route(provider_profile, default="codex-env")
 
 
 def _wire_api_for_provider_profile(provider_profile: str) -> str:
-    if provider_profile in {"mimo-openai-chat", "kimi-openai-chat"}:
-        return "chat-completions"
-    return "responses"
+    return provider_route_spec(provider_profile).wire_api
 
 
-def _model_family(provider_profile: str, model: str) -> str:
-    lowered = f"{provider_profile} {model}".lower()
-    if "mimo" in lowered or "mify" in lowered:
-        return "mimo"
-    return "gpt"
+def _registry_model_family(provider_profile: str, model: str) -> str:
+    return model_family_for_route_model(provider_profile, model or None)
 
 
 def _string_setting(
@@ -1446,9 +1608,17 @@ def _validate_context_limits(profile: dict[str, Any]) -> None:
 def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any]) -> str:
     mode = str(profile.get("prompt_mode") or "full")
     original = str(getattr(args, "kickoff_prompt", "") or "")
-    if _prompt_already_matches_profile(original, mode=mode):
-        return original
     lane = str(getattr(args, "profile", "") or "")
+    composite_tools = _camera_grounded_composite_tools_enabled_for_run(
+        profile,
+        evidence_lane=lane,
+    )
+    if _prompt_already_matches_profile(
+        original,
+        mode=mode,
+        camera_grounded_composite_tools=composite_tools,
+    ):
+        return original
     task_name = str(getattr(args, "task_name", "") or "")
     intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
     can_render = (
@@ -1471,10 +1641,7 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
             raw_fpv_candidate_budget=int(profile.get("raw_fpv_candidate_budget") or 24),
             max_observe_per_waypoint=int(profile.get("max_observe_per_waypoint") or 1),
             done_retry_budget=int(profile.get("done_retry_budget") or 1),
-            camera_grounded_composite_tools=_camera_grounded_composite_tools_enabled_for_run(
-                profile,
-                evidence_lane=lane,
-            ),
+            camera_grounded_composite_tools=composite_tools,
         )
     except ValueError:
         return original
@@ -1494,7 +1661,15 @@ def _target_cleanup_count_for_prompt(args: argparse.Namespace, *, lane: str) -> 
 def _kickoff_prompt_source(args: argparse.Namespace, profile: dict[str, Any]) -> str:
     original = str(getattr(args, "kickoff_prompt", "") or "")
     mode = str(profile.get("prompt_mode") or "full")
-    if _prompt_already_matches_profile(original, mode=mode):
+    composite_tools = _camera_grounded_composite_tools_enabled_for_run(
+        profile,
+        evidence_lane=str(getattr(args, "profile", "") or ""),
+    )
+    if _prompt_already_matches_profile(
+        original,
+        mode=mode,
+        camera_grounded_composite_tools=composite_tools,
+    ):
         return f"provided-profile-rendered-{mode}"
     rendered = _profiled_kickoff_prompt(args, profile=profile)
     if rendered == original:
@@ -1502,8 +1677,15 @@ def _kickoff_prompt_source(args: argparse.Namespace, profile: dict[str, Any]) ->
     return f"profile-rendered-{profile.get('prompt_mode') or 'full'}"
 
 
-def _prompt_already_matches_profile(prompt: str, *, mode: str) -> bool:
+def _prompt_already_matches_profile(
+    prompt: str,
+    *,
+    mode: str,
+    camera_grounded_composite_tools: bool = False,
+) -> bool:
     if mode == "compact":
+        if camera_grounded_composite_tools:
+            return "observe_camera_grounded_candidates" in prompt
         return (
             "Compact action cadence for world-public-labels" in prompt
             or "Compact action cadence for camera-grounded-labels" in prompt
@@ -2278,6 +2460,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         "openai_agents_span_type_counts": span_metrics.get("span_type_counts"),
         "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
         "model_service_fallback_metrics": _compact_metric_group(fallback_metrics),
+        "model_racing_observability_metrics": _compact_metric_group(
+            timing.get("model_racing_observability_metrics")
+            if isinstance(timing.get("model_racing_observability_metrics"), dict)
+            else {}
+        ),
         "model_input_filter_metrics": _compact_metric_group(model_input_filter_metrics),
         "agent_sdk_budget_terminal": _compact_metric_group(budget_terminal),
         "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
@@ -2498,6 +2685,151 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
             "Fallback metrics retain attempt counts, provider/model ids, failure classes, "
             "retry delays, and outcomes only. Raw prompts, model text, credentials, and "
             "tool payload bodies are not persisted."
+        ),
+    }
+
+
+def _model_racing_observability_metrics(run_dir: Path) -> dict[str, Any]:
+    events = [
+        event
+        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
+        for event in _read_jsonl_path(path)
+        if event.get("schema") == "openai_agents_model_racing_observability_v1"
+    ]
+    if not events:
+        return {
+            "available": False,
+            "source": "openai_agents_model_racing_observability_events",
+            "limitations": ["model_racing_observability_events_missing"],
+        }
+
+    event_counts: dict[str, int] = {}
+    attempted_models: set[str] = set()
+    attempted_provider_profiles: set[str] = set()
+    attempted_wire_apis: set[str] = set()
+    methods: set[str] = set()
+    racing_modes: set[str] = set()
+    arm_ids: set[str] = set()
+    call_indexes: set[int] = set()
+    final_outcomes: dict[str, int] = {}
+    failure_classes: dict[str, int] = {}
+    provider_reasons: dict[str, int] = {}
+    elapsed_s_total = 0.0
+    max_elapsed_s = 0.0
+    winner_count = 0
+    cancelled_count = 0
+    cancellation_observed_count = 0
+    loser_billing_unknown_count = 0
+    racing_enabled = False
+    racing_multiplier = 1.0
+    max_arm_count = 1
+    usage_available_count = 0
+    usage_missing_count = 0
+    total_input_tokens = 0
+    total_cached_input_tokens = 0
+    total_uncached_input_tokens = 0
+    total_output_tokens = 0
+    total_reasoning_tokens = 0
+    for event in events:
+        event_type = str(event.get("event") or "")
+        if event_type:
+            event_counts[event_type] = event_counts.get(event_type, 0) + 1
+        model = str(event.get("model") or "")
+        if model:
+            attempted_models.add(model)
+        provider_profile = str(event.get("provider_profile") or "")
+        if provider_profile:
+            attempted_provider_profiles.add(provider_profile)
+        wire_api = str(event.get("wire_api") or "")
+        if wire_api:
+            attempted_wire_apis.add(wire_api)
+        method = str(event.get("method") or "")
+        if method:
+            methods.add(method)
+        racing_mode = str(event.get("racing_mode") or "")
+        if racing_mode:
+            racing_modes.add(racing_mode)
+        arm_id = str(event.get("arm_id") or "")
+        if arm_id:
+            arm_ids.add(arm_id)
+        call_index = _int_or_none(event.get("call_index"))
+        if call_index is not None:
+            call_indexes.add(call_index)
+        final_outcome = str(event.get("final_outcome") or "")
+        if final_outcome:
+            final_outcomes[final_outcome] = final_outcomes.get(final_outcome, 0) + 1
+        failure_class = str(event.get("failure_class") or "")
+        if failure_class:
+            failure_classes[failure_class] = failure_classes.get(failure_class, 0) + 1
+        provider_reason = str(event.get("provider_reason") or "")
+        if provider_reason:
+            provider_reasons[provider_reason] = provider_reasons.get(provider_reason, 0) + 1
+        elapsed = _float_or_none(event.get("elapsed_s"))
+        if elapsed is not None:
+            elapsed_s_total += elapsed
+            max_elapsed_s = max(max_elapsed_s, elapsed)
+        if event.get("winner") is True:
+            winner_count += 1
+        if event.get("cancelled") is True:
+            cancelled_count += 1
+        if event.get("cancellation_observed") is True:
+            cancellation_observed_count += 1
+        if event.get("loser_billing_unknown") is True:
+            loser_billing_unknown_count += 1
+        usage = event.get("usage_summary") if isinstance(event.get("usage_summary"), dict) else {}
+        if usage:
+            if usage.get("usage_available") is True:
+                usage_available_count += 1
+                total_input_tokens += _int_or_none(usage.get("input_tokens")) or 0
+                total_cached_input_tokens += _int_or_none(usage.get("cached_input_tokens")) or 0
+                total_uncached_input_tokens += _int_or_none(usage.get("uncached_input_tokens")) or 0
+                total_output_tokens += _int_or_none(usage.get("output_tokens")) or 0
+                total_reasoning_tokens += _int_or_none(usage.get("reasoning_tokens")) or 0
+            else:
+                usage_missing_count += 1
+        racing_enabled = racing_enabled or bool(event.get("racing_enabled"))
+        racing_multiplier = max(
+            racing_multiplier,
+            _float_or_none(event.get("racing_multiplier")) or 1.0,
+        )
+        max_arm_count = max(max_arm_count, _int_or_none(event.get("arm_count")) or 1)
+
+    return {
+        "available": True,
+        "source": "openai_agents_model_racing_observability_events",
+        "limitations": [],
+        "event_count": len(events),
+        "event_counts": dict(sorted(event_counts.items())),
+        "call_count": len(call_indexes),
+        "arm_count": len(arm_ids),
+        "max_arm_count_per_call": max_arm_count,
+        "racing_enabled": racing_enabled,
+        "racing_multiplier": racing_multiplier,
+        "winner_count": winner_count,
+        "cancelled_count": cancelled_count,
+        "cancellation_observed_count": cancellation_observed_count,
+        "loser_billing_unknown_count": loser_billing_unknown_count,
+        "elapsed_s_total": _round_duration(elapsed_s_total),
+        "max_elapsed_s": _round_duration(max_elapsed_s),
+        "usage_available_count": usage_available_count,
+        "usage_missing_count": usage_missing_count,
+        "total_input_tokens": total_input_tokens,
+        "total_cached_input_tokens": total_cached_input_tokens,
+        "total_uncached_input_tokens": total_uncached_input_tokens,
+        "total_output_tokens": total_output_tokens,
+        "total_reasoning_tokens": total_reasoning_tokens,
+        "methods": sorted(methods),
+        "racing_modes": sorted(racing_modes),
+        "final_outcomes": dict(sorted(final_outcomes.items())),
+        "failure_classes": dict(sorted(failure_classes.items())),
+        "provider_reasons": dict(sorted(provider_reasons.items())),
+        "attempted_models": sorted(attempted_models),
+        "attempted_provider_profiles": sorted(attempted_provider_profiles),
+        "attempted_wire_apis": sorted(attempted_wire_apis),
+        "privacy_note": (
+            "Racing observability metrics retain arm lifecycle counts, timing, provider/model "
+            "ids, cancellation/winner flags, and usage-availability fields only. Raw prompts, "
+            "model text, tool payload bodies, credentials, and private truth are not persisted."
         ),
     }
 
@@ -2939,6 +3271,8 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "total_input_tokens",
         "total_cached_input_tokens",
         "total_uncached_input_tokens",
+        "total_output_tokens",
+        "total_reasoning_tokens",
         "cache_hit_ratio",
         "cached_input_token_ratio",
         "provider_prompt_cache_observed",
@@ -2962,6 +3296,22 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "retry_exhausted",
         "final_outcomes",
         "event_count",
+        "event_counts",
+        "call_count",
+        "arm_count",
+        "max_arm_count_per_call",
+        "racing_enabled",
+        "racing_multiplier",
+        "winner_count",
+        "cancelled_count",
+        "cancellation_observed_count",
+        "loser_billing_unknown_count",
+        "elapsed_s_total",
+        "max_elapsed_s",
+        "usage_available_count",
+        "usage_missing_count",
+        "methods",
+        "racing_modes",
         "enabled",
         "modes",
         "compacted_item_count",

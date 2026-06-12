@@ -4,7 +4,7 @@ import random
 import time
 from typing import Any
 
-from roboclaws.core.vlm import NAVIGATION_ACTIONS, ProviderStatus, _record_call_success
+from roboclaws.core.provider_runtime import NAVIGATION_ACTIONS, ProviderStatus, _record_call_success
 
 
 class MockProvider:

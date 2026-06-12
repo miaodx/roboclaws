@@ -24,6 +24,7 @@ def test_static_app_has_route_specific_field_groups() -> None:
     assert 'id="isaac-fields"' in html
     assert 'id="codex-fields"' in html
     assert 'id="codex-provider-input"' in html
+    assert 'value="minimax"' in html
     assert 'value="mimo-openai-chat"' in html
     assert 'value="kimi-openai-chat"' in html
     assert 'id="codex-model-input"' not in html

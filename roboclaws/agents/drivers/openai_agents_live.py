@@ -9,11 +9,17 @@ import json
 import os
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from roboclaws.agents.live_runtime import LiveAgentRequest, LiveAgentResult, LiveAgentRuntime
 from roboclaws.agents.live_status import LiveAgentFailure
+from roboclaws.agents.provider_registry import (
+    normalize_provider_route,
+    provider_route_spec,
+    route_base_url,
+)
 
 try:
     from agents.models.interface import Model as _AgentsModel  # type: ignore[import-not-found]
@@ -29,6 +35,8 @@ MODEL_SERVICE_RETRY_SLEEP_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLE
 DEFAULT_MODEL_INPUT_COMPACTION_MIN_CHARS = 1200
 MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
 RAW_FPV_OBSERVATION_ID_RE = re.compile(r"raw_fpv_\d+")
+MODEL_RACING_OBSERVABILITY_SCHEMA = "agent_sdk_model_racing_observability_v1"
+MODEL_RACING_EVENT_SCHEMA = "openai_agents_model_racing_observability_v1"
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -946,6 +954,7 @@ def _runtime_config(
     sdk_model_settings = _sdk_model_settings_payload(request)
     sdk_run_config = _sdk_run_config_payload(request, events_path=None)
     input_compaction = _input_compaction_config(request)
+    racing_observability = _model_racing_observability_config(request)
     responses_feature_surface = _responses_feature_surface(model_settings)
     return {
         "runtime": "openai-agents-live",
@@ -967,6 +976,7 @@ def _runtime_config(
         "sdk_run_config": sdk_run_config,
         "agent_sdk_responses_features": responses_feature_surface,
         "model_input_compaction": input_compaction,
+        "model_racing_observability": racing_observability,
         "prompt_cache_retention": sdk_model_settings.get("prompt_cache_retention") or "",
         "trace_include_sensitive_data": sdk_run_config.get("trace_include_sensitive_data"),
     }
@@ -993,6 +1003,54 @@ def _responses_feature_surface(model_settings: dict[str, Any]) -> dict[str, Any]
             "Responses continuation/session levers are recorded as capability surface only; "
             "they are not enabled by default because task state and report completeness must "
             "remain MCP-visible."
+        ),
+    }
+
+
+def _model_racing_observability_config(request: LiveAgentRequest) -> dict[str, Any]:
+    metadata = dict(request.metadata)
+    profile = metadata.get("agent_sdk_perf_profile")
+    config = profile.get("model_racing_observability") if isinstance(profile, dict) else None
+    if not isinstance(config, dict):
+        config = metadata.get("model_racing_observability")
+    if not isinstance(config, dict):
+        config = {}
+    enabled = _bool_setting(config.get("enabled"), default=False)
+    arm_count = _positive_int(config.get("arm_count"), default=1)
+    if not enabled:
+        arm_count = 1
+    else:
+        arm_count = max(2, arm_count)
+    configured_multiplier = float(config.get("racing_multiplier") or arm_count)
+    racing_multiplier = max(float(arm_count), configured_multiplier) if enabled else 1.0
+    racing_mode = str(
+        config.get("mode") or ("get_response_racing_v1" if enabled else "per_arm_observability_v1")
+    )
+    candidate_ids = (
+        config.get("candidate_ids") if isinstance(config.get("candidate_ids"), list) else []
+    )
+    return {
+        "schema": MODEL_RACING_OBSERVABILITY_SCHEMA,
+        "enabled": enabled,
+        "mode": racing_mode,
+        "candidate_ids": [str(item) for item in candidate_ids],
+        "arm_count": arm_count,
+        "racing_multiplier": racing_multiplier,
+        "winner_selection": str(
+            config.get("winner_selection")
+            or ("first_successful_sdk_response" if enabled else "single_arm_no_racing")
+        ),
+        "loser_cancellation": str(
+            config.get("loser_cancellation")
+            or ("cancel_pending_losers" if enabled else "not_applicable_until_racing_enabled")
+        ),
+        "unknown_loser_billing": True
+        if enabled
+        else bool(config.get("unknown_loser_billing", False)),
+        "private_artifact_policy": (
+            "records model-call arm lifecycle, winner/cancel fields, timing, provider/model ids, "
+            "and usage availability only; raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted"
         ),
     }
 
@@ -1292,8 +1350,6 @@ def _model_for_request(request: LiveAgentRequest) -> Any:
     else:  # pragma: no cover - guarded by _model_settings.
         raise RuntimeError(f"unsupported OpenAI Agents wire API: {settings['wire_api']}")
     retry_config = _model_service_retry_config(request)
-    if retry_config["retry_attempts"] <= 0:
-        return base_model
     return _RetryingModel(
         base_model,
         retry_attempts=int(retry_config["retry_attempts"]),
@@ -1330,6 +1386,15 @@ def _safe_model_settings(request: LiveAgentRequest) -> dict[str, str]:
         return {}
 
 
+@dataclass(frozen=True)
+class _ModelRacingArmOutcome:
+    arm_index: int
+    arm_id: str
+    elapsed_s: float
+    result: Any = None
+    exc: Exception | None = None
+
+
 class _RetryingModel(_AgentsModel):
     """Retry transient provider failures at the SDK model request boundary."""
 
@@ -1349,6 +1414,7 @@ class _RetryingModel(_AgentsModel):
         self.events_path = events_path
         self.spans_path = spans_path
         self.runtime_config = dict(runtime_config)
+        self._model_call_index = 0
 
     async def close(self) -> None:
         close = getattr(self.base_model, "close", None)
@@ -1382,6 +1448,8 @@ class _RetryingModel(_AgentsModel):
         attempt_index = 0
         while True:
             started = time.time()
+            call_index = self._next_model_call_index()
+            racing_enabled = self._get_response_racing_enabled()
             _append_model_service_event(
                 self.events_path,
                 self.spans_path,
@@ -1392,18 +1460,51 @@ class _RetryingModel(_AgentsModel):
                 method="get_response",
             )
             try:
-                result = await self.base_model.get_response(
-                    system_instructions,
-                    input,
-                    model_settings,
-                    tools,
-                    output_schema,
-                    handoffs,
-                    tracing,
-                    previous_response_id=previous_response_id,
-                    conversation_id=conversation_id,
-                    prompt=prompt,
-                )
+                if racing_enabled:
+                    result = await self._race_get_response(
+                        call_index=call_index,
+                        attempt_index=attempt_index,
+                        system_instructions=system_instructions,
+                        input=input,
+                        model_settings=model_settings,
+                        tools=tools,
+                        output_schema=output_schema,
+                        handoffs=handoffs,
+                        tracing=tracing,
+                        previous_response_id=previous_response_id,
+                        conversation_id=conversation_id,
+                        prompt=prompt,
+                    )
+                else:
+                    arm_id = _model_racing_arm_id(
+                        call_index=call_index,
+                        attempt_index=attempt_index,
+                        arm_index=0,
+                    )
+                    _append_model_racing_event(
+                        self.events_path,
+                        self.spans_path,
+                        "model_racing_arm_start",
+                        runtime_config=self.runtime_config,
+                        call_index=call_index,
+                        attempt_index=attempt_index,
+                        arm_id=arm_id,
+                        arm_index=0,
+                        method="get_response",
+                        arm_role="single",
+                    )
+                    result = await self.base_model.get_response(
+                        system_instructions,
+                        input,
+                        model_settings,
+                        tools,
+                        output_schema,
+                        handoffs,
+                        tracing,
+                        previous_response_id=previous_response_id,
+                        conversation_id=conversation_id,
+                        prompt=prompt,
+                    )
             except Exception as exc:
                 should_retry, failure = _should_retry_model_service_failure(
                     exc,
@@ -1423,6 +1524,33 @@ class _RetryingModel(_AgentsModel):
                     retry_delay_s=self.retry_sleep_s if should_retry else None,
                     safe_to_replay=True,
                 )
+                if not racing_enabled:
+                    _append_model_racing_event(
+                        self.events_path,
+                        self.spans_path,
+                        "model_racing_arm_failure",
+                        runtime_config=self.runtime_config,
+                        call_index=call_index,
+                        attempt_index=attempt_index,
+                        arm_id=_model_racing_arm_id(
+                            call_index=call_index,
+                            attempt_index=attempt_index,
+                            arm_index=0,
+                        ),
+                        arm_index=0,
+                        method="get_response",
+                        arm_role="single",
+                        elapsed_s=_round_duration(time.time() - started),
+                        final_outcome="retry_scheduled" if should_retry else "failure",
+                        failure_class=failure.reason,
+                        provider_reason=failure.provider_reason,
+                        retryable=failure.retryable,
+                        winner=False,
+                        cancelled=False,
+                        cancellation_observed=False,
+                        loser_billing_unknown=False,
+                        safe_to_replay=True,
+                    )
                 if not should_retry:
                     raise
                 if self.retry_sleep_s:
@@ -1440,7 +1568,241 @@ class _RetryingModel(_AgentsModel):
                 elapsed_s=_round_duration(time.time() - started),
                 final_outcome="success",
             )
+            if not racing_enabled:
+                _append_model_racing_event(
+                    self.events_path,
+                    self.spans_path,
+                    "model_racing_arm_finish",
+                    runtime_config=self.runtime_config,
+                    call_index=call_index,
+                    attempt_index=attempt_index,
+                    arm_id=_model_racing_arm_id(
+                        call_index=call_index,
+                        attempt_index=attempt_index,
+                        arm_index=0,
+                    ),
+                    arm_index=0,
+                    method="get_response",
+                    arm_role="single",
+                    elapsed_s=_round_duration(time.time() - started),
+                    final_outcome="success",
+                    winner=True,
+                    cancelled=False,
+                    cancellation_observed=False,
+                    loser_billing_unknown=False,
+                    usage_summary=_usage_summary(result),
+                )
             return result
+
+    def _get_response_racing_enabled(self) -> bool:
+        config = (
+            self.runtime_config.get("model_racing_observability")
+            if isinstance(self.runtime_config.get("model_racing_observability"), dict)
+            else {}
+        )
+        return bool(config.get("enabled")) and self._racing_arm_count() > 1
+
+    def _racing_arm_count(self) -> int:
+        config = (
+            self.runtime_config.get("model_racing_observability")
+            if isinstance(self.runtime_config.get("model_racing_observability"), dict)
+            else {}
+        )
+        return _positive_int(config.get("arm_count"), default=1)
+
+    async def _race_get_response(
+        self,
+        *,
+        call_index: int,
+        attempt_index: int,
+        system_instructions: str | None,
+        input: Any,
+        model_settings: Any,
+        tools: list[Any],
+        output_schema: Any,
+        handoffs: list[Any],
+        tracing: Any,
+        previous_response_id: str | None,
+        conversation_id: str | None,
+        prompt: Any,
+    ) -> Any:
+        tasks = [
+            asyncio.create_task(
+                self._get_response_racing_arm(
+                    arm_index=arm_index,
+                    call_index=call_index,
+                    attempt_index=attempt_index,
+                    system_instructions=system_instructions,
+                    input=input,
+                    model_settings=model_settings,
+                    tools=tools,
+                    output_schema=output_schema,
+                    handoffs=handoffs,
+                    tracing=tracing,
+                    previous_response_id=previous_response_id,
+                    conversation_id=conversation_id,
+                    prompt=prompt,
+                )
+            )
+            for arm_index in range(self._racing_arm_count())
+        ]
+        pending = set(tasks)
+        failures: list[_ModelRacingArmOutcome] = []
+        try:
+            while pending:
+                done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+                successful = [
+                    outcome for task in done for outcome in [task.result()] if outcome.exc is None
+                ]
+                failures.extend(
+                    outcome
+                    for task in done
+                    for outcome in [task.result()]
+                    if outcome.exc is not None
+                )
+                if not successful:
+                    continue
+
+                winner = min(successful, key=lambda outcome: outcome.arm_index)
+                for outcome in successful:
+                    _append_model_racing_event(
+                        self.events_path,
+                        self.spans_path,
+                        "model_racing_arm_finish",
+                        runtime_config=self.runtime_config,
+                        call_index=call_index,
+                        attempt_index=attempt_index,
+                        arm_id=outcome.arm_id,
+                        arm_index=outcome.arm_index,
+                        method="get_response",
+                        arm_role="winner" if outcome is winner else "loser",
+                        elapsed_s=outcome.elapsed_s,
+                        final_outcome="success" if outcome is winner else "success_loser",
+                        winner=outcome is winner,
+                        cancelled=False,
+                        cancellation_observed=False,
+                        loser_billing_unknown=outcome is not winner,
+                        usage_summary=_usage_summary(outcome.result),
+                    )
+                for task in pending:
+                    task.cancel()
+                if pending:
+                    await asyncio.gather(*pending, return_exceptions=True)
+                return winner.result
+            if failures and failures[-1].exc is not None:
+                raise failures[-1].exc
+            raise RuntimeError("model racing completed without a winning arm")
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            if any(not task.done() for task in tasks):
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _get_response_racing_arm(
+        self,
+        *,
+        arm_index: int,
+        call_index: int,
+        attempt_index: int,
+        system_instructions: str | None,
+        input: Any,
+        model_settings: Any,
+        tools: list[Any],
+        output_schema: Any,
+        handoffs: list[Any],
+        tracing: Any,
+        previous_response_id: str | None,
+        conversation_id: str | None,
+        prompt: Any,
+    ) -> "_ModelRacingArmOutcome":
+        started = time.time()
+        arm_id = _model_racing_arm_id(
+            call_index=call_index,
+            attempt_index=attempt_index,
+            arm_index=arm_index,
+        )
+        _append_model_racing_event(
+            self.events_path,
+            self.spans_path,
+            "model_racing_arm_start",
+            runtime_config=self.runtime_config,
+            call_index=call_index,
+            attempt_index=attempt_index,
+            arm_id=arm_id,
+            arm_index=arm_index,
+            method="get_response",
+            arm_role="candidate",
+        )
+        try:
+            result = await self.base_model.get_response(
+                system_instructions,
+                input,
+                model_settings,
+                tools,
+                output_schema,
+                handoffs,
+                tracing,
+                previous_response_id=previous_response_id,
+                conversation_id=conversation_id,
+                prompt=prompt,
+            )
+        except asyncio.CancelledError:
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_cancelled",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                arm_index=arm_index,
+                method="get_response",
+                arm_role="loser",
+                elapsed_s=_round_duration(time.time() - started),
+                final_outcome="cancelled",
+                winner=False,
+                cancelled=True,
+                cancellation_observed=True,
+                loser_billing_unknown=True,
+            )
+            raise
+        except Exception as exc:
+            failure = _failure_from_exception(exc)
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_failure",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                arm_index=arm_index,
+                method="get_response",
+                arm_role="candidate",
+                elapsed_s=_round_duration(time.time() - started),
+                final_outcome="failure",
+                failure_class=failure.reason,
+                provider_reason=failure.provider_reason,
+                retryable=failure.retryable,
+                winner=False,
+                cancelled=False,
+                cancellation_observed=False,
+                loser_billing_unknown=False,
+                safe_to_replay=True,
+            )
+            return _ModelRacingArmOutcome(
+                arm_index=arm_index,
+                arm_id=arm_id,
+                elapsed_s=_round_duration(time.time() - started),
+                exc=exc,
+            )
+        return _ModelRacingArmOutcome(
+            arm_index=arm_index,
+            arm_id=arm_id,
+            elapsed_s=_round_duration(time.time() - started),
+            result=result,
+        )
 
     async def stream_response(
         self,
@@ -1460,6 +1822,25 @@ class _RetryingModel(_AgentsModel):
         while True:
             started = time.time()
             yielded_event = False
+            call_index = self._next_model_call_index()
+            arm_id = _model_racing_arm_id(call_index=call_index, attempt_index=attempt_index)
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_start",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                method="stream_response",
+                arm_role="single",
+                arm_count=1,
+                racing_enabled=False,
+                racing_mode="stream_response_single_arm_no_racing",
+                racing_multiplier=1.0,
+                winner_selection="stream_response_single_arm_no_racing",
+                loser_cancellation="not_applicable_stream_response",
+            )
             _append_model_service_event(
                 self.events_path,
                 self.spans_path,
@@ -1506,6 +1887,33 @@ class _RetryingModel(_AgentsModel):
                     retry_delay_s=self.retry_sleep_s if should_retry else None,
                     safe_to_replay=safe_to_replay,
                 )
+                _append_model_racing_event(
+                    self.events_path,
+                    self.spans_path,
+                    "model_racing_arm_failure",
+                    runtime_config=self.runtime_config,
+                    call_index=call_index,
+                    attempt_index=attempt_index,
+                    arm_id=arm_id,
+                    method="stream_response",
+                    arm_role="single",
+                    arm_count=1,
+                    racing_enabled=False,
+                    racing_mode="stream_response_single_arm_no_racing",
+                    racing_multiplier=1.0,
+                    winner_selection="stream_response_single_arm_no_racing",
+                    loser_cancellation="not_applicable_stream_response",
+                    elapsed_s=_round_duration(time.time() - started),
+                    final_outcome="retry_scheduled" if should_retry else "failure",
+                    failure_class=failure.reason,
+                    provider_reason=failure.provider_reason,
+                    retryable=failure.retryable,
+                    winner=False,
+                    cancelled=False,
+                    cancellation_observed=False,
+                    loser_billing_unknown=False,
+                    safe_to_replay=safe_to_replay,
+                )
                 if not should_retry:
                     raise
                 if self.retry_sleep_s:
@@ -1523,7 +1931,35 @@ class _RetryingModel(_AgentsModel):
                 elapsed_s=_round_duration(time.time() - started),
                 final_outcome="success",
             )
+            _append_model_racing_event(
+                self.events_path,
+                self.spans_path,
+                "model_racing_arm_finish",
+                runtime_config=self.runtime_config,
+                call_index=call_index,
+                attempt_index=attempt_index,
+                arm_id=arm_id,
+                method="stream_response",
+                arm_role="single",
+                arm_count=1,
+                racing_enabled=False,
+                racing_mode="stream_response_single_arm_no_racing",
+                racing_multiplier=1.0,
+                winner_selection="stream_response_single_arm_no_racing",
+                loser_cancellation="not_applicable_stream_response",
+                elapsed_s=_round_duration(time.time() - started),
+                final_outcome="success",
+                winner=True,
+                cancelled=False,
+                cancellation_observed=False,
+                loser_billing_unknown=False,
+            )
             return
+
+    def _next_model_call_index(self) -> int:
+        value = self._model_call_index
+        self._model_call_index += 1
+        return value
 
 
 def _should_retry_model_service_failure(
@@ -1632,104 +2068,158 @@ def _append_model_service_event(
     _append_event(spans_path, span_payload)
 
 
+def _model_racing_arm_id(
+    *,
+    call_index: int,
+    attempt_index: int,
+    arm_index: int = 0,
+) -> str:
+    return f"call-{call_index}-attempt-{attempt_index}-arm-{arm_index}"
+
+
+def _append_model_racing_event(
+    events_path: Path,
+    spans_path: Path,
+    event: str,
+    *,
+    runtime_config: dict[str, Any],
+    call_index: int,
+    attempt_index: int,
+    arm_id: str,
+    method: str,
+    arm_role: str,
+    arm_index: int = 0,
+    **extra: Any,
+) -> None:
+    config = (
+        runtime_config.get("model_racing_observability")
+        if isinstance(runtime_config.get("model_racing_observability"), dict)
+        else {}
+    )
+    payload = _drop_empty(
+        {
+            "schema": MODEL_RACING_EVENT_SCHEMA,
+            "event": event,
+            "ts_epoch": time.time(),
+            "runtime": runtime_config.get("runtime"),
+            "provider_profile": runtime_config.get("provider_profile"),
+            "wire_api": runtime_config.get("wire_api"),
+            "model": runtime_config.get("model"),
+            "call_index": call_index,
+            "attempt_index": attempt_index,
+            "arm_id": arm_id,
+            "arm_index": arm_index,
+            "arm_count": config.get("arm_count", 1),
+            "arm_role": arm_role,
+            "method": method,
+            "racing_enabled": bool(config.get("enabled")),
+            "racing_mode": config.get("mode") or "off",
+            "racing_multiplier": config.get("racing_multiplier", 1.0),
+            "winner_selection": config.get("winner_selection") or "single_arm_no_racing",
+            "loser_cancellation": config.get("loser_cancellation")
+            or "not_applicable_until_racing_enabled",
+            **extra,
+        }
+    )
+    _append_event(events_path, payload)
+    span_payload = {
+        **payload,
+        "schema": "openai_agents_sanitized_span_v1",
+        "span_type": "model_racing_observability",
+    }
+    _append_event(spans_path, span_payload)
+
+
+def _usage_summary(result: Any) -> dict[str, Any]:
+    raw_usage = getattr(result, "usage", None)
+    usage = _to_jsonable(raw_usage) if raw_usage is not None else {}
+    if not isinstance(usage, dict) or not usage:
+        return {"usage_available": False}
+    input_tokens = _int_from_any(usage.get("input_tokens"))
+    cached_tokens = _cached_input_tokens_from_usage(usage)
+    output_tokens = _int_from_any(usage.get("output_tokens"))
+    reasoning_tokens = _reasoning_tokens_from_usage(usage)
+    payload: dict[str, Any] = {
+        "usage_available": True,
+        "input_tokens": input_tokens,
+        "cached_input_tokens": cached_tokens,
+        "output_tokens": output_tokens,
+        "reasoning_tokens": reasoning_tokens,
+    }
+    if input_tokens is not None and cached_tokens is not None:
+        payload["uncached_input_tokens"] = max(0, input_tokens - cached_tokens)
+    return _drop_empty(payload)
+
+
+def _cached_input_tokens_from_usage(usage: dict[str, Any]) -> int | None:
+    details = usage.get("input_tokens_details")
+    if isinstance(details, dict):
+        cached = _int_from_any(details.get("cached_tokens"))
+        if cached is not None:
+            return cached
+    return _int_from_any(usage.get("cached_input_tokens"))
+
+
+def _reasoning_tokens_from_usage(usage: dict[str, Any]) -> int | None:
+    details = usage.get("output_tokens_details")
+    if isinstance(details, dict):
+        reasoning = _int_from_any(details.get("reasoning_tokens"))
+        if reasoning is not None:
+            return reasoning
+    return _int_from_any(usage.get("reasoning_tokens"))
+
+
+def _int_from_any(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
     metadata = dict(request.metadata)
-    provider = str(
+    raw_provider = str(
         metadata.get("provider_profile")
         or request.provider_profile
         or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_PROVIDER")
         or os.environ.get("ROBOCLAWS_CODEX_PROVIDER")
         or "codex-env"
-    )
-    provider = provider.strip()
-    if provider in {"codex-mify", "mify"}:
-        base_url = str(
-            metadata.get("base_url")
-            or os.environ.get("XM_LLM_BASE_URL")
-            or "https://api.llm.mioffice.cn/v1"
-        )
-        api_key = str(metadata.get("api_key") or os.environ.get("XM_LLM_API_KEY") or "")
-        model = str(
-            metadata.get("model")
-            or request.model
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-            or "xiaomi/mimo-v2.5"
-        )
-        _require_setting("mify", "XM_LLM_API_KEY", api_key)
-        return {
-            "provider_profile": "mify",
-            "wire_api": "responses",
-            "base_url": base_url,
-            "api_key": api_key,
-            "model": model,
-        }
-    if provider in {"mimo-openai-chat", "mimo-chat"}:
-        base_url = str(
-            metadata.get("base_url")
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
-            or os.environ.get("MIMO_OPENAI_BASE_URL")
-            or "https://token-plan-cn.xiaomimimo.com/v1"
-        )
-        api_key = str(metadata.get("api_key") or os.environ.get("MIMO_TP_KEY") or "")
-        model = str(
-            metadata.get("model")
-            or request.model
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-            or "mimo-v2.5"
-        )
-        _require_setting("mimo-openai-chat", "MIMO_TP_KEY", api_key)
-        return {
-            "provider_profile": "mimo-openai-chat",
-            "wire_api": "chat-completions",
-            "base_url": base_url,
-            "api_key": api_key,
-            "model": model,
-        }
-    if provider in {"kimi-openai-chat", "kimi-chat"}:
-        base_url = str(
-            metadata.get("base_url")
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
-            or os.environ.get("KIMI_OPENAI_BASE_URL")
-            or "https://api.kimi.com/coding/v1"
-        )
-        api_key = str(metadata.get("api_key") or os.environ.get("KIMI_API_KEY") or "")
-        model = str(
-            metadata.get("model")
-            or request.model
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-            or "kimi-k2.6"
-        )
-        _require_setting("kimi-openai-chat", "KIMI_API_KEY", api_key)
-        return {
-            "provider_profile": "kimi-openai-chat",
-            "wire_api": "chat-completions",
-            "base_url": base_url,
-            "api_key": api_key,
-            "model": model,
-        }
-    if provider != "codex-env":
+    ).strip()
+    try:
+        provider = normalize_provider_route(raw_provider, default="codex-env")
+        route = provider_route_spec(provider)
+    except KeyError as exc:
         raise RuntimeError(
             "openai-agents-live supports provider profiles codex-env, mify, "
-            "mimo-openai-chat, and kimi-openai-chat"
-        )
+            "minimax, mimo-openai-chat, and kimi-openai-chat"
+        ) from exc
+    if "openai-agents-sdk" not in route.supported_engines:
+        raise RuntimeError(f"openai-agents-live does not support provider profile {provider}")
 
-    base_url = str(metadata.get("base_url") or os.environ.get("CODEX_BASE_URL") or "")
-    api_key = str(metadata.get("api_key") or os.environ.get("CODEX_API_KEY") or "")
+    base_url = str(metadata.get("base_url") or route_base_url(route))
+    api_key = str(
+        metadata.get("api_key")
+        or (os.environ.get(route.api_key_env or "") if route.api_key_env else "")
+        or ""
+    )
     model = str(
         metadata.get("model")
         or request.model
         or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
         or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-        or "gpt-5.5"
+        or route.default_model_id
     )
-    _require_setting("codex-env", "CODEX_BASE_URL", base_url)
-    _require_setting("codex-env", "CODEX_API_KEY", api_key)
+    if route.base_url_env == "CODEX_BASE_URL":
+        _require_setting(provider, route.base_url_env, base_url)
+    if route.api_key_env:
+        _require_setting(provider, route.api_key_env, api_key)
     return {
-        "provider_profile": "codex-env",
-        "wire_api": "responses",
+        "provider_profile": provider,
+        "wire_api": route.wire_api,
+        "wire_source": route.wire_source,
+        "route_status": route.status_for_engine("openai-agents-sdk"),
         "base_url": base_url,
         "api_key": api_key,
         "model": model,
@@ -1775,7 +2265,14 @@ def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
     lowered = detail.lower()
     if any(item in lowered for item in ("requires codex_base_url", "requires codex_api_key")):
         return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
-    if any(item in lowered for item in ("requires xm_llm_api_key", "supports responses provider")):
+    if any(
+        item in lowered
+        for item in (
+            "requires xm_llm_api_key",
+            "requires mm_api_key",
+            "supports responses provider",
+        )
+    ):
         return LiveAgentFailure("provider_config_failure", retryable=False, detail=detail)
     if any(
         item in lowered for item in ("authentication", "unauthorized", "invalid api key", "401")

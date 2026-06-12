@@ -13,6 +13,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.agents.provider_registry import (
+    default_provider_profile,
+    provider_readiness,
+    provider_route_spec,
+)
+from roboclaws.household.evidence_lane_policy import evidence_lane_compatibility
 from roboclaws.launch.catalog import LaunchError, resolve_surface_launch
 from roboclaws.launch.environment_setup import (
     ENVIRONMENT_SETUP_BASELINE,
@@ -33,36 +39,6 @@ from roboclaws.operator_console.state import resolve_display_run_dir
 
 DEFAULT_MCP_HOST = "127.0.0.1"
 DEFAULT_MCP_PORT = 18788
-CODEX_PROVIDER_DEFAULT = "codex-env"
-CODEX_PROVIDER_DEFAULT_MODELS = {
-    "codex-env": "gpt-5.5",
-    "mify": "xiaomi/mimo-v2.5",
-}
-CODEX_PROVIDER_REQUIRED_ENV = {
-    "codex-env": ("CODEX_BASE_URL", "CODEX_API_KEY"),
-    "mify": ("XM_LLM_API_KEY",),
-}
-OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS = {
-    **CODEX_PROVIDER_DEFAULT_MODELS,
-    "mimo-openai-chat": "mimo-v2.5",
-    "kimi-openai-chat": "kimi-k2.6",
-}
-OPENAI_AGENTS_PROVIDER_REQUIRED_ENV = {
-    **CODEX_PROVIDER_REQUIRED_ENV,
-    "mimo-openai-chat": ("MIMO_TP_KEY",),
-    "kimi-openai-chat": ("KIMI_API_KEY",),
-}
-CLAUDE_PROVIDER_DEFAULT = "mimo-anthropic"
-CLAUDE_PROVIDER_DEFAULT_MODELS = {
-    "kimi-anthropic": "kimi-k2.6",
-    "mimo-anthropic": "mimo-v2.5",
-    "mify-anthropic": "xiaomi/mimo-v2.5",
-}
-CLAUDE_PROVIDER_REQUIRED_ENV = {
-    "kimi-anthropic": ("KIMI_API_KEY",),
-    "mimo-anthropic": ("MIMO_TP_KEY",),
-    "mify-anthropic": ("XM_LLM_API_KEY",),
-}
 ALLOWED_ENV_OVERRIDES = {"ROBOCLAWS_CODEX_PROVIDER", "ROBOCLAWS_CLAUDE_PROVIDER"}
 RUN_ID_SAFE_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -371,6 +347,10 @@ def route_readiness(
                 )
                 message = str(provider_status["message"] or f"No {label} provider route found.")
                 kind = "needs_provider"
+            elif provider_status.get("capability_blocker"):
+                ok = False
+                message = str(provider_status["capability_blocker"])
+                kind = "unsupported_evidence_lane"
         elif gate.kind == "isaac_preflight":
             accepted = accepted_isaac_preflight(root)
             ok = accepted is not None
@@ -584,21 +564,25 @@ def _validate_env_overrides(
         if key == "ROBOCLAWS_CLAUDE_PROVIDER" and selection.agent_engine_id != "claude-code":
             raise ConsoleLaunchError("Claude provider override is only supported for Claude routes")
         if key == "ROBOCLAWS_CODEX_PROVIDER":
-            if selection.agent_engine_id == "openai-agents-sdk":
-                allowed = OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS
-                expected = "codex-env, mify, mimo-openai-chat, or kimi-openai-chat"
-            else:
-                allowed = CODEX_PROVIDER_DEFAULT_MODELS
-                expected = "codex-env or mify"
-            if value not in allowed:
+            try:
+                route = provider_route_spec(value)
+            except KeyError:
+                route = None
+            if route is None or selection.agent_engine_id not in route.supported_engines:
+                expected = ", ".join(selection.to_payload()["supported_provider_profiles"])
                 raise ConsoleLaunchError(
                     f"unsupported Codex provider override: {value}; expected {expected}"
                 )
-        if key == "ROBOCLAWS_CLAUDE_PROVIDER" and value not in CLAUDE_PROVIDER_DEFAULT_MODELS:
-            raise ConsoleLaunchError(
-                "unsupported Claude provider override: "
-                f"{value}; expected kimi-anthropic, mimo-anthropic, or mify-anthropic"
-            )
+        if key == "ROBOCLAWS_CLAUDE_PROVIDER":
+            try:
+                route = provider_route_spec(value)
+            except KeyError:
+                route = None
+            if route is None or selection.agent_engine_id not in route.supported_engines:
+                expected = ", ".join(selection.to_payload()["supported_provider_profiles"])
+                raise ConsoleLaunchError(
+                    f"unsupported Claude provider override: {value}; expected {expected}"
+                )
 
 
 def _apply_env_overrides(
@@ -628,11 +612,20 @@ def _provider_status(
 ) -> dict[str, Any]:
     selection = route.selection if isinstance(route, ConsoleRoute) else route
     if selection.agent_engine_id == "codex-cli":
-        return _codex_provider_status(env_map)
+        return _with_evidence_lane_compatibility(
+            selection,
+            _codex_provider_status(env_map),
+        )
     if selection.agent_engine_id == "openai-agents-sdk":
-        return _openai_agents_provider_status(env_map)
+        return _with_evidence_lane_compatibility(
+            selection,
+            _openai_agents_provider_status(env_map),
+        )
     if selection.agent_engine_id == "claude-code":
-        return _claude_provider_status(env_map)
+        return _with_evidence_lane_compatibility(
+            selection,
+            _claude_provider_status(env_map),
+        )
     return {
         "agent_engine": selection.agent_engine_id,
         "provider": "",
@@ -644,123 +637,73 @@ def _provider_status(
     }
 
 
+def _with_evidence_lane_compatibility(
+    selection: ConsoleLaunchSelection,
+    status: dict[str, Any],
+) -> dict[str, Any]:
+    provider = str(status.get("provider") or selection.provider_profile or "")
+    model = str(status.get("model") or "")
+    if not provider:
+        return status
+    try:
+        compatibility = evidence_lane_compatibility(
+            evidence_lane=selection.evidence_lane,
+            agent_engine=selection.agent_engine_id,
+            provider_profile=provider,
+            model_id=model,
+        )
+    except (KeyError, ValueError):
+        return status
+    enriched = dict(status)
+    enriched["evidence_lane_compatible"] = compatibility.allowed
+    if not compatibility.allowed:
+        enriched["capability_blocker"] = compatibility.reason
+    return enriched
+
+
 def _claude_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = (
         env_map.get("ROBOCLAWS_CLAUDE_PROVIDER")
         or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
-        or CLAUDE_PROVIDER_DEFAULT
+        or default_provider_profile("claude-code")
     )
     model = env_map.get("ROBOCLAWS_CLAUDE_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
-    if provider not in CLAUDE_PROVIDER_DEFAULT_MODELS:
-        return {
-            "driver": "claude",
-            "provider": provider,
-            "model": model or "",
-            "required_env": [],
-            "missing_env": [],
-            "ok": False,
-            "message": (
-                f"Unsupported Claude provider {provider!r}; choose Kimi, MiMo token plan, "
-                "or MiMo mify."
-            ),
-        }
-    model = model or CLAUDE_PROVIDER_DEFAULT_MODELS[provider]
-    required_env = list(CLAUDE_PROVIDER_REQUIRED_ENV[provider])
-    missing_env = [key for key in required_env if not env_map.get(key)]
-    if missing_env:
-        required = " and ".join(required_env)
-        message = f"Claude provider {provider} requires {required} in repo .env."
-    else:
-        message = ""
-    return {
-        "driver": "claude",
-        "provider": provider,
-        "model": model,
-        "required_env": required_env,
-        "missing_env": missing_env,
-        "ok": not missing_env,
-        "message": message,
-    }
+    return provider_readiness(
+        agent_engine="claude-code",
+        provider_profile=provider,
+        model=model,
+        env=env_map,
+    )
 
 
 def _codex_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = (
         env_map.get("ROBOCLAWS_CODEX_PROVIDER")
         or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
-        or CODEX_PROVIDER_DEFAULT
+        or default_provider_profile("codex-cli")
     )
     model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
-    if provider not in CODEX_PROVIDER_DEFAULT_MODELS:
-        return {
-            "driver": "codex",
-            "provider": provider,
-            "model": model or "",
-            "required_env": [],
-            "missing_env": [],
-            "ok": False,
-            "message": f"Unsupported Codex provider {provider!r}; choose codex-env or mify.",
-        }
-    model = model or CODEX_PROVIDER_DEFAULT_MODELS[provider]
-    required_env = list(CODEX_PROVIDER_REQUIRED_ENV[provider])
-    missing_env = [key for key in required_env if not env_map.get(key)]
-    if missing_env:
-        if provider == "codex-env":
-            message = (
-                "Codex provider codex-env requires CODEX_BASE_URL and CODEX_API_KEY "
-                "in repo .env. Choose mify explicitly only when using XM_LLM_API_KEY."
-            )
-        else:
-            message = "Codex provider mify requires XM_LLM_API_KEY in repo .env."
-    else:
-        message = ""
-    return {
-        "driver": "codex",
-        "provider": provider,
-        "model": model,
-        "required_env": required_env,
-        "missing_env": missing_env,
-        "ok": not missing_env,
-        "message": message,
-    }
+    return provider_readiness(
+        agent_engine="codex-cli",
+        provider_profile=provider,
+        model=model,
+        env=env_map,
+    )
 
 
 def _openai_agents_provider_status(env_map: dict[str, str]) -> dict[str, Any]:
     provider = (
         env_map.get("ROBOCLAWS_CODEX_PROVIDER")
         or env_map.get("ROBOCLAWS_CODE_AGENT_PROVIDER")
-        or CODEX_PROVIDER_DEFAULT
+        or default_provider_profile("openai-agents-sdk")
     )
     model = env_map.get("ROBOCLAWS_CODEX_MODEL") or env_map.get("ROBOCLAWS_CODE_AGENT_MODEL")
-    if provider not in OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS:
-        return {
-            "driver": "openai-agents-sdk",
-            "provider": provider,
-            "model": model or "",
-            "required_env": [],
-            "missing_env": [],
-            "ok": False,
-            "message": (
-                f"Unsupported OpenAI Agents SDK provider {provider!r}; choose "
-                "codex-env, mify, MiMo OpenAI Chat, or Kimi OpenAI Chat."
-            ),
-        }
-    model = model or OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS[provider]
-    required_env = list(OPENAI_AGENTS_PROVIDER_REQUIRED_ENV[provider])
-    missing_env = [key for key in required_env if not env_map.get(key)]
-    if missing_env:
-        required = " and ".join(required_env)
-        message = f"OpenAI Agents SDK provider {provider} requires {required} in repo .env."
-    else:
-        message = ""
-    return {
-        "driver": "openai-agents-sdk",
-        "provider": provider,
-        "model": model,
-        "required_env": required_env,
-        "missing_env": missing_env,
-        "ok": not missing_env,
-        "message": message,
-    }
+    return provider_readiness(
+        agent_engine="openai-agents-sdk",
+        provider_profile=provider,
+        model=model,
+        env=env_map,
+    )
 
 
 def _attachable_run_payload(root: Path, lock_state: Any) -> dict[str, Any] | None:

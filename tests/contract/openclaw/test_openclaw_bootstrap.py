@@ -369,7 +369,7 @@ def test_kimi_branch_registers_anthropic_kimi_provider() -> None:
     at the same host, no forced reasoning, canonical
     ``User-Agent: Claude-Code/1.0``.  Kimi's direct-probe path in
     ``KimiCodingProvider`` uses the same host at a different surface for
-    the same reason (see comments in ``roboclaws/core/vlm.py``).
+    the same reason.
     """
     entry = _extract_provider_entry_for("kimi")
     assert entry is not None, (

@@ -4,8 +4,8 @@ import time
 
 import pytest
 
+from roboclaws.core.provider_runtime import ProviderHealthError, ProviderStatus
 from roboclaws.core.provider_safety import handle_provider_exception
-from roboclaws.core.vlm import ProviderHealthError, ProviderStatus
 
 
 class RateLimitError(Exception):

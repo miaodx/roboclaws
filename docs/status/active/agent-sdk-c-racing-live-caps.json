@@ -1,0 +1,92 @@
+{
+  "schema": "agent_sdk_c_racing_live_caps_v1",
+  "created_at": "2026-06-12T00:00:00+08:00",
+  "candidate_ids": ["C", "D", "Q", "Y"],
+  "purpose": "Scoped Candidate C live A/B after deterministic get_response racing prep.",
+  "planned_live_rows": 2,
+  "max_wall_clock_s_per_row": 2700,
+  "concurrency": 1,
+  "provider_profile": "mify",
+  "wire_api": "responses",
+  "model": "mimo-v2.5",
+  "surface": "household-world",
+  "intent": "cleanup",
+  "world": "molmospaces/val_0",
+  "backend": "mujoco",
+  "implementation_backend": "molmospaces_subprocess",
+  "evidence_lane": "world-public-labels",
+  "seed": 7,
+  "scenario_setup": "relocate-cleanup-related-objects",
+  "relocation_count": 5,
+  "baseline": {
+    "output_dir": "output/agent-sdk-perf-followups/c-racing-baseline",
+    "model_racing": false,
+    "racing_multiplier": 1.0
+  },
+  "candidate": {
+    "output_dir": "output/agent-sdk-perf-followups/c-racing-candidate",
+    "model_racing": true,
+    "model_racing_arm_count": 2,
+    "racing_multiplier": 2.0
+  },
+  "credential_gate": {
+    "XM_LLM_API_KEY": "present",
+    "XM_LLM_BASE_URL": "present",
+    "CODEX_API_KEY": "present",
+    "CODEX_BASE_URL": "present"
+  },
+  "network_gate": {
+    "network": "work",
+    "openclaw_blocked": true,
+    "system_claude_blocked": true,
+    "mify_route_allowed": true
+  },
+  "backend_gate": {
+    "visual_backend_slots": 1,
+    "held_slots": 0,
+    "available": true
+  },
+  "stop_conditions": [
+    "network_policy_failure",
+    "missing_credentials",
+    "backend_slot_unavailable",
+    "privacy_or_schema_failure",
+    "quality_regression",
+    "wall_clock_timeout",
+    "context_limit_failure"
+  ],
+  "quality_policy": "same_or_better",
+  "claim_scope": "diagnostic live A/B only; normalized or publishable claims require repeated/paired evidence",
+  "outcome": {
+    "status": "rejected",
+    "reason": "candidate is faster but worse",
+    "baseline_run_dir": "output/agent-sdk-perf-followups/c-racing-baseline/0612_1429/seed-7",
+    "candidate_run_dir": "output/agent-sdk-perf-followups/c-racing-candidate/0612_1448/seed-7",
+    "comparison": "output/agent-sdk-perf-followups/c-racing-comparison-diagnostic.json",
+    "baseline_quality": {
+      "completion_status": "success",
+      "restored_count": 4,
+      "failed_or_noop_tool_count": 1
+    },
+    "candidate_quality": {
+      "completion_status": "partial_success",
+      "restored_count": 3,
+      "failed_or_noop_tool_count": 0
+    },
+    "timing_delta_s": {
+      "observed_wall": -260.987,
+      "mcp_between_tool_gap": -247.174,
+      "observed_model_api": 397.292
+    },
+    "candidate_racing_metrics": {
+      "racing_enabled": true,
+      "racing_multiplier": 2.0,
+      "call_count": 53,
+      "arm_count": 106,
+      "winner_count": 76,
+      "cancelled_count": 75,
+      "max_arm_count_per_call": 2
+    },
+    "next": "Do not claim a C speedup or rerun the same racing policy unchanged; prefer behavior-preserving compaction/session redesign, O paired/tightening evidence, raw-FPV P/AA live rows, or broader B baselines."
+  }
+}

@@ -5,7 +5,7 @@ import os
 import time
 from typing import Any
 
-from roboclaws.core.vlm import (
+from roboclaws.core.provider_runtime import (
     _COST_PER_M,
     _SYSTEM_PROMPT,
     ProviderStatus,

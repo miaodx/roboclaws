@@ -181,6 +181,38 @@ def test_agent_sdk_perf_matrix_rejects_faster_but_worse_quality(
     assert row["speed_comparison"]["elapsed_delta_s"] == -50.0
 
 
+def test_agent_sdk_perf_matrix_allows_expected_rejected_evidence_row(
+    tmp_path: Path,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100)
+    candidate = _write_run(tmp_path / "candidate", restored=4, elapsed_s=50)
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        expected_decision_status="rejected",
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 0
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "rejected"
+    assert row["expected_decision_status"] == "rejected"
+    assert packet["summary"]["rejected"] == ["gpt_world_public_group0"]
+
+
 def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     tmp_path: Path,
 ) -> None:
@@ -191,7 +223,17 @@ def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
         restored=5,
         elapsed_s=70,
         gap_s=50,
-        trace_tools=["metric_map", "metric_map", "declare_visual_candidates"],
+        trace_events=[
+            _trace_request("observe_camera_grounded_candidates", {}),
+            _trace_response("observe_camera_grounded_candidates"),
+            _trace_response("metric_map"),
+            _trace_response("metric_map"),
+            _trace_request(
+                "declare_visual_candidates",
+                {"observation_id": "raw_fpv_001"},
+            ),
+            _trace_response("declare_visual_candidates"),
+        ],
     )
     manifest = _write_manifest(
         tmp_path,
@@ -223,6 +265,12 @@ def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     assert report["tool_handler_s"] == 5.0
     assert report["failed_or_noop_tool_count"] == 0
     assert report["dominant_bucket"] == "model_or_sdk_between_tool_gap"
+    assert report["camera_grounded_tool_breakdown"] == {
+        "observe_camera_grounded_candidates": 1,
+        "declare_visual_candidates_requests": 1,
+        "composite_internal_declare_visual_candidates": 0,
+        "standalone_declare_visual_candidates": 1,
+    }
     assert report["latency_buckets"] == {
         "model_or_sdk_between_tool_gap": {"seconds": 50.0, "share": 0.7143, "reducible": True},
         "visual_capture": {"seconds": 20.0, "share": 0.2857, "reducible": True},
@@ -254,6 +302,58 @@ def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
             "candidate_ids": ["A", "G", "H", "I", "J", "L", "N", "O"],
         }
     ]
+
+
+def test_agent_sdk_perf_matrix_does_not_recommend_o_for_composite_internal_declare(
+    tmp_path: Path,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100, gap_s=80)
+    candidate = _write_run(
+        tmp_path / "candidate",
+        restored=5,
+        elapsed_s=70,
+        gap_s=50,
+        trace_events=[
+            _trace_request("observe_camera_grounded_candidates", {}),
+            _trace_response("observe"),
+            _trace_request("declare_visual_candidates", {"observation_id": "raw_fpv_001"}),
+            _trace_response("declare_visual_candidates"),
+            _trace_response("observe_camera_grounded_candidates"),
+        ],
+    )
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        lane="camera-grounded-labels",
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 0
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    report = packet["rows"][0]["reducible_bucket_report"]
+    assert report["camera_grounded_tool_breakdown"] == {
+        "observe_camera_grounded_candidates": 1,
+        "declare_visual_candidates_requests": 1,
+        "composite_internal_declare_visual_candidates": 1,
+        "standalone_declare_visual_candidates": 0,
+    }
+    candidate_ids = {
+        candidate_id for item in report["recommendations"] for candidate_id in item["candidate_ids"]
+    }
+    assert "O" not in candidate_ids
+    assert packet["summary"]["recommendation_summary"]["candidate_counts"].get("O") is None
 
 
 def test_agent_sdk_perf_matrix_accepts_expected_raw_fpv_diagnostic_terminal(
@@ -318,6 +418,7 @@ def _write_manifest(
     candidate: Path,
     lane: str = "world-public-labels",
     expected_terminal: str = "finished",
+    expected_decision_status: str = "",
 ) -> Path:
     manifest = tmp_path / "matrix.json"
     manifest.write_text(
@@ -363,6 +464,7 @@ def _write_manifest(
                         "candidate_run_dir": str(candidate),
                         "provider_calls": False,
                         "expected_terminal": expected_terminal,
+                        "expected_decision_status": expected_decision_status,
                     },
                     {
                         "row_id": "unsupported_provider",
@@ -392,6 +494,7 @@ def _write_run(
     elapsed_s: float,
     gap_s: float = 40.0,
     trace_tools: list[str] | None = None,
+    trace_events: list[dict[str, object]] | None = None,
     live_timing_extra: dict[str, object] | None = None,
     status: dict[str, object] | None = None,
     run_result: bool = True,
@@ -435,19 +538,20 @@ def _write_run(
             ),
             encoding="utf-8",
         )
+    events = trace_events
     tools = trace_tools or ["observe", "navigate_to_object", "pick", "place", "done"]
+    if events is None:
+        events = [_trace_response(tool) for tool in tools]
     (run_dir / "trace.jsonl").write_text(
-        "\n".join(
-            json.dumps(
-                {
-                    "event": "response",
-                    "tool": tool,
-                    "response": {"ok": True},
-                }
-            )
-            for tool in tools
-        )
-        + "\n",
+        "\n".join(json.dumps(event) for event in events) + "\n",
         encoding="utf-8",
     )
     return run_dir
+
+
+def _trace_request(tool: str, request: dict[str, object]) -> dict[str, object]:
+    return {"event": "request", "tool": tool, "request": request}
+
+
+def _trace_response(tool: str) -> dict[str, object]:
+    return {"event": "response", "tool": tool, "response": {"ok": True}}
