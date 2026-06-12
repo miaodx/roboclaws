@@ -171,4 +171,24 @@ Each entry should answer:
   - Try now: Yes for benchmark design; recurring live execution needs provider
     budget and local-network constraints.
 
+- **Periodic Docker-pinned coding-agent CLI updates**
+  - Created: 2026-06-12.
+  - Updated: 2026-06-12.
+  - Status: Parked maintenance cadence.
+  - Why: The Docker-backed coding-agent runtime pins Codex CLI and Claude Code
+    exactly so live-agent demos are reproducible, but stale pins can miss
+    provider, MCP, transport, and bug-fix changes. Version refreshes should be
+    deliberate instead of accidental.
+  - Next action: On a regular cadence, compare the pinned `@openai/codex` and
+    `@anthropic-ai/claude-code` packages against npm latest, read relevant
+    release notes, build a temporary image, and run focused MCP/provider smoke
+    tests before changing the repo pin.
+  - Evidence:
+    `scripts/dev/coding_agent_toolchain.env`;
+    `Dockerfile.coding-agents`;
+    `scripts/dev/coding_agent_docker.sh`;
+    `scripts/dev/coding_agent_env.sh`.
+  - Try now: Yes for version audit and temporary-image smoke tests. Commit a
+    pin bump only when the focused smokes show a net improvement or needed fix.
+
 _If this list empties, next work should come from a new plan or issue._
