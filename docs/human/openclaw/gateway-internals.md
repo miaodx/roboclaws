@@ -36,8 +36,8 @@ The human quick start intentionally hides bootstrap knobs. Maintainers touching
 | `KIMI_PROVIDER_MODE` | `custom` | Kimi only: repo custom provider or stock Gateway plugin path. |
 | `AGENTS` | `2` | Number of named agents (`1..8`). |
 | `AGENT_PREFIX` | `agent-` | Must match the demo agent prefix. |
-| `AGENT_SOULS` | empty | CSV or sparse dict of soul names from `skills/ai2thor-navigator/souls`. |
-| `SOULS_DIR` | `skills/ai2thor-navigator/souls` | Directory containing `<name>.md` SOUL files. |
+| `AGENT_SOULS` | empty | CSV or sparse dict of soul names. Household cleanup normally leaves this empty. |
+| `SOULS_DIR` | `skills/molmo-realworld-cleanup/souls` | Optional directory containing `<name>.md` SOUL files if a local probe needs personas. |
 | `PERSONALITY_PROBE` | `1` | Set to `0` only when intentionally skipping divergence checks. |
 | `IMAGE` | `OPENCLAW_IMAGE_DEFAULT` from `scripts/openclaw/openclaw-defaults.env` | Pinned Gateway image under test. |
 | `MODEL` | per-provider default | Explicit Gateway model override in `<provider>/<model-id>` form. |
@@ -96,13 +96,12 @@ models only by updating the bootstrap curation and
 ├── SOUL.md         # ← persona slot — Phase 2.2 writes here
 ├── TOOLS.md
 ├── USER.md
-├── skills/         # host-side bind mount to skills/ai2thor-navigator/
+├── skills/         # host-side bind mount to skills/molmo-realworld-cleanup/
 └── state/          # per-agent runtime state (MEMORY lives here)
 ```
 
-Phase 2.1 seeds all of these with defaults. Phase 2.2 replaces `SOUL.md`
-per agent. Phase 2.5 will likely care about `state/MEMORY.md` persistence
-across game turns.
+The Roboclaws bootstrap seeds these with defaults and mounts the household
+cleanup skill by default. Agent memory remains Gateway-owned state.
 
 ## Auth profile shape
 
@@ -141,12 +140,11 @@ under the Gateway's agent framework in its default config.
 
 ## MCP config in openclaw.json
 
-Phase 2.6 added an MCP tool surface — the autonomous-loop agent reaches the
-AI2-THOR engine through first-class `roboclaws__*` MCP tools over
-streamable-http, not via the Phase 2.5 `exec`-and-`curl` contract. The current
-host server exposes canonical `observe`, `observe_archived`, `move`, and
-`done` tools by default. Photo/demo launchers can explicitly opt into
-privileged `scene_objects` and `goto` helpers. The Gateway's MCP loader lives at
+The Gateway reaches the host-side household MCP server through first-class
+`roboclaws__*` MCP tools over streamable-http. The current host server exposes
+household tools such as metric-map, observation, navigation, cleanup actions,
+operator-message checks, and done according to the selected household profile.
+The Gateway's MCP loader lives at
 `/app/dist/pi-bundle-mcp-tools-CxZ16DeR.js:128-170` (originally probed on an
 older content-hash; re-grep the bundle on the current image) and
 expects this exact shape under `mcp.servers.<name>`:
@@ -197,9 +195,8 @@ accepts exactly three values: `"minimal"`, `"coding"`, or `"messaging"`
   by explicit launcher opt-in.
 - `coding` — the default if `tools` is unset. ~25 tools including the
   escape hatches (`exec`, fs, `image`, `browser`). Correct for general agent
-  work; wrong for autonomous AI2-THOR navigation — Phase 2.5 proved the
-  agent drifts straight back to `exec`-and-`curl` when those tools are
-  available, no matter what the prompt says.
+  work; wrong for bounded household MCP runs because the agent can drift back to
+  generic shell/filesystem tools instead of the Roboclaws MCP surface.
 - `messaging` — a middle ground; unused in roboclaws today.
 
 ### Tool-name prefix convention

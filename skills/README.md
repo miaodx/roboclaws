@@ -29,10 +29,6 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
 
 ## Maintained Skills
 
-- `ai2thor-navigator`: base AI2-THOR navigation skill over the public navigation
-  MCP surface.
-- `capture-object-photo`: photo-capture behavior that may opt into privileged
-  AI2-THOR demo helpers.
 - `molmo-realworld-cleanup`: household cleanup behavior over public household
   world, manipulation, and episode capabilities.
 - `agent-validation-matrix`: adaptive validation orchestration that selects and

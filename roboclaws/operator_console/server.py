@@ -29,6 +29,7 @@ from roboclaws.operator_console.launcher import (
     start_console_run,
     stop_console_run,
 )
+from roboclaws.operator_console.messup import preview_messup
 from roboclaws.operator_console.paths import OUTPUT_ROOT_ENV, console_output_root
 from roboclaws.operator_console.routes import (
     get_route,
@@ -196,6 +197,17 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
             payload = self._read_payload()
             if parsed.path == "/api/sessions":
                 return self._json(create_operator_session(self.repo_root), status=201)
+            if parsed.path == "/api/messup-preview":
+                return self._json(
+                    preview_messup(
+                        self.repo_root,
+                        world_id=str(payload.get("world_id") or ""),
+                        backend_id=str(payload.get("backend_id") or ""),
+                        scenario_setup=str(payload.get("scenario_setup") or ""),
+                        relocation_count=str(payload.get("relocation_count") or "5"),
+                        seed=str(payload.get("seed") or ""),
+                    )
+                )
             if parsed.path == "/api/runs":
                 request = LaunchRequest(
                     world_id=str(payload.get("world_id") or ""),

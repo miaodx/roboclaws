@@ -4,10 +4,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from roboclaws.core.action_decision import SAFE_FALLBACK_ACTION
-from roboclaws.core.engine import NAVIGATION_ACTIONS
 from roboclaws.core.provider_retry import retry_delay_seconds
 from roboclaws.core.vlm import (
+    NAVIGATION_ACTIONS,
+    SAFE_FALLBACK_ACTION,
     AnthropicProvider,
     KimiCodingProvider,
     KimiProvider,

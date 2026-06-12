@@ -1,8 +1,8 @@
 # Live-Agent Adaptive Inspection Triggerability
 
-**Status:** Proposed source plan
+**Status:** Implementation-Complete; Live-Proven pending targeted live adaptive gate
 **Created:** 2026-06-11
-**Last reviewed:** 2026-06-11
+**Last reviewed:** 2026-06-11 closeout
 **Source:** Scoped `intuitive-reduce-entropy` pass on live-agent use of
 adaptive target inspection.
 **Extends:** [`2026-06-11-adaptive-target-inspection.md`](2026-06-11-adaptive-target-inspection.md)
@@ -66,6 +66,32 @@ Existing artifacts show the gap:
   - `generated_exploration_candidates = 14`
   - `generated_target_inspection_candidates = 0`
   - `runtime_timing.total_elapsed_s = 1087.095`
+
+Closeout evidence from the implementation pass:
+
+- Prompt, skill, checker, and deterministic contract gates passed on
+  2026-06-11 with the focused commands listed in
+  [Implementation Closeout](#implementation-closeout).
+- Agent-validation recommendation artifact:
+  `output/agent-validation-matrix/20260611T082606Z/`.
+- Agent-validation execute artifact:
+  `output/agent-validation-matrix/20260611T082629Z/`.
+- The matrix-selected direct map-build product gate passed at
+  `output/agent-validation-matrix/20260611T082629Z/gates/direct-map-build-world-oracle/run/0611_1631/seed-7/report.html`
+  with `sweep_coverage_rate = 1.0`,
+  `adjust_camera:request = 28`, and
+  `runtime_metric_map.json` output.
+- The matrix-selected runtime-prior consumer gate initially failed because the
+  harness passed the literal unresolved placeholder
+  `map-build-world-oracle:runtime_metric_map.json`. The harness has been fixed
+  to resolve `${gate:artifact}` placeholders, and a manual rerun passed at
+  `output/agent-validation-matrix/20260611T082629Z/gates/direct-cleanup-runtime-prior-consumer-rerun/run/0611_1635/seed-7/report.html`.
+- `direct-camera-grounded-grounding-dino` was blocked by unavailable DINO
+  sidecar, and `codex-cleanup-camera-raw-fpv` was blocked by an already-active
+  live session. These blocks do not prevent `Implementation-Complete`.
+- The live Codex cleanup world-oracle matrix gate exited and released its
+  backend slot; it is not a targeted map-build adaptive-inspection proof and
+  does not promote this plan to `Live-Proven`.
 
 Existing tests prove pieces of the lower-level contract, not the full live-agent
 behavior:
@@ -424,3 +450,55 @@ sweep.
   trigger adaptive inspection does not require selecting the default refiner.
 - General root backlog cleanup remains parked. Why parked: this plan is scoped
   to live-agent triggerability and should not reopen `TODOS.md`.
+
+## Implementation Closeout
+
+Implemented on 2026-06-11:
+
+- Semantic-map-build live-agent prompts now explicitly instruct camera lanes to
+  call `adjust_camera`, observe again, follow `required_next_tool` /
+  `required_tool`, and use only public generated target-inspection waypoints for
+  `visible_only` / `needs_observe` candidates.
+- `skills/molmo-realworld-cleanup/SKILL.md` now has matching concise
+  map-build adaptive-inspection guidance.
+- The cleanup result checker has opt-in adaptive proof thresholds:
+  `--min-adjust-camera-count` and
+  `--min-generated-target-inspection-candidates`.
+- Focused tests now cover prompt guidance, checker opt-in behavior, and a
+  deterministic public contract path where blocked/non-actionable evidence
+  requires adaptive public reinspection.
+- The agent-validation matrix runner now resolves `${gate:artifact}` placeholders
+  before running dependent gates such as cleanup with a runtime-map prior.
+
+Focused verification passed:
+
+```bash
+uv sync --extra dev
+uv run ruff check roboclaws/agents/prompts/household_cleanup.py scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py
+uv run ruff check skills/agent-validation-matrix/scripts/run_validation_matrix.py tests/unit/molmo_cleanup/test_agent_validation_matrix.py
+./scripts/dev/run_pytest_standalone.sh tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py -q
+./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_agent_validation_matrix.py -q
+```
+
+Validation matrix evidence:
+
+```bash
+just agent::harness agent-validation recommend plan=docs/plans/2026-06-11-live-agent-adaptive-inspection-triggerability.md budget=focused
+just agent::harness agent-validation execute plan=docs/plans/2026-06-11-live-agent-adaptive-inspection-triggerability.md budget=focused
+```
+
+- Recommend artifact:
+  `output/agent-validation-matrix/20260611T082606Z/`.
+- Execute artifact:
+  `output/agent-validation-matrix/20260611T082629Z/`.
+- Manual prior-consumer rerun after placeholder-resolution fix:
+  `output/agent-validation-matrix/20260611T082629Z/gates/direct-cleanup-runtime-prior-consumer-rerun/run/0611_1635/seed-7/report.html`.
+
+Remaining `Live-Proven` gate:
+
+- Run a targeted live Codex `intent=map-build` adaptive prompt with
+  camera-grounded labels and `grounding-dino`, then run the checker with
+  `--min-adjust-camera-count 1` and the appropriate generated
+  target-inspection candidate threshold for the chosen scenario.
+- Do not claim live adaptive-inspection proof until that targeted live run
+  passes the opt-in adaptive checker flags.

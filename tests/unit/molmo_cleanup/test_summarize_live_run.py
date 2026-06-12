@@ -177,12 +177,36 @@ def test_agent_sdk_comparison_manifest_prints_explicit_run_pairs(
 
     output = capsys.readouterr().out
     assert status == 0
-    assert "Agent SDK comparison manifest" in output
+    assert "Report performance comparison manifest" in output
     assert "gpt_world_public | codex-env | world-public-labels" in output
     assert "-30.0s" in output
     assert "-350" in output
     assert "available(max=900)" in output
     assert "finished" in output
+
+
+def test_single_run_summary_does_not_print_hard_coded_speedup_baseline(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    summarize = _load_summary_module()
+    run_dir = _write_run(
+        tmp_path / "candidate",
+        elapsed_s=70.0,
+        gap_s=30.0,
+        lane="world-public-labels",
+        uncached_tokens=650,
+        cache_hit_ratio=0.7,
+    )
+
+    status = summarize.main([str(run_dir)])
+
+    output = capsys.readouterr().out
+    assert status == 0
+    assert "18m30s" not in output
+    assert "speedup=" not in output
+    assert "report performance:" in output
+    assert "normalized model time: unavailable" in output
 
 
 def test_agent_sdk_comparison_manifest_prints_terminal_classification(
@@ -334,4 +358,8 @@ def _write_run(
             json.dumps({"task_name": "household-cleanup"}),
             encoding="utf-8",
         )
+    (run_dir / "trace.jsonl").write_text(
+        json.dumps({"event": "response", "tool": "done", "response": {"ok": True}}) + "\n",
+        encoding="utf-8",
+    )
     return run_dir

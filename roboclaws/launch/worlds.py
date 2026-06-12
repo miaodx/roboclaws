@@ -91,28 +91,6 @@ WORLD_SPECS: dict[str, WorldSpec] = {
         ),
         preview_assets=(("map", "/asset-previews/maps/agibot-robot-map-12/preview.png"),),
     ),
-    "ai2thor/FloorPlan201": WorldSpec(
-        id="ai2thor/FloorPlan201",
-        label="AI2-THOR FloorPlan201",
-        surface_id="ai2thor-world",
-        available_backends=("ai2thor",),
-        scene_source="ithor",
-        tags=("ai2thor", "navigation"),
-        default_backend="ai2thor",
-        resource_kind="simulator",
-        default_overrides=("scene=FloorPlan201",),
-    ),
-    "ai2thor-games/FloorPlan201": WorldSpec(
-        id="ai2thor-games/FloorPlan201",
-        label="AI2-THOR Games FloorPlan201",
-        surface_id="ai2thor-games",
-        available_backends=("ai2thor",),
-        scene_source="ithor",
-        tags=("ai2thor", "game"),
-        default_backend="ai2thor",
-        resource_kind="simulator",
-        default_overrides=("scene=FloorPlan201",),
-    ),
     "planner-proof/default": WorldSpec(
         id="planner-proof/default",
         label="MolmoSpaces Planner Proof",
@@ -129,8 +107,6 @@ WORLD_SPECS: dict[str, WorldSpec] = {
 
 DEFAULT_WORLD_BY_SURFACE: dict[str, str] = {
     "household-world": "molmospaces/val_0",
-    "ai2thor-world": "ai2thor/FloorPlan201",
-    "ai2thor-games": "ai2thor-games/FloorPlan201",
     "planner-proof": "planner-proof/default",
 }
 

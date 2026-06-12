@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # openclaw-bootstrap.sh — idempotent first-run setup for a local OpenClaw Gateway
 # with N named agents (agent-0, agent-1, ...), each with its own isolated
-# workspace, auth profile, and bind-mounted skill. Supports both the existing
-# push-model demos and the Phase 2.5 autonomous loop, where the Gateway needs to
-# reach a host-side sim tool server.
+# workspace, auth profile, and bind-mounted skill. The Gateway reaches a
+# host-side Roboclaws MCP server such as the household cleanup server.
 #
 # Does:
 #   1. Pre-create every dir the Gateway + all N agents will need (as root).
@@ -30,9 +29,7 @@
 #   HOST_IP      Bind address on the host            (default: 127.0.0.1)
 #   PORT         Gateway port                        (default: 18789)
 #   SIM_SERVER_URL URL for host-side sim tools       (default: http://host.docker.internal:18788)
-#   ROBOCLAWS_MCP_ENABLED  Seed Roboclaws MCP tools  (default: 1; set 0 for
-#                                                     direct image-to-JSON
-#                                                     chat-completions demos)
+#   ROBOCLAWS_MCP_ENABLED  Seed Roboclaws MCP tools  (default: 1)
 #   PROVIDER     Upstream LLM provider               (auto-detected from env —
 #                                                     nvidia | mimo | kimi)
 #   MODEL        Model id each agent uses            (default per PROVIDER — see below)
@@ -40,7 +37,7 @@
 #                generic `image` tool path             set this explicitly when
 #                                                       you want deterministic
 #                                                       image routing)
-#   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/ai2thor-navigator)
+#   SKILLS_DIR   Host path of the skill to mount     (default: $PWD/skills/molmo-realworld-cleanup)
 #   READY_TIMEOUT  Seconds to wait for /readyz       (default: 180)
 #   TIMEOUT_SECONDS  Per-turn wall-clock cap         (default: 7200 = 2h;
 #                                                     written to agents.defaults.
@@ -83,10 +80,10 @@
 # Auto-detection order when PROVIDER is unset: nvidia → mimo → kimi (prefers
 # the verified-working provider; first provider with an API key in env wins).
 #
-# Why these two and not more: the demo sends FPV + overhead per turn
-# (2 images) so the model must support multi-image input. NVIDIA NIM's
+# Why these providers and not more: household visual evidence can include
+# image-bearing tool outputs, so the model must support image input. NVIDIA NIM's
 # nvidia/nemotron-nano-12b-v2-vl is the only NIM vision model that
-# survives all end-to-end constraints (multi-image + tool use from the
+# survives the end-to-end constraints (image input + tool use from the
 # Gateway's agent framework). Kimi's coding-tier provider via the
 # Gateway plugin accepts multi-image too. Other models we probed hit
 # one of: 1-image cap, no tool-use support on :free, or server-side
@@ -129,10 +126,8 @@ SIM_SERVER_URL="${SIM_SERVER_URL:-http://host.docker.internal:18788}"
 ROBOCLAWS_SNAPSHOTS_DIR="${ROBOCLAWS_SNAPSHOTS_DIR:-}"
 
 # ROBOCLAWS_MCP_ENABLED gates whether openclaw.json exposes the Roboclaws MCP
-# server to Gateway agents. Keep the default enabled for chat/autonomous/photo
-# paths that start a host-side MCP server. Direct image-to-JSON game demos set
-# this to 0 because they do not start an MCP server; exposing bundle-mcp there
-# lets a model attempt tool calls against a dead host endpoint and hang the turn.
+# server to Gateway agents. Keep the default enabled for household cleanup runs
+# that start a host-side MCP server.
 ROBOCLAWS_MCP_ENABLED="${ROBOCLAWS_MCP_ENABLED:-1}"
 case "$ROBOCLAWS_MCP_ENABLED" in
     1|true|TRUE|yes|YES|on|ON) ROBOCLAWS_MCP_ENABLED="1" ;;
@@ -177,8 +172,8 @@ case "$ROBOCLAWS_TOOL_PROFILE" in
         ;;
 esac
 
-SKILLS_DIR="${SKILLS_DIR:-${PWD}/skills/ai2thor-navigator}"
-SOULS_DIR="${SOULS_DIR:-${PWD}/skills/ai2thor-navigator/souls}"
+SKILLS_DIR="${SKILLS_DIR:-${PWD}/skills/molmo-realworld-cleanup}"
+SOULS_DIR="${SOULS_DIR:-${PWD}/skills/molmo-realworld-cleanup/souls}"
 AGENT_SOULS="${AGENT_SOULS:-}"
 PERSONALITY_PROBE="${PERSONALITY_PROBE:-1}"
 READY_TIMEOUT="${READY_TIMEOUT:-180}"
@@ -236,7 +231,7 @@ case "$PROVIDER" in
         #
         # Keep the default on "custom" because the built-in plugin
         # historically advertised reasoning-heavy behavior that pushed
-        # multi-image navigation turns into 60-120s and tripped the
+        # multi-image turns into 60-120s and tripped the
         # Gateway's idle watchdog. The explicit switch exists so local
         # debugging can A/B the two provider paths without editing code.
         KIMI_PROVIDER_MODE="${KIMI_PROVIDER_MODE:-custom}"
@@ -252,7 +247,7 @@ case "$PROVIDER" in
                 # `kimi-coding` plugin.  The built-in plugin advertises
                 # `reasoning: true` in its catalog and drives api.kimi.com/coding/
                 # in a mode that burns 3000+ CoT tokens per turn, pushing each
-                # multi-image navigation call to 60-120s and regularly tripping
+                # multi-image call to 60-120s and regularly tripping
                 # the Gateway's idle watchdog (observed on 2026-04-20).
                 #
                 # Our custom registration points at the SAME host
@@ -521,8 +516,8 @@ done
 log "pre-seeding config volume + $AGENTS agent(s)"
 # Read the canonical OpenClaw plugin allow-list from its single source of
 # truth (``scripts/openclaw/openclaw_plugin_allowlist.py``) and forward it to the
-# pre-seed container as JSON. Keeps the chat::run and appliance::run paths
-# from drifting; see that file for rationale + per-entry justification.
+# pre-seed container as JSON. See that file for rationale + per-entry
+# justification.
 PLUGIN_ALLOW_JSON="$(python3 -c "
 import json, sys
 sys.path.insert(0, '${SCRIPT_DIR}')

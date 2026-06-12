@@ -15,11 +15,7 @@ set shell := ["bash", "-uc"]
 [private]
 mod openclaw  'just/openclaw.just'
 [private]
-mod vlm       'just/vlm.just'
-[private]
 mod chat      'just/chat.just'
-[private]
-mod appliance 'just/appliance.just'
 [private]
 mod dev       'just/dev.just'
 [private]

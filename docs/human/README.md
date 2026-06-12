@@ -22,14 +22,12 @@ AI agents should also read these docs when they need human-facing context.
 ## Runbooks
 
 - [Local runtime reference](local-runtime.md)
-- [Direct Codex/Claude robot driver](coding-agent-nav-server.md)
+- [Direct coding-agent household MCP driver](coding-agent-nav-server.md)
 - [Agibot G2 Cleanup Pilot](agibot-g2-cleanup-pilot.md)
 - [Real Robot Nav2 Cleanup Pilot](real-robot-nav2-cleanup-pilot.md)
-- [OpenClaw demo](openclaw/demo.md)
+- [OpenClaw demo status](openclaw/demo.md)
 - [OpenClaw local development](openclaw/local.md)
 - [OpenClaw Gateway internals](openclaw/gateway-internals.md)
-- [Railway deploy](railway/deploy.md)
-- [Railway appliance plan](railway/appliance-plan.md)
 
 ## AI-Agent Docs
 

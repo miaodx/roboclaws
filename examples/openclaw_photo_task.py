@@ -1,1 +1,0 @@
-openclaw/openclaw_photo_task.py

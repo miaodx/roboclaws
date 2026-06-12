@@ -17,8 +17,7 @@
     "backend_variants": [
       "molmospaces_subprocess",
       "isaaclab_subprocess",
-      "agibot_gdk",
-      "ai2thor"
+      "agibot_gdk"
     ],
     "notes": "Selected gates may require household world, manipulation, episode, visual-grounding, live coding-agent, Agent SDK, or simulator runtime support depending on the matched signals."
   },

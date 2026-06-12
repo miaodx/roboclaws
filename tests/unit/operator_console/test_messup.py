@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+from roboclaws.operator_console.messup import preview_messup_from_inventory
+
+
+def test_messup_preview_reports_ready_when_requested_targets_are_available() -> None:
+    payload = preview_messup_from_inventory(
+        objects=[
+            {"object_id": "cup", "category": "Cup"},
+            {"object_id": "book", "category": "Book"},
+            {"object_id": "apple", "category": "Apple"},
+        ],
+        receptacles=[
+            {"receptacle_id": "sink", "category": "Sink"},
+            {"receptacle_id": "desk", "category": "Desk"},
+            {"receptacle_id": "fridge", "category": "Fridge"},
+        ],
+        world_id="molmospaces/val_test",
+        backend_id="mujoco",
+        scenario_setup="relocate-cleanup-related-objects",
+        requested_count=3,
+        seed=7,
+    )
+
+    assert payload["schema"] == "operator_console_messup_preview_v1"
+    assert payload["ok"] is True
+    assert payload["status"] == "ready"
+    assert payload["requested_count"] == 3
+    assert payload["selected_count"] == 3
+    assert payload["eligible_count"] == 3
+
+
+def test_messup_preview_explains_partial_scene_without_blocking_baseline() -> None:
+    payload = preview_messup_from_inventory(
+        objects=[
+            {"object_id": "bowl", "category": "Bowl"},
+            {"object_id": "remote", "category": "RemoteControl"},
+            {"object_id": "cell", "category": "CellPhone"},
+        ],
+        receptacles=[
+            {"receptacle_id": "sink", "category": "Sink"},
+        ],
+        world_id="molmospaces/val_test",
+        backend_id="mujoco",
+        scenario_setup="relocate-cleanup-related-objects",
+        requested_count=2,
+        seed=7,
+    )
+
+    assert payload["ok"] is False
+    assert payload["status"] == "partial"
+    assert payload["requested_count"] == 2
+    assert payload["selected_count"] == 1
+    assert payload["eligible_count"] == 1
+    assert "selected route can still run" in payload["message"]
+    remote_rule = next(
+        row for row in payload["rule_diagnostics"] if row["object_categories"] == ["RemoteControl"]
+    )
+    assert remote_rule["object_count"] == 1
+    assert remote_rule["target_receptacle_count"] == 0

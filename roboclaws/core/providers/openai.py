@@ -5,7 +5,6 @@ import os
 import time
 from typing import Any
 
-from roboclaws.core.action_decision import action_decision_from_fields, parse_action_decision
 from roboclaws.core.vlm import (
     _COST_PER_M,
     _SYSTEM_PROMPT,
@@ -13,6 +12,8 @@ from roboclaws.core.vlm import (
     _build_agent_action_model,
     _record_call_failure,
     _record_call_success,
+    action_decision_from_fields,
+    parse_action_decision,
 )
 
 _IMPORT_ERROR = "openai and instructor packages required: pip install openai instructor"

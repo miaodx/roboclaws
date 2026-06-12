@@ -63,7 +63,7 @@ room", remains a Task Prompt that the agent plans over those capabilities.
 
 The profile is public-agent metadata only. It must not expose generated mess
 sets, acceptable destinations, private manifests, hidden target lists,
-`is_misplaced`, private scoring truth, or the AI2-THOR `scene_objects` oracle.
+`is_misplaced`, private scoring truth, or full simulator inventory oracles.
 Demo recipes such as
 `just run::surface surface=household-world intent=cleanup ...` choose a run
 shape; they are not whole-task MCP tools.

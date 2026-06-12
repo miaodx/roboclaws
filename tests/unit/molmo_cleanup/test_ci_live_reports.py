@@ -306,6 +306,89 @@ def test_live_claude_print_command_uses_verbose_for_stream_json(
     )
 
 
+def test_live_claude_writes_live_timing_and_model_call_metrics(tmp_path: Path) -> None:
+    run_claude = _load_module(RUN_CLAUDE_PATH, "run_live_claude_cleanup")
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    args = SimpleNamespace(
+        run_dir=run_dir,
+        status_path=tmp_path / "status.json",
+        repo_root=REPO_ROOT,
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "runner.lock",
+        claude_bin="claude",
+        claude_provider_summary="mimo-anthropic",
+        kickoff_prompt="clean the room",
+        backend="molmospaces_subprocess",
+        policy="claude_agent",
+        task="帮我收拾这个房间",
+        min_generated_mess_count="5",
+        profile="world-oracle-labels",
+        server_arg=[],
+        claude_model_arg=[],
+        claude_env=[],
+        checker_visual_arg=[],
+    )
+    runner = run_claude.LiveClaudeCleanupRunner(args)
+    runner.started_at_epoch = 9.0
+    runner.live_timing.update(
+        {
+            "started_at_epoch": 9.0,
+            "server_start_epoch": 10.0,
+            "server_ready_epoch": 11.0,
+            "claude_exec_start_epoch": 12.0,
+            "claude_exec_end_epoch": 22.0,
+            "server_finished_epoch": 25.0,
+            "checker_start_epoch": 26.0,
+            "checker_end_epoch": 27.0,
+        }
+    )
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps({"event": "request", "tool": "done", "wallclock_elapsed": 1.0}),
+                json.dumps(
+                    {
+                        "event": "response",
+                        "tool": "done",
+                        "wallclock_elapsed": 2.0,
+                        "response": {"ok": True},
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "claude-events.jsonl").write_text(
+        json.dumps(
+            {
+                "type": "result",
+                "usage": {"input_tokens": 100, "output_tokens": 20},
+                "duration_s": 3.5,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    runner._write_live_timing("finished", 0)
+
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert timing["runtime"] == "claude-code"
+    assert timing["runner_timing"]["claude_exec_elapsed_s"] == 10.0
+    assert timing["mcp_trace_timing"]["tool_call_count"] == 1
+    rows = [
+        json.loads(line)
+        for line in (run_dir / "model_call_metrics.jsonl").read_text(encoding="utf-8").splitlines()
+    ]
+    assert rows[0]["schema"] == "roboclaws_model_call_metric_v1"
+    assert rows[0]["agent_engine"] == "claude-code"
+    assert rows[0]["input_tokens"] == 100
+
+
 def test_live_claude_workspace_exposes_skill_at_task_relative_path(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1100,23 +1183,16 @@ def test_publish_diagnostic_seed_run_and_pages_index_link_failed_tile(tmp_path: 
     assert "Kimi K2.6 diagnostics" in html
 
 
-def test_pages_index_omits_openclaw_tiles_without_report_html(tmp_path: Path) -> None:
+def test_pages_index_without_live_manifest_renders_household_placeholder(tmp_path: Path) -> None:
     write_pages_index = _load_module(PAGES_INDEX_PATH, "write_pages_index")
-    site = tmp_path / "site"
-    (site / "openclaw" / "demo" / "demo").mkdir(parents=True)
-    (site / "openclaw" / "territory").mkdir(parents=True)
-    (site / "openclaw" / "coverage").mkdir(parents=True)
-    (site / "openclaw" / "coverage" / "report.html").write_text(
-        "<!doctype html>",
-        encoding="utf-8",
-    )
 
-    out = write_pages_index.write_index(site, include_openclaw=True)
+    out = write_pages_index.write_index(tmp_path / "site", include_molmo_live=True)
     html = out.read_text(encoding="utf-8")
 
+    assert "Household Reports" in html
+    assert "No published household cleanup reports are available yet." in html
     assert "openclaw/demo/report.html" not in html
-    assert "openclaw/territory/report.html" not in html
-    assert "openclaw/coverage/report.html" in html
+    assert "territory/report.html" not in html
 
 
 def test_assemble_ci_live_pages_runs_without_site_packages(tmp_path: Path) -> None:

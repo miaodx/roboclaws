@@ -48,13 +48,13 @@ Build from the bottom up, but let the agent enter from the top:
 | --- | --- | --- | --- |
 | Open-ended goal | Human intent | "clean the room", "inspect this room" | Do not turn this into one opaque MCP tool. |
 | Runnable surface and intent | Public command, parameters, report shape, acceptance gates | `surface=household-world intent=map-build`, `surface=household-world intent=cleanup` | Keep it separate from strategy and backend implementation. |
-| Agent skill | Reusable behavior package | `capture-object-photo`, `cleanup-generated-mess` | Skills can evolve, merge, split, and be pruned. |
-| Trace-preserving skill routine | Skill-side reusable execution shape | scripted cleanup loop, `locate -> navigate -> observe_archived` | Default home for reusable composition before MCP promotion. |
-| Composite action | Describes a skill's internal behavior shape | `locate -> navigate -> observe_archived` | Descriptive by default, not a separate artifact. |
+| Agent skill | Reusable behavior package | `molmo-realworld-cleanup`, `actionable-semantic-map-conversion` | Skills can evolve, merge, split, and be pruned. |
+| Trace-preserving skill routine | Skill-side reusable execution shape | scripted cleanup loop, `navigate -> observe -> pick -> place` | Default home for reusable composition before MCP promotion. |
+| Composite action | Describes a skill's internal behavior shape | `navigate -> observe -> pick -> place` | Descriptive by default, not a separate artifact. |
 | Composed semantic capability | Bounded capability or service | localization, navigation, search, transport | Promote only when the boundary is stable. |
 | Atomic semantic capability | Small public robot action | observe, move, turn, pick, place, open, close | Prefer these for MCP capability contracts. |
-| Environment primitive | Backend-specific implementation | AI2-THOR step, MuJoCo actuation, robot API call | Not agent-facing by default. |
-| Execution backend | Actual environment | mock, AI2-THOR, MolmoSpaces, Unitree G1, RBY1M, AGIbot G2 | Backends differ; profiles should not pretend otherwise. |
+| Environment primitive | Backend-specific implementation | MuJoCo actuation, Isaac rendering, robot API call | Not agent-facing by default. |
+| Execution backend | Actual environment | MolmoSpaces, Isaac Lab, RBY1M, Agibot G2 | Backends differ; profiles should not pretend otherwise. |
 
 Capability profiles sit beside this ladder as reusable public environments for
 skills. For example, `surface=household-world intent=map-build` can select a
@@ -77,11 +77,10 @@ change backend variant, provenance, safety gate, and blocked-capability status;
 it should not need a separate robot-only task taxonomy when the public task,
 skill requirement, and profile shape already fit.
 
-`capture_object_photo(object)` is a good example: maintain it as an agent skill
-with a script by default. Internally, it may perform a composite action such as
-`locate -> navigate -> orient -> observe_archived -> verify`. It should not
-become an MCP tool unless several skills need the same stable capability and
-the public trace semantics are clear.
+Household inspection routines should start as skills by default. Internally,
+they may perform a composite action such as `search -> navigate -> observe ->
+verify`. They should not become MCP tools unless several skills need the same
+stable capability and the public trace semantics are clear.
 
 ## Skill Library Lifecycle
 
@@ -138,9 +137,9 @@ into an MCP tool only when all of these are true:
 4. It uses only public allowed information.
 5. It belongs in the robot capability boundary, not just agent strategy.
 
-For example, `observe_archived(label)` belongs in MCP because it is a stable
-observation capability with clear artifact output. A photo-capture routine
-usually belongs in a skill because it is task strategy.
+For example, observation belongs in MCP because it is a stable capability with
+clear artifact output. A full inspection or cleanup routine usually belongs in
+a skill because it is task strategy.
 
 Promoted composite tools should be rare enough that an empty promoted-tools
 surface is the normal state. A non-empty promoted surface should mean the
@@ -162,11 +161,9 @@ Examples:
 
 | Behavior | Classification | Why |
 | --- | --- | --- |
-| `capture_object_photo(object)` | Agent skill with a composite action inside | It combines locate, navigation, observation, and verification. |
+| Household inspection routine | Agent skill with a composite action inside | It combines search, navigation, observation, and verification. |
 | `put_in_refrigerator(object)` | Skill or composite action, depending on packaging | It can be decomposed into navigate, open, place, close. |
 | Selected-object cleanup transport | Agent skill routine | The cleanup skill composes `navigate_to_object -> pick -> navigate_to_receptacle -> open? -> place/place_inside -> close?` through public atomic tools. It remains skill-side unless promotion criteria are met; it is not exposed as a default MCP tool. |
-| `scene_objects()` | Privileged tool | It exposes full AI2-THOR object inventory. |
-| `goto(object_id)` | Privileged tool unless decomposed | The current AI2-THOR version is target-relative teleport-style help. |
 | Hidden acceptable-destination lookup | Privileged/private evaluator data | It must never enter public profile metadata. |
 
 ## Current Capability Profiles
@@ -175,25 +172,6 @@ The current household profile head is task-neutral. Public intents such as
 `map-build` and `cleanup` select skills and acceptance gates inside
 `surface=household-world`; profiles describe reusable capability environments
 and backend variants.
-
-### `ai2thor_navigation_v1`
-
-Canonical public capability tools:
-
-- `observe`
-- `observe_archived`
-- `move`
-- `done`
-
-Privileged tools:
-
-- `scene_objects` is an AI2-THOR object-inventory oracle.
-- `goto` is a target-relative teleport-style helper.
-
-Those tools are disabled on the default server surface. A photo/demo launcher
-must opt in explicitly when it needs the AI2-THOR inventory oracle or
-target-relative teleport helper. They are not presented as real robot perception
-or real robot navigation capabilities.
 
 ### `household_world_v1`
 
@@ -273,11 +251,13 @@ It narrows executable capability to navigation and perception. The backend is
 - `metric_map` returns backend-neutral public map semantics. Nav2-backed runs
   derive this from a Nav2-shaped map bundle; Agibot-backed runs derive it from
   an SDK-exported agent view generated from operator-authored map context.
-- `fixture_hints` returns only the public fixture-hint surface for the selected
-  map projection. In default `map_mode=minimal`, authored fixture labels may be
-  empty and destination evidence comes from runtime semantic anchors; explicit
-  legacy/debug rich projections may still expose static public fixture
-  semantics. Neither path exposes backend map ids or private cleanup truth.
+- `metric_map` is the current map-reading path. The Base Navigation Map exposes
+  occupancy/free-space context, generated candidates, and public room-category
+  hints when available; Runtime Metric Map evidence adds observed anchors and
+  target candidates during a run. Historical `fixture_hints` artifacts may
+  still be displayed for old reports, but active skills should discover
+  destinations through metric-map evidence and target-query resolution rather
+  than a fixture-hints-first tool habit.
 - `navigate_to_room`, `navigate_to_waypoint`, `navigate_to_visual_candidate`,
   `navigate_to_object`, and `navigate_to_receptacle` resolve cleanup goals to
   bounded physical navigation actions when enough public grounding is available.
@@ -299,15 +279,14 @@ evidence outside the Roboclaws Python runtime.
 
 ### Keep Profiles Capability-Oriented
 
-There is no premature universal robot API here. A navigation-only AI2-THOR
-profile and a household-world profile can share capability-family names while
-exposing different tools.
+There is no premature universal robot API here. Household simulator and
+physical-robot backends can share capability-family names while exposing
+different executable or blocked behavior.
 
 Prefer names that describe reusable capability environments:
 
 - `household_world_v1`
 - `household_manipulation_v1`
-- `ai2thor_navigation_v1`
 
 Task-like public work belongs in the surface/intent catalog:
 
@@ -317,7 +296,7 @@ Task-like public work belongs in the surface/intent catalog:
 
 Reusable strategy names belong in skills:
 
-- `capture-object-photo`
+- `molmo-realworld-cleanup`
 - `actionable-semantic-map-conversion`
 
 Backend variants such as `molmospaces_subprocess`, `api_semantic_synthetic`,
@@ -348,7 +327,7 @@ whole-goal tools like `cleanup_room()`.
 This keeps behavior inspectable: the report can show the steps the agent or
 skill chose instead of hiding the work behind one tool call.
 
-When a cleanup or photo routine becomes repetitive, first make it a
+When a cleanup or inspection routine becomes repetitive, first make it a
 trace-preserving skill routine with tests and report evidence. Promote it into
 MCP only when the composition itself must be discoverable, schema-validated,
 and enforced across clients or backend variants.
@@ -372,11 +351,6 @@ Open-ended goal
   -> execution backend runs primitives
   -> trace/report/eval feeds skill maintenance
 ```
-
-For AI2-THOR photo tasks, the `capture-object-photo` skill may use
-`scene_objects` and `goto` only when the launcher has enabled privileged
-helpers. The semantic profile still records that these are privileged tools,
-not general robot capabilities.
 
 For Molmo cleanup, the profile keeps the public cleanup surface separate from
 private scoring and planner proof evidence. A clean report can therefore be
@@ -411,11 +385,8 @@ describe what public robot capabilities the agent is allowed to rely on.
 | --- | --- |
 | Profile declarations and built-ins | `roboclaws/mcp/profiles.py` |
 | Generic profile router helper | `roboclaws/mcp/entrypoint.py` |
-| AI2-THOR navigation MCP server | `roboclaws/mcp/server.py` |
 | Household cleanup MCP server | `roboclaws/household/realworld_mcp_server.py` |
 | Skill library convention | `skills/README.md` |
-| AI2-THOR agent skill | `skills/ai2thor-navigator/SKILL.md` |
-| Photo capture skill | `skills/capture-object-photo/SKILL.md` |
 | ADR-0003 Molmo cleanup skill | `skills/molmo-realworld-cleanup/SKILL.md` |
 | Actionable semantic map conversion skill | `skills/actionable-semantic-map-conversion/SKILL.md` |
 | Profile/router contract tests | `tests/contract/mcp/test_semantic_profiles.py` |

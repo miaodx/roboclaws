@@ -169,12 +169,6 @@ def _normalized_goal(intent_id: str, prompt: str) -> str:
     defaults = {
         "cleanup": "Clean up the household world.",
         "map-build": "Build public semantic map evidence for the household world.",
-        "navigate": (
-            "Navigate through the AI2-THOR world and stop when the navigation goal is complete."
-        ),
-        "photo-capture": "Capture the requested object photos.",
-        "territory": "Run the territory game scenario.",
-        "coverage": "Run the coverage game scenario.",
         "planner-proof": "Produce planner-proof evidence.",
     }
     return defaults.get(intent_id, f"Complete the {intent_id} goal.")
@@ -198,8 +192,6 @@ def _tool_plan_for_intent(intent_id: str) -> tuple[str, ...]:
         return ("metric_map", "fixture_hints", "navigate/observe sweep", "done")
     if intent_id == "open-ended":
         return ("metric_map/fixture_hints as needed", "observe as needed", "done with claim")
-    if intent_id in {"navigate", "photo-capture"}:
-        return ("observe", "move/navigation tools", "done")
     return ("run intent-specific tools", "done")
 
 

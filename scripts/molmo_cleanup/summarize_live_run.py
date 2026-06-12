@@ -14,6 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from roboclaws.household.report import runtime_timing_from_trace
+from roboclaws.reports.live_performance import (
+    compare_report_performance_metrics,
+    extract_report_performance_metrics,
+)
 
 DEFAULT_SEARCH_ROOT = Path("output/molmo/codex-report")
 
@@ -134,6 +138,7 @@ def _artifact_summary(run_dir: Path) -> dict[str, str]:
         "codex-last-message.md",
         "codex.stderr.log",
         "live_timing.json",
+        "model_call_metrics.jsonl",
         "trace.jsonl",
         "run_result.json",
         "report.html",
@@ -293,6 +298,7 @@ def _timing_summary(
         skipped_work.append("per-tool robot-view timeline capture")
     codex_events = live_timing.get("codex_events") or {}
     openai_agents = live_timing.get("openai_agents") or {}
+    performance = extract_report_performance_metrics(run_dir)
     return {
         "live": live_timing,
         "runner": live_timing.get("runner_timing") or {},
@@ -301,28 +307,7 @@ def _timing_summary(
         "skipped_work": skipped_work,
         "codex_events": codex_events,
         "openai_agents": openai_agents,
-        "baseline": _baseline_comparison(runtime_timing, live_timing, run_dir),
-    }
-
-
-def _baseline_comparison(
-    runtime_timing: dict[str, Any],
-    live_timing: dict[str, Any],
-    run_dir: Path,
-) -> dict[str, Any]:
-    baseline_s = 18 * 60 + 30
-    candidate = _float_or_none(
-        (live_timing.get("runner_timing") or {}).get("total_elapsed_s")
-        or runtime_timing.get("total_elapsed_s")
-    )
-    if candidate is None:
-        return {"baseline_elapsed_s": baseline_s, "candidate_elapsed_s": None}
-    return {
-        "baseline_elapsed_s": baseline_s,
-        "candidate_elapsed_s": round(candidate, 3),
-        "delta_s": round(candidate - baseline_s, 3),
-        "speedup": round(baseline_s / candidate, 2) if candidate > 0 else None,
-        "candidate_run_dir": str(run_dir),
+        "performance": performance,
     }
 
 
@@ -370,10 +355,10 @@ def _print_comparison_manifest(path: Path) -> int:
             return 1
         rows.append(_comparison_row(entry, baseline_dir=baseline_dir, candidate_dir=candidate_dir))
 
-    print("Agent SDK comparison manifest")
+    print("Report performance comparison manifest")
     header = (
         "key | provider | lane | baseline | candidate | elapsed_delta_s | "
-        "gap_delta_s | uncached_delta | cache_ratio | context | terminal | checker"
+        "gap_delta_s | uncached_delta | model_work | context | terminal | checker | status"
     )
     print(header)
     print("-" * len(header))
@@ -386,7 +371,7 @@ def _print_comparison_manifest(path: Path) -> int:
             f"{_signed_duration(row['between_tool_gap_delta_s'])} | "
             f"{row['uncached_delta']} | {row['candidate_cache_hit_ratio']} | "
             f"{row['candidate_context_state']} | {row['candidate_terminal']} | "
-            f"{row['candidate_checker']}"
+            f"{row['candidate_checker']} | {row['status']}"
         )
     return 0
 
@@ -397,8 +382,17 @@ def _comparison_row(
     baseline_dir: Path,
     candidate_dir: Path,
 ) -> dict[str, Any]:
-    baseline = _comparison_run_summary(baseline_dir)
-    candidate = _comparison_run_summary(candidate_dir)
+    baseline_metrics = extract_report_performance_metrics(baseline_dir)
+    candidate_metrics = extract_report_performance_metrics(candidate_dir)
+    comparison = compare_report_performance_metrics(
+        baseline_metrics,
+        candidate_metrics,
+        key=str(entry.get("key") or ""),
+        quality_waiver=str(entry.get("quality_waiver") or ""),
+        diagnostic=str(entry.get("baseline_role") or "") == "diagnostic",
+    )
+    baseline = _comparison_run_summary_from_metrics(baseline_metrics)
+    candidate = _comparison_run_summary_from_metrics(candidate_metrics)
     return {
         "key": str(entry.get("key") or ""),
         "provider_profile": str(entry.get("provider_profile") or candidate["provider_profile"]),
@@ -418,38 +412,25 @@ def _comparison_row(
         "candidate_context_state": candidate["context_state"],
         "candidate_terminal": candidate["terminal"],
         "candidate_checker": candidate["checker"],
+        "status": comparison["status"],
     }
 
 
-def _comparison_run_summary(run_dir: Path) -> dict[str, Any]:
-    live_timing = _read_json(run_dir / "live_timing.json")
-    run_result = _read_json(run_dir / "run_result.json")
-    runner = live_timing.get("runner_timing") if isinstance(live_timing, dict) else {}
-    mcp = live_timing.get("mcp_trace_timing") if isinstance(live_timing, dict) else {}
-    raw_context = live_timing.get("context_metrics") if isinstance(live_timing, dict) else {}
-    context = raw_context if isinstance(raw_context, dict) else {}
-    raw_cache = live_timing.get("cache_metrics") if isinstance(live_timing, dict) else {}
-    cache = raw_cache if isinstance(raw_cache, dict) else {}
-    status = _read_json(run_dir / "live_status.json")
-    terminal = _terminal_state(live_timing, status)
+def _comparison_run_summary_from_metrics(metrics: dict[str, Any]) -> dict[str, Any]:
+    identity = metrics.get("run_identity") if isinstance(metrics.get("run_identity"), dict) else {}
+    quality = metrics.get("quality") if isinstance(metrics.get("quality"), dict) else {}
+    timing = metrics.get("timing") if isinstance(metrics.get("timing"), dict) else {}
+    model_work = metrics.get("model_work") if isinstance(metrics.get("model_work"), dict) else {}
     return {
-        "elapsed_s": _float_or_none((runner or {}).get("total_elapsed_s")),
-        "between_tool_gap_s": _float_or_none((mcp or {}).get("between_tool_gap_s")),
-        "total_uncached_input_tokens": (
-            (context or {}).get("total_uncached_input_tokens")
-            if (context or {}).get("available")
-            else None
-        ),
-        "cache_hit_ratio": (
-            (context or {}).get("cache_hit_ratio")
-            if (context or {}).get("available")
-            else (cache or {}).get("cached_input_token_ratio")
-        ),
-        "provider_profile": live_timing.get("provider_profile") or "unknown",
-        "lane": live_timing.get("evidence_lane") or live_timing.get("profile") or "unknown",
-        "context_state": _context_state(context),
-        "terminal": terminal,
-        "checker": _checker_state(status, run_result),
+        "elapsed_s": _float_or_none(timing.get("observed_wall_s")),
+        "between_tool_gap_s": _float_or_none(timing.get("mcp_between_tool_gap_s")),
+        "total_uncached_input_tokens": model_work.get("total_uncached_input_tokens"),
+        "cache_hit_ratio": _cache_hit_ratio(model_work),
+        "provider_profile": identity.get("provider_profile") or "unknown",
+        "lane": identity.get("evidence_lane") or "unknown",
+        "context_state": _context_state(model_work),
+        "terminal": quality.get("terminal") or "unknown",
+        "checker": quality.get("checker_state") or "unknown",
     }
 
 
@@ -461,6 +442,14 @@ def _context_state(context: dict[str, Any]) -> str:
     if isinstance(limitations, list) and limitations:
         return "unavailable:" + ",".join(str(item) for item in limitations[:3])
     return "unavailable"
+
+
+def _cache_hit_ratio(model_work: dict[str, Any]) -> float | None:
+    total_input = _float_or_none(model_work.get("total_input_tokens"))
+    total_cached = _float_or_none(model_work.get("total_cached_input_tokens"))
+    if total_input is None or total_cached is None or total_input <= 0:
+        return None
+    return round(total_cached / total_input, 4)
 
 
 def _terminal_state(live_timing: dict[str, Any], status: dict[str, Any]) -> str:
@@ -501,7 +490,9 @@ def _print_timing(timing: dict[str, Any]) -> None:
     mcp = timing.get("mcp") or {}
     profile = timing.get("profile") or {}
     codex_events = timing.get("codex_events") or {}
-    baseline = timing.get("baseline") or {}
+    performance = timing.get("performance") or {}
+    perf_model_work = performance.get("model_work") if isinstance(performance, dict) else {}
+    perf_timing = performance.get("timing") if isinstance(performance, dict) else {}
 
     if not runner and not mcp:
         print("timing: pending")
@@ -563,16 +554,26 @@ def _print_timing(timing: dict[str, Any]) -> None:
             f"{profile.get('profile', 'unknown')} "
             f"record_robot_views={profile.get('record_robot_views', 'unknown')}"
         )
+    if perf_model_work:
+        print(
+            "  report performance: "
+            f"schema={performance.get('schema', 'unknown')} "
+            f"model_work={'available' if perf_model_work.get('available') else 'unavailable'} "
+            f"uncached={perf_model_work.get('total_uncached_input_tokens', 'n/a')} "
+            f"output={perf_model_work.get('total_output_tokens', 'n/a')}"
+        )
+    if perf_timing:
+        estimate = perf_timing.get("estimated_model_work_s") or {}
+        print(
+            "  normalized model time: "
+            f"{'available' if estimate.get('available') else 'unavailable'} "
+            f"observed_model_api={_format_duration(perf_timing.get('observed_model_api_s'))} "
+            f"residual={_format_duration(perf_timing.get('model_latency_residual_s'))} "
+            f"model_or_sdk_residual={_format_duration(perf_timing.get('model_or_sdk_residual_s'))}"
+        )
     skipped = timing.get("skipped_work") or []
     if skipped:
         print(f"  skipped/sampled: {', '.join(str(item) for item in skipped)}")
-    if baseline.get("candidate_elapsed_s") is not None:
-        print(
-            "  baseline: "
-            f"18m30s candidate={_format_duration(baseline.get('candidate_elapsed_s'))} "
-            f"delta={_signed_duration(baseline.get('delta_s'))} "
-            f"speedup={baseline.get('speedup')}x"
-        )
 
 
 def _tmux_state(session: str) -> str:

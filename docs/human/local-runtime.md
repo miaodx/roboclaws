@@ -52,9 +52,8 @@ Common examples:
 
 | Run type | Typical output |
 | --- | --- |
-| Territory/Coverage games | `output/territory/<stamp>/`, `output/coverage/<stamp>/` |
-| Coding-agent navigation | `output/runs/<stamp>/` |
-| OpenClaw demos | `output/openclaw-*/<stamp>/` |
+| Semantic map build | `output/household/semantic-map-build/<driver>-*/` |
+| Household cleanup | `output/household/household-cleanup/<driver>-*/` |
 | Molmo cleanup | `output/molmo/<driver-or-profile>/<stamp>/seed-7/` |
 | Molmo live CI rehearsal | `output/molmo/ci-rehearsal/<model>/` |
 | Molmo planner proof bundle | `output/molmo/planner-proof*/` |

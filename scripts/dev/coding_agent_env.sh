@@ -216,7 +216,7 @@ roboclaws_code_agent_prepare_mcp_env() {
 
   if [[ "$provider" == "kimi-anthropic" ]]; then
     echo "==> Kimi coding profile note: Kimi is image-capable, but long skill context + raw observe images can intermittently return upstream server errors." >&2
-    echo "    For batch photo tasks, prefer observe_archived unless visual reasoning is required; scene_objects/goto require privileged-helper opt-in." >&2
+    echo "    Prefer structured public observations for routine household runs; use raw FPV image reasoning only when the selected evidence lane requires it." >&2
   fi
 }
 

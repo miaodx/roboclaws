@@ -8,10 +8,6 @@
 # - just verify::mock              static + fast unit/mock tests
 # - just verify::ci-required       required PR gate: mock + HTML report artifact
 # - just verify::contract          focused fixture/schema/report contracts
-# - just verify::regression-mock   baseline/candidate regression harness
-# - just verify::local-sim         real AI2-THOR regression harness
-# - just verify::local-openclaw    real OpenClaw/Gateway regression harness
-# - just verify::navigator <task>  coding-agent navigator harness
 # - just verify::molmo-realworld-cleanup  ADR-0003 public/private cleanup proof
 # - just verify::molmo-realworld-agent-mcp  ADR-0003 MCP smoke-agent proof
 # - just verify::molmo-realworld-agent-dogfood-kit  ADR-0003 direct-agent kit proof
@@ -21,7 +17,7 @@
 # - just verify::molmo-planner-proof-bundle-runner  proof-request dry-run handoff
 # - just verify::molmo-planner-proof-bundle-execute-rerun  local GPU proof-bundle execution
 # - just verify::molmo-planner-manipulation-probe  ADR-0014 planner manipulation proof gate
-# - just verify::full-local <task> all local gates, including navigator
+# - just verify::full-local        active deterministic local gates
 
 set working-directory := '..'
 
@@ -53,15 +49,12 @@ mock:
     just verify::static
     just dev::test fast
 
-# Required PR gate: deterministic checks plus the mock HTML report artifact
-# uploaded by hosted CI.
-ci-required output_dir="output/demo" steps="30":
+# Required PR gate: deterministic checks plus active household report contracts.
+ci-required output_dir="output/demo":
     #!/usr/bin/env bash
     set -euo pipefail
     output_dir="{{output_dir}}"
-    steps="{{steps}}"
     output_dir="${output_dir#output_dir=}"
-    steps="${steps#steps=}"
     python_bin="${ROBOCLAWS_PYTHON:-}"
     if [[ -z "$python_bin" ]]; then
       if [[ -x ".venv/bin/python" ]]; then
@@ -71,36 +64,18 @@ ci-required output_dir="output/demo" steps="30":
       fi
     fi
     just verify::mock
-    "$python_bin" scripts/reports/generate_demo_report.py \
-      --output-dir "$output_dir" \
-      --steps "$steps"
+    ./scripts/dev/run_pytest_standalone.sh -q \
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/contract/reports/test_molmo_cleanup_artifact_report.py
+    mkdir -p "$output_dir"
 
 # L2: focused fixture/schema/report contracts.
 contract:
     {{standalone_pytest}} -q \
-      tests/contract/regression/test_refactor_regression_contracts.py \
       tests/contract/reports/test_run_artifacts.py \
-      tests/regression/refactor/test_capture_refactor_regression.py \
-      tests/regression/refactor/test_analyze_refactor_regression.py \
-      tests/contract/reports/test_render_autonomous_replay.py \
-      tests/contract/reports/test_reporter.py
-
-# L3: mock-provider baseline/candidate refactor-regression harness.
-regression-mock baseline="" candidate="" scenes="FloorPlan201" seeds="1,2" steps="20" agents="2" model="mock":
-    just harness::regression mock "{{baseline}}" "{{candidate}}" "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
-
-# L4: local simulator harness using AI2-THOR with mock provider.
-local-sim scenes="FloorPlan201" seeds="1,2" steps="20" agents="2" model="mock":
-    just harness::sim "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
-
-# L5: local OpenClaw/Gateway/provider harness.
-local-openclaw scenes="FloorPlan201" seeds="1" steps="20" agents="2" model="mock":
-    bash scripts/dev/network_status.sh --assert-off-work "OpenClaw verification gate"
-    just harness::openclaw "{{scenes}}" "{{seeds}}" "{{steps}}" "{{agents}}" "{{model}}"
-
-# L6: coding-agent navigator harness.
-navigator task cap="900":
-    just harness::navigator "{{task}}" "{{cap}}"
+      tests/contract/reports/test_molmo_cleanup_report.py \
+      tests/contract/reports/test_molmo_cleanup_artifact_report.py \
+      tests/contract/reports/test_molmo_report_visual_core.py
 
 # ADR-0003 public/private cleanup gate. Requires the repo-local uv MolmoSpaces
 # runtime for the harness; focused tests use the synthetic backend.
@@ -212,14 +187,9 @@ molmo-planner-manipulation-probe:
       tests/contract/dev_tools/test_verify_just_recipes.py
     just harness::molmo-planner-manipulation-probe
 
-# Full local confidence ladder. This intentionally requires a navigator task
-# so the slowest gate is explicit rather than accidental.
-full-local task cap="900":
+# Full local confidence ladder for active deterministic gates.
+full-local:
     #!/usr/bin/env bash
     set -euo pipefail
     just verify::mock
     just verify::contract
-    just verify::regression-mock
-    just verify::local-sim
-    just verify::local-openclaw
-    just verify::navigator "{{task}}" "{{cap}}"

@@ -73,6 +73,45 @@ def test_agent_sdk_perf_matrix_blocks_privacy_leak(
     assert "forbidden marker bearer " in reasons
 
 
+def test_agent_sdk_perf_matrix_blocks_model_call_metric_privacy_leak(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100)
+    candidate = _write_run(tmp_path / "candidate", restored=5, elapsed_s=70)
+    (candidate / "model_call_metrics.jsonl").write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_model_call_metric_v1",
+                "agent_engine": "codex-cli",
+                "raw_prompt": "do not persist me",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path, baseline=baseline, candidate=candidate)
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 1
+    assert "privacy gate failed" in capsys.readouterr().err
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    reasons = {finding["reason"] for finding in row["privacy_gate"]["findings"]}
+    assert "forbidden key raw_prompt" in reasons
+
+
 def test_agent_sdk_perf_matrix_rejects_faster_but_worse_quality(
     tmp_path: Path,
     capsys,

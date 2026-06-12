@@ -1,15 +1,4 @@
-"""Regression tests for `just/code.just` ↔ `just/mcp.just` wiring.
-
-Locks in the fix for the 2026-04-28 bug where `just code::cc` registered the
-MCP server with a corrupted URL (``http://host=127.0.0.1:port=18788/mcp``)
-because the `cc` recipe passed ``host="..." port="..."`` after the recipe
-name. In `just`, tokens after a recipe name are positional — ``name=value``
-becomes the literal value of the next positional parameter, prefix and all.
-
-Also pins the cross-module wiring: `code::cc` and `code::codex` must call
-the shared `mcp::up` / `mcp::down` recipes rather than duplicating the
-lifecycle logic.
-"""
+"""Regression tests for coding-agent just recipe wiring."""
 
 from __future__ import annotations
 
@@ -32,41 +21,16 @@ CODE_JUST = JUST_DIR / "code.just"
 AGENT_JUST = JUST_DIR / "agent.just"
 MCP_JUST = JUST_DIR / "mcp.just"
 MOLMO_JUST = JUST_DIR / "molmo.just"
-HARNESS_RUN = REPO_ROOT / "harness" / "run.sh"
 LIVE_CODEX_RUNNER = REPO_ROOT / "scripts" / "molmo_cleanup" / "run_live_codex_cleanup.py"
-CODING_AGENT_ENV = REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh"
 CODING_AGENT_DOCKERFILE = REPO_ROOT / "Dockerfile.coding-agents"
 CODING_AGENT_DOCKER_SH = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"
 CODING_AGENT_TOOLCHAIN = REPO_ROOT / "scripts" / "dev" / "coding_agent_toolchain.env"
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
-# Matches an inter-recipe call to mcp::up and captures the trailing argument
-# list up to end-of-line. Excludes the recipe definition header.
-_MCP_UP_CALL = re.compile(r"just mcp::up\s+([^\n]+?)(?:\)|$)", re.MULTILINE)
-
-
-def _inter_recipe_calls() -> list[str]:
-    text = CODE_JUST.read_text(encoding="utf-8")
-    return [m.group(1).strip() for m in _MCP_UP_CALL.finditer(text)]
-
 
 def test_just_files_exist() -> None:
     assert CODE_JUST.is_file(), f"missing {CODE_JUST}"
     assert MCP_JUST.is_file(), f"missing {MCP_JUST}"
-
-
-def test_cc_and_codex_call_mcp_up_with_positional_args() -> None:
-    calls = _inter_recipe_calls()
-    assert len(calls) >= 2, f"expected cc + codex to both call mcp::up, found {len(calls)}: {calls}"
-    for call in calls:
-        for forbidden in ("scene=", "host=", "port="):
-            assert forbidden not in call, (
-                f"`just mcp::up` invocation uses `{forbidden}` named-arg syntax: "
-                f"{call!r}. After a recipe name, just treats `name=value` as the "
-                'literal positional value — use `"{{scene}}" "{{host}}" "{{port}}"` '
-                "instead. See 2026-04-28 bug: corrupt MCP URL like "
-                "http://host=127.0.0.1:port=18788/mcp."
-            )
 
 
 def test_mcp_url_template_is_well_formed() -> None:
@@ -79,25 +43,28 @@ def test_mcp_url_template_is_well_formed() -> None:
         assert url == "http://{{host}}:{{port}}/mcp", f"unexpected mcp_url template: {url!r}"
 
 
-def test_code_just_does_not_duplicate_mcp_lifecycle() -> None:
-    """`code.just` must delegate to mcp::up / mcp::down, not redefine them."""
+def test_code_just_is_toolchain_only_not_a_task_launcher() -> None:
+    """`code.just` should not preserve retired direct task launchers."""
     text = CODE_JUST.read_text(encoding="utf-8")
-    # No standalone recipe headers for mcp_up / mcp_down (and no top-level
-    # state vars duplicating the mcp module).
     forbidden_headers = (
+        re.compile(r"^cc\s", re.MULTILINE),
+        re.compile(r"^codex\s", re.MULTILINE),
+        re.compile(r"^view\s", re.MULTILINE),
         re.compile(r"^mcp_up\s", re.MULTILINE),
         re.compile(r"^mcp_down:", re.MULTILINE),
         re.compile(r"^server_pid_file\s*:=", re.MULTILINE),
     )
     for pattern in forbidden_headers:
         assert not pattern.search(text), (
-            f"code.just defines `{pattern.pattern}` but should delegate to "
-            f"just/mcp.just. Move the lifecycle to mcp.just."
+            f"code.just still defines retired launcher {pattern.pattern}"
         )
+    assert "codex-provider-smoke" in text
+    assert "docker-build:" in text
+    assert "docker-install-wrappers" in text
 
 
-def test_code_agent_launches_default_to_full_permissions() -> None:
-    """Direct Codex / Claude Code just recipes should not launch in read-only mode."""
+def test_code_just_keeps_permission_constants_for_downstream_launchers() -> None:
+    """Shared permission constants should stay available to live-agent recipes."""
     text = CODE_JUST.read_text(encoding="utf-8")
 
     assert 'codex_full_permission_args := "--dangerously-bypass-approvals-and-sandbox"' in text
@@ -105,24 +72,8 @@ def test_code_agent_launches_default_to_full_permissions() -> None:
         'claude_full_permission_args := "--dangerously-skip-permissions '
         '--permission-mode bypassPermissions"'
     ) in text
-    assert "scripts/dev/coding_agent_docker.sh ensure" in text
-    assert 'docker_codex=("$repo_root/scripts/dev/coding_agent_docker.sh" run codex)' in text
-    assert '"${docker_codex[@]}" "${codex_model_args[@]}" {{codex_full_permission_args}}' in text
-    assert 'docker_claude=("$repo_root/scripts/dev/coding_agent_docker.sh" run claude)' in text
-    assert (
-        'claude_command=("${docker_claude[@]}" "${claude_model_args[@]}" '
-        "{{claude_full_permission_args}})"
-    ) in text
     assert "command -v codex" not in text
     assert "command -v claude" not in text
-    assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE="' in text
-    assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_TASK="' in text
-    assert 'export ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS="' in text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}" in text
-    assert "Switching CWD to isolated task workspace" in text
-    assert "cd demo" not in text
-    assert 'for entry in "${claude_env_args[@]}"; do' in text
-    assert 'export "$entry"' in text
     assert "codex --yolo" not in text
     assert re.search(r"^\s+codex\s*$", text, re.MULTILINE) is None
     assert re.search(r"^\s+claude\s*$", text, re.MULTILINE) is None
@@ -201,68 +152,46 @@ def test_pinned_coding_agent_docker_toolchain_is_the_ci_source() -> None:
     assert "vars.CLAUDE_CODE_NPM_PACKAGE" not in ci_text
 
 
-def test_code_agent_mcp_server_receives_selected_model_for_observe_auto() -> None:
-    """Direct MCP runs must know the selected model so the server binds MODEL correctly."""
+def test_live_agent_routes_prepare_selected_model_for_mcp_server() -> None:
+    """Live MCP runs must know the selected model so the server binds MODEL correctly."""
     code_text = CODE_JUST.read_text(encoding="utf-8")
-    env_text = CODING_AGENT_ENV.read_text(encoding="utf-8")
+    agent_text = AGENT_JUST.read_text(encoding="utf-8")
+    molmo_text = MOLMO_JUST.read_text(encoding="utf-8")
+    env_text = (REPO_ROOT / "scripts" / "dev" / "coding_agent_env.sh").read_text(encoding="utf-8")
 
-    assert (
-        'claude_model="$(roboclaws_code_agent_model '
-        'ROBOCLAWS_CLAUDE_MODEL ROBOCLAWS_CLAUDE_PROVIDER)"'
-    ) in code_text
-    assert (
+    assert "roboclaws_code_agent_prepare_mcp_env" not in code_text
+    selected_model_snippet = (
         'codex_model="$(roboclaws_code_agent_model ROBOCLAWS_CODEX_MODEL ROBOCLAWS_CODEX_PROVIDER)"'
-    ) in code_text
-    assert ('roboclaws_code_agent_prepare_mcp_env "$claude_model" "$claude_provider"') in code_text
-    assert ('roboclaws_code_agent_prepare_mcp_env "$codex_model" "$codex_provider"') in code_text
+    )
+    assert selected_model_snippet in agent_text or selected_model_snippet in molmo_text
+    assert "roboclaws_code_agent_prepare_mcp_env" in env_text
     assert 'export MODEL="$model"' in env_text
 
 
-def test_photo_coding_agent_routes_use_photo_skill_only() -> None:
-    """Photo coding-agent tasks should not inherit the base navigator skill."""
+def test_retired_photo_coding_agent_routes_are_not_advertised() -> None:
+    """Retired photo tasks should not be reachable through coding-agent launchers."""
     agent_text = AGENT_JUST.read_text(encoding="utf-8")
     code_text = CODE_JUST.read_text(encoding="utf-8")
     mcp_text = MCP_JUST.read_text(encoding="utf-8")
 
-    assert "photo-chairs:codex|photo-chairs:claude" in agent_text
-    assert 'code::codex "$scene" "$host" "$port" photo-chairs capture-object-photo 1' in (
-        agent_text
-    )
-    assert 'code::cc "$scene" "$host" "$port" photo-chairs capture-object-photo 1' in (agent_text)
-    assert 'skill_name="${skill_name#skills/}"' in code_text
-    assert 'ln -sfn "$repo_root/skills/$skill_name"' in code_text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-${task_name}" in code_text
-    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-${skill_name}" in code_text
-    assert "allow_privileged_tools" in mcp_text
-    assert "server_args+=(--allow-privileged-tools)" in mcp_text
+    assert "photo-chairs" not in agent_text
+    assert "capture-object-photo" not in agent_text
+    assert "capture-object-photo" not in code_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-semantic-map-build" in agent_text
+    assert "ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-molmo-realworld-cleanup" in agent_text
+    assert "allow_privileged_tools" not in mcp_text
+    assert "--allow-privileged-tools" not in mcp_text
 
 
-def test_photo_task_facade_accepts_coding_agent_drivers() -> None:
-    codex = resolve_surface_run(
-        ("surface=ai2thor-world", "intent=photo-capture", "agent_engine=codex-cli")
-    )
-    claude = resolve_surface_run(
-        ("surface=ai2thor-world", "intent=photo-capture", "agent_engine=claude-code")
-    )
-
-    assert codex.argv == (
-        "just",
-        "agent::run",
-        "ai2thor-world.photo-capture",
-        "codex-cli",
-        "visual",
-        "scene=FloorPlan201",
-        "backend=ai2thor",
-    )
-    assert claude.argv == (
-        "just",
-        "agent::run",
-        "ai2thor-world.photo-capture",
-        "claude-code",
-        "visual",
-        "scene=FloorPlan201",
-        "backend=ai2thor",
-    )
+def test_retired_photo_task_facade_rejects_ai2thor_surface() -> None:
+    try:
+        resolve_surface_run(
+            ("surface=ai2thor-world", "intent=photo-capture", "agent_engine=codex-cli")
+        )
+    except Exception as exc:
+        assert "unsupported surface 'ai2thor-world'" in str(exc)
+    else:  # pragma: no cover - defensive assertion branch
+        raise AssertionError("retired ai2thor photo route resolved successfully")
 
 
 def test_molmo_codex_live_waits_for_server_and_runs_prompted_exec() -> None:
@@ -319,13 +248,6 @@ def test_other_just_files_do_not_launch_bare_coding_agents() -> None:
                 continue
             assert not re.match(r"^(codex|claude)(\s|$)", stripped), (
                 f"{path.relative_to(JUST_DIR.parent)} launches a coding agent directly: "
-                f"{stripped!r}. Route through just code::codex / code::cc or use the "
-                "full-permission defaults from just/code.just."
+                f"{stripped!r}. Route through run::surface / agent::* or use "
+                "scripts/dev/coding_agent_docker.sh."
             )
-
-
-def test_navigator_harness_inherits_full_permission_code_recipe() -> None:
-    text = HARNESS_RUN.read_text(encoding="utf-8")
-
-    assert "just code::cc" in text
-    assert "default full-permission launch args" in text

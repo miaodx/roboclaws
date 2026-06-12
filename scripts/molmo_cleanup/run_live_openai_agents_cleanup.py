@@ -47,6 +47,10 @@ from roboclaws.launch.evaluation import (
     household_intent_id_for_checker,
     merge_checker_flags,
 )
+from roboclaws.reports.live_performance import (
+    extract_model_call_metrics,
+    write_model_call_metrics_jsonl,
+)
 
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
@@ -655,6 +659,10 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["model_or_sdk_unattributed_s"] = _model_or_sdk_unattributed_seconds(payload)
         payload["timeline"] = _live_timing_timeline(payload)
         self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        write_model_call_metrics_jsonl(
+            self.run_dir / "model_call_metrics.jsonl",
+            extract_model_call_metrics(self.run_dir, live_timing=payload),
+        )
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc

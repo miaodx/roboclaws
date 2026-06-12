@@ -1,8 +1,8 @@
-"""Empty-MCP binding smoke for `just code::cc` / `just code::codex`.
+"""Empty-MCP binding smoke for Docker-backed coding-agent MCP registration.
 
-Spins up a tools-less FastMCP server on a free localhost port (no AI2-THOR,
-no Engine), exercises the same recipe wiring `just code::cc` would, and
-verifies Docker-backed `claude mcp` and `codex mcp` register the URL cleanly.
+Spins up a tools-less FastMCP server on a free localhost port, exercises the
+same URL handoff shape as the household MCP recipe, and verifies Docker-backed
+`claude mcp` and `codex mcp` register the URL cleanly.
 For claude (which health-probes every entry on `mcp list`), we additionally
 assert the entry comes back as `Connected` — proof that the streamable-HTTP
 handshake completed end-to-end.
@@ -86,8 +86,8 @@ def warm_path_pid():
     """Inject a live PID so `just mcp::up` takes the warm path.
 
     The warm path returns the URL immediately without trying to start a real
-    AI2-THOR-backed server. Backs up and restores any pre-existing PID file
-    so we never clobber the user's real running server.
+    household MCP server. Backs up and restores any pre-existing PID file so
+    we never clobber the user's real running server.
     """
     backup = PID_FILE.read_text(encoding="utf-8") if PID_FILE.exists() else None
     SERVER_DIR.mkdir(parents=True, exist_ok=True)
@@ -103,7 +103,7 @@ def warm_path_pid():
 
 @pytest.mark.usefixtures("warm_path_pid")
 def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
-    """`just mcp::up FloorPlan H P` returns http://H:P/mcp — no `name=` leak."""
+    """`just mcp::up household-cleanup H P` returns http://H:P/mcp — no `name=` leak."""
     port = empty_mcp_url.rsplit(":", 1)[1].split("/", 1)[0]
     # The recipe uses bare `python`; ensure the venv's bin dir is on PATH so
     # subprocess inherits it even when pytest was launched via .venv/bin/python
@@ -112,7 +112,7 @@ def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
     venv_bin = str(Path(sys.executable).parent)
     env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
     result = subprocess.run(
-        ["just", "mcp::up", "FloorPlan201", "127.0.0.1", port],
+        ["just", "mcp::up", "household-cleanup", "127.0.0.1", port],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -122,6 +122,25 @@ def test_just_mcp_up_emits_clean_url(empty_mcp_url: str) -> None:
     assert result.returncode == 0, f"just failed: {result.stderr}"
     last_line = result.stdout.strip().splitlines()[-1]
     assert last_line == empty_mcp_url, f"recipe emitted {last_line!r}, want {empty_mcp_url!r}"
+
+
+@pytest.mark.usefixtures("warm_path_pid")
+def test_just_mcp_up_rejects_unknown_server_before_warm_path(empty_mcp_url: str) -> None:
+    """A stale PID file must not make unsupported server names look valid."""
+    port = empty_mcp_url.rsplit(":", 1)[1].split("/", 1)[0]
+    env = os.environ.copy()
+    venv_bin = str(Path(sys.executable).parent)
+    env["PATH"] = venv_bin + os.pathsep + env.get("PATH", "")
+    result = subprocess.run(
+        ["just", "mcp::up", "unknown-server", "127.0.0.1", port],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        env=env,
+    )
+    assert result.returncode != 0
+    assert "unsupported MCP server 'unknown-server'" in result.stderr
 
 
 @pytest.mark.skipif(not _have("docker"), reason="Docker required")

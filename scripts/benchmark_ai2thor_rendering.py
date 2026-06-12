@@ -1,1 +1,0 @@
-dev/benchmark_ai2thor_rendering.py

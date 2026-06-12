@@ -57,8 +57,8 @@ _Avoid_: agent engine, task intent, evidence lane
 **Internal Runner Class**:
 The derived execution category behind a launch, such as `live-agent`,
 `deterministic`, `smoke`, `gateway`, or `script`. It is catalog/runtime
-metadata, not an operator-facing public choice. Smoke is an evidence or runner
-mode, not an Agent Engine.
+metadata, not an operator-facing public choice. Smoke is a verification preset
+or runner mode, not an Agent Engine and not an Evidence Lane.
 _Avoid_: public task name, provider profile, capability profile, UI selector
 
 **Agent Skill**:
@@ -73,6 +73,14 @@ or hardware gates for a plan or diff. It records why gates were selected,
 skipped, run, or blocked. It is not an MCP capability, task skill, or fixed
 benchmark grid.
 _Avoid_: manual checklist, hidden evaluator, one-size-fits-all harness
+
+**Report Performance Artifact Contract**:
+A durable maintainer artifact contract for comparing live-agent report
+performance under unstable provider/network conditions. It uses sanitized
+quality, call-count, token/image-work, timing, normalized model-work, and
+residual-latency fields. It is not a public command surface, MCP tool contract,
+or external API, and missing telemetry is unavailable rather than zero.
+_Avoid_: wall-clock-only speedup, raw prompt telemetry, public API
 
 **Trace-Preserving Skill Routine**:
 A reusable skill routine that composes lower-level public tools while recording
@@ -111,24 +119,22 @@ the run starts. The policy, object IDs, before/after locations, and relocation
 count stay private/report-side.
 _Avoid_: public mess generator, cleanup worklist, private scoring truth
 
-**Navigation Map Artifact**:
-A reusable static source of navigation geometry and public semantic annotations.
-Rich variants may include rooms, fixtures, inspection waypoints, and driveable
-links; minimal variants may contain only occupancy/free-space geometry, current
-pose, frame metadata, and safety bounds.
-_Avoid_: runtime observation memory, private scene graph, raw hidden truth
-
-**Minimal Navigation Map Artifact**:
-An intentionally sparse Navigation Map Artifact aligned with raw robot maps:
-occupancy/free-space geometry plus localization and safety context, without
-preauthored room, fixture, or object semantics. It is the preferred real-robot
-starting point; rich authored bundles are dev/test or explicit aids.
-_Avoid_: complete semantic map, arbitrary coordinate freedom, private scene graph
+**Base Navigation Map**:
+The agent-facing static map context available at run start. It contains
+occupancy/free-space geometry, frame metadata, current robot pose, generated
+safe exploration or inspection candidates, and public room-category hints when
+available. It must not expose private relocation/scoring truth, static movable
+object inventory, or a full static fixture/receptacle table by default.
+Historical minimal/rich map artifacts may remain source or report inputs, but
+new product behavior should not ask agents to choose a public `minimal` or
+`rich` map mode.
+_Avoid_: complete semantic map, runtime observation memory, private scene graph,
+static fixture truth
 
 **Metric Map Projection**:
-The agent-facing JSON view derived from a Navigation Map Artifact. For minimal
-maps, it may expose sparse navigation geometry and generated exploration
-candidates instead of authored rooms, fixtures, or inspection waypoints.
+The agent-facing JSON view derived from static map context and public runtime
+evidence. The Base Navigation Map is the start-of-run projection; Runtime
+Metric Map is the enriched current-run projection.
 _Avoid_: raw occupancy map, independent map source, private backend metadata
 
 **Runtime Metric Map**:
@@ -173,9 +179,12 @@ The terminal intent-level result for `surface=household-world
 intent=open-ended`. It is satisfied by agent-declared goal completion plus the
 required public artifacts, goal contract, trace, report, and open-ended
 artifact checker. Cleanup scoring may remain advisory evidence on the artifact,
-but cleanup restoration fields must not be the authoritative terminal outcome
-for open-ended runs.
-_Avoid_: cleanup success, private scorer result, restored-object count
+but cleanup restoration fields and legacy custom-task flags must not be the
+authoritative terminal outcome for open-ended runs. New artifacts should name
+the intent directly as `open-ended`; historical readers may tolerate
+`task_intent_mode=custom`.
+_Avoid_: cleanup success, private scorer result, restored-object count,
+custom cleanup mode
 
 **Cleanup Intent**:
 A first-class household-world intent that consumes household world evidence and
