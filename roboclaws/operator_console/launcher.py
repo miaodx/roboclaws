@@ -221,6 +221,7 @@ def route_readiness(
     lock_state = ResourceLock(root, route.lock_name).read()
     attachable_run = _attachable_run_payload(root, lock_state)
     lock_active = lock_state.held and (not lock_state.stale or bool(attachable_run))
+    real_movement_enabled = _truthy_override(override_map.get("real_movement_enabled"))
     if lock_active:
         if attachable_run:
             blocker = (
@@ -237,6 +238,8 @@ def route_readiness(
         message = "Ready"
         evidence = ""
         kind = "ready"
+        severity = gate.severity
+        blocks_start = gate.required
         if gate.kind == "provider_key":
             provider_status = _provider_status(route, env_map)
             ok = provider_status["ok"]
@@ -246,11 +249,14 @@ def route_readiness(
                 kind = "needs_provider"
         elif gate.kind == "isaac_preflight":
             accepted = accepted_isaac_preflight(root)
-            ok = accepted is not None or gate_map.get(gate.id) is True
+            ok = accepted is not None
             evidence = str(accepted or "")
             if not ok:
-                message = "Isaac preflight has not passed. Run the preflight gate before launch."
-                kind = "needs_isaac_preflight"
+                message = (
+                    "No accepted Isaac runtime preflight or smoke marker found. "
+                    "Launch can start; backend diagnostics will report concrete runtime failures."
+                )
+                kind = "isaac_runtime_unverified"
         elif gate.kind == "mcp_port_free":
             host = _override_host(override_map)
             port = _override_port(override_map)
@@ -265,18 +271,26 @@ def route_readiness(
         elif gate.kind == "request_field":
             ok = bool(override_map.get(gate.id))
             if not ok:
-                message = (
-                    "Attach context, localization, run enablement, and E-stop readiness evidence."
-                )
+                message = "Attach a completed Agibot map context JSON."
                 kind = "needs_agibot_context"
         elif gate.kind == "operator_gate":
+            blocks_start = real_movement_enabled
             ok = gate_map.get(gate.id) is True
             if not ok:
-                message = "Agibot operator gates are incomplete."
-                kind = "needs_agibot_gates"
+                if real_movement_enabled:
+                    message = (
+                        "Real movement is enabled; localization, run enablement, "
+                        "and E-stop/manual-stop readiness must be accepted before launch."
+                    )
+                    kind = "needs_real_movement_gate"
+                else:
+                    message = (
+                        "Dry-run launch can start; this evidence is required for real movement."
+                    )
+                    kind = "real_movement_gate_pending"
         if ok:
             kind = "ready"
-        if not ok and not blocker:
+        if not ok and blocks_start and not blocker:
             blocker = message
             blocker_kind = kind
         gate_rows.append(
@@ -285,8 +299,12 @@ def route_readiness(
                 "label": gate.label,
                 "status": "ready" if ok else "needs_action",
                 "kind": kind,
+                "severity": severity,
+                "required": blocks_start,
+                "blocks_start": blocks_start,
                 "message": message,
                 "evidence": evidence,
+                "help_text": gate.help_text,
             }
         )
     return {
@@ -833,6 +851,10 @@ def _parse_port(value: str) -> int:
     if not 1 <= port <= 65535:
         raise ConsoleLaunchError(f"invalid MCP port: {value}")
     return port
+
+
+def _truthy_override(raw: str | None) -> bool:
+    return str(raw or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _tcp_port_free(host: str, port: int) -> bool:

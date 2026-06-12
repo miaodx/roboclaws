@@ -17,6 +17,7 @@ class RouteGate:
     label: str
     kind: str
     required: bool = True
+    severity: str = "blocking"
     help_text: str = ""
 
     def to_payload(self) -> dict[str, Any]:
@@ -64,7 +65,7 @@ class ConsoleRoute:
         payload["argv_preview"] = ["just", "task::run", *self.base_args()]
         payload["command_preview"] = payload["argv_preview"]
         payload["gates"] = [gate.to_payload() for gate in self.gates]
-        payload["required_gates"] = payload["gates"]
+        payload["required_gates"] = [gate for gate in payload["gates"] if gate["required"]]
         payload["state"] = "enabled" if self.enabled else "disabled"
         payload["blocker"] = self.disabled_reason
         payload["prompt_disabled_reason"] = (
@@ -93,30 +94,44 @@ MCP_PORT_FREE_GATE = RouteGate(
 )
 ISAAC_PREFLIGHT_GATE = RouteGate(
     id="isaac_preflight",
-    label="Isaac preflight accepted",
+    label="Isaac runtime diagnostic",
     kind="isaac_preflight",
-    help_text="Run or accept a recent Isaac runtime preflight/smoke artifact before launch.",
+    required=False,
+    severity="advisory",
+    help_text=(
+        "Shows recent Isaac runtime preflight/smoke evidence when present; "
+        "launch can start without a manual acceptance marker."
+    ),
 )
 AGIBOT_CONTEXT_GATE = RouteGate(
     id="context_json",
-    label="Agibot context JSON attached",
+    label="Agibot map context JSON attached",
     kind="request_field",
     help_text="Attach a completed Agibot map context JSON.",
 )
 AGIBOT_LOCALIZATION_GATE = RouteGate(
     id="localization_ready",
-    label="Localization gate accepted",
+    label="Localization available for real movement",
     kind="operator_gate",
+    required=False,
+    severity="capability",
+    help_text="Required only when real movement is enabled.",
 )
 AGIBOT_ENABLEMENT_GATE = RouteGate(
     id="run_enabled",
-    label="Run enablement accepted",
+    label="Run enablement available for real movement",
     kind="operator_gate",
+    required=False,
+    severity="capability",
+    help_text="Required only when real movement is enabled.",
 )
 AGIBOT_ESTOP_GATE = RouteGate(
     id="estop_ready",
-    label="E-stop readiness visible",
+    label="E-stop/manual-stop visible for real movement",
     kind="operator_gate",
+    required=False,
+    severity="capability",
+    help_text="Required only when real movement is enabled.",
 )
 
 

@@ -37,7 +37,7 @@ def test_build_harness_has_expected_rows(tmp_path: Path) -> None:
     assert all(row["requires_runtime_map_prior"] for row in prior_rows)
 
 
-def test_prior_camera_rows_get_larger_codex_continuation_budget(tmp_path: Path) -> None:
+def test_cleanup_rows_do_not_set_runner_continuation_env(tmp_path: Path) -> None:
     harness = harness8.build_harness(
         output_dir=tmp_path,
         seed=7,
@@ -49,15 +49,13 @@ def test_prior_camera_rows_get_larger_codex_continuation_budget(tmp_path: Path) 
     )
 
     rows = {row["row_id"]: row for row in harness["rows"]}
-    assert rows["dino-prior-camera-grounded-labels-grounding-dino"]["env"] == {
-        "ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"
-    }
-    assert rows["dino-prior-camera-raw-fpv"]["env"] == {"ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"}
+    assert rows["dino-prior-camera-grounded-labels-grounding-dino"]["env"] == {}
+    assert rows["dino-prior-camera-raw-fpv"]["env"] == {}
     assert rows["direct-camera-grounded-labels-grounding-dino"]["env"] == {}
     assert rows["dino-prior-world-oracle-labels"]["env"] == {}
     assert (
-        "ROBOCLAWS_CODEX_MAX_CONTINUATIONS=14"
-        in rows["dino-prior-camera-grounded-labels-grounding-dino"]["rerun_command"]
+        "ROBOCLAWS_CODEX_MAX_CONTINUATIONS"
+        not in rows["dino-prior-camera-grounded-labels-grounding-dino"]["rerun_command"]
     )
 
 
@@ -121,7 +119,26 @@ def test_setup_row_refresh_treats_runtime_map_as_artifact_success(tmp_path: Path
     assert "exact_restored" not in row["metrics"]
 
 
-def test_rate_limit_evidence_detects_provider_429_log(tmp_path: Path) -> None:
+def test_provider_transient_evidence_reads_explicit_live_status() -> None:
+    live_status = {
+        "phase": "failed",
+        "exit_status": 1,
+        "reason": "provider_transient_failure",
+        "provider_reason": "rate_limit",
+        "retryable": True,
+        "resume_available": True,
+    }
+
+    evidence = harness8._provider_transient_evidence({"live_status": live_status})
+
+    assert evidence is not None
+    assert evidence["provider_reason"] == "rate_limit"
+    assert evidence["source"] == "live_status.json"
+
+
+def test_provider_transient_evidence_ignores_matching_log_without_live_status(
+    tmp_path: Path,
+) -> None:
     run_dir = tmp_path / "seed-7"
     run_dir.mkdir()
     (run_dir / "driver.log").write_text(
@@ -129,14 +146,10 @@ def test_rate_limit_evidence_detects_provider_429_log(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    evidence = harness8._rate_limit_evidence({"run_dir": str(run_dir)})
-
-    assert evidence is not None
-    assert evidence["pattern"] == "429 too many requests"
-    assert evidence["source"] == "driver.log"
+    assert harness8._provider_transient_evidence({"run_dir": str(run_dir)}) is None
 
 
-def test_execute_row_with_retries_marks_exhausted_rate_limit(
+def test_execute_row_with_retries_marks_exhausted_provider_transient(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     row = {"row_id": "dino-prior-world-oracle-labels", "run_dir": str(tmp_path)}
@@ -151,27 +164,31 @@ def test_execute_row_with_retries_marks_exhausted_rate_limit(
     monkeypatch.setattr(harness8, "_execute_row", fake_execute_row)
     monkeypatch.setattr(
         harness8,
-        "_rate_limit_evidence",
+        "_provider_transient_evidence",
         lambda _row: {
-            "source": "driver.log",
-            "pattern": "429 too many requests",
-            "snippet": "429 Too Many Requests",
+            "source": "live_status.json",
+            "provider_reason": "rate_limit",
+            "retryable": True,
+            "resume_available": True,
         },
     )
 
     status = harness8._execute_row_with_retries(
         row,
-        Namespace(rate_limit_retries=1, rate_limit_retry_sleep_s=0),
+        Namespace(provider_retry_attempts=1, provider_retry_sleep_s=0),
     )
 
     assert status == 1
-    assert row["status"] == "rate_limited"
+    assert row["status"] == "provider_transient_failed"
     assert row["behavior_status"] == "infra_failure"
+    assert row["provider_reason"] == "rate_limit"
+    assert row["retryable"] is True
+    assert row["resume_available"] is True
     assert row["retry_count"] == 1
     assert len(row["attempts"]) == 2
 
 
-def test_execute_row_applies_row_and_operator_codex_continuation_env(
+def test_execute_row_does_not_apply_operator_codex_continuation_env(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     run_dir = tmp_path / "dino-prior-camera-grounded-labels-grounding-dino" / "0604_1030" / "seed-7"
@@ -203,7 +220,7 @@ def test_execute_row_applies_row_and_operator_codex_continuation_env(
             "evidence_lane=camera-grounded-labels",
         ],
         "output_dir": str(tmp_path / "dino-prior-camera-grounded-labels-grounding-dino"),
-        "env": {"ROBOCLAWS_CODEX_MAX_CONTINUATIONS": "14"},
+        "env": {},
     }
     status = harness8._execute_row(
         row,
@@ -212,12 +229,11 @@ def test_execute_row_applies_row_and_operator_codex_continuation_env(
             seed=7,
             live_wait_timeout_s=1,
             live_wait_poll_s=0.1,
-            codex_max_continuations=16,
         ),
     )
 
     assert status == 0
-    assert captured_envs[0]["ROBOCLAWS_CODEX_MAX_CONTINUATIONS"] == "16"
+    assert "ROBOCLAWS_CODEX_MAX_CONTINUATIONS" not in captured_envs[0]
 
 
 def test_visual_grounding_connection_error_is_infra_failure(tmp_path: Path) -> None:
@@ -270,7 +286,9 @@ def test_visual_grounding_connection_error_is_infra_failure(tmp_path: Path) -> N
     assert "grounding-dino visual grounding infra failure" in row["reason"]
 
 
-def test_prior_setup_rate_limit_blocks_prior_rows(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+def test_prior_setup_provider_transient_blocks_prior_rows(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
     harness = harness8.build_harness(
         output_dir=tmp_path,
         seed=7,
@@ -286,9 +304,9 @@ def test_prior_setup_rate_limit_blocks_prior_rows(tmp_path: Path, monkeypatch: M
 
     def fake_execute_row_with_retries(row_arg, _args):
         if row_arg["row_id"] == "setup-semantic-map-prior-dino":
-            row_arg["status"] = "rate_limited"
+            row_arg["status"] = "provider_transient_failed"
             row_arg["behavior_status"] = "infra_failure"
-            row_arg["reason"] = "provider rate limited after 2 attempt(s)"
+            row_arg["reason"] = "provider transient failure after 2 attempt(s): rate_limit"
             return 1
         executed_cleanup_rows.append(row_arg["row_id"])
         return 0
@@ -304,8 +322,8 @@ def test_prior_setup_rate_limit_blocks_prior_rows(tmp_path: Path, monkeypatch: M
         Namespace(
             runtime_map_prior="",
             seed=7,
-            rate_limit_retries=1,
-            rate_limit_retry_sleep_s=0,
+            provider_retry_attempts=1,
+            provider_retry_sleep_s=0,
             continue_on_error=True,
             row=["dino-prior-world-oracle-labels"],
             dino_sidecar_lifecycle="off",
@@ -314,7 +332,7 @@ def test_prior_setup_rate_limit_blocks_prior_rows(tmp_path: Path, monkeypatch: M
 
     assert status == 1
     assert executed_cleanup_rows == []
-    assert harness["setup_status"] == "rate_limited"
+    assert harness["setup_status"] == "provider_transient_failed"
     assert selected[0]["status"] == "blocked"
     assert selected[0]["behavior_status"] == "infra_failure"
 

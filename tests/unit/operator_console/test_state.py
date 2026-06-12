@@ -277,7 +277,7 @@ def test_state_prefers_robot_view_map_over_newer_report_map_bundle_preview(
     assert state["latest_view_assets"]["map"]["path"] == str(robot_map.resolve())
 
 
-def test_state_surfaces_provider_rate_limit_reason(tmp_path: Path) -> None:
+def test_state_surfaces_provider_transient_reason(tmp_path: Path) -> None:
     run_dir = tmp_path / "output" / "operator-console" / "runs" / "wrapper-run"
     attempt_dir = run_dir / "0608_1921" / "seed-7"
     attempt_dir.mkdir(parents=True)
@@ -297,7 +297,10 @@ def test_state_surfaces_provider_rate_limit_reason(tmp_path: Path) -> None:
             {
                 "phase": "failed",
                 "exit_status": 1,
-                "reason": "Codex provider rate limit; rerun the whole cleanup row",
+                "reason": "provider_transient_failure",
+                "provider_reason": "rate_limit",
+                "retryable": True,
+                "resume_available": True,
             }
         ),
         encoding="utf-8",
@@ -306,9 +309,9 @@ def test_state_surfaces_provider_rate_limit_reason(tmp_path: Path) -> None:
     state = derive_operator_state(tmp_path, run_dir, get_route("codex-mujoco-cleanup"))
 
     assert state["phase"] == "failed"
-    assert state["status"] == "rate_limited"
-    assert state["status_label"] == "Provider rate limited"
-    assert state["terminal_reason"] == "Codex provider rate limit; rerun the whole cleanup row"
+    assert state["status"] == "provider_transient_failed"
+    assert state["status_label"] == "Provider transient failure"
+    assert state["terminal_reason"] == "provider_transient_failure"
 
 
 def test_redacted_artifact_text_redacts_secrets(tmp_path: Path) -> None:

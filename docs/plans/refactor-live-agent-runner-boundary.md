@@ -1,18 +1,18 @@
 ---
 refactor_scope: live-agent-runner-boundary
-status: LOCKED
+status: DONE
 accepted_severities:
   - P0
   - P1
   - P2
-last_verified: null
+last_verified: 2026-06-08
 ---
 
 # Refactor Scope: Live Agent Runner Boundary
 
 ## Status
 
-LOCKED
+DONE
 
 ## Target
 
@@ -63,21 +63,21 @@ monitors that decide task strategy outside the coding agent.
 
 ## Accepted Cleanup Checklist
 
-- [ ] Remove lane-specific magic continuation budget from the live runner.
-- [ ] Remove implicit live-runner continuation for both Codex and Claude Code
+- [x] Remove lane-specific magic continuation budget from the live runner.
+- [x] Remove implicit live-runner continuation for both Codex and Claude Code
       unless an explicit agent-owned handoff protocol is added in a later
       slice.
-- [ ] Treat provider transient failures as explicit retryable infrastructure
+- [x] Treat provider transient failures as explicit retryable infrastructure
       failures, not normal cleanup continuation.
-- [ ] Treat idle timeouts as explicit non-retryable live-run failures.
-- [ ] Treat tool-binding and MCP namespace failures as explicit non-retryable
+- [x] Treat idle timeouts as explicit non-retryable live-run failures.
+- [x] Treat tool-binding and MCP namespace failures as explicit non-retryable
       live-run failures.
-- [ ] Keep runner artifacts and status files stable for operator console,
+- [x] Keep runner artifacts and status files stable for operator console,
       status summaries, and harness tooling.
-- [ ] Keep any provider retry envelope in the batch harness thin and bounded;
+- [x] Keep any provider retry envelope in the batch harness thin and bounded;
       it may resume/retry only from explicit retryable provider-transient
       status.
-- [ ] Update tests and docs to encode the launcher boundary.
+- [x] Update tests and docs to encode the launcher boundary.
 
 ## Parked Cross-Seam / Future Ideas
 
@@ -103,7 +103,7 @@ have stable files to inspect.
 
 ## Preflight Contract
 
-Preflight status: DRAFT
+Preflight status: IMPLEMENTED
 
 Task source: this plan plus the 2026-06-08 discussion.
 
@@ -215,3 +215,16 @@ To execute:
 - 2026-06-08: Provider retry scope widened from rate-limit-only to narrow
   provider-transient failures while excluding auth, config, context, MCP, idle,
   and unclassified CLI failures.
+- 2026-06-08: Implemented the runner boundary. Codex now launches one
+  `codex exec` turn, Claude launches one print-mode turn, and both classify
+  nonzero agent exits into explicit live status fields. Removed
+  `--codex-max-continuations` / `ROBOCLAWS_CODEX_MAX_CONTINUATIONS`
+  live-runner behavior, removed lane-specific harness continuation env, and
+  changed the Codex harness retry envelope to `--provider-retry-attempts` /
+  `--provider-retry-sleep-s`, driven only by
+  `live_status.reason=provider_transient_failure` and `retryable=true`.
+  Updated operator-console status handling, harness docs, and focused tests.
+  Verification passed:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_ci_live_reports.py tests/unit/molmo_cleanup/test_codex_cleanup_harness8.py`,
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_state.py tests/contract/dev_tools/test_task_agent_just_recipes.py::test_molmo_codex_harness8_recipe_traces_to_runner`,
+  and `ruff check` on touched Python files.

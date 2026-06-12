@@ -41,7 +41,6 @@ const els = {
   claudeProviderInput: document.getElementById("claude-provider-input"),
   contextInput: document.getElementById("context-json-input"),
   isaacSceneInput: document.getElementById("isaac-scene-input"),
-  isaacPreflightGate: document.getElementById("isaac-preflight-gate"),
   localizationGate: document.getElementById("localization-gate"),
   enablementGate: document.getElementById("enablement-gate"),
   estopGate: document.getElementById("estop-gate"),
@@ -99,7 +98,6 @@ function bindEvents() {
     els.codexProviderInput,
     els.claudeProviderInput,
     els.portInput,
-    els.isaacPreflightGate,
     els.localizationGate,
     els.enablementGate,
     els.estopGate,
@@ -418,13 +416,18 @@ function renderSelection() {
   els.gateList.innerHTML = "";
   for (const gate of gates) {
     const gateReady = gate.status === "ready";
+    const display = gateBadgeDisplay(gate);
     const row = document.createElement("div");
     row.className = "gate-row";
     row.innerHTML = `
       <span>${escapeHtml(gate.label)}</span>
-      <span class="badge ${gateReady ? "ready" : "needs_action"}">
-        ${gateReady ? "Ready" : "Needs Action"}
-      </span>
+      <span class="badge ${display.className}">${display.label}</span>
+      ${
+        gate.message && (!gateReady || gate.evidence)
+          ? `<span class="field-help">${escapeHtml(gate.message)}</span>`
+          : ""
+      }
+      ${gate.evidence ? `<span class="field-help">${escapeHtml(gate.evidence)}</span>` : ""}
     `;
     els.gateList.appendChild(row);
   }
@@ -450,13 +453,29 @@ function routeStatusDisplay(route, readiness) {
   if (kind === "locked") return { label: "LOCKED", className: "blocked" };
   if (kind === "mcp_port_in_use") return { label: "PORT IN USE", className: "blocked" };
   if (kind === "needs_provider") return { label: "NEEDS PROVIDER", className: "needs_action" };
-  if (kind === "needs_isaac_preflight") {
-    return { label: "NEEDS PREFLIGHT", className: "needs_action" };
+  if (kind === "needs_real_movement_gate") {
+    return { label: "NEEDS SAFETY GATES", className: "needs_action" };
   }
-  if (kind === "needs_agibot_context" || kind === "needs_agibot_gates") {
-    return { label: "NEEDS OPERATOR GATES", className: "needs_action" };
+  if (kind === "needs_agibot_context") {
+    return { label: "NEEDS CONTEXT", className: "needs_action" };
   }
   return { label: "NEEDS ACTION", className: "needs_action" };
+}
+
+function gateBadgeDisplay(gate) {
+  if (gate.status === "ready") {
+    return { label: "Ready", className: "ready" };
+  }
+  if (gateBlocksStart(gate)) {
+    return { label: "Required", className: "needs_action" };
+  }
+  if (gate.severity === "capability") {
+    return { label: "Capability Gate", className: "warning" };
+  }
+  if (gate.severity === "advisory") {
+    return { label: "Diagnostic", className: "warning" };
+  }
+  return { label: "Needs Action", className: "needs_action" };
 }
 
 function renderSelectedRouteSummary(route, readiness) {
@@ -493,7 +512,8 @@ function commandPreview(route) {
 function effectiveReadiness(route) {
   const base = state.readiness[route.id] || {};
   const gates = (base.gates || route.gates || []).map((gate) => ({ ...gate }));
-  const lockBlocked = base.lock && base.lock.held && !base.lock.stale;
+  const lockBlocked =
+    base.blocker_kind === "locked" || (base.lock && base.lock.held && !base.lock.stale);
   let blocker = "";
 
   if (!route.enabled) {
@@ -507,7 +527,7 @@ function effectiveReadiness(route) {
 
   for (const gate of gates) {
     applyLocalGateEvidence(gate);
-    if (gate.status !== "ready" && !blocker) {
+    if (gate.status !== "ready" && gateBlocksStart(gate) && !blocker) {
       blocker = gate.message || "Required gate is incomplete.";
     }
   }
@@ -523,11 +543,20 @@ function effectiveReadiness(route) {
 
 function applyLocalGateEvidence(gate) {
   const localReady =
-    (gate.id === "isaac_preflight" && els.isaacPreflightGate.checked) ||
     (gate.id === "context_json" && Boolean(els.contextInput.value.trim())) ||
     (gate.id === "localization_ready" && els.localizationGate.checked) ||
     (gate.id === "run_enabled" && els.enablementGate.checked) ||
     (gate.id === "estop_ready" && els.estopGate.checked);
+
+  if (isRealMovementGate(gate) && els.realMovementGate.checked) {
+    gate.blocks_start = true;
+    gate.required = true;
+    if (gate.status !== "ready") {
+      gate.kind = "needs_real_movement_gate";
+      gate.message =
+        "Real movement is enabled; localization, run enablement, and E-stop/manual-stop readiness must be accepted before launch.";
+    }
+  }
 
   if (!localReady) {
     return;
@@ -537,8 +566,16 @@ function applyLocalGateEvidence(gate) {
 }
 
 function firstBlockingGateKind(gates) {
-  const gate = gates.find((item) => item.status !== "ready");
+  const gate = gates.find((item) => item.status !== "ready" && gateBlocksStart(item));
   return gate ? gate.kind || "" : "";
+}
+
+function gateBlocksStart(gate) {
+  return Boolean(gate.blocks_start || gate.required);
+}
+
+function isRealMovementGate(gate) {
+  return ["localization_ready", "run_enabled", "estop_ready"].includes(gate.id);
 }
 
 function renderStartAction(route, readiness) {
@@ -591,6 +628,12 @@ async function refreshSelectedRouteReadiness() {
   });
   if (els.contextInput.value) {
     params.set("context_json", els.contextInput.value);
+  }
+  if (isAgibotRoute(route)) {
+    params.set("real_movement_enabled", els.realMovementGate.checked ? "true" : "false");
+    params.set("localization_ready", els.localizationGate.checked ? "true" : "false");
+    params.set("run_enabled", els.enablementGate.checked ? "true" : "false");
+    params.set("estop_ready", els.estopGate.checked ? "true" : "false");
   }
   if (route.driver === "codex") {
     params.set("codex_provider", selectedCodexProvider());
@@ -676,7 +719,6 @@ async function launchRun() {
       port: els.portInput.value || "18788",
     },
     gates: {
-      isaac_preflight: els.isaacPreflightGate.checked,
       localization_ready: els.localizationGate.checked,
       run_enabled: els.enablementGate.checked,
       estop_ready: els.estopGate.checked,

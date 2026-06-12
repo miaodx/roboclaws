@@ -18,10 +18,19 @@ from pathlib import Path
 from typing import BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
+from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
 
 FULL_PERMISSION_ARGS = ("--dangerously-skip-permissions", "--permission-mode", "bypassPermissions")
 CHECKER_SCRIPT = "scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py"
 REPORT_RERUN_COMMAND_ENV = "ROBOCLAWS_REPORT_RERUN_COMMAND"
+
+
+class LiveAgentRunFailure(RuntimeError):
+    """Raised after a live-agent turn writes structured failure status."""
+
+    def __init__(self, message: str, failure: LiveAgentFailure) -> None:
+        super().__init__(message)
+        self.failure = failure
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -81,6 +90,11 @@ class LiveClaudeCleanupRunner:
             self._write_status("failed", 130)
             self._cleanup_server()
             return 130
+        except LiveAgentRunFailure as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            self._write_status("failed", 1, **exc.failure.status_fields())
+            self._cleanup_server()
+            return 1
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
@@ -267,7 +281,15 @@ class LiveClaudeCleanupRunner:
             env=env,
         )
         if status != 0:
-            raise RuntimeError(f"Claude Code exited with status {status}")
+            failure = classify_live_agent_failure(
+                self.run_dir / "claude-events.jsonl",
+                self.run_dir / "claude.stderr.log",
+                exit_status=status,
+            )
+            raise LiveAgentRunFailure(
+                f"Claude Code failed after one live-agent turn: {failure.reason}",
+                failure,
+            )
 
     def _wait_for_server_finish(self) -> None:
         assert self.server_proc is not None
@@ -340,6 +362,10 @@ class LiveClaudeCleanupRunner:
         exit_status: int | None = None,
         *,
         reason: str = "",
+        provider_reason: str = "",
+        retryable: bool | None = None,
+        resume_available: bool | None = None,
+        detail: str = "",
     ) -> None:
         payload: dict[str, object] = {
             "phase": phase,
@@ -347,6 +373,14 @@ class LiveClaudeCleanupRunner:
         }
         if reason:
             payload["reason"] = reason
+        if provider_reason:
+            payload["provider_reason"] = provider_reason
+        if retryable is not None:
+            payload["retryable"] = retryable
+        if resume_available is not None:
+            payload["resume_available"] = resume_available
+        if detail:
+            payload["detail"] = detail
         if exit_status is not None:
             payload["finished_at_epoch"] = time.time()
             payload["exit_status"] = exit_status

@@ -54,7 +54,12 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                 route = get_route(str(query.get("route_id", [""])[0]))
                 overrides = {
                     key: str(query[key][0])
-                    for key in ("host", "port", "context_json")
+                    for key in ("host", "port", "context_json", "real_movement_enabled")
+                    if query.get(key, [""])[0]
+                }
+                gates = {
+                    key: str(query[key][0]).lower() == "true"
+                    for key in ("localization_ready", "run_enabled", "estop_ready")
                     if query.get(key, [""])[0]
                 }
                 env_overrides = {
@@ -68,6 +73,7 @@ class ConsoleRequestHandler(SimpleHTTPRequestHandler):
                         route,
                         overrides=overrides,
                         env_overrides=env_overrides,
+                        gates=gates,
                     )
                 )
             except (ConsoleLaunchError, KeyError, ValueError) as exc:
