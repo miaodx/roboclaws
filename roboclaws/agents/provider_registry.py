@@ -195,12 +195,6 @@ _MODEL_SPECS: tuple[ModelSpec, ...] = (
         model_capabilities=_caps(MODEL_CAP_TEXT, MODEL_CAP_IMAGE_INPUT),
     ),
     ModelSpec(
-        model_id="xiaomi/mimo-v2.5-pro",
-        aliases=("xiaomi/mimo-v2.5-pro",),
-        family="mimo",
-        model_capabilities=_caps(MODEL_CAP_TEXT),
-    ),
-    ModelSpec(
         model_id="MiniMax-M3",
         aliases=("minimax", "minimax-m3", "MiniMax-M3"),
         family="minimax",
