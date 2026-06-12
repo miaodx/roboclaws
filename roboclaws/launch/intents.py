@@ -94,7 +94,7 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "planner-proof": TaskIntentSpec(
         intent_id="planner-proof",
         surface_ids=("planner-proof",),
-        supported_dispatch_runners=("direct", "script", "mcp-smoke"),
+        supported_dispatch_runners=("direct", "mcp-smoke"),
         dispatch_target="planner-proof.planner-proof",
         prompt_id="molmo_planner_proof",
         checker_id="planner_proof_report",

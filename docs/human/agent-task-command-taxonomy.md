@@ -35,7 +35,6 @@ Current agent engines:
 - `claude-code`
 - `openai-agents-sdk`
 - `openclaw-gateway`
-- `script-runner`
 
 `prompt=...` without an explicit household intent resolves to
 `intent=open-ended`. `intent=cleanup prompt=...` keeps cleanup semantics while

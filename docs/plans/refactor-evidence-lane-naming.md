@@ -248,7 +248,7 @@ Must read:
 
 Useful evidence:
 
-- `docs/adr/0133-use-http-visual-grounding-service-for-real-camera-labels.md`
+- `docs/adr/archive/superseded/0133-use-http-visual-grounding-service-for-real-camera-labels.md`
 - `docs/status/active/raw-fpv-live-strategy-stabilization.md`
 
 Do not read unless needed:

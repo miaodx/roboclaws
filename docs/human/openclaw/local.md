@@ -4,6 +4,11 @@ OpenClaw remains a local/maintainer route for household MCP runs. It is not a
 separate public robot surface; use it as an agent engine for
 `surface=household-world` when you need Gateway behavior.
 
+Current status: validation-required. The household OpenClaw path is kept for
+maintainer use, but the current household-world contract has not been recently
+proved off the work network. Treat the route as degraded until a dated
+off-work-network Gateway run produces a cleanup report and trace.
+
 ## Prerequisites
 
 - Docker.
@@ -30,7 +35,7 @@ network.
 
 ## Run A Household Cleanup Route
 
-The public route is:
+The validation-required route shape is:
 
 ```bash
 just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=openclaw-gateway evidence_lane=world-oracle-labels

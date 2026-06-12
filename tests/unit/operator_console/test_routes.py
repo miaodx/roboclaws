@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from roboclaws.launch.agent_engines import agent_engine_spec
 from roboclaws.launch.worlds import MOLMOSPACES_CONSOLE_WORLD_IDS
 from roboclaws.operator_console.launcher import ConsoleLaunchError, build_launch_argv
 from roboclaws.operator_console.routes import (
@@ -220,6 +221,12 @@ def test_openai_agents_route_payload_lists_provider_profiles() -> None:
     assert route_by_profile["mify"]["route_status"] == "provisional"
     assert route_by_profile["mimo-openai-chat"]["wire_api"] == "chat-completions"
     assert route_by_profile["minimax"]["route_capabilities"]["image_transport"] == "unknown"
+
+
+def test_openclaw_agent_engine_marks_validation_required() -> None:
+    spec = agent_engine_spec("openclaw-gateway")
+
+    assert spec.availability == "validation-required"
 
 
 def test_console_exposes_all_supported_household_evidence_lanes() -> None:

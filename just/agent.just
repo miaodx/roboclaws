@@ -81,9 +81,6 @@ run dispatch_target agent_engine mode="" *overrides:
       openclaw-gateway)
         driver="openclaw"
         ;;
-      script-runner)
-        driver="script"
-        ;;
       *)
         driver="$agent_engine"
         ;;
@@ -264,9 +261,6 @@ run dispatch_target agent_engine mode="" *overrides:
       openclaw)
         report_rerun_parts+=("agent_engine=openclaw-gateway")
         ;;
-      script)
-        report_rerun_parts+=("agent_engine=script-runner")
-        ;;
     esac
     if [[ "$implementation_task_name" == "household-cleanup" || "$implementation_task_name" == "semantic-map-build" ]]; then
       if [[ "$profile" == "smoke" ]]; then
@@ -374,7 +368,7 @@ run dispatch_target agent_engine mode="" *overrides:
               sim-projected-labels)
                 visual_grounding="sim"
                 ;;
-              grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake|grounding-dino+mimo-v2.5|yoloe+mimo-v2.5|grounding-dino+qwen3-vl|mimo-v2.5-direct|qwen3-vl-direct)
+              grounding-dino|yoloe|omdet-turbo|yolo-world|fake-http|contract-fake)
                 visual_grounding="$camera_labeler"
                 ;;
               *)
@@ -758,7 +752,7 @@ run dispatch_target agent_engine mode="" *overrides:
           run_just molmo::cleanup "${molmo_args[@]}"
         ;;
 
-      molmo-planner-proof:direct|molmo-planner-proof:script|molmo-planner-proof:mcp-smoke)
+      molmo-planner-proof:direct|molmo-planner-proof:mcp-smoke)
         mode="$(get mode dry-run)"
         mode="${mode//_/-}"
         output_dir="$(get output_dir "")"

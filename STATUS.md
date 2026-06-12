@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-06-11
+Last updated: 2026-06-12
 
 This is the human-facing dashboard for the repo. Keep it short: current state
 and pointers only, not a changelog or execution ledger.
@@ -14,9 +14,17 @@ AI2-THOR/direct-VLM public-surface retirement is implemented and verified; the
 active code, docs, tests, skills, CI, and public command facade now center on
 household-world / planner-proof.
 
+The active visual-grounding sidecar contract is now detector-only: hosted VLM
+refiner/direct-producer camera labelers are retired from active code, command
+examples, tests, and benchmark promotion. OpenClaw remains available only as a
+guarded validation-required maintainer route until an off-work-network Gateway
+proof runs.
+
 The implemented source of truth is
 `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`, backed by
-ADR-0136. The implemented retirement record is
+ADR-0136. The implemented visual-grounding cleanup is
+`docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`,
+backed by ADR-0138. The implemented AI2-THOR/direct-VLM retirement record is
 `docs/plans/refactor-retire-ai2thor-vlm-direct.md`.
 
 ## Next Action
@@ -25,13 +33,14 @@ Use the canonical launch shape for new work:
 `just run::surface surface=household-world ... intent=map-build|cleanup` or a
 household prompt that infers `intent=open-ended`. Pick the next implementation
 task from `TODOS.md`, `docs/plans/`, or the issue tracker rather than reopening
-the completed launch-contract saturation.
+the completed launch-contract or VLM-sidecar retirement work.
 
 ## Current Blocker
 
-No current implementation blocker. The household launch-contract saturation and
-AI2-THOR/direct-VLM retirement are implemented; live OpenClaw/Gateway and
-deleted AI2-THOR gates are not required for those proofs.
+No current implementation blocker for the detector-only sidecar cleanup. The
+only known validation blocker is OpenClaw Gateway: this host is on the work
+network, so Gateway proof must run separately off the work network before
+OpenClaw can be called healthy.
 
 ## Human Review Surface
 
@@ -42,6 +51,10 @@ deleted AI2-THOR gates are not required for those proofs.
   `docs/plans/2026-06-11-household-map-launch-open-ended-contracts.md`
 - Active launch contract ADR:
   `docs/adr/0136-use-base-navigation-map-and-first-class-household-launch-contracts.md`
+- Active detector-only sidecar ADR:
+  `docs/adr/0138-use-detector-only-visual-grounding-sidecar.md`
+- Implemented VLM-sidecar/OpenClaw status cleanup:
+  `docs/plans/2026-06-12-vlm-direct-sidecar-and-openclaw-status-cleanup.md`
 - Implemented AI2-THOR/direct-VLM retirement record:
   `docs/plans/refactor-retire-ai2thor-vlm-direct.md`
 - Open-ended proof-status contract:

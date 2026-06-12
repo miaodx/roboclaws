@@ -4,7 +4,7 @@ Date: 2026-05-20
 
 ## Status
 
-Accepted; updated by ADR-0132
+Superseded by [ADR-0132](../../0132-keep-cleanup-memory-skill-first-and-remove-promoted-composite.md).
 
 ## Decision
 

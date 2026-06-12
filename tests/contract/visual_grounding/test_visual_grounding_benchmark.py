@@ -4,9 +4,8 @@ import json
 import subprocess
 import sys
 import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
 
 from scripts.visual_grounding.adapters import (
     ADAPTER_MODE_REAL,
@@ -335,7 +334,7 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
                 "--output-dir",
                 str(tmp_path),
                 "--pipeline",
-                "grounding-dino,yoloe,yoloe+mimo-v2.5,mimo-v2.5-direct",
+                "grounding-dino,yoloe,omdet-turbo",
                 "--base-url",
                 base_url,
                 "--timeout-s",
@@ -365,57 +364,39 @@ def test_visual_grounding_benchmark_compares_named_contract_pipelines(tmp_path: 
     assert set(by_pipeline) == {
         "grounding-dino",
         "yoloe",
-        "yoloe+mimo-v2.5",
-        "mimo-v2.5-direct",
+        "omdet-turbo",
     }
     assert by_pipeline["grounding-dino"]["stage_summary"][0]["producer_id"] == "grounding-dino"
     assert by_pipeline["grounding-dino"]["metrics"]["precision"] == 1.0
     assert by_pipeline["yoloe"]["stage_summary"][0]["producer_id"] == "yoloe"
     assert by_pipeline["yoloe"]["metrics"]["precision"] < 1.0
     assert by_pipeline["yoloe"]["metrics"]["duplicate_count"] >= 1
+    assert by_pipeline["omdet-turbo"]["stage_summary"][0]["producer_id"] == "omdet-turbo"
     assert by_pipeline["grounding-dino"]["metrics"]["actionability_proxy_rate"] > 0.0
     assert by_pipeline["yoloe"]["metrics"]["destination_hint_rate"] == 1.0
-    assert [stage["stage"] for stage in by_pipeline["yoloe+mimo-v2.5"]["stage_summary"]] == [
-        "proposer",
-        "refiner",
-    ]
-    assert by_pipeline["yoloe+mimo-v2.5"]["metrics"]["rejected_proposal_count"] >= 1
-    assert by_pipeline["mimo-v2.5-direct"]["stage_summary"][0]["stage"] == "direct_producer"
     assert result["ranking"][0]["pipeline_id"] in {
         "grounding-dino",
-        "mimo-v2.5-direct",
-        "yoloe+mimo-v2.5",
+        "yoloe",
+        "omdet-turbo",
     }
     assert "actionability_proxy_rate" in result["ranking"][0]
     promotion = result["promotion_recommendation"]
     assert promotion["selected_end_to_end_pipelines"][0] == "sim"
     assert promotion["best_proposer_only_pipeline_id"] == "grounding-dino"
-    assert promotion["best_proposer_plus_refiner_pipeline_id"] == "yoloe+mimo-v2.5"
-    assert promotion["best_direct_vlm_pipeline_id"] == "mimo-v2.5-direct"
+    assert "best_proposer_plus_refiner_pipeline_id" not in promotion
+    assert "best_direct_vlm_pipeline_id" not in promotion
+    assert "max_proposer_plus_refiner_pipelines" not in promotion["policy"]
+    assert "max_direct_vlm_pipelines" not in promotion["policy"]
     assert promotion["selected_real_stage_provenance_complete"] is False
     assert promotion["requires_real_stage_provenance_before_promotion"] is True
-    assert (
-        len(
-            [
-                pipeline_id
-                for pipeline_id in promotion["selected_end_to_end_pipelines"]
-                if pipeline_id.endswith("-direct")
-            ]
-        )
-        <= 1
-    )
 
     predictions = [
         json.loads(line)
         for line in (tmp_path / "visual_grounding_predictions.jsonl").read_text().splitlines()
     ]
-    refined = [
-        item
-        for item in predictions
-        if item["pipeline_id"] == "yoloe+mimo-v2.5"
-        and item["diagnostic_evidence"]["rejected_proposal_count"]
-    ]
-    assert refined
+    assert {stage["stage"] for item in predictions for stage in item["pipeline"]["stages"]} == {
+        "proposer"
+    }
     assert "private_labels" not in json.dumps(predictions)
     assert "bytes_base64" not in json.dumps(predictions)
 
@@ -757,54 +738,9 @@ def test_visual_grounding_first_wave_matrix_covers_required_sweeps() -> None:
         assert row["runtime_parameters"]["torch_dtype"] == "auto"
 
 
-def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_service(
+def test_visual_grounding_benchmark_rejects_retired_direct_pipeline_through_configurable_service(
     tmp_path: Path,
-    monkeypatch,
 ) -> None:
-    seen: dict[str, Any] = {}
-    chat_server = _start_chat_server(
-        seen,
-        {
-            "choices": [
-                {
-                    "message": {
-                        "content": json.dumps(
-                            {
-                                "candidates": [
-                                    {
-                                        "category": "dish",
-                                        "image_region": {
-                                            "type": "bbox",
-                                            "value": [0.4, 0.42, 0.22, 0.18],
-                                        },
-                                        "confidence": 0.83,
-                                        "evidence_note": "fake hosted VLM direct output",
-                                        "destination_hint": {
-                                            "candidate_fixture_id": "sink_01",
-                                            "confidence": 0.5,
-                                        },
-                                    }
-                                ],
-                                "rejected_proposals": [],
-                            }
-                        )
-                    }
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 100,
-                "completion_tokens": 20,
-                "total_tokens": 120,
-            },
-        },
-    )
-    monkeypatch.setenv(
-        "VISUAL_GROUNDING_MIMO_BASE_URL",
-        f"http://127.0.0.1:{chat_server.server_port}/v1",
-    )
-    monkeypatch.setenv("VISUAL_GROUNDING_MIMO_API_KEY", "secret-mimo-key")
-    monkeypatch.setenv("VISUAL_GROUNDING_VLM_INPUT_USD_PER_1K_TOKENS", "0.001")
-    monkeypatch.setenv("VISUAL_GROUNDING_VLM_OUTPUT_USD_PER_1K_TOKENS", "0.002")
     service = _start_configurable_service(
         pipeline_id="mimo-v2.5-direct",
         adapter_mode="real",
@@ -832,10 +768,8 @@ def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_
     finally:
         service.shutdown()
         service.server_close()
-        chat_server.shutdown()
-        chat_server.server_close()
 
-    subprocess.run(
+    candidate_gate = subprocess.run(
         [
             sys.executable,
             str(CHECKER),
@@ -846,136 +780,26 @@ def test_visual_grounding_benchmark_runs_hosted_vlm_direct_through_configurable_
             "--require-candidates",
         ],
         cwd=REPO_ROOT,
-        check=True,
+        capture_output=True,
+        text=True,
     )
+    assert candidate_gate.returncode == 1
+    assert "pipeline failures present" in candidate_gate.stderr
 
     result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
     pipeline = result["pipelines"][0]
     assert pipeline["pipeline_id"] == "mimo-v2.5-direct"
-    assert pipeline["failure_count"] == 0
-    assert pipeline["auth_mode"] == "bearer_configured"
-    assert pipeline["evidence_level"] == "real_or_hosted_service"
-    assert pipeline["api_cost"]["available"] is True
-    assert pipeline["api_cost"]["total_usd"] > 0
-    assert pipeline["api_cost"]["token_usage"]["total_tokens"] == 360
+    assert pipeline["failure_count"] > 0
+    assert pipeline["auth_mode"] == "none"
+    assert pipeline["evidence_level"] == "failure_only"
+    assert pipeline["api_cost"]["available"] is False
     assert pipeline["memory_profile"]["available"] is False
-    assert seen["path"] == "/v1/chat/completions"
-    assert seen["authorization"] == "Bearer secret-mimo-key"
     assert "secret-mimo-key" not in json.dumps(result)
     predictions = [
         json.loads(line)
         for line in (tmp_path / "visual_grounding_predictions.jsonl").read_text().splitlines()
     ]
-    assert {item["pipeline"]["auth_mode"] for item in predictions} == {"bearer_configured"}
-    assert result["promotion_recommendation"]["real_stage_provenance_present"] is True
-    assert result["promotion_recommendation"]["selected_real_stage_provenance_complete"] is True
-    assert (
-        result["promotion_recommendation"]["requires_real_stage_provenance_before_promotion"]
-        is False
-    )
-
-
-def test_visual_grounding_benchmark_runs_provider_prefixed_hosted_vlm_direct(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    seen: dict[str, Any] = {}
-    chat_server = _start_chat_server(
-        seen,
-        {
-            "choices": [
-                {
-                    "message": {
-                        "content": json.dumps(
-                            {
-                                "candidates": [
-                                    {
-                                        "category": "dish",
-                                        "image_region": {
-                                            "type": "bbox",
-                                            "value": [0.4, 0.42, 0.22, 0.18],
-                                        },
-                                        "confidence": 0.83,
-                                        "evidence_note": "fake hosted VLM direct output",
-                                        "destination_hint": {
-                                            "candidate_fixture_id": "sink_01",
-                                            "confidence": 0.5,
-                                        },
-                                    }
-                                ],
-                                "rejected_proposals": [],
-                            }
-                        )
-                    }
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 100,
-                "completion_tokens": 20,
-                "total_tokens": 120,
-            },
-        },
-    )
-    monkeypatch.setenv(
-        "VISUAL_GROUNDING_VLM_BASE_URL",
-        f"http://127.0.0.1:{chat_server.server_port}/v1",
-    )
-    monkeypatch.setenv("VISUAL_GROUNDING_VLM_API_KEY", "secret-vlm-key")
-    service = _start_configurable_service(
-        pipeline_id="real-router",
-        adapter_mode="real",
-    )
-    pipelines = [
-        "xiaomi/mimo-v2.5-direct",
-        "vertex_ai/gemini-3-flash-preview-direct",
-        "tongyi/qwen3-vl-flash-direct",
-        "siliconflow/Qwen/Qwen3-VL-8B-Instruct-direct",
-    ]
-    try:
-        base_url = f"http://127.0.0.1:{service.server_port}"
-        subprocess.run(
-            [
-                sys.executable,
-                str(RUNNER),
-                "--corpus",
-                str(CORPUS),
-                "--output-dir",
-                str(tmp_path),
-                "--pipeline",
-                ",".join(pipelines),
-                "--base-url",
-                base_url,
-                "--timeout-s",
-                "2",
-            ],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-    finally:
-        service.shutdown()
-        service.server_close()
-        chat_server.shutdown()
-        chat_server.server_close()
-
-    result = json.loads((tmp_path / "visual_grounding_benchmark_result.json").read_text())
-    by_pipeline = {item["pipeline_id"]: item for item in result["pipelines"]}
-    assert set(by_pipeline) == set(pipelines)
-    assert all(item["failure_count"] == 0 for item in by_pipeline.values())
-    assert all(item["auth_mode"] == "bearer_configured" for item in by_pipeline.values())
-    assert all(item["evidence_level"] == "real_or_hosted_service" for item in by_pipeline.values())
-    seen_models = {
-        request["payload"]["model"]
-        for request in seen["requests"]
-        if request["payload"].get("model")
-    }
-    assert seen_models == {
-        "xiaomi/mimo-v2.5",
-        "vertex_ai/gemini-3-flash-preview",
-        "tongyi/qwen3-vl-flash",
-        "siliconflow/Qwen/Qwen3-VL-8B-Instruct",
-    }
-    assert {request["authorization"] for request in seen["requests"]} == {"Bearer secret-vlm-key"}
-    assert "secret-vlm-key" not in json.dumps(result)
+    assert {item["error"]["reason"] for item in predictions} == {"adapter_unavailable"}
 
 
 def _start_fake_server(*, mode: str) -> ThreadingHTTPServer:
@@ -1001,39 +825,6 @@ def _start_configurable_service(
             latency_ms=1,
         ),
     )
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    return server
-
-
-def _start_chat_server(
-    seen: dict[str, Any],
-    response_payload: dict[str, Any],
-) -> ThreadingHTTPServer:
-    class Handler(BaseHTTPRequestHandler):
-        def do_POST(self) -> None:  # noqa: N802
-            length = int(self.headers.get("Content-Length") or 0)
-            seen["path"] = self.path
-            seen["authorization"] = self.headers.get("Authorization")
-            seen["payload"] = json.loads(self.rfile.read(length).decode("utf-8"))
-            seen.setdefault("requests", []).append(
-                {
-                    "path": seen["path"],
-                    "authorization": seen["authorization"],
-                    "payload": seen["payload"],
-                }
-            )
-            body = json.dumps(response_payload).encode("utf-8")
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def log_message(self, _format: str, *_args: Any) -> None:
-            return
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server

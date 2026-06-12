@@ -21,6 +21,16 @@ from roboclaws.household.visual_grounding import (  # noqa: E402
 )
 
 ENDPOINT = "/v1/visual-grounding/candidates"
+DETECTOR_ONLY_PIPELINES = frozenset(
+    {
+        "fake-http",
+        "contract-fake",
+        "grounding-dino",
+        "yoloe",
+        "yolo-world",
+        "omdet-turbo",
+    }
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -103,6 +113,16 @@ def contract_fake_visual_grounding_response(
     pipeline_id: str,
     latency_ms: int,
 ) -> dict[str, Any]:
+    if pipeline_id not in DETECTOR_ONLY_PIPELINES:
+        return visual_grounding_failure_response(
+            pipeline_id=pipeline_id,
+            reason="unsupported_pipeline",
+            message=(
+                f"visual grounding pipeline '{pipeline_id}' is not in the detector-only "
+                "contract fake catalog"
+            ),
+            latency_ms=latency_ms,
+        )
     pipeline = _fake_pipeline_result(
         payload=payload,
         pipeline_id=pipeline_id,
@@ -129,53 +149,26 @@ def _fake_pipeline_result(
 ) -> dict[str, Any]:
     stages = _stages_for_pipeline(pipeline_id, latency_ms)
     proposals = _proposals_for_pipeline(payload, pipeline_id)
-    candidates, rejected = _apply_refiner_if_present(payload, pipeline_id, proposals)
     return {
         "pipeline": {"pipeline_id": pipeline_id, "stages": stages},
-        "candidates": candidates,
+        "candidates": proposals,
         "diagnostics": {
             "schema": "visual_grounding_diagnostics_v1",
             "diagnostic_mode": "deterministic_contract_fake",
             "raw_proposals": proposals,
-            "rejected_proposals": rejected,
+            "rejected_proposals": [],
             "private_truth_included": False,
         },
     }
 
 
 def _stages_for_pipeline(pipeline_id: str, latency_ms: int) -> list[dict[str, Any]]:
-    if pipeline_id.endswith("-direct"):
-        producer_id = pipeline_id.removesuffix("-direct")
-        return [
-            _stage(
-                name="direct_producer",
-                producer_id=producer_id,
-                model_id=_model_id_for_producer(producer_id),
-                latency_ms=latency_ms,
-            )
-        ]
-    parts = pipeline_id.split("+")
-    if len(parts) == 1:
-        return [
-            _stage(
-                name="proposer",
-                producer_id=parts[0],
-                model_id=_model_id_for_producer(parts[0]),
-                latency_ms=latency_ms,
-            )
-        ]
     return [
         _stage(
             name="proposer",
-            producer_id=parts[0],
-            model_id=_model_id_for_producer(parts[0]),
-            latency_ms=max(0, round(latency_ms * 0.35)),
-        ),
-        _stage(
-            name="refiner",
-            producer_id=parts[1],
-            model_id=_model_id_for_producer(parts[1]),
-            latency_ms=max(0, round(latency_ms * 0.65)),
+            producer_id=pipeline_id,
+            model_id=_model_id_for_producer(pipeline_id),
+            latency_ms=latency_ms,
         ),
     ]
 
@@ -196,18 +189,15 @@ def _model_id_for_producer(producer_id: str) -> str:
         "fake-http": "deterministic-public-metadata",
         "grounding-dino": "contract-stub:IDEA-Research/grounding-dino-tiny",
         "yoloe": "contract-stub:ultralytics/yoloe",
-        "mimo-v2.5": "contract-stub:mimo-v2.5",
-        "qwen3-vl": "contract-stub:Qwen/Qwen3-VL-8B-Instruct",
+        "yolo-world": "contract-stub:ultralytics/yolo-world",
+        "omdet-turbo": "contract-stub:omlab/omdet-turbo-swin-tiny-hf",
     }.get(producer_id, f"contract-stub:{producer_id}")
 
 
 def _proposals_for_pipeline(payload: dict[str, Any], pipeline_id: str) -> list[dict[str, Any]]:
-    if pipeline_id.endswith("-direct"):
-        return _direct_producer_candidates(payload, pipeline_id)
-    proposer_id = pipeline_id.split("+", maxsplit=1)[0]
-    if proposer_id == "grounding-dino":
+    if pipeline_id == "grounding-dino":
         return _grounding_dino_contract_proposals(payload)
-    if proposer_id == "yoloe":
+    if pipeline_id == "yoloe":
         return _yoloe_contract_proposals(payload)
     return _generic_fake_candidates(payload)
 
@@ -246,22 +236,6 @@ def _yoloe_contract_proposals(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return proposals
 
 
-def _direct_producer_candidates(payload: dict[str, Any], pipeline_id: str) -> list[dict[str, Any]]:
-    category = _positive_category_for_request(payload)
-    if not category:
-        return []
-    producer_id = pipeline_id.removesuffix("-direct")
-    return [
-        _candidate(
-            payload=payload,
-            category=category,
-            bbox=_positive_bbox_for_category(category),
-            confidence=0.81,
-            note=f"contract fake direct producer candidate from {producer_id}",
-        )
-    ]
-
-
 def _generic_fake_candidates(payload: dict[str, Any]) -> list[dict[str, Any]]:
     category = _category_for_request(payload)
     return [
@@ -273,40 +247,6 @@ def _generic_fake_candidates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             note=f"fake HTTP candidate from waypoint {payload.get('waypoint_id', '')}",
         )
     ]
-
-
-def _apply_refiner_if_present(
-    payload: dict[str, Any],
-    pipeline_id: str,
-    proposals: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    if "+" not in pipeline_id:
-        return proposals, []
-    candidates: list[dict[str, Any]] = []
-    rejected: list[dict[str, Any]] = []
-    seen_regions: set[str] = set()
-    has_positive_category = bool(_positive_category_for_request(payload))
-    for proposal in proposals:
-        region_key = json.dumps(proposal.get("image_region") or {}, sort_keys=True)
-        if not has_positive_category:
-            rejected.append(
-                {
-                    "candidate": proposal,
-                    "reason": "no_cleanup_object_visible_in_public_frame_metadata",
-                }
-            )
-            continue
-        if region_key in seen_regions:
-            rejected.append({"candidate": proposal, "reason": "near_duplicate_region"})
-            continue
-        seen_regions.add(region_key)
-        refined = dict(proposal)
-        refined["confidence"] = min(1.0, round(float(refined.get("confidence") or 0) + 0.08, 3))
-        refined["evidence_note"] = (
-            f"{refined.get('evidence_note', '')}; contract fake refiner accepted"
-        )
-        candidates.append(refined)
-    return candidates, rejected
 
 
 def _positive_category_for_request(payload: dict[str, Any]) -> str:

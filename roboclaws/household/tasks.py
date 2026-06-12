@@ -37,7 +37,7 @@ HOUSEHOLD_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
     "planner-proof": TaskSurfaceSpec(
         surface_id="planner-proof",
         domain="household",
-        supported_dispatch_runners=("direct", "script", "mcp-smoke"),
+        supported_dispatch_runners=("direct", "mcp-smoke"),
         supported_intents=("planner-proof",),
         default_intent="planner-proof",
         supported_reports=("visual", "minimal"),

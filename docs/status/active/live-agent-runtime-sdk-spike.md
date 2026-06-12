@@ -100,9 +100,19 @@ and
 remain accepted on quality/wall time, with estimated model-work deltas
 `-112.56s` / `-85.531s` and model-latency residual deltas `-541.003s` /
 `-533.491s`. Treat these as accepted paired plus calibrated-diagnostic rows,
-not broad or publishable speed claims. The full live provider/model x
-evidence-lane performance matrix is still not done. The follow-up execution plan is
-`docs/plans/live-agent-runtime-sdk-perf-followups.md`.
+not broad or publishable speed claims. The calibration builder now supports
+explicit holdout/cross-run validation rows; a baseline-trained,
+fixed4/repeat-validated packet exists at
+`output/agent-sdk-perf-followups/mify-camera-grounded-o-ac-holdout-calibration.json`
+with 76 training rows and 117 holdout rows. It records
+`holdout_validation_low_explanatory_power` because holdout fit is weak
+(`mae_s=7.72203`, `rmse_s=8.327714`, `p95_abs_error_s=11.548254`,
+`r2=-4.79098`). The holdout-normalized comparisons remain quality/wall accepted
+but show inconsistent estimated model-work deltas (`-13.613s` fixed4,
+`+35.951s` repeat) while residual reductions dominate (`-639.95s`,
+`-654.973s`). This keeps the normalized claim diagnostic only. The full live
+provider/model x evidence-lane performance matrix is still not done. The
+follow-up execution plan is `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
 
@@ -523,8 +533,12 @@ Parked work:
     wall-clock priority is broader B coverage only where it adds new
     evidence-lane/provider information, then holdout-reviewed calibration governance,
     with raw-FPV retry only after provider/image-transport availability
-    changes. O+AC calibrated-normalized diagnostic artifacts now exist, but
-    they are not broad or publishable speed claims.
+    changes. The live-refresh matrix now passes the holdout calibration packet
+    into the O+AC rows, so `output/agent-sdk-perf-followups/live-refresh-decision.json`
+    records the holdout-normalized deltas and
+    `holdout_validation_low_explanatory_power` limitation directly. O+AC
+    calibrated-normalized diagnostic artifacts now exist, but they are not broad
+    or publishable speed claims.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in
