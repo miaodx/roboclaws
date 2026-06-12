@@ -112,6 +112,46 @@ def test_agent_sdk_perf_matrix_blocks_model_call_metric_privacy_leak(
     assert "forbidden key raw_prompt" in reasons
 
 
+def test_agent_sdk_perf_matrix_blocks_openai_agents_event_privacy_leak(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100)
+    candidate = _write_run(tmp_path / "candidate", restored=5, elapsed_s=70)
+    (candidate / "openai-agents-events.jsonl").write_text(
+        json.dumps(
+            {
+                "schema": "openai_agents_model_input_filter_v1",
+                "event": "model_input_filter",
+                "metrics": {"input_bytes_reduced": 1200},
+                "raw_prompt": "do not persist me",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(tmp_path, baseline=baseline, candidate=candidate)
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 1
+    assert "privacy gate failed" in capsys.readouterr().err
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    reasons = {finding["reason"] for finding in row["privacy_gate"]["findings"]}
+    assert "forbidden key raw_prompt" in reasons
+
+
 def test_agent_sdk_perf_matrix_rejects_faster_but_worse_quality(
     tmp_path: Path,
     capsys,
@@ -180,10 +220,95 @@ def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     assert packet["summary"]["unsupported"] == ["unsupported_provider"]
     report = row["reducible_bucket_report"]
     assert report["available"] is True
+    assert report["tool_handler_s"] == 5.0
+    assert report["failed_or_noop_tool_count"] == 0
+    assert report["dominant_bucket"] == "model_or_sdk_between_tool_gap"
+    assert report["latency_buckets"] == {
+        "model_or_sdk_between_tool_gap": {"seconds": 50.0, "share": 0.7143, "reducible": True},
+        "visual_capture": {"seconds": 20.0, "share": 0.2857, "reducible": True},
+        "mcp_backend_tool_handler": {"seconds": 5.0, "share": 0.0714, "reducible": False},
+        "residual_or_unattributed": {"seconds": 0.0, "share": 0.0, "reducible": False},
+    }
     candidate_ids = {
         candidate_id for item in report["recommendations"] for candidate_id in item["candidate_ids"]
     }
     assert {"O", "N"}.issubset(candidate_ids)
+    recommendation_summary = packet["summary"]["recommendation_summary"]
+    assert recommendation_summary["source"] == "reducible_bucket_report"
+    assert recommendation_summary["claim_scope"] == "no-provider diagnostic recommendation evidence"
+    assert recommendation_summary["candidate_counts"]["O"] == 1
+    assert recommendation_summary["candidate_counts"]["N"] == 1
+    assert recommendation_summary["candidate_group_counts"]["group2_lane_specific_reductions"] == 2
+    assert recommendation_summary["dominant_bucket_counts"] == {"model_or_sdk_between_tool_gap": 1}
+    assert {"O", "N"}.issubset(set(recommendation_summary["top_candidate_ids"]))
+    assert recommendation_summary["top_candidate_groups"][0] == "group2_lane_specific_reductions"
+    assert recommendation_summary["row_recommendations"] == [
+        {
+            "row_id": "gpt_world_public_group0",
+            "evidence_lane": "camera-grounded-labels",
+            "dominant_bucket": "model_or_sdk_between_tool_gap",
+            "candidate_groups": [
+                "group1_private_sdk_levers",
+                "group2_lane_specific_reductions",
+            ],
+            "candidate_ids": ["A", "G", "H", "I", "J", "L", "N", "O"],
+        }
+    ]
+
+
+def test_agent_sdk_perf_matrix_accepts_expected_raw_fpv_diagnostic_terminal(
+    tmp_path: Path,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(
+        tmp_path / "baseline",
+        restored=0,
+        elapsed_s=300,
+        status={"phase": "failed", "reason": "provider_transient_failure", "exit_status": 1},
+        run_result=False,
+        trace_tools=[
+            "navigate_to_visual_candidate",
+            "navigate_to_visual_candidate",
+            "navigate_to_visual_candidate",
+        ],
+    )
+    candidate = _write_run(
+        tmp_path / "candidate",
+        restored=0,
+        elapsed_s=180,
+        status={
+            "phase": "failed",
+            "reason": "raw_fpv_sdk_turn_budget_exhausted",
+            "exit_status": 1,
+        },
+        run_result=False,
+        trace_tools=["navigate_to_visual_candidate"],
+    )
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        lane="camera-raw-fpv",
+        expected_terminal="raw_fpv_sdk_turn_budget_exhausted",
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 0
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    assert row["status"] == "accepted"
+    assert "raw-FPV accepted as classified diagnostic evidence" in row["reasons"]
+    assert row["quality_comparison"]["regressed"] is True
 
 
 def _write_manifest(
@@ -192,6 +317,7 @@ def _write_manifest(
     baseline: Path,
     candidate: Path,
     lane: str = "world-public-labels",
+    expected_terminal: str = "finished",
 ) -> Path:
     manifest = tmp_path / "matrix.json"
     manifest.write_text(
@@ -236,6 +362,7 @@ def _write_manifest(
                         "baseline_run_dir": str(baseline),
                         "candidate_run_dir": str(candidate),
                         "provider_calls": False,
+                        "expected_terminal": expected_terminal,
                     },
                     {
                         "row_id": "unsupported_provider",
@@ -266,6 +393,8 @@ def _write_run(
     gap_s: float = 40.0,
     trace_tools: list[str] | None = None,
     live_timing_extra: dict[str, object] | None = None,
+    status: dict[str, object] | None = None,
+    run_result: bool = True,
 ) -> Path:
     run_dir.mkdir()
     timing = {
@@ -280,31 +409,32 @@ def _write_run(
         timing.update(live_timing_extra)
     (run_dir / "live_timing.json").write_text(json.dumps(timing), encoding="utf-8")
     (run_dir / "live_status.json").write_text(
-        json.dumps({"phase": "finished", "exit_status": 0}),
+        json.dumps(status or {"phase": "finished", "exit_status": 0}),
         encoding="utf-8",
     )
-    (run_dir / "run_result.json").write_text(
-        json.dumps(
-            {
-                "cleanup_status": "success",
-                "completion_status": "success",
-                "mess_restoration_rate": restored / 5,
-                "sweep_coverage_rate": 1.0,
-                "disturbance_count": 0,
-                "score": {
-                    "restored_count": restored,
-                    "total_targets": 5,
+    if run_result:
+        (run_dir / "run_result.json").write_text(
+            json.dumps(
+                {
+                    "cleanup_status": "success",
+                    "completion_status": "success",
                     "mess_restoration_rate": restored / 5,
+                    "sweep_coverage_rate": 1.0,
                     "disturbance_count": 0,
-                    "object_results": [
-                        {"restored": True, "semantic_acceptability": "preferred"}
-                        for _ in range(restored)
-                    ],
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
+                    "score": {
+                        "restored_count": restored,
+                        "total_targets": 5,
+                        "mess_restoration_rate": restored / 5,
+                        "disturbance_count": 0,
+                        "object_results": [
+                            {"restored": True, "semantic_acceptability": "preferred"}
+                            for _ in range(restored)
+                        ],
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
     tools = trace_tools or ["observe", "navigate_to_object", "pick", "place", "done"]
     (run_dir / "trace.jsonl").write_text(
         "\n".join(

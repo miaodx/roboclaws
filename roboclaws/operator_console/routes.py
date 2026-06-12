@@ -178,6 +178,8 @@ class ConsoleLaunchSelection:
             "agent_engine_id": self.agent_engine_id,
             "agent_engine_label": engine.label,
             "provider_profile": self.provider_profile or "",
+            "supported_provider_profiles": list(engine.supported_provider_profiles),
+            "default_provider_profile": engine.default_provider_profile or "",
             "evidence_lane": self.evidence_lane,
             "scenario_setup": self.scenario_setup,
             "surface": self.surface,

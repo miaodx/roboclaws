@@ -272,6 +272,29 @@ CAMERA_LABELS_COMPACT_PROMPT = (
     "producing run_result.json counts."
 )
 
+CAMERA_LABELS_COMPOSITE_COMPACT_PROMPT = (
+    "Compact action cadence for camera-grounded-labels with the private SDK "
+    "composite observation tool enabled. Call metric_map, build the exact "
+    "inspection_waypoints checklist, and for each unchecked waypoint call "
+    "navigate_to_waypoint then observe_camera_grounded_candidates instead of a "
+    "separate observe plus declare_visual_candidates pair. Treat the response "
+    "observation as the waypoint observe evidence and the response declaration "
+    "as the camera-labeler candidate output; do not call "
+    "declare_visual_candidates again for the same source_observation_id unless "
+    "a public tool explicitly asks for it. Do not ask for service URLs, "
+    "credentials, image paths, or model hosts. Clean only returned public camera "
+    "candidates whose candidate_state is navigation_authorized. Prefer one "
+    "short chain at a time: observe_camera_grounded_candidates -> candidate "
+    "decision -> navigate_to_object -> pick -> navigate_to_receptacle -> "
+    "open? -> place/place_inside -> observe_camera_grounded_candidates. Use "
+    "place_inside for shelf/bookshelf/bookcase/shelving/fridge targets. If done "
+    "reports pending_cleanup_candidates, clean only those public handles before "
+    "another broad sweep. Call done when every public waypoint has observation "
+    "evidence and public pending candidates are resolved. Do not call "
+    "scene_objects, read private scoring artifacts, or treat SDK turn completion "
+    "as task success; only MCP done producing run_result.json counts."
+)
+
 
 def _camera_raw_prompt(*, target_cleanup_count: int = 7) -> str:
     cleanup_count = max(1, int(target_cleanup_count))
@@ -361,6 +384,7 @@ def render_kickoff_prompt(
     raw_fpv_candidate_budget: int = 24,
     max_observe_per_waypoint: int = 1,
     done_retry_budget: int = 1,
+    camera_grounded_composite_tools: bool = False,
 ) -> str:
     """Render the live-agent kickoff prompt for a cleanup evidence lane."""
 
@@ -393,6 +417,8 @@ def render_kickoff_prompt(
         prompt = (
             CAMERA_LABELS_COMPACT_PROMPT if mode == PROMPT_MODE_COMPACT else CAMERA_LABELS_PROMPT
         )
+        if mode == PROMPT_MODE_COMPACT and camera_grounded_composite_tools:
+            prompt = CAMERA_LABELS_COMPOSITE_COMPACT_PROMPT
         return _with_task(
             _task_aware_prompt(
                 OPEN_ENDED_TASK_RULES if open_ended else prompt,
@@ -470,6 +496,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--raw-fpv-candidate-budget", type=int, default=24)
     parser.add_argument("--max-observe-per-waypoint", type=int, default=1)
     parser.add_argument("--done-retry-budget", type=int, default=1)
+    parser.add_argument("--camera-grounded-composite-tools", action="store_true")
     args = parser.parse_args(argv)
     goal_contract = goal_contract_from_json(args.goal_contract_json)
     if args.task_name == "semantic-map-build":
@@ -488,6 +515,7 @@ def main(argv: list[str] | None = None) -> int:
                 raw_fpv_candidate_budget=args.raw_fpv_candidate_budget,
                 max_observe_per_waypoint=args.max_observe_per_waypoint,
                 done_retry_budget=args.done_retry_budget,
+                camera_grounded_composite_tools=args.camera_grounded_composite_tools,
             )
         )
     return 0

@@ -11,6 +11,7 @@ import pytest
 
 from roboclaws.agents.drivers.openai_agents_live import (
     OpenAIAgentsLiveRuntime,
+    _compact_model_input_items,
     _failure_from_exception,
     _RetryingModel,
     _RoboclawsSpanRecorder,
@@ -31,7 +32,9 @@ from scripts.molmo_cleanup.run_live_openai_agents_cleanup import (
     _context_growth_metrics,
     _context_metrics,
     _live_timing_timeline,
+    _load_agent_sdk_skill_context,
     _mcp_control_plane_metrics,
+    _model_input_filter_metrics,
     _model_service_fallback_metrics,
     _openai_agents_event_metrics,
     _openai_agents_span_metrics,
@@ -43,6 +46,16 @@ def _isolated_repo_root(tmp_path: Path) -> Path:
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     return repo_root
+
+
+class FakeModelSettings:
+    def __init__(self, **kwargs) -> None:
+        self.__dict__.update(kwargs)
+
+
+class FakeRunConfig:
+    def __init__(self, **kwargs) -> None:
+        self.__dict__.update(kwargs)
 
 
 def test_live_agent_request_keeps_one_turn_policy_explicit(tmp_path: Path) -> None:
@@ -257,6 +270,7 @@ def test_openai_agents_retrying_model_retries_transient_once(tmp_path: Path) -> 
         runtime_config={
             "runtime": "openai-agents-live",
             "provider_profile": "codex-env",
+            "wire_api": "responses",
             "model": "gpt-5.5",
         },
     )
@@ -310,6 +324,7 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
         runtime_config={
             "runtime": "openai-agents-live",
             "provider_profile": "mify",
+            "wire_api": "responses",
             "model": "xiaomi/mimo-v2.5",
         },
     )
@@ -340,6 +355,7 @@ def test_openai_agents_retrying_model_reports_retry_exhaustion(tmp_path: Path) -
     assert metrics["provider_reasons"] == {"upstream_unavailable": 2}
     assert metrics["attempted_models"] == ["xiaomi/mimo-v2.5"]
     assert metrics["attempted_provider_profiles"] == ["mify"]
+    assert metrics["attempted_wire_apis"] == ["responses"]
 
 
 def test_openai_agents_retrying_model_satisfies_sdk_model_contract(tmp_path: Path) -> None:
@@ -433,6 +449,8 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
                     captured.setdefault("runner_kwargs", kwargs) or SimpleNamespace()
                 )
             ),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
         ),
     )
@@ -466,10 +484,494 @@ def test_openai_agents_runtime_defaults_to_codex_env_responses_profile(
     wrapped_model = captured["agent_kwargs"]["model"]
     assert isinstance(wrapped_model, _RetryingModel)
     assert wrapped_model.base_model is captured["responses_model"]
+    assert captured["agent_kwargs"]["model_settings"].tool_choice == "auto"
+    assert captured["agent_kwargs"]["model_settings"].parallel_tool_calls is False
+    assert captured["agent_kwargs"]["model_settings"].truncation == "auto"
+    assert captured["runner_kwargs"]["run_config"].trace_include_sensitive_data is False
+    assert captured["runner_kwargs"]["run_config"].workflow_name == "roboclaws-openai-agents-live"
     assert captured["mcp_server_kwargs"]["cache_tools_list"] is True
     assert "client_session_timeout_seconds" not in captured["mcp_server_kwargs"]
     assert captured["agent_kwargs"]["mcp_config"]["failure_error_function"]
     assert captured["runner_kwargs"]["max_turns"] == 128
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["wire_api"] == "responses"
+    assert events[0]["sdk_model_settings"]["store"] is False
+    assert events[0]["sdk_run_config"]["trace_include_sensitive_data"] is False
+    assert events[0]["agent_sdk_responses_features"]["available"] is True
+    assert events[0]["agent_sdk_responses_features"]["server_managed_continuation_default"] is False
+    assert events[0]["model_input_compaction"]["enabled"] is False
+    assert events[0]["model_input_compaction"]["mode"] == "off"
+
+
+def test_openai_agents_runtime_includes_skill_context_without_persisting_body(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+    skill_text = "# Molmo Real-World Cleanup\n\nCall metric_map first."
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            pass
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(
+                run_sync=lambda *_args, **kwargs: (
+                    captured.setdefault("runner_kwargs", kwargs) or SimpleNamespace()
+                )
+            ),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={
+            "skill_context": {
+                "skill_name": "molmo-realworld-cleanup",
+                "included": True,
+                "reason": "included",
+                "relative_path": "skills/molmo-realworld-cleanup/SKILL.md",
+                "sha256": "abc123",
+                "bytes": len(skill_text),
+                "estimated_tokens": 12,
+                "policy": "canonical_skill_markdown",
+                "content": skill_text,
+            }
+        },
+    )
+
+    result = OpenAIAgentsLiveRuntime().run(request)
+
+    assert result.artifact_paths["openai_agents_skill_context"] == (
+        tmp_path / "run" / "openai-agents-skill-context.json"
+    )
+    instructions = str(captured["agent_kwargs"]["instructions"])
+    assert "Canonical skill context" in instructions
+    assert skill_text in instructions
+    assert instructions.endswith("clean the room")
+    artifact = json.loads(
+        (tmp_path / "run" / "openai-agents-skill-context.json").read_text(encoding="utf-8")
+    )
+    assert artifact == {
+        "schema": "openai_agents_skill_context_v1",
+        "skill_name": "molmo-realworld-cleanup",
+        "included": True,
+        "reason": "included",
+        "relative_path": "skills/molmo-realworld-cleanup/SKILL.md",
+        "sha256": "abc123",
+        "bytes": len(skill_text),
+        "estimated_tokens": 12,
+        "policy": "canonical_skill_markdown",
+    }
+    assert skill_text not in json.dumps(artifact)
+    events_text = (tmp_path / "run" / "openai-agents-events.jsonl").read_text(encoding="utf-8")
+    assert "abc123" in events_text
+    assert skill_text not in events_text
+
+
+def test_openai_agents_runtime_can_use_mimo_openai_chat_profile(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIChatCompletionsModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["chat_model"] = self
+            captured["model"] = model
+            captured["client"] = openai_client
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+
+    monkeypatch.setenv("MIMO_TP_KEY", "fake-mimo-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIChatCompletionsModel=FakeOpenAIChatCompletionsModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        provider_profile="mimo-openai-chat",
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    assert captured["model"] == "mimo-v2.5"
+    assert captured["base_url"] == "https://token-plan-cn.xiaomimimo.com/v1"
+    assert captured["api_key"] == "fake-mimo-key"
+    wrapped_model = captured["agent_kwargs"]["model"]
+    assert isinstance(wrapped_model, _RetryingModel)
+    assert wrapped_model.base_model is captured["chat_model"]
+    assert captured["agent_kwargs"]["model_settings"].include_usage is True
+    assert captured["agent_kwargs"]["model_settings"].parallel_tool_calls is False
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["provider_profile"] == "mimo-openai-chat"
+    assert events[0]["wire_api"] == "chat-completions"
+    assert events[0]["sdk_model_settings"]["include_usage"] is True
+    assert events[0]["agent_sdk_responses_features"]["available"] is False
+
+
+def test_openai_agents_runtime_configures_model_input_compaction_filter(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIResponsesModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            pass
+
+    monkeypatch.setenv("CODEX_BASE_URL", "https://codex.example.test/v1")
+    monkeypatch.setenv("CODEX_API_KEY", "fake-codex-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(
+                run_sync=lambda *_args, **kwargs: (
+                    captured.setdefault("runner_kwargs", kwargs) or SimpleNamespace()
+                )
+            ),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIResponsesModel=FakeOpenAIResponsesModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        metadata={
+            "agent_sdk_perf_profile": {
+                "profile_id": "custom",
+                "provider_profile": "codex-env",
+                "wire_api": "responses",
+                "model_input_compaction": {
+                    "enabled": True,
+                    "mode": "public_tool_result_summary_v1",
+                    "min_chars": 80,
+                },
+            }
+        },
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    run_config = captured["runner_kwargs"]["run_config"]
+    assert callable(run_config.call_model_input_filter)
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "run" / "openai-agents-events.jsonl").read_text().splitlines()
+    ]
+    assert events[0]["model_input_compaction"]["enabled"] is True
+    assert events[0]["model_input_compaction"]["mode"] == "public_tool_result_summary_v1"
+    assert "call_model_input_filter" not in events[0]["sdk_run_config"]
+
+
+def test_model_input_compaction_reduces_oversized_public_tool_outputs() -> None:
+    large_output = json.dumps(
+        {
+            "metric_map": {
+                "inspection_waypoints": [
+                    {"waypoint_id": f"wp_{idx}", "room": "kitchen", "objects": ["cup", "plate"]}
+                    for idx in range(20)
+                ]
+            }
+        }
+    )
+    items = [
+        {"role": "user", "content": "clean the room"},
+        {
+            "type": "function_call_output",
+            "call_id": "call_metric_map",
+            "output": large_output,
+        },
+    ]
+
+    filtered, metrics = _compact_model_input_items(items, min_chars=80)
+
+    assert metrics["input_item_count"] == 2
+    assert metrics["compacted_item_count"] == 1
+    assert metrics["input_bytes_after"] < metrics["input_bytes_before"]
+    assert filtered[0] == items[0]
+    assert filtered[1]["call_id"] == "call_metric_map"
+    replacement = json.loads(filtered[1]["output"])
+    assert replacement["schema"] == "roboclaws_public_tool_output_summary_v1"
+    assert replacement["original_chars"] == len(large_output)
+    assert "wp_19" not in json.dumps(filtered)
+
+
+def test_model_input_compaction_summarizes_repeated_metric_map_outputs() -> None:
+    first_map = {
+        "ok": True,
+        "tool": "metric_map",
+        "map_id": "home",
+        "map_version": "v1",
+        "mode": "minimal",
+        "inspection_waypoints": [
+            {
+                "waypoint_id": f"wp_{idx}",
+                "room": "kitchen",
+                "navigation_note": "large public map waypoint payload",
+            }
+            for idx in range(80)
+        ],
+        "runtime_metric_map": {
+            "observed_objects": [{"object_id": "cup_1"}],
+            "target_candidates": [{"object_id": "cup_1"}],
+        },
+    }
+    second_map = {
+        **first_map,
+        "runtime_metric_map": {
+            "observed_objects": [{"object_id": "cup_1"}, {"object_id": "book_1"}],
+            "target_candidates": [{"object_id": "cup_1"}, {"object_id": "book_1"}],
+        },
+    }
+    items = [
+        {
+            "type": "function_call_output",
+            "call_id": "call_metric_map_first",
+            "output": json.dumps(first_map),
+        },
+        {
+            "type": "function_call_output",
+            "call_id": "call_metric_map_second",
+            "output": json.dumps(second_map),
+        },
+    ]
+
+    filtered, metrics = _compact_model_input_items(items, min_chars=999_999)
+
+    assert filtered[0] == items[0]
+    replacement = json.loads(filtered[1]["output"])
+    assert replacement["schema"] == "roboclaws_repeated_metric_map_delta_summary_v1"
+    assert replacement["map_id"] == "home"
+    assert replacement["inspection_waypoint_count"] == 80
+    assert replacement["runtime_observed_object_count"] == 2
+    assert "book_1" not in json.dumps(filtered[1])
+    assert metrics["metric_map_output_count"] == 2
+    assert metrics["repeated_metric_map_output_count"] == 1
+    assert metrics["metric_map_delta_compacted_count"] == 1
+    assert metrics["metric_map_bytes_after"] < metrics["metric_map_bytes_before"]
+    assert metrics["metric_map_bytes_reduced"] > 0
+
+
+def test_model_input_compaction_evicted_raw_fpv_images_keep_latest_frame() -> None:
+    items = [
+        {
+            "type": "function_call_output",
+            "call_id": "observe_raw_fpv_001",
+            "output": json.dumps(
+                {
+                    "schema": "raw_fpv_mcp_observe_state_v1",
+                    "raw_fpv_observation": {"observation_id": "raw_fpv_001"},
+                }
+            ),
+        },
+        {
+            "type": "image",
+            "_mime_type": "image/png",
+            "_format": "png",
+            "data": "raw_fpv_001:" + ("a" * 3_000),
+        },
+        {
+            "type": "function_call_output",
+            "call_id": "observe_raw_fpv_002",
+            "output": json.dumps(
+                {
+                    "schema": "raw_fpv_mcp_observe_state_v1",
+                    "raw_fpv_observation": {"observation_id": "raw_fpv_002"},
+                }
+            ),
+        },
+        {
+            "type": "image",
+            "_mime_type": "image/png",
+            "_format": "png",
+            "data": "raw_fpv_002:" + ("b" * 3_000),
+        },
+    ]
+
+    filtered, metrics = _compact_model_input_items(
+        items,
+        min_chars=999_999,
+        public_tool_output_summary=False,
+        repeated_metric_map_delta=False,
+        raw_fpv_image_memory={
+            "enabled": True,
+            "mode": "retain_latest_full_frame",
+            "retained_full_frame_limit": 1,
+        },
+    )
+
+    assert filtered[0] == items[0]
+    assert filtered[2] == items[2]
+    evicted = filtered[1]
+    assert evicted["schema"] == "raw_fpv_evicted_image_frame_summary_v1"
+    assert evicted["observation_id"] == "raw_fpv_001"
+    assert evicted["original_data_bytes"] > 0
+    assert "a" * 20 not in json.dumps(evicted)
+    assert filtered[3] == items[3]
+    assert metrics["raw_fpv_image_memory_enabled"] is True
+    assert metrics["raw_fpv_image_item_count"] == 2
+    assert metrics["raw_fpv_image_retained_count"] == 1
+    assert metrics["raw_fpv_image_evicted_count"] == 1
+    assert metrics["raw_fpv_image_bytes_after"] < metrics["raw_fpv_image_bytes_before"]
+    assert metrics["raw_fpv_image_bytes_reduced"] > 0
+
+
+def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
+    tmp_path: Path, monkeypatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeOpenAIChatCompletionsModel:
+        def __init__(self, model: str, *, openai_client: object) -> None:
+            captured["model"] = model
+
+    class FakeAsyncOpenAI:
+        def __init__(self, *, api_key: str, base_url: str) -> None:
+            captured["api_key"] = api_key
+            captured["base_url"] = base_url
+
+    monkeypatch.setenv("KIMI_API_KEY", "fake-kimi-key")
+    monkeypatch.setattr(
+        "roboclaws.agents.drivers.openai_agents_live._run_with_async_mcp_server",
+        lambda *_args, **_kwargs: SimpleNamespace(final_output="done"),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents",
+        SimpleNamespace(
+            Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
+            Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
+            OpenAIChatCompletionsModel=FakeOpenAIChatCompletionsModel,
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "agents.mcp",
+        SimpleNamespace(
+            MCPServerStreamableHttp=lambda **kwargs: (
+                captured.setdefault("mcp_server_kwargs", kwargs) or SimpleNamespace(kwargs=kwargs)
+            )
+        ),
+    )
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "openai",
+        SimpleNamespace(AsyncOpenAI=FakeAsyncOpenAI),
+    )
+    request = LiveAgentRequest(
+        task_name="household-cleanup",
+        skill_name="molmo-realworld-cleanup",
+        kickoff_prompt="clean the room",
+        mcp_server=LiveAgentMCPServer(name="cleanup", url="http://127.0.0.1:18788/mcp"),
+        run_dir=tmp_path / "run",
+        provider_profile="kimi-openai-chat",
+    )
+
+    OpenAIAgentsLiveRuntime().run(request)
+
+    assert captured["model"] == "kimi-k2.6"
+    assert captured["base_url"] == "https://api.kimi.com/coding/v1"
+    assert captured["api_key"] == "fake-kimi-key"
 
 
 def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
@@ -497,6 +999,8 @@ def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
             Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
         ),
     )
@@ -554,6 +1058,8 @@ def test_openai_agents_runtime_configures_mcp_client_session_timeout(
         SimpleNamespace(
             Agent=lambda **kwargs: captured.setdefault("agent_kwargs", kwargs),
             Runner=SimpleNamespace(run_sync=lambda *_args, **_kwargs: SimpleNamespace()),
+            ModelSettings=FakeModelSettings,
+            RunConfig=FakeRunConfig,
             OpenAIResponsesModel=FakeOpenAIResponsesModel,
         ),
     )
@@ -724,6 +1230,22 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert timing["agent_sdk_perf_profile"]["max_turns"] == 128
     assert timing["agent_sdk_perf_profile"]["model_service_retry_attempts"] == 1
     assert timing["agent_sdk_perf_profile"]["model_service_retry_sleep_s"] == 1.0
+    assert timing["agent_sdk_perf_profile"]["sdk_model_settings"] == {
+        "parallel_tool_calls": False,
+        "store": False,
+        "tool_choice": "auto",
+        "truncation": "auto",
+    }
+    assert timing["agent_sdk_perf_profile"]["sdk_run_config"] == {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
+    assert timing["kickoff_prompt_stable_prefix"]["schema"] == "agent_sdk_stable_prefix_v1"
+    assert timing["kickoff_prompt_stable_prefix"]["hash"]
+    assert (
+        timing["cache_metrics"]["stable_prefix_hash"]
+        == timing["kickoff_prompt_stable_prefix"]["hash"]
+    )
     assert timing["openai_agents"]["trace_id"] == "trace_1"
     assert timing["mcp_control_plane_metrics"]["available"] is False
     assert timing["openai_agents_event_metrics"]["available"] is True
@@ -747,6 +1269,287 @@ def test_openai_agents_cleanup_runner_invokes_sdk_then_checker(tmp_path: Path, m
     assert "--expect-policy" in checker_command
     assert "openai_agents_agent" in checker_command
     assert "--require-clean-agent-run" in checker_command
+
+
+def test_openai_agents_camera_grounded_composite_profile_adds_private_server_flag(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    run_dir = tmp_path / "run"
+    server_commands: list[list[str]] = []
+    prompts: list[str] = []
+
+    class FakeProcess:
+        pid = 4242
+
+        def __init__(self, command, *_args, **_kwargs) -> None:
+            server_commands.append(list(command))
+            self._poll: int | None = None
+
+        def poll(self) -> int | None:
+            return self._poll
+
+        def wait(self, timeout: float | None = None) -> int:
+            self._poll = 0
+            return 0
+
+        def terminate(self) -> None:
+            self._poll = 0
+
+        def kill(self) -> None:
+            self._poll = 0
+
+    class FakeRuntime:
+        def run(self, request: LiveAgentRequest) -> LiveAgentResult:
+            prompts.append(request.kickoff_prompt)
+            assert (
+                request.metadata["agent_sdk_perf_profile"]["camera_grounded_composite_tools"][
+                    "enabled"
+                ]
+                is True
+            )
+            (request.run_dir / "run_result.json").write_text(
+                json.dumps(
+                    {
+                        "task": "clean",
+                        "task_name": "household-cleanup",
+                        "backend": "molmospaces_subprocess",
+                        "policy": "openai_agents_agent",
+                        "cleanup_success": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return LiveAgentResult(phase="finished", exit_status=0, run_result_present=True)
+
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.subprocess.Popen",
+        FakeProcess,
+    )
+    port_checks = iter([False, True])
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._port_accepting",
+        lambda *_args, **_kwargs: next(port_checks),
+    )
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.OpenAIAgentsLiveRuntime",
+        lambda: FakeRuntime(),
+    )
+
+    def fake_run_and_tee(command, *, cwd, stdout_path, stderr_path, env):
+        stdout_path.write_text("checker ok\n", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._run_and_tee",
+        fake_run_and_tee,
+    )
+    args = Namespace(
+        run_dir=run_dir,
+        repo_root=_isolated_repo_root(tmp_path),
+        status_path=run_dir / "live_status.json",
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "live.lock",
+        provider_profile="codex-env",
+        model="gpt-5.5",
+        max_turns=128,
+        mcp_client_session_timeout_s=30.0,
+        agent_sdk_perf_profile="mimo_compact_v1",
+        prompt_mode="",
+        continuation_mode="",
+        model_input_compaction=None,
+        model_input_compaction_min_chars=None,
+        camera_grounded_composite_tools=True,
+        context_soft_limit_tokens=None,
+        context_hard_limit_tokens=None,
+        max_observe_per_waypoint=None,
+        raw_fpv_candidate_budget=None,
+        done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
+        server_startup_timeout_s=1.0,
+        kickoff_prompt="clean the room",
+        backend="molmospaces_subprocess",
+        task_name="household-cleanup",
+        policy="openai_agents_agent",
+        task="clean",
+        min_generated_mess_count="5",
+        profile="camera-grounded-labels",
+        server_arg=[],
+        checker_visual_arg=[],
+    )
+
+    status = LiveOpenAIAgentsCleanupRunner(args).run()
+
+    assert status == 0
+    assert server_commands
+    assert prompts
+    assert "observe_camera_grounded_candidates instead of a separate observe" in prompts[0]
+    assert "do not call declare_visual_candidates again for the same" in prompts[0]
+    assert "--agent-sdk-camera-grounded-composite-tools" in server_commands[0]
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    composite = timing["agent_sdk_perf_profile"]["camera_grounded_composite_tools"]
+    assert composite["enabled"] is True
+    assert composite["tool_names"] == ["observe_camera_grounded_candidates"]
+    assert timing["agent_sdk_camera_grounded_composite_tools"] == composite
+
+
+def test_openai_agents_cleanup_runner_loads_canonical_skill_context(
+    tmp_path: Path, monkeypatch
+) -> None:
+    run_dir = tmp_path / "run"
+    repo_root = tmp_path / "repo"
+    skill_path = repo_root / "skills/molmo-realworld-cleanup/SKILL.md"
+    skill_path.parent.mkdir(parents=True)
+    skill_text = "# Molmo Real-World Cleanup\n\nCall metric_map first."
+    skill_path.write_text(skill_text, encoding="utf-8")
+    captured_contexts: list[dict[str, object]] = []
+
+    class FakeProcess:
+        pid = 4242
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            self._poll: int | None = None
+
+        def poll(self) -> int | None:
+            return self._poll
+
+        def wait(self, timeout: float | None = None) -> int:
+            self._poll = 0
+            return 0
+
+        def terminate(self) -> None:
+            self._poll = 0
+
+        def kill(self) -> None:
+            self._poll = 0
+
+    class FakeRuntime:
+        def run(self, request: LiveAgentRequest) -> LiveAgentResult:
+            captured_contexts.append(dict(request.metadata["skill_context"]))
+            (request.run_dir / "run_result.json").write_text(
+                json.dumps(
+                    {
+                        "task": "clean",
+                        "task_name": "household-cleanup",
+                        "backend": "molmospaces_subprocess",
+                        "policy": "openai_agents_agent",
+                        "cleanup_success": True,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (request.run_dir / "openai-agents-skill-context.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "openai_agents_skill_context_v1",
+                        "skill_name": "molmo-realworld-cleanup",
+                        "included": True,
+                        "sha256": request.metadata["skill_context"]["sha256"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            return LiveAgentResult(
+                phase="finished",
+                exit_status=0,
+                run_result_present=True,
+                artifact_paths={
+                    "openai_agents_skill_context": request.artifact_path(
+                        "openai_agents_skill_context",
+                        "missing.json",
+                    )
+                },
+            )
+
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.subprocess.Popen",
+        FakeProcess,
+    )
+    port_checks = iter([False, True])
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._port_accepting",
+        lambda *_args, **_kwargs: next(port_checks),
+    )
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup.OpenAIAgentsLiveRuntime",
+        lambda: FakeRuntime(),
+    )
+
+    def fake_run_and_tee(command, *, cwd, stdout_path, stderr_path, env):
+        stdout_path.write_text("checker ok\n", encoding="utf-8")
+        return 0
+
+    monkeypatch.setattr(
+        "scripts.molmo_cleanup.run_live_openai_agents_cleanup._run_and_tee",
+        fake_run_and_tee,
+    )
+    args = Namespace(
+        run_dir=run_dir,
+        repo_root=repo_root,
+        status_path=run_dir / "live_status.json",
+        client_url="http://127.0.0.1:18788/mcp",
+        host="127.0.0.1",
+        port=18788,
+        lock_path=tmp_path / "live.lock",
+        provider_profile="codex-env",
+        model="gpt-5.5",
+        max_turns=128,
+        incomplete_turn_continuation_attempts=2,
+        mcp_client_session_timeout_s=30.0,
+        agent_sdk_perf_profile="",
+        prompt_mode="",
+        continuation_mode="",
+        context_soft_limit_tokens=None,
+        context_hard_limit_tokens=None,
+        max_observe_per_waypoint=None,
+        raw_fpv_candidate_budget=None,
+        done_retry_budget=None,
+        model_service_retry_attempts=None,
+        model_service_retry_sleep_s=None,
+        server_startup_timeout_s=1.0,
+        kickoff_prompt="clean the room",
+        backend="molmospaces_subprocess",
+        task_name="household-cleanup",
+        task_intent_mode="default_cleanup",
+        policy="openai_agents_agent",
+        task="clean",
+        min_generated_mess_count="5",
+        profile="world-public-labels",
+        server_arg=[],
+        checker_visual_arg=[],
+    )
+
+    status = LiveOpenAIAgentsCleanupRunner(args).run()
+
+    assert status == 0
+    assert captured_contexts
+    skill_context = captured_contexts[0]
+    assert skill_context["included"] is True
+    assert skill_context["content"] == skill_text
+    assert skill_context["relative_path"] == "skills/molmo-realworld-cleanup/SKILL.md"
+    timing = json.loads((run_dir / "live_timing.json").read_text(encoding="utf-8"))
+    assert timing["agent_sdk_skill_context"]["included"] is True
+    assert timing["agent_sdk_skill_context"]["relative_path"] == (
+        "skills/molmo-realworld-cleanup/SKILL.md"
+    )
+    assert timing["agent_sdk_skill_context"]["bytes"] == len(skill_text.encode("utf-8"))
+    assert "content" not in timing["agent_sdk_skill_context"]
+    assert skill_text not in json.dumps(timing)
+
+
+def test_agent_sdk_skill_context_loader_reports_missing_source(tmp_path: Path) -> None:
+    context = _load_agent_sdk_skill_context(
+        tmp_path / "repo",
+        skill_name="molmo-realworld-cleanup",
+    )
+
+    assert context["included"] is False
+    assert context["reason"] == "source_unavailable"
+    assert context["relative_path"] == "skills/molmo-realworld-cleanup/SKILL.md"
+    assert "content" not in context
 
 
 def test_openai_agents_cleanup_runner_continues_incomplete_sdk_turn(
@@ -1314,6 +2117,73 @@ def test_openai_agents_budget_guard_classifies_raw_fpv_candidate_exhaustion(
     assert detail["candidate_attempts_sample"][0]["source_observation_id"] == "raw_fpv_001"
 
 
+def test_openai_agents_budget_guard_classifies_repeated_raw_fpv_failures(
+    tmp_path: Path,
+) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    events = []
+    for _ in range(3):
+        events.extend(
+            [
+                {
+                    "event": "request",
+                    "tool": "navigate_to_visual_candidate",
+                    "request": {
+                        "source_observation_id": "raw_fpv_001",
+                        "category": "cup",
+                        "image_region": {"type": "bbox", "value": [1, 2, 3, 4]},
+                    },
+                },
+                {
+                    "event": "response",
+                    "tool": "navigate_to_visual_candidate",
+                    "request": {
+                        "source_observation_id": "raw_fpv_001",
+                        "category": "cup",
+                        "image_region": {"type": "bbox", "value": [1, 2, 3, 4]},
+                    },
+                    "response": {
+                        "ok": False,
+                        "source_observation_id": "raw_fpv_001",
+                        "category": "cup",
+                        "error_reason": "source_observation_locality_unresolved",
+                    },
+                },
+            ]
+        )
+    (run_dir / "trace.jsonl").write_text(
+        "\n".join(json.dumps(item) for item in events) + "\n",
+        encoding="utf-8",
+    )
+
+    failure = _budget_failure_from_run_state(
+        run_dir,
+        {"evidence_lane": "camera-raw-fpv", "cache_tools_list": True},
+        {
+            "profile_id": "raw_fpv_budgeted_v1",
+            "context_hard_limit_tokens": None,
+            "raw_fpv_candidate_budget": 24,
+            "raw_fpv_repeated_failure_limit": 3,
+            "max_observe_per_waypoint": None,
+        },
+    )
+
+    assert failure is not None
+    assert failure.reason == "raw_fpv_repeated_candidate_failure"
+    assert failure.retryable is False
+    detail = json.loads(failure.detail)
+    assert detail["reasons"] == ["raw_fpv_repeated_candidate_failure"]
+    assert detail["raw_fpv_repeated_failure_limit"] == 3
+    assert detail["candidate_attempt_count"] == 3
+    assert detail["repeated_failure_limit_hits"][0]["count"] == 3
+    assert detail["repeated_failure_limit_hits"][0]["category"] == "cup"
+    assert detail["repeated_failure_limit_hits"][0]["failure_reason"] == (
+        "source_observation_locality_unresolved"
+    )
+    assert "image_region" not in json.dumps(detail)
+
+
 def test_openai_agents_cleanup_runner_fails_after_bounded_continuation(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1442,6 +2312,9 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
         max_observe_per_waypoint=None,
         raw_fpv_candidate_budget=None,
         done_retry_budget=None,
+        model_input_compaction=None,
+        model_input_compaction_min_chars=None,
+        camera_grounded_composite_tools=None,
         model_service_retry_attempts=None,
         model_service_retry_sleep_s=None,
     )
@@ -1450,12 +2323,25 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert baseline["profile_id"] == "baseline"
     assert baseline["source"] == "default"
     assert baseline["provider_profile"] == "codex-env"
+    assert baseline["wire_api"] == "responses"
     assert baseline["model_family"] == "gpt"
     assert baseline["prompt_mode"] == "full"
     assert baseline["continuation_mode"] == "repeat_full_prompt"
     assert baseline["max_turns"] == 128
     assert baseline["max_continuations"] == 2
     assert baseline["context_soft_limit_tokens"] is None
+    assert baseline["camera_grounded_composite_tools"]["enabled"] is False
+    assert baseline["camera_grounded_composite_tools"]["tool_names"] == []
+    assert baseline["sdk_model_settings"] == {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+        "truncation": "auto",
+        "store": False,
+    }
+    assert baseline["sdk_run_config"] == {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
 
     gpt_args = Namespace(**{**vars(base_args), "agent_sdk_perf_profile": "gpt_compact_v1"})
     gpt = _resolve_agent_sdk_perf_profile(gpt_args)
@@ -1467,6 +2353,11 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert gpt["context_soft_limit_tokens"] == 96_000
     assert gpt["context_hard_limit_tokens"] == 128_000
     assert gpt["done_retry_budget"] == 2
+    assert gpt["sdk_model_settings"]["prompt_cache_retention"] == "in_memory"
+    assert gpt["model_input_compaction"]["candidate_ids"] == []
+    assert gpt["model_input_compaction"]["repeated_metric_map_delta"] is False
+    assert gpt["camera_grounded_composite_tools"]["candidate_ids"] == ["O"]
+    assert gpt["camera_grounded_composite_tools"]["enabled"] is False
 
     mimo_args = Namespace(
         **{
@@ -1478,10 +2369,28 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     )
     mimo = _resolve_agent_sdk_perf_profile(mimo_args)
     assert mimo["provider_profile"] == "mify"
+    assert mimo["wire_api"] == "responses"
     assert mimo["model_family"] == "mimo"
     assert mimo["max_continuations"] == 1
     assert mimo["context_soft_limit_tokens"] == 64_000
     assert mimo["context_hard_limit_tokens"] == 96_000
+
+    chat_args = Namespace(
+        **{
+            **vars(base_args),
+            "provider_profile": "mimo-chat",
+            "model": "mimo-v2.5",
+        }
+    )
+    chat = _resolve_agent_sdk_perf_profile(chat_args)
+    assert chat["provider_profile"] == "mimo-openai-chat"
+    assert chat["wire_api"] == "chat-completions"
+    assert chat["model_family"] == "mimo"
+    assert chat["sdk_model_settings"] == {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+        "include_usage": True,
+    }
 
     raw = _resolve_agent_sdk_perf_profile(
         Namespace(**{**vars(base_args), "agent_sdk_perf_profile": "raw_fpv_budgeted_v1"})
@@ -1490,6 +2399,19 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert raw["max_turns"] == 40
     assert raw["max_continuations"] == 1
     assert raw["raw_fpv_candidate_budget"] == 24
+    assert raw["raw_fpv_repeated_failure_limit"] == 3
+    assert raw["model_input_compaction"]["enabled"] is True
+    assert raw["model_input_compaction"]["raw_fpv_image_memory"] == {
+        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+        "enabled": True,
+        "mode": "retain_latest_full_frame",
+        "retained_full_frame_limit": 1,
+        "candidate_ids": ["AA"],
+        "private_artifact_policy": (
+            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
+            "remain complete"
+        ),
+    }
     assert raw["done_retry_budget"] == 1
 
     custom = _resolve_agent_sdk_perf_profile(
@@ -1505,6 +2427,9 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
                 "context_hard_limit_tokens": 34,
                 "max_observe_per_waypoint": 2,
                 "raw_fpv_candidate_budget": 3,
+                "raw_fpv_repeated_failure_limit": 2,
+                "raw_fpv_image_memory": True,
+                "raw_fpv_image_memory_retain": 2,
                 "done_retry_budget": 4,
             }
         )
@@ -1516,6 +2441,63 @@ def test_openai_agents_perf_profiles_resolve_known_defaults(monkeypatch) -> None
     assert custom["context_soft_limit_tokens"] == 12
     assert custom["context_hard_limit_tokens"] == 34
     assert custom["max_observe_per_waypoint"] == 2
+    assert custom["raw_fpv_repeated_failure_limit"] == 2
+    assert custom["model_input_compaction"]["candidate_ids"] == ["AA"]
+    assert custom["model_input_compaction"]["mode"] == "raw_fpv_image_memory_v1"
+    assert custom["model_input_compaction"]["enabled"] is True
+    assert (
+        custom["model_input_compaction"]["raw_fpv_image_memory"]["retained_full_frame_limit"] == 2
+    )
+
+    compaction = _resolve_agent_sdk_perf_profile(
+        Namespace(
+            **{
+                **vars(base_args),
+                "agent_sdk_perf_profile": "custom",
+                "model_input_compaction": True,
+                "model_input_compaction_min_chars": 80,
+                "raw_fpv_image_memory": True,
+                "raw_fpv_image_memory_retain": 2,
+                "camera_grounded_composite_tools": True,
+            }
+        )
+    )
+    assert compaction["model_input_compaction"] == {
+        "schema": "agent_sdk_model_input_compaction_v1",
+        "enabled": True,
+        "mode": (
+            "public_tool_result_summary_v1+repeated_metric_map_delta_v1+raw_fpv_image_memory_v1"
+        ),
+        "min_chars": 80,
+        "candidate_ids": ["I", "N", "AA"],
+        "hook": "RunConfig.call_model_input_filter",
+        "repeated_metric_map_delta": True,
+        "raw_fpv_image_memory": {
+            "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+            "enabled": True,
+            "mode": "retain_latest_full_frame",
+            "retained_full_frame_limit": 2,
+            "candidate_ids": ["AA"],
+            "private_artifact_policy": (
+                "model-facing raw-FPV image memory only; MCP traces, reports, and image "
+                "artifacts remain complete"
+            ),
+        },
+        "private_artifact_policy": (
+            "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
+        ),
+    }
+    assert compaction["camera_grounded_composite_tools"] == {
+        "schema": "agent_sdk_camera_grounded_composite_tools_v1",
+        "enabled": True,
+        "tool_names": ["observe_camera_grounded_candidates"],
+        "candidate_ids": ["O"],
+        "scope": "camera-grounded-labels only",
+        "hook": "cleanup MCP server private extra tool",
+        "private_artifact_policy": (
+            "SDK-private MCP tool addition only; default public MCP/profile tools remain unchanged"
+        ),
+    }
 
 
 def test_openai_agents_control_plane_metrics_parse_server_log(tmp_path: Path) -> None:
@@ -1752,6 +2734,8 @@ def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path)
     timing = {
         "kickoff_prompt_chars": 80,
         "cache_tools_list": True,
+        "sdk_model_settings": {"prompt_cache_retention": "in_memory"},
+        "kickoff_prompt_stable_prefix": {"hash": "stable-hash"},
         "openai_agents_attempts": [
             {"attempt_index": 0, "continuation_prompt_chars": 0},
             {"attempt_index": 1, "continuation_prompt_chars": 40},
@@ -1778,6 +2762,8 @@ def test_openai_agents_context_metrics_parse_response_span_usage(tmp_path: Path)
     assert cache["available"] is True
     assert cache["provider_prompt_cache_observed"] is True
     assert cache["first_response_cached_tokens"] == 25
+    assert cache["prompt_cache_retention"] == "in_memory"
+    assert cache["stable_prefix_hash"] == "stable-hash"
     assert cache["mcp_tool_catalog_cache_enabled"] is True
     assert growth["available"] is True
     assert growth["trace_event_count"] == 3
@@ -1796,7 +2782,14 @@ def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Pa
     )
 
     context = _context_metrics(run_dir, {"cache_tools_list": True})
-    cache = _cache_metrics(context, {"cache_tools_list": True})
+    cache = _cache_metrics(
+        context,
+        {
+            "cache_tools_list": True,
+            "sdk_model_settings": {"prompt_cache_retention": "in_memory"},
+            "kickoff_prompt_stable_prefix": {"hash": "stable-hash"},
+        },
+    )
 
     assert context["available"] is False
     assert context["source"] == "openai_agents_span_usage"
@@ -1805,6 +2798,117 @@ def test_openai_agents_context_metrics_missing_usage_is_unavailable(tmp_path: Pa
     assert cache["available"] is False
     assert cache["source"] == "openai_agents_span_usage"
     assert "response_span_usage_missing" in cache["limitations"]
+    assert cache["prompt_cache_retention"] == "in_memory"
+    assert cache["stable_prefix_hash"] == "stable-hash"
+
+
+def test_openai_agents_model_input_filter_metrics_are_aggregate_only(tmp_path: Path) -> None:
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "openai-agents-events.jsonl").write_text(
+        "\n".join(
+            [
+                json.dumps(
+                    {
+                        "schema": "openai_agents_model_input_filter_v1",
+                        "event": "model_input_filter",
+                        "provider_profile": "codex-env",
+                        "wire_api": "responses",
+                        "model": "gpt-5.5",
+                        "config": {
+                            "enabled": True,
+                            "mode": "public_tool_result_summary_v1",
+                        },
+                        "metrics": {
+                            "input_item_count": 3,
+                            "compacted_item_count": 2,
+                            "unchanged_item_count": 1,
+                            "repeated_item_count": 1,
+                            "input_bytes_before": 2000,
+                            "input_bytes_after": 800,
+                            "input_bytes_reduced": 1200,
+                            "metric_map_output_count": 2,
+                            "repeated_metric_map_output_count": 1,
+                            "metric_map_delta_compacted_count": 1,
+                            "metric_map_bytes_before": 1400,
+                            "metric_map_bytes_after": 500,
+                            "metric_map_bytes_reduced": 900,
+                            "raw_fpv_image_memory_enabled": True,
+                            "raw_fpv_image_memory_mode": "retain_latest_full_frame",
+                            "raw_fpv_image_item_count": 2,
+                            "raw_fpv_image_retained_count": 1,
+                            "raw_fpv_image_evicted_count": 1,
+                            "raw_fpv_image_bytes_before": 1000,
+                            "raw_fpv_image_bytes_after": 350,
+                            "raw_fpv_image_bytes_reduced": 650,
+                        },
+                    }
+                ),
+                json.dumps(
+                    {
+                        "schema": "openai_agents_model_input_filter_v1",
+                        "event": "model_input_filter",
+                        "provider_profile": "codex-env",
+                        "wire_api": "responses",
+                        "model": "gpt-5.5",
+                        "config": {
+                            "enabled": True,
+                            "mode": "public_tool_result_summary_v1",
+                        },
+                        "metrics": {
+                            "input_item_count": 2,
+                            "compacted_item_count": 0,
+                            "unchanged_item_count": 2,
+                            "input_bytes_before": 500,
+                            "input_bytes_after": 500,
+                            "input_bytes_reduced": 0,
+                            "metric_map_output_count": 1,
+                            "metric_map_bytes_before": 300,
+                            "metric_map_bytes_after": 300,
+                            "metric_map_bytes_reduced": 0,
+                        },
+                    }
+                ),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    metrics = _model_input_filter_metrics(run_dir)
+
+    assert metrics["available"] is True
+    assert metrics["source"] == "openai_agents_model_input_filter_events"
+    assert metrics["event_count"] == 2
+    assert metrics["enabled"] is True
+    assert metrics["modes"] == ["public_tool_result_summary_v1"]
+    assert metrics["attempted_provider_profiles"] == ["codex-env"]
+    assert metrics["attempted_wire_apis"] == ["responses"]
+    assert metrics["compacted_item_count"] == 2
+    assert metrics["unchanged_item_count"] == 3
+    assert metrics["repeated_item_count"] == 1
+    assert metrics["input_bytes_before"] == 2500
+    assert metrics["input_bytes_after"] == 1300
+    assert metrics["input_bytes_reduced"] == 1200
+    assert metrics["input_byte_reduction_ratio"] == 0.48
+    assert metrics["metric_map_output_count"] == 3
+    assert metrics["repeated_metric_map_output_count"] == 1
+    assert metrics["metric_map_delta_compacted_count"] == 1
+    assert metrics["metric_map_bytes_before"] == 1700
+    assert metrics["metric_map_bytes_after"] == 800
+    assert metrics["metric_map_bytes_reduced"] == 900
+    assert metrics["metric_map_byte_reduction_ratio"] == 0.529412
+    assert metrics["raw_fpv_image_memory_enabled"] is True
+    assert metrics["raw_fpv_image_memory_modes"] == ["retain_latest_full_frame"]
+    assert metrics["raw_fpv_image_item_count"] == 2
+    assert metrics["raw_fpv_image_retained_count"] == 1
+    assert metrics["raw_fpv_image_evicted_count"] == 1
+    assert metrics["raw_fpv_image_bytes_before"] == 1000
+    assert metrics["raw_fpv_image_bytes_after"] == 350
+    assert metrics["raw_fpv_image_bytes_reduced"] == 650
+    assert metrics["raw_fpv_image_byte_reduction_ratio"] == 0.65
+    assert "Raw prompts" in metrics["privacy_note"]
+    assert "tool payload bodies" in metrics["privacy_note"]
 
 
 def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() -> None:
@@ -1815,6 +2919,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "task_intent_mode": "default_cleanup",
         "runtime": "openai-agents-live",
         "provider_profile": "codex-env",
+        "wire_api": "responses",
         "model": "gpt-5.5",
         "evidence_lane": "world-public-labels",
         "started_at_epoch": 100.0,
@@ -1860,10 +2965,45 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
             "provider_reasons": {"upstream_unavailable": 1},
             "attempted_models": ["gpt-5.5"],
             "attempted_provider_profiles": ["codex-env"],
+            "attempted_wire_apis": ["responses"],
             "retry_delay_s_total": 1.0,
             "retry_delay_count": 1,
             "retry_exhausted": False,
             "final_outcomes": {"success": 1},
+        },
+        "model_input_filter_metrics": {
+            "available": True,
+            "source": "openai_agents_model_input_filter_events",
+            "limitations": [],
+            "event_count": 2,
+            "enabled": True,
+            "modes": ["public_tool_result_summary_v1"],
+            "attempted_models": ["gpt-5.5"],
+            "attempted_provider_profiles": ["codex-env"],
+            "attempted_wire_apis": ["responses"],
+            "compacted_item_count": 2,
+            "unchanged_item_count": 3,
+            "repeated_item_count": 1,
+            "input_bytes_before": 2500,
+            "input_bytes_after": 1300,
+            "input_bytes_reduced": 1200,
+            "input_byte_reduction_ratio": 0.48,
+            "metric_map_output_count": 3,
+            "repeated_metric_map_output_count": 1,
+            "metric_map_delta_compacted_count": 1,
+            "metric_map_bytes_before": 1700,
+            "metric_map_bytes_after": 800,
+            "metric_map_bytes_reduced": 900,
+            "metric_map_byte_reduction_ratio": 0.529412,
+            "raw_fpv_image_memory_enabled": True,
+            "raw_fpv_image_memory_modes": ["retain_latest_full_frame"],
+            "raw_fpv_image_item_count": 2,
+            "raw_fpv_image_retained_count": 1,
+            "raw_fpv_image_evicted_count": 1,
+            "raw_fpv_image_bytes_before": 1000,
+            "raw_fpv_image_bytes_after": 350,
+            "raw_fpv_image_bytes_reduced": 650,
+            "raw_fpv_image_byte_reduction_ratio": 0.65,
         },
         "context_metrics": {
             "available": True,
@@ -1923,6 +3063,7 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
     assert timeline["task_intent_mode"] == "default_cleanup"
     assert timeline["runtime"] == "openai-agents-live"
     assert timeline["provider_profile"] == "codex-env"
+    assert timeline["wire_api"] == "responses"
     assert timeline["model"] == "gpt-5.5"
     assert timeline["evidence_lane"] == "world-public-labels"
     assert [segment["duration_s"] for segment in timeline["runner_segments"]] == [
@@ -1958,10 +3099,45 @@ def test_openai_agents_live_timing_timeline_partitions_runner_and_attribution() 
         "provider_reasons": {"upstream_unavailable": 1},
         "attempted_models": ["gpt-5.5"],
         "attempted_provider_profiles": ["codex-env"],
+        "attempted_wire_apis": ["responses"],
         "retry_delay_s_total": 1.0,
         "retry_delay_count": 1,
         "retry_exhausted": False,
         "final_outcomes": {"success": 1},
+    }
+    assert timeline["latency_attribution"]["model_input_filter_metrics"] == {
+        "available": True,
+        "source": "openai_agents_model_input_filter_events",
+        "limitations": [],
+        "event_count": 2,
+        "enabled": True,
+        "modes": ["public_tool_result_summary_v1"],
+        "attempted_models": ["gpt-5.5"],
+        "attempted_provider_profiles": ["codex-env"],
+        "attempted_wire_apis": ["responses"],
+        "compacted_item_count": 2,
+        "unchanged_item_count": 3,
+        "repeated_item_count": 1,
+        "input_bytes_before": 2500,
+        "input_bytes_after": 1300,
+        "input_bytes_reduced": 1200,
+        "input_byte_reduction_ratio": 0.48,
+        "metric_map_output_count": 3,
+        "repeated_metric_map_output_count": 1,
+        "metric_map_delta_compacted_count": 1,
+        "metric_map_bytes_before": 1700,
+        "metric_map_bytes_after": 800,
+        "metric_map_bytes_reduced": 900,
+        "metric_map_byte_reduction_ratio": 0.529412,
+        "raw_fpv_image_memory_enabled": True,
+        "raw_fpv_image_memory_modes": ["retain_latest_full_frame"],
+        "raw_fpv_image_item_count": 2,
+        "raw_fpv_image_retained_count": 1,
+        "raw_fpv_image_evicted_count": 1,
+        "raw_fpv_image_bytes_before": 1000,
+        "raw_fpv_image_bytes_after": 350,
+        "raw_fpv_image_bytes_reduced": 650,
+        "raw_fpv_image_byte_reduction_ratio": 0.65,
     }
     assert timeline["latency_attribution"]["context_metrics"] == {
         "available": True,

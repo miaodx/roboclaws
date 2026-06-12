@@ -1,0 +1,62 @@
+{
+  "schema": "agent_sdk_speedup_matrix_v1",
+  "budget_caps": {
+    "concurrency": 1,
+    "max_context_hard_limit_tokens": 128000,
+    "max_live_runs": 0,
+    "max_wall_clock_s": 0,
+    "racing_multiplier": 1.0
+  },
+  "candidate_groups": [
+    {
+      "candidate_ids": ["Q", "Y"],
+      "group_id": "group0_foundation",
+      "purpose": "offline recommendation refresh from already-completed live performance packets"
+    },
+    {
+      "candidate_ids": ["A", "G", "J", "H", "I", "L"],
+      "group_id": "group1_private_sdk_levers",
+      "purpose": "private SDK speed levers after Group 0 gates pass"
+    },
+    {
+      "candidate_ids": ["O", "M", "N", "F"],
+      "group_id": "group2_lane_specific_reductions",
+      "purpose": "lane-specific reductions that stay SDK-private or opt-in until cross-client proof"
+    },
+    {
+      "candidate_ids": ["P", "AA"],
+      "group_id": "group3_raw_fpv_stabilization",
+      "purpose": "raw-FPV diagnostic stabilization"
+    }
+  ],
+  "rows": [
+    {
+      "baseline_role": "completed_live_responses_baseline",
+      "baseline_run_dir": "output/agent-sdk-perf-followups/mify-world-public-baseline/0612_0814/seed-7",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["Q", "Y"],
+      "candidate_run_dir": "output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7",
+      "dependency_candidate_ids": ["B", "I", "AB", "N"],
+      "evidence_lane": "world-public-labels",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "offline_recommendation_refresh": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true,
+        "source_rows_already_completed": true
+      },
+      "model": "mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mify",
+      "quality_policy": "same_or_better",
+      "row_id": "mify_world_public_live_refresh",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned"
+      ]
+    }
+  ]
+}

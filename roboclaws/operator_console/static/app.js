@@ -734,12 +734,14 @@ function renderProviderProfileOptions(route) {
     return;
   }
   els.providerProfileFields.hidden = false;
-  const profiles = [...new Set(
-    combinationsForWorld(route.world_id)
-      .filter((item) => item.agent_engine_id === route.agent_engine_id)
-      .map((item) => item.provider_profile)
-      .filter(Boolean)
-  )];
+  const profiles = (route.supported_provider_profiles && route.supported_provider_profiles.length)
+    ? route.supported_provider_profiles
+    : [...new Set(
+        combinationsForWorld(route.world_id)
+          .filter((item) => item.agent_engine_id === route.agent_engine_id)
+          .map((item) => item.provider_profile)
+          .filter(Boolean)
+      )];
   renderSelectOptions(
     els.providerProfileInput,
     profiles.map((profile) => ({ value: profile, label: profile })),

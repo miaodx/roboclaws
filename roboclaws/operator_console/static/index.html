@@ -115,10 +115,13 @@
             <select id="codex-provider-input" name="codex_provider">
               <option value="codex-env" selected>codex-env</option>
               <option value="mify">mify</option>
+              <option value="mimo-openai-chat">MiMo OpenAI Chat</option>
+              <option value="kimi-openai-chat">Kimi OpenAI Chat</option>
             </select>
           </label>
           <div class="prompt-copy" id="codex-provider-help">
-            codex-env uses CODEX_BASE_URL and CODEX_API_KEY. mify requires XM_LLM_API_KEY.
+            codex-env and mify use Responses. OpenAI Agents SDK can also use MiMo/Kimi
+            OpenAI Chat profiles with MIMO_TP_KEY or KIMI_API_KEY.
           </div>
           </div>
           <div id="claude-fields" class="route-fields" hidden>

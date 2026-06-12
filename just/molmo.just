@@ -516,7 +516,7 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
         elif [[ "$driver" == "codex-live" ]]; then
           roboclaws_assert_codex_network_allowed "Codex Molmo cleanup live report"
         elif [[ "$driver" == "openai-agents-live" ]]; then
-          roboclaws_assert_codex_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
+          roboclaws_assert_openai_agents_network_allowed "OpenAI Agents SDK Molmo cleanup live report"
         fi
         if [[ "$backend" != "molmospaces_subprocess" ]]; then
           active_runner=""
@@ -870,6 +870,19 @@ cleanup driver="mcp-smoke" profile="smoke" seeds="7" output_dir="output/molmo/cl
           fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET:-}" ]]; then
             runner_args+=(--raw-fpv-candidate-budget "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT:-}" ]]; then
+            runner_args+=(--raw-fpv-repeated-failure-limit "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT}")
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY:-}" ]]; then
+            if [[ "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY}" =~ ^(0|false|False|FALSE|no|No|NO|off|Off|OFF)$ ]]; then
+              runner_args+=(--no-raw-fpv-image-memory)
+            else
+              runner_args+=(--raw-fpv-image-memory)
+            fi
+          fi
+          if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN:-}" ]]; then
+            runner_args+=(--raw-fpv-image-memory-retain "${ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN}")
           fi
           if [[ -n "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET:-}" ]]; then
             runner_args+=(--done-retry-budget "${ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET}")

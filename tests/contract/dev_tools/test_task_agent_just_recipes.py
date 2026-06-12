@@ -2023,6 +2023,19 @@ def test_molmo_compact_label_prompts_keep_public_done_boundary() -> None:
     assert "only MCP done producing run_result.json counts" in camera_prompt
 
 
+def test_molmo_compact_camera_prompt_can_prefer_composite_observe_tool() -> None:
+    prompt = render_kickoff_prompt(
+        "camera-grounded-labels",
+        prompt_mode="compact",
+        camera_grounded_composite_tools=True,
+    )
+
+    assert "observe_camera_grounded_candidates instead of a separate observe" in prompt
+    assert "response declaration as the camera-labeler candidate output" in prompt
+    assert "do not call declare_visual_candidates again for the same" in prompt
+    assert "only MCP done producing run_result.json counts" in prompt
+
+
 def test_molmo_raw_fpv_compact_prompt_includes_budget_contract() -> None:
     prompt = render_kickoff_prompt(
         "camera-raw-fpv",
@@ -2396,6 +2409,72 @@ def test_coding_agent_codex_explicit_mify_profile_uses_xm_key() -> None:
         "-c",
         'web_search="disabled"',
     ]
+
+
+def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=mimo-openai-chat
+            MIMO_TP_KEY=fake-mimo-key
+            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
+            ROBOCLAWS_CODEX_PROVIDER=kimi-openai-chat
+            KIMI_API_KEY=fake-kimi-key
+            roboclaws_code_agent_profile_summary ROBOCLAWS_CODEX_PROVIDER ROBOCLAWS_CODEX_MODEL
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        (
+            "mimo-openai-chat model=mimo-v2.5 "
+            "base_url=https://token-plan-cn.xiaomimimo.com/v1 "
+            "key_env=MIMO_TP_KEY protocol=chat-completions"
+        ),
+        (
+            "kimi-openai-chat model=kimi-k2.6 "
+            "base_url=https://api.kimi.com/coding/v1 "
+            "key_env=KIMI_API_KEY protocol=chat-completions"
+        ),
+    ]
+
+
+def test_coding_agent_codex_provider_args_reject_openai_agents_chat_profile() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            ROBOCLAWS_CODEX_PROVIDER=mimo-openai-chat
+            MIMO_TP_KEY=fake-mimo-key
+            args=()
+            roboclaws_codex_provider_args args
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "unsupported Codex provider 'mimo-openai-chat'" in result.stderr
 
 
 def test_coding_agent_codex_can_disable_responses_websockets() -> None:

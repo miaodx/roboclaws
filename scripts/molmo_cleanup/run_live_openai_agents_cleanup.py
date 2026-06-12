@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -60,9 +61,17 @@ PROMPT_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_PROMPT_MODE"
 CONTINUATION_MODE_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTINUATION_MODE"
 CONTEXT_SOFT_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_SOFT_LIMIT_TOKENS"
 CONTEXT_HARD_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_CONTEXT_HARD_LIMIT_TOKENS"
+MODEL_INPUT_COMPACTION_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION"
+MODEL_INPUT_COMPACTION_MIN_CHARS_ENV = "ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION_MIN_CHARS"
+RAW_FPV_IMAGE_MEMORY_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY"
+RAW_FPV_IMAGE_MEMORY_RETAIN_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_IMAGE_MEMORY_RETAIN"
+CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV = "ROBOCLAWS_OPENAI_AGENTS_CAMERA_GROUNDED_COMPOSITE_TOOLS"
 MAX_OBSERVE_PER_WAYPOINT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MAX_OBSERVE_PER_WAYPOINT"
 RAW_FPV_CANDIDATE_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_CANDIDATE_BUDGET"
+RAW_FPV_REPEATED_FAILURE_LIMIT_ENV = "ROBOCLAWS_OPENAI_AGENTS_RAW_FPV_REPEATED_FAILURE_LIMIT"
 DONE_RETRY_BUDGET_ENV = "ROBOCLAWS_OPENAI_AGENTS_DONE_RETRY_BUDGET"
+MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH = Path("skills/molmo-realworld-cleanup/SKILL.md")
+MAX_AGENT_SDK_SKILL_CONTEXT_BYTES = 24_000
 
 
 DEFAULT_INCOMPLETE_TURN_CONTINUATION_PROMPT = """
@@ -154,10 +163,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--prompt-mode", default="")
     parser.add_argument("--continuation-mode", default="")
+    parser.add_argument(
+        "--model-input-compaction",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to the SDK call_model_input_filter compaction arm. This is private "
+            "OpenAI Agents SDK candidate-I evidence and is disabled by default."
+        ),
+    )
+    parser.add_argument("--model-input-compaction-min-chars", type=int, default=None)
+    parser.add_argument(
+        "--raw-fpv-image-memory",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to private Agent SDK Candidate-AA raw-FPV image-memory policy. "
+            "This only compacts older image blocks before SDK model calls; reports and "
+            "MCP traces keep full image artifacts."
+        ),
+    )
+    parser.add_argument("--raw-fpv-image-memory-retain", type=int, default=None)
+    parser.add_argument(
+        "--camera-grounded-composite-tools",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Opt in to private Agent SDK Candidate-O MCP composite tools for "
+            "camera-grounded-labels. The cleanup server enables the extra tool only "
+            "for this SDK run."
+        ),
+    )
     parser.add_argument("--context-soft-limit-tokens", type=int, default=None)
     parser.add_argument("--context-hard-limit-tokens", type=int, default=None)
     parser.add_argument("--max-observe-per-waypoint", type=int, default=None)
     parser.add_argument("--raw-fpv-candidate-budget", type=int, default=None)
+    parser.add_argument("--raw-fpv-repeated-failure-limit", type=int, default=None)
     parser.add_argument("--done-retry-budget", type=int, default=None)
     parser.add_argument(
         "--model-service-retry-attempts",
@@ -213,6 +254,10 @@ class LiveOpenAIAgentsCleanupRunner:
         self.lock_file = None
         self.visual_slot: VisualBackendSlotLease | None = None
         self.agent_sdk_perf_profile = _resolve_agent_sdk_perf_profile(args)
+        self.skill_context = _load_agent_sdk_skill_context(
+            args.repo_root,
+            skill_name="molmo-realworld-cleanup",
+        )
         self.initial_kickoff_prompt = _profiled_kickoff_prompt(
             args,
             profile=self.agent_sdk_perf_profile,
@@ -230,6 +275,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "policy": getattr(args, "policy", ""),
             "runtime": "openai-agents-live",
             "provider_profile": getattr(args, "provider_profile", ""),
+            "wire_api": self.agent_sdk_perf_profile["wire_api"],
             "model": getattr(args, "model", ""),
             "cache_tools_list": bool(getattr(args, "cache_tools_list", True)),
             "kickoff_prompt_chars": len(self.initial_kickoff_prompt),
@@ -237,11 +283,20 @@ class LiveOpenAIAgentsCleanupRunner:
                 len(self.initial_kickoff_prompt)
             ),
             "kickoff_prompt_source": _kickoff_prompt_source(args, self.agent_sdk_perf_profile),
+            "kickoff_prompt_stable_prefix": _stable_prefix_packet(
+                self.initial_kickoff_prompt,
+                self.skill_context,
+                self.agent_sdk_perf_profile,
+            ),
             "mcp_client_session_timeout_s": _round_duration(
                 max(0.0, float(getattr(args, "mcp_client_session_timeout_s", 0.0) or 0.0))
             ),
             "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
+            "agent_sdk_camera_grounded_composite_tools": (
+                self.agent_sdk_perf_profile["camera_grounded_composite_tools"]
+            ),
             "prompt_profile_id": self.agent_sdk_perf_profile["profile_id"],
+            "agent_sdk_skill_context": _skill_context_timing_summary(self.skill_context),
         }
 
     def run(self) -> int:
@@ -360,6 +415,11 @@ class LiveOpenAIAgentsCleanupRunner:
             *household_cleanup_server_argv(str(self.args.repo_root / ".venv/bin/python")),
             *self.args.server_arg,
         ]
+        if _camera_grounded_composite_tools_enabled_for_run(
+            self.agent_sdk_perf_profile,
+            evidence_lane=str(getattr(self.args, "profile", "") or ""),
+        ):
+            command.append("--agent-sdk-camera-grounded-composite-tools")
         env = os.environ.copy()
         if env.get(REPORT_RERUN_COMMAND_ENV):
             command.extend(["--rerun-command", env[REPORT_RERUN_COMMAND_ENV]])
@@ -493,6 +553,7 @@ class LiveOpenAIAgentsCleanupRunner:
             "openai_agents_events": self.run_dir / "openai-agents-events.jsonl",
             "openai_agents_trace": self.run_dir / "openai-agents-trace.json",
             "openai_agents_spans": self.run_dir / "openai-agents-spans.jsonl",
+            "openai_agents_skill_context": self.run_dir / "openai-agents-skill-context.json",
         }
         if attempt_index:
             artifact_paths.update(
@@ -531,6 +592,9 @@ class LiveOpenAIAgentsCleanupRunner:
                     self.agent_sdk_perf_profile["model_service_retry_sleep_s"] or 0.0
                 ),
                 "agent_sdk_perf_profile": self.agent_sdk_perf_profile,
+                "sdk_model_settings": self.agent_sdk_perf_profile["sdk_model_settings"],
+                "sdk_run_config": self.agent_sdk_perf_profile["sdk_run_config"],
+                "skill_context": self.skill_context,
                 "surface": "household-world",
                 "intent": _intent_for_task_name(getattr(self.args, "task_name", "")),
                 "task_name": getattr(self.args, "task_name", ""),
@@ -649,6 +713,7 @@ class LiveOpenAIAgentsCleanupRunner:
         payload["openai_agents_event_metrics"] = _openai_agents_event_metrics(self.run_dir)
         payload["openai_agents_span_metrics"] = _openai_agents_span_metrics(self.run_dir)
         payload["model_service_fallback_metrics"] = _model_service_fallback_metrics(self.run_dir)
+        payload["model_input_filter_metrics"] = _model_input_filter_metrics(self.run_dir)
         payload["context_metrics"] = _context_metrics(self.run_dir, payload)
         payload["cache_metrics"] = _cache_metrics(payload["context_metrics"], payload)
         payload["context_growth_metrics"] = _context_growth_metrics(self.run_dir, payload)
@@ -791,6 +856,7 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
         "profile_id": profile_id,
         "source": profile_source,
         "provider_profile": provider_profile,
+        "wire_api": _wire_api_for_provider_profile(provider_profile),
         "model_family": model_family,
         "prompt_mode": _string_setting(
             args,
@@ -829,6 +895,13 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=defaults["raw_fpv_candidate_budget"],
             allow_none=True,
         ),
+        "raw_fpv_repeated_failure_limit": _int_setting(
+            args,
+            "raw_fpv_repeated_failure_limit",
+            RAW_FPV_REPEATED_FAILURE_LIMIT_ENV,
+            default=defaults["raw_fpv_repeated_failure_limit"],
+            allow_none=True,
+        ),
         "done_retry_budget": _int_setting(
             args,
             "done_retry_budget",
@@ -857,6 +930,11 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=defaults["context_hard_limit_tokens"],
             allow_none=True,
         ),
+        "model_input_compaction": _model_input_compaction_profile(args, defaults),
+        "camera_grounded_composite_tools": _camera_grounded_composite_tools_profile(
+            args,
+            defaults,
+        ),
         "model_service_retry_attempts": _int_setting(
             args,
             "model_service_retry_attempts",
@@ -870,8 +948,96 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
             default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
         ),
     }
+    payload["sdk_model_settings"] = _sdk_model_settings_for_profile(payload)
+    payload["sdk_run_config"] = _sdk_run_config_for_profile(payload)
     _validate_context_limits(payload)
     return payload
+
+
+def _load_agent_sdk_skill_context(repo_root: Path, *, skill_name: str) -> dict[str, Any]:
+    source_path = Path(repo_root) / MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH
+    base_payload: dict[str, Any] = {
+        "schema": "agent_sdk_skill_context_v1",
+        "skill_name": skill_name,
+        "source_path": str(source_path),
+        "relative_path": str(MOLMO_REALWORLD_CLEANUP_SKILL_RELATIVE_PATH),
+        "policy": "canonical_skill_markdown",
+    }
+    try:
+        raw = source_path.read_bytes()
+    except OSError as exc:
+        return {
+            **base_payload,
+            "included": False,
+            "reason": "source_unavailable",
+            "error_type": exc.__class__.__name__,
+        }
+    truncated = raw[:MAX_AGENT_SDK_SKILL_CONTEXT_BYTES]
+    text = truncated.decode("utf-8", errors="replace")
+    return {
+        **base_payload,
+        "included": bool(text),
+        "reason": "included" if text else "empty",
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "bytes": len(raw),
+        "included_bytes": len(truncated),
+        "truncated": len(raw) > len(truncated),
+        "estimated_tokens": _estimated_tokens_from_chars(len(text)),
+        "content": text,
+    }
+
+
+def _skill_context_timing_summary(skill_context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in skill_context.items()
+        if key
+        in {
+            "schema",
+            "skill_name",
+            "source_path",
+            "relative_path",
+            "policy",
+            "included",
+            "reason",
+            "sha256",
+            "bytes",
+            "included_bytes",
+            "truncated",
+            "estimated_tokens",
+            "error_type",
+        }
+    }
+
+
+def _stable_prefix_packet(
+    prompt: str,
+    skill_context: dict[str, Any],
+    profile: dict[str, Any],
+) -> dict[str, Any]:
+    skill_hash = str(skill_context.get("sha256") or "")
+    prompt_prefix = str(prompt or "")[:2048]
+    material = "\n".join(
+        [
+            str(skill_context.get("relative_path") or ""),
+            skill_hash,
+            str(profile.get("prompt_mode") or ""),
+            str(profile.get("provider_profile") or ""),
+            str(profile.get("wire_api") or ""),
+            prompt_prefix,
+        ]
+    )
+    return {
+        "schema": "agent_sdk_stable_prefix_v1",
+        "hash": hashlib.sha256(material.encode("utf-8")).hexdigest(),
+        "material": "skill-path+skill-hash+prompt-mode+provider-profile+wire-api+prompt-prefix",
+        "skill_context_sha256": skill_hash,
+        "prompt_prefix_chars": len(prompt_prefix),
+        "prompt_cache_retention": (profile.get("sdk_model_settings") or {}).get(
+            "prompt_cache_retention"
+        )
+        or "",
+    }
 
 
 def _profile_id_with_source(
@@ -912,10 +1078,38 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
         "max_turns": DEFAULT_OPENAI_AGENTS_MAX_TURNS,
         "max_continuations": DEFAULT_INCOMPLETE_TURN_CONTINUATION_ATTEMPTS,
         "raw_fpv_candidate_budget": None,
+        "raw_fpv_repeated_failure_limit": None,
         "done_retry_budget": None,
         "max_observe_per_waypoint": None,
         "context_soft_limit_tokens": None,
         "context_hard_limit_tokens": None,
+        "model_input_compaction": {
+            "schema": "agent_sdk_model_input_compaction_v1",
+            "enabled": False,
+            "mode": "off",
+            "min_chars": 1200,
+            "raw_fpv_image_memory": {
+                "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+                "enabled": False,
+                "mode": "off",
+                "retained_full_frame_limit": 0,
+                "candidate_ids": [],
+                "private_artifact_policy": (
+                    "model-facing raw-FPV image memory only; MCP traces, reports, and "
+                    "image artifacts remain complete"
+                ),
+            },
+        },
+        "camera_grounded_composite_tools": {
+            "schema": "agent_sdk_camera_grounded_composite_tools_v1",
+            "enabled": False,
+            "tool_names": [],
+            "candidate_ids": ["O"],
+            "private_artifact_policy": (
+                "SDK-private MCP tool addition only; default public MCP/profile tools remain "
+                "unchanged"
+            ),
+        },
     }
     if profile_id in {"baseline", "custom"}:
         return baseline
@@ -949,18 +1143,201 @@ def _profile_defaults(profile_id: str) -> dict[str, Any]:
             "max_turns": 40,
             "max_continuations": 1,
             "raw_fpv_candidate_budget": 24,
+            "raw_fpv_repeated_failure_limit": 3,
             "done_retry_budget": 1,
             "max_observe_per_waypoint": 1,
             "context_soft_limit_tokens": 64_000,
             "context_hard_limit_tokens": 96_000,
+            "model_input_compaction": {
+                "schema": "agent_sdk_model_input_compaction_v1",
+                "enabled": True,
+                "mode": (
+                    "public_tool_result_summary_v1+repeated_metric_map_delta_v1+"
+                    "raw_fpv_image_memory_v1"
+                ),
+                "min_chars": 1200,
+                "raw_fpv_image_memory": {
+                    "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+                    "enabled": True,
+                    "mode": "retain_latest_full_frame",
+                    "retained_full_frame_limit": 1,
+                    "candidate_ids": ["AA"],
+                    "private_artifact_policy": (
+                        "model-facing raw-FPV image memory only; MCP traces, reports, and "
+                        "image artifacts remain complete"
+                    ),
+                },
+            },
         }
     raise ValueError(f"unsupported OpenAI Agents SDK performance profile '{profile_id}'")
+
+
+def _model_input_compaction_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    default_config = (
+        defaults.get("model_input_compaction")
+        if isinstance(defaults.get("model_input_compaction"), dict)
+        else {}
+    )
+    default_enabled = bool(default_config.get("enabled", False))
+    enabled = _bool_arg_setting(
+        args,
+        "model_input_compaction",
+        MODEL_INPUT_COMPACTION_ENV,
+        default=default_enabled,
+    )
+    min_chars = _int_setting(
+        args,
+        "model_input_compaction_min_chars",
+        MODEL_INPUT_COMPACTION_MIN_CHARS_ENV,
+        default=int(default_config.get("min_chars") or 1200),
+    )
+    raw_fpv_image_memory = _raw_fpv_image_memory_profile(args, default_config)
+    mode_parts = []
+    candidate_ids = []
+    if enabled:
+        mode_parts.extend(["public_tool_result_summary_v1", "repeated_metric_map_delta_v1"])
+        candidate_ids.extend(["I", "N"])
+    if raw_fpv_image_memory["enabled"]:
+        mode_parts.append("raw_fpv_image_memory_v1")
+        candidate_ids.append("AA")
+    hook_enabled = enabled or bool(raw_fpv_image_memory["enabled"])
+    return {
+        "schema": "agent_sdk_model_input_compaction_v1",
+        "enabled": hook_enabled,
+        "mode": "+".join(mode_parts) if mode_parts else "off",
+        "min_chars": int(min_chars or 1200),
+        "candidate_ids": candidate_ids,
+        "hook": "RunConfig.call_model_input_filter",
+        "repeated_metric_map_delta": enabled,
+        "raw_fpv_image_memory": raw_fpv_image_memory,
+        "private_artifact_policy": (
+            "model-facing compaction only; MCP traces, reports, and run artifacts remain complete"
+        ),
+    }
+
+
+def _raw_fpv_image_memory_profile(
+    args: argparse.Namespace,
+    default_config: dict[str, Any],
+) -> dict[str, Any]:
+    default_policy = (
+        default_config.get("raw_fpv_image_memory")
+        if isinstance(default_config.get("raw_fpv_image_memory"), dict)
+        else {}
+    )
+    default_enabled = bool(default_policy.get("enabled", False))
+    enabled = _bool_arg_setting(
+        args,
+        "raw_fpv_image_memory",
+        RAW_FPV_IMAGE_MEMORY_ENV,
+        default=default_enabled,
+    )
+    retain = _int_setting(
+        args,
+        "raw_fpv_image_memory_retain",
+        RAW_FPV_IMAGE_MEMORY_RETAIN_ENV,
+        default=int(default_policy.get("retained_full_frame_limit") or (1 if enabled else 0)),
+    )
+    retain = max(1, int(retain or 1)) if enabled else 0
+    return {
+        "schema": "agent_sdk_raw_fpv_image_memory_policy_v1",
+        "enabled": enabled,
+        "mode": "retain_latest_full_frame" if enabled else "off",
+        "retained_full_frame_limit": retain,
+        "candidate_ids": ["AA"] if enabled else [],
+        "private_artifact_policy": (
+            "model-facing raw-FPV image memory only; MCP traces, reports, and image artifacts "
+            "remain complete"
+        ),
+    }
+
+
+def _camera_grounded_composite_tools_profile(
+    args: argparse.Namespace,
+    defaults: dict[str, Any],
+) -> dict[str, Any]:
+    default_config = (
+        defaults.get("camera_grounded_composite_tools")
+        if isinstance(defaults.get("camera_grounded_composite_tools"), dict)
+        else {}
+    )
+    default_enabled = bool(default_config.get("enabled", False))
+    enabled = _bool_arg_setting(
+        args,
+        "camera_grounded_composite_tools",
+        CAMERA_GROUNDED_COMPOSITE_TOOLS_ENV,
+        default=default_enabled,
+    )
+    return {
+        "schema": "agent_sdk_camera_grounded_composite_tools_v1",
+        "enabled": enabled,
+        "tool_names": ["observe_camera_grounded_candidates"] if enabled else [],
+        "candidate_ids": ["O"],
+        "scope": "camera-grounded-labels only",
+        "hook": "cleanup MCP server private extra tool",
+        "private_artifact_policy": (
+            "SDK-private MCP tool addition only; default public MCP/profile tools remain unchanged"
+        ),
+    }
+
+
+def _camera_grounded_composite_tools_enabled_for_run(
+    profile: dict[str, Any],
+    *,
+    evidence_lane: str,
+) -> bool:
+    config = profile.get("camera_grounded_composite_tools")
+    if not isinstance(config, dict) or not config.get("enabled"):
+        return False
+    return evidence_lane == "camera-grounded-labels"
+
+
+def _sdk_model_settings_for_profile(profile: dict[str, Any]) -> dict[str, Any]:
+    wire_api = str(profile.get("wire_api") or "")
+    provider_profile = str(profile.get("provider_profile") or "")
+    profile_id = str(profile.get("profile_id") or "baseline")
+    settings: dict[str, Any] = {
+        "tool_choice": "auto",
+        "parallel_tool_calls": False,
+    }
+    if wire_api == "responses":
+        settings.update(
+            {
+                "truncation": "auto",
+                "store": False,
+            }
+        )
+        if provider_profile == "codex-env" and profile_id != "baseline":
+            settings["prompt_cache_retention"] = "in_memory"
+    elif wire_api == "chat-completions":
+        settings["include_usage"] = True
+    return settings
+
+
+def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "trace_include_sensitive_data": False,
+        "workflow_name": "roboclaws-openai-agents-live",
+    }
 
 
 def _normal_provider_profile(provider_profile: str) -> str:
     if provider_profile in {"codex-mify", "mify"}:
         return "mify"
+    if provider_profile in {"mimo-chat", "mimo-openai-chat"}:
+        return "mimo-openai-chat"
+    if provider_profile in {"kimi-chat", "kimi-openai-chat"}:
+        return "kimi-openai-chat"
     return provider_profile or "codex-env"
+
+
+def _wire_api_for_provider_profile(provider_profile: str) -> str:
+    if provider_profile in {"mimo-openai-chat", "kimi-openai-chat"}:
+        return "chat-completions"
+    return "responses"
 
 
 def _model_family(provider_profile: str, model: str) -> str:
@@ -1040,6 +1417,25 @@ def _float_setting(
     return _round_duration(value)
 
 
+def _bool_arg_setting(
+    args: argparse.Namespace,
+    attr: str,
+    env_name: str,
+    *,
+    default: bool,
+) -> bool:
+    raw = getattr(args, attr, None)
+    if raw is None:
+        env_raw = os.environ.get(env_name)
+        if env_raw not in {None, ""}:
+            raw = env_raw
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in {"0", "false", "no", "off"}
+
+
 def _validate_context_limits(profile: dict[str, Any]) -> None:
     soft = profile.get("context_soft_limit_tokens")
     hard = profile.get("context_hard_limit_tokens")
@@ -1075,6 +1471,10 @@ def _profiled_kickoff_prompt(args: argparse.Namespace, *, profile: dict[str, Any
             raw_fpv_candidate_budget=int(profile.get("raw_fpv_candidate_budget") or 24),
             max_observe_per_waypoint=int(profile.get("max_observe_per_waypoint") or 1),
             done_retry_budget=int(profile.get("done_retry_budget") or 1),
+            camera_grounded_composite_tools=_camera_grounded_composite_tools_enabled_for_run(
+                profile,
+                evidence_lane=lane,
+            ),
         )
     except ValueError:
         return original
@@ -1207,14 +1607,25 @@ def _raw_fpv_budget_failure(
     if str(timing.get("evidence_lane") or timing.get("profile") or "") != "camera-raw-fpv":
         return None
     candidate_budget = _int_or_none(profile.get("raw_fpv_candidate_budget"))
+    repeated_failure_limit = _int_or_none(profile.get("raw_fpv_repeated_failure_limit"))
     observe_budget = _int_or_none(profile.get("max_observe_per_waypoint"))
-    if candidate_budget is None and observe_budget is None:
+    if candidate_budget is None and observe_budget is None and repeated_failure_limit is None:
         return None
     trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
     if not trace_events:
         return None
     metrics = _raw_fpv_budget_metrics(trace_events)
     reasons: list[str] = []
+    if repeated_failure_limit is not None:
+        repeated_failures = [
+            item
+            for item in metrics["repeated_failure_fingerprints"]
+            if int(item.get("count") or 0) >= repeated_failure_limit
+        ]
+        if repeated_failures:
+            metrics["repeated_failure_limit"] = repeated_failure_limit
+            metrics["repeated_failure_limit_hits"] = repeated_failures[:12]
+            reasons.append("raw_fpv_repeated_candidate_failure")
     if candidate_budget is not None and metrics["candidate_attempt_count"] >= candidate_budget:
         reasons.append("raw_fpv_candidate_budget_exhausted")
     if observe_budget is not None:
@@ -1228,8 +1639,13 @@ def _raw_fpv_budget_failure(
             reasons.append("raw_fpv_observe_budget_exhausted")
     if not reasons:
         return None
-    reason = "raw_fpv_candidate_budget_exhausted"
-    if "raw_fpv_candidate_budget_exhausted" not in reasons:
+    reason = "raw_fpv_repeated_candidate_failure"
+    if "raw_fpv_repeated_candidate_failure" not in reasons:
+        reason = "raw_fpv_candidate_budget_exhausted"
+    if (
+        "raw_fpv_repeated_candidate_failure" not in reasons
+        and "raw_fpv_candidate_budget_exhausted" not in reasons
+    ):
         reason = "raw_fpv_observe_budget_exhausted"
     detail = json.dumps(
         {
@@ -1237,6 +1653,7 @@ def _raw_fpv_budget_failure(
             "profile_id": profile.get("profile_id") or "baseline",
             "reasons": reasons,
             "raw_fpv_candidate_budget": candidate_budget,
+            "raw_fpv_repeated_failure_limit": repeated_failure_limit,
             "max_observe_per_waypoint": observe_budget,
             **metrics,
         },
@@ -1254,6 +1671,7 @@ def _raw_fpv_budget_metrics(trace_events: list[dict[str, Any]]) -> dict[str, Any
     candidate_attempts: list[dict[str, str]] = []
     observe_count_by_waypoint: dict[str, int] = {}
     failure_fingerprints: dict[str, int] = {}
+    failure_fingerprint_details: dict[str, dict[str, str]] = {}
     for event in trace_events:
         tool = str(event.get("tool") or "")
         event_type = str(event.get("event") or "")
@@ -1298,8 +1716,22 @@ def _raw_fpv_budget_metrics(trace_events: list[dict[str, Any]]) -> dict[str, Any
         if event_type == "response" and failure_reason:
             fingerprint = "|".join((source_id, category, region, candidate_id, failure_reason))
             failure_fingerprints[fingerprint] = failure_fingerprints.get(fingerprint, 0) + 1
+            failure_fingerprint_details.setdefault(
+                fingerprint,
+                {
+                    "source_observation_id": source_id,
+                    "category": category,
+                    "region": region,
+                    "candidate_id": candidate_id,
+                    "failure_reason": failure_reason,
+                },
+            )
     repeated_failures = [
-        {"fingerprint": key, "count": count}
+        {
+            "fingerprint": key,
+            "count": count,
+            **failure_fingerprint_details.get(key, {}),
+        }
         for key, count in sorted(failure_fingerprints.items())
         if count > 1
     ][:12]
@@ -1676,6 +2108,7 @@ def _live_timing_timeline(timing: dict[str, Any]) -> dict[str, Any]:
         "task_intent_mode": timing.get("task_intent_mode", ""),
         "runtime": timing.get("runtime", ""),
         "provider_profile": timing.get("provider_profile", ""),
+        "wire_api": timing.get("wire_api", ""),
         "model": timing.get("model", ""),
         "evidence_lane": timing.get("evidence_lane") or timing.get("profile", ""),
         "started_at_epoch": started_at,
@@ -1802,6 +2235,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         if isinstance(timing.get("model_service_fallback_metrics"), dict)
         else {}
     )
+    model_input_filter_metrics = (
+        timing.get("model_input_filter_metrics")
+        if isinstance(timing.get("model_input_filter_metrics"), dict)
+        else {}
+    )
     context_metrics = (
         timing.get("context_metrics") if isinstance(timing.get("context_metrics"), dict) else {}
     )
@@ -1811,6 +2249,11 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
     context_growth_metrics = (
         timing.get("context_growth_metrics")
         if isinstance(timing.get("context_growth_metrics"), dict)
+        else {}
+    )
+    budget_terminal = (
+        timing.get("agent_sdk_budget_terminal")
+        if isinstance(timing.get("agent_sdk_budget_terminal"), dict)
         else {}
     )
     sdk_elapsed = _float_or_none(runner_timing.get("openai_agents_elapsed_s"))
@@ -1835,6 +2278,8 @@ def _latency_attribution(timing: dict[str, Any]) -> dict[str, Any]:
         "openai_agents_span_type_counts": span_metrics.get("span_type_counts"),
         "openai_agents_span_capture_limitations": span_metrics.get("limitations"),
         "model_service_fallback_metrics": _compact_metric_group(fallback_metrics),
+        "model_input_filter_metrics": _compact_metric_group(model_input_filter_metrics),
+        "agent_sdk_budget_terminal": _compact_metric_group(budget_terminal),
         "mcp_client_session_timeout_s": timing.get("mcp_client_session_timeout_s"),
         "context_metrics": _compact_metric_group(context_metrics),
         "cache_metrics": _compact_metric_group(cache_metrics),
@@ -1997,6 +2442,7 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
     provider_reasons: dict[str, int] = {}
     attempted_models: set[str] = set()
     attempted_provider_profiles: set[str] = set()
+    attempted_wire_apis: set[str] = set()
     retry_delay_s_total = 0.0
     retry_delay_count = 0
     retry_exhausted = False
@@ -2011,6 +2457,9 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
         provider_profile = str(event.get("provider_profile") or "")
         if provider_profile:
             attempted_provider_profiles.add(provider_profile)
+        wire_api = str(event.get("wire_api") or "")
+        if wire_api:
+            attempted_wire_apis.add(wire_api)
         if event_type == "model_service_failure":
             failure_class = str(event.get("failure_class") or "")
             if failure_class:
@@ -2040,6 +2489,7 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
         "provider_reasons": dict(sorted(provider_reasons.items())),
         "attempted_models": sorted(attempted_models),
         "attempted_provider_profiles": sorted(attempted_provider_profiles),
+        "attempted_wire_apis": sorted(attempted_wire_apis),
         "retry_delay_s_total": _round_duration(retry_delay_s_total),
         "retry_delay_count": retry_delay_count,
         "retry_exhausted": retry_exhausted,
@@ -2048,6 +2498,151 @@ def _model_service_fallback_metrics(run_dir: Path) -> dict[str, Any]:
             "Fallback metrics retain attempt counts, provider/model ids, failure classes, "
             "retry delays, and outcomes only. Raw prompts, model text, credentials, and "
             "tool payload bodies are not persisted."
+        ),
+    }
+
+
+def _model_input_filter_metrics(run_dir: Path) -> dict[str, Any]:
+    events = [
+        event
+        for path in sorted(run_dir.glob("openai-agents-events*.jsonl"))
+        for event in _read_jsonl_path(path)
+        if event.get("schema") == "openai_agents_model_input_filter_v1"
+    ]
+    if not events:
+        return {
+            "available": False,
+            "source": "openai_agents_model_input_filter_events",
+            "limitations": ["model_input_filter_events_missing"],
+        }
+
+    attempted_models: set[str] = set()
+    attempted_provider_profiles: set[str] = set()
+    attempted_wire_apis: set[str] = set()
+    input_bytes_before = 0
+    input_bytes_after = 0
+    input_bytes_reduced = 0
+    compacted_item_count = 0
+    unchanged_item_count = 0
+    repeated_item_count = 0
+    metric_map_output_count = 0
+    repeated_metric_map_output_count = 0
+    metric_map_delta_compacted_count = 0
+    metric_map_bytes_before = 0
+    metric_map_bytes_after = 0
+    metric_map_bytes_reduced = 0
+    raw_fpv_image_item_count = 0
+    raw_fpv_image_retained_count = 0
+    raw_fpv_image_evicted_count = 0
+    raw_fpv_image_bytes_before = 0
+    raw_fpv_image_bytes_after = 0
+    raw_fpv_image_bytes_reduced = 0
+    raw_fpv_image_memory_enabled = False
+    raw_fpv_image_memory_modes: set[str] = set()
+    max_input_bytes_before = 0
+    max_input_bytes_after = 0
+    max_input_bytes_reduced = 0
+    enabled = False
+    modes: set[str] = set()
+    for event in events:
+        model = str(event.get("model") or "")
+        if model:
+            attempted_models.add(model)
+        provider_profile = str(event.get("provider_profile") or "")
+        if provider_profile:
+            attempted_provider_profiles.add(provider_profile)
+        wire_api = str(event.get("wire_api") or "")
+        if wire_api:
+            attempted_wire_apis.add(wire_api)
+        config = event.get("config") if isinstance(event.get("config"), dict) else {}
+        enabled = enabled or bool(config.get("enabled"))
+        mode = str(config.get("mode") or "")
+        if mode:
+            modes.add(mode)
+        metrics = event.get("metrics") if isinstance(event.get("metrics"), dict) else {}
+        before = _int_or_none(metrics.get("input_bytes_before")) or 0
+        after = _int_or_none(metrics.get("input_bytes_after")) or 0
+        reduced = _int_or_none(metrics.get("input_bytes_reduced")) or 0
+        input_bytes_before += before
+        input_bytes_after += after
+        input_bytes_reduced += reduced
+        compacted_item_count += _int_or_none(metrics.get("compacted_item_count")) or 0
+        unchanged_item_count += _int_or_none(metrics.get("unchanged_item_count")) or 0
+        repeated_item_count += _int_or_none(metrics.get("repeated_item_count")) or 0
+        metric_map_output_count += _int_or_none(metrics.get("metric_map_output_count")) or 0
+        repeated_metric_map_output_count += (
+            _int_or_none(metrics.get("repeated_metric_map_output_count")) or 0
+        )
+        metric_map_delta_compacted_count += (
+            _int_or_none(metrics.get("metric_map_delta_compacted_count")) or 0
+        )
+        metric_map_bytes_before += _int_or_none(metrics.get("metric_map_bytes_before")) or 0
+        metric_map_bytes_after += _int_or_none(metrics.get("metric_map_bytes_after")) or 0
+        metric_map_bytes_reduced += _int_or_none(metrics.get("metric_map_bytes_reduced")) or 0
+        raw_fpv_image_item_count += _int_or_none(metrics.get("raw_fpv_image_item_count")) or 0
+        raw_fpv_image_retained_count += (
+            _int_or_none(metrics.get("raw_fpv_image_retained_count")) or 0
+        )
+        raw_fpv_image_evicted_count += _int_or_none(metrics.get("raw_fpv_image_evicted_count")) or 0
+        raw_fpv_image_bytes_before += _int_or_none(metrics.get("raw_fpv_image_bytes_before")) or 0
+        raw_fpv_image_bytes_after += _int_or_none(metrics.get("raw_fpv_image_bytes_after")) or 0
+        raw_fpv_image_bytes_reduced += _int_or_none(metrics.get("raw_fpv_image_bytes_reduced")) or 0
+        raw_fpv_image_memory_enabled = raw_fpv_image_memory_enabled or bool(
+            metrics.get("raw_fpv_image_memory_enabled")
+        )
+        raw_fpv_mode = str(metrics.get("raw_fpv_image_memory_mode") or "")
+        if raw_fpv_mode:
+            raw_fpv_image_memory_modes.add(raw_fpv_mode)
+        max_input_bytes_before = max(max_input_bytes_before, before)
+        max_input_bytes_after = max(max_input_bytes_after, after)
+        max_input_bytes_reduced = max(max_input_bytes_reduced, reduced)
+
+    return {
+        "available": True,
+        "source": "openai_agents_model_input_filter_events",
+        "limitations": [],
+        "event_count": len(events),
+        "enabled": enabled,
+        "modes": sorted(modes),
+        "attempted_models": sorted(attempted_models),
+        "attempted_provider_profiles": sorted(attempted_provider_profiles),
+        "attempted_wire_apis": sorted(attempted_wire_apis),
+        "compacted_item_count": compacted_item_count,
+        "unchanged_item_count": unchanged_item_count,
+        "repeated_item_count": repeated_item_count,
+        "metric_map_output_count": metric_map_output_count,
+        "repeated_metric_map_output_count": repeated_metric_map_output_count,
+        "metric_map_delta_compacted_count": metric_map_delta_compacted_count,
+        "metric_map_bytes_before": metric_map_bytes_before,
+        "metric_map_bytes_after": metric_map_bytes_after,
+        "metric_map_bytes_reduced": metric_map_bytes_reduced,
+        "metric_map_byte_reduction_ratio": _ratio(
+            metric_map_bytes_reduced,
+            metric_map_bytes_before,
+        ),
+        "raw_fpv_image_memory_enabled": raw_fpv_image_memory_enabled,
+        "raw_fpv_image_memory_modes": sorted(raw_fpv_image_memory_modes),
+        "raw_fpv_image_item_count": raw_fpv_image_item_count,
+        "raw_fpv_image_retained_count": raw_fpv_image_retained_count,
+        "raw_fpv_image_evicted_count": raw_fpv_image_evicted_count,
+        "raw_fpv_image_bytes_before": raw_fpv_image_bytes_before,
+        "raw_fpv_image_bytes_after": raw_fpv_image_bytes_after,
+        "raw_fpv_image_bytes_reduced": raw_fpv_image_bytes_reduced,
+        "raw_fpv_image_byte_reduction_ratio": _ratio(
+            raw_fpv_image_bytes_reduced,
+            raw_fpv_image_bytes_before,
+        ),
+        "input_bytes_before": input_bytes_before,
+        "input_bytes_after": input_bytes_after,
+        "input_bytes_reduced": input_bytes_reduced,
+        "input_byte_reduction_ratio": _ratio(input_bytes_reduced, input_bytes_before),
+        "max_input_bytes_before": max_input_bytes_before,
+        "max_input_bytes_after": max_input_bytes_after,
+        "max_input_bytes_reduced": max_input_bytes_reduced,
+        "privacy_note": (
+            "Model-input filter metrics retain aggregate counts, byte sizes, mode, provider, "
+            "wire API, and model ids only. Raw prompts, model text, tool payload bodies, "
+            "credentials, and private truth are not persisted."
         ),
     }
 
@@ -2192,12 +2787,24 @@ def _context_metrics(run_dir: Path, timing: dict[str, Any]) -> dict[str, Any]:
 
 
 def _cache_metrics(context_metrics: dict[str, Any], timing: dict[str, Any]) -> dict[str, Any]:
+    model_settings = (
+        timing.get("sdk_model_settings")
+        if isinstance(timing.get("sdk_model_settings"), dict)
+        else {}
+    )
+    stable_prefix = (
+        timing.get("kickoff_prompt_stable_prefix")
+        if isinstance(timing.get("kickoff_prompt_stable_prefix"), dict)
+        else {}
+    )
     if not context_metrics.get("available"):
         return {
             "available": False,
             "source": context_metrics.get("source") or "unavailable",
             "limitations": context_metrics.get("limitations") or ["span_usage_missing"],
             "cache_tools_list": bool(timing.get("cache_tools_list")),
+            "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
+            "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
             "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
         }
     total_input = _int_or_none(context_metrics.get("total_input_tokens")) or 0
@@ -2207,10 +2814,11 @@ def _cache_metrics(context_metrics: dict[str, Any], timing: dict[str, Any]) -> d
         "source": "openai_agents_span_usage",
         "limitations": list(context_metrics.get("limitations") or []),
         "cache_tools_list": bool(timing.get("cache_tools_list")),
+        "prompt_cache_retention": str(model_settings.get("prompt_cache_retention") or ""),
         "provider_prompt_cache_observed": total_cached > 0,
         "cached_input_token_ratio": _ratio(total_cached, total_input),
         "first_response_cached_tokens": context_metrics.get("first_response_cached_tokens"),
-        "stable_prefix_hash": "",
+        "stable_prefix_hash": str(stable_prefix.get("hash") or ""),
         "prompt_profile_id": str(timing.get("prompt_profile_id") or "baseline"),
         "mcp_tool_catalog_cache_enabled": bool(timing.get("cache_tools_list")),
     }
@@ -2348,12 +2956,80 @@ def _compact_metric_group(metrics: dict[str, Any]) -> dict[str, Any]:
         "provider_reasons",
         "attempted_models",
         "attempted_provider_profiles",
+        "attempted_wire_apis",
         "retry_delay_s_total",
         "retry_delay_count",
         "retry_exhausted",
         "final_outcomes",
+        "event_count",
+        "enabled",
+        "modes",
+        "compacted_item_count",
+        "unchanged_item_count",
+        "repeated_item_count",
+        "input_bytes_before",
+        "input_bytes_after",
+        "input_bytes_reduced",
+        "input_byte_reduction_ratio",
+        "max_input_bytes_before",
+        "max_input_bytes_after",
+        "max_input_bytes_reduced",
+        "metric_map_output_count",
+        "repeated_metric_map_output_count",
+        "metric_map_delta_compacted_count",
+        "metric_map_bytes_before",
+        "metric_map_bytes_after",
+        "metric_map_bytes_reduced",
+        "metric_map_byte_reduction_ratio",
+        "raw_fpv_image_memory_enabled",
+        "raw_fpv_image_memory_modes",
+        "raw_fpv_image_item_count",
+        "raw_fpv_image_retained_count",
+        "raw_fpv_image_evicted_count",
+        "raw_fpv_image_bytes_before",
+        "raw_fpv_image_bytes_after",
+        "raw_fpv_image_bytes_reduced",
+        "raw_fpv_image_byte_reduction_ratio",
+        "reason",
+        "provider_reason",
+        "retryable",
+        "resume_available",
+        "detail_schema",
+        "raw_fpv_candidate_budget",
+        "raw_fpv_repeated_failure_limit",
+        "max_observe_per_waypoint",
+        "candidate_attempt_count",
+        "repeated_failure_count",
+        "repeated_failure_limit_hit_count",
+        "observe_waypoint_count",
     )
-    return {key: metrics.get(key) for key in keys if key in metrics}
+    compact = {key: metrics.get(key) for key in keys if key in metrics}
+    detail = metrics.get("detail")
+    if isinstance(detail, str) and detail:
+        try:
+            parsed = json.loads(detail)
+        except json.JSONDecodeError:
+            parsed = {}
+        if isinstance(parsed, dict):
+            compact.setdefault("detail_schema", parsed.get("schema"))
+            for key in (
+                "raw_fpv_candidate_budget",
+                "raw_fpv_repeated_failure_limit",
+                "max_observe_per_waypoint",
+                "candidate_attempt_count",
+            ):
+                if key in parsed:
+                    compact.setdefault(key, parsed.get(key))
+            repeated = parsed.get("repeated_failure_fingerprints")
+            if isinstance(repeated, list):
+                compact.setdefault("repeated_failure_count", len(repeated))
+            hits = parsed.get("repeated_failure_limit_hits")
+            if isinstance(hits, list):
+                compact.setdefault("repeated_failure_limit_hit_count", len(hits))
+            observe_counts = parsed.get("observe_count_by_waypoint")
+            if isinstance(observe_counts, dict):
+                compact.setdefault("observe_waypoint_count", len(observe_counts))
+    return compact
 
 
 def _nearest_rank_percentile(values: list[int], percentile: float) -> int | None:

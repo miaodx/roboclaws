@@ -27,6 +27,7 @@ SEMANTIC_CLEANUP_TOOL_NAMES = (
     "inspect_visible_object",
     "resolve_target_query",
 )
+AGENT_SDK_CAMERA_GROUNDED_COMPOSITE_TOOL_NAMES = ("observe_camera_grounded_candidates",)
 
 
 def register_semantic_cleanup_tools(server: Any) -> None:
@@ -119,6 +120,15 @@ def register_semantic_cleanup_tools(server: Any) -> None:
         )
 
 
+def register_agent_sdk_camera_grounded_composite_tools(server: Any) -> None:
+    """Register opt-in private Agent SDK camera-grounded shortcuts."""
+
+    @server._mcp.tool()
+    def observe_camera_grounded_candidates() -> dict:
+        """Observe and register configured camera-grounded candidates in one call."""
+        return server.call_tool("observe_camera_grounded_candidates")
+
+
 def semantic_cleanup_handlers(
     server: Any,
     kwargs: dict[str, Any],
@@ -173,4 +183,13 @@ def semantic_cleanup_handlers(
             operation=str(kwargs.get("operation", "inspect")),
             max_results=int(kwargs.get("max_results") or 8),
         ),
+    }
+
+
+def agent_sdk_camera_grounded_composite_handlers(
+    server: Any,
+    _kwargs: dict[str, Any],
+) -> dict[str, Callable[[], dict[str, Any]]]:
+    return {
+        "observe_camera_grounded_candidates": server.observe_camera_grounded_candidates,
     }

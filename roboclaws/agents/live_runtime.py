@@ -214,6 +214,7 @@ def live_agent_artifacts(
         "openai_agents_events": run_dir / "openai-agents-events.jsonl",
         "openai_agents_trace": run_dir / "openai-agents-trace.json",
         "openai_agents_spans": run_dir / "openai-agents-spans.jsonl",
+        "openai_agents_skill_context": run_dir / "openai-agents-skill-context.json",
     }
     return {name: path for name, path in candidates.items() if path.exists()}
 

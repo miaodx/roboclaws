@@ -135,6 +135,7 @@ def extract_model_call_metrics(
             _model_call_row(
                 agent_engine=engine,
                 provider_profile=str(live_timing.get("provider_profile") or ""),
+                wire_api=str(live_timing.get("wire_api") or ""),
                 model=str(live_timing.get("model") or ""),
                 source="unavailable",
                 status="unavailable",
@@ -354,6 +355,7 @@ def _run_identity(
         "task_name": _first_text(live_timing, run_result, "task_name"),
         "agent_engine": _agent_engine(live_timing, run_dir),
         "provider_profile": str(live_timing.get("provider_profile") or ""),
+        "wire_api": str(live_timing.get("wire_api") or ""),
         "model": str(live_timing.get("model") or ""),
         "evidence_lane": str(live_timing.get("evidence_lane") or live_timing.get("profile") or ""),
         "seed": run_result.get("seed") or live_timing.get("seed"),
@@ -586,6 +588,7 @@ def _openai_agents_model_call_rows(
                     provider_profile=str(
                         event.get("provider_profile") or live_timing.get("provider_profile") or ""
                     ),
+                    wire_api=str(event.get("wire_api") or live_timing.get("wire_api") or ""),
                     model=str(event.get("model") or live_timing.get("model") or ""),
                     attempt_index=attempt_index,
                     call_index=call_index,
@@ -643,6 +646,7 @@ def _codex_model_call_rows(run_dir: Path, live_timing: dict[str, Any]) -> list[d
             _model_call_row(
                 agent_engine="codex-cli",
                 provider_profile=str(live_timing.get("provider_profile") or ""),
+                wire_api=str(live_timing.get("wire_api") or ""),
                 model=str(live_timing.get("model") or ""),
                 call_index=call_index,
                 duration_s=duration,
@@ -667,6 +671,7 @@ def _codex_model_call_rows(run_dir: Path, live_timing: dict[str, Any]) -> list[d
             _model_call_row(
                 agent_engine="codex-cli",
                 provider_profile=str(live_timing.get("provider_profile") or ""),
+                wire_api=str(live_timing.get("wire_api") or ""),
                 model=str(live_timing.get("model") or ""),
                 duration_s=_float_or_none(codex_summary.get("model_api_time_s")),
                 input_tokens=_int_or_none(usage.get("input_tokens")),
@@ -698,6 +703,7 @@ def _claude_model_call_rows(run_dir: Path, live_timing: dict[str, Any]) -> list[
             _model_call_row(
                 agent_engine="claude-code",
                 provider_profile=str(live_timing.get("provider_profile") or ""),
+                wire_api=str(live_timing.get("wire_api") or ""),
                 model=str(live_timing.get("model") or ""),
                 call_index=call_index,
                 duration_s=duration,
@@ -719,6 +725,7 @@ def _model_call_row(
     agent_engine: str,
     provider_profile: str,
     model: str,
+    wire_api: str = "",
     attempt_index: int = 0,
     call_index: int = 0,
     started_at_epoch: float | None = None,
@@ -750,6 +757,7 @@ def _model_call_row(
         "schema": MODEL_CALL_METRIC_SCHEMA,
         "agent_engine": agent_engine,
         "provider_profile": provider_profile,
+        "wire_api": wire_api,
         "model": model,
         "attempt_index": attempt_index,
         "call_index": call_index,
@@ -835,9 +843,10 @@ def _quality_comparison(
             candidate.get("mess_restoration_rate"),
             baseline.get("mess_restoration_rate"),
         ),
-        "sweep_coverage_rate": _not_lower(
+        "sweep_coverage_rate": _not_lower_with_cap(
             candidate.get("sweep_coverage_rate"),
             baseline.get("sweep_coverage_rate"),
+            cap=1.0,
         ),
         "disturbance_count": _not_higher(
             candidate.get("disturbance_count"),
@@ -934,6 +943,7 @@ def _identity_comparison(baseline: Any, candidate: Any) -> dict[str, Any]:
         "task_name",
         "agent_engine",
         "provider_profile",
+        "wire_api",
         "model",
         "evidence_lane",
         "seed",
@@ -1282,6 +1292,14 @@ def _not_lower(candidate: Any, baseline: Any) -> bool:
     if candidate_value is None or baseline_value is None:
         return True
     return candidate_value >= baseline_value
+
+
+def _not_lower_with_cap(candidate: Any, baseline: Any, *, cap: float) -> bool:
+    candidate_value = _float_or_none(candidate)
+    baseline_value = _float_or_none(baseline)
+    if candidate_value is None or baseline_value is None:
+        return True
+    return min(candidate_value, cap) >= min(baseline_value, cap)
 
 
 def _not_higher(candidate: Any, baseline: Any) -> bool:

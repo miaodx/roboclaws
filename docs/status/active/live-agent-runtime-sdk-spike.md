@@ -2,14 +2,32 @@
 
 Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 
-Current slice: Agent SDK performance optimization and Group 0 matrix
-foundation for the private `openai-agents-live` route.
+Current slice: Agent SDK performance optimization, Group 0 matrix foundation,
+Candidate A skill-context parity, Candidate G/J deterministic settings
+attribution, Candidate I/AB deterministic prep, and Q/Y deterministic
+recommendation enrichment, Candidate N deterministic repeated-map prep,
+Candidate O deterministic camera-grounded composite prep, and Candidate P
+deterministic raw-FPV repeated-failure rails, and Candidate AA deterministic
+raw-FPV image-memory prep for the private `openai-agents-live` route.
 
 Status: SDK runtime spike, first performance optimization pass, and Group 0
-no-provider matrix foundation completed on 2026-06-10. The full live
-provider/model x evidence-lane performance matrix is not done; it remains
-parked pending explicit live-run approval, credentials/backend availability,
-and budget acknowledgement. The follow-up execution plan is
+no-provider matrix foundation completed on 2026-06-10. Candidate A deterministic
+skill-context proof and Candidate G/J deterministic settings/cache attribution
+were accepted on 2026-06-11. Candidate I/AB deterministic prep and Q/Y
+deterministic recommendation enrichment were accepted on 2026-06-12. Candidate
+N deterministic repeated-map prep and Candidate O deterministic
+camera-grounded composite prep were accepted on 2026-06-12. Candidate P
+deterministic raw-FPV repeated-failure rails and Candidate AA deterministic
+raw-FPV image-memory prep were accepted on 2026-06-12. The first resumed
+provider-backed pass on 2026-06-12 produced one `mify` Responses
+`world-public-labels` baseline/candidate comparison and one blocked
+`codex-env` GPT baseline attempt. The first Candidate O `mify` Responses
+`camera-grounded-labels` pair completed but is diagnostic/inconclusive for O
+because the composite shortcut was enabled but never called. Prompt/tool
+selection has been repaired so the private compact O prompt now names the
+shortcut when enabled; the remaining O gate is a tightly scoped live retry that
+actually calls the shortcut. The full live provider/model x evidence-lane
+performance matrix is still not done. The follow-up execution plan is
 `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
@@ -60,6 +78,122 @@ Result:
 - Future OpenAI Agents SDK result summaries redact raw assistant output and SDK
   `last_agent` reprs from event/trace artifacts while keeping trace/session,
   usage, output length, and public agent-name metadata.
+- Candidate A now gives the private SDK route bounded, auditable access to the
+  canonical `molmo-realworld-cleanup` skill markdown. The SDK instructions
+  receive the `SKILL.md` text, while persisted artifacts keep only
+  `openai-agents-skill-context.json` metadata and `live_timing.json`
+  `agent_sdk_skill_context` summary fields such as path, hash, byte counts,
+  truncation state, and estimated tokens.
+- Candidate G/J now makes SDK `ModelSettings` and `RunConfig` explicit for the
+  private route, including trace privacy config, tool-call policy, truncation /
+  usage settings by wire API, prompt-cache retention policy where applicable,
+  and stable-prefix hash attribution in timing/cache summaries. This is
+  deterministic attribution only, not a live speedup claim.
+- Candidate I/AB deterministic prep now records the Responses-only continuation
+  and session capability surface for each `wire_api`, keeps server-managed
+  continuation disabled by default, and adds an opt-in
+  `RunConfig.call_model_input_filter` compaction arm through
+  `--model-input-compaction` / `ROBOCLAWS_OPENAI_AGENTS_INPUT_COMPACTION`.
+  The compaction hook is model-facing only: oversized public tool outputs can be
+  replaced with hash/size summaries before model calls while MCP traces,
+  reports, and run artifacts remain complete. Events persist aggregate counts
+  and byte deltas only, not raw prompts, model text, tool payload bodies,
+  credentials, or private truth. `live_timing.json` and
+  `timeline.latency_attribution` summarize the aggregate
+  `model_input_filter_metrics`.
+- Q/Y deterministic recommendation enrichment now extends the Group 0 decision
+  packet with row-level latency buckets and aggregate candidate rankings.
+  `reducible_bucket_report` separates model/SDK between-tool gap, visual
+  capture, MCP/backend tool-handler time, residual/unattributed time,
+  failed/noop counts, and dominant bucket. `summary.recommendation_summary`
+  records candidate counts, candidate-group counts, dominant-bucket counts, top
+  candidate ids/groups, and per-row recommendation evidence. The refreshed
+  no-provider packet accepts 5 supported fixture rows, preserves 2 unsupported
+  rows, and ranks Group 2 lane-specific reductions first after the already
+  accepted Group 1 prep; this is diagnostic recommendation evidence, not a live
+  speed claim.
+- Candidate N deterministic prep now extends the opt-in SDK model-input
+  compaction arm with repeated `metric_map` delta summarization. The first
+  `metric_map` output remains full in model input; repeated later `metric_map`
+  outputs can become hash/size/count summaries only when the replacement is
+  smaller. MCP traces, reports, and run artifacts remain complete.
+  `model_input_filter_metrics` and timeline attribution aggregate metric-map
+  output counts, repeated-map counts, delta-compacted counts, and map byte
+  deltas without storing map bodies in SDK events. This is deterministic
+  model-facing prep, not a live speed claim.
+- Candidate P deterministic prep now adds a raw-FPV repeated visual-candidate
+  failure rail to `raw_fpv_budgeted_v1`. Repeated compact
+  `navigate_to_visual_candidate` failure fingerprints terminate as
+  `raw_fpv_repeated_candidate_failure`, with aggregate terminal counts exposed
+  in `agent_sdk_budget_terminal` and timeline latency attribution. The terminal
+  detail stays compact and does not persist raw prompts, model text, image
+  region payloads, full tool payload bodies, credentials, or private truth.
+  This is raw-FPV stabilization prep, not a cleanup-pass or speed claim.
+- Candidate AA deterministic prep now adds raw-FPV image memory inside the
+  private SDK model-input filter. `raw_fpv_budgeted_v1` keeps the latest full
+  raw-FPV frame model-visible and summarizes older image blocks only when the
+  summary is smaller. Events and timing persist aggregate retained/evicted
+  counts, byte deltas, hashes, and policy metadata only. MCP traces, report
+  artifacts, and robot-view images remain complete; the raw-FPV MCP observe
+  boundary still returns compact state plus a full PNG image block. This is
+  model-facing prep, not a cleanup-pass or speed claim.
+- The 2026-06-12 live pass satisfied the no-provider Group 0 dry-run/offline
+  preflight and recorded live caps: 2 planned live rows for the successful
+  `mify` pass, 45-minute wall-clock cap per row, context hard limit 128k,
+  concurrency 1, racing multiplier 1, provider credentials present,
+  MolmoSpaces/MuJoCo backend slot available, and `network: work` with
+  repo-local `codex-env` / `mify` routes allowed.
+- The GPT `codex-env` `world-public-labels` baseline attempt stopped before
+  task work with classified transient provider 502
+  (`provider_transient_failure`, `upstream_unavailable`) after model-service
+  retry; no GPT speed or quality claim is made from that row.
+- The `mify` Responses `world-public-labels` baseline and `mimo_compact_v1`
+  candidate both finished. The diagnostic comparison is not a speed win:
+  candidate quality was not worse, model/MCP calls each dropped by 2, but
+  observed wall time was +5.746s, observed model API time was +8.749s, and
+  uncached input tokens were +7033. Artifacts:
+  `output/agent-sdk-perf-followups/mify-world-public-baseline/0612_0814/seed-7/`,
+  `output/agent-sdk-perf-followups/mify-world-public-mimo-compact/0612_0820/seed-7/`,
+  and
+  `output/agent-sdk-perf-followups/mify-world-public-comparison-diagnostic.json`.
+- Q/Y was refreshed from that completed live Responses pair without launching a
+  new provider run. The refresh manifest is
+  `docs/status/active/agent-sdk-speedup-live-refresh-matrix.json`, and the
+  packet is `output/agent-sdk-perf-followups/live-refresh-decision.json`. It
+  accepted the completed row as diagnostic recommendation evidence, kept
+  model/SDK between-tool gap dominant (`205.026s`, 63.34%), recorded visual
+  capture as material (`93.256s`, 28.81%), and pointed the next live arm toward
+  Group 2 lane-specific work after already-accepted Group 1 prep.
+- Completed external camera-grounded Chat-compatible evidence at
+  `output/experiments/mimo-pro-text-lanes/agent-sdk-camera-grounded-dino/0612_0950/seed-7/`
+  shows `mimo-openai-chat` / `mimo-v2.5-pro` finished with 14
+  `declare_visual_candidates` calls and a large between-tool/visual bucket. Use
+  it as compatibility/diagnostic support for Candidate O, not as a Responses
+  speed claim.
+- The `mify` Responses Candidate O baseline/composite pair completed:
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7/`
+  and
+  `output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite/0612_1032/seed-7/`.
+  Metrics are
+  `output/agent-sdk-perf-followups/mify-camera-grounded-baseline-metrics.json`,
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-metrics.json`,
+  and
+  `output/agent-sdk-perf-followups/mify-camera-grounded-composite-comparison.json`.
+  The comparison helper marks same-or-better quality and faster wall time
+  (`-37.851s`), but the candidate trace still has 19 `observe` requests and 19
+  `declare_visual_candidates` requests with zero
+  `observe_camera_grounded_candidates` requests. Treat the row as diagnostic
+  runtime/provider evidence, not a valid Candidate O speed win.
+- Candidate O prompt/tool selection is repaired: the compact private
+  `camera-grounded-labels` prompt now uses
+  `observe_camera_grounded_candidates` when
+  `camera_grounded_composite_tools.enabled=true`, while the default
+  camera-grounded prompt still uses the public two-step path.
+- The shared report-performance quality comparator now caps sweep
+  over-coverage at 1.0 for same-or-better comparison, so extra baseline
+  inspection waypoints do not create a false regression when the candidate
+  still reaches full required coverage. This does not waive cleanup quality,
+  disturbance, failed/noop, or semantic acceptance checks.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -104,8 +238,14 @@ Raw-FPV failure classification:
   summaries.
 - Group 0 matrix preflight has regression coverage for dry-run budgets,
   unsupported rows, forbidden artifact keys/secret markers, faster-but-worse
-  quality rejection, accepted same-or-better rows, and reducible-bucket
-  recommendations.
+  quality rejection, accepted same-or-better rows, expected-terminal raw-FPV
+  diagnostic evidence, model-input-filter event privacy scanning, reducible
+  latency buckets, dominant-bucket classification, aggregate recommendation
+  summaries, and reducible-bucket recommendations.
+- Candidate N has regression coverage for repeated `metric_map` model-input
+  delta summaries, no-growth compaction behavior through the smaller-than-
+  original guard, profile attribution, aggregate metric-map byte counters, and
+  timeline attribution projection.
 
 Verification:
 
@@ -119,6 +259,28 @@ Verification:
 - `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
 - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
 - `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/ruff format --check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/ruff format --check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff format --check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 
 No-touch scope preserved:
 
@@ -127,15 +289,53 @@ No-touch scope preserved:
 - Do not replace or remove existing `codex-live` / `claude-live` behavior.
 - Do not write credentials, raw full prompts, or private evaluator truth to
   observability artifacts.
+- Do not persist the SDK skill-context body in events, timing, status, or trace
+  artifacts; only metadata/hash/size summaries are allowed.
+- Do not claim a settings/cache speedup from Candidate G/J until provider-backed
+  baseline and candidate rows exist under the live approval gate.
+- Do not claim model-input compaction or Responses continuation/session speedup
+  from Candidate I/AB deterministic prep until provider-backed baseline and
+  candidate rows exist under the live approval gate.
 
 Parked work:
 
 - Post-optimization perf follow-up batch captured in
   `docs/plans/live-agent-runtime-sdk-perf-followups.md`:
-  - OpenAI Agents SDK skill parity: the current plain SDK route names
-    `molmo-realworld-cleanup` but does not automatically mount/read the
-    `SKILL.md` the way Codex/Claude live workspaces do.
-  - Full provider/model x evidence-lane matrix before new speed claims.
+  - Candidate A skill parity is accepted; keep its metadata/privacy guard and
+    optionally run live A/B only after recorded budget/backend/network gates
+    pass.
+  - Candidate G/J deterministic settings/cache attribution is accepted; live
+    A/B speed proof remains gated on credentials/backend availability,
+    network policy, and recorded run caps.
+  - Candidate I/AB deterministic prep is accepted; live model-input compaction,
+    server-managed continuation, and session-state A/B proof remains gated on
+    credentials/backend availability, network policy, and recorded run caps.
+    The first `mify` `world-public-labels` baseline versus `mimo_compact_v1`
+    row is diagnostic only, not a speed win.
+  - Q/Y deterministic recommendation enrichment is accepted for Group 0; the
+    current no-provider packet pointed to Group 2 N/O after already-accepted
+    Group 1 prep. Q/Y has now been refreshed with the completed `mify`
+    world-public live packet; it points to Group 2 lane-specific reductions,
+    but the first Candidate O live pair did not exercise the shortcut and does
+    not prove a composite-tool speed win.
+  - Candidate N deterministic repeated-map prep is accepted inside the opt-in
+    model-input compaction arm.
+  - Candidate O deterministic prep is accepted as an SDK-private opt-in
+    `observe_camera_grounded_candidates` MCP shortcut for
+    `camera-grounded-labels`; default public MCP/profile tools remain
+    unchanged. Live proof remains inconclusive until a provider-backed row
+    actually calls the shortcut; next work is a tightly scoped O retry before
+    claiming speed.
+  - Candidate P deterministic prep is accepted as a raw-FPV repeated
+    visual-candidate failure rail; cleanup-pass and live speed claims remain
+    gated.
+  - Candidate AA deterministic prep is accepted as raw-FPV SDK model-facing
+    image memory; live cleanup-pass and speed claims remain gated, while
+    multiresolution thumbnail/crop policy stays parked until live evidence says
+    retained full-frame policy is insufficient.
+  - Full provider/model x evidence-lane matrix before broad speed claims. The
+    GPT `codex-env` baseline needs retry only after the transient 502 gate
+    clears.
   - Optional per-model-call racing inside the SDK model interface, only with
     per-arm cache/cost telemetry and explicit live-run approval.
   - Agent-visible state delta/compaction and selective visual artifact capture
@@ -145,15 +345,17 @@ Parked work:
     Responses/session continuation, `call_model_input_filter` compaction,
     prompt-cache stable-prefix evidence, parallel-tool-call policy audit, and
     non-tool response turn-waste classification.
-  - Trace-backed second-pass candidates: evidence-lane tool-surface pruning,
-    repeated `metric_map` delta contract, camera-grounded observe/label
-    two-step collapse, raw-FPV visual-candidate failure rails, and a
-    trace-derived irreducible-floor/waste classifier.
-  - Big-flow infrastructure follow-ups after the Group 0 foundation: live
-    matrix execution approval, richer feature-flag attribution in live timing,
-    variance/repeatability policy for publishable claims, cross-client
-    regression guard, and raw-FPV image-memory policy.
-  - Default MCP composite/merge tools remain out of scope.
+  - Trace-backed second-pass candidates: evidence-lane tool-surface pruning and
+    a trace-derived irreducible-floor/waste classifier. Repeated `metric_map`
+    delta prep, the camera-grounded observe/label two-step collapse, raw-FPV
+    visual-candidate failure rails, and raw-FPV image memory have deterministic
+    prep accepted.
+  - Big-flow infrastructure follow-ups after the Group 0 foundation: richer
+    feature-flag attribution in live timing, variance/repeatability policy for
+    publishable claims, cross-client regression guard, and multiresolution
+    raw-FPV thumbnail/crop policy if live evidence shows it is needed.
+  - Default MCP composite/merge tools remain out of scope; Candidate O is
+    SDK-private and opt-in only.
 - Anthropic Claude Agent SDK spike.
 - Pi SDK MCP adapter prototype.
 - Public/default route promotion for `openai-agents-live`.

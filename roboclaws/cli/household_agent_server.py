@@ -151,6 +151,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=Path,
         help="Operator-console JSONL inbox for active-run steering messages.",
     )
+    parser.add_argument(
+        "--agent-sdk-camera-grounded-composite-tools",
+        action="store_true",
+        help=(
+            "Private OpenAI Agents SDK Candidate-O shortcut: add an opt-in "
+            "observe_camera_grounded_candidates MCP tool for camera-grounded-labels. "
+            "Default public MCP/profile tools are unchanged."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -292,6 +301,7 @@ def run_molmo_realworld_cleanup_agent_server(
     goal_contract_json: str | None = None,
     goal_contract_path: str | Path | None = None,
     rerun_command: str | None = None,
+    agent_sdk_camera_grounded_composite_tools: bool = False,
     poll_interval_s: float = 0.25,
     print_setup_text: bool = True,
 ) -> dict[str, Any]:
@@ -401,6 +411,7 @@ def run_molmo_realworld_cleanup_agent_server(
             task_intent_mode=task_intent_mode,
             goal_contract=goal_contract,
             operator_messages_path=operator_messages_path,
+            agent_sdk_camera_grounded_composite_tools=agent_sdk_camera_grounded_composite_tools,
             rerun_command=rerun_command,
         )
         server.run_in_thread()
@@ -504,6 +515,9 @@ def main(argv: list[str] | None = None) -> int:
             goal_contract_json=args.goal_contract_json,
             goal_contract_path=args.goal_contract,
             rerun_command=args.rerun_command,
+            agent_sdk_camera_grounded_composite_tools=(
+                args.agent_sdk_camera_grounded_composite_tools
+            ),
         )
     except Exception as exc:
         print(f"Molmo real-world cleanup agent server failed: {exc}", file=sys.stderr)

@@ -199,6 +199,31 @@ def test_codex_provider_guard_allows_mify_profile_on_work_network(tmp_path: Path
     assert "repo-local Codex provider (mify)" in result.stderr
 
 
+def test_openai_agents_provider_guard_allows_chat_profile_on_work_network(tmp_path: Path) -> None:
+    env = _fake_curl(tmp_path, "204")
+    env["ROBOCLAWS_CODEX_PROVIDER"] = "mimo-openai-chat"
+    env["MIMO_TP_KEY"] = "fake-mimo-key"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_assert_openai_agents_network_allowed "OpenAI Agents SDK"
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env={**env, "ROBOCLAWS_HELPER": str(CODING_AGENT_ENV)},
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "repo-local OpenAI Agents SDK provider (mimo-openai-chat)" in result.stderr
+
+
 def test_codex_provider_guard_allows_repo_local_endpoint_on_work_network(tmp_path: Path) -> None:
     env = _fake_curl(tmp_path, "204")
     env.pop("XM_LLM_BASE_URL", None)
