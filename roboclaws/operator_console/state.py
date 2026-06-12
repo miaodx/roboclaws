@@ -273,11 +273,23 @@ def _latest_view_assets(root: Path, run_dir: Path) -> dict[str, dict[str, str]]:
         "map": ("*map*.png", "*map*.jpg"),
         "grounding": ("*grounding*.png", "*bbox*.png", "*detection*.png"),
     }
+    preferred_dirs = {
+        "fpv": ("robot_views",),
+        "chase": ("robot_views",),
+        "map": ("robot_views",),
+    }
     output: dict[str, dict[str, str]] = {}
     for key, globs in patterns.items():
         matches: list[Path] = []
-        for pattern in globs:
-            matches.extend(path for path in run_dir.rglob(pattern) if path.is_file())
+        for directory in preferred_dirs.get(key, ()):
+            base = run_dir / directory
+            if not base.is_dir():
+                continue
+            for pattern in globs:
+                matches.extend(path for path in base.rglob(pattern) if path.is_file())
+        if not matches:
+            for pattern in globs:
+                matches.extend(path for path in run_dir.rglob(pattern) if path.is_file())
         if not matches:
             continue
         path = max(matches, key=lambda item: item.stat().st_mtime).resolve()
