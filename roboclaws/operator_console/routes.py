@@ -6,6 +6,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from roboclaws.agents.provider_registry import (
+    provider_route_specs,
+    route_payload,
+)
 from roboclaws.household.profiles import (
     CAMERA_GROUNDED_LABELS_LANE,
     SIM_PROJECTED_LABELS_CAMERA_LABELER,
@@ -179,6 +183,11 @@ class ConsoleLaunchSelection:
             "agent_engine_label": engine.label,
             "provider_profile": self.provider_profile or "",
             "supported_provider_profiles": list(engine.supported_provider_profiles),
+            "provider_routes": [
+                route_payload(route, agent_engine=self.agent_engine_id)
+                for route in provider_route_specs()
+                if self.agent_engine_id in route.supported_engines
+            ],
             "default_provider_profile": engine.default_provider_profile or "",
             "evidence_lane": self.evidence_lane,
             "scenario_setup": self.scenario_setup,

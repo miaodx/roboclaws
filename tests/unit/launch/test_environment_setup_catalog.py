@@ -123,6 +123,21 @@ def test_responses_agent_engines_accept_minimax_provider_profile(agent_engine: s
     assert "provider_profile=minimax" in plan.overrides
 
 
+def test_raw_fpv_rejects_routes_without_verified_image_transport() -> None:
+    with pytest.raises(LaunchError, match="image_transport=unknown"):
+        resolve_surface_launch(
+            [
+                "surface=household-world",
+                "world=molmospaces/val_0",
+                "backend=mujoco",
+                "intent=cleanup",
+                "agent_engine=codex-cli",
+                "provider_profile=minimax",
+                "evidence_lane=camera-raw-fpv",
+            ]
+        )
+
+
 def test_codex_cli_rejects_openai_agents_chat_provider_profiles() -> None:
     with pytest.raises(LaunchError, match="provider_profile 'mimo-openai-chat' is unsupported"):
         resolve_surface_launch(

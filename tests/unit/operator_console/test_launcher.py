@@ -643,6 +643,22 @@ def test_provider_gate_allows_explicit_minimax_override_with_mm_key(tmp_path: Pa
     assert readiness["provider"]["model"] == "MiniMax-M3"
 
 
+def test_provider_gate_blocks_raw_fpv_when_route_image_transport_unknown(tmp_path: Path) -> None:
+    route = get_selection("molmospaces/val_0::mujoco::cleanup::codex-cli::camera-raw-fpv")
+
+    readiness = route_readiness(
+        tmp_path,
+        route,
+        env={"MM_API_KEY": "key"},
+        overrides={"port": _free_port()},
+        env_overrides={"ROBOCLAWS_CODEX_PROVIDER": "minimax"},
+    )
+
+    assert readiness["can_start"] is False
+    assert readiness["blocker_kind"] == "unsupported_evidence_lane"
+    assert "image_transport=unknown" in readiness["blocker"]
+
+
 def test_provider_gate_allows_openai_agents_chat_profiles(tmp_path: Path) -> None:
     route = get_route("molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::world-oracle-labels")
 

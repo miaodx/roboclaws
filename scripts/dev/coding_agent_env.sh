@@ -15,6 +15,41 @@ roboclaws_load_dotenv() {
   fi
 }
 
+roboclaws_python() {
+  if [[ -n "${ROBOCLAWS_PYTHON:-}" ]]; then
+    printf '%s\n' "$ROBOCLAWS_PYTHON"
+  elif [[ -x ".venv/bin/python" ]]; then
+    printf '%s\n' ".venv/bin/python"
+  elif command -v python3 >/dev/null 2>&1; then
+    command -v python3
+  elif command -v python >/dev/null 2>&1; then
+    command -v python
+  elif command -v uv >/dev/null 2>&1; then
+    printf '%s\n' "uv run python"
+  else
+    echo "error: no Python interpreter found for Roboclaws provider registry" >&2
+    return 2
+  fi
+}
+
+roboclaws_provider_registry() {
+  local python_cmd
+  python_cmd="$(roboclaws_python)" || return
+  # shellcheck disable=SC2086
+  CODEX_BASE_URL="${CODEX_BASE_URL:-}" \
+  CODEX_API_KEY="${CODEX_API_KEY:-}" \
+  XM_LLM_BASE_URL="${XM_LLM_BASE_URL:-}" \
+  XM_LLM_ANTHROPIC_BASE_URL="${XM_LLM_ANTHROPIC_BASE_URL:-}" \
+  XM_LLM_API_KEY="${XM_LLM_API_KEY:-}" \
+  MM_BASE_URL="${MM_BASE_URL:-}" \
+  MM_API_KEY="${MM_API_KEY:-}" \
+  MIMO_OPENAI_BASE_URL="${MIMO_OPENAI_BASE_URL:-}" \
+  MIMO_TP_KEY="${MIMO_TP_KEY:-}" \
+  KIMI_OPENAI_BASE_URL="${KIMI_OPENAI_BASE_URL:-}" \
+  KIMI_API_KEY="${KIMI_API_KEY:-}" \
+  $python_cmd -m roboclaws.agents.provider_registry "$@"
+}
+
 roboclaws_code_agent_provider() {
   local primary_var="$1"
   local provider=""
@@ -50,39 +85,11 @@ roboclaws_code_agent_provider() {
 
 roboclaws_code_agent_profile_default_model() {
   local provider="$1"
-  case "$provider" in
-    system)
-      printf '\n'
-      ;;
-    codex-env)
-      printf 'gpt-5.5\n'
-      ;;
-    mify)
-      printf 'xiaomi/mimo-v2.5\n'
-      ;;
-    minimax)
-      printf 'MiniMax-M3\n'
-      ;;
-    mimo-openai-chat|mimo-chat)
-      printf 'mimo-v2.5\n'
-      ;;
-    kimi-openai-chat|kimi-chat)
-      printf 'kimi-k2.6\n'
-      ;;
-    kimi-anthropic)
-      printf 'kimi-k2.6\n'
-      ;;
-    mify-anthropic)
-      printf 'xiaomi/mimo-v2.5\n'
-      ;;
-    mimo-anthropic)
-      printf 'mimo-v2.5\n'
-      ;;
-    *)
-      echo "error: unknown coding-agent provider profile: ${provider}" >&2
-      return 2
-      ;;
-  esac
+  if [[ "$provider" == "system" ]]; then
+    printf '\n'
+    return 0
+  fi
+  roboclaws_provider_registry default-model "$provider"
 }
 
 roboclaws_mify_anthropic_base_url() {
@@ -110,102 +117,29 @@ roboclaws_mify_anthropic_base_url() {
 
 roboclaws_code_agent_profile_base_url() {
   local provider="$1"
-  case "$provider" in
-    codex-env)
-      if [[ -z "${CODEX_BASE_URL:-}" ]]; then
-        echo "error: codex-env requires CODEX_BASE_URL; add it to the repo-local .env or export it for this shell" >&2
-        return 2
-      fi
-      printf '%s\n' "${CODEX_BASE_URL}"
-      ;;
-    mify)
-      printf '%s\n' "${XM_LLM_BASE_URL:-https://api.llm.mioffice.cn/v1}"
-      ;;
-    minimax)
-      printf '%s\n' "${MM_BASE_URL:-https://api.minimaxi.com/v1}"
-      ;;
-    mimo-openai-chat|mimo-chat)
-      printf '%s\n' "${MIMO_OPENAI_BASE_URL:-https://token-plan-cn.xiaomimimo.com/v1}"
-      ;;
-    kimi-openai-chat|kimi-chat)
-      printf '%s\n' "${KIMI_OPENAI_BASE_URL:-https://api.kimi.com/coding/v1}"
-      ;;
-    kimi-anthropic)
-      printf 'https://api.kimi.com/coding/\n'
-      ;;
-    mify-anthropic)
-      roboclaws_mify_anthropic_base_url
-      ;;
-    mimo-anthropic)
-      printf 'https://token-plan-cn.xiaomimimo.com/anthropic\n'
-      ;;
-    system)
-      printf '\n'
-      ;;
-    *)
-      echo "error: unknown coding-agent provider profile: ${provider}" >&2
-      return 2
-      ;;
-  esac
+  if [[ "$provider" == "system" ]]; then
+    printf '\n'
+    return 0
+  fi
+  roboclaws_provider_registry base-url "$provider"
 }
 
 roboclaws_code_agent_profile_key_env() {
   local provider="$1"
-  case "$provider" in
-    codex-env)
-      printf 'CODEX_API_KEY\n'
-      ;;
-    mify)
-      printf 'XM_LLM_API_KEY\n'
-      ;;
-    minimax)
-      printf 'MM_API_KEY\n'
-      ;;
-    mimo-openai-chat|mimo-chat)
-      printf 'MIMO_TP_KEY\n'
-      ;;
-    kimi-openai-chat|kimi-chat)
-      printf 'KIMI_API_KEY\n'
-      ;;
-    kimi-anthropic)
-      printf 'KIMI_API_KEY\n'
-      ;;
-    mify-anthropic)
-      printf 'XM_LLM_API_KEY\n'
-      ;;
-    mimo-anthropic)
-      printf 'MIMO_TP_KEY\n'
-      ;;
-    system)
-      printf '\n'
-      ;;
-    *)
-      echo "error: unknown coding-agent provider profile: ${provider}" >&2
-      return 2
-      ;;
-  esac
+  if [[ "$provider" == "system" ]]; then
+    printf '\n'
+    return 0
+  fi
+  roboclaws_provider_registry key-env "$provider"
 }
 
 roboclaws_code_agent_profile_wire_api() {
   local provider="$1"
-  case "$provider" in
-    codex-env|mify|minimax)
-      printf 'responses\n'
-      ;;
-    mimo-openai-chat|mimo-chat|kimi-openai-chat|kimi-chat)
-      printf 'chat-completions\n'
-      ;;
-    kimi-anthropic|mify-anthropic|mimo-anthropic)
-      printf 'anthropic\n'
-      ;;
-    system)
-      printf '\n'
-      ;;
-    *)
-      echo "error: unknown coding-agent provider profile: ${provider}" >&2
-      return 2
-      ;;
-  esac
+  if [[ "$provider" == "system" ]]; then
+    printf '\n'
+    return 0
+  fi
+  roboclaws_provider_registry wire-api "$provider"
 }
 
 roboclaws_code_agent_model() {
@@ -291,6 +225,10 @@ roboclaws_codex_provider_args() {
 
   model="$(roboclaws_code_agent_model "$model_var" "$provider_var")" || return
   base_url="$(roboclaws_code_agent_profile_base_url "$provider")" || return
+  if [[ "$provider" == "codex-env" && -z "$base_url" ]]; then
+    echo "error: codex-env requires CODEX_BASE_URL; add it to the repo-local .env or export it for this shell" >&2
+    return 2
+  fi
   key_env="$(roboclaws_code_agent_profile_key_env "$provider")" || return
   wire_api="$(roboclaws_code_agent_profile_wire_api "$provider")" || return
   roboclaws_code_agent_require_key "$provider" "$key_env" || return

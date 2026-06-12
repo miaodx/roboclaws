@@ -4,12 +4,7 @@ import os
 import time
 from typing import Any
 
-from roboclaws.core.provider_safety import (
-    build_provider_status,
-    handle_provider_exception,
-    raise_if_provider_circuit_open,
-)
-from roboclaws.core.vlm import (
+from roboclaws.core.provider_runtime import (
     _COST_PER_M,
     _SYSTEM_PROMPT,
     ProviderStatus,
@@ -17,6 +12,11 @@ from roboclaws.core.vlm import (
     _maybe_open_circuit,
     _record_call_success,
     action_decision_from_fields,
+)
+from roboclaws.core.provider_safety import (
+    build_provider_status,
+    handle_provider_exception,
+    raise_if_provider_circuit_open,
 )
 
 

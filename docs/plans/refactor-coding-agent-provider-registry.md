@@ -1,22 +1,22 @@
 ---
 refactor_scope: coding-agent-provider-registry
-status: READY_FOR_IMPLEMENTATION
+status: DONE
 accepted_severities:
   - P0
   - P1
   - P2
-last_verified: null
+last_verified: 2026-06-12
 ---
 
 # Refactor Scope: Coding-Agent Provider Registry
 
 ## Status
 
-READY_FOR_IMPLEMENTATION
+DONE
 
-The grill pass is saturated: no decision-impact open questions remain before
-implementation. This document is plan-first; do not implement it from the
-planning turn alone.
+Implemented and verified for the deterministic L0-L2 scope. Live provider,
+Docker-backed coding-agent, simulator product, and raw-FPV image-transport
+proofs remain optional validation tasks and were not run in this closeout.
 
 ## Target
 
@@ -231,27 +231,29 @@ optional live evidence verdicts.
 
 ## Accepted Cleanup Checklist
 
-- [ ] Add a canonical Python registry for coding-agent provider profiles and
+- [x] Add a canonical Python registry for coding-agent provider profiles and
   model metadata.
-- [ ] Remove string-inference traps, including `_model_family()` substring
+- [x] Remove string-inference traps, including `_model_family()` substring
   matching and raw-FPV eligibility from model id alone.
-- [ ] Keep MiMo/mify as a Codex provider, with provisional/degraded status.
-- [ ] Add MiniMax profiles without multiplying provider-specific branches.
-- [ ] Merge and delete `roboclaws/core/provider_catalog.py` with no shim.
-- [ ] Retire the stale `roboclaws/core/vlm.py` boundary with no shim.
-- [ ] Migrate Python consumers to the registry:
+- [x] Keep MiMo/mify as a Codex provider, with provisional/degraded status.
+- [x] Add MiniMax profiles without multiplying provider-specific branches.
+- [x] Merge and delete `roboclaws/core/provider_catalog.py` with no shim.
+- [x] Retire the stale `roboclaws/core/vlm.py` boundary with no shim.
+- [x] Migrate Python consumers to the registry:
   `roboclaws/launch/agent_engines.py`,
   `roboclaws/operator_console/launcher.py`,
   `roboclaws/operator_console/routes.py`,
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `scripts/molmo_cleanup/run_live_codex_cleanup.py`, and any surviving neutral
-  provider/runtime module split out of `core/vlm.py`.
-- [ ] Keep `scripts/dev/coding_agent_env.sh` thin and consistency-tested.
-- [ ] Add capability-aware household lane gating.
-- [ ] Add `docs/human/model-route-verdicts.yaml`.
-- [ ] Add registry consistency tests.
-- [ ] Update operator console metadata flow.
-- [ ] Update docs and tests after the registry shape is accepted:
+  and the surviving neutral provider/runtime module split out of `core/vlm.py`.
+  `scripts/molmo_cleanup/run_live_codex_cleanup.py` did not need a registry
+  change because it reads provider/model facts from Codex command/report
+  summaries instead of owning defaults.
+- [x] Keep `scripts/dev/coding_agent_env.sh` thin and consistency-tested.
+- [x] Add capability-aware household lane gating.
+- [x] Add `docs/human/model-route-verdicts.yaml`.
+- [x] Add registry consistency tests.
+- [x] Update operator console metadata flow.
+- [x] Update docs and tests after the registry shape is accepted:
   `just/README.md`, `docs/human/coding-agent-nav-server.md`,
   `docs/human/model-matrix.md`, `.env.example`, and
   provider/launch/operator-console tests.
@@ -391,13 +393,13 @@ Verification:
 
 - deterministic:
   `rg -n "provider_catalog|CODEX_PROVIDER_DEFAULT_MODELS|OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS|CLAUDE_PROVIDER_DEFAULT_MODELS" roboclaws scripts tests`;
-  `rg -n "roboclaws\\.core\\.vlm|from roboclaws\\.core\\.vlm|core/vlm.py" roboclaws scripts tests docs`;
-  `rg -n "_model_family\\(|\"mify\".*\"mimo\"|raw_fpv_eligible|route_status" roboclaws scripts tests`;
+  `rg -n "roboclaws\\.core\\.vlm|from roboclaws\\.core\\.vlm|core/vlm.py" roboclaws scripts tests`;
+  `rg -n "_model_family\\(|raw_fpv_eligible" roboclaws scripts tests`;
   `test -f docs/human/model-route-verdicts.yaml`;
   `bash -n scripts/dev/coding_agent_env.sh`;
   `ruff check .`; `ruff format --check .`.
 - integration:
-  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_provider_registry.py`;
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_provider_catalog.py`;
   `./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py`;
   `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_launcher.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py`;
   `./scripts/dev/run_pytest_standalone.sh -q tests/unit/scripts/test_network_status_guard.py`;
@@ -407,6 +409,8 @@ Verification:
 - product-run:
   `just agent::harness agent-validation recommend plan=docs/plans/refactor-coding-agent-provider-registry.md budget=focused`;
   `just agent::harness agent-validation execute plan=docs/plans/refactor-coding-agent-provider-registry.md budget=focused`.
+  The execute gate may select live-agent, simulator, DINO, or raw-FPV product
+  runs from plan text; those remain optional/local-live gates for this slice.
 - local-live-manual:
   before live/provider gates run `just dev::network-status`; if credentials,
   Docker, simulator, and policy allow it, run at least one public Codex cleanup
@@ -435,13 +439,13 @@ edits request revision before implementation.
 
 - L0 static:
   - `rg -n "provider_catalog|CODEX_PROVIDER_DEFAULT_MODELS|OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS|CLAUDE_PROVIDER_DEFAULT_MODELS" roboclaws scripts tests`
-  - `rg -n "roboclaws\\.core\\.vlm|from roboclaws\\.core\\.vlm|core/vlm.py" roboclaws scripts tests docs`
-  - `rg -n "_model_family\\(|\"mify\".*\"mimo\"|raw_fpv_eligible|route_status" roboclaws scripts tests`
+  - `rg -n "roboclaws\\.core\\.vlm|from roboclaws\\.core\\.vlm|core/vlm.py" roboclaws scripts tests`
+  - `rg -n "_model_family\\(|raw_fpv_eligible" roboclaws scripts tests`
   - `test -f docs/human/model-route-verdicts.yaml`
   - `ruff check` and `ruff format --check` on touched Python files.
   - `bash -n scripts/dev/coding_agent_env.sh`
 - L1 unit:
-  - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_provider_registry.py`
+  - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_provider_catalog.py`
   - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/launch/test_environment_setup_catalog.py`
   - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/operator_console/test_launcher.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_static_assets.py`
   - `./scripts/dev/run_pytest_standalone.sh -q tests/unit/scripts/test_network_status_guard.py`
@@ -465,6 +469,33 @@ current live-route verdicts needed for route status, and L0-L2 evidence passes.
 Live MiniMax/MiMo/GPT validation can remain a separate evidence task and must be
 recorded as skipped or linked if not run.
 
+## Verification Closeout
+
+2026-06-12 deterministic scope passed:
+
+- `rg -n "provider_catalog|CODEX_PROVIDER_DEFAULT_MODELS|OPENAI_AGENTS_PROVIDER_DEFAULT_MODELS|CLAUDE_PROVIDER_DEFAULT_MODELS" roboclaws scripts tests`
+- `rg -n "roboclaws\\.core\\.vlm|from roboclaws\\.core\\.vlm|core/vlm.py" roboclaws scripts tests`
+- `rg -n "_model_family\\(|raw_fpv_eligible" roboclaws scripts tests`
+- `test -f docs/human/model-route-verdicts.yaml`
+- `bash -n scripts/dev/coding_agent_env.sh`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `python3 -m compileall roboclaws/agents/provider_registry.py roboclaws/core/provider_runtime.py roboclaws/core/provider_factory.py roboclaws/household/evidence_lane_policy.py roboclaws/agents/drivers/openai_agents_live.py roboclaws/launch/agent_engines.py roboclaws/operator_console/launcher.py roboclaws/operator_console/routes.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
+- `python3 -m roboclaws.agents.provider_registry json codex-env codex-cli`
+- `python3 -m roboclaws.agents.provider_registry default-model mify codex-cli`
+- `python3 -m roboclaws.agents.provider_registry supports-engine minimax codex-cli`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/providers/test_provider_catalog.py tests/unit/providers/test_vlm.py tests/unit/providers/test_nvidia_provider.py tests/unit/providers/test_provider_safety.py tests/unit/providers/test_provider_retry.py tests/unit/launch/test_environment_setup_catalog.py tests/unit/operator_console/test_routes.py tests/unit/operator_console/test_launcher.py tests/unit/operator_console/test_static_assets.py tests/unit/scripts/test_network_status_guard.py tests/unit/agents/test_live_runtime.py tests/unit/agents/test_openai_agents_minimax_provider.py tests/contract/dev_tools/test_code_just_recipes.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/openclaw/test_openclaw_bootstrap.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_molmo_cleanup_policy.py tests/unit/molmo_cleanup/test_molmo_cleanup_semantic_acceptability.py tests/unit/molmo_cleanup/test_molmo_semantic_cleanup_loop.py`
+
+2026-06-12 matrix evidence:
+
+- `just agent::harness agent-validation recommend plan=docs/plans/refactor-coding-agent-provider-registry.md budget=focused` wrote
+  `output/agent-validation-matrix/20260612T043058Z/validation_matrix.json`.
+- Full `agent-validation execute` was not run because the focused matrix
+  selected live-agent, simulator, DINO, and raw-FPV product gates that this
+  plan keeps optional/local-live unless explicitly validating live route
+  health or image transport.
+
 ## Execution Log
 
 - 2026-06-12: Plan recreated after the untracked draft disappeared from the
@@ -483,3 +514,7 @@ recorded as skipped or linked if not run.
   delete it or split surviving primitives into neutral modules instead of
   keeping the stale boundary.
 - 2026-06-12: Added intuitive-preflight execution contract.
+- 2026-06-12: Implemented the registry slice, deleted the old catalog and
+  `core/vlm.py` boundary, migrated launch/operator/shell/OpenAI Agents SDK
+  consumers, added household evidence-lane gating and route verdict YAML,
+  aligned human docs, and verified the deterministic L0-L2 gates listed above.

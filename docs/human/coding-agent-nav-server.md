@@ -44,6 +44,16 @@ the Responses route, so tiny output-token budgets can stop before assistant
 text is produced. Claude Code uses repo-local MiMo, Kimi, or mify Anthropic
 routes when present.
 
+Provider/model metadata is centralized in
+`roboclaws/agents/provider_registry.py`. The launch catalog, operator console,
+OpenAI Agents SDK runner, and shell helpers use that registry for default
+models, required env keys, wire API, route health, and route capabilities.
+Evidence-lane gating stays separate from provider metadata: `camera-raw-fpv`
+requires model image input plus verified runtime image transport, while
+structured lanes such as `world-oracle-labels` and `camera-grounded-labels`
+can use text-only routes. Live route verdicts are recorded in
+`docs/human/model-route-verdicts.yaml`.
+
 Before long Codex runs, verify the selected endpoint:
 
 ```bash

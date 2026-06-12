@@ -2466,6 +2466,48 @@ def test_coding_agent_codex_explicit_minimax_profile_uses_mm_key() -> None:
     ]
 
 
+def test_coding_agent_env_shell_profile_facts_match_python_registry() -> None:
+    env = clean_code_agent_env()
+    env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+            set -euo pipefail
+            source "$ROBOCLAWS_HELPER"
+            roboclaws_code_agent_profile_default_model minimax
+            roboclaws_code_agent_profile_wire_api mimo-openai-chat
+            roboclaws_code_agent_profile_key_env codex-env
+            """,
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    python_result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "roboclaws.agents.provider_registry",
+            "default-model",
+            "minimax",
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        python_result.stdout.strip(),
+        "chat-completions",
+        "CODEX_API_KEY",
+    ]
+
+
 def test_coding_agent_minimax_model_can_select_highspeed_variant() -> None:
     env = clean_code_agent_env()
     env["ROBOCLAWS_HELPER"] = str(CODING_AGENT_ENV)

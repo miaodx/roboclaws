@@ -160,6 +160,17 @@ reasoning tokens on the Responses route, so tiny output-token budgets can stop
 before assistant text is produced. Hosted CI does not run Codex or Codex
 provider smoke.
 
+Provider/model facts are centralized in
+`roboclaws/agents/provider_registry.py`. Shell helpers and the operator console
+read that registry for default models, required env keys, wire API, route
+status, and route capabilities. Household evidence-lane policy is separate:
+structured lanes can use text-only routes, while `camera-raw-fpv` requires both
+model image input and verified runtime image transport. MiniMax highspeed and
+routes with unknown image transport are therefore blocked from raw-FPV launches
+until a live route verdict proves otherwise. Current live verdicts live in
+`docs/human/model-route-verdicts.yaml`; the narrative audit remains in
+`docs/human/model-matrix.md`.
+
 Public Codex / Claude live-agent runs support only the pinned Docker toolchain:
 
 ```bash

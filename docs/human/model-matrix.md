@@ -6,6 +6,11 @@ the bootstrap provider JSON changes; CI does not cross-check the numbers
 against vendor docs, so this is the audit trail. Historical rows are kept only
 when they explain an incident or benchmark artifact and must be labeled as such.
 
+Coding-agent provider/model route metadata is centralized in
+`roboclaws/agents/provider_registry.py`; live route health verdicts are recorded
+in `docs/human/model-route-verdicts.yaml`. This page keeps the human narrative
+for context-window, endpoint, and incident rationale.
+
 Why this file exists: on 2026-04-23 a MiMo chat run crashed because
 `contextWindow: 32768` was declared for `mimo-v2-omni` while the vendor
 publishes 256K. The Gateway's memory-flush threshold is

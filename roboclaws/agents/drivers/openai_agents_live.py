@@ -14,6 +14,11 @@ from typing import Any
 
 from roboclaws.agents.live_runtime import LiveAgentRequest, LiveAgentResult, LiveAgentRuntime
 from roboclaws.agents.live_status import LiveAgentFailure
+from roboclaws.agents.provider_registry import (
+    normalize_provider_route,
+    provider_route_spec,
+    route_base_url,
+)
 
 try:
     from agents.models.interface import Model as _AgentsModel  # type: ignore[import-not-found]
@@ -1634,124 +1639,46 @@ def _append_model_service_event(
 
 def _model_settings(request: LiveAgentRequest) -> dict[str, str]:
     metadata = dict(request.metadata)
-    provider = str(
+    raw_provider = str(
         metadata.get("provider_profile")
         or request.provider_profile
         or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_PROVIDER")
         or os.environ.get("ROBOCLAWS_CODEX_PROVIDER")
         or "codex-env"
-    )
-    provider = provider.strip()
-    if provider in {"codex-mify", "mify"}:
-        base_url = str(
-            metadata.get("base_url")
-            or os.environ.get("XM_LLM_BASE_URL")
-            or "https://api.llm.mioffice.cn/v1"
-        )
-        api_key = str(metadata.get("api_key") or os.environ.get("XM_LLM_API_KEY") or "")
-        model = str(
-            metadata.get("model")
-            or request.model
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-            or "xiaomi/mimo-v2.5"
-        )
-        _require_setting("mify", "XM_LLM_API_KEY", api_key)
-        return {
-            "provider_profile": "mify",
-            "wire_api": "responses",
-            "base_url": base_url,
-            "api_key": api_key,
-            "model": model,
-        }
-    if provider in {"minimax", "mm"}:
-        base_url = str(
-            metadata.get("base_url")
-            or os.environ.get("MM_BASE_URL")
-            or "https://api.minimaxi.com/v1"
-        )
-        api_key = str(metadata.get("api_key") or os.environ.get("MM_API_KEY") or "")
-        model = str(
-            metadata.get("model")
-            or request.model
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-            or "MiniMax-M3"
-        )
-        _require_setting("minimax", "MM_API_KEY", api_key)
-        return {
-            "provider_profile": "minimax",
-            "wire_api": "responses",
-            "base_url": base_url,
-            "api_key": api_key,
-            "model": model,
-        }
-    if provider in {"mimo-openai-chat", "mimo-chat"}:
-        base_url = str(
-            metadata.get("base_url")
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
-            or os.environ.get("MIMO_OPENAI_BASE_URL")
-            or "https://token-plan-cn.xiaomimimo.com/v1"
-        )
-        api_key = str(metadata.get("api_key") or os.environ.get("MIMO_TP_KEY") or "")
-        model = str(
-            metadata.get("model")
-            or request.model
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-            or "mimo-v2.5"
-        )
-        _require_setting("mimo-openai-chat", "MIMO_TP_KEY", api_key)
-        return {
-            "provider_profile": "mimo-openai-chat",
-            "wire_api": "chat-completions",
-            "base_url": base_url,
-            "api_key": api_key,
-            "model": model,
-        }
-    if provider in {"kimi-openai-chat", "kimi-chat"}:
-        base_url = str(
-            metadata.get("base_url")
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_BASE_URL")
-            or os.environ.get("KIMI_OPENAI_BASE_URL")
-            or "https://api.kimi.com/coding/v1"
-        )
-        api_key = str(metadata.get("api_key") or os.environ.get("KIMI_API_KEY") or "")
-        model = str(
-            metadata.get("model")
-            or request.model
-            or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
-            or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-            or "kimi-k2.6"
-        )
-        _require_setting("kimi-openai-chat", "KIMI_API_KEY", api_key)
-        return {
-            "provider_profile": "kimi-openai-chat",
-            "wire_api": "chat-completions",
-            "base_url": base_url,
-            "api_key": api_key,
-            "model": model,
-        }
-    if provider != "codex-env":
+    ).strip()
+    try:
+        provider = normalize_provider_route(raw_provider, default="codex-env")
+        route = provider_route_spec(provider)
+    except KeyError as exc:
         raise RuntimeError(
             "openai-agents-live supports provider profiles codex-env, mify, "
             "minimax, mimo-openai-chat, and kimi-openai-chat"
-        )
+        ) from exc
+    if "openai-agents-sdk" not in route.supported_engines:
+        raise RuntimeError(f"openai-agents-live does not support provider profile {provider}")
 
-    base_url = str(metadata.get("base_url") or os.environ.get("CODEX_BASE_URL") or "")
-    api_key = str(metadata.get("api_key") or os.environ.get("CODEX_API_KEY") or "")
+    base_url = str(metadata.get("base_url") or route_base_url(route))
+    api_key = str(
+        metadata.get("api_key")
+        or (os.environ.get(route.api_key_env or "") if route.api_key_env else "")
+        or ""
+    )
     model = str(
         metadata.get("model")
         or request.model
         or os.environ.get("ROBOCLAWS_OPENAI_AGENTS_MODEL")
         or os.environ.get("ROBOCLAWS_CODEX_MODEL")
-        or "gpt-5.5"
+        or route.default_model_id
     )
-    _require_setting("codex-env", "CODEX_BASE_URL", base_url)
-    _require_setting("codex-env", "CODEX_API_KEY", api_key)
+    if route.base_url_env == "CODEX_BASE_URL":
+        _require_setting(provider, route.base_url_env, base_url)
+    if route.api_key_env:
+        _require_setting(provider, route.api_key_env, api_key)
     return {
-        "provider_profile": "codex-env",
-        "wire_api": "responses",
+        "provider_profile": provider,
+        "wire_api": route.wire_api,
+        "wire_source": route.wire_source,
+        "route_status": route.status_for_engine("openai-agents-sdk"),
         "base_url": base_url,
         "api_key": api_key,
         "model": model,

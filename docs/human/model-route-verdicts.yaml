@@ -1,0 +1,116 @@
+schema: roboclaws_model_route_verdicts_v1
+last_reviewed: 2026-06-12
+source_of_truth:
+  registry: roboclaws/agents/provider_registry.py
+  narrative: docs/human/model-matrix.md
+verdicts:
+  - agent_engine: codex-cli
+    provider_route: codex-env
+    provider_profile: codex-env
+    model_id: gpt-5.5
+    route_status: healthy
+    lane_verdicts:
+      structured_labels: healthy
+      camera_grounded_labels: healthy
+      camera_raw_fpv: healthy
+    evidence: current local cleanup evidence
+    notes: Default Codex Responses route; requires CODEX_BASE_URL and CODEX_API_KEY.
+  - agent_engine: codex-cli
+    provider_route: mify
+    provider_profile: mify
+    model_id: xiaomi/mimo-v2.5
+    route_status: degraded
+    lane_verdicts:
+      structured_labels: degraded
+      camera_grounded_labels: degraded
+      camera_raw_fpv: blocked
+    evidence: current local Codex/mify probes
+    notes: MCP calls work, but current probes can early-stop after one live-agent turn.
+  - agent_engine: codex-cli
+    provider_route: minimax
+    provider_profile: minimax
+    model_id: MiniMax-M3
+    route_status: experimental
+    lane_verdicts:
+      structured_labels: experimental
+      camera_grounded_labels: experimental
+      camera_raw_fpv: blocked
+    evidence: provider route wired; Codex cleanup runs still need review
+    notes: Raw FPV is blocked until runtime image transport is verified.
+  - agent_engine: openai-agents-sdk
+    provider_route: codex-env
+    provider_profile: codex-env
+    model_id: gpt-5.5
+    route_status: experimental
+    lane_verdicts:
+      structured_labels: experimental
+      camera_grounded_labels: experimental
+      camera_raw_fpv: healthy
+    evidence: experimental SDK route
+    notes: SDK route remains non-default.
+  - agent_engine: openai-agents-sdk
+    provider_route: mimo-openai-chat
+    provider_profile: mimo-openai-chat
+    model_id: mimo-v2.5
+    route_status: healthy
+    lane_verdicts:
+      structured_labels: healthy
+      camera_grounded_labels: healthy
+      camera_raw_fpv: blocked
+    evidence: local non-raw-FPV Agent SDK cleanup evidence
+    notes: Chat transport is suitable for structured lanes; raw FPV is blocked by route image transport.
+  - agent_engine: openai-agents-sdk
+    provider_route: kimi-openai-chat
+    provider_profile: kimi-openai-chat
+    model_id: kimi-k2.6
+    route_status: experimental
+    lane_verdicts:
+      structured_labels: experimental
+      camera_grounded_labels: experimental
+      camera_raw_fpv: blocked
+    evidence: route wired; cleanup verdict pending
+    notes: Chat transport is treated as structured-lane only until image transport is verified.
+  - agent_engine: openai-agents-sdk
+    provider_route: minimax
+    provider_profile: minimax
+    model_id: MiniMax-M3
+    route_status: experimental
+    lane_verdicts:
+      structured_labels: experimental
+      camera_grounded_labels: experimental
+      camera_raw_fpv: blocked
+    evidence: provider route wired; SDK cleanup verdict pending
+    notes: Raw FPV is blocked until runtime image transport is verified.
+  - agent_engine: claude-code
+    provider_route: mimo-anthropic
+    provider_profile: mimo-anthropic
+    model_id: mimo-v2.5
+    route_status: healthy
+    lane_verdicts:
+      structured_labels: healthy
+      camera_grounded_labels: healthy
+      camera_raw_fpv: healthy
+    evidence: current Claude Code household route evidence
+    notes: Default Claude Code route when MIMO_TP_KEY is configured.
+  - agent_engine: claude-code
+    provider_route: kimi-anthropic
+    provider_profile: kimi-anthropic
+    model_id: kimi-k2.6
+    route_status: healthy
+    lane_verdicts:
+      structured_labels: healthy
+      camera_grounded_labels: healthy
+      camera_raw_fpv: healthy
+    evidence: current Claude Code household route evidence
+    notes: Kimi can be selected explicitly with ROBOCLAWS_CLAUDE_PROVIDER.
+  - agent_engine: claude-code
+    provider_route: mify-anthropic
+    provider_profile: mify-anthropic
+    model_id: xiaomi/mimo-v2.5
+    route_status: experimental
+    lane_verdicts:
+      structured_labels: experimental
+      camera_grounded_labels: experimental
+      camera_raw_fpv: experimental
+    evidence: gateway route wired; cleanup verdict pending
+    notes: Uses XM_LLM_API_KEY through the Anthropic-compatible mify gateway.

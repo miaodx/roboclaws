@@ -31,6 +31,12 @@ from roboclaws.agents.drivers.openai_agents_live import (
 from roboclaws.agents.live_runtime import LiveAgentMCPServer, LiveAgentRequest
 from roboclaws.agents.live_status import LiveAgentFailure
 from roboclaws.agents.prompts.household_cleanup import render_kickoff_prompt
+from roboclaws.agents.provider_registry import (
+    model_family_for_route_model,
+    normalize_provider_route,
+    provider_route_spec,
+    route_capabilities_for_engine,
+)
 from roboclaws.household.report import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_DEFAULT,
@@ -848,7 +854,8 @@ class IncompleteTurnRecoveryPolicy:
 def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
     provider_profile = _normal_provider_profile(str(getattr(args, "provider_profile", "") or ""))
     model = str(getattr(args, "model", "") or "")
-    model_family = _model_family(provider_profile, model)
+    model_family = _registry_model_family(provider_profile, model)
+    route = provider_route_spec(provider_profile)
     profile_id, profile_source = _profile_id_with_source(args, provider_profile, model_family)
     defaults = _profile_defaults(profile_id)
     payload = {
@@ -857,6 +864,10 @@ def _resolve_agent_sdk_perf_profile(args: argparse.Namespace) -> dict[str, Any]:
         "source": profile_source,
         "provider_profile": provider_profile,
         "wire_api": _wire_api_for_provider_profile(provider_profile),
+        "wire_source": route.wire_source,
+        "route_status": route.status_for_engine("openai-agents-sdk"),
+        "route_status_note": route.status_note,
+        "route_capabilities": route_capabilities_for_engine(route, "openai-agents-sdk"),
         "model_family": model_family,
         "prompt_mode": _string_setting(
             args,
@@ -1325,26 +1336,15 @@ def _sdk_run_config_for_profile(_profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def _normal_provider_profile(provider_profile: str) -> str:
-    if provider_profile in {"codex-mify", "mify"}:
-        return "mify"
-    if provider_profile in {"mimo-chat", "mimo-openai-chat"}:
-        return "mimo-openai-chat"
-    if provider_profile in {"kimi-chat", "kimi-openai-chat"}:
-        return "kimi-openai-chat"
-    return provider_profile or "codex-env"
+    return normalize_provider_route(provider_profile, default="codex-env")
 
 
 def _wire_api_for_provider_profile(provider_profile: str) -> str:
-    if provider_profile in {"mimo-openai-chat", "kimi-openai-chat"}:
-        return "chat-completions"
-    return "responses"
+    return provider_route_spec(provider_profile).wire_api
 
 
-def _model_family(provider_profile: str, model: str) -> str:
-    lowered = f"{provider_profile} {model}".lower()
-    if "mimo" in lowered or "mify" in lowered:
-        return "mimo"
-    return "gpt"
+def _registry_model_family(provider_profile: str, model: str) -> str:
+    return model_family_for_route_model(provider_profile, model or None)
 
 
 def _string_setting(

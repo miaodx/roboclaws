@@ -6,27 +6,9 @@ import re
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from roboclaws.core.provider_catalog import model_aliases, resolve_model
+from roboclaws.agents.provider_registry import cost_table_by_model
 
-# ---------------------------------------------------------------------------
-# Cost tables (USD per 1 M tokens)
-# ---------------------------------------------------------------------------
-
-_COST_PER_M: dict[str, dict[str, float]] = {
-    "gpt-4o": {"input": 5.00, "output": 15.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "kimi-k2-5": {"input": 1.00, "output": 3.00},
-    "kimi-k2.6": {"input": 1.00, "output": 3.00},
-    "kimi-for-coding": {"input": 1.00, "output": 3.00},
-    "claude-3-5-sonnet-20241022": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-    # Official NVIDIA Build pages currently mark these endpoints as free/trial.
-    "meta/llama-4-maverick-17b-128e-instruct": {"input": 0.0, "output": 0.0},
-    "nvidia/llama-3.1-nemotron-nano-vl-8b-v1": {"input": 0.0, "output": 0.0},
-    # MiMo token-plan pricing TBD — set to 0 until confirmed.
-    # mimo-v2.5: vision + tool-calls (probed 2026-05-28)
-    "mimo-v2.5": {"input": 0.0, "output": 0.0},
-}
+_COST_PER_M: dict[str, dict[str, float]] = cost_table_by_model()
 
 _SYSTEM_PROMPT = (
     "You are a robot agent navigating an indoor environment. "
@@ -79,13 +61,7 @@ def fallback_action_decision(raw: Any) -> ActionDecision:
 
 
 def parse_action_decision(raw_content: Any) -> ActionDecision:
-    """Parse and validate a model/Gateway decision.
-
-    This provider contract is retained for generic mocked model routing after
-    retiring the AI2-THOR game loop. It accepts plain JSON, fenced JSON, or prose
-    containing one JSON object. Malformed, missing, or unknown actions fall back
-    to the shared safe action.
-    """
+    """Parse and validate a model/Gateway decision."""
     content = str(raw_content or "")
     stripped = _CODE_FENCE_RE.sub("", content).strip()
     if not stripped.startswith("{"):
@@ -106,7 +82,7 @@ def parse_action_decision(raw_content: Any) -> ActionDecision:
 
 @dataclass
 class ProviderStatus:
-    """Mutable provider-health snapshot exposed to the game/replay layers."""
+    """Mutable provider-health snapshot exposed to replay and report layers."""
 
     provider_name: str
     model: str
@@ -162,7 +138,7 @@ class ProviderHealthError(RuntimeError):
 
 @runtime_checkable
 class VLMProvider(Protocol):
-    """Minimal interface every VLM backend must satisfy."""
+    """Minimal interface every model backend must satisfy."""
 
     @property
     def cumulative_cost(self) -> float:
@@ -178,25 +154,12 @@ class VLMProvider(Protocol):
         images: list[str],
         state: dict[str, Any],
     ) -> dict[str, Any]:
-        """Query the model for an action decision.
-
-        Args:
-            images: Base64-encoded JPEG images (first-person frame, overhead map, …).
-            state: Structured game state (position, score, remaining steps, etc.).
-
-        Returns:
-            Dict with at least "action" (one of NAVIGATION_ACTIONS) and "reasoning".
-        """
+        """Query the model for an action decision."""
         ...
 
     def get_status(self) -> dict[str, Any]:
         """Return provider-health telemetry for logging and replay output."""
         ...
-
-
-# ---------------------------------------------------------------------------
-# Provider health helpers
-# ---------------------------------------------------------------------------
 
 
 def _record_call_success(
@@ -289,11 +252,6 @@ def format_provider_status(status: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# AgentAction Pydantic model (built lazily; requires pydantic + instructor)
-# ---------------------------------------------------------------------------
-
-
 def _build_agent_action_model() -> type:
     """Return AgentAction Pydantic model. Called once per provider __init__."""
     from typing import Literal
@@ -301,10 +259,9 @@ def _build_agent_action_model() -> type:
     from pydantic import BaseModel
 
     class AgentAction(BaseModel):
-        """Structured VLM response — instructor enforces schema and auto-retries."""
+        """Structured model response; instructor enforces schema and auto-retries."""
 
         reasoning: str
-        # Mirrors the provider action contract retained in this module.
         action: Literal[
             "MoveAhead",
             "MoveBack",
@@ -321,61 +278,12 @@ def _build_agent_action_model() -> type:
     return AgentAction
 
 
-# ---------------------------------------------------------------------------
-# Provider re-exports (implementations live in roboclaws/core/providers/)
-# ---------------------------------------------------------------------------
-
-from roboclaws.core.providers.anthropic import AnthropicProvider, _AnthropicBase  # noqa: E402
-from roboclaws.core.providers.kimi import KimiCodingProvider, KimiProvider  # noqa: E402
-from roboclaws.core.providers.mock import MockProvider  # noqa: E402
-from roboclaws.core.providers.openai import (  # noqa: E402
-    MimoProvider,
-    NvidiaProvider,
-    OpenAIProvider,
-)
-
-__all__ = [
-    "_AnthropicBase",
-    "AnthropicProvider",
-    "KimiCodingProvider",
-    "KimiProvider",
-    "MimoProvider",
-    "MockProvider",
-    "NvidiaProvider",
-    "OpenAIProvider",
-]
-
-# ---------------------------------------------------------------------------
-# Per-agent SOUL loading (shared by VLM + OpenClaw backends)
-# ---------------------------------------------------------------------------
-
-
 def load_agent_souls(
     souls_env: str,
     agent_count: int,
     souls_dir: str,
 ) -> tuple[list[str], dict[int, str]]:
-    """Parse ``AGENT_SOULS`` env var and load SOUL file contents.
-
-    Accepts two formats (same as ``scripts/openclaw/openclaw-bootstrap.sh``):
-
-    * positional CSV — ``aggressive,defensive`` → agent 0 / 1
-    * dict form      — ``agent-0:aggressive,agent-2:cooperative``
-
-    Missing entries fall back to ``"default"``.
-
-    Args:
-        souls_env: Raw value of the ``AGENT_SOULS`` env var.  Empty string
-            disables SOUL loading — returns ``([], {})``.
-        agent_count: Number of simulation agents.
-        souls_dir: Directory containing ``<soul>.md`` files.
-
-    Returns:
-        ``(labels, contents)`` where ``labels[i]`` is the SOUL name for agent
-        ``i`` (for visualizer tinting), and ``contents[i]`` is the loaded
-        markdown text (for system-prompt injection).  When a SOUL file is
-        missing, that agent is omitted from ``contents``.
-    """
+    """Parse ``AGENT_SOULS`` env var and load SOUL file contents."""
     if not souls_env:
         return [], {}
 
@@ -397,27 +305,3 @@ def _parse_soul_labels(souls_env: str, agent_count: int) -> list[str]:
 
     entries = souls_env.split(",")
     return [entries[idx] if idx < len(entries) else "default" for idx in range(agent_count)]
-
-
-_MODEL_ALIASES: dict[str, str] = model_aliases()
-
-_PROVIDER_CLASSES: dict[str, type[Any]] = {
-    "mock": MockProvider,
-    "openai": OpenAIProvider,
-    "kimi": KimiProvider,
-    "kimi-coding": KimiCodingProvider,
-    "anthropic": AnthropicProvider,
-    "nvidia": NvidiaProvider,
-    "mimo": MimoProvider,
-}
-
-
-def create_provider(model: str = "mock", **kwargs: Any) -> VLMProvider:
-    """Map a ``--model`` CLI flag to a provider instance."""
-    try:
-        metadata = resolve_model(model)
-    except KeyError:
-        raise ValueError(f"Unknown model: {model!r}. Choose from {list(_MODEL_ALIASES)}")
-    canonical = metadata.canonical_model
-    provider_class = _PROVIDER_CLASSES[metadata.adapter]
-    return provider_class(**({} if canonical == "mock" else {"model": canonical}), **kwargs)
