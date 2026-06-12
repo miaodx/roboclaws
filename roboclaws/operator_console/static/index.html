@@ -28,7 +28,7 @@
 
       <aside class="route-rail">
         <section class="rail-section">
-          <h2>Routes</h2>
+          <h2>World / Scene</h2>
           <div id="route-list" class="route-list"></div>
         </section>
       </aside>
@@ -37,7 +37,21 @@
         <section class="rail-section">
           <h2>Setup</h2>
           <div id="selected-route-summary" class="selected-route-summary">
-            Choose a route to configure its parameters and gates.
+            Choose a world or scene to configure backend, task, agent engine, and evidence.
+          </div>
+          <div id="launch-axis-fields" class="route-fields">
+          <label>
+            Backend
+            <select id="backend-input" name="backend"></select>
+          </label>
+          <label>
+            Agent engine
+            <select id="agent-engine-input" name="agent_engine"></select>
+          </label>
+          <label>
+            Evidence lane
+            <select id="evidence-lane-input" name="evidence_lane"></select>
+          </label>
           </div>
           <div id="intent-fields" class="route-fields">
           <label>
@@ -51,9 +65,13 @@
             Seed
             <input id="seed-input" name="seed" value="7" />
           </label>
+          <p class="field-help">
+            Scenario seed for reproducible runs. Baseline does not relocate objects;
+            relocation setups also use it to choose what moves.
+          </p>
           <label>
-            Environment setup
-            <select id="environment-setup-input" name="environment_setup">
+            Scenario setup
+            <select id="scenario-setup-input" name="scenario_setup">
               <option value="baseline">Baseline</option>
               <option value="relocate-loose-objects">Relocate loose objects</option>
               <option value="relocate-cleanup-related-objects">
@@ -69,6 +87,15 @@
             Agent port
             <input id="port-input" name="port" value="18788" />
           </label>
+          </div>
+          <div id="provider-profile-fields" class="route-fields" hidden>
+          <label>
+            Provider profile
+            <select id="provider-profile-input" name="provider_profile"></select>
+          </label>
+          <div class="prompt-copy" id="provider-profile-help">
+            Provider profiles are resolved through the selected agent engine.
+          </div>
           </div>
           <div id="agibot-fields" class="route-fields" hidden>
           <label>

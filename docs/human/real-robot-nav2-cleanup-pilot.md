@@ -99,7 +99,7 @@ deterministic client with an operator-approved ROS/Nav2 action client.
 Use the MolmoSpaces world-label report before hardware:
 
 ```bash
-just run::surface surface=household-world driver=direct intent=cleanup evidence_lane=world-oracle-labels seed=7 environment_setup=relocate-cleanup-related-objects relocation_count=10
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
 ```
 
 For a live Codex cleanup rehearsal with the supported local runtime, set
@@ -107,17 +107,17 @@ For a live Codex cleanup rehearsal with the supported local runtime, set
 `codex-env` route, then run:
 
 ```bash
-just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels seed=7 environment_setup=relocate-cleanup-related-objects relocation_count=10
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=10
 ```
 
 For a local Codex Nav2 acceptance rehearsal, write to a stable proof root and use
 the smaller five-object gate so the no-regression expectation is exact:
 
 ```bash
-just run::surface surface=household-world driver=codex intent=cleanup evidence_lane=world-oracle-labels \
+just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels \
   output_dir=output/molmo/codex-gpt55-nav2-report \
   seed=7 \
-  environment_setup=relocate-cleanup-related-objects \
+  scenario_setup=relocate-cleanup-related-objects \
   relocation_count=5 \
   map_bundle=molmo-cleanup-default-7
 ```

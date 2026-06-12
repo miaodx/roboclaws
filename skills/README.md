@@ -41,6 +41,9 @@ profile, public/private boundaries are clear, and traces can preserve substeps.
   contract for visible cleanup-relevant movable objects.
 - `actionable-semantic-map-conversion`: offline robot semantic-memory conversion
   into `actionable_semantic_map_snapshot_v1` for downstream household tasks.
+- `scene-gaussian-map-alignment`: scene-specific alignment workflow for
+  Gaussian/splat, USD/mesh, and robot semantic-map assets, with explicit evidence
+  tiers and honest B1/Map12-style report labels.
 - `visual-result-showcase`: post-run renderer for blog/README/demo GIFs,
   contact sheets, and visual proof artifacts from completed runs.
 

@@ -9,6 +9,14 @@ last_verified: 2026-06-03
 
 # Refactor Scope: Operator Console UI
 
+> **Supersession note (2026-06-10):** The route-card UI produced by this
+> completed refactor was the predecessor to
+> `docs/plans/operator-console-orthogonal-launch-refactor.md`. Current console
+> launch identity is the orthogonal selection of world/scene, backend, intent,
+> agent engine, provider profile, evidence lane, and scenario setup. Treat this
+> file as historical evidence for the prior four-column shell and view-mode
+> cleanup, not as current launch taxonomy.
+
 ## Status
 
 DONE

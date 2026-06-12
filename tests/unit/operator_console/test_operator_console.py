@@ -7,6 +7,7 @@ import socket
 import subprocess
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 from functools import partial
 from http.server import ThreadingHTTPServer
@@ -79,12 +80,7 @@ def test_console_route_registry_exposes_agent_routes_and_explains_disabled_route
     assert disabled["agibot-g2-cleanup"] == (
         "Physical manipulation is not available yet. Run Agibot G2 Map Build first."
     )
-    assert disabled["unsupported-drivers"] == (
-        "This console supports local coding-agent drivers only."
-    )
-    assert disabled["claude-map-build"] == (
-        "semantic-map-build does not support the Claude driver yet."
-    )
+    assert set(disabled) == {"agibot-g2-cleanup"}
     validate_supported_routes_against_catalog()
 
 
@@ -114,17 +110,25 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
         prompt="pick up the mug; rm -rf /",
         overrides={
             "seed": "8",
-            "environment_setup": "relocate-loose-objects",
+            "scenario_setup": "relocate-loose-objects",
             "relocation_count": "2",
         },
     )
 
-    assert argv[:4] == ["just", "run::surface", "surface=household-world", "driver=codex"]
+    assert argv[:7] == [
+        "just",
+        "run::surface",
+        "surface=household-world",
+        "world=molmospaces/val_0",
+        "backend=mujoco",
+        "intent=cleanup",
+        "agent_engine=codex-cli",
+    ]
     assert "intent=cleanup" in argv
     assert "evidence_lane=world-oracle-labels" in argv
-    assert "backend=molmospaces_subprocess" in argv
+    assert "provider_profile=codex-env" in argv
     assert "prompt=pick up the mug; rm -rf /" in argv
-    assert "environment_setup=relocate-loose-objects" in argv
+    assert "scenario_setup=relocate-loose-objects" in argv
     assert "relocation_count=2" in argv
     assert not any(item.startswith("generated_mess_count=") for item in argv)
     assert not any("OpenClaw" in item or "claude" in item for item in argv)
@@ -138,7 +142,7 @@ def test_console_prompt_gating_and_argv_construction_are_fixed_argv(tmp_path: Pa
     )
     assert "intent=open-ended" in open_ended
     assert "intent=cleanup" not in open_ended
-    assert "environment_setup=baseline" in open_ended
+    assert "scenario_setup=baseline" in open_ended
     assert not any(item.startswith("relocation_count=") for item in open_ended)
     assert not any(item.startswith("generated_mess_count=") for item in open_ended)
 
@@ -290,6 +294,35 @@ def test_operator_console_static_assets_are_not_cached(tmp_path: Path) -> None:
         thread.join(timeout=2)
 
 
+def test_operator_console_routes_endpoint_exposes_evidence_lane_matrix(tmp_path: Path) -> None:
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        with urllib.request.urlopen(f"http://{host}:{port}/api/routes") as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert [lane["id"] for lane in payload["evidence_lanes"]] == [
+        "world-oracle-labels",
+        "world-public-labels",
+        "camera-grounded-labels",
+        "camera-raw-fpv",
+    ]
+    routes = {route["id"]: route for route in payload["combinations"]}
+    assert routes["molmospaces/val_0::mujoco::cleanup::codex-cli::camera-grounded-labels"][
+        "enabled"
+    ]
+    assert not routes["molmospaces/val_0::isaaclab::cleanup::codex-cli::camera-grounded-labels"][
+        "enabled"
+    ]
+
+
 def test_operator_console_latest_run_endpoint_returns_artifact_backed_history(
     tmp_path: Path,
 ) -> None:
@@ -358,7 +391,7 @@ def test_operator_console_run_endpoint_passes_explicit_intent(tmp_path: Path) ->
     assert payload["run_id"] == "started-run"
     launch_request = launched["request"]
     assert launch_request.route_id == "codex-mujoco-cleanup"
-    assert launch_request.intent == "open-ended"
+    assert launch_request.intent_id == "open-ended"
     assert launch_request.prompt == "收拾桌面上的杯子"
 
 
@@ -433,9 +466,62 @@ def test_operator_console_next_goal_autostarts_ready_followup(tmp_path: Path) ->
     assert payload["started_run"]["run_id"] == "child-run"
     launch_request = launched["request"]
     assert launch_request.route_id == route.id
-    assert launch_request.intent == "open-ended"
+    assert launch_request.intent_id == "open-ended"
     assert launch_request.operator_session_id == "session-test"
     assert launch_request.parent_run_id == run_id
+
+
+def test_operator_console_stop_endpoint_decodes_browser_encoded_run_id(tmp_path: Path) -> None:
+    route = get_route("codex-mujoco-cleanup")
+    run_id = "20260610-224107-molmospaces/val_0::mujoco::cleanup::codex-cli::world-oracle-labels"
+    run_dir = tmp_path / "output" / "operator-console" / "runs" / run_id
+    attempt_dir = run_dir / "0610_2241" / "seed-7"
+    attempt_dir.mkdir(parents=True)
+    (run_dir / "operator_state.json").write_text(
+        json.dumps(
+            {
+                "run_id": run_id,
+                "route": route.to_payload(),
+                "phase": "starting",
+                "pid": 99999999,
+                "backend_lock": route.lock_name,
+                "run_dir": str(run_dir),
+            }
+        ),
+        encoding="utf-8",
+    )
+    (attempt_dir / "live_status.json").write_text(
+        json.dumps({"phase": "running-codex"}),
+        encoding="utf-8",
+    )
+    ResourceLock(tmp_path, route.lock_name).acquire(run_id=run_id, pid=99999999)
+
+    handler = partial(ConsoleRequestHandler, root=tmp_path)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        host, port = server.server_address
+        request = urllib.request.Request(
+            f"http://{host}:{port}/api/runs/{urllib.parse.quote(run_id, safe='')}/stop",
+            method="POST",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+        with (
+            patch("roboclaws.operator_console.launcher._stop_live_child_run"),
+            patch("roboclaws.operator_console.launcher._terminate_process_group"),
+        ):
+            with urllib.request.urlopen(request) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+    assert payload["run_id"] == run_id
+    assert payload["phase"] == "stopped_by_operator"
+    assert ResourceLock(tmp_path, route.lock_name).read().held is False
 
 
 def test_operator_console_continue_endpoint_is_not_public(tmp_path: Path) -> None:

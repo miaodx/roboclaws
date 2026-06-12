@@ -6,7 +6,7 @@ source:
   - intuitive-reduce-entropy
   - inline intuitive-planning-loop
   - intuitive-preflight
-last_reviewed: 2026-06-09
+last_reviewed: 2026-06-11
 ---
 
 # Live Agent Runtime SDK Spike
@@ -763,6 +763,77 @@ and private evaluator truth are not written to the span artifacts; error samples
 may be retained only when they are useful for failure classification and do not
 contain secrets.
 
+### Agent SDK Service Fallback Prerequisite
+
+Status: implemented on 2026-06-10 before the next performance/matrix slice.
+
+Before optimizing Agent SDK latency, Roboclaws needs SDK-level protection
+against transient model service failures. A single provider-side model outage,
+model-unavailable response, transport 5xx, or equivalent transient service
+error should not automatically fail the whole cleanup run when the request can
+be safely replayed.
+
+Required behavior:
+
+- Add a bounded model-service fallback/retry layer at the Agent SDK model
+  request boundary.
+- On classified transient model service failures, retry the same model request
+  with the same agent input, tool context, and run state. The first fallback may
+  be a same-provider retry; a secondary fallback model/provider route is allowed
+  only when explicitly configured.
+- Keep retry budgets small and visible. Exhausted fallback must produce a
+  classified provider-transient failure, not an unstructured run failure.
+- Do not retry non-transient failures: MCP tool errors, auth/config errors,
+  context-window failures, malformed request validation failures, checker
+  failures, or `done` responses that legitimately report task failure.
+- Persist fallback evidence in `live_timing.json` and sanitized span/timeline
+  artifacts: attempt count, failure class, provider/model attempted, fallback
+  provider/model when used, elapsed retry delay, and final outcome. Do not store
+  raw prompts, model text, credentials, private evaluator truth, or full tool
+  payload bodies.
+- Preserve existing cleanup semantics. Model fallback is infrastructure
+  resilience only; it must not change MCP capability semantics, run-state
+  progression, checker gates, or `done`/`run_result.json` as the only cleanup
+  success signal.
+
+Acceptance criteria before performance optimization:
+
+- Unit tests classify model-unavailable/5xx/transport transient failures as
+  retryable and auth/config/context/tool/checker failures as non-retryable.
+- A focused Agent SDK runner test proves that one transient model failure is
+  retried with the same request and can continue the same run.
+- A failure-exhaustion test proves retry budget exhaustion is reported as a
+  structured provider-transient failure.
+- Timing/timeline artifacts expose fallback attempts without leaking prompt or
+  private task data.
+
+With this in place, performance optimization can compare latency and context
+behavior without conflating model-service flakiness with prompt/profile quality.
+
+Implementation evidence:
+
+- `OpenAIAgentsLiveRuntime` now wraps `OpenAIResponsesModel` in a bounded
+  model-service retry layer by default.
+- The retry layer is at the SDK model request boundary, so it can replay a
+  transient failed model request without replaying completed MCP tool calls or
+  changing cleanup state.
+- Default retry budget is one same-provider retry, configurable through
+  `--model-service-retry-attempts`,
+  `--model-service-retry-sleep-s`,
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS`, and
+  `ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S`.
+- Fallback evidence is written as sanitized
+  `openai_agents_model_service_fallback_v1` events and summarized in
+  `live_timing.json` / `timeline.latency_attribution` under
+  `model_service_fallback_metrics`.
+- The artifact surface records attempt counts, failure classes,
+  provider/model attempted, retry delay, retry exhaustion, and final outcome.
+  It does not persist raw prompts, model text, credentials, private evaluator
+  truth, or full tool payload bodies.
+- Focused deterministic tests cover retryable model-unavailable/5xx/transport
+  failures, non-retryable auth/config/context/tool failures, one successful
+  transient retry, exhausted retry budget, and timing/timeline summarization.
+
 ### Agent SDK Performance Plan
 
 Status: planning contract ready on 2026-06-10 after comparing the final
@@ -772,7 +843,8 @@ pre-GSD plan for the next Agent SDK performance slice.
 
 Goal:
 
-- Reduce model-side latency for GPT/codex-env and MiMo/mify
+- With the model-service fallback prerequisite in place, reduce model-side
+  latency for GPT/codex-env and MiMo/mify
   `openai-agents-live` cleanup runs without changing public route exposure,
   MCP capability semantics, checker gates, or `done`/`run_result.json` as the
   only cleanup success signal.
@@ -1372,7 +1444,7 @@ Accepted on 2026-06-10:
 
 #### Execution Preflight: Agent SDK Performance Optimization
 
-Preflight status: DRAFT
+Preflight status: DONE on 2026-06-10.
 
 Task source: user request plus the Agent SDK Performance Plan in this file.
 
@@ -1381,13 +1453,16 @@ Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`.
 Route: durable `intuitive-flow`.
 
 Goal: implement the first Agent SDK performance optimization pass for
-`openai-agents-live`, starting with telemetry/profile proof and then applying
-bounded context, continuation, label-lane cadence, raw-FPV safety, and
-cross-run comparison without changing public route or cleanup success
-semantics.
+`openai-agents-live`, starting with model-service fallback resilience and
+telemetry/profile proof, then applying bounded context, continuation,
+label-lane cadence, raw-FPV safety, and cross-run comparison without changing
+public route or cleanup success semantics.
 
 Scope:
 
+- Phase 0: add bounded model-service fallback/retry for classified transient
+  Agent SDK model request failures, with structured timing/timeline evidence and
+  no retry for auth/config/context/tool/checker failures.
 - Phase 1: add telemetry V2 metrics and profile persistence with no behavior
   change.
 - Phase 2: add private Agent SDK performance profile resolution and CLI/env
@@ -1725,1105 +1800,32 @@ Candidate 9: Provider-latency classification beyond context/cache
   residual is surfaced as a named field.
 - Execution risk: safe if it is observability-only.
 
-#### Post-Optimization Reduce-Entropy Batch
-
-Status: planning notes captured on 2026-06-10 after the first Agent SDK
-performance optimization pass. These are follow-up candidates, not approved
-implementation work.
-
-Context:
-
-- The 2026-06-10 optimization pass made the private `openai-agents-live` route
-  much faster on GPT label lanes while preserving checker-visible success, but
-  the optimized runs still made about 72-78 response/model turns and still
-  reached large per-run context sizes.
-- Roboclaws should not default to MCP macro/merge tools for speed. The repo
-  already has a skill-first boundary, the active `molmo-realworld-cleanup`
-  skill contains the trace-preserving
-  `navigate_to_object -> pick -> navigate_to_receptacle -> open? ->
-  place/place_inside -> close? -> observe` routine, and historical MCP/skill
-  cleanup intentionally kept ADR-0003 as the only default agent-facing cleanup
-  MCP surface.
-- Codex and Claude live routes prepare an isolated task workspace and expose
-  `skills/molmo-realworld-cleanup/SKILL.md` for the agent to read. The current
-  plain OpenAI Agents SDK route does not do equivalent automatic skill
-  discovery; it sets `LiveAgentRequest.skill_name` and passes a rendered kickoff
-  prompt to `Agent.instructions`.
-- OpenAI Agents SDK has first-class MCP and model/provider extension points, and
-  its `Model` interface is replaceable. Codex-style progressive-disclosure
-  Skills are a Codex behavior; Agents SDK also has Sandbox skill capabilities,
-  but the current `openai-agents-live` implementation uses a plain
-  `Agent + MCPServerStreamableHttp` path, not SandboxAgent skill mounting.
-
-References:
-
-- Current SDK route request metadata:
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`
-- Current SDK runtime model/MCP wiring:
-  `roboclaws/agents/drivers/openai_agents_live.py`
-- Cleanup skill and routine:
-  `skills/molmo-realworld-cleanup/SKILL.md`,
-  `skills/molmo-realworld-cleanup/scripts/trace_preserving_cleanup.py`,
-  `roboclaws/household/cleanup_routine.py`
-- Prior MCP/skill minimal-surface decision:
-  `docs/retrospectives/plans/refactor-mcp-skill-minimal-surface.md`
-- Official SDK/Codex docs inspected during discussion:
-  <https://openai.github.io/openai-agents-python/mcp/>,
-  <https://openai.github.io/openai-agents-python/models/>,
-  <https://openai.github.io/openai-agents-python/ref/sandbox/capabilities/skills/>,
-  <https://developers.openai.com/codex/skills>
-
-Grill Batch 2 Decisions:
-
-- The first unified validation flow is a diagnostic sweep. A candidate may
-  become a publishable/accepted speedup only after the winning row gets a
-  repeat or paired validation pass.
-- The first "all relevant models" matrix covers GPT/codex-env and MiMo/mify
-  across `world-public-labels`, `camera-grounded-labels`, and
-  `camera-raw-fpv`. Kimi/Claude rows should be recorded as unsupported or
-  blocked until their SDK route/provider support exists; do not expand this
-  speed pass into a provider-integration task.
-- The live matrix needs explicit caps before execution: default
-  `concurrency=1`, racing disabled, planned max live runs, planned max
-  wall-clock, hard context budgets, and any racing-arm multiplier. A dry run
-  must display the worst-case budget before provider calls.
-- Raw-FPV remains a classified diagnostic target unless a later lane-specific
-  pass explicitly makes cleanup success part of the gate. Do not raise budgets
-  or add racing before raw-FPV failure rails and image-memory policy are tested.
-- MCP/profile-affecting candidates start as SDK-private or opt-in. Promotion to
-  default MCP/profile behavior requires Candidate X cross-client proof and a
-  separate promotion decision.
-- Behavior quality follows same-or-better by default. Faster but lower-quality
-  runs are not accepted unless the tradeoff is explicitly waived in the
-  decision packet.
-
-Candidate Grouping And Test Priority:
-
-Use this grouping as the practical execution view for the next unified
-validation flow. It does not delete candidates. It front-loads the directions
-that are most likely to produce useful speed evidence without changing the
-public MCP/default route boundary.
-
-Group 0: foundation, comparability, and stop gates
-
-- Candidates: R, S, T, U, V, W, Y, B, Z, Q.
-- Purpose: make the experiment matrix runnable, bounded, private-safe,
-  comparable, and decision-ready before spending provider time.
-- Expected direct speedup: none. This group exists so later speed claims are
-  trustworthy.
-- Test first because: without these gates, a large live flow can produce
-  incomparable artifacts, hidden feature interactions, budget overrun, or a
-  faster-but-worse result.
-- Default proof: dry-run matrix, offline/fake-provider preflight, privacy gate,
-  baseline matrix rows, behavior-quality comparator, and trace-derived
-  reducible-bucket report.
-
-Group 1: high-confidence private SDK levers
-
-- Candidates: A, G, J, H, I, L.
-- Purpose: remove prompt/skill drift, make SDK model settings explicit, improve
-  prompt-cache interpretability, use SDK-native continuation where safe, compact
-  model input without changing MCP responses, and measure text-only/deferred
-  turns.
-- Expected value: high to medium. These attack observed context growth and
-  response-turn overhead while staying inside the private SDK route.
-- Test before MCP/profile changes because: they are easier to isolate and less
-  likely to break Codex/Claude/OpenClaw clients.
-- Default proof: label-lane A/B on GPT/codex-env and MiMo/mify after foundation
-  gates; repeat only the best winner rows before calling a speedup accepted.
-
-Group 2: high-impact lane-specific reductions
-
-- Candidates: O, M, N, F.
-- Purpose: collapse deterministic camera-grounded observe/label plumbing,
-  narrow irrelevant tools by evidence lane, avoid repeated static map payloads,
-  and reduce report-only visual capture if it becomes a top wall-clock bucket.
-- Expected value: high for O in `camera-grounded-labels`; medium-high for M/N
-  if Q/I still show tool-choice noise or repeated map bytes; conditional for F.
-- Test after Group 1 because: these can touch MCP response shape, tool
-  availability, or evidence-lane behavior. Run SDK-private or opt-in first.
-- Default proof: lane-local A/B with unchanged checker success, explicit trace
-  preservation, and Candidate X before any default/public promotion.
-
-Group 3: raw-FPV stabilization track
-
-- Candidates: P, AA.
-- Purpose: make raw-FPV failures actionable and reduce repeated image context
-  before increasing budgets or attempting cleanup-pass claims.
-- Expected value: high for making raw-FPV bounded and informative; unknown for
-  cleanup success.
-- Test separately because: raw-FPV has a different success target in this pass:
-  classified diagnostic evidence, not label-lane cleanup pass.
-- Default proof: fewer repeated `visual_candidate_not_resolved` failures,
-  explicit retained/evicted image evidence, bounded context, and unchanged
-  report reviewability.
-
-Group 4: speculative or expensive orchestration
-
-- Candidates: D, C, K, E.
-- Purpose: measure per-arm cache/cost before racing, optionally race individual
-  SDK model calls, audit safe parallel tool-call policy, and consider broader
-  agent-visible state deltas after SDK-specific compaction is exhausted.
-- Expected value: potentially high but riskier and more expensive.
-- Test last by default because: racing can multiply provider cost/cache effects,
-  parallel tool calls can violate robot action ordering, and broad state deltas
-  can become public contract changes.
-- Default proof: Q must identify the target bucket as a top remaining reducible
-  source before this group runs. D is mandatory before C; K needs an explicit
-  read-only/stateful tool-order policy; E waits until I/N/AA are insufficient.
-
-Group 5: promotion and compatibility gates
-
-- Candidate: X.
-- Purpose: decide whether an opt-in/private MCP/profile-affecting speedup can
-  become default behavior.
-- Expected direct speedup: none. This is the safety gate for promotion.
-- Test only when needed: any M/N/O/P/E result that stays private does not need
-  public promotion. Default/public behavior requires cross-client proof and a
-  separate promotion decision.
-
-Simplification rules:
-
-- Treat E as the umbrella for state compaction; try concrete SDK/lane variants
-  I, N, and AA first.
-- Treat D as part of C, not a standalone live speed feature.
-- Treat X as a promotion gate, not a speed candidate.
-- Treat W/Y/S/T/U/V/R as flow infrastructure, not optimization arms.
-- Treat B/Z/Q as measurement and acceptance gates, not speed features.
-
-Candidate A: OpenAI Agents SDK skill parity
-
-- Severity: P1
-- Entropy source: live source drift and recurring rediscovery.
-- Materiality: The route names `molmo-realworld-cleanup` as a skill and the
-  kickoff prompt says to use the bundled skill, but the plain SDK runtime does
-  not actually mount or progressively disclose `SKILL.md` the way Codex/Claude
-  live routes do.
-- Why now: Further speed/quality work should not keep duplicating or compressing
-  skill rules into runner prompts if the canonical strategy already lives in
-  `skills/molmo-realworld-cleanup/`.
-- Impact radius: private `openai-agents-live` route, prompt construction, and
-  skill packaging.
-- Maintainer test: A reviewer should be able to answer "what skill instructions
-  did this SDK agent actually receive?" from artifacts without inferring it
-  from a hand-edited prompt fragment.
-- Affected paths:
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `roboclaws/agents/prompts/household_cleanup.py`,
-  `skills/molmo-realworld-cleanup/`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: `intuitive-reduce-entropy` for the preflight; normal
-  implementation or `openai-docs` if SDK/Sandbox capability details need fresh
-  confirmation.
-- Zen hint: one canonical skill source beats duplicated prompt memory.
-- Pattern hint: skill-pack adapter; keep strategy in skills and runtime wiring
-  in the driver.
-- Suggested proof: deterministic test showing the SDK kickoff context includes
-  a bounded, public-safe skill pack or explicit recorded limitation; no raw
-  private truth or full tool payloads are persisted. A live proof should compare
-  skill-pack mode against current compact prompt mode on at least one passing
-  label lane.
-- Execution risk: medium. Plain `Agent` prompt injection is low-risk but may
-  increase context; SandboxAgent skill capability may change runtime topology
-  and needs a separate decision.
-
-Candidate B: All provider/model x evidence-lane matrix
-
-- Severity: P1
-- Entropy source: false comparisons and incomplete coverage.
-- Materiality: Current evidence has GPT and MiMo label-lane runs, but raw-FPV
-  cleanup success remains out of scope and model/lane performance differs
-  materially. Future claims need a complete matrix instead of one-off lane
-  anecdotes.
-- Why now: The user direction is to support all evidence lanes for all relevant
-  models, then verify them as one group.
-- Impact radius: local live verification workflow, manifest schema, and
-  comparison summary.
-- Maintainer test: A maintainer should be able to see, for each model/provider
-  and evidence lane, whether the route passes, fails with classified evidence,
-  or is unsupported.
-- Affected paths:
-  `docs/status/active/agent-sdk-perf-opt-0610-comparison-manifest.json`,
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  future matrix manifest under `docs/status/active/`.
-- Owner skill: normal implementation after planning.
-- Zen hint: explicit matrix beats implicit provider preferences.
-- Pattern hint: test matrix manifest.
-- Suggested proof: manifest rows for GPT/codex-env and MiMo/mify across
-  `world-public-labels`, `camera-grounded-labels`, and `camera-raw-fpv`,
-  including pass/fail/classified terminal, elapsed time, `between_tool_gap_s`,
-  context/cache metrics, and checker result. Add Kimi/Claude-compatible rows
-  only after their route/provider support is explicitly available.
-- Execution risk: medium because it requires local provider-backed runs and
-  backend slot/time budget, but the code change can be docs/summarizer-only.
-
-Candidate C: Per-model-call racing inside the SDK model interface
-
-- Severity: P2 initially, P1 if matrix evidence shows provider tail latency is
-  the dominant remaining blocker.
-- Entropy source: unexplored latency tradeoff.
-- Materiality: The optimized label lanes still spend most wall-clock inside
-  model/SDK response-to-next-tool gaps. OpenAI Agents SDK exposes a replaceable
-  `Model.get_response(...)` interface, so a wrapper can race multiple provider
-  arms for one model call rather than launching two complete live runs.
-- Why now: This is the user's preferred racing granularity: one SDK model call
-  can be sent to multiple models asynchronously, and the first valid response
-  wins.
-- Impact radius: private SDK runtime/model adapter and telemetry.
-- Maintainer test: A reviewer should be able to tell whether racing reduced
-  wall-clock enough to justify extra provider/cache cost and whether loser arms
-  were cancelled safely.
-- Affected paths:
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `tests/unit/agents/test_live_runtime.py`,
-  `scripts/molmo_cleanup/summarize_live_run.py`.
-- Owner skill: `diagnose` for measurement shape, then normal implementation.
-- Zen hint: experiment at the exact bottleneck boundary, not at a coarser run
-  boundary.
-- Pattern hint: racing/decorator model adapter.
-- Suggested proof: deterministic fake-model test for a non-streaming
-  `RacingModel` wrapper where two arms receive the same sanitized model input,
-  the first schema-valid/MCP-legal response wins, loser cancellation is recorded,
-  and only the winner's response enters subsequent agent history. First live
-  proof should be opt-in and label-lane-only.
-- Execution risk: high enough to require explicit approval before live runs.
-  Loser requests may still be billable and may perturb provider-side prompt
-  cache behavior.
-
-Candidate D: Racing cache/cost observability
-
-- Severity: P1 if Candidate C is executed.
-- Entropy source: false confidence.
-- Materiality: Current cache metrics objectively measure single-arm runs, but
-  they do not say whether a cancelled loser arm consumed input tokens, cache
-  writes, or billable work.
-- Why now: The user explicitly called out cache miss/cost uncertainty for
-  multi-model racing.
-- Impact radius: telemetry V2, span/event artifacts, and comparison summaries.
-- Maintainer test: A racing experiment should never report "faster" without
-  also reporting known or unknown extra token/cache cost per arm.
-- Affected paths:
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: `diagnose`.
-- Zen hint: name the cost uncertainty instead of hiding it behind elapsed time.
-- Pattern hint: per-arm telemetry adapter.
-- Suggested proof: `live_timing.json` records per-arm fields such as
-  `arm_started_at`, `arm_finished_at`, `arm_cancelled_at`, `winner`,
-  `usage_available`, `input_tokens`, `cached_input_tokens`,
-  `uncached_input_tokens`, and `loser_billable_unknown`. Missing loser usage is
-  unavailable, never zero.
-- Execution risk: safe as observability, but should be bundled with Candidate C
-  if racing is implemented.
-
-Candidate E: Agent-visible state delta/compaction
-
-- Severity: P1 after skill parity/matrix, because it preserves MCP boundaries
-  while attacking context growth.
-- Entropy source: provider context pressure.
-- Materiality: Even optimized label-lane runs can reach max input sizes around
-  100k-144k tokens. This suggests repeated tool response state, not only the
-  kickoff prompt, is a remaining context driver.
-- Why now: The previous pass compacted kickoff and continuation prompts; the
-  next non-MCP-merge speed lever is reducing repeated agent-visible state.
-- Impact radius: MCP response shaping or SDK-side input filtering; report
-  artifacts must stay complete.
-- Maintainer test: The agent should see enough current public state to act, but
-  not keep re-reading large unchanged map/camera payloads every model call.
-- Affected paths:
-  `roboclaws/household/realworld_mcp_server.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `tests/unit/agents/test_live_runtime.py`,
-  report/checker tests if artifact boundaries change.
-- Owner skill: `diagnose` followed by normal implementation.
-- Zen hint: send deltas to the agent, keep full evidence in artifacts.
-- Pattern hint: state snapshot/delta adapter or SDK `call_model_input_filter`.
-- Suggested proof: fixture run or replay where repeated map/observation payload
-  bytes drop while `run_result.json`, `trace.jsonl`, and report evidence remain
-  complete. Do not hide private truth or add macro cleanup behavior.
-- Execution risk: medium. This touches the agent-visible contract and needs
-  checker/live proof.
-
-Candidate F: Selective visual artifact capture
-
-- Severity: P2.
-- Entropy source: real workflow friction.
-- Materiality: Optimized label runs still spend roughly 100-130s in
-  robot-view capture, which is a real wall-clock bucket separate from model
-  reasoning.
-- Why now: If model-side work is reduced further, report-only visual capture may
-  become a larger share of runtime.
-- Impact radius: visual backend/report artifact policy.
-- Maintainer test: Report artifacts should remain reviewable, but the live
-  agent should not wait on redundant report-only views when a smaller or reused
-  artifact would prove the same state.
-- Affected paths:
-  household visual backend/report code, cleanup runner visual flags, and report
-  checker tests.
-- Owner skill: normal implementation after matrix data confirms the benefit.
-- Zen hint: capture what proves the behavior, not every redundant view.
-- Pattern hint: artifact capture policy.
-- Suggested proof: A/B run with unchanged checker result and report
-  reviewability, plus lower `robot_view_capture_s`.
-- Execution risk: medium because it changes visual evidence density.
-
-Candidate G: SDK-native model settings performance profile
-
-- Severity: P1.
-- Entropy source: recurring rediscovery and unexplored SDK control surface.
-- Materiality: The current private SDK route builds an `OpenAIResponsesModel`
-  and passes only `max_turns` to `Runner.run`. Local inspection of the pinned
-  `openai-agents==0.17.4` package shows `RunConfig(model_settings=...)` and
-  `ModelSettings` support `verbosity`, `parallel_tool_calls`, `truncation`,
-  `max_tokens`, `reasoning`, `prompt_cache_retention`, `store`, and
-  `context_management`, but the current performance profile does not record or
-  vary those SDK-native knobs.
-- Why now: Optimized label-lane runs still made 72-78 response/model turns.
-  Before adding custom orchestration, the next low-risk pass should test
-  whether SDK/model settings can reduce output chatter, reasoning latency, or
-  context retention while preserving MCP `done` success.
-- Impact radius: private `openai-agents-live` route, performance profile
-  schema, and timing artifacts.
-- Maintainer test: A reviewer should be able to see the exact SDK model
-  settings used for a speed claim instead of guessing provider defaults.
-- Affected paths:
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `tests/unit/agents/test_live_runtime.py`,
-  `scripts/molmo_cleanup/summarize_live_run.py`.
-- Owner skill: normal implementation with `openai-docs` refresh if SDK option
-  semantics need confirmation beyond local signatures.
-- Zen hint: prefer explicit runtime knobs over implicit provider behavior.
-- Pattern hint: typed performance-profile adapter.
-- Suggested proof: deterministic test that profile settings produce a
-  `RunConfig`/`ModelSettings` payload and are persisted in `live_timing.json`;
-  A/B label-lane run with unchanged checker success comparing
-  `verbosity=low`, explicit `include_usage`, selected `reasoning` effort when
-  supported, and any provider-safe `max_tokens` cap.
-- Execution risk: medium. Some options are provider/model-specific and must
-  degrade to "unsupported/omitted" rather than silently altering behavior.
-
-Candidate H: Responses/session continuation instead of prompt replay
-
-- Severity: P1.
-- Entropy source: provider context pressure.
-- Materiality: The runner currently starts a fresh SDK invocation for
-  incomplete-turn recovery and either repeats the full prompt or sends a compact
-  continuation packet. Local SDK signatures expose `previous_response_id`,
-  `auto_previous_response_id`, `conversation_id`, and `session` on
-  `Runner.run`, which may let the provider/SDK carry prior state without the
-  runner replaying large prompt text.
-- Why now: Continuation prompt compaction helped, but context growth still
-  reaches large per-run maxima. SDK-native continuation is a narrower
-  experiment than changing MCP response shapes.
-- Impact radius: private SDK runtime, continuation policy, privacy boundary,
-  and artifact metadata.
-- Maintainer test: A reviewer should be able to tell whether a continuation
-  reused provider-side response/session state, what identifiers were persisted,
-  and whether no raw prompts/model text were written.
-- Affected paths:
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: `diagnose` for measurement, then normal implementation.
-- Zen hint: use the SDK's state primitive when it is clearer than re-sending
-  state manually.
-- Pattern hint: continuation strategy.
-- Suggested proof: fake Runner test covering `previous_response_id` or
-  `conversation_id` propagation across continuation attempts, plus live A/B
-  with `max_input_tokens`, `total_uncached_input_tokens`, completion/checker
-  status, and artifact privacy verified.
-- Execution risk: medium-high. Provider-side storage/session behavior may vary
-  and must remain private-route-only until privacy, retention, and replay
-  semantics are explicit.
-
-Candidate I: SDK `call_model_input_filter` state compaction
-
-- Severity: P1 after Candidate H/G, because it attacks repeated context without
-  changing the public MCP tool contract.
-- Entropy source: provider context pressure and live source drift.
-- Materiality: Candidate E names agent-visible state delta/compaction. The
-  lower-risk SDK-specific variant is to apply compaction at
-  `RunConfig.call_model_input_filter`, leaving MCP tool responses and report
-  artifacts complete while trimming only the model input carried into the next
-  response call.
-- Why now: Optimized runs still show large repeated input contexts, but the
-  repo direction is not to hide cleanup behind MCP merge tools.
-- Impact radius: private SDK runtime and tests; public MCP traces/reports should
-  remain unchanged.
-- Maintainer test: Full trace/report evidence should remain reviewable while
-  the next model call receives only the necessary current public state.
-- Affected paths:
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: `diagnose` followed by normal implementation.
-- Zen hint: compact at the model boundary, not at the evidence boundary.
-- Pattern hint: model-input filter pipeline.
-- Suggested proof: fixture test where synthetic repeated tool payloads are
-  reduced by the input filter, sensitive data is not introduced, and
-  `trace.jsonl`/`run_result.json` stay unchanged; live proof compares
-  `tool_response_bytes_total` vs `max_input_tokens` before/after.
-- Execution risk: medium. A too-aggressive filter can remove state the model
-  needs for ordering or recovery.
-
-Candidate J: Prompt cache retention and stable-prefix hardening
-
-- Severity: P2, or P1 if future matrix runs show high uncached input remains
-  the dominant cost.
-- Entropy source: cache/cost false confidence.
-- Materiality: Current cache metrics report observed cached tokens and a blank
-  `stable_prefix_hash`, but the profile does not explicitly control
-  `prompt_cache_retention` or prove that the stable prefix stays stable across
-  comparable runs. Racing or session experiments need a baseline cache story
-  first.
-- Why now: The user explicitly asked whether cache hint/miss behavior is
-  objective. Single-arm cache metrics are now objective, but stable-prefix
-  drift and explicit retention policy remain unmodeled.
-- Impact radius: prompt renderer, private SDK profile metadata, summarizer.
-- Maintainer test: A reviewer should be able to distinguish real cache miss
-  from changed prompt prefix or unavailable provider usage.
-- Affected paths:
-  `roboclaws/agents/prompts/household_cleanup.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: normal implementation.
-- Zen hint: measure the cache key surface instead of trusting anecdotes.
-- Pattern hint: stable-prefix fingerprint.
-- Suggested proof: persist a sanitized stable prefix hash, profile id,
-  `prompt_cache_retention` intent, and cache availability state; fixture proves
-  missing usage is unavailable, not zero, and A/B runs with the same prefix show
-  expected cache behavior.
-- Execution risk: safe if hashes are computed from public-safe prompt segments
-  and no raw prompt text is persisted.
-
-Candidate K: Parallel tool-call policy audit
-
-- Severity: P2.
-- Entropy source: unexplored SDK control surface with semantic-order risk.
-- Materiality: `ModelSettings.parallel_tool_calls` is available, and the mify
-  Codex recipe explicitly disables parallel tool calls for that provider. The
-  cleanup task is mostly stateful (`navigate -> observe -> pick -> place`), but
-  some calls such as early map/fixture reads may be independent. The risk and
-  benefit should be documented before enabling it globally.
-- Why now: Parallel tool calls are an obvious speed knob, but enabling them
-  without a task-order policy could corrupt robot semantics.
-- Impact radius: private SDK profile and safety tests.
-- Maintainer test: A reviewer should see which tools are safe to parallelize,
-  which are strictly sequential, and whether the provider/model supports the
-  setting.
-- Affected paths:
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `scripts/dev/coding_agent_env.sh`,
-  `tests/contract/dev_tools/test_task_agent_just_recipes.py`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: `plan-eng-review` before implementation because this touches
-  action ordering.
-- Zen hint: make ordering constraints explicit before asking for concurrency.
-- Pattern hint: capability/tool execution policy.
-- Suggested proof: policy table marking read-only MCP tools versus stateful
-  robot tools, deterministic test that mify remains disabled, and live proof
-  only if a constrained read-only parallelism mode exists.
-- Execution risk: medium-high. Default should remain sequential unless the
-  policy proves safety.
-
-Candidate L: Non-tool response and turn-count waste audit
-
-- Severity: P2.
-- Entropy source: hidden latency and model behavior drift.
-- Materiality: Optimized label lanes still make nearly one response span per
-  MCP tool call. If some response turns contain only progress text or defer a
-  tool call, `tool_choice`, output guardrails, or stricter SDK instructions may
-  cut latency without changing MCP tools. If no such turns exist, this candidate
-  should be closed as no-change evidence.
-- Why now: The remaining elapsed time is dominated by many response-to-next-tool
-  gaps; reducing unnecessary response turns is cheaper than racing models.
-- Impact radius: telemetry summarizer and private SDK profile.
-- Maintainer test: A maintainer should know whether the 72-78 response turns
-  are all necessary tool-selection turns or include avoidable text-only turns.
-- Affected paths:
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: `diagnose`.
-- Zen hint: count wasted turns before optimizing around them.
-- Pattern hint: turn classifier.
-- Suggested proof: sanitized span/event classifier reports response spans,
-  function/tool spans, terminal outputs, and avoidable text-only turn count
-  without persisting model text; only test `tool_choice`/guardrails if the audit
-  finds real waste.
-- Execution risk: safe as observability; behavior change needs live proof.
-
-Candidate M: Evidence-lane tool-surface pruning
-
-- Severity: P1 if tool-choice noise is confirmed, otherwise P2.
-- Entropy source: live source drift and model action entropy.
-- Materiality: `public_tool_names_for_profile(...)` currently returns the same
-  broad cleanup tool set regardless of evidence lane. Optimized traces show the
-  model still reaches tools that are irrelevant or marginal in a given lane:
-  world-label runs called `adjust_camera` 6-7 times with noop errors and GPT
-  world also called `inspect_visible_object`; MiMo world made one
-  `check_operator_messages` call even though no operator-message flow was part
-  of the run. A smaller lane-specific tool surface could reduce action search
-  and error recovery without hiding cleanup behind a macro tool.
-- Why now: After prompt compaction, the remaining latency is dominated by many
-  response-to-tool decisions. Reducing the available wrong choices is a direct
-  entropy reduction at the model/tool boundary.
-- Impact radius: private SDK route first, MCP profile metadata, and profile
-  tests if promoted beyond SDK experiments.
-- Maintainer test: For each evidence lane, a maintainer should know which tools
-  are intentionally exposed and which are unavailable because they cannot help
-  that lane.
-- Affected paths:
-  `roboclaws/household/realworld_mcp_backend.py`,
-  `roboclaws/mcp/profiles.py`,
-  `docs/human/mcp-skills-and-semantic-profiles.md`,
-  `tests/unit/agents/test_live_runtime.py`,
-  relevant MCP/profile contract tests.
-- Owner skill: `plan-eng-review` before implementation because this touches the
-  public capability surface.
-- Zen hint: fewer explicit tools beat a broad menu plus repeated prompt
-  warnings.
-- Pattern hint: capability allowlist by evidence-lane strategy.
-- Suggested proof: trace-derived before/after counts for irrelevant tool calls,
-  unit tests for lane-specific allowlists, and live label-lane A/B with
-  unchanged checker success and no new unknown-tool failures.
-- Execution risk: medium. Keep as private route/profile override until
-  Codex/Claude/OpenClaw behavior is checked.
-
-Candidate N: `metric_map` repeated-call delta contract
-
-- Severity: P1 if context growth remains the next blocker after SDK input
-  filtering; otherwise P2.
-- Entropy source: provider context pressure.
-- Materiality: Optimized world-label traces repeatedly pull a large
-  `metric_map`: GPT world called it 3 times for about 162 KB total with one
-  63 KB response; MiMo world called it 2 times for about 101 KB. The map is
-  mostly static, while the useful repeated state is visited-waypoint status,
-  current public anchors, and recent observed handles.
-- Why now: Candidate I can compact at the SDK model boundary. If this remains a
-  bottleneck, an explicit MCP-level map snapshot/delta contract would reduce
-  repeated agent-visible state for every client while keeping full artifacts in
-  `runtime_metric_map.json` and reports.
-- Impact radius: `metric_map` response shape, map/report artifacts, and agent
-  prompt guidance.
-- Maintainer test: A second `metric_map` call in the same run should not replay
-  unchanged large map payload unless the agent explicitly requests it.
-- Affected paths:
-  `roboclaws/household/realworld_contract.py`,
-  `roboclaws/household/realworld_mcp_server.py`,
-  `tests/unit/agents/test_live_runtime.py`,
-  map/report contract tests.
-- Owner skill: `diagnose` followed by normal implementation.
-- Zen hint: send the changed state, not the whole static map each time.
-- Pattern hint: snapshot plus delta/version token.
-- Suggested proof: unit fixture where repeated `metric_map` calls return a
-  public-safe revision/delta payload, full map evidence still persists to
-  artifacts, and live A/B shows lower `tool_response_bytes_total` and
-  `max_input_tokens`.
-- Execution risk: medium-high if made default. Prefer an opt-in
-  `metric_map_delta_v1` or SDK-profile mode until all clients are checked.
-
-Candidate O: Camera-grounded observe/label two-step collapse
-
-- Severity: P1.
-- Entropy source: avoidable tool round trips.
-- Materiality: Camera-grounded optimized traces show a mechanical pattern:
-  every useful `observe` is followed by `declare_visual_candidates` with only
-  `observation_id` so the configured camera labeler labels the frame. GPT
-  camera used 19 `observe` and 19 `declare_visual_candidates` calls; MiMo
-  camera used 18 observes and 19 declares, including one
-  `missing_raw_fpv_observation` error. This is not a cleanup macro; it is a
-  lane-local perception postprocessor.
-- Why now: Collapsing this two-step could remove many model/tool turns in the
-  lane with the least semantic risk, because the prompt already instructs the
-  model to call the labeler deterministically after each raw FPV observation.
-- Impact radius: camera-grounded evidence lane, observation response schema,
-  visual-grounding provenance, and report trace preservation.
-- Maintainer test: Camera-grounded runs should preserve labeler provenance and
-  reviewable image evidence while not requiring the model to issue a separate
-  deterministic labeler call after every observe.
-- Affected paths:
-  `roboclaws/household/realworld_mcp_server.py`,
-  `roboclaws/household/realworld_contract.py`,
-  camera-grounded report/checker tests, and SDK comparison summaries.
-- Owner skill: `diagnose` then normal implementation.
-- Zen hint: automate deterministic perception plumbing, keep robot behavior
-  explicit.
-- Pattern hint: lane-local postprocessor with trace-preserving virtual substep.
-- Suggested proof: camera-grounded A/B where tool calls and response spans drop
-  by the former declare count, checker still passes, and trace/report artifacts
-  still show visual-grounding pipeline evidence for each observation.
-- Execution risk: medium. Do not generalize to cleanup action chains; preserve
-  an explicit trace event or nested provenance for the auto-label step.
-
-Candidate P: Raw-FPV visual-candidate failure rails
-
-- Severity: P1 for raw-FPV lane work.
-- Entropy source: repeated failure and weak affordance contract.
-- Materiality: The final raw-FPV budgeted run exhausted turn budget after 40
-  model turns. Its trace shows 7 `navigate_to_visual_candidate` calls with 6
-  `visual_candidate_not_resolved` failures. The model is spending scarce turns
-  guessing regions/actions that the server cannot resolve.
-- Why now: Raw-FPV currently has classified budget evidence but no cleanup
-  success. Before increasing budgets or racing models, the lane needs tighter
-  public affordances for candidate region format, retry cooldown, failure
-  fingerprints, and next valid action.
-- Impact radius: raw-FPV prompt/rules, `navigate_to_visual_candidate` response
-  schema, budget classifier, and trace summary.
-- Maintainer test: A raw-FPV failure should teach the next model call exactly
-  which public candidate shape failed and how to avoid repeating it, without
-  adding structured object labels.
-- Affected paths:
-  `roboclaws/household/raw_fpv_guidance.py`,
-  `roboclaws/household/realworld_contract.py`,
-  `roboclaws/household/realworld_mcp_server.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  raw-FPV tests.
-- Owner skill: `diagnose`.
-- Zen hint: make failure feedback actionable instead of letting the model
-  rediscover invalid regions.
-- Pattern hint: failure-memory and affordance schema.
-- Suggested proof: raw-FPV fixture with repeated invalid visual candidates emits
-  compact failure fingerprints, retry limits, and schema hints; live proof
-  should show fewer repeated `visual_candidate_not_resolved` failures before
-  any larger budget increase is accepted.
-- Execution risk: medium. Keep raw-FPV unlabeled; do not silently convert it
-  into camera-grounded-labels.
-
-Candidate Q: Trace-derived irreducible floor and waste classifier
-
-- Severity: P1 for deciding the next optimization batch.
-- Entropy source: false optimization target.
-- Materiality: Current timing says where time was spent, but not which tool
-  calls were behaviorally necessary. A trace lower-bound analyzer can classify
-  calls into required sweep/navigation/manipulation, deterministic
-  lane-plumbing, repeated static-state reads, noop/error recovery, and optional
-  report-only capture. That would make future "extreme speedup" experiments
-  objective before changing behavior.
-- Why now: The optimized runs already expose enough trace data to separate
-  likely irreducible work from waste: e.g. 14 waypoint navigations and post-place
-  observes may be necessary, while repeated `metric_map`, noop
-  `adjust_camera`, and camera declare two-step calls are candidate waste.
-- Impact radius: summarizer/reporting only at first.
-- Maintainer test: Before implementing another speed feature, a maintainer
-  should see the estimated remaining floor and the largest reducible buckets.
-- Affected paths:
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `tests/unit/molmo_cleanup/test_summarize_live_run.py`,
-  `tests/unit/agents/test_live_runtime.py`.
-- Owner skill: `diagnose`.
-- Zen hint: measure the remaining floor before chasing another knob.
-- Pattern hint: trace classifier pipeline.
-- Suggested proof: offline analyzer over the 2026-06-10 artifacts that reports
-  required tool count, reducible tool count, repeated response bytes, error/noop
-  turns, lane-plumbing turns, and visual-capture wall-clock buckets without
-  reading private evaluator truth.
-- Execution risk: safe. Observability-only and can precede behavior changes.
-
-Candidate R: Unified Agent SDK experiment matrix runner
-
-- Severity: P1.
-- Entropy source: workflow drift and false comparisons.
-- Materiality: The current comparison manifest is hand-authored for a small set
-  of baseline/candidate pairs, while the next batch spans SDK settings,
-  continuation, model-input filtering, tool-surface pruning, lane-specific MCP
-  changes, raw-FPV rails, and optional racing. Without a single experiment
-  matrix contract, a "big flow" will produce incomparable output directories,
-  hidden env overrides, missing baselines, or unbounded live runs.
-- Why now: The user wants to try the directions later in one flow, so the flow
-  itself needs to become a first-class artifact before more speed changes land.
-- Impact radius: local-only live verification workflow, comparison manifest,
-  status artifacts, and summarizer.
-- Maintainer test: A maintainer should be able to inspect one manifest and know
-  every model, evidence lane, seed, candidate feature flag, baseline role,
-  output directory, and expected terminal condition before any provider call.
-- Affected paths:
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  future `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py`,
-  `docs/status/active/agent-sdk-*.json`,
-  `just/molmo.just` only if a private maintainer recipe is useful.
-- Owner skill: `diagnose` for matrix shape, then normal implementation.
-- Zen hint: one explicit matrix beats many shell-history experiments.
-- Pattern hint: experiment manifest runner.
-- Suggested proof: dry-run mode emits the full command/status manifest without
-  provider calls; execution mode refuses missing baseline/candidate rows,
-  duplicate output dirs, unsupported lane/model combos, and matrix entries with
-  no stop condition.
-- Execution risk: safe in dry-run; live execution needs explicit local approval
-  and budget caps.
-
-Candidate S: Feature-flag and interaction isolation contract
-
-- Severity: P1.
-- Entropy source: false attribution.
-- Materiality: Many candidates can interact. For example, `ModelSettings`,
-  session continuation, `call_model_input_filter`, tool pruning, metric-map
-  deltas, and camera auto-labeling can all reduce turns or context. If several
-  are enabled in one candidate run, the result may be faster but unexplainable.
-- Why now: The next pass should be able to run a large flow while still
-  attributing wins and regressions to one bounded direction at a time.
-- Impact radius: private performance profile schema, live timing metadata, and
-  comparison summary.
-- Maintainer test: Each candidate arm should record exactly which feature flags
-  were enabled and which earlier accepted arms it depends on.
-- Affected paths:
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  future matrix manifest, and summarizer tests.
-- Owner skill: normal implementation.
-- Zen hint: isolate one change before composing it.
-- Pattern hint: feature-flag strategy with dependency graph.
-- Suggested proof: `live_timing.json` persists `experiment_id`,
-  `candidate_ids`, `feature_flags`, `dependency_candidate_ids`, and
-  `profile_id`; summarizer rejects comparisons where candidate arms differ by
-  untracked flags.
-- Execution risk: safe. Mostly metadata, but it should block ambiguous live
-  comparisons.
-
-Candidate T: Offline replay and fake-provider preflight
-
-- Severity: P1.
-- Entropy source: real workflow friction and avoidable provider spend.
-- Materiality: Most candidate changes can be schema-tested before live calls:
-  trace classifiers can run on existing artifacts; tool-surface pruning can be
-  tested against recorded tool sequences; metric-map deltas can use fixtures;
-  SDK `RunConfig` settings and session continuation can use fake Runner/Model
-  objects. A big flow should not discover basic schema/privacy failures during
-  a paid live run.
-- Why now: Existing tests mock pieces of the SDK runner, but there is no single
-  preflight that replays the 2026-06-10 artifacts and validates the experiment
-  matrix without contacting providers.
-- Impact radius: tests, summarizer, and future experiment runner.
-- Maintainer test: Every live candidate arm should have a no-provider preflight
-  result before it is allowed into the live matrix.
-- Affected paths:
-  `tests/unit/agents/test_live_runtime.py`,
-  `tests/unit/molmo_cleanup/test_summarize_live_run.py`,
-  future replay fixtures under `tests/fixtures/` or synthesized temp artifacts.
-- Owner skill: `diagnose`.
-- Zen hint: fail fast on local evidence before spending live time.
-- Pattern hint: replay harness.
-- Suggested proof: replay existing sanitized trace/timing artifacts to produce
-  candidate Q metrics, exercise fake SDK settings/session/filter paths, and
-  write a preflight status row for each matrix candidate.
-- Execution risk: safe. No provider, no live backend.
-
-Candidate U: Artifact privacy and schema regression gate
-
-- Severity: P1.
-- Entropy source: false confidence at the trust boundary.
-- Materiality: The new candidates introduce more artifact fields: session IDs,
-  stable-prefix hashes, feature flags, racing arm telemetry, trace waste
-  classes, tool allowlists, and map delta revisions. Existing checks protect
-  many run-result and span paths, but a big flow needs one explicit gate that
-  scans all new experiment artifacts for raw prompts, model text, full tool
-  payload bodies, credentials, private evaluator truth, and full continuation
-  packets.
-- Why now: More observability is only useful if it does not erode the current
-  public/private boundary.
-- Impact radius: artifact writers, summarizer, checker tests, and matrix
-  publish step.
-- Maintainer test: A failed privacy gate should block comparison publication
-  even when the live run itself passed.
-- Affected paths:
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  future matrix runner,
-  `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`,
-  tests for SDK span/timing artifacts.
-- Owner skill: normal implementation.
-- Zen hint: make the trust boundary executable.
-- Pattern hint: artifact schema/privacy validator.
-- Suggested proof: fixtures with forbidden keys/content fail; allowed aggregate
-  timings, token counts, hashes, public ids, and sanitized session identifiers
-  pass.
-- Execution risk: safe and should precede live publication.
-
-Candidate V: Live-run cost, time, and concurrency budget gate
-
-- Severity: P1.
-- Entropy source: operational risk and unbounded experiment loops.
-- Materiality: A full provider/model x evidence-lane x candidate matrix can
-  quickly become expensive and can monopolize the MolmoSpaces backend slot.
-  Racing makes this worse because loser arms may still be billable. The flow
-  needs explicit max runs, max wall-clock, max response/model calls, context
-  hard limits, and optional token/cost estimates before execution.
-- Why now: The next task is intentionally one large validation flow. It should
-  stop safely instead of discovering cost limits through provider failures.
-- Impact radius: future experiment runner, live runner budget metadata, and
-  local operator workflow.
-- Maintainer test: A maintainer should know the maximum possible live spend and
-  wall-clock before starting the flow.
-- Affected paths:
-  future matrix runner,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `docs/status/active/live-agent-runtime-sdk-spike.md`.
-- Owner skill: `diagnose` for budgets, normal implementation for gates.
-- Zen hint: explicit budgets beat heroic live loops.
-- Pattern hint: budget policy/state machine.
-- Suggested proof: dry-run prints total planned runs, estimated wall-clock, max
-  turns, hard context budgets, and racing-arm multiplier; execution refuses to
-  run without acknowledged caps and stops after the first configured hard
-  failure class.
-- Execution risk: safe. It limits live work rather than expanding it.
-
-Candidate W: Variance and repeatability gate
-
-- Severity: P2 for planning, P1 before publishing a strong speed claim.
-- Entropy source: false performance confidence.
-- Materiality: Current speed evidence is mostly one run per provider/lane/seed.
-  Live model latency and action choices vary, so a one-off win can overstate a
-  speedup or hide a regression. The big flow needs repeat indexes or a small
-  paired-seed set before declaring a candidate accepted.
-- Why now: Once multiple optimization arms exist, reviewers need to know whether
-  a speedup survived repeated runs or is just a lucky sample.
-- Impact radius: experiment manifest, summarizer, and acceptance criteria.
-- Maintainer test: A "winner" row should show either repeated-run stability or
-  an explicit "single-run diagnostic only" label.
-- Affected paths:
-  future matrix runner,
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  `tests/unit/molmo_cleanup/test_summarize_live_run.py`.
-- Owner skill: `diagnose`.
-- Zen hint: label uncertainty instead of laundering it as certainty.
-- Pattern hint: paired experiment analysis.
-- Suggested proof: manifest supports `seed`, `repeat_index`, and aggregation
-  fields such as median elapsed, worst checker state, and p95 max input tokens;
-  single-run rows are reported as diagnostic-only.
-- Execution risk: medium because repeated live runs cost time/money; keep the
-  default repeat count small and opt-in.
-
-Candidate X: Cross-client regression guard for MCP/profile-affecting arms
-
-- Severity: P1 for Candidate M/N/O/P/E, P2 otherwise.
-- Entropy source: public contract drift.
-- Materiality: Several candidates touch MCP response shape, tool availability,
-  or evidence-lane behavior. `openai-agents-live` is private, but the same MCP
-  server supports direct, Codex, Claude, and OpenClaw-style clients. A speed win
-  in the SDK route should not silently break those clients.
-- Why now: Tool-surface pruning and map/observe response changes are tempting
-  speed wins, but they need compatibility staging.
-- Impact radius: MCP profile contracts, direct runs, Codex/Claude live routes,
-  and docs.
-- Maintainer test: Any MCP/profile-affecting optimization should say whether it
-  is SDK-private, opt-in profile-only, or safe for all clients.
-- Affected paths:
-  `roboclaws/household/realworld_mcp_backend.py`,
-  `roboclaws/household/realworld_mcp_server.py`,
-  `roboclaws/mcp/profiles.py`,
-  `just/molmo.just`,
-  relevant direct/Codex/Claude contract tests.
-- Owner skill: `plan-eng-review` before implementation.
-- Zen hint: private experiments must not blur into public contract changes.
-- Pattern hint: compatibility adapter or opt-in capability profile.
-- Suggested proof: direct smoke/contract tests pass for default profiles; SDK
-  private profile can narrow tools or responses without changing default
-  Codex/Claude/OpenClaw behavior; docs label promotion criteria.
-- Execution risk: medium-high for default MCP changes. Stage as private/opt-in
-  until cross-client proof passes.
-
-Candidate Y: Decision dashboard and acceptance packet
-
-- Severity: P2, but required for a large combined validation flow.
-- Entropy source: recurring rediscovery and buried evidence.
-- Materiality: After a big flow, raw artifacts will be spread across output
-  dirs, live_timing files, traces, checker logs, and reports. Without a compact
-  decision packet, the team will have to rediscover which candidates won,
-  regressed, were inconclusive, or were blocked by budget/privacy gates.
-- Why now: The plan is explicitly to try the directions later in one big flow,
-  so the closeout artifact should be designed before the flow starts.
-- Impact radius: summarizer/report generation and active status docs.
-- Maintainer test: One generated report should answer "what should we implement
-  or keep next?" without reading every run directory.
-- Affected paths:
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  future matrix runner,
-  `docs/status/active/live-agent-runtime-sdk-spike.md`.
-- Owner skill: normal implementation.
-- Zen hint: make the decision obvious from one artifact.
-- Pattern hint: decision report.
-- Suggested proof: generated markdown or JSON report with candidate id, status
-  (`accepted`, `rejected`, `inconclusive`, `blocked`), speed/cost/context
-  deltas, checker state, privacy gate state, and artifact links.
-- Execution risk: safe. Reporting-only.
-
-Candidate Z: Behavior-quality regression comparator
-
-- Severity: P1.
-- Entropy source: false confidence.
-- Materiality: Speed improvements can preserve `done` and still degrade the run:
-  fewer restored objects, lower semantic acceptability, more disturbances,
-  earlier premature-done patterns, more failed/noop tools, or weaker evidence
-  density. The existing checker is the hard gate, but the big flow also needs a
-  quality comparator so "faster" does not silently mean "worse but still
-  passing."
-- Why now: The user explicitly wants to know that behavior and results have not
-  degraded while runtime improves.
-- Impact radius: comparison summarizer, decision dashboard, and acceptance
-  criteria.
-- Maintainer test: Every accepted speedup should show the quality metrics that
-  stayed equal or improved, plus any tolerated tradeoff.
-- Affected paths:
-  `scripts/molmo_cleanup/summarize_live_run.py`,
-  future matrix runner,
-  `scripts/molmo_cleanup/check_molmo_realworld_cleanup_result.py`,
-  `tests/unit/molmo_cleanup/test_summarize_live_run.py`.
-- Owner skill: `diagnose`.
-- Zen hint: success should mean same-or-better behavior, not just lower time.
-- Pattern hint: behavioral comparator.
-- Suggested proof: comparison rows include restored count/rate, semantic
-  accepted count, sweep coverage, disturbance count, premature-done flag,
-  failed/noop tool count, raw-FPV classified terminal state, and report artifact
-  presence; accepted candidates cannot regress configured quality thresholds.
-- Execution risk: safe. Reporting/gating only.
-
-Candidate AA: Raw-FPV image-memory and multiresolution policy
-
-- Severity: P1 for any attempt to make raw-FPV pass cleanup gates.
-- Entropy source: provider context pressure and visual search entropy.
-- Materiality: Raw-FPV runs carry image evidence through the model context and
-  the latest budgeted run still consumed about 1.58M total input tokens over 40
-  response spans before classified turn-budget exhaustion. Candidate P improves
-  failure feedback, but raw-FPV also needs a policy for when full images, compact
-  state, thumbnails, crops, or image references remain in the model history.
-- Why now: Raising raw-FPV budgets or racing models without reducing repeated
-  image context will likely spend more tokens without making cleanup reliable.
-- Impact radius: raw-FPV observe response shape, SDK model-input filtering,
-  report artifacts, and raw-FPV prompt guidance.
-- Maintainer test: The agent should keep enough visual evidence to act, but
-  stale full-frame images should not be replayed into every future model call.
-- Affected paths:
-  `roboclaws/household/realworld_mcp_server.py`,
-  `roboclaws/household/raw_fpv_guidance.py`,
-  `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py`,
-  `roboclaws/agents/drivers/openai_agents_live.py`,
-  raw-FPV tests.
-- Owner skill: `diagnose` followed by normal implementation.
-- Zen hint: keep the visual proof in artifacts, send the model the smallest
-  current image evidence that can support the next action.
-- Pattern hint: image-memory policy with thumbnail/crop ladder.
-- Suggested proof: raw-FPV fixture and live diagnostic report image count,
-  image bytes/tokens when available, retained-image ids, evicted-image ids,
-  crop/thumbnail requests, candidate success/failure counts, and unchanged
-  report reviewability.
-- Execution risk: medium-high. Must not relabel raw-FPV as structured
-  camera-grounded evidence, and must not drop image proof from artifacts.
-
-#### Unified Big-Flow Validation Contract
-
-Use this contract when the follow-up candidates are ready to run as one larger
-flow. The flow should still execute in staged arms; "big" means one planned
-matrix and one decision packet, not one un-attributed mega-change.
-
-Foundation gates before live runs:
-
-1. Build Candidate R's manifest runner in dry-run mode.
-2. Add Candidate S feature-flag/dependency metadata and require it in
-   `live_timing.json`.
-3. Run Candidate T offline replay/fake-provider preflight for every candidate
-   arm in the matrix.
-4. Run Candidate U privacy/schema gate on synthetic and replayed artifacts.
-5. Apply Candidate V budgets: max live runs, max wall-clock, context hard
-   limits, default `concurrency=1`, default racing disabled, and any
-   racing-arm multiplier.
-6. Apply Candidate W repeat policy: the first unified matrix is diagnostic by
-   default; accepted/publishable speedup claims require a repeat or paired
-   validation pass for the winning row.
-7. Add Candidate Z behavior-quality thresholds before accepting any speed win.
-
-Recommended live matrix stages:
-
-1. Baseline refresh: Candidate B across GPT/codex-env and MiMo/mify x evidence
-   lane, with old artifacts clearly labeled as historical baselines when not
-   rerun. Kimi/Claude rows remain unsupported or blocked until route/provider
-   support exists.
-2. Low-risk SDK knobs: Candidate G and Candidate J.
-3. SDK state/context controls: Candidate H and Candidate I.
-4. Turn and tool entropy: Candidate L and Candidate M.
-5. Lane-specific reductions: Candidate O for camera-grounded, Candidate N for
-   repeated map state, and Candidate P plus Candidate AA for raw-FPV.
-6. Visual/report-time reduction: Candidate F only if Q shows capture is a
-   dominant remaining bucket.
-7. Racing: Candidate D first, then Candidate C only when a matrix row proves
-   provider tail latency is worth the extra cost/cache risk.
-8. Parallel tool calls: Candidate K only after a tool-order policy is reviewed.
-
-Acceptance gates for any candidate arm:
-
-- `done`/`run_result.json` remains the cleanup success signal.
-- Checker-visible behavior does not regress on label lanes.
-- Candidate Z quality metrics do not regress beyond configured thresholds:
-  restored count/rate, semantic accepted count, sweep coverage, disturbance
-  count, premature-done flag, failed/noop tool count, raw-FPV terminal
-  classification, and report artifact presence.
-- Same-or-better quality is the default acceptance policy. Faster but
-  lower-quality runs are rejected unless the decision packet names an explicit
-  waiver.
-- Raw-FPV may be accepted only as classified diagnostic evidence unless the
-  lane explicitly passes cleanup gates.
-- No raw prompts, model text, full tool payload bodies, credentials, private
-  evaluator truth, or full compact continuation packets are persisted.
-- Any MCP/profile-affecting change has Candidate X cross-client proof or stays
-  SDK-private or opt-in.
-- The decision packet from Candidate Y records accepted, rejected,
-  inconclusive, and blocked arms with artifact links.
-
-Stop conditions:
-
-- Stop before live execution if dry-run manifest, offline replay, or privacy
-  gate fails.
-- Stop a candidate arm after a checker regression, context hard-limit breach,
-  unclassified provider failure, or budget exhaustion.
-- Stop a speed-acceptance claim when Candidate Z shows behavior-quality
-  regression, even if elapsed time improved.
-- Stop the loop when Candidate Q shows the remaining reducible bucket is smaller
-  than the cost/risk of the next change, or when remaining ideas are only
-  wording/profile polish.
-
-Preliminary ordering for a future unified validation pass:
-
-1. Group 0 foundation: R, S, T, U, V, W, Y, B, Z, and Q. This creates the dry
-   run matrix, feature-flag attribution, offline preflight, privacy gate, budget
-   gate, repeat policy, decision packet, provider/lane baselines,
-   behavior-quality comparator, and trace-derived reducible-bucket report.
-2. Group 1 private SDK levers: A, G, J, H, I, and L. This is the first real
-   speed pass because it targets skill drift, explicit SDK settings, cache
-   evidence, continuation, model-input compaction, and avoidable text-only turns
-   without changing default MCP/profile behavior.
-3. Group 2 lane-specific reductions: O, then M/N as indicated by Q/I, then F
-   only if visual capture is still a dominant wall-clock bucket. These remain
-   SDK-private or opt-in until cross-client proof exists.
-4. Group 3 raw-FPV stabilization: P and AA. This runs on the raw-FPV diagnostic
-   track before any budget increase, racing, or cleanup-pass claim.
-5. Group 4 speculative/expensive orchestration: D before C, K only after a
-   read-only/stateful tool-order policy, and E only if the concrete compaction
-   variants I/N/AA are insufficient.
-6. Group 5 promotion gate: X before any MCP/profile-affecting result is
-   promoted beyond private/opt-in behavior.
-
-Explicit non-goal for this follow-up batch:
-
-- Do not add or promote MCP composite cleanup tools by default. Revisit MCP
-  promotion only if multiple skills need the same stable composition, the
-  public IO is clear, trace/report artifacts preserve the semantic substeps,
-  and measured live performance proves skill-side composition is no longer good
-  enough for cross-client use.
+#### Post-Optimization Perf Follow-ups
+
+The post-optimization A-AA candidate set has moved to
+`docs/plans/live-agent-runtime-sdk-perf-followups.md`.
+
+This spike document keeps the completed runtime, observability, performance
+optimization, and Group 0 foundation record. Future provider-backed matrix work,
+Group 1-5 optimization attempts, and publishable speedup decisions belong in the
+perf follow-up document.
+
+Current boundary:
+
+- Completed here: SDK runtime spike, Observability V1, model-service fallback,
+  first performance optimization pass, and Group 0 no-provider foundation.
+- Not completed here: full live provider/model x evidence-lane matrix, A-AA
+  follow-up optimization groups, raw-FPV cleanup-pass work, racing, and public
+  route promotion.
+- Live provider-backed matrix rows still require explicit approval, budget
+  acknowledgement, credentials/backend availability, and `just dev::network-status`.
 
 ### Execution Preflight: Agent SDK Unified Speedup Foundation
 
-Preflight status: DRAFT
+Preflight status: IMPLEMENTED on 2026-06-10.
 
-Task source: user request plus the Post-Optimization Reduce-Entropy Batch in
-this file.
+Task source: user request plus the post-optimization perf follow-up batch now
+tracked in `docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`.
 
@@ -2833,6 +1835,35 @@ Goal: implement the Group 0 foundation for the unified Agent SDK speedup
 validation flow, so later speed candidates can be tried in priority order with
 bounded cost, privacy gates, comparable metrics, and clear acceptance
 decisions.
+
+Implementation evidence:
+
+- Added `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py` as a no-provider
+  matrix runner for Group 0 dry-run, offline preflight, artifact privacy scan,
+  behavior-quality comparison, reducible-bucket recommendations, and decision
+  packet generation.
+- This implementation completes only the Group 0 foundation/preflight. It does
+  not complete the later live provider/model x evidence-lane performance
+  matrix, does not execute provider-backed matrix rows, and does not create a
+  publishable speedup claim.
+- Added the deterministic manifest
+  `docs/status/active/agent-sdk-speedup-foundation-matrix.json`. It uses
+  committed fake-provider fixtures under
+  `tests/fixtures/agent_sdk_speedup_foundation/`, plans zero provider calls,
+  and records unsupported Kimi/Claude-compatible rows as `unsupported` rather
+  than blocking the no-provider gate.
+- Hardened future OpenAI Agents SDK result artifacts by redacting raw
+  `final_output` text and SDK `last_agent` reprs from
+  `openai-agents-events*.jsonl` / `openai-agents-trace*.json`; summaries keep
+  only presence/length, usage, trace/session metadata, and public agent
+  identifiers.
+- Dry-run proof:
+  `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
+  listed 7 rows, 5 supported rows, 2 unsupported rows, serial concurrency,
+  `max_live_runs=0`, `max_wall_clock_s=0`, and no planned provider calls.
+- Offline preflight proof:
+  `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+  passed with 5 accepted fixture-backed rows and 2 unsupported rows.
 
 Scope:
 
@@ -3203,3 +2234,13 @@ preflight. To start durable execution from the main session, use the exact
   `max_input_tokens=67040` under the 96k hard limit,
   `context_window_failure_detected=false`, 40 response spans, and no
   `run_result.json` as expected for this safety-only phase.
+- 2026-06-10: Completed the Agent SDK model-service fallback prerequisite.
+  `openai-agents-live` now wraps SDK model requests in a bounded retry layer
+  for classified transient model-service failures, defaults to one same-provider
+  retry, persists sanitized fallback evidence in event/span artifacts, and
+  summarizes fallback attempts in `live_timing.json` and
+  `timeline.latency_attribution`. Focused verification passed:
+  `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`,
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`,
+  `./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_molmo_cleanup_report.py`,
+  and `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`.

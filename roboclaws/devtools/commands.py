@@ -1,44 +1,30 @@
-"""Compatibility adapter for the public Just facade.
-
-The root Justfile historically called this module. Public CLI parsing now lives
-in :mod:`roboclaws.cli`, while this module keeps import-compatible helpers for
-tests and older local scripts.
-"""
+"""Compatibility adapter for the public Just facade."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from roboclaws.cli.main import main
-from roboclaws.cli.task_run import surface_run_main, task_run_main
+from roboclaws.cli.task_run import surface_run_main
 from roboclaws.launch.catalog import (
-    CANONICAL_DRIVERS,
+    CANONICAL_AGENT_ENGINES,
     CANONICAL_INTENTS,
     CANONICAL_SURFACES,
-    CANONICAL_TASKS,
-    LEGACY_TASK_ALIASES,
-    SUPPORTED_ROUTES,
     SUPPORTED_SURFACE_ROUTES,
     LaunchError,
     resolve_surface_launch,
-    resolve_task_launch,
 )
 
 __all__ = [
-    "CANONICAL_DRIVERS",
+    "CANONICAL_AGENT_ENGINES",
     "CANONICAL_INTENTS",
     "CANONICAL_SURFACES",
-    "CANONICAL_TASKS",
-    "LEGACY_TASK_ALIASES",
     "SUPPORTED_SURFACE_ROUTES",
-    "SUPPORTED_ROUTES",
     "CommandError",
     "ResolvedCommand",
     "main",
     "resolve_surface_run",
-    "resolve_task_run",
     "surface_run_main",
-    "task_run_main",
 ]
 
 
@@ -51,26 +37,12 @@ class ResolvedCommand:
     """A command ready to execute."""
 
     argv: tuple[str, ...]
-    task: str
-    driver: str
+    world: str
+    backend: str
+    agent_engine: str
+    provider_profile: str | None
     mode: str
     overrides: tuple[str, ...]
-
-
-def resolve_task_run(args: list[str] | tuple[str, ...]) -> ResolvedCommand:
-    """Resolve `just task::run ...` arguments to the next Just command."""
-
-    try:
-        plan = resolve_task_launch(args)
-    except LaunchError as exc:
-        raise CommandError(str(exc), exc.hint) from exc
-    return ResolvedCommand(
-        argv=plan.argv,
-        task=plan.task,
-        driver=plan.driver,
-        mode=plan.mode,
-        overrides=plan.overrides,
-    )
 
 
 def resolve_surface_run(args: list[str] | tuple[str, ...]) -> ResolvedCommand:
@@ -82,8 +54,10 @@ def resolve_surface_run(args: list[str] | tuple[str, ...]) -> ResolvedCommand:
         raise CommandError(str(exc), exc.hint) from exc
     return ResolvedCommand(
         argv=plan.argv,
-        task=plan.task,
-        driver=plan.driver,
+        world=plan.world,
+        backend=plan.backend,
+        agent_engine=plan.agent_engine,
+        provider_profile=plan.provider_profile,
         mode=plan.mode,
         overrides=plan.overrides,
     )

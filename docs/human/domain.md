@@ -8,15 +8,15 @@ details belong in `.planning/`, `docs/adr/`, and `docs/retrospectives/`.
 
 ## Core Language
 
-**Environment Setup**:
+**Scenario Setup**:
 A private pre-run world initialization choice that prepares the room before a
 task starts. It can be `baseline` or a relocation setup, and it is independent
 of task intent and evaluation policy.
 _Avoid_: task intent, cleanup scenario, Agent View context
 
 **Relocation Policy**:
-An Environment Setup mode that moves eligible loose or cleanup-related objects
-before the run starts. The Cleanup Agent is not told the policy, object IDs, or
+A Scenario Setup mode that moves eligible loose or cleanup-related objects before
+the run starts. The Cleanup Agent is not told the policy, object IDs, or
 before/after locations.
 _Avoid_: public mess generator, cleanup worklist, private scoring truth
 
@@ -159,7 +159,7 @@ _Avoid_: assuming object assets imply usable cached grasps
 
 ## Relationships
 
-- **Environment Setup** prepares the room before the **Cleanup Agent** starts.
+- **Scenario Setup** prepares the room before the **Cleanup Agent** starts.
 - A **Cleanup Agent** must not receive the **Private Scoring Truth**, hidden
   relocated-object list, or target count.
 - A **Scorer** may use the **Private Scoring Truth** only after the run ends.

@@ -8,7 +8,7 @@ GAME_TASK_SPECS: dict[str, TaskSurfaceSpec] = {
     "ai2thor-games": TaskSurfaceSpec(
         surface_id="ai2thor-games",
         domain="games",
-        supported_drivers=("openclaw", "vlm", "script"),
+        supported_dispatch_runners=("openclaw", "vlm", "script"),
         supported_intents=("territory", "coverage"),
         default_intent="coverage",
         supported_reports=("visual", "minimal"),

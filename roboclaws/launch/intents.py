@@ -11,8 +11,8 @@ class TaskIntentSpec:
 
     intent_id: str
     surface_ids: tuple[str, ...]
-    supported_drivers: tuple[str, ...]
-    lower_task: str
+    supported_dispatch_runners: tuple[str, ...]
+    dispatch_target: str
     prompt_id: str
     checker_id: str
     default_goal_scope: str
@@ -32,8 +32,15 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "cleanup": TaskIntentSpec(
         intent_id="cleanup",
         surface_ids=("household-world",),
-        supported_drivers=("direct", "mcp-smoke", "codex", "claude", "openclaw"),
-        lower_task="household-cleanup",
+        supported_dispatch_runners=(
+            "direct",
+            "mcp-smoke",
+            "codex",
+            "claude",
+            "openai-agents-live",
+            "openclaw",
+        ),
+        dispatch_target="household-world.cleanup",
         prompt_id="household_cleanup",
         checker_id="cleanup_report",
         default_goal_scope=GOAL_SCOPE_WHOLE_ROOM,
@@ -51,8 +58,8 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "map-build": TaskIntentSpec(
         intent_id="map-build",
         surface_ids=("household-world",),
-        supported_drivers=("direct", "codex"),
-        lower_task="semantic-map-build",
+        supported_dispatch_runners=("direct", "codex"),
+        dispatch_target="household-world.map-build",
         prompt_id="semantic_map_build",
         checker_id="runtime_metric_map",
         default_goal_scope=GOAL_SCOPE_WHOLE_ROOM,
@@ -72,8 +79,8 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "open-ended": TaskIntentSpec(
         intent_id="open-ended",
         surface_ids=("household-world",),
-        supported_drivers=("mcp-smoke", "codex", "claude"),
-        lower_task="household-cleanup",
+        supported_dispatch_runners=("mcp-smoke", "codex", "claude"),
+        dispatch_target="household-world.open-ended",
         prompt_id="household_open_ended",
         checker_id="open_ended_report",
         default_goal_scope=GOAL_SCOPE_AGENT_DECLARED,
@@ -87,8 +94,8 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "navigate": TaskIntentSpec(
         intent_id="navigate",
         surface_ids=("ai2thor-world",),
-        supported_drivers=("openclaw", "codex", "claude"),
-        lower_task="ai2thor-nav",
+        supported_dispatch_runners=("openclaw", "codex", "claude"),
+        dispatch_target="ai2thor-world.navigate",
         prompt_id="ai2thor_nav",
         checker_id="ai2thor_nav_report",
         default_goal_scope=GOAL_SCOPE_AGENT_DECLARED,
@@ -102,8 +109,8 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "photo-capture": TaskIntentSpec(
         intent_id="photo-capture",
         surface_ids=("ai2thor-world",),
-        supported_drivers=("openclaw", "codex", "claude"),
-        lower_task="photo-chairs",
+        supported_dispatch_runners=("openclaw", "codex", "claude"),
+        dispatch_target="ai2thor-world.photo-capture",
         prompt_id="photo_chairs",
         checker_id="photo_report",
         default_goal_scope=GOAL_SCOPE_AGENT_DECLARED,
@@ -117,8 +124,8 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "territory": TaskIntentSpec(
         intent_id="territory",
         surface_ids=("ai2thor-games",),
-        supported_drivers=("openclaw", "vlm", "script"),
-        lower_task="territory",
+        supported_dispatch_runners=("openclaw", "vlm", "script"),
+        dispatch_target="ai2thor-games.territory",
         prompt_id="territory_game",
         checker_id="territory_report",
         default_goal_scope=GOAL_SCOPE_AGENT_DECLARED,
@@ -132,8 +139,8 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "coverage": TaskIntentSpec(
         intent_id="coverage",
         surface_ids=("ai2thor-games",),
-        supported_drivers=("openclaw", "vlm", "script"),
-        lower_task="coverage",
+        supported_dispatch_runners=("openclaw", "vlm", "script"),
+        dispatch_target="ai2thor-games.coverage",
         prompt_id="coverage_game",
         checker_id="coverage_report",
         default_goal_scope=GOAL_SCOPE_AGENT_DECLARED,
@@ -147,8 +154,8 @@ TASK_INTENT_SPECS: dict[str, TaskIntentSpec] = {
     "planner-proof": TaskIntentSpec(
         intent_id="planner-proof",
         surface_ids=("planner-proof",),
-        supported_drivers=("direct", "script", "mcp-smoke"),
-        lower_task="molmo-planner-proof",
+        supported_dispatch_runners=("direct", "script", "mcp-smoke"),
+        dispatch_target="planner-proof.planner-proof",
         prompt_id="molmo_planner_proof",
         checker_id="planner_proof_report",
         default_goal_scope=GOAL_SCOPE_AGENT_DECLARED,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
@@ -13,6 +14,10 @@ from roboclaws.agents.live_status import LiveAgentFailure
 
 DEFAULT_OPENAI_AGENTS_MAX_TURNS = 128
 MCP_CLIENT_SESSION_TIMEOUT_ENV = "ROBOCLAWS_OPENAI_AGENTS_MCP_CLIENT_SESSION_TIMEOUT_S"
+DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS = 1
+DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S = 1.0
+MODEL_SERVICE_RETRY_ATTEMPTS_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_ATTEMPTS"
+MODEL_SERVICE_RETRY_SLEEP_ENV = "ROBOCLAWS_OPENAI_AGENTS_MODEL_SERVICE_RETRY_SLEEP_S"
 
 
 class OpenAIAgentsLiveRuntime(LiveAgentRuntime):
@@ -274,6 +279,7 @@ def _runtime_config(
     mcp_client_session_timeout_configured: bool,
     mcp_client_session_timeout_s: float | None,
 ) -> dict[str, Any]:
+    model_retry = _model_service_retry_config(request)
     return {
         "runtime": "openai-agents-live",
         "provider_profile": request.provider_profile,
@@ -287,6 +293,8 @@ def _runtime_config(
         },
         "mcp_client_session_timeout_configured": mcp_client_session_timeout_configured,
         "mcp_client_session_timeout_s": mcp_client_session_timeout_s,
+        "model_service_retry_attempts": model_retry["retry_attempts"],
+        "model_service_retry_sleep_s": model_retry["retry_sleep_s"],
     }
 
 
@@ -326,11 +334,24 @@ def _classify_tool_error(message: str) -> str:
 
 def _summarize_sdk_result(result: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {}
-    for attr in ("final_output", "last_agent", "trace_id"):
-        value = getattr(result, attr, None)
-        if value is None:
-            continue
-        payload[attr] = str(value)
+    final_output = getattr(result, "final_output", None)
+    if final_output is not None:
+        final_output_text = str(final_output)
+        payload["final_output_present"] = True
+        payload["final_output_chars"] = len(final_output_text)
+        payload["message"] = (
+            "OpenAI Agents SDK result captured; assistant output redacted by "
+            "artifact privacy policy."
+        )
+    last_agent = getattr(result, "last_agent", None)
+    if last_agent is not None:
+        name = getattr(last_agent, "name", None)
+        if name:
+            payload["last_agent_name"] = str(name)
+        payload["last_agent_class"] = last_agent.__class__.__name__
+    trace_id = getattr(result, "trace_id", None)
+    if trace_id is not None:
+        payload["trace_id"] = str(trace_id)
     usage = getattr(result, "usage", None)
     if usage is not None:
         payload["usage"] = _to_jsonable(usage)
@@ -562,7 +583,338 @@ def _responses_model(request: LiveAgentRequest) -> Any:
         api_key=settings["api_key"],
         base_url=settings["base_url"],
     )
-    return OpenAIResponsesModel(settings["model"], openai_client=client)
+    base_model = OpenAIResponsesModel(settings["model"], openai_client=client)
+    retry_config = _model_service_retry_config(request)
+    if retry_config["retry_attempts"] <= 0:
+        return base_model
+    return _RetryingModel(
+        base_model,
+        retry_attempts=int(retry_config["retry_attempts"]),
+        retry_sleep_s=float(retry_config["retry_sleep_s"]),
+        events_path=request.artifact_path("openai_agents_events", "openai-agents-events.jsonl"),
+        spans_path=request.artifact_path("openai_agents_spans", "openai-agents-spans.jsonl"),
+        runtime_config=_runtime_config(
+            request,
+            mcp_client_session_timeout_configured=_mcp_client_session_timeout_seconds(request)[0],
+            mcp_client_session_timeout_s=_mcp_client_session_timeout_seconds(request)[1],
+        ),
+    )
+
+
+def _model_service_retry_config(request: LiveAgentRequest) -> dict[str, int | float]:
+    metadata = dict(request.metadata)
+    attempts = _non_negative_int(
+        metadata.get("model_service_retry_attempts"),
+        env_name=MODEL_SERVICE_RETRY_ATTEMPTS_ENV,
+        default=DEFAULT_MODEL_SERVICE_RETRY_ATTEMPTS,
+    )
+    sleep_s = _non_negative_float(
+        metadata.get("model_service_retry_sleep_s"),
+        env_name=MODEL_SERVICE_RETRY_SLEEP_ENV,
+        default=DEFAULT_MODEL_SERVICE_RETRY_SLEEP_S,
+    )
+    return {"retry_attempts": attempts, "retry_sleep_s": sleep_s}
+
+
+class _RetryingModel:
+    """Retry transient provider failures at the SDK model request boundary."""
+
+    def __init__(
+        self,
+        base_model: Any,
+        *,
+        retry_attempts: int,
+        retry_sleep_s: float,
+        events_path: Path,
+        spans_path: Path,
+        runtime_config: dict[str, Any],
+    ) -> None:
+        self.base_model = base_model
+        self.retry_attempts = max(0, retry_attempts)
+        self.retry_sleep_s = max(0.0, retry_sleep_s)
+        self.events_path = events_path
+        self.spans_path = spans_path
+        self.runtime_config = dict(runtime_config)
+
+    async def close(self) -> None:
+        close = getattr(self.base_model, "close", None)
+        if close is None:
+            return None
+        result = close()
+        if hasattr(result, "__await__"):
+            await result
+        return None
+
+    def get_retry_advice(self, request: Any) -> Any:
+        get_retry_advice = getattr(self.base_model, "get_retry_advice", None)
+        if get_retry_advice is None:
+            return None
+        return get_retry_advice(request)
+
+    async def get_response(
+        self,
+        system_instructions: str | None,
+        input: Any,
+        model_settings: Any,
+        tools: list[Any],
+        output_schema: Any,
+        handoffs: list[Any],
+        tracing: Any,
+        *,
+        previous_response_id: str | None,
+        conversation_id: str | None,
+        prompt: Any,
+    ) -> Any:
+        attempt_index = 0
+        while True:
+            started = time.time()
+            _append_model_service_event(
+                self.events_path,
+                self.spans_path,
+                "model_service_attempt",
+                runtime_config=self.runtime_config,
+                attempt_index=attempt_index,
+                retry_budget=self.retry_attempts,
+                method="get_response",
+            )
+            try:
+                result = await self.base_model.get_response(
+                    system_instructions,
+                    input,
+                    model_settings,
+                    tools,
+                    output_schema,
+                    handoffs,
+                    tracing,
+                    previous_response_id=previous_response_id,
+                    conversation_id=conversation_id,
+                    prompt=prompt,
+                )
+            except Exception as exc:
+                should_retry, failure = _should_retry_model_service_failure(
+                    exc,
+                    attempt_index=attempt_index,
+                    retry_attempts=self.retry_attempts,
+                )
+                _append_model_service_failure_events(
+                    self.events_path,
+                    self.spans_path,
+                    runtime_config=self.runtime_config,
+                    attempt_index=attempt_index,
+                    retry_budget=self.retry_attempts,
+                    method="get_response",
+                    started_at=started,
+                    failure=failure,
+                    will_retry=should_retry,
+                    retry_delay_s=self.retry_sleep_s if should_retry else None,
+                    safe_to_replay=True,
+                )
+                if not should_retry:
+                    raise
+                if self.retry_sleep_s:
+                    await asyncio.sleep(self.retry_sleep_s)
+                attempt_index += 1
+                continue
+            _append_model_service_event(
+                self.events_path,
+                self.spans_path,
+                "model_service_success",
+                runtime_config=self.runtime_config,
+                attempt_index=attempt_index,
+                retry_budget=self.retry_attempts,
+                method="get_response",
+                elapsed_s=_round_duration(time.time() - started),
+                final_outcome="success",
+            )
+            return result
+
+    async def stream_response(
+        self,
+        system_instructions: str | None,
+        input: Any,
+        model_settings: Any,
+        tools: list[Any],
+        output_schema: Any,
+        handoffs: list[Any],
+        tracing: Any,
+        *,
+        previous_response_id: str | None,
+        conversation_id: str | None,
+        prompt: Any,
+    ) -> Any:
+        attempt_index = 0
+        while True:
+            started = time.time()
+            yielded_event = False
+            _append_model_service_event(
+                self.events_path,
+                self.spans_path,
+                "model_service_attempt",
+                runtime_config=self.runtime_config,
+                attempt_index=attempt_index,
+                retry_budget=self.retry_attempts,
+                method="stream_response",
+            )
+            try:
+                stream = self.base_model.stream_response(
+                    system_instructions,
+                    input,
+                    model_settings,
+                    tools,
+                    output_schema,
+                    handoffs,
+                    tracing,
+                    previous_response_id=previous_response_id,
+                    conversation_id=conversation_id,
+                    prompt=prompt,
+                )
+                async for event in stream:
+                    yielded_event = True
+                    yield event
+            except Exception as exc:
+                safe_to_replay = not yielded_event
+                should_retry, failure = _should_retry_model_service_failure(
+                    exc,
+                    attempt_index=attempt_index,
+                    retry_attempts=self.retry_attempts,
+                    safe_to_replay=safe_to_replay,
+                )
+                _append_model_service_failure_events(
+                    self.events_path,
+                    self.spans_path,
+                    runtime_config=self.runtime_config,
+                    attempt_index=attempt_index,
+                    retry_budget=self.retry_attempts,
+                    method="stream_response",
+                    started_at=started,
+                    failure=failure,
+                    will_retry=should_retry,
+                    retry_delay_s=self.retry_sleep_s if should_retry else None,
+                    safe_to_replay=safe_to_replay,
+                )
+                if not should_retry:
+                    raise
+                if self.retry_sleep_s:
+                    await asyncio.sleep(self.retry_sleep_s)
+                attempt_index += 1
+                continue
+            _append_model_service_event(
+                self.events_path,
+                self.spans_path,
+                "model_service_success",
+                runtime_config=self.runtime_config,
+                attempt_index=attempt_index,
+                retry_budget=self.retry_attempts,
+                method="stream_response",
+                elapsed_s=_round_duration(time.time() - started),
+                final_outcome="success",
+            )
+            return
+
+
+def _should_retry_model_service_failure(
+    exc: Exception,
+    *,
+    attempt_index: int,
+    retry_attempts: int,
+    safe_to_replay: bool = True,
+) -> tuple[bool, LiveAgentFailure]:
+    failure = _failure_from_exception(exc)
+    should_retry = (
+        safe_to_replay
+        and failure.reason == "provider_transient_failure"
+        and failure.retryable
+        and attempt_index < retry_attempts
+    )
+    return should_retry, failure
+
+
+def _append_model_service_failure_events(
+    events_path: Path,
+    spans_path: Path,
+    *,
+    runtime_config: dict[str, Any],
+    attempt_index: int,
+    retry_budget: int,
+    method: str,
+    started_at: float,
+    failure: LiveAgentFailure,
+    will_retry: bool,
+    retry_delay_s: float | None,
+    safe_to_replay: bool,
+) -> None:
+    base_payload = {
+        "attempt_index": attempt_index,
+        "retry_budget": retry_budget,
+        "method": method,
+        "failure_class": failure.reason,
+        "provider_reason": failure.provider_reason,
+        "retryable": failure.retryable,
+        "safe_to_replay": safe_to_replay,
+        "elapsed_s": _round_duration(time.time() - started_at),
+        "final_outcome": "" if will_retry else "failure",
+        "retry_exhausted": (
+            failure.reason == "provider_transient_failure"
+            and failure.retryable
+            and not will_retry
+            and safe_to_replay
+        ),
+    }
+    _append_model_service_event(
+        events_path,
+        spans_path,
+        "model_service_failure",
+        runtime_config=runtime_config,
+        **base_payload,
+    )
+    if will_retry:
+        _append_model_service_event(
+            events_path,
+            spans_path,
+            "model_service_retry_scheduled",
+            runtime_config=runtime_config,
+            **{
+                **base_payload,
+                "retry_delay_s": retry_delay_s,
+                "next_attempt_index": attempt_index + 1,
+                "final_outcome": "",
+                "retry_exhausted": False,
+            },
+        )
+
+
+def _append_model_service_event(
+    events_path: Path,
+    spans_path: Path,
+    event: str,
+    *,
+    runtime_config: dict[str, Any],
+    attempt_index: int,
+    retry_budget: int,
+    method: str,
+    **extra: Any,
+) -> None:
+    payload = _drop_empty(
+        {
+            "schema": "openai_agents_model_service_fallback_v1",
+            "event": event,
+            "ts_epoch": time.time(),
+            "runtime": runtime_config.get("runtime"),
+            "provider_profile": runtime_config.get("provider_profile"),
+            "model": runtime_config.get("model"),
+            "attempt_index": attempt_index,
+            "retry_budget": retry_budget,
+            "method": method,
+            **extra,
+        }
+    )
+    _append_event(events_path, payload)
+    span_payload = {
+        **payload,
+        "schema": "openai_agents_sanitized_span_v1",
+        "span_type": "model_service_fallback",
+    }
+    _append_event(spans_path, span_payload)
 
 
 def _responses_model_settings(request: LiveAgentRequest) -> dict[str, str]:
@@ -625,6 +977,28 @@ def _require_setting(provider: str, name: str, value: str) -> None:
         raise RuntimeError(f"{provider} requires {name}")
 
 
+def _non_negative_int(value: Any, *, env_name: str, default: int) -> int:
+    if value is None:
+        raw_env = os.environ.get(env_name)
+        value = raw_env if raw_env not in {None, ""} else default
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0, parsed)
+
+
+def _non_negative_float(value: Any, *, env_name: str, default: float) -> float:
+    if value is None:
+        raw_env = os.environ.get(env_name)
+        value = raw_env if raw_env not in {None, ""} else default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, parsed)
+
+
 def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
     detail = str(exc)
     if exc.__class__.__name__ == "MaxTurnsExceeded":
@@ -656,7 +1030,23 @@ def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
     ):
         return LiveAgentFailure("provider_context_failure", retryable=False, detail=detail)
     if any(
-        item in lowered for item in ("429", "rate limit", "too many requests", "502", "503", "504")
+        item in lowered
+        for item in (
+            "429",
+            "rate limit",
+            "too many requests",
+            "500",
+            "502",
+            "503",
+            "504",
+            "model unavailable",
+            "model_unavailable",
+            "temporarily unavailable",
+            "service unavailable",
+            "internal server error",
+            "bad gateway",
+            "gateway timeout",
+        )
     ):
         provider_reason = (
             "rate_limit" if "429" in lowered or "rate limit" in lowered else "upstream_unavailable"
@@ -670,7 +1060,16 @@ def _failure_from_exception(exc: Exception) -> LiveAgentFailure:
         )
     if any(
         item in lowered
-        for item in ("timed out", "timeout", "connection reset", "connection refused")
+        for item in (
+            "timed out",
+            "timeout",
+            "connection reset",
+            "connection refused",
+            "connection error",
+            "transport error",
+            "broken pipe",
+            "econnreset",
+        )
     ):
         return LiveAgentFailure(
             "provider_transient_failure",
@@ -691,6 +1090,10 @@ def _append_event(path: Path, payload: dict[str, Any]) -> None:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _round_duration(value: float) -> float:
+    return round(max(0.0, value), 3)
 
 
 def _to_jsonable(value: Any) -> Any:

@@ -13,6 +13,14 @@ supersedes: codex-only v1 contract (2026-06-03)
 
 # Standalone Operator Console - UI Design Contract
 
+> **Supersession note (2026-06-10):** The operator console launch taxonomy in
+> this UI contract has been superseded by
+> `docs/plans/operator-console-orthogonal-launch-refactor.md`. Current console
+> launches are selected by world/scene, backend, intent, agent engine, provider
+> profile, evidence lane, and scenario setup, not by flattened route cards or
+> provider-neutral `driver_label` route identities. Preserve this file as the
+> prior visual shell contract, not as current launch grammar.
+>
 > Visual and interaction contract for the standalone operator console.
 > Companion to `docs/plans/standalone-codex-operator-console.md`.
 >

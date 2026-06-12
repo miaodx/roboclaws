@@ -1,0 +1,220 @@
+{
+  "schema": "agent_sdk_speedup_matrix_v1",
+  "budget_caps": {
+    "concurrency": 1,
+    "max_context_hard_limit_tokens": 128000,
+    "max_live_runs": 0,
+    "max_wall_clock_s": 0,
+    "racing_multiplier": 1.0
+  },
+  "candidate_groups": [
+    {
+      "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
+      "group_id": "group0_foundation",
+      "purpose": "dry-run matrix, feature flags, offline preflight, privacy gate, budget gate, repeat policy, decision packet, baseline matrix rows, behavior comparator, and reducible-bucket report"
+    },
+    {
+      "candidate_ids": ["A", "G", "J", "H", "I", "L"],
+      "group_id": "group1_private_sdk_levers",
+      "purpose": "later private SDK speed levers after Group 0 gates pass"
+    },
+    {
+      "candidate_ids": ["O", "M", "N", "F"],
+      "group_id": "group2_lane_specific_reductions",
+      "purpose": "later lane-specific reductions that stay SDK-private or opt-in until cross-client proof"
+    },
+    {
+      "candidate_ids": ["P", "AA"],
+      "group_id": "group3_raw_fpv_stabilization",
+      "purpose": "later raw-FPV diagnostic stabilization"
+    },
+    {
+      "candidate_ids": ["D", "C", "K", "E"],
+      "group_id": "group4_speculative_orchestration",
+      "purpose": "later expensive/speculative orchestration only after remaining bucket evidence"
+    },
+    {
+      "candidate_ids": ["X"],
+      "group_id": "group5_promotion_gate",
+      "purpose": "promotion gate for MCP/profile-affecting changes"
+    }
+  ],
+  "rows": [
+    {
+      "baseline_role": "full_lane_baseline",
+      "baseline_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/world_public_baseline",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
+      "candidate_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/world_public_candidate",
+      "dependency_candidate_ids": [],
+      "evidence_lane": "world-public-labels",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "dry_run_matrix": true,
+        "offline_preflight": true,
+        "privacy_gate": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true
+      },
+      "model": "gpt-5.5",
+      "provider_calls": false,
+      "provider_profile": "codex-env",
+      "quality_policy": "same_or_better",
+      "row_id": "gpt_world_public_group0",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned"
+      ]
+    },
+    {
+      "baseline_role": "full_lane_baseline",
+      "baseline_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/camera_grounded_baseline",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
+      "candidate_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/camera_grounded_candidate",
+      "dependency_candidate_ids": [],
+      "evidence_lane": "camera-grounded-labels",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "dry_run_matrix": true,
+        "offline_preflight": true,
+        "privacy_gate": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true
+      },
+      "model": "gpt-5.5",
+      "provider_calls": false,
+      "provider_profile": "codex-env",
+      "quality_policy": "same_or_better",
+      "row_id": "gpt_camera_grounded_group0",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned"
+      ]
+    },
+    {
+      "baseline_role": "diagnostic_failed_checker_baseline",
+      "baseline_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/world_public_baseline",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
+      "candidate_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/world_public_candidate",
+      "dependency_candidate_ids": [],
+      "evidence_lane": "world-public-labels",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "dry_run_matrix": true,
+        "offline_preflight": true,
+        "privacy_gate": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true
+      },
+      "model": "xiaomi/mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mify",
+      "quality_policy": "same_or_better",
+      "row_id": "mimo_world_public_group0",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned"
+      ]
+    },
+    {
+      "baseline_role": "full_lane_baseline",
+      "baseline_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/camera_grounded_baseline",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
+      "candidate_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/camera_grounded_candidate",
+      "dependency_candidate_ids": [],
+      "evidence_lane": "camera-grounded-labels",
+      "expected_terminal": "finished",
+      "feature_flags": {
+        "dry_run_matrix": true,
+        "offline_preflight": true,
+        "privacy_gate": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true
+      },
+      "model": "xiaomi/mimo-v2.5",
+      "provider_calls": false,
+      "provider_profile": "mify",
+      "quality_policy": "same_or_better",
+      "row_id": "mimo_camera_grounded_group0",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "quality_regression",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned"
+      ]
+    },
+    {
+      "baseline_role": "diagnostic",
+      "baseline_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/raw_fpv_baseline",
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["R", "S", "T", "U", "V", "W", "Y", "B", "Z", "Q"],
+      "candidate_run_dir": "tests/fixtures/agent_sdk_speedup_foundation/raw_fpv_candidate",
+      "dependency_candidate_ids": [],
+      "evidence_lane": "camera-raw-fpv",
+      "expected_terminal": "raw_fpv_sdk_turn_budget_exhausted",
+      "feature_flags": {
+        "dry_run_matrix": true,
+        "offline_preflight": true,
+        "privacy_gate": true,
+        "provider_calls": false,
+        "quality_comparator": true,
+        "reducible_bucket_report": true
+      },
+      "model": "gpt-5.5",
+      "provider_calls": false,
+      "provider_profile": "codex-env",
+      "quality_policy": "classified_diagnostic",
+      "row_id": "gpt_raw_fpv_group0",
+      "stop_conditions": [
+        "privacy_gate_failed",
+        "unclassified_terminal",
+        "missing_baseline_or_candidate",
+        "provider_calls_planned"
+      ]
+    },
+    {
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B"],
+      "dependency_candidate_ids": [],
+      "evidence_lane": "world-public-labels",
+      "feature_flags": {
+        "provider_calls": false,
+        "unsupported_matrix_row": true
+      },
+      "model": "kimi",
+      "provider_calls": false,
+      "provider_profile": "kimi-anthropic",
+      "row_id": "kimi_world_public_unsupported",
+      "stop_conditions": ["unsupported_provider_route"],
+      "unsupported_reason": "OpenAI Agents SDK route/provider support is not implemented for Kimi/Claude-compatible Anthropic rows."
+    },
+    {
+      "candidate_group": "group0_foundation",
+      "candidate_ids": ["B"],
+      "dependency_candidate_ids": [],
+      "evidence_lane": "camera-grounded-labels",
+      "feature_flags": {
+        "provider_calls": false,
+        "unsupported_matrix_row": true
+      },
+      "model": "claude",
+      "provider_calls": false,
+      "provider_profile": "mimo-anthropic",
+      "row_id": "claude_camera_grounded_unsupported",
+      "stop_conditions": ["unsupported_provider_route"],
+      "unsupported_reason": "OpenAI Agents SDK route/provider support is not implemented for Kimi/Claude-compatible Anthropic rows."
+    }
+  ]
+}

@@ -2,10 +2,15 @@
 
 Canonical source: `docs/plans/live-agent-runtime-sdk-spike.md`
 
-Current slice: Agent SDK performance optimization for the private
-`openai-agents-live` route.
+Current slice: Agent SDK performance optimization and Group 0 matrix
+foundation for the private `openai-agents-live` route.
 
-Status: completed on 2026-06-10.
+Status: SDK runtime spike, first performance optimization pass, and Group 0
+no-provider matrix foundation completed on 2026-06-10. The full live
+provider/model x evidence-lane performance matrix is not done; it remains
+parked pending explicit live-run approval, credentials/backend availability,
+and budget acknowledgement. The follow-up execution plan is
+`docs/plans/live-agent-runtime-sdk-perf-followups.md`.
 
 Result:
 
@@ -24,6 +29,12 @@ Result:
 - Agent SDK performance profiles now persist resolved prompt mode,
   continuation mode, SDK turn cap, context budgets, raw-FPV budgets, and cache
   settings in `live_timing.json`.
+- Agent SDK model-service fallback now retries classified transient
+  model-service failures once by default at the SDK model request boundary,
+  with CLI/env controls for retry budget and delay.
+- `live_timing.json` and `timeline.latency_attribution` now include
+  `model_service_fallback_metrics`, derived from sanitized fallback events
+  rather than raw prompts or model/tool payloads.
 - Compact continuation uses a public-safe state packet instead of replaying the
   full kickoff prompt when the profile requests it or context crosses the soft
   limit.
@@ -34,6 +45,21 @@ Result:
   for the first raw-FPV performance pass.
 - The comparison workflow now accepts an explicit manifest and rejects smoke
   references as full-lane baselines.
+- Group 0 unified speedup foundation tooling now exists as a no-provider
+  preflight:
+  `scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py` plus
+  `docs/status/active/agent-sdk-speedup-foundation-matrix.json`.
+- The Group 0 manifest uses committed fake-provider fixtures under
+  `tests/fixtures/agent_sdk_speedup_foundation/`, plans zero provider calls,
+  records 5 supported rows and 2 unsupported Kimi/Claude-compatible rows, and
+  produces a decision packet with privacy, quality, budget, and reducible-bucket
+  gates.
+- This Group 0 matrix is a foundation/preflight artifact only. It is not the
+  full live provider/model x evidence-lane performance matrix and must not be
+  used as a publishable speedup claim.
+- Future OpenAI Agents SDK result summaries redact raw assistant output and SDK
+  `last_agent` reprs from event/trace artifacts while keeping trace/session,
+  usage, output length, and public agent-name metadata.
 - `openai-agents-live` remains private/non-default.
 - `done`/`run_result.json` remains the only cleanup success signal.
 
@@ -72,11 +98,27 @@ Raw-FPV failure classification:
   hard limit, and `context_window_failure_detected=false`.
 - The SDK exception classifier has regression coverage for provider-wrapped
   context failures and SDK max-turn budget exhaustion.
+- Model-service fallback has regression coverage for model-unavailable/5xx/
+  transport retryability, auth/config/context/tool non-retryability, successful
+  one-retry recovery, retry-budget exhaustion, and timing/timeline artifact
+  summaries.
+- Group 0 matrix preflight has regression coverage for dry-run budgets,
+  unsupported rows, forbidden artifact keys/secret markers, faster-but-worse
+  quality rejection, accepted same-or-better rows, and reducible-bucket
+  recommendations.
 
 Verification:
 
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/agents/test_live_runtime.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/contract/reports/test_molmo_cleanup_report.py`
+- `.venv/bin/ruff check roboclaws/agents/drivers/openai_agents_live.py scripts/molmo_cleanup/run_live_openai_agents_cleanup.py tests/unit/agents/test_live_runtime.py`
 - `./scripts/dev/run_pytest_standalone.sh tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/contract/reports/test_molmo_cleanup_report.py tests/unit/molmo_cleanup/test_summarize_live_run.py -q`
 - `.venv/bin/ruff check scripts/molmo_cleanup/run_live_openai_agents_cleanup.py roboclaws/agents/drivers/openai_agents_live.py roboclaws/agents/live_runtime.py roboclaws/agents/prompts/household_cleanup.py scripts/molmo_cleanup/summarize_live_run.py tests/unit/agents/test_live_runtime.py tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/molmo_cleanup/test_summarize_live_run.py`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --dry-run`
+- `.venv/bin/python scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py --manifest docs/status/active/agent-sdk-speedup-foundation-matrix.json --offline-preflight --decision-packet output/agent-sdk-speedup-foundation/decision.json`
+- `./scripts/dev/run_pytest_standalone.sh -q tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py tests/unit/agents/test_live_runtime.py`
+- `.venv/bin/ruff check scripts/molmo_cleanup/run_agent_sdk_perf_matrix.py tests/unit/molmo_cleanup/test_agent_sdk_perf_matrix.py roboclaws/agents/drivers/openai_agents_live.py tests/unit/agents/test_live_runtime.py`
 
 No-touch scope preserved:
 
@@ -88,8 +130,8 @@ No-touch scope preserved:
 
 Parked work:
 
-- Post-optimization reduce-entropy batch captured in
-  `docs/plans/live-agent-runtime-sdk-spike.md`:
+- Post-optimization perf follow-up batch captured in
+  `docs/plans/live-agent-runtime-sdk-perf-followups.md`:
   - OpenAI Agents SDK skill parity: the current plain SDK route names
     `molmo-realworld-cleanup` but does not automatically mount/read the
     `SKILL.md` the way Codex/Claude live workspaces do.
@@ -107,12 +149,10 @@ Parked work:
     repeated `metric_map` delta contract, camera-grounded observe/label
     two-step collapse, raw-FPV visual-candidate failure rails, and a
     trace-derived irreducible-floor/waste classifier.
-  - Big-flow infrastructure candidates: unified experiment matrix runner,
-    feature-flag attribution, offline replay/fake-provider preflight,
-    artifact privacy/schema gate, live cost/time/concurrency budget gate,
-    variance/repeatability gate, cross-client regression guard, decision
-    dashboard, behavior-quality regression comparator, and raw-FPV image-memory
-    policy.
+  - Big-flow infrastructure follow-ups after the Group 0 foundation: live
+    matrix execution approval, richer feature-flag attribution in live timing,
+    variance/repeatability policy for publishable claims, cross-client
+    regression guard, and raw-FPV image-memory policy.
   - Default MCP composite/merge tools remain out of scope.
 - Anthropic Claude Agent SDK spike.
 - Pi SDK MCP adapter prototype.
