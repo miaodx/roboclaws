@@ -14,6 +14,7 @@ from roboclaws.reports.live_performance import (
     extract_report_performance_metrics,
     privacy_findings_for_packet,
     privacy_findings_for_run_dir,
+    read_model_latency_calibration,
 )
 
 
@@ -158,6 +159,7 @@ def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
         "baseline_role": str(row.get("baseline_role") or ""),
         "baseline_run_dir": str(row.get("baseline_run_dir") or ""),
         "candidate_run_dir": str(row.get("candidate_run_dir") or ""),
+        "calibration_path": str(row.get("calibration_path") or ""),
         "quality_policy": str(row.get("quality_policy") or "same_or_better"),
         "quality_waiver": str(row.get("quality_waiver") or ""),
         "expected_terminal": str(row.get("expected_terminal") or ""),
@@ -248,6 +250,7 @@ def _finalize_packet(packet: dict[str, Any]) -> None:
     for row in packet["rows"]:
         row.pop("_baseline_summary", None)
         row.pop("_candidate_summary", None)
+        row.pop("_calibration", None)
     counts: dict[str, int] = {}
     for row in packet["rows"]:
         status = str(row.get("status") or "unknown")
@@ -277,18 +280,35 @@ def _load_row_runs(row: dict[str, Any]) -> None:
     if not candidate_dir.exists():
         _block(row, f"candidate run dir missing: {candidate_dir}")
         return
-    row["_baseline_summary"] = _run_summary(baseline_dir)
-    row["_candidate_summary"] = _run_summary(candidate_dir)
+    calibration = _row_calibration(row)
+    if row["calibration_path"] and calibration is None:
+        return
+    row["_calibration"] = calibration
+    row["_baseline_summary"] = _run_summary(baseline_dir, calibration=calibration)
+    row["_candidate_summary"] = _run_summary(candidate_dir, calibration=calibration)
     row["artifact_links"] = {
         "baseline_run_dir": str(baseline_dir),
         "candidate_run_dir": str(candidate_dir),
         "candidate_report": str(candidate_dir / "report.html"),
         "candidate_live_timing": str(candidate_dir / "live_timing.json"),
     }
+    if row["calibration_path"]:
+        row["artifact_links"]["calibration"] = row["calibration_path"]
 
 
-def _run_summary(run_dir: Path) -> dict[str, Any]:
-    metrics = extract_report_performance_metrics(run_dir)
+def _row_calibration(row: dict[str, Any]) -> dict[str, Any] | None:
+    path = row.get("calibration_path")
+    if not path:
+        return None
+    calibration_path = Path(str(path))
+    if not calibration_path.exists():
+        _block(row, f"calibration_path missing: {calibration_path}")
+        return None
+    return read_model_latency_calibration(calibration_path)
+
+
+def _run_summary(run_dir: Path, *, calibration: dict[str, Any] | None = None) -> dict[str, Any]:
+    metrics = extract_report_performance_metrics(run_dir, calibration=calibration)
     quality = _dict(metrics.get("quality"))
     timing = _dict(metrics.get("timing"))
     call_counts = _dict(metrics.get("call_counts"))
@@ -323,6 +343,15 @@ def _speed_comparison(baseline: dict[str, Any], candidate: dict[str, Any]) -> di
     return {
         "elapsed_delta_s": timing.get("observed_wall_delta_s"),
         "between_tool_gap_delta_s": timing.get("mcp_between_tool_gap_delta_s"),
+        "observed_model_api_delta_s": timing.get("observed_model_api_delta_s"),
+        "estimated_model_work_delta_s": timing.get("estimated_model_work_delta_s"),
+        "model_latency_residual_delta_s": timing.get("model_latency_residual_delta_s"),
+        "baseline_estimated_model_work_s": _dict(timing.get("baseline")).get(
+            "estimated_model_work_s"
+        ),
+        "candidate_estimated_model_work_s": _dict(timing.get("candidate")).get(
+            "estimated_model_work_s"
+        ),
     }
 
 
@@ -599,6 +628,7 @@ def _dry_run_row(row: dict[str, Any]) -> dict[str, Any]:
         "unsupported_reason": str(row.get("unsupported_reason") or ""),
         "provider_calls": bool(row.get("provider_calls")),
         "expected_decision_status": str(row.get("expected_decision_status") or ""),
+        "calibration_path": str(row.get("calibration_path") or ""),
     }
 
 

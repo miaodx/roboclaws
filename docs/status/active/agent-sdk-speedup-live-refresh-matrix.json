@@ -228,6 +228,7 @@
     {
       "baseline_role": "completed_live_responses_baseline",
       "baseline_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7",
+      "calibration_path": "output/agent-sdk-perf-followups/mify-camera-grounded-o-ac-holdout-calibration.json",
       "candidate_group": "group0_foundation",
       "candidate_ids": ["Q", "Y"],
       "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-fixed4/0612_1841/seed-7",
@@ -238,6 +239,8 @@
       "feature_flags": {
         "camera_grounded_composite_tools": true,
         "camera_grounded_history_compaction": "camera_grounded_history_v1",
+        "holdout_validation_low_explanatory_power": true,
+        "model_latency_calibration": "holdout_baseline_train_fixed4_repeat_validate_v1",
         "offline_recommendation_refresh": true,
         "provider_calls": false,
         "quality_comparator": true,
@@ -260,6 +263,7 @@
     {
       "baseline_role": "completed_live_responses_baseline",
       "baseline_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-baseline/0612_1012/seed-7",
+      "calibration_path": "output/agent-sdk-perf-followups/mify-camera-grounded-o-ac-holdout-calibration.json",
       "candidate_group": "group0_foundation",
       "candidate_ids": ["Q", "Y"],
       "candidate_run_dir": "output/agent-sdk-perf-followups/mify-camera-grounded-mimo-compact-composite-ac-repeat-mify/0612_1909/seed-7",
@@ -270,6 +274,8 @@
       "feature_flags": {
         "camera_grounded_composite_tools": true,
         "camera_grounded_history_compaction": "camera_grounded_history_v1",
+        "holdout_validation_low_explanatory_power": true,
+        "model_latency_calibration": "holdout_baseline_train_fixed4_repeat_validate_v1",
         "offline_recommendation_refresh": true,
         "provider_calls": false,
         "quality_comparator": true,

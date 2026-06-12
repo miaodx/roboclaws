@@ -533,8 +533,12 @@ Parked work:
     wall-clock priority is broader B coverage only where it adds new
     evidence-lane/provider information, then holdout-reviewed calibration governance,
     with raw-FPV retry only after provider/image-transport availability
-    changes. O+AC calibrated-normalized diagnostic artifacts now exist, but
-    they are not broad or publishable speed claims.
+    changes. The live-refresh matrix now passes the holdout calibration packet
+    into the O+AC rows, so `output/agent-sdk-perf-followups/live-refresh-decision.json`
+    records the holdout-normalized deltas and
+    `holdout_validation_low_explanatory_power` limitation directly. O+AC
+    calibrated-normalized diagnostic artifacts now exist, but they are not broad
+    or publishable speed claims.
   - Candidate N deterministic repeated-map prep is accepted inside the opt-in
     model-input compaction arm.
   - Candidate O deterministic prep is accepted as an SDK-private opt-in

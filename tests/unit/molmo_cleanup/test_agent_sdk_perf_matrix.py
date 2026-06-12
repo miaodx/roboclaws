@@ -351,6 +351,79 @@ def test_agent_sdk_perf_matrix_accepts_same_or_better_and_reports_buckets(
     ]
 
 
+def test_agent_sdk_perf_matrix_uses_row_calibration_for_normalized_deltas(
+    tmp_path: Path,
+) -> None:
+    matrix = _load_matrix_module()
+    baseline = _write_run(tmp_path / "baseline", restored=5, elapsed_s=100, gap_s=80)
+    candidate = _write_run(tmp_path / "candidate", restored=5, elapsed_s=70, gap_s=50)
+    _write_model_call_metrics(
+        baseline,
+        input_tokens=120,
+        cached_input_tokens=20,
+        output_tokens=10,
+        duration_s=30.0,
+    )
+    _write_model_call_metrics(
+        candidate,
+        input_tokens=80,
+        cached_input_tokens=0,
+        output_tokens=5,
+        duration_s=12.0,
+    )
+    calibration = tmp_path / "calibration.json"
+    calibration.write_text(
+        json.dumps(
+            {
+                "schema": "roboclaws_model_latency_calibration_v1",
+                "available": True,
+                "sample_count": 40,
+                "total_row_count": 40,
+                "limitations": ["not_repo_default_calibration"],
+                "coefficients": {
+                    "intercept_s": 1.0,
+                    "uncached_input_s_per_token": 0.1,
+                    "cached_input_s_per_token": 0.0,
+                    "output_s_per_token": 0.2,
+                    "reasoning_s_per_token": 0.0,
+                    "image_s_per_unit": 0.0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest = _write_manifest(
+        tmp_path,
+        baseline=baseline,
+        candidate=candidate,
+        calibration_path=calibration,
+    )
+    decision_packet = tmp_path / "decision.json"
+
+    status = matrix.main(
+        [
+            "--manifest",
+            str(manifest),
+            "--offline-preflight",
+            "--decision-packet",
+            str(decision_packet),
+        ]
+    )
+
+    assert status == 0
+    packet = json.loads(decision_packet.read_text(encoding="utf-8"))
+    row = packet["rows"][0]
+    speed = row["speed_comparison"]
+    assert row["artifact_links"]["calibration"] == str(calibration)
+    assert speed["observed_model_api_delta_s"] == -18.0
+    assert speed["estimated_model_work_delta_s"] == -3.0
+    assert speed["model_latency_residual_delta_s"] == -15.0
+    assert speed["candidate_estimated_model_work_s"]["limitations"] == [
+        "not_repo_default_calibration"
+    ]
+    assert "_calibration" not in row
+
+
 def test_agent_sdk_perf_matrix_does_not_recommend_o_for_composite_internal_declare(
     tmp_path: Path,
 ) -> None:
@@ -467,6 +540,7 @@ def _write_manifest(
     expected_terminal: str = "finished",
     expected_decision_status: str = "",
     feature_flags_extra: dict[str, object] | None = None,
+    calibration_path: Path | None = None,
 ) -> Path:
     feature_flags = {
         "dry_run_matrix": True,
@@ -513,6 +587,7 @@ def _write_manifest(
                         "baseline_role": "full_lane_baseline",
                         "baseline_run_dir": str(baseline),
                         "candidate_run_dir": str(candidate),
+                        "calibration_path": str(calibration_path or ""),
                         "provider_calls": False,
                         "expected_terminal": expected_terminal,
                         "expected_decision_status": expected_decision_status,
@@ -552,6 +627,11 @@ def _write_run(
 ) -> Path:
     run_dir.mkdir()
     timing = {
+        "runtime": "openai-agents-live",
+        "provider_profile": "codex-env",
+        "wire_api": "responses",
+        "model": "gpt-5.5",
+        "evidence_lane": "world-public-labels",
         "runner_timing": {"total_elapsed_s": elapsed_s},
         "mcp_trace_timing": {
             "between_tool_gap_s": gap_s,
@@ -598,6 +678,34 @@ def _write_run(
         encoding="utf-8",
     )
     return run_dir
+
+
+def _write_model_call_metrics(
+    run_dir: Path,
+    *,
+    input_tokens: int,
+    cached_input_tokens: int,
+    output_tokens: int,
+    duration_s: float,
+) -> None:
+    row = {
+        "event": "span_end",
+        "span_type": "response",
+        "duration_s": duration_s,
+        "provider_profile": "codex-env",
+        "wire_api": "responses",
+        "model": "gpt-5.5",
+        "usage": {
+            "input_tokens": input_tokens,
+            "input_tokens_details": {"cached_tokens": cached_input_tokens},
+            "output_tokens": output_tokens,
+            "output_tokens_details": {"reasoning_tokens": 0},
+        },
+    }
+    (run_dir / "openai-agents-spans.jsonl").write_text(
+        json.dumps(row, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _trace_request(tool: str, request: dict[str, object]) -> dict[str, object]:
