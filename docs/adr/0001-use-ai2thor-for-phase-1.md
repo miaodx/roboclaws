@@ -5,7 +5,7 @@ at project inception).
 
 ## Status
 
-Accepted.
+Superseded by [ADR-0137](0137-retire-ai2thor-and-direct-vlm-public-surfaces.md).
 
 ## Context
 

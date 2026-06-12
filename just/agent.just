@@ -51,18 +51,6 @@ run dispatch_target agent_engine mode="" *overrides:
           raw_overrides+=("task_intent=open-ended")
         fi
         ;;
-      ai2thor-world.navigate)
-        task="ai2thor-nav"
-        ;;
-      ai2thor-world.photo-capture)
-        task="photo-chairs"
-        ;;
-      ai2thor-games.territory)
-        task="territory"
-        ;;
-      ai2thor-games.coverage)
-        task="coverage"
-        ;;
       planner-proof.planner-proof)
         task="molmo-planner-proof"
         ;;
@@ -88,9 +76,6 @@ run dispatch_target agent_engine mode="" *overrides:
         ;;
       openclaw-gateway)
         driver="openclaw"
-        ;;
-      vlm-policy)
-        driver="vlm"
         ;;
       script-runner)
         driver="script"
@@ -151,17 +136,16 @@ run dispatch_target agent_engine mode="" *overrides:
       key="${key#--}"
       key="${key//-/_}"
       case "$key" in
-        agent_souls|agents|agibot_map_artifact_dir|backend|baseline|candidate|cap|context_json|\
+        agibot_map_artifact_dir|backend|baseline|candidate|cap|context_json|\
         generated_mess_count|\
         cleanup_object_count|\
         cleanup_routine|record_robot_views|robot_views|\
-        host|max_moves|max_wall_seconds|min_generated_mess_count|\
-        map_bundle|map_mode|mode|model|output_dir|personality_probe|photo_max_moves|\
-        photo_output_dir|photo_scene|photo_wall_budget|policy|port|prompt|provider|\
+        host|max_wall_seconds|min_generated_mess_count|\
+        map_bundle|map_mode|mode|output_dir|policy|port|prompt|provider|\
         camera_labeler|evidence_lane|profile|real_movement_enabled|rehearsal_mode|robot_name|run_dir|runner_python|runner_script|\
         runtime|runtime_map_prior|molmospaces_python|generated_mess_object_ids|\
         operator_messages_path|task_intent|task_intent_mode|task_surface|goal_contract_json|goal_contract_path|\
-        scene|scene_index|scene_source|scenes|seed|seeds|semantic_sweep|souls|steps|task|timeout_s|\
+        scene_index|scene_source|seed|seeds|semantic_sweep|task|timeout_s|\
         isaac_scene_usd_path|\
         visual_grounding|visual_grounding_timeout|visual_grounding_timeout_s|wall_budget|waypoint_id)
           ;;
@@ -247,15 +231,6 @@ run dispatch_target agent_engine mode="" *overrides:
 
     report_rerun_parts=("just" "run::surface")
     case "$task" in
-      ai2thor-nav)
-        report_rerun_parts+=("surface=ai2thor-world" "intent=navigate")
-        ;;
-      photo-chairs)
-        report_rerun_parts+=("surface=ai2thor-world" "intent=photo-capture")
-        ;;
-      territory|coverage)
-        report_rerun_parts+=("surface=ai2thor-games" "intent=$task")
-        ;;
       semantic-map-build)
         report_rerun_parts+=("surface=household-world" "intent=map-build")
         ;;
@@ -285,9 +260,6 @@ run dispatch_target agent_engine mode="" *overrides:
       openclaw)
         report_rerun_parts+=("agent_engine=openclaw-gateway")
         ;;
-      vlm)
-        report_rerun_parts+=("agent_engine=vlm-policy")
-        ;;
       script)
         report_rerun_parts+=("agent_engine=script-runner")
         ;;
@@ -303,88 +275,6 @@ run dispatch_target agent_engine mode="" *overrides:
     export ROBOCLAWS_REPORT_RERUN_COMMAND="$(shell_join "${report_rerun_parts[@]}")"
 
     case "$task:$driver" in
-      ai2thor-nav:codex)
-        scene="$(get scene FloorPlan201)"
-        host="$(get host 127.0.0.1)"
-        port="$(get port 18788)"
-        run_just code::codex "$scene" "$host" "$port"
-        ;;
-
-      ai2thor-nav:claude)
-        scene="$(get scene FloorPlan201)"
-        host="$(get host 127.0.0.1)"
-        port="$(get port 18788)"
-        run_just code::cc "$scene" "$host" "$port"
-        ;;
-
-      ai2thor-nav:openclaw)
-        agents="$(get agents 2)"
-        steps="$(get steps 10)"
-        provider="$(get provider kimi)"
-        output_dir="$(get output_dir output/openclaw/nav)"
-        run_just openclaw::run nav "$agents" "$steps" "$provider" "$output_dir"
-        ;;
-
-      territory:vlm|coverage:vlm)
-        model="$(get model kimi-k2.6)"
-        agents="$(get agents 2)"
-        steps="$(get steps 20)"
-        souls="$(get souls "")"
-        output_dir="$(get output_dir "output/kimi/$task")"
-        run_just vlm::run "$task" "$model" "$agents" "$steps" "$souls" "$output_dir"
-        ;;
-
-      territory:openclaw|coverage:openclaw)
-        agents="$(get agents 2)"
-        steps="$(get steps 20)"
-        provider="$(get provider kimi)"
-        output_dir="$(get output_dir "output/openclaw/$task")"
-        souls="$(get souls "$(get agent_souls "")")"
-        run_just openclaw::run "$task" "$agents" "$steps" "$provider" "$output_dir" "$souls"
-        ;;
-
-      territory:script)
-        agents="$(get agents 2)"
-        steps="$(get steps 20)"
-        output_dir="$(get output_dir output/script/territory)"
-        run_cmd xvfb-run -a .venv/bin/python -u examples/games/territory_game.py \
-          --backend vlm --model mock --agents "$agents" --steps "$steps" \
-          --output-dir "$output_dir"
-        ;;
-
-      coverage:script)
-        agents="$(get agents 2)"
-        steps="$(get steps 20)"
-        output_dir="$(get output_dir output/script/coverage)"
-        run_cmd xvfb-run -a .venv/bin/python -u examples/games/coverage_game.py \
-          --backend vlm --model mock --agents "$agents" --steps "$steps" \
-          --output-dir "$output_dir"
-        ;;
-
-      photo-chairs:openclaw)
-        provider="$(get provider kimi)"
-        output_dir="$(get output_dir output/openclaw-photo-task)"
-        max_moves="$(get max_moves "$(get photo_max_moves 200)")"
-        wall_budget="$(get wall_budget "$(get photo_wall_budget 900)")"
-        scene="$(get scene "$(get photo_scene FloorPlan201)")"
-        run_just openclaw::run photo 1 10 "$provider" output/openclaw/photo "" 0 "" \
-          "$output_dir" "$max_moves" "$wall_budget" "$scene"
-        ;;
-
-      photo-chairs:codex|photo-chairs:claude)
-        scene="$(get scene "$(get photo_scene FloorPlan201)")"
-        host="$(get host 127.0.0.1)"
-        port="$(get port 18788)"
-        case "$driver" in
-          codex)
-            run_just code::codex "$scene" "$host" "$port" photo-chairs capture-object-photo 1
-            ;;
-          claude)
-            run_just code::cc "$scene" "$host" "$port" photo-chairs capture-object-photo 1
-            ;;
-        esac
-        ;;
-
       semantic-map-build:direct|semantic-map-build:codex|household-cleanup:direct|household-cleanup:mcp-smoke|\
       household-cleanup:codex|household-cleanup:claude|household-cleanup:openai-agents-live|household-cleanup:openclaw)
         case "$driver" in
@@ -925,7 +815,7 @@ verify target="mock" *args:
     }
 
     case "$target" in
-      static|mock|ci-required|contract|regression-mock|local-sim|local-openclaw|navigator|\
+      static|mock|ci-required|contract|\
       molmo-realworld-cleanup|molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
       molmo-realworld-openclaw-dogfood-kit|\
       molmo-realworld-openclaw-visual-dogfood-kit|molmo-realworld-raw-fpv|\
@@ -960,7 +850,7 @@ harness target *args:
     }
 
     case "$target" in
-      run|navigator|regression|sim|openclaw|molmo-realworld-cleanup|\
+      molmo-realworld-cleanup|\
       agent-validation|\
       molmo-cleanup-codex-perf|\
       molmo-realworld-agent-mcp|molmo-realworld-agent-dogfood-kit|\
@@ -971,8 +861,7 @@ harness target *args:
       molmo-isaac-runtime-preflight|molmo-isaac-usd-references|\
       molmo-isaac-runtime-smoke|molmo-isaac-cleanup-smoke|\
       molmo-isaac-prepared-cleanup-smoke|\
-      b1-map12-navigation-smoke|\
-      list-tasks|history)
+      b1-map12-navigation-smoke)
         trace_or_exec harness::"$target" "${rest[@]}"
         ;;
       *)
@@ -981,8 +870,8 @@ harness target *args:
         ;;
     esac
 
-# Manage the direct navigation MCP server.
-mcp action="up" scene="FloorPlan201" host="127.0.0.1" port="18788":
+# Manage a household MCP server.
+mcp action="up" server="household-cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/roboclaws-mcp/run":
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -1001,7 +890,7 @@ mcp action="up" scene="FloorPlan201" host="127.0.0.1" port="18788":
 
     case "$action" in
       up)
-        trace_or_exec mcp::up "$2" "$3" "$4"
+        trace_or_exec mcp::up "$2" "$3" "$4" "$5"
         ;;
       down)
         trace_or_exec mcp::down

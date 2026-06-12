@@ -8,7 +8,6 @@ from typing import Any
 
 PROFILE_SCHEMA = "roboclaws_mcp_contract_profile_v1"
 
-AI2THOR_NAVIGATION_PROFILE = "ai2thor_navigation_v1"
 HOUSEHOLD_WORLD_PROFILE = "household_world_v1"
 HOUSEHOLD_MANIPULATION_PROFILE = "household_manipulation_v1"
 HOUSEHOLD_EPISODE_PROFILE = "household_episode_v1"
@@ -245,76 +244,6 @@ def _duplicates(values: list[str]) -> list[str]:
         seen.add(value)
     return duplicates
 
-
-_AI2THOR_PROFILE = ContractProfile(
-    profile_id=AI2THOR_NAVIGATION_PROFILE,
-    version=1,
-    backend="ai2thor",
-    domain="navigation",
-    capability_families=(
-        FAMILY_PERCEPTION,
-        FAMILY_LOCALIZATION,
-        FAMILY_MAPPING,
-        FAMILY_NAVIGATION,
-        FAMILY_MEMORY,
-        FAMILY_EPISODE,
-    ),
-    public_tools=(
-        _tool(
-            "observe",
-            "perception.observe",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_SIMULATOR_METADATA,),
-            "Observe FPV, map, chase view, and structured navigation state.",
-        ),
-        _tool(
-            "observe_archived",
-            "perception.observe_archived",
-            FAMILY_PERCEPTION,
-            CLASSIFICATION_COMPOSED,
-            (PROVENANCE_SIMULATOR_METADATA,),
-            "Archive navigation observations without inlining image payloads.",
-        ),
-        _tool(
-            "move",
-            "navigation.move_step",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_SIM_PLANNER, PROVENANCE_BLOCKED_CAPABILITY),
-            "Move one bounded AI2-THOR navigation step.",
-        ),
-        _tool(
-            "done",
-            "episode.done",
-            FAMILY_EPISODE,
-            CLASSIFICATION_CANONICAL,
-            (PROVENANCE_API_SEMANTIC,),
-            "Terminate the current MCP-controlled navigation episode.",
-        ),
-    ),
-    privileged_tools=(
-        _tool(
-            "scene_objects",
-            "mapping.scene_inventory",
-            FAMILY_MAPPING,
-            CLASSIFICATION_PRIVILEGED_TOOL,
-            (PROVENANCE_SIMULATOR_METADATA,),
-            "Simulator inventory oracle; useful for demos, not a real robot perception surface.",
-        ),
-        _tool(
-            "goto",
-            "navigation.teleport_to_object",
-            FAMILY_NAVIGATION,
-            CLASSIFICATION_PRIVILEGED_TOOL,
-            (PROVENANCE_SIMULATOR_METADATA,),
-            "Teleport-like target-relative helper; excluded from canonical navigation profile.",
-        ),
-    ),
-    summary=(
-        "AI2-THOR navigation profile with privileged simulator tools excluded from public tools."
-    ),
-)
 
 _MOLMO_PRIVATE_EXCLUSIONS = (
     "generated_mess_set",
@@ -841,7 +770,6 @@ _REAL_ROBOT_PROFILE = ContractProfile(
 )
 
 _PROFILES = {
-    AI2THOR_NAVIGATION_PROFILE: _AI2THOR_PROFILE,
     HOUSEHOLD_WORLD_PROFILE: _HOUSEHOLD_WORLD_PROFILE,
     HOUSEHOLD_MANIPULATION_PROFILE: _HOUSEHOLD_MANIPULATION_PROFILE,
     HOUSEHOLD_EPISODE_PROFILE: _HOUSEHOLD_EPISODE_PROFILE,

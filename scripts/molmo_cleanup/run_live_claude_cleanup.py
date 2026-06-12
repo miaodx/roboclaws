@@ -19,6 +19,7 @@ from typing import BinaryIO
 
 from roboclaws.agents.drivers.household_live import household_cleanup_server_argv
 from roboclaws.agents.live_status import LiveAgentFailure, classify_live_agent_failure
+from roboclaws.household.report import runtime_timing_from_trace
 from roboclaws.household.task_intent import (
     TASK_INTENT_MODE_CUSTOM,
     TASK_INTENT_MODE_DEFAULT,
@@ -34,6 +35,10 @@ from roboclaws.launch.evaluation import (
     checker_flags_for_household_intent,
     household_intent_id_for_checker,
     merge_checker_flags,
+)
+from roboclaws.reports.live_performance import (
+    extract_model_call_metrics,
+    write_model_call_metrics_jsonl,
 )
 
 FULL_PERMISSION_ARGS = ("--dangerously-skip-permissions", "--permission-mode", "bypassPermissions")
@@ -89,10 +94,20 @@ class LiveClaudeCleanupRunner:
         self.args = args
         self.run_dir = args.run_dir
         self.status_path = args.status_path
+        self.timing_path = self.run_dir / "live_timing.json"
         self.started_at_epoch = time.time()
         self.server_proc: subprocess.Popen[bytes] | None = None
         self.lock_file = None
         self.visual_slot: VisualBackendSlotLease | None = None
+        self.live_timing: dict[str, object] = {
+            "schema": "molmo_live_timing_v1",
+            "runtime": "claude-code",
+            "started_at_epoch": self.started_at_epoch,
+            "profile": getattr(args, "profile", ""),
+            "backend": getattr(args, "backend", ""),
+            "policy": getattr(args, "policy", ""),
+            "provider_profile": getattr(args, "claude_provider_summary", ""),
+        }
 
     def run(self) -> int:
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -106,22 +121,26 @@ class LiveClaudeCleanupRunner:
             self._check_result()
         except KeyboardInterrupt:
             self._write_status("failed", 130)
+            self._write_live_timing("failed", 130, reason="keyboard_interrupt")
             self._cleanup_server()
             self._release_visual_slot()
             return 130
         except LiveAgentRunFailure as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, **exc.failure.status_fields())
+            self._write_live_timing("failed", 1, **exc.failure.status_fields())
             self._cleanup_server()
             self._release_visual_slot()
             return 1
         except Exception as exc:
             print(f"error: {exc}", file=sys.stderr)
             self._write_status("failed", 1, reason=str(exc))
+            self._write_live_timing("failed", 1, reason=str(exc))
             self._cleanup_server()
             self._release_visual_slot()
             return 1
 
+        self._write_live_timing("finished", 0)
         self._write_status("finished", 0)
         self._release_visual_slot()
         return 0
@@ -193,6 +212,7 @@ class LiveClaudeCleanupRunner:
         print(f"    repo    : {self.args.repo_root}")
         print(f"    run dir : {self.run_dir}")
         print(f"    MCP URL : {self.args.client_url}")
+        self._mark_timing("server_start")
 
         probe_host = _probe_host(self.args.host)
         if _port_accepting(probe_host, self.args.port):
@@ -218,6 +238,7 @@ class LiveClaudeCleanupRunner:
             if self.server_proc.poll() is not None:
                 raise RuntimeError("cleanup MCP server exited before becoming ready")
             if _port_accepting(probe_host, self.args.port):
+                self._mark_timing("server_ready")
                 return
             time.sleep(0.5)
         raise RuntimeError(
@@ -227,6 +248,7 @@ class LiveClaudeCleanupRunner:
 
     def _run_claude(self) -> None:
         self._write_status("running-claude")
+        self._mark_timing("claude_exec_start")
         env = os.environ.copy()
         env.setdefault("ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_WORKSPACE", "1")
         for item in self.args.claude_env:
@@ -334,6 +356,7 @@ class LiveClaudeCleanupRunner:
             stderr_path=self.run_dir / "claude.stderr.log",
             env=env,
         )
+        self._mark_timing("claude_exec_end")
         if status != 0:
             failure = classify_live_agent_failure(
                 self.run_dir / "claude-events.jsonl",
@@ -349,13 +372,16 @@ class LiveClaudeCleanupRunner:
         assert self.server_proc is not None
         self._write_status("waiting-for-server-finish")
         print("==> waiting for cleanup MCP server to finish after agent done")
+        self._mark_timing("server_wait_start")
         status = self.server_proc.wait()
+        self._mark_timing("server_finished")
         self.server_proc = None
         if status != 0:
             raise RuntimeError(f"cleanup MCP server exited with status {status}")
 
     def _check_result(self) -> None:
         self._write_status("checking-result")
+        self._mark_timing("checker_start")
         task_name = getattr(self.args, "task_name", "household-cleanup")
         task_intent = os.environ.get("ROBOCLAWS_TASK_INTENT", "")
         custom_task = (
@@ -398,16 +424,60 @@ class LiveClaudeCleanupRunner:
         ]
         checker_args.append(str(run_result))
 
-        status = _run_and_tee(
-            checker_args,
-            cwd=self.args.repo_root,
-            stdout_path=self.run_dir / "checker.log",
-            stderr_path=self.run_dir / "checker.log",
-            env=os.environ.copy(),
-        )
+        try:
+            status = _run_and_tee(
+                checker_args,
+                cwd=self.args.repo_root,
+                stdout_path=self.run_dir / "checker.log",
+                stderr_path=self.run_dir / "checker.log",
+                env=os.environ.copy(),
+            )
+        finally:
+            self._mark_timing("checker_end")
         if status != 0:
             raise RuntimeError(f"cleanup checker exited with status {status}")
         print(f"==> report: {self.run_dir / 'report.html'}")
+
+    def _mark_timing(self, name: str) -> None:
+        self.live_timing[f"{name}_epoch"] = time.time()
+
+    def _write_live_timing(
+        self,
+        phase: str,
+        exit_status: int,
+        *,
+        reason: str = "",
+        provider_reason: str = "",
+        retryable: bool | None = None,
+        resume_available: bool | None = None,
+        detail: str = "",
+    ) -> None:
+        finished_at = time.time()
+        payload = dict(self.live_timing)
+        payload.update(
+            {
+                "phase": phase,
+                "exit_status": exit_status,
+                "finished_at_epoch": finished_at,
+            }
+        )
+        if reason:
+            payload["reason"] = reason
+        if provider_reason:
+            payload["provider_reason"] = provider_reason
+        if retryable is not None:
+            payload["retryable"] = retryable
+        if resume_available is not None:
+            payload["resume_available"] = resume_available
+        if detail:
+            payload["detail"] = detail
+        payload["runner_timing"] = _runner_timing_breakdown(payload, finished_at)
+        payload["mcp_trace_timing"] = _mcp_trace_timing(self.run_dir)
+        self.timing_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        write_model_call_metrics_jsonl(
+            self.run_dir / "model_call_metrics.jsonl",
+            extract_model_call_metrics(self.run_dir, live_timing=payload),
+        )
 
     def _cleanup_server(self) -> None:
         proc = self.server_proc
@@ -507,6 +577,92 @@ def _run_and_tee(
             stdout_thread.join()
             stderr_thread.join()
             return status
+
+
+def _runner_timing_breakdown(timing: dict[str, object], finished_at: float) -> dict[str, object]:
+    started = _float_or_none(timing.get("started_at_epoch"))
+    claude_start = _float_or_none(timing.get("claude_exec_start_epoch"))
+    claude_end = _float_or_none(timing.get("claude_exec_end_epoch"))
+    checker_start = _float_or_none(timing.get("checker_start_epoch"))
+    checker_end = _float_or_none(timing.get("checker_end_epoch"))
+    server_start = _float_or_none(timing.get("server_start_epoch"))
+    server_ready = _float_or_none(timing.get("server_ready_epoch"))
+    server_finished = _float_or_none(timing.get("server_finished_epoch"))
+    total = _round_duration(finished_at - started) if started is not None else None
+
+    segments: dict[str, float] = {}
+    if started is not None and claude_start is not None:
+        segments["pre_claude_setup_s"] = _round_duration(claude_start - started)
+    if claude_start is not None and claude_end is not None:
+        segments["claude_exec_elapsed_s"] = _round_duration(claude_end - claude_start)
+    if claude_end is not None and server_finished is not None:
+        segments["post_claude_server_wait_s"] = _round_duration(server_finished - claude_end)
+    if checker_start is not None and checker_end is not None:
+        segments["checker_elapsed_s"] = _round_duration(checker_end - checker_start)
+    if checker_end is not None:
+        segments["final_overhead_s"] = _round_duration(finished_at - checker_end)
+    if server_start is not None and server_ready is not None:
+        segments["server_startup_s"] = _round_duration(server_ready - server_start)
+
+    partition_keys = (
+        "pre_claude_setup_s",
+        "claude_exec_elapsed_s",
+        "post_claude_server_wait_s",
+        "checker_elapsed_s",
+        "final_overhead_s",
+    )
+    accounted = sum(segments.get(key, 0.0) for key in partition_keys)
+    breakdown: dict[str, object] = {"total_elapsed_s": total, **segments}
+    if total is not None:
+        breakdown["accounted_elapsed_s"] = _round_duration(accounted)
+        breakdown["unaccounted_elapsed_s"] = _round_duration(max(0.0, total - accounted))
+        breakdown["accounting_note"] = (
+            "The partitioned runner buckets sum to total wall time. MCP trace timing "
+            "runs inside claude_exec_elapsed_s and is reported separately to avoid "
+            "double counting concurrent server work."
+        )
+    return breakdown
+
+
+def _mcp_trace_timing(run_dir: Path) -> dict[str, object]:
+    run_result_path = run_dir / "run_result.json"
+    if run_result_path.is_file():
+        try:
+            run_result = json.loads(run_result_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            run_result = {}
+        timing = run_result.get("runtime_timing")
+        if isinstance(timing, dict):
+            return timing
+    trace_events = _read_jsonl_path(run_dir / "trace.jsonl")
+    return runtime_timing_from_trace(trace_events)
+
+
+def _read_jsonl_path(path: Path) -> list[dict[str, object]]:
+    if not path.is_file():
+        return []
+    events: list[dict[str, object]] = []
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(item, dict):
+            events.append(item)
+    return events
+
+
+def _float_or_none(value: object) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _round_duration(value: float) -> float:
+    return round(max(0.0, value), 3)
 
 
 def _tee_stream(stream: BinaryIO, outputs: list[BinaryIO]) -> None:

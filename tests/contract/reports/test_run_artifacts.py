@@ -37,7 +37,7 @@ def test_run_artifact_contract_links_replay_trace_snapshots_and_summary() -> Non
         extra_views=[{"label": "chase", "path": "scene_views/0001_view0_chase.png"}],
     )
     manifest = build_replay_manifest(
-        game="territory",
+        game="household-cleanup",
         agent_count=1,
         duration_seconds=12.345,
         vlm_cost_usd=0.0012349,

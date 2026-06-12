@@ -15,6 +15,8 @@ const state = {
   activeView: "overview",
   selectedIntent: "",
   setupSelectionKey: "",
+  messupStatusKey: "",
+  syncAxesFromRoute: false,
 };
 
 const STATE_RAIL_WIDTH_KEY = "roboclaws.operatorConsole.stateRailWidth";
@@ -48,6 +50,8 @@ const els = {
   scenarioSetupInput: document.getElementById("scenario-setup-input"),
   relocationCountField: document.getElementById("relocation-count-field"),
   relocationCountInput: document.getElementById("relocation-count-input"),
+  messupButton: document.getElementById("messup-button"),
+  messupStatus: document.getElementById("messup-status"),
   portInput: document.getElementById("port-input"),
   selectedRouteSummary: document.getElementById("selected-route-summary"),
   commonFields: document.getElementById("common-fields"),
@@ -114,6 +118,8 @@ async function boot() {
   if (state.selectedRoute) {
     state.selectedWorld =
       state.worlds.find((world) => world.id === state.selectedRoute.world_id) || state.selectedWorld;
+    state.selectedIntent = state.selectedRoute.intent_id || "";
+    state.syncAxesFromRoute = true;
   }
   renderRoutes();
   renderSelection();
@@ -150,13 +156,11 @@ function bindEvents() {
     renderSelection();
   });
   els.intentInput.addEventListener("change", () => {
-    state.selectedIntent = selectedIntent();
+    state.selectedIntent = els.intentInput.value;
     renderSelection();
   });
   [
     els.contextInput,
-    els.scenarioSetupInput,
-    els.relocationCountInput,
     els.codexProviderInput,
     els.claudeProviderInput,
     els.portInput,
@@ -176,7 +180,22 @@ function bindEvents() {
     input.addEventListener("change", renderRoutes);
     input.addEventListener("change", refreshSelectedRouteReadiness);
   });
+  [els.scenarioSetupInput, els.relocationCountInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      resetMessupStatusForManualSetup();
+      renderSelection();
+      renderRoutes();
+      scheduleReadinessRefresh();
+    });
+    input.addEventListener("change", () => {
+      resetMessupStatusForManualSetup();
+      renderSelection();
+      renderRoutes();
+      refreshSelectedRouteReadiness();
+    });
+  });
   els.startButton.addEventListener("click", handleStartAction);
+  els.messupButton.addEventListener("click", previewMessup);
   els.latestResultButton.addEventListener("click", attachLatestResult);
   els.pauseButton.addEventListener("click", () => postRunAction("pause"));
   els.stopButton.addEventListener("click", () => {
@@ -464,6 +483,7 @@ function renderRoutes() {
         combinationsForWorld(world.id).find((item) => item.enabled) ||
         combinationsForWorld(world.id)[0];
       state.selectedIntent = state.selectedRoute ? state.selectedRoute.intent_id : "";
+      state.syncAxesFromRoute = true;
       renderRoutes();
       renderSelection();
       refreshSelectedRouteReadiness();
@@ -555,28 +575,58 @@ function renderSelection() {
 function renderAxisSelectors() {
   const worldId = state.selectedWorld && state.selectedWorld.id;
   const combos = combinationsForWorld(worldId);
+  const syncFromRoute = state.syncAxesFromRoute;
+  const route = state.selectedRoute;
+  const backendOptions = uniqueOptions(combos, "backend_id", "backend_label");
   renderSelectOptions(
     els.backendInput,
-    uniqueOptions(combos, "backend_id", "backend_label"),
-    state.selectedRoute && state.selectedRoute.backend_id
+    backendOptions,
+    syncFromRoute && route
+      ? route.backend_id
+      : currentSelectValue(els.backendInput, backendOptions, route && route.backend_id)
   );
+  const agentOptions = uniqueOptions(combos, "agent_engine_id", "agent_engine_label");
   renderSelectOptions(
     els.agentEngineInput,
-    uniqueOptions(combos, "agent_engine_id", "agent_engine_label"),
-    state.selectedRoute && state.selectedRoute.agent_engine_id
+    agentOptions,
+    syncFromRoute && route
+      ? route.agent_engine_id
+      : currentSelectValue(els.agentEngineInput, agentOptions, route && route.agent_engine_id)
   );
+  const intentOptions = intentOptionsForCurrentAxes(combos);
   renderSelectOptions(
     els.intentInput,
-    intentOptionsForCurrentAxes(combos),
-    state.selectedIntent || (state.selectedRoute && state.selectedRoute.intent_id)
+    intentOptions,
+    syncFromRoute && route
+      ? route.intent_id
+      : currentSelectValue(
+          els.intentInput,
+          intentOptions,
+          state.selectedIntent || (route && route.intent_id)
+        )
   );
+  const laneOptions = evidenceLaneOptions(combos);
   renderSelectOptions(
     els.evidenceLaneInput,
-    evidenceLaneOptions(combos),
-    state.selectedRoute && state.selectedRoute.evidence_lane
+    laneOptions,
+    syncFromRoute && route
+      ? route.evidence_lane
+      : currentSelectValue(els.evidenceLaneInput, laneOptions, route && route.evidence_lane)
   );
+  state.syncAxesFromRoute = false;
   const selected = selectedCombinationFromAxes();
   renderProviderProfileOptions(selected);
+}
+
+function currentSelectValue(select, options, fallbackValue = "") {
+  const current = select.value || "";
+  if (current && options.some((option) => option.value === current)) {
+    return current;
+  }
+  if (fallbackValue && options.some((option) => option.value === fallbackValue)) {
+    return fallbackValue;
+  }
+  return current || fallbackValue || "";
 }
 
 function uniqueOptions(items, valueKey, labelKey, labelFn) {
@@ -599,11 +649,15 @@ function uniqueOptions(items, valueKey, labelKey, labelFn) {
 function intentOptionsForCurrentAxes(combos) {
   const backendId = els.backendInput.value;
   const agentEngineId = els.agentEngineInput.value;
+  const axisMatches = combos.filter(
+    (item) => item.backend_id === backendId && item.agent_engine_id === agentEngineId
+  );
+  const scopedCombos = axisMatches.length ? axisMatches : combos;
   const intentValues = [
-    ...new Set(combos.map((item) => item.intent_id).filter(Boolean)),
+    ...new Set(scopedCombos.map((item) => item.intent_id).filter(Boolean)),
   ];
   return intentValues.map((value) => {
-    const matching = combos.filter(
+    const matching = scopedCombos.filter(
       (item) =>
         item.backend_id === backendId &&
         item.agent_engine_id === agentEngineId &&
@@ -811,6 +865,7 @@ function renderScenarioSetup(route) {
   const relocation = selectedScenarioSetup() !== "baseline";
   els.relocationCountField.hidden = !relocation;
   els.relocationCountInput.disabled = !relocation;
+  renderMessupAction(route);
 }
 
 function defaultScenarioSetup(route, intent, defaults) {
@@ -818,6 +873,37 @@ function defaultScenarioSetup(route, intent, defaults) {
     return route.scenario_setup || defaults.scenario_setup || "relocate-cleanup-related-objects";
   }
   return "baseline";
+}
+
+function renderMessupAction(route) {
+  const supported = Boolean(
+    route &&
+      route.world_id &&
+      route.world_id.startsWith("molmospaces/") &&
+      route.backend_id === "mujoco"
+  );
+  const statusKey = route ? `${route.world_id}:${route.backend_id}` : "";
+  els.messupButton.disabled = !supported || Boolean(state.activeRunId);
+  els.messupButton.hidden = !supported;
+  els.messupStatus.hidden = !supported;
+  if (!supported) {
+    return;
+  }
+  if (state.messupStatusKey !== statusKey) {
+    state.messupStatusKey = statusKey;
+    els.messupStatus.textContent = "Mess-up check is optional and does not block baseline tests.";
+  }
+}
+
+function resetMessupStatusForManualSetup() {
+  const route = state.selectedRoute;
+  if (!route || !route.world_id || !route.world_id.startsWith("molmospaces/")) {
+    return;
+  }
+  const relocation = selectedScenarioSetup() !== "baseline";
+  els.messupStatus.textContent = relocation
+    ? "Mess-up check is optional; run it again after changing setup or count."
+    : "Baseline means no pre-run relocation. Start Agent Run will not mess up objects.";
 }
 
 function renderIntentSelector(route) {
@@ -1134,6 +1220,8 @@ async function attachLatestResult() {
   );
   if (route) {
     state.selectedRoute = route;
+    state.selectedIntent = route.intent_id || "";
+    state.syncAxesFromRoute = true;
     renderRoutes();
     renderSelection();
   }
@@ -1328,6 +1416,54 @@ function confirmAction({ title, cta, body, bodyHtml, onConfirm }) {
     },
     { once: true }
   );
+}
+
+async function previewMessup() {
+  const route = state.selectedRoute;
+  if (!route) {
+    return;
+  }
+  const requestedCount = els.relocationCountInput.value || "5";
+  els.messupButton.disabled = true;
+  els.messupStatus.textContent = "Checking mess-up target capacity...";
+  const result = await fetchJson("/api/messup-preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      world_id: route.world_id,
+      backend_id: route.backend_id,
+      scenario_setup: "relocate-cleanup-related-objects",
+      relocation_count: requestedCount,
+      seed: els.seedInput.value || "7",
+    }),
+  });
+  els.messupButton.disabled = false;
+  if (result.error) {
+    els.scenarioSetupInput.value = "baseline";
+    els.messupStatus.textContent = `Mess-up check failed: ${result.error}. Baseline remains available.`;
+    renderSelection();
+    return;
+  }
+  if (result.ok) {
+    els.scenarioSetupInput.value = result.scenario_setup || "relocate-cleanup-related-objects";
+    els.relocationCountInput.value = String(result.requested_count || requestedCount);
+    markCurrentSetupSelection(route);
+    els.messupStatus.textContent =
+      `Mess-up ready: ${result.selected_count} / ${result.requested_count} targets. ` +
+      "Start Agent Run will use this relocation setup.";
+  } else {
+    els.scenarioSetupInput.value = "baseline";
+    markCurrentSetupSelection(route);
+    els.messupStatus.textContent =
+      `Mess-up unavailable: ${result.message || "not enough eligible targets"}. ` +
+      "Baseline remains available for follow-up tests.";
+  }
+  renderSelection();
+  scheduleReadinessRefresh();
+}
+
+function markCurrentSetupSelection(route) {
+  state.setupSelectionKey = `${route.id}:${selectedIntentForRoute(route)}`;
 }
 
 async function launchRun() {

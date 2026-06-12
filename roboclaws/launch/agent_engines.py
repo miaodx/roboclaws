@@ -66,14 +66,6 @@ AGENT_ENGINE_SPECS: dict[str, AgentEngineSpec] = {
         supported_provider_profiles=("kimi",),
         default_provider_profile="kimi",
     ),
-    "vlm-policy": AgentEngineSpec(
-        id="vlm-policy",
-        label="VLM Policy",
-        dispatch_runner="vlm",
-        internal_runner_class="model-policy",
-        supported_provider_profiles=("kimi",),
-        default_provider_profile="kimi",
-    ),
     "script-runner": AgentEngineSpec(
         id="script-runner",
         label="Script Runner",

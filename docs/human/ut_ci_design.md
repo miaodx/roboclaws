@@ -109,12 +109,10 @@ gate when it requires any of the following:
 | CI Job | Current Level | Local Equivalent |
 | --- | --- | --- |
 | `lint-and-mock` | required PR gate | `just agent::verify ci-required` |
-| `real-model-smoke` | required main gate today; review if provider flakiness grows | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=territory agent_engine=vlm-policy report=visual ...` and `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=coverage agent_engine=vlm-policy report=visual ...` |
-| `openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual ...` |
-| `territory-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=territory agent_engine=openclaw-gateway report=visual ...` |
-| `coverage-openclaw-smoke` | advisory smoke | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=coverage agent_engine=openclaw-gateway report=visual ...` |
-| `photo-task-smoke` | opt-in expensive gate | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=photo-capture agent_engine=openclaw-gateway report=visual ...` |
-| `molmo-live-cleanup` | opt-in expensive gate | `just molmo::ci-rehearsal ...` or the live matrix script |
+| `household-route-contracts` | required PR gate, usually inside `lint-and-mock` | `./scripts/dev/run_pytest_standalone.sh -q tests/contract/dev_tools/test_task_agent_just_recipes.py tests/unit/operator_console` |
+| `household-map-build` | required or advisory main gate depending on runtime cost | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels ...` |
+| `molmo-live-cleanup` | opt-in expensive gate | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels ...` or the live matrix script |
+| `planner-proof` | local-only or manual expensive gate | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` |
 | `publish-pages` | required main gate | no single facade today; keep focused tests for Pages assembly constraints |
 
 ## Current Gaps

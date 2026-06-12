@@ -124,6 +124,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-restored-count", type=int, default=None)
     parser.add_argument("--min-semantic-accepted-count", type=int, default=None)
     parser.add_argument("--min-sweep-coverage", type=float, default=None)
+    parser.add_argument(
+        "--min-adjust-camera-count",
+        type=int,
+        default=0,
+        help="Require at least this many adjust_camera tool requests for adaptive proof runs.",
+    )
+    parser.add_argument(
+        "--min-generated-target-inspection-candidates",
+        type=int,
+        default=0,
+        help=(
+            "Require at least this many public generated target-inspection candidates "
+            "for adaptive proof runs."
+        ),
+    )
     parser.add_argument("--require-planner-proof-attachment", action="store_true")
     parser.add_argument("--require-planner-proof-quality", action="store_true")
     parser.add_argument(
@@ -245,6 +260,10 @@ def main() -> None:
             min_restored_count=args.min_restored_count,
             min_semantic_accepted_count=args.min_semantic_accepted_count,
             min_sweep_coverage=args.min_sweep_coverage,
+            min_adjust_camera_count=args.min_adjust_camera_count,
+            min_generated_target_inspection_candidates=(
+                args.min_generated_target_inspection_candidates
+            ),
             require_planner_proof_attachment=args.require_planner_proof_attachment,
             require_planner_proof_quality=args.require_planner_proof_quality,
             require_planner_proof_min_steps=args.require_planner_proof_min_steps,
@@ -325,6 +344,8 @@ def _assert_result(
     min_restored_count: int | None = None,
     min_semantic_accepted_count: int | None = None,
     min_sweep_coverage: float | None = None,
+    min_adjust_camera_count: int = 0,
+    min_generated_target_inspection_candidates: int = 0,
     require_planner_proof_attachment: bool = False,
     require_planner_proof_quality: bool = False,
     require_planner_proof_min_steps: int | None = None,
@@ -403,6 +424,11 @@ def _assert_result(
         _assert_semantic_acceptability(data, min_semantic_accepted_count)
     if min_sweep_coverage is not None:
         assert float(data.get("sweep_coverage_rate") or 0.0) >= min_sweep_coverage, data
+    _assert_adaptive_inspection_thresholds(
+        data,
+        min_adjust_camera_count=min_adjust_camera_count,
+        min_generated_target_inspection_candidates=min_generated_target_inspection_candidates,
+    )
     if expect_task is not None:
         assert data.get("task_prompt") == expect_task, data
     if expect_task_name is not None:
@@ -1344,6 +1370,31 @@ def _assert_semantic_sweep_did_not_clean(data: dict[str, Any]) -> None:
         if int(counts.get(f"{tool}:request") or 0)
     }
     assert not called, (called, data)
+
+
+def _assert_adaptive_inspection_thresholds(
+    data: dict[str, Any],
+    *,
+    min_adjust_camera_count: int = 0,
+    min_generated_target_inspection_candidates: int = 0,
+) -> None:
+    counts = data.get("tool_event_counts") or {}
+    adjust_count = int(counts.get("adjust_camera:request") or 0)
+    assert adjust_count >= min_adjust_camera_count, {
+        "actual_adjust_camera_count": adjust_count,
+        "min_adjust_camera_count": min_adjust_camera_count,
+        "tool_event_counts": counts,
+    }
+    runtime_metric_map = data.get("runtime_metric_map") or (
+        (data.get("agent_view") or {}).get("runtime_metric_map") or {}
+    )
+    generated = runtime_metric_map.get("generated_target_inspection_candidates") or []
+    generated_count = len(generated)
+    assert generated_count >= min_generated_target_inspection_candidates, {
+        "actual_generated_target_inspection_candidates": generated_count,
+        "min_generated_target_inspection_candidates": (min_generated_target_inspection_candidates),
+        "runtime_metric_map": runtime_metric_map,
+    }
 
 
 def _is_semantic_sweep_or_map_build(data: dict[str, Any]) -> bool:

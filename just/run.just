@@ -6,11 +6,10 @@
 #     [key=value ...]
 #
 # Surfaces:
-#   household-world | ai2thor-world | ai2thor-games | planner-proof
+#   household-world | planner-proof
 #
 # Intents:
-#   cleanup | open-ended | map-build | navigate | photo-capture |
-#   territory | coverage | planner-proof
+#   cleanup | open-ended | map-build | planner-proof
 
 set working-directory := '..'
 set positional-arguments

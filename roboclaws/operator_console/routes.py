@@ -576,6 +576,32 @@ def _molmospaces_enabled_combinations() -> tuple[ConsoleLaunchSelection, ...]:
             _lane_selections(
                 world_id,
                 "mujoco",
+                "open-ended",
+                "codex-cli",
+                "codex-env",
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                gates=common_gates,
+                default_overrides=("seed=7",),
+                supports_operator_steer=True,
+            )
+        )
+        rows.extend(
+            _lane_selections(
+                world_id,
+                "mujoco",
+                "open-ended",
+                "claude-code",
+                "mimo-anthropic",
+                scenario_setup=ENVIRONMENT_SETUP_BASELINE,
+                gates=common_gates,
+                default_overrides=("seed=7",),
+                supports_operator_steer=True,
+            )
+        )
+        rows.extend(
+            _lane_selections(
+                world_id,
+                "mujoco",
                 "map-build",
                 "direct-runner",
                 None,
@@ -973,5 +999,4 @@ def _intent_label(intent_id: str) -> str:
         "cleanup": "Cleanup",
         "open-ended": "Open-ended",
         "map-build": "Map build",
-        "coverage": "Coverage",
     }.get(intent_id, intent_id.replace("-", " ").title())

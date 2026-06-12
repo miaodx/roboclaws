@@ -8,7 +8,7 @@
 
 > **Let's Bring Brain To Robots**
 
-**Visible robotics demos driven by VLM policies, OpenClaw, and AI coding agents.**
+**Visible household-robot demos driven by MCP tools, reusable skills, and AI coding agents.**
 
 Roboclaws is a thin demo repo for making AI-driven robotics behavior reviewable:
 frames, maps, tool traces, scores, and public/private evaluation boundaries are
@@ -100,16 +100,12 @@ Pages republishes from successful `main` runs.
 
 | Demo | What it proves | Run it locally | Live CI report |
 | --- | --- | --- | --- |
-| AI2-THOR territory | Multiple robots compete for reachable cells in an iTHOR scene. | Local VLM route is being repaired; use mock/OpenClaw reports for now. | [mock](https://miaodx.com/roboclaws/territory/report.html), [Kimi smoke](https://miaodx.com/roboclaws/smoke/territory/report.html), [OpenClaw](https://miaodx.com/roboclaws/openclaw/territory/report.html) |
-| AI2-THOR coverage | Multiple robots cooperate to cover as much of the room as possible. | `just run::surface surface=ai2thor-games world=ai2thor-games/FloorPlan201 backend=ai2thor intent=coverage agent_engine=vlm-policy report=visual agents=2 steps=100` | [mock](https://miaodx.com/roboclaws/coverage/report.html), [Kimi smoke](https://miaodx.com/roboclaws/smoke/coverage/report.html), [OpenClaw](https://miaodx.com/roboclaws/openclaw/coverage/report.html) |
-| OpenClaw navigation | OpenClaw Gateway agents control robots through the shared Roboclaws APIs. | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual` | [openclaw/demo/report.html](https://miaodx.com/roboclaws/openclaw/demo/report.html) |
-| Coding-agent MCP control | Docker-backed Codex or Claude Code drives the robot directly through MCP tools. | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=codex-cli report=visual` or `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=claude-code report=visual` | Local-only today; reports write to `output/runs/<stamp>/`. |
-| Photo task | A robot navigates the room and photographs chairs/sofas. | `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=photo-capture agent_engine=openclaw-gateway report=visual` | Local/OpenClaw report artifact. |
 | Semantic map build | A no-cleanup sweep starts from the minimal navigation map and builds public runtime map evidence. Online `runtime_metric_map.json` output and converted Agibot `navigation_memory.json` can both feed the canonical Actionable Semantic Map Snapshot contract. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=baseline` | Local artifact today. |
 | Household cleanup | A cleanup agent tidies a relocated household setup from minimal map context while private scoring stays hidden. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=direct-runner evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | [Molmo live index](https://miaodx.com/roboclaws/molmo/live/), [Kimi K2.6](https://miaodx.com/roboclaws/molmo/live/kimi-k2.6/seed-7/report.html), [MiMo v2.5 Pro](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5-pro/seed-7/report.html), [MiMo v2.5](https://miaodx.com/roboclaws/molmo/live/mimo-v2.5/seed-7/report.html) |
+| Open-ended household goal | A coding agent receives a user goal, builds or uses household evidence, and declares task-level completion without cleanup-specific terminal scoring. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="find something useful to drink"` | Local artifact today. |
 | Household live agent | Docker-backed Claude Code or Codex connects to the cleanup MCP server and produces the same cleanup report shape. | `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=claude-code provider_profile=mimo-anthropic evidence_lane=world-oracle-labels seed=7 scenario_setup=relocate-cleanup-related-objects relocation_count=5` | Same Molmo live index; CI currently runs Claude Code through Kimi/MiMo provider profiles. |
+| Planner proof | A household cleanup run can hand off planner proof requests for local manipulation evidence without changing the public cleanup contract. | `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run` | Local artifact today. |
 | Agent operator console | Standalone local browser console for supported Codex, Claude Code, and experimental OpenAI Agents SDK household routes with backend locks, launch-axis gates, live state, and artifact links. | `just console::run` | Local-only operator surface. |
-| Railway appliance | Single-container hosted demo with UI, viewer, Gateway, and AI2-THOR. | `DEMO_PASSWORD=demo just appliance::run local` | Local appliance surface. |
 | Maintainer gate | Fast mock confidence check before shipping repo changes. | `just agent::verify mock` | CI status: [workflow](https://github.com/MiaoDX/roboclaws/actions/workflows/ci.yml) |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the code map and the full operating
@@ -126,7 +122,7 @@ mode contract.
 | Skill library convention         | [skills/README.md](skills/README.md)                                                                       |
 | Public command grammar           | [just/README.md](just/README.md)                                                                           |
 | Local keys and report artifacts  | [docs/human/local-runtime.md](docs/human/local-runtime.md)                                                 |
-| Coding-agent navigation guide    | [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md)                             |
+| Coding-agent household MCP guide | [docs/human/coding-agent-nav-server.md](docs/human/coding-agent-nav-server.md)                             |
 | MolmoSpaces settings             | [docs/human/molmospaces-settings.md](docs/human/molmospaces-settings.md)                                   |
 | Current project focus            | [STATUS.md](STATUS.md)                                                                                     |
 | Agent operating rules            | [AGENTS.md](AGENTS.md)                                                                                     |
@@ -138,7 +134,6 @@ mode contract.
 - [Robowbc](https://github.com/MiaoDX/robowbc) - whole-body-control experiments
 - [OpenClaw](https://github.com/openclaw/openclaw) - open-source personal AI assistant
 - [ROSClaw](https://github.com/PlaiPin/rosclaw) - OpenClaw to ROS 2 bridge
-- [AI2-THOR](https://github.com/allenai/ai2thor) - interactive 3D indoor simulation
 
 ## License
 

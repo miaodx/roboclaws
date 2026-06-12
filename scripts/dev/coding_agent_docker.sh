@@ -144,8 +144,8 @@ run_cli() {
   local task_name="${ROBOCLAWS_CODE_AGENT_DOCKER_TASK:-}"
   local mounted_skills="${ROBOCLAWS_CODE_AGENT_DOCKER_SKILLS:-}"
   if [[ "${ROBOCLAWS_CODE_AGENT_DOCKER_ISOLATED_NAV_WORKSPACE:-0}" == "1" ]]; then
-    task_name="${task_name:-ai2thor-nav}"
-    mounted_skills="${mounted_skills:-ai2thor-navigator}"
+    task_name="${task_name:-semantic-map-build}"
+    mounted_skills="${mounted_skills:-molmo-realworld-cleanup}"
   fi
   task_name="${task_name:-task}"
   local disable_codex_system_skills="${ROBOCLAWS_CODE_AGENT_DOCKER_DISABLE_CODEX_SYSTEM_SKILLS:-${isolate_workspace}}"

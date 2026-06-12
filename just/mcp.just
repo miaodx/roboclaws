@@ -1,10 +1,4 @@
-# Roboclaws MCP server lifecycle — shared across code::cc, chat::run,
-# appliance::run, and any future driver. Project policy: only one roboclaws
-# MCP per machine, so `down` reaps orphans across all known driver families.
-#
-# Preferred entrypoints:
-# - just mcp::up    [scene] [host] [port]   start bare FastMCP server
-# - just mcp::down                          universal idempotent teardown
+# Roboclaws MCP lifecycle helpers for household agent-server runs.
 
 set working-directory := '..'
 
@@ -30,40 +24,40 @@ _wait_for_port host port:
     echo "error: MCP endpoint not ready at {{host}}:{{port}}" >&2
     exit 1
 
-up scene="FloorPlan201" host="127.0.0.1" port="18788" allow_privileged_tools="0" skill_path="../skills/ai2thor-navigator/SKILL.md":
+up server="household-cleanup" host="127.0.0.1" port="18788" output_dir=".tmp/roboclaws-mcp/run":
     #!/usr/bin/env bash
     set -euo pipefail
-    allow_privileged_tools="{{allow_privileged_tools}}"
-    skill_path="{{skill_path}}"
+    server="{{server}}"
 
     if [[ ! -x .venv/bin/python ]]; then
       echo "error: .venv/bin/python not found — run 'uv sync --extra dev' first" >&2
       exit 1
     fi
 
+    case "$server" in
+      household-cleanup|semantic-map-build)
+        ;;
+      *)
+        echo "error: unsupported MCP server '$server' (expected household-cleanup|semantic-map-build)" >&2
+        exit 1
+        ;;
+    esac
+
     mkdir -p "{{server_dir}}"
 
     if [[ -f "{{server_pid_file}}" ]]; then
       existing_pid="$(cat "{{server_pid_file}}" || true)"
       if [[ "$existing_pid" =~ ^[0-9]+$ ]] && kill -0 "$existing_pid" 2>/dev/null; then
-        if [[ "$allow_privileged_tools" == "1" || "$allow_privileged_tools" == "true" ]]; then
-          echo "==> restarting roboclaws MCP server with privileged helpers enabled" >&2
-          just mcp::down
-        else
-          mcp_url="http://{{host}}:{{port}}/mcp"
-          printf '%s\n' "$mcp_url" > "{{server_url_file}}"
-          just mcp::_kickoff_banner "$mcp_url" "$skill_path" >&2
-          echo "$mcp_url"
-          exit 0
-        fi
+        mcp_url="http://{{host}}:{{port}}/mcp"
+        printf '%s\n' "$mcp_url" > "{{server_url_file}}"
+        just mcp::_kickoff_banner "$mcp_url" "$server" >&2
+        echo "$mcp_url"
+        exit 0
       fi
     fi
 
-    echo "==> starting roboclaws MCP server (scene={{scene}}, host={{host}}, port={{port}})" >&2
-    server_args=(.venv/bin/python -m roboclaws.cli.agent_server --scene "{{scene}}" --host "{{host}}" --port "{{port}}")
-    if [[ "$allow_privileged_tools" == "1" || "$allow_privileged_tools" == "true" ]]; then
-      server_args+=(--allow-privileged-tools)
-    fi
+    echo "==> starting roboclaws MCP server (server=$server, host={{host}}, port={{port}})" >&2
+    server_args=(.venv/bin/python -m roboclaws.cli.agent_server "$server" --host "{{host}}" --port "{{port}}" --output-dir "{{output_dir}}")
     "${server_args[@]}" > "{{server_log_file}}" 2>&1 &
     SERVER_PID=$!
     printf '%s\n' "$SERVER_PID" > "{{server_pid_file}}"
@@ -76,18 +70,14 @@ up scene="FloorPlan201" host="127.0.0.1" port="18788" allow_privileged_tools="0"
 
     mcp_url="http://{{host}}:{{port}}/mcp"
     printf '%s\n' "$mcp_url" > "{{server_url_file}}"
-    just mcp::_kickoff_banner "$mcp_url" "$skill_path" >&2
+    just mcp::_kickoff_banner "$mcp_url" "$server" >&2
     echo "$mcp_url"
 
-# Print the canonical kickoff prompt for direct coding-agent usage.
-# Emitted on stderr by `up` so callers that capture stdout (`mcp_url=$(just mcp::up)`)
-# still get the URL clean. Centralised here so code::cc / code::codex and
-# chat::run show the same prompt.
-_kickoff_banner url skill_path="../skills/ai2thor-navigator/SKILL.md":
+_kickoff_banner url server="household-cleanup":
     #!/usr/bin/env bash
     echo "==> roboclaws MCP ready at {{url}}"
-    echo "==> Kickoff prompt (paste as the first message to Claude / Codex):"
-    echo '    Read {{skill_path}}, then use the roboclaws MCP tools for the requested task.'
+    echo "==> Server: {{server}}"
+    echo "==> Use the task skill and public household MCP tools for the selected run."
 
 down:
     #!/usr/bin/env bash
@@ -117,12 +107,9 @@ down:
     fi
 
     # Backstop: reap any orphan roboclaws MCP server processes that lost their
-    # PID file (crash, disk wipe, manual rm, recipe family switch). Project
-    # policy is one roboclaws MCP per machine, so we cover every known driver:
-    #   - roboclaws.cli.agent_server  (code::cc / code::codex)
-    #   - openclaw_interactive.py     (chat::run)
+    # PID file (crash, disk wipe, manual rm, recipe family switch).
     if command -v pgrep >/dev/null 2>&1; then
-      orphan_pattern='python[^ ]*[ ].*((-m[ ]+)?roboclaws[.]cli[.]agent_server|openclaw_interactive[.]py)'
+      orphan_pattern='python[^ ]*[ ].*((-m[ ]+)?roboclaws[.]cli[.]agent_server)'
       orphan_pids="$(pgrep -f "$orphan_pattern" || true)"
       if [[ -n "$orphan_pids" ]]; then
         while IFS= read -r orphan_pid; do

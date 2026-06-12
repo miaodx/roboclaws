@@ -18,10 +18,10 @@ the default architecture decision surface.
 
 | # | Title | Status |
 |---|-------|--------|
-| [0001](0001-use-ai2thor-for-phase-1.md) | Use AI2-THOR for Phase 1 | Accepted |
+| [0001](0001-use-ai2thor-for-phase-1.md) | Use AI2-THOR for Phase 1 | Superseded by ADR-0137 |
 | [0002](0002-defer-isaac-lab-to-phase-3.md) | Defer Isaac Lab integration to Phase 3 | Accepted |
 | [0003](0003-separate-cleanup-agent-view-from-private-evaluation.md) | Separate Cleanup Agent View From Private Evaluation | Accepted |
-| [0004](0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md) | Use Separate MCP Servers For AI2-THOR And Molmo Cleanup | Accepted |
+| [0004](0004-use-separate-mcp-servers-for-ai2thor-and-molmo-cleanup.md) | Use Separate MCP Servers For AI2-THOR And Molmo Cleanup | Superseded by ADR-0137 |
 | [0005](0005-use-configurable-generated-mess-set-size.md) | Use Configurable Generated Mess Set Size | Accepted |
 | [0006](0006-expose-adr-0003-cleanup-contract-through-mcp.md) | Expose ADR-0003 Cleanup Contract Through MCP | Accepted |
 | [0009](0009-use-shared-molmo-cleanup-report-underlay.md) | Use Shared Molmo Cleanup Report Underlay | Accepted |
@@ -49,6 +49,9 @@ the default architecture decision surface.
 | [0132](0132-keep-cleanup-memory-skill-first-and-remove-promoted-composite.md) | Keep Cleanup Memory Skill-First And Remove Promoted Composite | Accepted |
 | [0133](0133-use-http-visual-grounding-service-for-real-camera-labels.md) | Use HTTP Visual Grounding Service For Real Camera Labels | Accepted |
 | [0134](0134-use-public-done-readiness-gates.md) | Use Public Done Readiness Gates | Accepted |
+| [0135](0135-use-sanitized-report-performance-artifacts-for-speed-claims.md) | Use Sanitized Report Performance Artifacts For Speed Claims | Accepted |
+| [0136](0136-use-base-navigation-map-and-first-class-household-launch-contracts.md) | Use Base Navigation Map And First-Class Household Launch Contracts | Accepted |
+| [0137](0137-retire-ai2thor-and-direct-vlm-public-surfaces.md) | Retire AI2-THOR And Direct VLM Public Surfaces | Accepted |
 
 ## Adding A New ADR
 

@@ -609,30 +609,6 @@ def test_advertised_context_windows_clear_flush_headroom() -> None:
     )
 
 
-def test_reasoning_entries_have_enough_token_budget() -> None:
-    """Any bootstrap entry marked ``reasoning: true`` triggers a hidden
-    chain-of-thought pass. Without a generous ``max_tokens`` budget the
-    answer comes back with ``content: null`` (verified on
-    ``nvidia/nemotron-nano-12b-v2-vl:free`` via OpenRouter during Phase 2.2
-    exploration). If any curated entry ever flips to ``reasoning: true``,
-    ``_DEFAULT_MAX_TOKENS`` in the bridge must stay ≥ 1024.
-    """
-    reasoning_ids: set[str] = set()
-    for provider in ("kimi", "nvidia"):
-        for model in _extract_extra_models_for(provider):
-            if model.get("reasoning"):
-                reasoning_ids.add(f"{provider}:{model['id']}")
-    if not reasoning_ids:
-        pytest.skip("no reasoning-flagged curated models right now")
-    bridge_text = (ROOT / "roboclaws" / "openclaw" / "bridge.py").read_text(encoding="utf-8")
-    m = re.search(r"_DEFAULT_MAX_TOKENS\s*=\s*(\d+)", bridge_text)
-    assert m, "bridge.py missing _DEFAULT_MAX_TOKENS constant"
-    assert int(m.group(1)) >= 1024, (
-        "bridge.py _DEFAULT_MAX_TOKENS too small for reasoning model entries "
-        f"{sorted(reasoning_ids)!r} — tested minimum is 1024."
-    )
-
-
 # ---------------------------------------------------------------------------
 # Plugin id ↔ auth env var sanity
 # ---------------------------------------------------------------------------
@@ -852,15 +828,8 @@ def test_mcp_seeds_per_agent_tools_profile_minimal(tmp_path: Path) -> None:
         )
 
 
-def test_mcp_can_be_disabled_for_direct_chat_completions_runs(tmp_path: Path) -> None:
-    """Direct OpenClaw game runs use image-to-JSON chat turns, not MCP tools.
-
-    Those runs do not start a host-side Roboclaws MCP server. If the Gateway
-    config still exposes ``bundle-mcp`` there, Kimi can try to call tools
-    against ``host.docker.internal:18788/mcp`` and the turn stalls until the
-    HTTP read timeout. ``ROBOCLAWS_MCP_ENABLED=0`` must therefore remove both
-    the server block and the per-agent bundle-mcp splice.
-    """
+def test_mcp_can_be_disabled_for_provider_only_probes(tmp_path: Path) -> None:
+    """Provider-only Gateway probes can disable the Roboclaws MCP surface."""
     cfg_path = _run_preseed(
         tmp_path,
         {

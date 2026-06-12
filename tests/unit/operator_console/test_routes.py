@@ -55,8 +55,8 @@ def test_world_catalog_exposes_scene_first_console_choices() -> None:
     assert worlds["b1-map12"]["preview_assets"]["map"]["href"] == (
         "/asset-previews/maps/agibot-robot-map-12/preview.png"
     )
-    assert worlds["ai2thor/FloorPlan201"]["preview_assets"] == {}
-    assert worlds["ai2thor-games/FloorPlan201"]["preview_assets"] == {}
+    assert "ai2thor/FloorPlan201" not in worlds
+    assert "ai2thor-games/FloorPlan201" not in worlds
     assert worlds["planner-proof/default"]["preview_assets"] == {
         "map": {
             "path": "/previews/molmospaces-val_0-map.png",
@@ -167,6 +167,22 @@ def test_console_combinations_are_catalog_backed_axes() -> None:
             "world-oracle-labels",
         ),
         (
+            "molmospaces/val_0",
+            "mujoco",
+            "open-ended",
+            "codex-cli",
+            "codex-env",
+            "world-oracle-labels",
+        ),
+        (
+            "molmospaces/val_1",
+            "mujoco",
+            "open-ended",
+            "codex-cli",
+            "codex-env",
+            "world-oracle-labels",
+        ),
+        (
             "agibot-g2/map-12",
             "agibot-gdk",
             "map-build",
@@ -202,6 +218,8 @@ def test_console_exposes_all_supported_household_evidence_lanes() -> None:
         assert f"molmospaces/val_0::mujoco::cleanup::openai-agents-sdk::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::map-build::codex-cli::{lane}" in enabled_ids
         assert f"molmospaces/val_0::mujoco::map-build::direct-runner::{lane}" in enabled_ids
+        assert f"molmospaces/val_0::mujoco::open-ended::codex-cli::{lane}" in enabled_ids
+        assert f"molmospaces/val_1::mujoco::open-ended::codex-cli::{lane}" in enabled_ids
         assert f"agibot-g2/map-12::agibot-gdk::map-build::codex-cli::{lane}" in enabled_ids
 
     grounded = get_selection(
@@ -252,7 +270,19 @@ def test_molmospaces_cleanup_routes_match_scene_target_capacity() -> None:
     assert not any(route_id.startswith("molmospaces/val_8::") for route_id in all_ids)
 
     assert "molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels" in disabled
+    assert (
+        "at least 5 generated cleanup targets"
+        in disabled["molmospaces/val_1::mujoco::cleanup::codex-cli::world-oracle-labels"]
+    )
     assert "molmospaces/val_1::isaaclab::cleanup::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_1::mujoco::map-build::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_1::mujoco::open-ended::codex-cli::world-oracle-labels" in enabled_ids
+    assert "molmospaces/val_2::mujoco::open-ended::codex-cli::world-oracle-labels" in enabled_ids
+    val0_openai_open_ended = (
+        "molmospaces/val_0::mujoco::open-ended::openai-agents-sdk::world-oracle-labels"
+    )
+    assert val0_openai_open_ended in disabled
+    assert "OpenAI Agents SDK is not proven" in disabled[val0_openai_open_ended]
 
     enabled_mujoco_cleanup_worlds = {
         route.world_id

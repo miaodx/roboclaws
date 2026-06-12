@@ -78,7 +78,8 @@ need normal GitHub access or a local network proxy.
 ### 1.1.1 Work-network guard
 
 OpenClaw Gateway runs and system-provider Claude Code runs are not allowed on
-the work network. The work network is detected by reachability of
+the work network. OpenClaw is a private/maintainer path, not a current public
+launch axis. The work network is detected by reachability of
 `https://api-router.evad.mioffice.cn/`.
 Check the current network before those workflows with:
 
@@ -87,8 +88,8 @@ just dev::network-status
 ```
 
 If that command reports `network: work`, do not run `just openclaw::*`,
-`just chat::run`, `just appliance::run`, or OpenClaw integration/local
-verification gates. Do not run system-provider Claude Code workflows on the
+`just chat::run`, or OpenClaw integration/local verification gates. Do not run
+system-provider Claude Code workflows on the
 work network. Claude Code recipes may run there only when the repo-local `.env`
 contains a supported MiMo, Kimi, or mify Anthropic key route. Codex recipes
 default to `codex-env` and may run there when `CODEX_BASE_URL` and
@@ -100,12 +101,19 @@ allowed repo-local key route is available.
 
 ### 1.1.2 Coding-agent permissions
 
-The pinned coding-agent Docker runtime is the only supported public route for
-local Codex / Claude Code demos. Use `just code::codex` or `just code::cc` for
-direct coding-agent demos; those recipes carry the required bypass-approval /
-bypass-sandbox flags and isolate the agent to the task skill. New `just`
-recipes that launch Codex or Claude Code must call those recipes or
-`scripts/dev/coding_agent_docker.sh`.
+The pinned coding-agent Docker runtime is the only supported runtime for local
+Codex / Claude Code household demos. Launch those demos through the public
+catalog:
+
+```bash
+just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=claude-code intent=cleanup evidence_lane=world-oracle-labels
+```
+
+The recipes carry the required bypass-approval / bypass-sandbox flags and
+isolate the agent to the task skill. New `just` recipes that launch Codex or
+Claude Code must route through `run::surface`, the private `agent::*`
+dispatcher, or `scripts/dev/coding_agent_docker.sh`.
 
 Bare host `codex` or `claude` launches are unsupported and must not be used
 unless the human explicitly asks for a system-CLI debugging run. If that happens,
@@ -128,13 +136,11 @@ Apply the same environment variable to other gstack `browse` commands in that
 session. This is a local browser-test workaround only; it is not a demo runtime
 setting and should not be committed into application code or launch recipes.
 
-### 1.2 Verify AI2-THOR is available
+### 1.2 Simulator availability
 
-```bash
-python -c "import ai2thor; print(f'ai2thor {ai2thor.__version__} ok')"
-```
-
-Note: AI2-THOR will download a Unity build (~1GB) on first use.
+The current public household routes use MolmoSpaces/MuJoCo by default, with
+Isaac Lab and Agibot GDK behind explicit backend gates. Do not require
+AI2-THOR for current household or planner-proof work.
 
 ### 1.3 Verify VLM access
 
@@ -206,16 +212,12 @@ pytest -q
 
 ### 2.2 Run a specific demo
 
-```bash
-python examples/games/single_agent_explore.py --steps 20 --model gpt-4o-mini
-python examples/games/territory_game.py --agents 2 --steps 50 --scene FloorPlan201
-```
-
-Or use `just` recipes. The public command grammar is intentionally small:
+Use `just` recipes. The public command grammar is intentionally small:
 
 ```bash
-just run::surface surface=ai2thor-world agent_engine=openclaw-gateway intent=navigate
-just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=smoke
+just run::surface surface=household-world agent_engine=direct-runner intent=map-build evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
 just agent::verify mock                          # maintainer confidence gate
 ```
 
@@ -236,11 +238,11 @@ ruff format --check .
 
 ## 4) Key technical constraints
 
-1. **AI2-THOR multi-agent is synchronous**: `controller.step()` moves one agent per call. Game logic must implement turn-based stepping.
-2. **Use iTHOR scenes only**: ProcTHOR has multi-agent bugs (GitHub Issues #1169, #1265). Stick to FloorPlan1-430.
-3. **VLM output parsing must be robust**: VLMs sometimes return malformed JSON. Always wrap parsing in try/except with fallback to a safe action (e.g., `RotateRight`).
-4. **Image encoding**: Use JPEG quality 60-80 for VLM input to balance cost and quality. Resize to 320×240 or 640×480.
-5. **Cost guard**: Default to a cheap provider for development (Kimi/MiMo); switch to Claude/GPT-4o for final demos. See `docs/human/model-matrix.md` for current verified models. Example scripts should expose a `--model` flag and log cumulative API cost per game.
+1. **Public launch axes stay canonical**: use `surface`, `world`, `backend`, `intent`, `agent_engine`, `provider_profile`, `evidence_lane`, and `camera_labeler` instead of old task/profile wrappers.
+2. **Base Navigation Map is the start-of-run map contract**: do not expose private relocation/scoring truth, static movable-object inventory, or full fixture tables as default agent input.
+3. **Runtime Metric Map owns semantic enrichment**: map-build and observations create public anchors, target candidates, and observed-object evidence.
+4. **VLM output parsing must be robust**: model-backed runs may return malformed JSON or partial tool arguments. Always wrap parsing in try/except with a safe recovery path.
+5. **Cost guard**: default to cheap provider profiles for development (Kimi/MiMo/codex-env as appropriate) and record model usage/cost when live agents run. See `docs/human/model-matrix.md` for current verified models.
 
 ---
 
@@ -251,7 +253,8 @@ This is a thin demo repo. Priorities:
 1. **Get it working end-to-end** over making it elegant
 2. **Generate visible output** (screenshots, GIFs, videos) for every feature
 3. **Log everything** (VLM prompts, responses, game state) for debugging
-4. **Keep dependencies minimal**: ai2thor, anthropic/openai, Pillow, numpy
+4. **Keep dependencies minimal**: avoid adding packages unless the active
+   surface/backend needs them and they are declared in `pyproject.toml`
 
 ### 5.1 Legacy support policy
 
@@ -270,7 +273,7 @@ sole working route for the requested demo.
 
 ## 6) Commit hygiene
 
-- Keep commits scoped: `feat: add territory game logic`, `fix: handle VLM timeout`
+- Keep commits scoped: `feat: add cleanup report gate`, `fix: handle provider timeout`
 - Commit messages: `type: description` format
 - If a commit is created by Codex, include `Co-authored-by: Codex <codex@users.noreply.github.com>`
 - If a commit is created by another AI coding agent, include a corresponding co-author trailer.
@@ -280,13 +283,13 @@ sole working route for the requested demo.
 ## 7) Cloud vs local development split
 
 This project runs agents in two topologies that complement each other. Pick the right
-one for the task; don't try to validate a real-AI2-THOR / real-VLM outcome in a cloud
-sandbox and don't burn local wall-clock on tasks that a cloud session could close in
-minutes.
+one for the task; don't try to validate a real simulator / real provider / real robot
+outcome in a cloud sandbox and don't burn local wall-clock on tasks that a cloud
+session could close in minutes.
 
 ### 7.1 Cloud agent (Claude Code on the web, this sandbox)
 
-No GPU, no display, no AI2-THOR Unity build, typically no VLM API keys. Good for:
+No GPU, no display, no robot backend, typically no VLM/API keys. Good for:
 
 - Research / survey questions across the repo
 - Small bounded code changes fully covered by the `lint-and-mock` CI job
@@ -298,8 +301,8 @@ No GPU, no display, no AI2-THOR Unity build, typically no VLM API keys. Good for
 **Don't** use a cloud session to validate:
 
 - Real Kimi / Claude / GPT behavior on real frames
-- Real AI2-THOR rendering, multi-agent collision, or `GetReachablePositions`
-  correctness
+- Real simulator rendering, robot navigation, physics, or backend-specific
+  map/pose correctness
 - Real OpenClaw Gateway docker-compose integration
 - Anything needing multi-round debug iteration against a live service
 
@@ -309,10 +312,11 @@ next CI run against `main`") rather than implying it was exercised.
 
 ### 7.2 Local agent (user's workstation)
 
-Has real VLM keys, real AI2-THOR + GPU/X, can run the OpenClaw Gateway locally.
+Has real provider keys, local simulator/GPU/display resources when needed, and
+can run backend-specific services locally.
 Required for any task tagged `local-dev` on the issue tracker. Good for:
 
-- End-to-end validation of a new feature with real Kimi + real Unity
+- End-to-end validation of a new feature with real provider and simulator/backend
 - Long-running multi-round debug loops (agents stuck in furniture, VLM choosing
   nonsense actions, OpenClaw session memory growth)
 - Taking the GIFs / screenshots that feed the README demo matrix
@@ -386,8 +390,8 @@ just run::surface surface=<surface> agent_engine=<engine> [world=<world>] [backe
 ```
 
 Use `report=visual` by default for non-Molmo surfaces. For household cleanup,
-use `evidence_lane=world-oracle-labels` by default and `evidence_lane=smoke`
-when the prompt asks for cheap, semantic, or fast AI-agent iteration evidence.
+use `evidence_lane=world-oracle-labels` by default. `smoke` is a verification
+preset or private runner mode, not a public evidence lane.
 If a household prompt is supplied and no `intent=` is named, let the canonical
 surface infer `intent=open-ended`; use `intent=cleanup prompt=...` only when the
 prompt explicitly narrows cleanup scope.
@@ -396,9 +400,8 @@ Examples:
 
 - "run the semantic map build task" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=map-build agent_engine=direct-runner evidence_lane=world-oracle-labels`
 - "run the household cleanup task with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=world-oracle-labels`
-- "run the household cleanup task with codex with smoke profile" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco intent=cleanup agent_engine=codex-cli provider_profile=codex-env evidence_lane=smoke`
 - "run an open-ended household goal with codex" -> `just run::surface surface=household-world world=molmospaces/val_0 backend=mujoco agent_engine=codex-cli provider_profile=codex-env prompt="我渴了，帮我找些解渴的东西"`
-- "run the ai2thor nav task with openclaw" -> `just run::surface surface=ai2thor-world world=ai2thor/FloorPlan201 backend=ai2thor intent=navigate agent_engine=openclaw-gateway report=visual`
+- "run the planner proof dry run" -> `just run::surface surface=planner-proof world=planner-proof/default backend=mujoco intent=planner-proof agent_engine=direct-runner mode=dry-run`
 
 Use `agent::*` for deeper maintainer control:
 
@@ -410,8 +413,8 @@ just agent::mcp up|down
 just agent::gateway up|down|pull-image
 ```
 
-Lower modules (`openclaw::*`, `vlm::*`, `molmo::*`, `harness::*`, `verify::*`,
-`mcp::*`, `code::*`, `chat::*`, `appliance::*`, `dev::*`) are private
+Lower modules (`openclaw::*`, `molmo::*`, `harness::*`, `verify::*`,
+`mcp::*`, `code::*`, `chat::*`, `dev::*`) are private
 implementation details. They remain runnable for debugging, but are hidden from
 completion and should not be the first choice for natural-language run requests.
 

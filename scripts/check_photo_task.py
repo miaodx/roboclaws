@@ -1,1 +1,0 @@
-openclaw/check_photo_task.py

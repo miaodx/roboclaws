@@ -117,6 +117,23 @@ def test_map_build_change_selects_map_build_and_cleanup_consumer_prior(
     assert gates["direct-cleanup-runtime-prior-consumer"]["axes"]["runtime_map_prior"] == "required"
 
 
+def test_runtime_prior_placeholder_resolves_to_map_build_artifact(tmp_path: Path) -> None:
+    matrix = selector.build_validation_matrix(
+        budget="focused",
+        changed_files=["roboclaws/maps/actionable_semantic_map.py"],
+        output_dir=tmp_path,
+    )
+    gates = _selected_gates(matrix)
+    map_gate = gates["direct-map-build-world-oracle"]
+    prior = Path(map_gate["gate_dir"]) / "run" / "seed-7" / "runtime_metric_map.json"
+    prior.parent.mkdir(parents=True)
+    prior.write_text('{"schema":"runtime_metric_map_v1"}\n', encoding="utf-8")
+
+    command = runner._resolve_gate_command(gates["direct-cleanup-runtime-prior-consumer"], matrix)
+
+    assert f"runtime_map_prior={prior}" in command
+
+
 def test_smoke_budget_records_relevant_expensive_gates_as_user_budget_skipped(
     tmp_path: Path,
 ) -> None:

@@ -73,7 +73,7 @@ OFFICIAL_RENDER_SOURCE_REFERENCES = (
         "line_start": 361,
         "line_end": 399,
         "claim": (
-            "MuJoCo scene generation parses AI2-THOR material albedo, specular values, "
+            "MuJoCo scene generation parses source-scene material albedo, specular values, "
             "and diffuse texture paths into MJCF material metadata."
         ),
     },

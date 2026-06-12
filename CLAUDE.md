@@ -1,6 +1,7 @@
 # Roboclaws
 
-Multiple VLM/OpenClaw agents controlling simulated robots in competition and cooperation. Python 3.12+, AI2-THOR simulation.
+Household robot demo routes with MCP tools, reusable skills, and coding-agent
+runtimes. Python 3.12+.
 
 `AGENTS.md` is the canonical repo playbook. This file is a Claude-specific
 overlay; when the two conflict, follow `AGENTS.md`.
@@ -29,13 +30,6 @@ Then follow the links in `STATUS.md` only as needed:
 Root `PLAN.md` is a legacy compatibility pointer, not an active plan. Shipped
 phase history lives under `docs/retrospectives/` and is not required reading.
 
-For navigator-skill / MCP-tool changes, also read `harness/PLAN.md` — the
-append-only logbook of scripted-loop runs that grades the skill on curated
-tasks. Each `## Run NNN` entry attributes a metric delta to one bounded
-change. See [`docs/ai/harness/self-improvement-loop.md`](docs/ai/harness/self-improvement-loop.md)
-for the design rationale and [`harness/README.md`](harness/README.md) for
-how to run another iteration (`just agent::harness run <task>`).
-
 ## Build & test
 
 Use the repo-local `.venv/` as the canonical Python environment. It is managed
@@ -61,39 +55,42 @@ pytest
 Isaac Lab remains intentionally isolated in `.venv-isaaclab/`; use the Isaac
 preflight harness when testing that backend.
 
-Run demos (requires AI2-THOR, auto-downloads Unity build ~1GB; see `AGENTS.md` §1.3 for VLM key setup):
+Run current public demos through the launch catalog:
 
 ```bash
-python examples/games/single_agent_explore.py
-python examples/games/territory_game.py --agents 3
-python examples/games/coverage_game.py --agents 3
+just run::surface surface=household-world agent_engine=direct-runner intent=map-build evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli prompt="find something useful to drink"
 ```
 
 Common `just` recipes use the small public facade:
 
 ```bash
-just run::surface surface=ai2thor-world agent_engine=openclaw-gateway intent=navigate
-just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=smoke
+just run::surface surface=household-world agent_engine=direct-runner intent=map-build evidence_lane=world-oracle-labels
+just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels
+just run::surface surface=planner-proof agent_engine=direct-runner intent=planner-proof mode=dry-run
 just agent::verify mock                          # maintainer confidence gate
 ```
 
 Work-network restriction: if `just dev::network-status` reports `network: work`
 (the probe can reach `https://api-router.evad.mioffice.cn/`), do not run
 OpenClaw workflows. Guarded recipes include OpenClaw Gateway recipes,
-`just chat::run`, `just appliance::run`, and OpenClaw local/integration
-verification gates. System-provider Claude Code is also blocked on the work
-network. `just code::cc`, `just harness::navigator`, and
-`just molmo::claude-report` may run there when `.env` contains a supported MiMo,
+`just chat::run`, and OpenClaw local/integration verification gates.
+System-provider Claude Code is also blocked on the work
+network. `just molmo::claude-report` may run there when `.env` contains a supported MiMo,
 Kimi, or mify Anthropic key route. Codex recipes default to `codex-env` and may
 run there when `CODEX_BASE_URL` and `CODEX_API_KEY` are configured. The mify
 route is available only with explicit `ROBOCLAWS_CODEX_PROVIDER=mify` and
 `XM_LLM_API_KEY`. Model-only overrides do not bypass the guard.
 
-Coding-agent runtime contract: run direct Codex / Claude Code demos through
-`just code::codex` or `just code::cc`. The pinned Docker-backed coding-agent
-runtime is the only supported public route; it runs with full local-demo
-permissions and an isolated task-skill workspace. New `just` recipes that launch
-Codex or Claude Code must reuse those recipes or `scripts/dev/coding_agent_docker.sh`.
+Coding-agent runtime contract: run Codex / Claude Code demos through the public
+launch catalog, for example
+`just run::surface surface=household-world agent_engine=codex-cli intent=cleanup evidence_lane=world-oracle-labels`.
+The pinned Docker-backed coding-agent runtime is the only supported task
+runtime; it runs with full local-demo permissions and an isolated task-skill
+workspace. New `just` recipes that launch Codex or Claude Code must route
+through `run::surface`, the private `agent::*` dispatcher, or
+`scripts/dev/coding_agent_docker.sh`.
 Bare host `codex` or `claude` launches are unsupported unless the human
 explicitly asks for a system-CLI debugging run.
 
@@ -110,42 +107,18 @@ for the launch-axis grammar and prompt mappings.
 
 ## Architecture
 
-See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the code map. Non-obvious
-AI2-THOR quirks and the VLM call pattern are below.
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the code map. Current product
+contracts use `surface=household-world` plus `intent=map-build`, `cleanup`, or
+`open-ended`. The planner proof route is `surface=planner-proof
+intent=planner-proof`.
 
-### AI2-THOR key APIs
-
-```python
-# Multi-agent initialization
-controller = Controller(scene="FloorPlan201", agentCount=3, gridSize=0.25)
-
-# Control a single agent (one agent per step() call)
-event = controller.step(action="MoveAhead", agentId=1)
-
-# Get each agent's independent frame and state
-frame = event.events[agent_id].frame  # numpy (H, W, 3)
-pos = event.events[agent_id].metadata['agent']['position']
-
-# Overhead view
-event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=True)
-```
-
-**Important notes:**
-- iTHOR scenes support multi-agent; ProcTHOR does NOT (known bugs)
-- Agents physically collide — they cannot pass through each other
-- Agents are visible in each other's camera views
-- Scene ranges: FloorPlan1-30 (kitchens), 201-230 (living rooms), 301-330 (bedrooms), 401-430 (bathrooms)
-
-### VLM call pattern
-
-```python
-# Each agent's per-step prompt includes:
-# 1. First-person camera frame (base64 JPEG)
-# 2. Overhead grid map (marking all agent positions + game state)
-# 3. Structured JSON (position, score, remaining steps, etc.)
-#
-# VLM returns JSON: {"reasoning": "...", "action": "MoveAhead"}
-```
+Map guidance:
+- Base Navigation Map is the start-of-run map contract.
+- Runtime Metric Map owns semantic evidence produced during map-build and
+  observations.
+- `smoke` is a verification preset/private runner mode, not an evidence lane.
+- Open-ended runs use `intent=open-ended` directly, not cleanup-specific custom
+  mode language.
 
 ## Git workflow
 
@@ -158,11 +131,19 @@ event = controller.step(action="GetMapViewCameraProperties", raise_for_failure=T
 This project uses a two-topology dev setup — see `AGENTS.md §7` for the full spec. Short version:
 
 - **Cloud sessions** (this Claude Code web session): research, small bounded changes, CI/doc edits, anything validated by `lint-and-mock`. No API keys, no Unity, no GPU in the sandbox.
-- **Local sessions** (user's workstation): real Kimi / real AI2-THOR / real OpenClaw Gateway. Owns every task tagged `local-dev` on the issue tracker, plus any multi-round debug loop.
+- **Local sessions** (user's workstation): real provider keys, simulator/GPU
+  resources when needed, and backend-specific services. Owns every task tagged
+  `local-dev` on the issue tracker, plus any multi-round debug loop.
 
 Rule of thumb: if a PR's core claim depends on real hardware or real VLM behavior, the first validation happens **locally**. CI is where that proof stays continuously live, not where it starts. In a cloud session, if you can't actually run the thing, say so explicitly in the PR — don't paper over it with "CI will tell us". File a `local-dev` issue (see #50 for template) and hand off.
 
-**If the session IS local** (you have `docker`, a real `KIMI_API_KEY` / `ANTHROPIC_API_KEY`, a running Gateway, and AI2-THOR installed): the cloud → local handoff protocol does not apply. Run the real thing yourself, iterate, and report what you observed. No need to file a `local-dev` issue or split bounded changes away from real-hardware probes — a local session owns both. The cloud/local split exists to stop *cloud* sessions from papering over missing validation; it does not constrain a local session from carrying a full phase end-to-end.
+**If the session IS local** (you have `docker`, real provider keys, and the
+needed simulator/backend available): the cloud -> local handoff protocol does
+not apply. Run the real thing yourself, iterate, and report what you observed.
+No need to file a `local-dev` issue or split bounded changes away from
+real-backend probes; a local session owns both. The cloud/local split exists to
+stop cloud sessions from papering over missing validation; it does not
+constrain a local session from carrying a full phase end-to-end.
 
 ### Local preflight ritual
 
@@ -199,10 +180,13 @@ sole working route for the requested demo.
 
 ## Gotchas
 
-- AI2-THOR downloads a Unity build (~1GB) on first run
-- AI2-THOR on Linux requires X server or headless rendering (`ai2thor[headless]`)
-- macOS may need additional AI2-THOR rendering configuration
-- `controller.step()` is synchronous, one agent per call — game engine uses turn-based stepping
+- Use `./scripts/dev/run_pytest_standalone.sh` on hosts where ROS site-packages
+  leak into pytest.
+- Check `just dev::network-status` before OpenClaw or system-provider Claude
+  workflows.
+- Keep Isaac Lab in `.venv-isaaclab/`; do not mix it into the normal `.venv/`.
+- Treat historical AI2-THOR/direct-VLM docs and reports as archived evidence,
+  not current launch guidance.
 
 ## Planning workflow
 
