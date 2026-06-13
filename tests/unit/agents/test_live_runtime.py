@@ -1704,9 +1704,12 @@ def test_openai_agents_runtime_can_use_kimi_openai_chat_profile(
 
     OpenAIAgentsLiveRuntime().run(request)
 
-    assert captured["model"] == "kimi-k2.6"
+    assert captured["model"] == "kimi-k2.7-code"
     assert captured["base_url"] == "https://api.kimi.com/coding/v1"
     assert captured["api_key"] == "fake-kimi-key"
+    assert captured["agent_kwargs"]["model_settings"].extra_headers == {
+        "User-Agent": "claude-code/1.0.0"
+    }
 
 
 def test_openai_agents_runtime_allows_disabling_mcp_tool_list_cache(

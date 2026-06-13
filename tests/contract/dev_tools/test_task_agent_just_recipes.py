@@ -2592,7 +2592,7 @@ def test_coding_agent_profile_summary_supports_openai_agents_chat_profiles() -> 
             "key_env=MIMO_TP_KEY protocol=chat-completions"
         ),
         (
-            "kimi-openai-chat model=kimi-k2.6 "
+            "kimi-openai-chat model=kimi-k2.7-code "
             "base_url=https://api.kimi.com/coding/v1 "
             "key_env=KIMI_API_KEY protocol=chat-completions"
         ),
