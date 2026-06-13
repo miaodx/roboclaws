@@ -352,62 +352,6 @@ def test_worker_model_data_cache_reuses_loaded_scene(
     assert calls == [scene_xml]
 
 
-def test_worker_registers_filament_resource_provider_when_assets_exist(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pytest.importorskip("mujoco")
-    worker = _load_worker_module()
-    worker._FILAMENT_RESOURCE_PROVIDER = None
-    assets_dir = tmp_path / "mujoco" / "filament" / "assets" / "data"
-    assets_dir.mkdir(parents=True)
-    (assets_dir / "pbr.filamat").write_bytes(b"pbr")
-    lib_path = tmp_path / "mujoco" / "libmujoco.so.3.5.1"
-    lib_path.write_bytes(b"fake")
-    monkeypatch.setattr(worker.mujoco, "__file__", str(tmp_path / "mujoco" / "__init__.py"))
-    monkeypatch.setattr(worker.mujoco, "__version__", "3.5.1")
-
-    class FakeLib:
-        def __init__(self) -> None:
-            self.registered = None
-            self.mjp_getResourceProvider = _FakeCFunc(lambda name: None)
-            self.mjp_registerResourceProvider = _FakeCFunc(self._register)
-
-        def _register(self, provider_pointer: object) -> int:
-            self.registered = provider_pointer
-            return 1
-
-    fake_lib = FakeLib()
-    monkeypatch.setattr(worker.ctypes, "CDLL", lambda path: fake_lib)
-
-    worker._register_filament_resource_provider_if_available()
-
-    provider = worker._FILAMENT_RESOURCE_PROVIDER
-    assert provider is not None
-    assert provider.assets_dir == assets_dir
-    assert fake_lib.registered is not None
-    assert provider.provider.prefix == b"filament"
-
-
-def test_worker_normalizes_filament_renderer_frame_orientation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    pytest.importorskip("mujoco")
-    worker = _load_worker_module()
-    import numpy as np
-
-    frame = np.array([[[1], [2]], [[3], [4]], [[5], [6]]], dtype=np.uint8)
-
-    monkeypatch.setattr(worker, "_is_mujoco_filament_runtime", lambda: False)
-    assert worker._normalize_renderer_frame(frame) is frame
-
-    monkeypatch.setattr(worker, "_is_mujoco_filament_runtime", lambda: True)
-    normalized = worker._normalize_renderer_frame(frame)
-
-    assert normalized.tolist() == [[[5], [6]], [[3], [4]], [[1], [2]]]
-    assert normalized.flags["C_CONTIGUOUS"]
-
-
 def test_worker_kwargs_parse_render_resolution_args() -> None:
     kwargs = _worker_kwargs_from_args(
         "robot_views",
@@ -601,16 +545,6 @@ def test_molmospaces_worker_preserves_robot_view_role_on_camera_spec() -> None:
 
     assert spec["robot_view_role"] == "fpv"
     assert spec["camera_basis"] == "robot_pose_eye_target"
-
-
-class _FakeCFunc:
-    def __init__(self, callback):
-        self.callback = callback
-        self.argtypes = None
-        self.restype = None
-
-    def __call__(self, *args):
-        return self.callback(*args)
 
 
 def test_worker_select_targets_honors_requested_generated_count() -> None:

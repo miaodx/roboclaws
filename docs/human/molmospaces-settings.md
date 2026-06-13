@@ -544,18 +544,6 @@ Real visual status/review report:
 just molmo::review-report
 ```
 
-Renderer-only standard-vs-Filament comparison:
-
-```bash
-just molmo::renderer-comparison
-just molmo::renderer-comparison 7 10 output/molmo/renderer-comparison-1280x720 procthor-10k-val 0 rby1m 8 1280 720
-```
-
-The comparison recipe is positional. When overriding render width or height,
-also pass the intermediate scene, robot, and focus-count arguments so values do
-not shift into earlier slots. The high-resolution path changes only comparison
-artifacts; it does not change cleanup, RAW_FPV, or visual-grounding defaults.
-
 Render-only MuJoCo/Isaac scene camera comparison:
 
 ```bash

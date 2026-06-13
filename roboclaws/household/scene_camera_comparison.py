@@ -15,6 +15,7 @@ from xml.etree import ElementTree
 
 from PIL import Image, ImageDraw, ImageFont
 
+from roboclaws.household.artifact_paths import dimensions_from_shape, output_relpath
 from roboclaws.household.camera_control import (
     CAMERA_CONTROL_API_NAME,
     CANONICAL_CAMERA_MODEL,
@@ -32,7 +33,6 @@ from roboclaws.household.camera_control import (
 )
 from roboclaws.household.genesis_backend import GenesisSubprocessBackend
 from roboclaws.household.isaac_lab_backend import IsaacLabSubprocessBackend
-from roboclaws.household.renderer_comparison import _dimensions_from_shape, _relpath
 from roboclaws.household.subprocess_backend import MolmoSpacesSubprocessBackend
 
 SCENE_CAMERA_COMPARISON_SCHEMA = "molmospaces_isaac_scene_camera_comparison_v1"
@@ -280,7 +280,7 @@ def run_scene_camera_comparison(config: SceneCameraComparisonConfig) -> dict[str
         output_dir / "camera_control_request.json",
         camera_request,
     )
-    manifest["camera_control"]["request_artifact"] = _relpath(camera_request_path, output_dir)
+    manifest["camera_control"]["request_artifact"] = output_relpath(camera_request_path, output_dir)
     manifest["view_specs"] = {
         "room-level-canonical": room_views,
         MOLMOSPACES_LANE_ID: molmo_specs,
@@ -611,7 +611,7 @@ def _capture_molmospaces_camera_views(
             "lens": result.get("lens") or {},
             "images": _image_entries(output_dir=config.output_dir, result=result),
             "views": result.get("views") or [],
-            "camera_control_request": _relpath(camera_request_path, config.output_dir),
+            "camera_control_request": output_relpath(camera_request_path, config.output_dir),
         }
     except Exception as exc:
         return _lane_failure(config.molmospaces_python, exc)
@@ -667,7 +667,7 @@ def _capture_isaac_lane(
             "scene_bounds": result.get("scene_bounds"),
             "images": _image_entries(output_dir=config.output_dir, result=result),
             "views": result.get("views") or [],
-            "camera_control_request": _relpath(camera_request_path, config.output_dir),
+            "camera_control_request": output_relpath(camera_request_path, config.output_dir),
         }
     except Exception as exc:
         return _lane_failure(config.isaac_python, exc)
@@ -713,7 +713,7 @@ def _capture_genesis_lane(
             "lens": result.get("lens") or {},
             "images": _image_entries(output_dir=config.output_dir, result=result),
             "views": result.get("views") or [],
-            "camera_control_request": _relpath(camera_request_path, config.output_dir),
+            "camera_control_request": output_relpath(camera_request_path, config.output_dir),
         }
     except Exception as exc:
         return _lane_failure(config.genesis_python, exc)
@@ -2364,9 +2364,9 @@ def _write_contact_sheet(manifest: dict[str, Any], *, output_dir: Path) -> Path 
             draw.text((x + 6, tile_y + 4), lane_id, fill=(248, 250, 252), font=font)
     contact_path.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(contact_path)
-    manifest.setdefault("artifacts", {})["contact_sheet"] = _relpath(contact_path, output_dir)
+    manifest.setdefault("artifacts", {})["contact_sheet"] = output_relpath(contact_path, output_dir)
     manifest["contact_sheet"] = {
-        "path": _relpath(contact_path, output_dir),
+        "path": output_relpath(contact_path, output_dir),
         "view_count": len(entries),
         "lanes": list(lanes),
         "dimensions": {
@@ -2494,7 +2494,7 @@ def _write_genesis_movable_object_crops(
     diagnostics["crop_artifacts"] = {
         "schema": "genesis_movable_object_crop_artifacts_v1",
         "crop_size_px": crop_size_px,
-        "crop_dir": _relpath(crop_dir, output_dir) if crop_dir.is_dir() else "",
+        "crop_dir": output_relpath(crop_dir, output_dir) if crop_dir.is_dir() else "",
         "object_count": len(crop_records),
         "objects": crop_records,
     }
@@ -2532,8 +2532,8 @@ def _write_image_center_crop(
         target = target_dir / filename
         crop.save(target)
         return {
-            "path": _relpath(target, output_dir),
-            "source_path": _relpath(image_path, output_dir),
+            "path": output_relpath(target, output_dir),
+            "source_path": output_relpath(image_path, output_dir),
             "view_id": view_id,
             "pixel": [pixel_x, pixel_y],
             "crop_box": [left, upper, right, lower],
@@ -6163,8 +6163,8 @@ def _image_entries(*, output_dir: Path, result: dict[str, Any]) -> dict[str, dic
     for view_id, raw_path in images.items():
         path = Path(str(raw_path))
         entries[str(view_id)] = {
-            "path": _relpath(path, output_dir),
-            "dimensions": _dimensions_from_shape(shapes.get(view_id)),
+            "path": output_relpath(path, output_dir),
+            "dimensions": dimensions_from_shape(shapes.get(view_id)),
         }
     return entries
 
