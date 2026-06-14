@@ -700,3 +700,20 @@ Stop this refactor loop when:
   grouped complexity count dropped from 14 to 9 violations, and the
   `_assert_public_agent_view` / `_assert_runtime_metric_map` rows were removed
   from the main checker baseline.
+- 2026-06-14: Continued P1 by splitting the remaining planner-proof bundle
+  runner checker core into
+  `scripts/molmo_cleanup/planner_proof_bundle_runner_checker.py`. The CLI
+  script now keeps `main(...)` plus the `_assert_runner_result(...)` private
+  test hook as an imported alias, while runner manifest core checks, proof
+  execution horizon, local runtime preflight, warmup, grasp mitigation/cache
+  preflights, proof summaries, probe commands, and cleanup rerun checks live in
+  focused helper phases. Evidence:
+  `ruff check scripts/molmo_cleanup/check_molmo_planner_proof_bundle_runner_result.py scripts/molmo_cleanup/planner_proof_bundle_runner_checker.py`
+  passed; `ruff format --check` for the same files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/checkers/test_check_molmo_planner_proof_bundle_runner_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 184 to 178 Ruff complexity
+  violations, with oversized modules unchanged at 59. The remaining six
+  grouped complexity rows for
+  `check_molmo_planner_proof_bundle_runner_result.py` were removed from the
+  baseline.
