@@ -11,7 +11,7 @@ import sys
 import traceback
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 if __package__ in {None, ""}:
     repo_root = Path(__file__).resolve().parents[2]
@@ -75,6 +75,7 @@ from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureRequest,
     capture_isaac_lab_scene_camera_views,
 )
+from scripts.isaac_lab_cleanup.isaac_worker_cli import build_arg_parser
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
 DEFAULT_WIDTH = 540
@@ -243,157 +244,15 @@ _DEFERRED_SIMULATION_APP: Any | None = None
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Isaac Lab cleanup backend worker for Roboclaws.")
-    parser.add_argument("--state-path", type=Path, required=True)
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    return build_arg_parser(
+        default_width=DEFAULT_WIDTH,
+        default_height=DEFAULT_HEIGHT,
+        generated_scene_kinds=GENERATED_SCENE_KINDS,
+        segmentation_data_types=ISAAC_SEGMENTATION_DATA_TYPES,
+    ).parse_args(argv)
 
-    init = subparsers.add_parser("init")
-    init.add_argument("--run-dir", type=Path, required=True)
-    init.add_argument("--seed", type=int, default=7)
-    init.add_argument("--scene-source", default="procthor-10k-val")
-    init.add_argument("--scene-index", type=int, default=0)
-    init.add_argument("--generated-mess-count", type=int, default=1)
-    init.add_argument(
-        "--generated-mess-object-id",
-        action="append",
-        help="Private run-control object id to include in the generated mess set. Repeatable.",
-    )
-    init.add_argument(
-        "--generated-mess-manifest-path",
-        type=Path,
-        help="Private backend-neutral generated mess manifest to apply during init.",
-    )
-    init.add_argument(
-        "--generated-scene-kind",
-        choices=GENERATED_SCENE_KINDS,
-        default="roboclaws_smoke",
-        help=(
-            "Generated USD control scene to write when --scene-usd-path is omitted. "
-            "Use isaac_official_blocks to probe NVIDIA Isaac sample assets."
-        ),
-    )
-    init.add_argument("--runtime-mode", choices=("real", "fake"), default="real")
-    init.add_argument("--include-robot", action="store_true")
-    init.add_argument("--robot-name", default="rby1m")
-    init.add_argument("--map-bundle-dir", type=Path)
-    init.add_argument(
-        "--enable-segmentation",
-        action="store_true",
-        help="Request Isaac semantic/instance segmentation tensors during real RGB capture.",
-    )
-    init.add_argument(
-        "--segmentation-data-type",
-        action="append",
-        choices=ISAAC_SEGMENTATION_DATA_TYPES,
-        help=(
-            "Isaac segmentation data type to request. Repeat to probe individual "
-            "annotators; defaults to all supported segmentation data types."
-        ),
-    )
-    init.add_argument(
-        "--segmentation-semantic-filter",
-        action="append",
-        help=(
-            "Semantic label instance name to request from Isaac camera semantic filters. "
-            "Repeat to probe class vs usd_prim_path labels; defaults to class."
-        ),
-    )
-    init.add_argument(
-        "--scene-usd-path",
-        type=Path,
-        help=(
-            "Optional local USD/USDA scene to load in real mode. Use this for "
-            "MolmoSpaces Isaac scene parity once a scene shard is available locally."
-        ),
-    )
 
-    subparsers.add_parser("locations")
-    subparsers.add_parser("observe")
-
-    snapshot = subparsers.add_parser("snapshot")
-    snapshot.add_argument("--output-path", type=Path, required=True)
-    snapshot.add_argument("--title", required=True)
-    snapshot.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
-    snapshot.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
-
-    robot_views = subparsers.add_parser("robot_views")
-    robot_views.add_argument("--output-dir", type=Path, required=True)
-    robot_views.add_argument("--label", required=True)
-    robot_views.add_argument("--focus-object-id")
-    robot_views.add_argument("--focus-receptacle-id")
-    robot_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
-    robot_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
-    robot_views.add_argument(
-        "--render-settle-frames",
-        type=int,
-        default=0,
-        help=(
-            "Extra Isaac render frames to advance after the first nonblank RGB tensor before "
-            "saving robot-view images. This is an opt-in capture-quality probe control."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-aa-op",
-        type=int,
-        help=(
-            "Optional Isaac /rtx/post/aa/op value for an opt-in capture-quality probe. "
-            "The worker records the previous value and restores it after capture."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-tonemap-op",
-        type=int,
-        help=(
-            "Optional Isaac /rtx/post/tonemap/op value for an opt-in native tone probe. "
-            "The worker records the previous value and restores it after capture."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-exposure-bias",
-        type=float,
-        help=(
-            "Optional Isaac /rtx/post/tonemap/exposureBias value for an opt-in native "
-            "exposure probe. The worker records the previous value and restores it after "
-            "capture."
-        ),
-    )
-    robot_views.add_argument(
-        "--isaac-colorcorr-gain",
-        type=_parse_rgb_gain,
-        help=(
-            "Optional Isaac /rtx/post/colorcorr gain as R,G,B for an opt-in native color "
-            "correction probe. The worker enables color correction, records previous values, "
-            "and restores them after capture."
-        ),
-    )
-
-    camera_views = subparsers.add_parser("camera_views")
-    camera_views.add_argument("--output-dir", type=Path, required=True)
-    camera_views.add_argument("--view-specs-path", type=Path)
-    camera_views.add_argument("--camera-request-path", type=Path)
-    camera_views.add_argument("--render-width", type=int, default=DEFAULT_WIDTH)
-    camera_views.add_argument("--render-height", type=int, default=DEFAULT_HEIGHT)
-
-    object_cmds = ("navigate_to_object", "pick")
-    for command in object_cmds:
-        item = subparsers.add_parser(command)
-        item.add_argument("--object-id", required=True)
-
-    receptacle_cmds = (
-        "navigate_to_receptacle",
-        "open_receptacle",
-        "place",
-        "place_inside",
-        "close_receptacle",
-    )
-    for command in receptacle_cmds:
-        item = subparsers.add_parser(command)
-        item.add_argument("--receptacle-id", required=True)
-
-    done = subparsers.add_parser("done")
-    done.add_argument("--reason", default="")
-
-    return parser.parse_args(argv)
+type _IsaacWorkerCommand = Callable[[argparse.Namespace, dict[str, Any]], dict[str, Any]]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -409,36 +268,10 @@ def main(argv: list[str] | None = None) -> int:
                 os._exit(1)
             raise
         return _finish_command(result)
-    else:
-        state = read_state(args.state_path)
-        if args.command == "locations":
-            result = {"ok": True, "tool": "locations", "final_locations": state["locations"]}
-        elif args.command == "snapshot":
-            result = write_snapshot(args, state)
-        elif args.command == "robot_views":
-            result = write_robot_views(args, state)
-        elif args.command == "camera_views":
-            result = write_camera_views(args, state)
-        elif args.command == "observe":
-            result = observe(args, state)
-        elif args.command == "navigate_to_object":
-            result = navigate_to_object(args, state)
-        elif args.command == "navigate_to_receptacle":
-            result = navigate_to_receptacle(args, state)
-        elif args.command == "pick":
-            result = pick(args, state)
-        elif args.command == "open_receptacle":
-            result = open_receptacle(args, state)
-        elif args.command == "place":
-            result = place(args, state, relation="on")
-        elif args.command == "place_inside":
-            result = place(args, state, relation="inside")
-        elif args.command == "close_receptacle":
-            result = close_receptacle(args, state)
-        elif args.command == "done":
-            result = done(args, state)
-        else:  # pragma: no cover - argparse prevents this.
-            raise ValueError(f"unsupported command: {args.command}")
+    handler = _STATE_COMMANDS.get(args.command)
+    if handler is None:  # pragma: no cover - argparse prevents this.
+        raise ValueError(f"unsupported command: {args.command}")
+    result = handler(args, read_state(args.state_path))
     return _finish_command(result)
 
 
@@ -1252,19 +1085,6 @@ def _float_or_default(value: Any, default: float) -> float:
         return float(value)
     except (TypeError, ValueError):
         return float(default)
-
-
-def _parse_rgb_gain(value: str) -> tuple[float, float, float]:
-    parts = [part.strip() for part in str(value).split(",")]
-    if len(parts) != 3:
-        raise argparse.ArgumentTypeError("RGB gain must be three comma-separated floats")
-    try:
-        gain = tuple(float(part) for part in parts)
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("RGB gain must contain only floats") from exc
-    if any(item <= 0.0 for item in gain):
-        raise argparse.ArgumentTypeError("RGB gain values must be positive")
-    return gain  # type: ignore[return-value]
 
 
 def _usd_receptacle_support_surfaces(*, prim: Any, usd_geom: Any) -> list[dict[str, Any]]:
@@ -6755,6 +6575,27 @@ def write_camera_views(args: argparse.Namespace, state: dict[str, Any]) -> dict[
         render_steps=int(capture.get("render_steps") or 0),
         render_resolution={"width": args.render_width, "height": args.render_height},
     )
+
+
+def _locations_command(_: argparse.Namespace, state: dict[str, Any]) -> dict[str, Any]:
+    return {"ok": True, "tool": "locations", "final_locations": state["locations"]}
+
+
+_STATE_COMMANDS: dict[str, _IsaacWorkerCommand] = {
+    "locations": _locations_command,
+    "snapshot": write_snapshot,
+    "robot_views": write_robot_views,
+    "camera_views": write_camera_views,
+    "observe": observe,
+    "navigate_to_object": navigate_to_object,
+    "navigate_to_receptacle": navigate_to_receptacle,
+    "pick": pick,
+    "open_receptacle": open_receptacle,
+    "place": lambda args, state: place(args, state, relation="on"),
+    "place_inside": lambda args, state: place(args, state, relation="inside"),
+    "close_receptacle": close_receptacle,
+    "done": done,
+}
 
 
 def _robot_view_camera_control_contract(

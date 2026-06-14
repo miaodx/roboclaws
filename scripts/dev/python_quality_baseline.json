@@ -88,7 +88,7 @@
         "path": "roboclaws/reports/live_performance.py"
       },
       {
-        "lines": 8391,
+        "lines": 8232,
         "max_module_lines": 800,
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py"
       },
@@ -1094,7 +1094,7 @@
         "limit": 10,
         "message": "`_apply_isaac_capture_quality_overrides` is too complex (13 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 4429,
+        "row": 4249,
         "symbol": "_apply_isaac_capture_quality_overrides",
         "value": 13
       },
@@ -1104,7 +1104,7 @@
         "limit": 10,
         "message": "`_apply_scene_index_semantic_labels` is too complex (13 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2584,
+        "row": 2404,
         "symbol": "_apply_scene_index_semantic_labels",
         "value": 13
       },
@@ -1114,7 +1114,7 @@
         "limit": 10,
         "message": "`_real_semantic_pose_robot_view_images` is too complex (12 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 6985,
+        "row": 6826,
         "symbol": "_real_semantic_pose_robot_view_images",
         "value": 12
       },
@@ -1124,7 +1124,7 @@
         "limit": 10,
         "message": "`_set_usd_xform_translate` is too complex (12 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 2490,
+        "row": 2310,
         "symbol": "_set_usd_xform_translate",
         "value": 12
       },
@@ -1134,19 +1134,9 @@
         "limit": 10,
         "message": "`_usd_support_surface_union` is too complex (11 > 10)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 1381,
+        "row": 1201,
         "symbol": "_usd_support_surface_union",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|C901|main",
-        "limit": 10,
-        "message": "`main` is too complex (17 > 10)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 399,
-        "symbol": "main",
-        "value": 17
       },
       {
         "code": "PLR0912",
@@ -1154,19 +1144,9 @@
         "limit": 12,
         "message": "Too many branches (13 > 12)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 4429,
+        "row": 4249,
         "symbol": "_apply_isaac_capture_quality_overrides",
         "value": 13
-      },
-      {
-        "code": "PLR0912",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0912|main",
-        "limit": 12,
-        "message": "Too many branches (18 > 12)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 399,
-        "symbol": "main",
-        "value": 18
       },
       {
         "code": "PLR0915",
@@ -1174,19 +1154,9 @@
         "limit": 50,
         "message": "Too many statements (54 > 50)",
         "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 6985,
+        "row": 6826,
         "symbol": "_real_semantic_pose_robot_view_images",
         "value": 54
-      },
-      {
-        "code": "PLR0915",
-        "key": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py|PLR0915|parse_args",
-        "limit": 50,
-        "message": "Too many statements (53 > 50)",
-        "path": "scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py",
-        "row": 245,
-        "symbol": "parse_args",
-        "value": 53
       },
       {
         "code": "C901",
