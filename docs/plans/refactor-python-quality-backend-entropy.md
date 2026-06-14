@@ -145,6 +145,18 @@ Rejected alternatives:
     not a mandatory base abstraction.
   - Do not import Isaac packages in the normal Roboclaws process.
 
+- [ ] **B5: Move optional backend capabilities behind the facade.**
+  - Target `roboclaws/household/backend_contract.py`,
+    `roboclaws/household/realworld_cleanup.py`, and
+    `roboclaws/household/realworld_mcp_server.py`.
+  - Add explicit facade methods/properties for snapshot capture, robot-view
+    capture support, robot-view recording, backend close, final locations, and
+    requested generated mess count.
+  - Replace direct `base_contract.backend` feature probes in direct cleanup and
+    live MCP cleanup with those facade methods.
+  - Preserve synthetic fallback snapshots, visual-backend robot-view artifacts,
+    public artifact schemas, and fake Isaac tests.
+
 - [x] **Q1: Add a quality-debt selection report to the ratchet.**
   - Extend `scripts/dev/check_python_quality_ratchet.py` with a read-only
     summary mode such as `--summary` or `--top-debt`.
@@ -183,12 +195,12 @@ Rejected alternatives:
     `goal_status`, `cleanup_status_role`, `runtime_timing`,
     `agent_diagnostics`, `cleanup_plan`, and `robot_view_capture_policy`.
 
-- [ ] **C2: Extract RealWorldCleanupContract construction and payload builders.**
+- [x] **C2: Extract RealWorldCleanupContract construction and payload builders.**
   - Target `roboclaws/household/realworld_contract.py`.
   - Constructor option normalization and map/runtime initialization are split
     into `roboclaws/household/realworld_contract_init.py`.
-  - Remaining C2 work: extract payload-builder helpers for runtime metric map
-    and cleanup worklist.
+  - Runtime metric map and cleanup worklist payload assembly are split into
+    `roboclaws/household/realworld_contract_payloads.py`.
   - Keep public payload schemas stable.
 
 - [ ] **C3: Split cleanup report sections from shared HTML wrapper.**
@@ -270,6 +282,8 @@ Rejected alternatives:
   - `python scripts/dev/check_python_quality_ratchet.py`
   - quality-debt summary mode after Q1 exists
 - L1 unit/mock:
+  - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_cleanup_backend_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py -q`
+    when optional backend facade capabilities change
   - `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_molmo_cleanup_subprocess_backend.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
   - targeted unit tests for new backend facade/factory modules
 - L2 contract:
@@ -288,6 +302,9 @@ Stop this refactor loop when:
 
 - `run_realworld_cleanup` no longer contains backend-specific metadata/artifact
   assembly for MolmoSpaces and Isaac Lab.
+- Direct cleanup and live MCP cleanup use `CleanupBackendSession` for optional
+  backend capabilities such as snapshots, robot views, close, final locations,
+  and requested run size, instead of rediscovering backend internals separately.
 - `run_realworld_cleanup` is mostly an orchestration reader: setup, loop
   execution, artifact assembly, report rendering, and result writeback are named
   stages with focused tests.
@@ -463,3 +480,38 @@ Stop this refactor loop when:
   and `roboclaws/household/realworld_contract.py` dropped from 6942 to 6829
   lines at the time of the summary run because constructor helpers moved out of
   the oversized module.
+- 2026-06-14: Ran another bounded reduce-entropy discovery loop after the C2
+  constructor slice. Evidence:
+  `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/high-noise-summary.mjs" --examples 12`;
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 60`;
+  targeted probes across `realworld_contract.py`, `realworld_cleanup.py`,
+  `realworld_mcp_server.py`, `backend_contract.py`, `report.py`, planner-proof
+  checker/probe scripts, map bundle validation, current docs/plans references,
+  and legacy/retired token searches. The current quality signal is 209 Ruff
+  complexity violations and 61 oversized modules. No new P0 or public-doc
+  command drift was found. The materiality gate accepted one new P1 candidate,
+  B5 optional backend capability facade, because direct cleanup and live MCP
+  cleanup still separately probe `base_contract.backend` for snapshots,
+  robot-view support, close, final locations, and requested run size after the
+  facade already centralized backend id and runtime metadata. The gate reported
+  `eligible_count=1` and `quota_saturated=true` for five requested groups, so
+  this loop should not invent more groups. Existing uncompleted candidates
+  C2/C3/P1/P2/M1/I1 remain live and are still the main queue; OpenAI Agents SDK,
+  operator console, scene-camera/render parity, Agibot, raw-FPV, apple2apple,
+  broad test-suite cleanup, and historical docs/plans remain parked under their
+  specialized plans or specialist skills unless fresh drift appears.
+- 2026-06-14: Completed C2 by extracting runtime metric map and cleanup
+  worklist payload assembly into
+  `roboclaws/household/realworld_contract_payloads.py`. The public
+  `RealWorldCleanupContract.runtime_metric_map_payload(...)` and
+  `cleanup_worklist_payload(...)` methods remain in place as schema-preserving
+  delegates, with a narrow protocol documenting the contract surface that the
+  payload module consumes. Evidence:
+  `ruff check roboclaws/household/realworld_contract.py roboclaws/household/realworld_contract_payloads.py tests/contract/molmo_cleanup/test_molmo_realworld_contract.py`
+  passed; `ruff format --check roboclaws/household/realworld_contract.py roboclaws/household/realworld_contract_payloads.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmo_realworld_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered for
+  `roboclaws/household/realworld_contract.py` file size from 6829 to 6602
+  lines, with Ruff complexity unchanged at 209 violations and oversized
+  modules unchanged at 61.
