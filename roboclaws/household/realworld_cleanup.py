@@ -9,9 +9,9 @@ from typing import Any
 
 from roboclaws.household.backend_contract import (
     SYNTHETIC_BACKEND,
-    VISUAL_BACKENDS,
     CleanupBackendSession,
     build_cleanup_backend_session,
+    validate_cleanup_run_options,
 )
 from roboclaws.household.isaac_lab_backend import (
     ISAACLAB_SUBPROCESS_BACKEND,
@@ -60,7 +60,6 @@ from roboclaws.household.semantic_cleanup_loop import (
 )
 from roboclaws.household.semantic_timeline import (
     camera_offsets_from_raw_fpv_observation,
-    record_robot_view_step,
     robot_view_capture_for_tool,
 )
 from roboclaws.household.skill_scratchpad import empty_skill_scratchpad
@@ -272,17 +271,14 @@ def run_realworld_cleanup(
     run_metadata_overrides: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
-    if include_robot and backend not in VISUAL_BACKENDS:
-        raise ValueError("robot inclusion requires a visual subprocess backend")
-    if record_robot_views and (backend not in VISUAL_BACKENDS or not include_robot):
-        raise ValueError(
-            "record_robot_views requires a visual subprocess backend and include_robot"
-        )
-    if generated_mess_count < 0:
-        raise ValueError("generated_mess_count must be >= 0")
-    if map_mode not in REALWORLD_MAP_MODES:
-        allowed = ", ".join(sorted(REALWORLD_MAP_MODES))
-        raise ValueError(f"map_mode must be one of: {allowed}")
+    validate_cleanup_run_options(
+        backend_name=backend,
+        include_robot=include_robot,
+        record_robot_views=record_robot_views,
+        generated_mess_count=generated_mess_count,
+        map_mode=map_mode,
+        allowed_map_modes=REALWORLD_MAP_MODES,
+    )
     selected_bundle_dir = selected_nav2_map_bundle_dir(
         map_bundle_dir,
         required=require_map_bundle,
@@ -317,7 +313,7 @@ def run_realworld_cleanup(
         isaac_segmentation_data_types=isaac_segmentation_data_types,
         isaac_segmentation_semantic_filter=isaac_segmentation_semantic_filter,
     )
-    scenario = base_contract.backend.scenario
+    scenario = base_contract.scenario
     contract = RealWorldCleanupContract(
         base_contract,
         task_prompt=task_prompt,
@@ -351,7 +347,6 @@ def run_realworld_cleanup(
     started_at = time.time()
 
     before_snapshot = _write_snapshot(
-        backend=backend,
         contract=base_contract,
         scenario=scenario,
         output_path=output_dir / "before.png",
@@ -360,9 +355,8 @@ def run_realworld_cleanup(
     robot_view_steps: list[dict[str, Any]] = []
     view_index = 0
     if record_robot_views:
-        view_index = record_robot_view_step(
+        view_index = base_contract.record_robot_view_step(
             steps=robot_view_steps,
-            backend=base_contract.backend,
             output_dir=output_dir,
             index=view_index,
             label_suffix="before",
@@ -497,9 +491,7 @@ def run_realworld_cleanup(
     if "score" not in done:
         base_done = base_contract.done(reason=f"{policy_name} incomplete")
         score = dict(base_done.get("score") or {})
-        final_locations = dict(
-            base_done.get("final_locations") or base_contract.backend.object_locations()
-        )
+        final_locations = base_contract.final_locations(base_done.get("final_locations"))
         if score:
             metrics = contract._realworld_metrics(score, final_locations)  # noqa: SLF001
             score.update(metrics)
@@ -515,22 +507,20 @@ def run_realworld_cleanup(
         }
 
     after_snapshot = _write_snapshot(
-        backend=backend,
         contract=base_contract,
         scenario=scenario,
         output_path=output_dir / "after.png",
         title="After real-world cleanup",
     )
     if record_robot_views:
-        view_index = record_robot_view_step(
+        view_index = base_contract.record_robot_view_step(
             steps=robot_view_steps,
-            backend=base_contract.backend,
             output_dir=output_dir,
             index=view_index,
             label_suffix="after",
             action="after",
         )
-    return finalize_realworld_cleanup_run(
+    run_result = finalize_realworld_cleanup_run(
         RealWorldRunArtifactInputs(
             output_dir=output_dir,
             backend=backend,
@@ -557,13 +547,13 @@ def run_realworld_cleanup(
             record_robot_views=record_robot_views,
             selected_bundle_dir=selected_bundle_dir,
             planner_proof_evidence=planner_proof_evidence,
-            use_planner_proof_for_cleanup_primitives=(
-                use_planner_proof_for_cleanup_primitives
-            ),
+            use_planner_proof_for_cleanup_primitives=(use_planner_proof_for_cleanup_primitives),
             semantic_sweep_camera_schedule=SEMANTIC_SWEEP_CAMERA_SCHEDULE,
             run_metadata_overrides=run_metadata_overrides,
         )
     )
+    base_contract.close()
+    return run_result
 
 
 def _load_runtime_map_prior(path: str | Path | None) -> dict[str, Any] | None:
@@ -750,9 +740,8 @@ def _clean_visible_object(
         )
         if capture is None:
             return
-        view_index = record_robot_view_step(
+        view_index = base_contract.record_robot_view_step(
             steps=robot_view_steps,
-            backend=base_contract.backend,
             output_dir=output_dir,
             index=view_index,
             action=str(capture["action"]),
@@ -987,17 +976,17 @@ def _current_worklist_target_fixture(
 
 def _write_snapshot(
     *,
-    backend: str,
     contract: CleanupBackendSession,
     scenario: Any,
     output_path: Path,
     title: str,
 ) -> Path:
-    if backend in VISUAL_BACKENDS:
-        return contract.backend.write_snapshot(output_path, title=title)
+    visual_snapshot = contract.write_visual_snapshot(output_path, title=title)
+    if visual_snapshot is not None:
+        return visual_snapshot
     return write_state_snapshot(
         scenario,
-        contract.backend.object_locations(),
+        contract.object_locations(),
         output_path,
         title=title,
     )
@@ -1085,9 +1074,8 @@ def _attach_raw_fpv_robot_view(
     observation_id = str(raw.get("observation_id", ""))
     if not observation_id:
         return response
-    view_index_ref[0] = record_robot_view_step(
+    view_index_ref[0] = base_contract.record_robot_view_step(
         steps=robot_view_steps,
-        backend=base_contract.backend,
         output_dir=output_dir,
         index=view_index_ref[0],
         label_suffix=observation_id,

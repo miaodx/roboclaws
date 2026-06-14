@@ -145,7 +145,7 @@ Rejected alternatives:
     not a mandatory base abstraction.
   - Do not import Isaac packages in the normal Roboclaws process.
 
-- [ ] **B5: Move optional backend capabilities behind the facade.**
+- [x] **B5: Move optional backend capabilities behind the facade.**
   - Target `roboclaws/household/backend_contract.py`,
     `roboclaws/household/realworld_cleanup.py`, and
     `roboclaws/household/realworld_mcp_server.py`.
@@ -515,3 +515,20 @@ Stop this refactor loop when:
   `roboclaws/household/realworld_contract.py` file size from 6829 to 6602
   lines, with Ruff complexity unchanged at 209 violations and oversized
   modules unchanged at 61.
+- 2026-06-14: Implemented B5 optional backend capability facade. `CleanupBackendSession`
+  now owns scenario access, visual snapshot capability/proxying, robot-view
+  support and recording, final/object locations, requested generated mess
+  count, backend close, and run-option capability validation. Direct cleanup
+  and live MCP cleanup now use the facade for snapshots, robot views, final
+  locations, close, and requested run size instead of probing
+  `base_contract.backend` separately. Evidence:
+  `ruff check roboclaws/household/backend_contract.py roboclaws/household/realworld_cleanup.py roboclaws/household/realworld_mcp_server.py tests/unit/molmo_cleanup/test_cleanup_backend_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py`
+  passed; `ruff format --check roboclaws/household/backend_contract.py roboclaws/household/realworld_cleanup.py roboclaws/household/realworld_mcp_server.py tests/unit/molmo_cleanup/test_cleanup_backend_contract.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_cleanup_backend_contract.py tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered for
+  `roboclaws/household/realworld_cleanup.py` file size 1171 -> 1159,
+  `roboclaws/household/realworld_mcp_server.py` file size 1190 -> 1180, and
+  `run_realworld_cleanup` complexity rows C901 22 -> 18, PLR0912 23 -> 19,
+  PLR0915 74 -> 68. Overall Ruff complexity count remains 209 and oversized
+  module count remains 61.

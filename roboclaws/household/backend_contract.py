@@ -10,6 +10,9 @@ from roboclaws.household.isaac_lab_backend import (
     IsaacLabSubprocessBackend,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
+from roboclaws.household.semantic_timeline import (
+    record_robot_view_step as _record_robot_view_step,
+)
 from roboclaws.household.subprocess_backend import (
     MOLMOSPACES_SUBPROCESS_BACKEND,
     MolmoSpacesSubprocessBackend,
@@ -32,8 +35,76 @@ class CleanupBackendSession:
     def __init__(self, scenario: CleanupScenario | None = None, backend: Any | None = None):
         self.backend = backend or ApiSemanticCleanupBackend(scenario or build_cleanup_scenario())
 
+    @property
+    def scenario(self) -> CleanupScenario:
+        return self.backend.scenario
+
     def backend_name(self) -> str:
         return cleanup_backend_name(self.backend)
+
+    def supports_visual_snapshots(self) -> bool:
+        return callable(getattr(self.backend, "write_snapshot", None))
+
+    def supports_robot_views(self) -> bool:
+        return callable(getattr(self.backend, "write_robot_views", None))
+
+    def requested_generated_mess_count(self) -> int | None:
+        requested = getattr(self.backend, "requested_generated_mess_count", None)
+        try:
+            return int(requested)
+        except (TypeError, ValueError):
+            return None
+
+    def object_locations(self) -> dict[str, str]:
+        return self.backend.object_locations()
+
+    def final_locations(self, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
+        return dict(fallback or self.object_locations())
+
+    def write_visual_snapshot(self, output_path: Path, *, title: str) -> Path | None:
+        writer = getattr(self.backend, "write_snapshot", None)
+        if not callable(writer):
+            return None
+        return writer(output_path, title=title)
+
+    def record_robot_view_step(
+        self,
+        *,
+        steps: list[dict[str, Any]],
+        output_dir: Path,
+        index: int,
+        action: str,
+        label_suffix: str,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+        semantic_phase: str | None = None,
+        action_evidence: dict[str, Any] | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
+    ) -> int:
+        return _record_robot_view_step(
+            steps=steps,
+            backend=self.backend,
+            output_dir=output_dir,
+            index=index,
+            action=action,
+            label_suffix=label_suffix,
+            focus_object_id=focus_object_id,
+            focus_receptacle_id=focus_receptacle_id,
+            semantic_phase=semantic_phase,
+            action_evidence=action_evidence,
+            camera_yaw_offset_deg=camera_yaw_offset_deg,
+            camera_pitch_offset_deg=camera_pitch_offset_deg,
+        )
+
+    def close(self) -> None:
+        backend_close = getattr(self.backend, "close", None)
+        if not callable(backend_close):
+            return
+        try:
+            backend_close()
+        except Exception:
+            pass
 
     def observe(self) -> dict[str, Any]:
         return self.backend.observe()
@@ -154,6 +225,46 @@ def cleanup_backend_name(backend: Any, *, override: str = "") -> str:
     if explicit:
         return str(explicit)
     return SYNTHETIC_BACKEND
+
+
+def cleanup_backend_supports_visual_artifacts(backend_name: str) -> bool:
+    return backend_name in VISUAL_BACKENDS
+
+
+def validate_cleanup_backend_capability_request(
+    *,
+    backend_name: str,
+    include_robot: bool,
+    record_robot_views: bool,
+) -> None:
+    supports_visual_artifacts = cleanup_backend_supports_visual_artifacts(backend_name)
+    if include_robot and not supports_visual_artifacts:
+        raise ValueError("robot inclusion requires a visual subprocess backend")
+    if record_robot_views and (not supports_visual_artifacts or not include_robot):
+        raise ValueError(
+            "record_robot_views requires a visual subprocess backend and include_robot"
+        )
+
+
+def validate_cleanup_run_options(
+    *,
+    backend_name: str,
+    include_robot: bool,
+    record_robot_views: bool,
+    generated_mess_count: int,
+    map_mode: str,
+    allowed_map_modes: frozenset[str],
+) -> None:
+    validate_cleanup_backend_capability_request(
+        backend_name=backend_name,
+        include_robot=include_robot,
+        record_robot_views=record_robot_views,
+    )
+    if generated_mess_count < 0:
+        raise ValueError("generated_mess_count must be >= 0")
+    if map_mode not in allowed_map_modes:
+        allowed = ", ".join(sorted(allowed_map_modes))
+        raise ValueError(f"map_mode must be one of: {allowed}")
 
 
 def attach_cleanup_backend_runtime_metadata(

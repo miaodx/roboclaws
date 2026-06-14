@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
+from roboclaws.household.backend import ApiSemanticCleanupBackend
 from roboclaws.household.backend_contract import (
     SYNTHETIC_BACKEND,
     CleanupBackendSession,
@@ -11,6 +13,55 @@ from roboclaws.household.backend_contract import (
     build_cleanup_backend_session,
     cleanup_backend_name,
 )
+from roboclaws.household.scenario import build_cleanup_scenario
+
+
+class _FacadeVisualBackend(ApiSemanticCleanupBackend):
+    backend = "molmospaces_subprocess"
+    requested_generated_mess_count = "4"
+
+    def __init__(self) -> None:
+        super().__init__(build_cleanup_scenario(seed=3))
+        self.closed = False
+
+    def write_snapshot(self, output_path: Path, *, title: str) -> Path:
+        output_path.write_text(title, encoding="utf-8")
+        return output_path
+
+    def write_robot_views(
+        self,
+        output_dir: Path,
+        *,
+        label: str,
+        focus_object_id: str | None = None,
+        focus_receptacle_id: str | None = None,
+        camera_yaw_offset_deg: float = 0.0,
+        camera_pitch_offset_deg: float = 0.0,
+    ) -> dict[str, Any]:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        views = {}
+        for key in ("fpv", "chase"):
+            path = output_dir / f"{label}_{key}.png"
+            path.write_bytes(b"fake png")
+            views[key] = str(path)
+        return {
+            "ok": True,
+            "robot_pose": {"x": 0.0, "y": 0.0},
+            "robot_trajectory": [],
+            "view_variant": "test",
+            "view_provenance": "test",
+            "camera_control_contract": {},
+            "focus": {
+                "has_focus": bool(focus_object_id or focus_receptacle_id),
+                "object_id": focus_object_id,
+                "receptacle_id": focus_receptacle_id,
+            },
+            "room_outline_count": 0,
+            "views": views,
+        }
+
+    def close(self) -> None:
+        self.closed = True
 
 
 def test_cleanup_backend_name_uses_explicit_backend_id() -> None:
@@ -33,6 +84,40 @@ def test_synthetic_backend_factory_can_build_baseline_scenario(tmp_path: Path) -
     assert session.backend_name() == SYNTHETIC_BACKEND
     assert session.backend.scenario.private_manifest.targets == ()
     assert session.backend.scenario.private_manifest.success_threshold == 0
+
+
+def test_cleanup_backend_session_exposes_optional_backend_capabilities(
+    tmp_path: Path,
+) -> None:
+    backend = _FacadeVisualBackend()
+    session = CleanupBackendSession(backend.scenario, backend=backend)
+
+    assert session.scenario is backend.scenario
+    assert session.supports_visual_snapshots() is True
+    assert session.supports_robot_views() is True
+    assert session.requested_generated_mess_count() == 4
+    assert session.object_locations() == backend.object_locations()
+    assert session.final_locations({"apple_1": "sink_01"}) == {"apple_1": "sink_01"}
+
+    snapshot_path = session.write_visual_snapshot(tmp_path / "snapshot.png", title="Snapshot")
+    assert snapshot_path == tmp_path / "snapshot.png"
+    assert snapshot_path.read_text(encoding="utf-8") == "Snapshot"
+
+    steps: list[dict[str, Any]] = []
+    next_index = session.record_robot_view_step(
+        steps=steps,
+        output_dir=tmp_path,
+        index=0,
+        action="before",
+        label_suffix="before",
+        focus_object_id="apple_1",
+    )
+    assert next_index == 1
+    assert steps[0]["label"] == "0000_before"
+    assert steps[0]["views"]["fpv"] == "robot_views/0000_before_fpv.png"
+
+    session.close()
+    assert backend.closed is True
 
 
 def test_molmospaces_runtime_metadata_attaches_common_backend_payload(tmp_path: Path) -> None:

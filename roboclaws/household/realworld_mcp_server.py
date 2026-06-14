@@ -41,7 +41,6 @@ from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
     camera_offsets_from_raw_fpv_observation,
     has_complete_semantic_sequence,
-    record_robot_view_step,
     robot_view_capture_for_tool,
     semantic_substeps,
     successful_semantic_phases,
@@ -261,9 +260,7 @@ class RealWorldMolmoCleanupMCPServer:
         self.rerun_command = (
             str(rerun_command or "").strip() or os.environ.get(REPORT_RERUN_COMMAND_ENV, "").strip()
         )
-        if self.record_robot_views and not callable(
-            getattr(self.base_contract.backend, "write_robot_views", None)
-        ):
+        if self.record_robot_views and not self.base_contract.supports_robot_views():
             raise ValueError("record_robot_views requires a backend with write_robot_views")
 
         self.trace_path = self.run_dir / "trace.jsonl"
@@ -649,12 +646,7 @@ class RealWorldMolmoCleanupMCPServer:
                 shutdown()
         except Exception:
             pass
-        backend_close = getattr(self.base_contract.backend, "close", None)
-        if callable(backend_close):
-            try:
-                backend_close()
-            except Exception:
-                pass
+        self.base_contract.close()
         with self._trace_lock:
             self._closed = True
             try:
@@ -666,10 +658,11 @@ class RealWorldMolmoCleanupMCPServer:
 
     def _write_snapshot(self, filename: str, *, title: str) -> Path:
         output_path = self.run_dir / filename
-        writer = getattr(self.base_contract.backend, "write_snapshot", None)
-        if callable(writer):
+        if self.base_contract.supports_visual_snapshots():
             try:
-                return writer(output_path, title=title)
+                visual_snapshot = self.base_contract.write_visual_snapshot(output_path, title=title)
+                if visual_snapshot is not None:
+                    return visual_snapshot
             except Exception as exc:
                 self.write_runtime_event(
                     "snapshot_capture_failed",
@@ -679,7 +672,7 @@ class RealWorldMolmoCleanupMCPServer:
                 )
         return write_state_snapshot(
             self.scenario,
-            self.base_contract.backend.object_locations(),
+            self.base_contract.object_locations(),
             output_path,
             title=title,
         )
@@ -741,15 +734,13 @@ class RealWorldMolmoCleanupMCPServer:
     ) -> dict[str, Any] | None:
         if not self.record_robot_views:
             return None
-        writer = getattr(self.base_contract.backend, "write_robot_views", None)
-        if not callable(writer):
+        if not self.base_contract.supports_robot_views():
             raise RuntimeError("robot view capture requires backend.write_robot_views")
         previous_count = len(self.robot_view_steps)
         capture_started = time.monotonic()
         try:
-            self._robot_view_index = record_robot_view_step(
+            self._robot_view_index = self.base_contract.record_robot_view_step(
                 steps=self.robot_view_steps,
-                backend=self.base_contract.backend,
                 output_dir=self.run_dir,
                 index=self._robot_view_index,
                 action=action,
@@ -1152,8 +1143,7 @@ def _public_acceptance_config_from_backend(
 ) -> dict[str, int]:
     if base_contract is None:
         return {}
-    backend = getattr(base_contract, "backend", None)
-    requested = getattr(backend, "requested_generated_mess_count", None)
+    requested = base_contract.requested_generated_mess_count()
     try:
         requested_run_size = int(requested)
     except (TypeError, ValueError):
