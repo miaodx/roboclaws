@@ -172,6 +172,17 @@ Rejected alternatives:
     `private_evaluation.json`, `advisory_evaluation.json`, and `report.html`
     schemas stable.
 
+- [x] **C1.6: Split live MCP cleanup done finalization from server orchestration.**
+  - Target `roboclaws/household/realworld_mcp_server.py`.
+  - Extract MCP `done` artifact writing, `run_result` construction, profile/map/
+    backend metadata attachment, planner-proof attachment, report rendering, and
+    writeback into a focused finalizer module.
+  - Use the backend facade's `backend_name()` and `attach_runtime_metadata(...)`
+    path directly instead of retaining local backend-name/runtime wrappers.
+  - Preserve live-agent fields such as `mcp_server`, `intent_status`,
+    `goal_status`, `cleanup_status_role`, `runtime_timing`,
+    `agent_diagnostics`, `cleanup_plan`, and `robot_view_capture_policy`.
+
 - [ ] **C2: Extract RealWorldCleanupContract construction and payload builders.**
   - Target `roboclaws/household/realworld_contract.py`.
   - Start with constructor option normalization and payload-builder helpers for
@@ -410,3 +421,26 @@ Stop this refactor loop when:
   140 -> 74. Overall debt count remains 211 Ruff violations and 61 oversized
   modules because this slice lowered existing debt without removing all
   violation rows.
+- 2026-06-14: Post-C1.5 discovery found one new material P1 candidate:
+  direct cleanup and live MCP cleanup now published the same artifact family
+  through diverging finalization code. The materiality gate accepted C1.6 for
+  live source drift, real workflow friction, and recurring rediscovery.
+  Implemented C1.6 by adding
+  `roboclaws/household/realworld_mcp_run_artifacts.py` as the live MCP `done`
+  finalizer for agent-view/runtime-map/private/advisory artifacts,
+  goal-contract artifacts, scratchpad/proof request artifacts, `run_result`
+  assembly, profile/map/backend metadata, planner-proof metadata, report
+  rendering, and final writeback. `RealWorldMolmoCleanupMCPServer._finalize_done`
+  now coordinates after-snapshot capture, trace reading, finalizer invocation,
+  done-event state, and runtime trace emission. The server-local backend-name,
+  backend-runtime, and run-metadata wrappers were removed in favor of
+  contract-level backend overrides plus the backend facade's
+  `attach_runtime_metadata(...)` path. Evidence:
+  `ruff check roboclaws/household/realworld_mcp_server.py roboclaws/household/realworld_mcp_run_artifacts.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_physical_agibot_pilot.py::test_agibot_adapter_integrates_with_shared_cleanup_mcp_contract tests/contract/molmo_cleanup/test_molmo_realworld_mcp_server.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 211 to 210 Ruff complexity
+  violations, with oversized modules unchanged at 61. The
+  `RealWorldMolmoCleanupMCPServer._finalize_done` PLR0915 row was removed from
+  the explicit baseline; the server still carries the existing `__init__`
+  PLR0915 row for a future bounded slice.

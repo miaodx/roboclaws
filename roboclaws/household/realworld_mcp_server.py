@@ -13,26 +13,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp import Image as MCPImage
 
-from roboclaws.household.advisory_scoring import build_advisory_evaluation
-from roboclaws.household.backend import API_SEMANTIC_PROVENANCE
-from roboclaws.household.backend_contract import (
-    CleanupBackendSession,
-    attach_cleanup_backend_runtime_metadata,
-    cleanup_backend_name,
-)
-from roboclaws.household.cleanup_primitive_evidence import (
-    cleanup_primitive_evidence_from_substeps,
-)
-from roboclaws.household.manipulation_provenance import (
-    api_semantic_manipulation_evidence,
-)
-from roboclaws.household.nav2_map_bundle import attach_nav2_map_bundle_snapshot
-from roboclaws.household.planner_proof_attachment import attach_planner_proof
-from roboclaws.household.planner_proof_requests import write_planner_proof_requests
-from roboclaws.household.profiles import (
-    camera_labeler_from_visual_grounding_pipeline,
-    cleanup_profile_metadata_for_run,
-)
+from roboclaws.household.backend_contract import CleanupBackendSession
 from roboclaws.household.realworld_contract import (
     CAMERA_MODEL_POLICY_MODE,
     DEFAULT_MAP_MODE,
@@ -41,9 +22,7 @@ from roboclaws.household.realworld_contract import (
     REALWORLD_CONTRACT,
     VISIBLE_OBJECT_DETECTIONS_MODE,
     RealWorldCleanupContract,
-    cleanup_policy_trace_from_events,
     raw_fpv_inline_candidate_instruction,
-    real_robot_readiness_from_events,
 )
 from roboclaws.household.realworld_mcp_backend import (
     agent_view_public_tool_names,
@@ -51,27 +30,22 @@ from roboclaws.household.realworld_mcp_backend import (
     register_realworld_mcp_tools,
     validate_realworld_mcp_tool_call,
 )
+from roboclaws.household.realworld_mcp_run_artifacts import (
+    RealWorldMCPDoneArtifactInputs,
+    finalize_realworld_mcp_done,
+)
 from roboclaws.household.report import (
-    render_cleanup_report,
-    runtime_timing_from_trace,
     write_state_snapshot,
 )
 from roboclaws.household.scenario import build_cleanup_scenario
 from roboclaws.household.semantic_timeline import (
-    ROBOT_VIEW_VARIANT,
-    SEMANTIC_LOOP_VARIANT,
     camera_offsets_from_raw_fpv_observation,
-    cleanup_plan_from_semantic_substeps,
     has_complete_semantic_sequence,
-    primitive_provenance_counts,
     record_robot_view_step,
-    robot_view_camera_control_summary,
     robot_view_capture_for_tool,
-    semantic_diagnostics,
     semantic_substeps,
     successful_semantic_phases,
 )
-from roboclaws.household.skill_scratchpad import read_or_create_skill_scratchpad
 from roboclaws.household.task_intent import (
     HOUSEHOLD_INTENT_OPEN_ENDED,
     TASK_INTENT_MODE_DEFAULT,
@@ -85,15 +59,10 @@ from roboclaws.household.visual_grounding import (
     visual_grounding_client_from_env,
 )
 from roboclaws.household.visual_scan_guidance import visual_scan_metric_map_instruction
-from roboclaws.launch.environment_setup_metadata import (
-    environment_setup_run_metadata_from_env,
-)
 from roboclaws.launch.goals import (
     GoalContract,
-    completion_claim_from_done_reason,
     goal_contract_from_file,
     goal_contract_from_json,
-    write_goal_contract,
 )
 from roboclaws.operator_console.interactions import (
     check_operator_messages_for_mcp,
@@ -518,246 +487,51 @@ class RealWorldMolmoCleanupMCPServer:
         after_snapshot = self._write_snapshot("after.png", title="After real-world cleanup")
         self._record_robot_view("after", label_suffix="after")
         trace_events = self._read_trace_events()
-        runtime_timing = runtime_timing_from_trace(trace_events, self.robot_view_steps)
-        substeps = semantic_substeps(trace_events, self.contract.public_receptacles_by_id())
-        cleanup_primitive_evidence = cleanup_primitive_evidence_from_substeps(substeps)
-        cleanup_plan = cleanup_plan_from_semantic_substeps(substeps)
-        planner_proof_requests_path = self.run_dir / "planner_proof_requests.json"
-        planner_proof_requests = write_planner_proof_requests(
-            output_path=planner_proof_requests_path,
-            contract=self.contract,
-            substeps=substeps,
-        )
-        diagnostics = semantic_diagnostics(trace_events, substeps, done_response)
-        diagnostics["premature_done"] = done_response["score"].get("sweep_coverage_rate", 0) < 0.90
-        diagnostics["premature_done_source"] = "sweep_coverage_rate"
-        primitive_counts = primitive_provenance_counts(trace_events)
-        agent_view = self._agent_view_payload()
-        cleanup_policy_trace = cleanup_policy_trace_from_events(trace_events, agent_view)
-        readiness_hook = getattr(self.contract, "real_robot_readiness_payload", None)
-        real_robot_readiness = (
-            readiness_hook(trace_events)
-            if callable(readiness_hook)
-            else real_robot_readiness_from_events(
-                agent_view=agent_view,
-                trace_events=trace_events,
-                robot_view_steps=self.robot_view_steps,
-            )
-        )
-        private_evaluation = self.contract.private_evaluation_payload(done_response["score"])
-        requested_count = getattr(
-            self.base_contract.backend,
-            "requested_generated_mess_count",
-            private_evaluation["generated_mess_count"],
-        )
-        private_evaluation["requested_generated_mess_count"] = requested_count
-        advisory_evaluation = build_advisory_evaluation(
-            score=done_response["score"],
-            scenario_id=self.scenario.scenario_id,
-        )
-        agent_view_path = self.run_dir / "agent_view.json"
-        runtime_metric_map_path = self.run_dir / "runtime_metric_map.json"
-        private_evaluation_path = self.run_dir / "private_evaluation.json"
-        advisory_evaluation_path = self.run_dir / "advisory_evaluation.json"
-        goal_contract_path = self.run_dir / "goal_contract.json"
-        goal_contract_payload: dict[str, Any] = {}
-        completion_claim: dict[str, Any] = {}
-        if self.goal_contract is not None:
-            write_goal_contract(goal_contract_path, self.goal_contract)
-            goal_contract_payload = self.goal_contract.to_payload()
-            completion_claim = completion_claim_from_done_reason(
-                reason,
+        finalized = finalize_realworld_mcp_done(
+            RealWorldMCPDoneArtifactInputs(
+                run_dir=self.run_dir,
+                trace_path=self.trace_path,
+                run_result_path=self.run_result_path,
+                base_contract=self.base_contract,
+                contract=self.contract,
+                scenario=self.scenario,
+                task_name=self.task_name,
+                task_prompt=self.task_prompt,
+                task_intent=self.task_intent,
                 goal_contract=self.goal_contract,
-            )
-        runtime_metric_map = agent_view.get("runtime_metric_map", {})
-        runtime_prior_rows = [
-            item
-            for item in runtime_metric_map.get("observed_objects", [])
-            if item.get("freshness") == "prior"
-        ]
-        agent_view_path.write_text(json.dumps(agent_view, indent=2, sort_keys=True) + "\n")
-        runtime_metric_map_path.write_text(
-            json.dumps(runtime_metric_map, indent=2, sort_keys=True) + "\n"
-        )
-        private_evaluation_path.write_text(
-            json.dumps(private_evaluation, indent=2, sort_keys=True) + "\n"
-        )
-        advisory_evaluation_path.write_text(
-            json.dumps(advisory_evaluation, indent=2, sort_keys=True) + "\n"
-        )
-        agent_scratchpad, agent_scratchpad_path = read_or_create_skill_scratchpad(
-            run_dir=self.run_dir,
-            note=(
-                "No live cleanup_scratch.json was present when the MCP server finalized; "
-                "cleanup_worklist remains authoritative."
-            ),
-        )
-        task_intent = normalize_household_intent(
-            goal_contract_payload.get("intent") or self.task_intent,
-            task_name=self.task_name,
-        )
-        terminal_status = (
-            "success" if task_intent == "open-ended" else done_response["cleanup_status"]
-        )
-        intent_status = terminal_status
-
-        run_result = {
-            "backend": _backend_name(self.base_contract.backend, override=self.backend_name),
-            "task_name": self.task_name,
-            "scenario_id": self.scenario.scenario_id,
-            "seed": self.scenario.seed,
-            "task_prompt": self.task_prompt,
-            "task_surface": goal_contract_payload.get("surface", "household-world"),
-            "task_intent": task_intent,
-            "goal_contract": goal_contract_payload,
-            "agent_completion_claim": completion_claim,
-            "contract": REALWORLD_CONTRACT,
-            "adr_0003_satisfied": True,
-            "final_status": terminal_status,
-            "intent_status": intent_status,
-            "goal_status": intent_status,
-            "cleanup_status_role": "advisory" if task_intent == "open-ended" else "terminal",
-            "terminate_reason": reason,
-            "cleanup_status": done_response["cleanup_status"],
-            "completion_status": done_response["score"]["completion_status"],
-            "primitive_provenance": API_SEMANTIC_PROVENANCE,
-            "primitive_provenance_summary": primitive_counts,
-            "manipulation_evidence": api_semantic_manipulation_evidence(
-                backend=_backend_name(self.base_contract.backend, override=self.backend_name),
-                primitive_summary=primitive_counts,
-            ),
-            "policy": self.policy,
-            "planner": self.policy,
-            "agent_driven": self.agent_driven,
-            "policy_uses_private_truth": self.policy_uses_private_truth,
-            "planner_uses_private_manifest": False,
-            "fixture_hint_mode": self.fixture_hint_mode,
-            "perception_mode": self.perception_mode,
-            "map_mode": runtime_metric_map.get("map_mode", self.contract.map_mode),
-            "minimal_map_mode": runtime_metric_map.get("minimal_map_mode", False),
-            "runtime_metric_map_prior": {
-                "loaded": bool(runtime_prior_rows),
-                "source": self.runtime_map_prior_source,
-                "observed_object_count": len(runtime_prior_rows),
-            },
-            "camera_labeler": camera_labeler_from_visual_grounding_pipeline(
-                self.contract.visual_grounding_pipeline_id
-            )
-            if self.perception_mode == CAMERA_MODEL_POLICY_MODE
-            else "",
-            "visual_grounding_pipeline_id": self.contract.visual_grounding_pipeline_id,
-            "requested_generated_mess_count": requested_count,
-            "generated_mess_count": private_evaluation["generated_mess_count"],
-            "mcp_server": MCP_SERVER_NAME,
-            "mess_restoration_rate": done_response["score"]["mess_restoration_rate"],
-            "sweep_coverage_rate": done_response["score"]["sweep_coverage_rate"],
-            "disturbance_count": done_response["score"]["disturbance_count"],
-            "semantic_loop_variant": SEMANTIC_LOOP_VARIANT,
-            "semantic_substeps": substeps,
-            "cleanup_primitive_evidence": cleanup_primitive_evidence,
-            "planner_proof_requests": planner_proof_requests,
-            "cleanup_plan": cleanup_plan,
-            "cleanup_policy_trace": cleanup_policy_trace,
-            "real_robot_readiness": real_robot_readiness,
-            "agent_view": agent_view,
-            "runtime_metric_map": runtime_metric_map,
-            "raw_fpv_observations": agent_view.get("raw_fpv_observations", []),
-            "camera_model_policy_evidence": agent_view.get("camera_model_policy_evidence", {}),
-            "model_declared_observations": agent_view.get("model_declared_observations", []),
-            "model_declared_observation_evidence": agent_view.get(
-                "model_declared_observation_evidence",
-                {},
-            ),
-            "agent_scratchpad": agent_scratchpad,
-            "private_evaluation": private_evaluation,
-            "advisory_evaluation": advisory_evaluation,
-            "score": done_response["score"],
-            "final_locations": done_response["final_locations"],
-            "final_containment": done_response.get("final_containment", {}),
-            "tool_event_counts": dict(self._tool_event_counts),
-            "backend_tool_event_counts": done_response["tool_event_counts"],
-            "runtime_timing": runtime_timing,
-            "agent_diagnostics": diagnostics,
-            "rerun_command": self.rerun_command,
-            "artifacts": {
-                "agent_view": str(agent_view_path),
-                "runtime_metric_map": str(runtime_metric_map_path),
-                "private_evaluation": str(private_evaluation_path),
-                "advisory_evaluation": str(advisory_evaluation_path),
-                "agent_scratchpad": str(agent_scratchpad_path),
-                "planner_proof_requests": str(planner_proof_requests_path),
-                "trace": str(self.trace_path),
-                "before_snapshot": str(self._before_snapshot),
-                "after_snapshot": str(after_snapshot),
-            },
-        }
-        if self.goal_contract is not None:
-            run_result["artifacts"]["goal_contract"] = str(goal_contract_path)
-        if self.cleanup_profile is not None:
-            profile_metadata = cleanup_profile_metadata_for_run(
-                profile_name=self.cleanup_profile,
-                backend=_backend_name(self.base_contract.backend, override=self.backend_name),
+                policy=self.policy,
+                agent_driven=self.agent_driven,
+                policy_uses_private_truth=self.policy_uses_private_truth,
+                fixture_hint_mode=self.fixture_hint_mode,
                 perception_mode=self.perception_mode,
+                map_bundle_dir=self.map_bundle_dir,
+                runtime_map_prior_source=self.runtime_map_prior_source,
+                cleanup_profile=self.cleanup_profile,
                 record_robot_views=self.record_robot_views,
-                camera_labeler=camera_labeler_from_visual_grounding_pipeline(
-                    self.contract.visual_grounding_pipeline_id
-                )
-                if self.perception_mode == CAMERA_MODEL_POLICY_MODE
-                else None,
+                planner_proof_run_result=self.planner_proof_run_result,
+                robot_view_steps=self.robot_view_steps,
+                robot_view_capture_policy=self.robot_view_capture_policy,
+                before_snapshot=self._before_snapshot,
+                after_snapshot=after_snapshot,
+                trace_events=trace_events,
+                agent_view=self._agent_view_payload(),
+                done_response=done_response,
+                reason=reason,
+                tool_event_counts=dict(self._tool_event_counts),
+                rerun_command=self.rerun_command,
+                mcp_server_name=MCP_SERVER_NAME,
             )
-            run_result["evidence_lane"] = profile_metadata["evidence_lane"]
-            run_result["cleanup_profile"] = profile_metadata["evidence_lane"]
-            run_result["cleanup_profile_metadata"] = profile_metadata
-        run_metadata = environment_setup_run_metadata_from_env()
-        override_hook = getattr(self.contract, "run_result_overrides", None)
-        if callable(override_hook):
-            run_metadata = _merge_run_metadata(run_metadata, override_hook())
-        if run_metadata:
-            run_result = _merge_run_metadata(run_result, run_metadata)
-        attach_nav2_map_bundle_snapshot(
-            run_result=run_result,
-            run_dir=self.run_dir,
-            source_bundle_dir=self.map_bundle_dir,
-        )
-        _add_backend_runtime_metadata(run_result, self.base_contract.backend, run_dir=self.run_dir)
-        if self.robot_view_steps:
-            run_result["view_variant"] = ROBOT_VIEW_VARIANT
-            run_result["robot_view_steps"] = self.robot_view_steps
-            run_result["robot_view_capture_policy"] = self.robot_view_capture_policy
-            run_result["robot_view_camera_control"] = robot_view_camera_control_summary(
-                self.robot_view_steps
-            )
-            run_result["artifacts"]["robot_views"] = str(self.run_dir / "robot_views")
-        if self.planner_proof_run_result is not None:
-            run_result["planner_backed_manipulation_proof"] = attach_planner_proof(
-                proof_run_result_path=self.planner_proof_run_result,
-                cleanup_run_dir=self.run_dir,
-            )
-            run_result["artifacts"]["planner_proof_views"] = str(self.run_dir / "planner_proof")
-        report_path = render_cleanup_report(
-            run_dir=self.run_dir,
-            scenario=self.scenario,
-            run_result=run_result,
-            trace_events=trace_events,
-            before_snapshot=self._before_snapshot,
-            after_snapshot=after_snapshot,
-            robot_view_steps=self.robot_view_steps,
-        )
-        run_result["artifacts"]["report"] = str(report_path)
-        self.run_result_path.write_text(
-            json.dumps(run_result, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
         )
         self._done_result = {
             "ok": True,
             "tool": "done",
             "status": "ok",
-            "intent_status": intent_status,
-            "goal_status": intent_status,
+            "intent_status": finalized.intent_status,
+            "goal_status": finalized.intent_status,
             "cleanup_status": done_response["cleanup_status"],
             "score": done_response["score"],
             "run_result": str(self.run_result_path),
-            "report": str(report_path),
+            "report": str(finalized.report_path),
             "contract": REALWORLD_CONTRACT,
             "agent_driven": self.agent_driven,
         }
@@ -1373,10 +1147,6 @@ def _default_agent_driven(policy: str) -> bool:
     return policy in AGENT_POLICIES or policy.endswith("_agent")
 
 
-def _backend_name(backend: Any, *, override: str = "") -> str:
-    return cleanup_backend_name(backend, override=override)
-
-
 def _public_acceptance_config_from_backend(
     base_contract: CleanupBackendSession | None,
 ) -> dict[str, int]:
@@ -1406,32 +1176,6 @@ def _goal_contract_from_env() -> GoalContract | None:
     if payload:
         return goal_contract_from_json(payload)
     return None
-
-
-def _add_backend_runtime_metadata(
-    run_result: dict[str, Any],
-    backend: Any,
-    *,
-    run_dir: Path,
-) -> None:
-    attach_cleanup_backend_runtime_metadata(
-        run_result=run_result,
-        backend=backend,
-        run_dir=run_dir,
-    )
-
-
-def _merge_run_metadata(
-    run_result: dict[str, Any],
-    overrides: dict[str, Any],
-) -> dict[str, Any]:
-    merged = dict(run_result)
-    for key, value in overrides.items():
-        if isinstance(value, dict) and isinstance(merged.get(key), dict):
-            merged[key] = {**merged[key], **value}
-        else:
-            merged[key] = value
-    return merged
 
 
 def _startup_probe_host(host: str) -> str:

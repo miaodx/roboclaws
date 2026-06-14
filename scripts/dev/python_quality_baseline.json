@@ -43,7 +43,7 @@
         "path": "roboclaws/household/realworld_contract.py"
       },
       {
-        "lines": 1446,
+        "lines": 1190,
         "max_module_lines": 800,
         "path": "roboclaws/household/realworld_mcp_server.py"
       },
@@ -704,19 +704,9 @@
         "limit": 50,
         "message": "Too many statements (57 > 50)",
         "path": "roboclaws/household/realworld_mcp_server.py",
-        "row": 189,
+        "row": 158,
         "symbol": "RealWorldMolmoCleanupMCPServer.__init__",
         "value": 57
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/household/realworld_mcp_server.py|PLR0915|RealWorldMolmoCleanupMCPServer._finalize_done",
-        "limit": 50,
-        "message": "Too many statements (74 > 50)",
-        "path": "roboclaws/household/realworld_mcp_server.py",
-        "row": 514,
-        "symbol": "RealWorldMolmoCleanupMCPServer._finalize_done",
-        "value": 74
       },
       {
         "code": "C901",
