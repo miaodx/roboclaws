@@ -320,11 +320,11 @@ Discovery round: 2026-06-14 post-I1 Isaac camera-capture splits.
 
 Quality signal:
 
-- `python scripts/dev/check_python_quality_ratchet.py` passes at 150 Ruff
+- `python scripts/dev/check_python_quality_ratchet.py` passes at 149 Ruff
   complexity violations and 59 oversized modules.
 - `python scripts/dev/check_python_quality_ratchet.py --summary --top 30`
   shows the largest implementation hotspots are
-  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (8021 lines, 5
+  `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` (7966 lines, 4
   complexity rows), `roboclaws/household/report.py` (7889 lines, 3 rows),
   `roboclaws/household/scene_camera_comparison.py` (6796 lines, 8 rows),
   `scripts/molmo_cleanup/run_live_openai_agents_cleanup.py` (3701 lines, 7
@@ -352,8 +352,7 @@ Entropy source: backend implementation depth and real workflow friction.
 Materiality: `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py` remains
 the largest backend-specific module. After camera-capture extraction and the
 CLI/dispatch split, its remaining rows are separate families:
-`_usd_support_surface_union`, `_set_usd_xform_translate`,
-`_apply_scene_index_semantic_labels`, and
+`_usd_support_surface_union`, `_apply_scene_index_semantic_labels`, and
 `_real_semantic_pose_robot_view_images`.
 
 Impact radius: workflow.
@@ -388,6 +387,10 @@ Progress:
   `_apply_isaac_capture_quality_overrides(...)` wrapper so existing hook and
   test seams stay stable. This removed the `_apply_isaac_capture_quality_overrides`
   C901/PLR0912 rows.
+- 2026-06-14: USD translate op authoring moved to
+  `scripts/isaac_lab_cleanup/isaac_usd_xform.py`. The worker imports
+  `_set_usd_xform_translate` as the same private hook used by semantic-pose
+  stage application tests. This removed the `_set_usd_xform_translate` C901 row.
 
 Suggested proof:
 
@@ -1280,3 +1283,19 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 59. The Isaac worker dropped
   from 8232 to 8021 lines and from 7 to 5 grouped complexity rows; the
   `_apply_isaac_capture_quality_overrides` C901/PLR0912 rows were removed.
+- 2026-06-14: Continued I1 by extracting USD xform translate authoring into
+  `scripts/isaac_lab_cleanup/isaac_usd_xform.py`. The worker still exposes the
+  `_set_usd_xform_translate` private hook via import for semantic-pose stage
+  application tests while the helper owns existing translate op, typed
+  translate op, added translate op, and XformCommonAPI fallbacks. Evidence:
+  `ruff check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_usd_xform.py tests/unit/molmo_cleanup/test_isaac_lab_backend.py`
+  passed; `ruff format --check scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py scripts/isaac_lab_cleanup/isaac_usd_xform.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_semantic_pose_stage_application_uses_exact_pose tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_semantic_pose_stage_application_converts_world_pose_to_parent_local tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_semantic_pose_stage_application_updates_existing_translate_op tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_semantic_pose_stage_application_blocks_parent_transform_failure tests/unit/molmo_cleanup/test_isaac_lab_backend.py::test_isaac_semantic_pose_stage_application_does_not_mark_partial_as_rendered -q`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/unit/molmo_cleanup/test_isaac_lab_backend.py -q`
+  passed with the existing Pillow deprecation warning from scene-camera image
+  saving; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py::test_realworld_cleanup_demo_can_run_isaaclab_fake_backend -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 150 to 149 Ruff complexity
+  violations, with oversized modules unchanged at 59. The Isaac worker dropped
+  from 8021 to 7966 lines and from 5 to 4 grouped complexity rows; the
+  `_set_usd_xform_translate` C901 row was removed.

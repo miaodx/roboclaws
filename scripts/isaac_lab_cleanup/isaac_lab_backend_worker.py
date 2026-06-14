@@ -84,6 +84,9 @@ from scripts.isaac_lab_cleanup.isaac_scene_camera_capture import (
     IsaacSceneCameraCaptureRequest,
     capture_isaac_lab_scene_camera_views,
 )
+from scripts.isaac_lab_cleanup.isaac_usd_xform import (
+    set_usd_xform_translate as _set_usd_xform_translate,
+)
 from scripts.isaac_lab_cleanup.isaac_worker_cli import build_arg_parser
 
 STATE_SCHEMA = "isaac_lab_backend_state_v1"
@@ -2314,64 +2317,6 @@ def _world_position_to_parent_local_translate(
         raise RuntimeError(
             "could not convert world semantic pose into parent-local USD frame"
         ) from exc
-
-
-def _set_usd_xform_translate(
-    *,
-    UsdGeom: Any,
-    Gf: Any,
-    prim: Any,
-    translate: tuple[float, float, float],
-) -> dict[str, str]:
-    value = Gf.Vec3d(*translate)
-    xformable_type = getattr(UsdGeom, "Xformable", None)
-    if callable(xformable_type):
-        xformable = xformable_type(prim)
-        try:
-            ordered_ops = list(xformable.GetOrderedXformOps())
-        except Exception:
-            ordered_ops = []
-        for op in ordered_ops:
-            get_name = getattr(op, "GetOpName", None)
-            if callable(get_name) and str(get_name()) == "xformOp:translate":
-                _set_xform_op_value(op, value)
-                return {"method": "existing_xformOp_translate", "xform_op": str(get_name())}
-        type_translate = getattr(getattr(UsdGeom, "XformOp", None), "TypeTranslate", None)
-        if type_translate is not None:
-            for op in ordered_ops:
-                get_type = getattr(op, "GetOpType", None)
-                is_inverse = getattr(op, "IsInverseOp", None)
-                if callable(get_type) and get_type() == type_translate:
-                    if callable(is_inverse) and is_inverse():
-                        continue
-                    get_name = getattr(op, "GetOpName", None)
-                    op_name = str(get_name()) if callable(get_name) else "translate"
-                    _set_xform_op_value(op, value)
-                    return {"method": "existing_translate_op", "xform_op": op_name}
-        add_translate_op = getattr(xformable, "AddTranslateOp", None)
-        if callable(add_translate_op):
-            op = add_translate_op()
-            _set_xform_op_value(op, value)
-            get_name = getattr(op, "GetOpName", None)
-            op_name = str(get_name()) if callable(get_name) else "xformOp:translate"
-            return {"method": "added_xformOp_translate", "xform_op": op_name}
-
-    common_api_type = getattr(UsdGeom, "XformCommonAPI", None)
-    if callable(common_api_type):
-        result = common_api_type(prim).SetTranslate(value)
-        if result is False:
-            raise RuntimeError("USD XformCommonAPI refused xformOp:translate value")
-        return {"method": "xform_common_api", "xform_op": "xform_common_api"}
-    raise RuntimeError("USD prim has no translate-authoring API")
-
-
-def _set_xform_op_value(op: Any, value: Any) -> None:
-    set_value = getattr(op, "Set", None)
-    if not callable(set_value):
-        raise RuntimeError("USD translate op does not expose Set")
-    result = set_value(value)
-    if result is False:
-        raise RuntimeError("USD translate op refused authored value")
 
 
 def _semantic_pose_target_position(
