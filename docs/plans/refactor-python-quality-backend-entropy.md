@@ -163,7 +163,7 @@ Rejected alternatives:
     metric map, backend-specific runtime evidence, and waypoint honesty.
   - Preserve CLI flags and current `just verify` / `just harness` behavior.
 
-- [ ] **C1.5: Split direct cleanup orchestration from artifact/result assembly.**
+- [x] **C1.5: Split direct cleanup orchestration from artifact/result assembly.**
   - Target `roboclaws/household/realworld_cleanup.py`.
   - Extract the post-loop artifact writer, run-result payload builder, profile
     metadata attachment, planner-proof attachment, and report/writeback stages
@@ -391,3 +391,22 @@ Stop this refactor loop when:
   cleanup remain parked because current specialized plans or `intuitive-tests`
   own those surfaces; this loop should not count them again unless fresh drift
   appears.
+- 2026-06-14: Implemented C1.5 direct cleanup orchestration/result assembly
+  splitting. Added `roboclaws/household/realworld_run_artifacts.py` as the
+  focused artifact finalizer for trace writing, public/private JSON artifacts,
+  goal-contract artifacts, primitive/proof/profile/map/backend metadata
+  attachment, report rendering, and final `run_result.json` writeback.
+  `run_realworld_cleanup` now ends by passing explicit
+  `RealWorldRunArtifactInputs` to that finalizer instead of assembling the
+  report payload inline. A stale contract-test reference to the moved Isaac
+  runtime checker helper was updated to import
+  `scripts.molmo_cleanup.isaac_runtime_checker`. Evidence:
+  `ruff check roboclaws/household/realworld_cleanup.py roboclaws/household/realworld_run_artifacts.py tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py`
+  passed; `./scripts/dev/run_pytest_standalone.sh tests/contract/molmo_cleanup/test_molmospaces_realworld_cleanup.py tests/contract/checkers/test_check_molmo_realworld_cleanup_result.py -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered for
+  `roboclaws/household/realworld_cleanup.py`: file size 1429 -> 1171 lines,
+  `run_realworld_cleanup` C901 30 -> 22, PLR0912 32 -> 23, and PLR0915
+  140 -> 74. Overall debt count remains 211 Ruff violations and 61 oversized
+  modules because this slice lowered existing debt without removing all
+  violation rows.
