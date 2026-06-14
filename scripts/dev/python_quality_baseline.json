@@ -68,11 +68,6 @@
         "path": "roboclaws/maps/actionable_snapshot.py"
       },
       {
-        "lines": 857,
-        "max_module_lines": 800,
-        "path": "roboclaws/maps/bundle.py"
-      },
-      {
         "lines": 1113,
         "max_module_lines": 800,
         "path": "roboclaws/operator_console/launcher.py"
@@ -924,39 +919,9 @@
         "limit": 10,
         "message": "`_normalize_room_only_fixture_poses` is too complex (11 > 10)",
         "path": "roboclaws/maps/bundle.py",
-        "row": 567,
+        "row": 379,
         "symbol": "_normalize_room_only_fixture_poses",
         "value": 11
-      },
-      {
-        "code": "C901",
-        "key": "roboclaws/maps/bundle.py|C901|validate_nav2_map_bundle",
-        "limit": 10,
-        "message": "`validate_nav2_map_bundle` is too complex (29 > 10)",
-        "path": "roboclaws/maps/bundle.py",
-        "row": 294,
-        "symbol": "validate_nav2_map_bundle",
-        "value": 29
-      },
-      {
-        "code": "PLR0912",
-        "key": "roboclaws/maps/bundle.py|PLR0912|validate_nav2_map_bundle",
-        "limit": 12,
-        "message": "Too many branches (29 > 12)",
-        "path": "roboclaws/maps/bundle.py",
-        "row": 294,
-        "symbol": "validate_nav2_map_bundle",
-        "value": 29
-      },
-      {
-        "code": "PLR0915",
-        "key": "roboclaws/maps/bundle.py|PLR0915|validate_nav2_map_bundle",
-        "limit": 50,
-        "message": "Too many statements (85 > 50)",
-        "path": "roboclaws/maps/bundle.py",
-        "row": 294,
-        "symbol": "validate_nav2_map_bundle",
-        "value": 85
       },
       {
         "code": "C901",

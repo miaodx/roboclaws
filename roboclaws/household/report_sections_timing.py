@@ -95,18 +95,49 @@ def runtime_timing_from_trace(
     """Build a wall-clock attribution summary from cleanup MCP trace events."""
 
     robot_view_steps = robot_view_steps or []
+    timed_events = _timed_trace_events(trace_events)
+    if not timed_events:
+        return {}
+    total_elapsed = max(float(event["wallclock_elapsed"]) for event in timed_events)
+    tool_events = _tool_timing_events(timed_events)
+    handler_total, breakdown = _tool_handler_breakdown(tool_events)
+    raw_gap_total, gaps = _between_tool_gaps(tool_events)
+    robot_view_capture = _robot_view_capture_seconds(timed_events, robot_view_steps)
+    robot_view_overlap = _subtract_robot_view_capture_from_gaps(timed_events, gaps)
+    gap_total = max(0.0, raw_gap_total - robot_view_overlap)
+    other_mcp_overhead = max(0.0, total_elapsed - handler_total - robot_view_capture - gap_total)
+    return {
+        "total_elapsed_s": round(total_elapsed, 3),
+        "tool_handler_s": round(handler_total, 3),
+        "robot_view_capture_s": round(robot_view_capture, 3),
+        "between_tool_gap_s": round(gap_total, 3),
+        "raw_between_tool_gap_s": round(raw_gap_total, 3),
+        "other_mcp_overhead_s": round(other_mcp_overhead, 3),
+        "tool_call_count": sum(int(item["calls"]) for item in breakdown),
+        "tool_breakdown": breakdown,
+        "longest_between_tool_gaps": gaps[:8],
+    }
+
+
+def _timed_trace_events(trace_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     timed_events = [
         event for event in trace_events if isinstance(event.get("wallclock_elapsed"), (int, float))
     ]
-    if not timed_events:
-        return {}
     timed_events.sort(key=lambda event: float(event["wallclock_elapsed"]))
-    total_elapsed = max(float(event["wallclock_elapsed"]) for event in timed_events)
-    tool_events = [
+    return timed_events
+
+
+def _tool_timing_events(timed_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
         event
         for event in timed_events
         if event.get("tool") != "<runtime>" and event.get("event") in {"request", "response"}
     ]
+
+
+def _tool_handler_breakdown(
+    tool_events: list[dict[str, Any]],
+) -> tuple[float, list[dict[str, Any]]]:
     pending_requests: dict[str, list[dict[str, Any]]] = {}
     tool_breakdown: dict[str, dict[str, float | int | str]] = {}
     handler_total = 0.0
@@ -131,7 +162,23 @@ def runtime_timing_from_trace(
         item["calls"] = int(item["calls"]) + 1
         item["handler_s"] = float(item["handler_s"]) + duration
         handler_total += duration
+    breakdown = []
+    for item in tool_breakdown.values():
+        calls = int(item["calls"])
+        handler_s = float(item["handler_s"])
+        breakdown.append(
+            {
+                "tool": str(item["tool"]),
+                "calls": calls,
+                "handler_s": round(handler_s, 3),
+                "avg_handler_s": round(handler_s / calls, 3) if calls else 0.0,
+            }
+        )
+    breakdown.sort(key=lambda item: (-float(item["handler_s"]), str(item["tool"])))
+    return handler_total, breakdown
 
+
+def _between_tool_gaps(tool_events: list[dict[str, Any]]) -> tuple[float, list[dict[str, Any]]]:
     raw_gap_total = 0.0
     gaps = []
     previous_response: dict[str, Any] | None = None
@@ -156,8 +203,13 @@ def runtime_timing_from_trace(
                     }
                 )
             previous_response = None
+    return raw_gap_total, gaps
 
-    robot_view_capture = _robot_view_capture_seconds(timed_events, robot_view_steps)
+
+def _subtract_robot_view_capture_from_gaps(
+    timed_events: list[dict[str, Any]],
+    gaps: list[dict[str, Any]],
+) -> float:
     robot_view_overlap = _robot_view_capture_overlap_seconds(timed_events, gaps)
     for gap in gaps:
         overlap = _robot_view_capture_overlap_seconds(timed_events, [gap])
@@ -167,33 +219,8 @@ def runtime_timing_from_trace(
         gap["gap_s"] = round(max(0.0, raw_gap - overlap), 3)
         gap.pop("start_s", None)
         gap.pop("end_s", None)
-    gap_total = max(0.0, raw_gap_total - robot_view_overlap)
-    other_mcp_overhead = max(0.0, total_elapsed - handler_total - robot_view_capture - gap_total)
-    breakdown = []
-    for item in tool_breakdown.values():
-        calls = int(item["calls"])
-        handler_s = float(item["handler_s"])
-        breakdown.append(
-            {
-                "tool": str(item["tool"]),
-                "calls": calls,
-                "handler_s": round(handler_s, 3),
-                "avg_handler_s": round(handler_s / calls, 3) if calls else 0.0,
-            }
-        )
-    breakdown.sort(key=lambda item: (-float(item["handler_s"]), str(item["tool"])))
     gaps.sort(key=lambda item: -float(item["gap_s"]))
-    return {
-        "total_elapsed_s": round(total_elapsed, 3),
-        "tool_handler_s": round(handler_total, 3),
-        "robot_view_capture_s": round(robot_view_capture, 3),
-        "between_tool_gap_s": round(gap_total, 3),
-        "raw_between_tool_gap_s": round(raw_gap_total, 3),
-        "other_mcp_overhead_s": round(other_mcp_overhead, 3),
-        "tool_call_count": sum(int(item["calls"]) for item in breakdown),
-        "tool_breakdown": breakdown,
-        "longest_between_tool_gaps": gaps[:8],
-    }
+    return robot_view_overlap
 
 
 def _object_cycle_timing_section(

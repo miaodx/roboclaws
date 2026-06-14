@@ -230,7 +230,7 @@ Rejected alternatives:
   - Keep blocked-capability evidence valid by default; strict planner-backed
     proof remains a local-runtime gate.
 
-- [ ] **M1: Split map bundle validation and snapshot contract checks.**
+- [x] **M1: Split map bundle validation and snapshot contract checks.**
   - Target `roboclaws/maps/bundle.py` and
     `roboclaws/maps/actionable_snapshot.py`.
   - Turn `validate_nav2_map_bundle(...)` into an ordered validation pipeline
@@ -554,3 +554,38 @@ Stop this refactor loop when:
   violations, with oversized modules unchanged at 61. `report.py` file size
   dropped from 8607 to 7889 lines, and the `runtime_timing_from_trace` C901 and
   PLR0915 rows were removed from the report-module baseline.
+- 2026-06-14: Ran the post-C3 bounded reduce-entropy discovery loop from clean
+  `HEAD`. Evidence:
+  `node "$HOME/.codex/skills/intuitive-reduce-entropy/scripts/high-noise-summary.mjs" --examples 10`;
+  `python scripts/dev/check_python_quality_ratchet.py --summary --top 40`;
+  targeted probes across planner-proof checker/probe scripts,
+  `roboclaws/maps/bundle.py`, `scripts/isaac_lab_cleanup/isaac_lab_backend_worker.py`,
+  and the remaining `report.py` function families. Current quality signal is
+  209 Ruff complexity violations and 61 oversized modules because the timing
+  helper still carries its complexity in the new module, while `report.py`
+  itself has dropped to three complexity rows. The materiality gate accepted
+  the still-live queue: P1 planner-proof bundle checker phases, P2 planner
+  manipulation probe/runtime packaging, M1 map bundle validation pipeline,
+  I1 Isaac worker backend-detail splitting, and the remaining C3 proof/robot/
+  agent report section families. No new unrelated P0/P1 public command or doc
+  drift was found; OpenAI Agents SDK, operator console, scene-camera/render
+  parity, Agibot, raw-FPV, apple2apple, and broad test-suite cleanup remain
+  parked under their specialized plans or specialist skills.
+- 2026-06-14: Implemented M1's Nav2 map-bundle validation pipeline. Added
+  `roboclaws/maps/bundle_validation.py` for staged required-file,
+  map.yaml/PGM, private-truth, semantics, waypoint, fixture, and route
+  validation while keeping `validate_nav2_map_bundle(...)` and
+  `parse_map_yaml(...)` import compatibility through `roboclaws/maps/bundle.py`.
+  During this slice the quality ratchet exposed a C3 blind spot: the prior
+  baseline write ran before the new report section files were tracked, so
+  `report_sections_timing.runtime_timing_from_trace(...)` was split into
+  smaller timing helpers instead of refreshing the baseline over newly visible
+  debt. Evidence:
+  `ruff check roboclaws/maps/bundle.py roboclaws/maps/bundle_validation.py roboclaws/household/report_sections_timing.py`
+  passed; `ruff format --check` for the same touched files passed;
+  `./scripts/dev/run_pytest_standalone.sh tests/contract/maps/test_nav2_map_bundle_contract.py tests/contract/maps/test_actionable_semantic_map_snapshot.py tests/contract/maps/test_agibot_map_bundle_export.py tests/contract/reports/test_molmo_cleanup_report.py::test_cleanup_report_renders_runtime_timing_breakdown tests/contract/reports/test_molmo_cleanup_report.py::test_cleanup_report_renders_per_object_timing_cycles -q`
+  passed; `python scripts/dev/check_python_quality_ratchet.py` passed. The
+  quality baseline was deliberately lowered from 207 to 204 Ruff complexity
+  violations and from 61 to 60 oversized modules. `roboclaws/maps/bundle.py`
+  is no longer oversized, and the `validate_nav2_map_bundle` C901, PLR0912,
+  and PLR0915 rows were removed from the baseline.
