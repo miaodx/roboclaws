@@ -82,17 +82,20 @@ def blocked_result_from_live_agent_request(
                 "error_type": "LiveAgentEvalNotExecuted",
                 "message": (
                     f"eval runner recorded live-agent identity for {agent_engine}, "
-                    "but provider/runtime execution is not implemented in the repo-native "
-                    f"eval runner yet{missing_detail}"
+                    "but live_execution=run was not requested for this eval run"
+                    f"{missing_detail}"
                 ),
                 "preflight": preflight,
-                "required_action": "run a supported live-agent eval runtime on an allowed network",
+                "required_action": (
+                    "rerun with live_execution=run on an allowed network when a supported "
+                    "provider/runtime route is available"
+                ),
             }
         },
         artifacts={"run_dir": str(run_dir)},
         artifact_schema_versions={"run_dir": MISSING_UNAVAILABLE},
         metrics={"pass": 0.0},
-        limitations=(*trial.limitations, "live_agent_eval_runtime_not_implemented"),
+        limitations=(*trial.limitations, "live_agent_eval_execution_not_requested"),
     )
 
 
@@ -116,14 +119,14 @@ def live_agent_eval_preflight(
         ),
         "runtime_readiness": _runtime_readiness(agent_engine),
         "execution_status": "blocked",
-        "blocker": "repo_native_live_eval_execution_not_integrated",
+        "blocker": "live_execution_not_requested",
     }
 
 
 def _runtime_readiness(agent_engine: str) -> dict[str, Any]:
     runtime: dict[str, Any] = {
-        "repo_native_live_eval_runner": "not_implemented",
-        "product_route_available": "use just run::surface for manual live proof",
+        "repo_native_live_eval_runner": "opt_in_via_live_execution_run",
+        "product_route_available": "eval runner can call the public run::surface route",
     }
     if agent_engine in {"codex-cli", "claude-code"}:
         script = REPO_ROOT / "scripts" / "dev" / "coding_agent_docker.sh"

@@ -133,8 +133,11 @@ def test_eval_runner_records_live_agent_blocked_identity(tmp_path: Path) -> None
     assert preflight["provider_readiness"]["provider_profile"] == "codex-env"
     assert preflight["provider_readiness"]["required_env"] == ["CODEX_BASE_URL", "CODEX_API_KEY"]
     assert preflight["runtime_readiness"]["required_runtime"] == "docker-backed coding-agent CLI"
-    assert preflight["blocker"] == "repo_native_live_eval_execution_not_integrated"
-    assert "live_agent_eval_runtime_not_implemented" in result["limitations"]
+    assert preflight["blocker"] == "live_execution_not_requested"
+    assert preflight["runtime_readiness"]["repo_native_live_eval_runner"] == (
+        "opt_in_via_live_execution_run"
+    )
+    assert "live_agent_eval_execution_not_requested" in result["limitations"]
 
 
 def test_eval_runner_runs_live_agent_when_explicitly_enabled(tmp_path: Path) -> None:
